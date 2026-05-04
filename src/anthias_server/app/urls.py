@@ -6,7 +6,8 @@ app_name = 'anthias_app'
 
 # Every route declares a trailing slash so Django's APPEND_SLASH=True
 # (default) handles the slashless variant for free: `/system-info`
-# 302-redirects to `/system-info/` instead of 404-ing. The earlier
+# permanently redirects to `/system-info/` (HTTP 301 for GET, 308
+# method-preserving for POST/PUT/etc.) instead of 404-ing. The earlier
 # slashless convention worked for inbound `{% url %}` references but
 # silently broke any external bookmark / share / copy-pasted link
 # typed without the trailing slash. APPEND_SLASH only ADDS slashes,
