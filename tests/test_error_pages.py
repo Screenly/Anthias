@@ -10,9 +10,12 @@ path.
 
 from __future__ import annotations
 
+from typing import Callable
+
 import pytest
+from django.http import HttpResponse
 from django.template.loader import get_template
-from django.test import Client, override_settings
+from django.test import Client, RequestFactory, override_settings
 from django.views.defaults import (
     bad_request,
     page_not_found,
@@ -20,8 +23,12 @@ from django.views.defaults import (
     server_error,
 )
 
-
 _ERROR_TEMPLATES = ['400.html', '403.html', '404.html', '500.html']
+
+
+@pytest.fixture
+def rf() -> RequestFactory:
+    return RequestFactory()
 
 
 @pytest.mark.parametrize('name', _ERROR_TEMPLATES)
@@ -58,7 +65,9 @@ def test_404_handler_uses_branded_template() -> None:
     ],
 )
 def test_default_handler_returns_branded_body(
-    rf, view, expected_status: int
+    rf: RequestFactory,
+    view: Callable[..., HttpResponse],
+    expected_status: int,
 ) -> None:
     """Django's default 4xx handlers render `<code>.html` from the
     project template path. This bypasses URL routing and goes straight
@@ -70,7 +79,7 @@ def test_default_handler_returns_branded_body(
     assert b'auth-card' in response.content
 
 
-def test_500_handler_returns_branded_body(rf) -> None:
+def test_500_handler_returns_branded_body(rf: RequestFactory) -> None:
     """500's signature differs (no `exception` kwarg) and the renderer
     skips context processors, so test it on its own."""
     request = rf.get('/anything')
@@ -78,9 +87,3 @@ def test_500_handler_returns_branded_body(rf) -> None:
     assert response.status_code == 500
     assert b'auth-card' in response.content
     assert b'500' in response.content
-
-
-@pytest.fixture
-def rf():
-    from django.test import RequestFactory
-    return RequestFactory()
