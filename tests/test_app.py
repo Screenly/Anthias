@@ -813,9 +813,13 @@ def test_skip_buttons_publish_correct_command(
     # directly-constructed client (not connect_to_redis) bypasses the
     # autouse fake in conftest.py — uvicorn is a separate process and
     # publishes against the real broker either way.
-    sub = _redis.Redis(
+    # ``pubsub`` typed as Any because redis-py's stubs don't expose
+    # get_message / unsubscribe on the PubSub class (matches the
+    # workaround in src/anthias_viewer/messaging.py).
+    client: Any = _redis.Redis(
         host='redis', port=6379, db=0, decode_responses=True
-    ).pubsub()
+    )
+    sub: Any = client.pubsub()
     try:
         sub.subscribe('anthias.viewer')
         # Drain the subscribe-confirmation frame so the next get_message
@@ -854,8 +858,7 @@ def test_skip_buttons_publish_correct_command(
                 published = data[len('viewer ') :]
                 break
         assert published == expected_command, (
-            f'expected viewer publish {expected_command!r}, '
-            f'got {published!r}'
+            f'expected viewer publish {expected_command!r}, got {published!r}'
         )
     finally:
         try:
