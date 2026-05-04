@@ -488,7 +488,7 @@ def test_splash_renders_200_without_mocking_anything() -> None:
     ``ipaddress.ip_address(get_node_ip())`` and 500'd on 'Unknown'.
     The view now does no IP work at all — render must succeed with no
     fixtures, no mocks, no Redis state."""
-    response = Client().get('/splash-page')
+    response = Client().get('/splash-page/')
     assert response.status_code == 200
 
 
@@ -513,7 +513,7 @@ def test_splash_renders_with_polling_script() -> None:
     script tag goes missing (template refactor, CSP, etc.), the
     page would forever show 'Detecting network…' even when IPs
     are available — catch that here."""
-    response = Client().get('/splash-page')
+    response = Client().get('/splash-page/')
     body = response.content.decode()
     assert '/api/v2/network/ip-addresses' in body
     assert 'Detecting network' in body
