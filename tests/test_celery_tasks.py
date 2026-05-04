@@ -749,6 +749,38 @@ def test_download_youtube_asset_success_writes_title_and_duration(
 
 
 @pytest.mark.django_db
+def test_download_youtube_asset_writes_to_persisted_uri(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """The output path passed to yt-dlp must be the row's persisted
+    uri, not a fresh recomputation from settings['assetdir']. If
+    assetdir was changed between the create call and task pickup
+    (operator edited ~/.anthias/anthias.conf), recomputing here
+    would write the file to the new path while the row still
+    points at the old, and the viewer would see a missing file."""
+    Asset.objects.create(
+        asset_id='yt-uri',
+        name='https://youtu.be/abc',
+        # Pin the row to a non-default path: the task must trust this
+        # value rather than rebuilding it from settings.
+        uri='/custom/assetdir/yt-uri.mp4',
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 5}
+    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+        download_youtube_asset('yt-uri', 'https://youtu.be/abc')
+    # ydl_opts is the first positional arg to the YoutubeDL ctor.
+    fake_cls = fake_youtube_dl._cls
+    fake_cls.assert_called_once()
+    ydl_opts = fake_cls.call_args.args[0]
+    assert ydl_opts['outtmpl'] == '/custom/assetdir/yt-uri.mp4'
+
+
+@pytest.mark.django_db
 def test_download_youtube_asset_floors_subsecond_duration_to_one(
     fake_youtube_dl: mock.MagicMock,
 ) -> None:

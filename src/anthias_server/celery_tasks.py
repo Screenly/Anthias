@@ -417,7 +417,16 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         # operator-edited. Don't re-download or clobber its state.
         return
 
-    location = youtube_destination_path(asset_id, settings)
+    # Trust the path the upstream caller persisted on the row rather
+    # than recomputing from settings['assetdir']: if assetdir was
+    # changed between create and task pickup (operator edited
+    # ~/.anthias/anthias.conf, settings reloaded), recomputing here
+    # would write the file to the new path while the row still
+    # points at the old, and the viewer would see a missing file.
+    # Falling back to the recomputed path covers the (defensive)
+    # case where uri is empty for some reason — same destination as
+    # the serializer / frontend create would have produced.
+    location = asset.uri or youtube_destination_path(asset_id, settings)
 
     # Lazy import: yt_dlp pulls in hundreds of extractors at import
     # time. Keeping it inside the task body avoids the cost on

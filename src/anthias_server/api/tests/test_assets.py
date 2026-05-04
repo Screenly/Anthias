@@ -272,3 +272,80 @@ def test_v2_create_with_play_days_round_trips(
     assert response.data['play_days'] == [1, 3, 5]
     assert response.data['play_time_from'] == '09:00:00'
     assert response.data['play_time_to'] == '17:00:00'
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_create_youtube_asset_dispatches_celery_task(
+    api_client: APIClient, version: str
+) -> None:
+    """Every API version that accepts ``mimetype='youtube_asset'``
+    must dispatch ``download_youtube_asset`` after persisting the
+    row. v1.2 was previously missing this hop, so the row landed
+    with ``is_processing=1`` and never finalized. Parametrize across
+    every version so a future create-view regression for any of
+    them fails this test instead of leaking into prod silently.
+    """
+    youtube_url = 'https://www.youtube.com/watch?v=jNQXAC9IVRw'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': youtube_url,
+        'mimetype': 'youtube_asset',
+        # Required for YouTube: the serializer sets duration=0 itself,
+        # but the v1.1 serializer's input validation still needs a
+        # 0/None to avoid the "explicit override" branch.
+        'duration': 0,
+    }
+
+    asset_list_url = reverse(f'api:asset_list_{version}')
+    with (
+        mock.patch(
+            'anthias_server.api.views.v1.dispatch_download'
+        ) as v1_dispatch,
+        mock.patch(
+            'anthias_server.api.views.v1_1.dispatch_download'
+        ) as v1_1_dispatch,
+        mock.patch(
+            'anthias_server.api.views.v1_2.dispatch_download'
+        ) as v1_2_dispatch,
+        mock.patch(
+            'anthias_server.api.views.v2.dispatch_download'
+        ) as v2_dispatch,
+        # Skip the network probe — url_fails would be invoked on the
+        # local mp4 destination, which is a no-op in practice but
+        # avoids any future url_fails behaviour change leaking into
+        # this test.
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.url_fails',
+            return_value=False,
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    asset_id = response.data['asset_id']
+
+    dispatch_for_version = {
+        'v1': v1_dispatch,
+        'v1_1': v1_1_dispatch,
+        'v1_2': v1_2_dispatch,
+        'v2': v2_dispatch,
+    }[version]
+    dispatch_for_version.assert_called_once_with(asset_id, youtube_url)
+
+    # The other versions' dispatchers must stay untouched — proves
+    # we routed through the right view, not just any of them.
+    for v, m in {
+        'v1': v1_dispatch,
+        'v1_1': v1_1_dispatch,
+        'v1_2': v1_2_dispatch,
+        'v2': v2_dispatch,
+    }.items():
+        if v != version:
+            m.assert_not_called()
