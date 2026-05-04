@@ -7,10 +7,8 @@ import re
 import socket
 import string
 from datetime import datetime, timedelta
-from os import getenv, path, utime
+from os import getenv, utime
 from platform import machine
-from subprocess import call, check_output
-from threading import Thread
 from time import sleep
 from typing import Any
 from urllib.parse import urlparse
@@ -27,7 +25,6 @@ from tenacity import (
     wait_fixed,
 )
 
-from anthias_server.app.models import Asset
 from anthias_server.settings import settings
 
 arch = machine()
@@ -637,68 +634,6 @@ def url_fails(url: str) -> bool:
         pass
 
     return True
-
-
-def download_video_from_youtube(
-    uri: str,
-    asset_id: str,
-) -> tuple[str, str, int]:
-    name = check_output(['yt-dlp', '-O', 'title', uri])
-    info = json.loads(check_output(['yt-dlp', '-j', uri]))
-    duration = info['duration']
-
-    # Write into settings['assetdir'] so cleanup() (which sweeps the same
-    # path) sees these files; otherwise a custom assetdir would leak
-    # orphaned YouTube downloads in $HOME/anthias_assets.
-    location = path.join(settings['assetdir'], f'{asset_id}.mp4')
-    thread = YoutubeDownloadThread(location, uri, asset_id)
-    thread.daemon = True
-    thread.start()
-
-    return location, str(name.decode('utf-8')), duration
-
-
-class YoutubeDownloadThread(Thread):
-    def __init__(
-        self,
-        location: str,
-        uri: str,
-        asset_id: str,
-    ) -> None:
-        Thread.__init__(self)
-        self.location = location
-        self.uri = uri
-        self.asset_id = asset_id
-
-    def run(self) -> None:
-        call(
-            [
-                'yt-dlp',
-                '-S',
-                'vcodec:h264,fps,res:1080,acodec:m4a',
-                '-o',
-                self.location,
-                self.uri,
-            ]
-        )
-
-        try:
-            asset = Asset.objects.get(asset_id=self.asset_id)
-            asset.is_processing = False
-            asset.save()
-        except Asset.DoesNotExist:
-            logging.warning('Asset %s not found', self.asset_id)
-            return
-
-        # Imported lazily so the viewer container (which does not
-        # ship channels/channels-redis) can still import anthias_common.utils.
-        from asgiref.sync import async_to_sync
-        from channels.layers import get_channel_layer
-
-        async_to_sync(get_channel_layer().group_send)(
-            'ws_server',
-            {'type': 'asset.update', 'asset_id': self.asset_id},
-        )
 
 
 def template_handle_unicode(value: Any) -> str:

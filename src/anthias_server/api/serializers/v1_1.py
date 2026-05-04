@@ -13,10 +13,10 @@ from rest_framework.serializers import (
 )
 
 from anthias_common.utils import (
-    download_video_from_youtube,
     get_video_duration,
     url_fails,
 )
+from anthias_common.youtube import youtube_destination_path
 from anthias_server.settings import settings
 
 from . import (
@@ -26,6 +26,12 @@ from . import (
 
 
 class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
+    # Source URL of an in-flight YouTube asset, set by prepare_asset
+    # when ``mimetype == 'youtube_asset'``. The view dispatches the
+    # download_youtube_asset task with this value after the row is
+    # persisted. None means "not a YouTube asset" → skip dispatch.
+    _pending_youtube_uri: str | None = None
+
     def __init__(
         self,
         *args: Any,
@@ -72,16 +78,25 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
                 rename(uri, path.join(settings['assetdir'], asset['asset_id']))
                 uri = path.join(settings['assetdir'], asset['asset_id'])
 
-        if 'youtube_asset' in asset['mimetype']:
-            (uri, asset['name'], asset['duration']) = (
-                download_video_from_youtube(uri, asset['asset_id'])
-            )
+        # Exact match — substring `'youtube_asset' in mimetype`
+        # would also fire on `not_youtube_asset` and crash on a
+        # missing/None mimetype. Both bugs predate the celery refactor.
+        is_youtube = asset['mimetype'] == 'youtube_asset'
+        if is_youtube:
+            # Defer the download to download_youtube_asset (Celery).
+            # The row is persisted with mimetype='video',
+            # is_processing=1, uri at the eventual local path, and
+            # duration=0 placeholder. The task overwrites name +
+            # duration once yt-dlp completes.
             asset['mimetype'] = 'video'
             asset['is_processing'] = 1
+            asset['duration'] = 0
+            self._pending_youtube_uri = uri
+            uri = youtube_destination_path(asset['asset_id'], settings)
 
         asset['uri'] = uri
 
-        if 'video' in asset['mimetype']:
+        if 'video' in asset['mimetype'] and not is_youtube:
             duration_raw = data.get('duration')
             try:
                 duration_int = (
@@ -109,7 +124,7 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
                 asset['duration'] = int(video_duration.total_seconds())
             else:
                 asset['duration'] = duration_int
-        else:
+        elif not is_youtube:
             duration_raw = data.get('duration')
             if duration_raw is None:
                 raise ValidationError(
@@ -138,7 +153,13 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
         else:
             asset['end_date'] = ''
 
-        if not asset['skip_asset_check'] and url_fails(asset['uri']):
+        # Skip url_fails for in-flight YouTube assets — the local
+        # mp4 destination doesn't exist until the Celery task lands.
+        if (
+            not is_youtube
+            and not asset['skip_asset_check']
+            and url_fails(asset['uri'])
+        ):
             raise Exception('Could not retrieve file. Check the asset URL.')
 
         return asset

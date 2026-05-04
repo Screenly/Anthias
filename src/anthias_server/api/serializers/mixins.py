@@ -7,10 +7,10 @@ from rest_framework.serializers import CharField, Serializer
 
 from anthias_server.api.errors import AssetCreationError
 from anthias_common.utils import (
-    download_video_from_youtube,
     get_video_duration,
     url_fails,
 )
+from anthias_common.youtube import youtube_destination_path
 from anthias_server.settings import settings
 
 from . import (
@@ -21,6 +21,14 @@ from . import (
 
 class CreateAssetSerializerMixin:
     unique_name: bool = False
+    # Source URL of an in-flight YouTube asset, set by prepare_asset
+    # when ``mimetype == 'youtube_asset'``. The view reads this after
+    # Asset.objects.create() to dispatch download_youtube_asset.delay
+    # with the freshly persisted row's id. Stashing it here (instead
+    # of inside the asset dict) keeps Asset.objects.create from
+    # choking on an unknown column. None means "not a YouTube asset"
+    # and the view skips the dispatch.
+    _pending_youtube_uri: str | None = None
 
     def prepare_asset(
         self,
@@ -64,35 +72,44 @@ class CreateAssetSerializerMixin:
             rename(uri, new_uri)
             uri = new_uri
 
-        if 'youtube_asset' in asset['mimetype']:
-            (uri, asset['name'], asset['duration']) = (
-                download_video_from_youtube(uri, asset['asset_id'])
-            )
+        # Exact match — substring `'youtube_asset' in mimetype`
+        # would also fire on `not_youtube_asset` and crash on a
+        # missing/None mimetype. Both bugs were inherited from the
+        # pre-celery code path.
+        is_youtube = asset['mimetype'] == 'youtube_asset'
+        if is_youtube:
+            # Defer the download to download_youtube_asset (Celery).
+            # The row lands with mimetype='video', is_processing set,
+            # uri at the eventual local path, and a placeholder
+            # duration that the task overwrites with the real value.
+            # The viewer treats local files whose path doesn't exist
+            # yet as not-displayable, so the in-flight row is silently
+            # skipped during rotation.
             asset['mimetype'] = 'video'
             asset['is_processing'] = True if version == 'v2' else 1
+            asset['duration'] = 0
+            self._pending_youtube_uri = uri
+            uri = youtube_destination_path(asset['asset_id'], settings)
 
         asset['uri'] = uri
 
-        if 'video' in asset['mimetype']:
+        if 'video' in asset['mimetype'] and not is_youtube:
             duration_raw = data.get('duration')
             if duration_raw is not None and int(duration_raw) == 0:
-                original_mimetype = data.get('mimetype')
-
-                if original_mimetype != 'youtube_asset':
-                    video_duration = get_video_duration(uri)
-                    if video_duration is None:
-                        raise AssetCreationError(
-                            f'Could not determine duration of video {uri!r}'
-                        )
-                    duration = video_duration.total_seconds()
-                    asset['duration'] = (
-                        duration if version == 'v2' else int(duration)
+                video_duration = get_video_duration(uri)
+                if video_duration is None:
+                    raise AssetCreationError(
+                        f'Could not determine duration of video {uri!r}'
                     )
+                duration = video_duration.total_seconds()
+                asset['duration'] = (
+                    duration if version == 'v2' else int(duration)
+                )
             else:
                 raise AssetCreationError(
                     'Duration must be zero for video assets.'
                 )
-        else:
+        elif not is_youtube:
             # Crashes if it's not an int. We want that.
             duration = data.get('duration', settings['default_duration'])
 
@@ -121,7 +138,16 @@ class CreateAssetSerializerMixin:
             if field in data:
                 asset[field] = data[field]
 
-        if not asset['skip_asset_check'] and url_fails(asset['uri']):
+        # Skip the reachability probe for in-flight YouTube rows: the
+        # local mp4 path is the *future* destination, the file does
+        # not exist yet, and url_fails on a schemeless path is a
+        # silent no-op anyway. Asserting that explicitly prevents a
+        # future url_fails change from breaking the create flow.
+        if (
+            not is_youtube
+            and not asset['skip_asset_check']
+            and url_fails(asset['uri'])
+        ):
             raise AssetCreationError(
                 'Could not retrieve file. Check the asset URL.'
             )

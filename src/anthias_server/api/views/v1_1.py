@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from anthias_server.app.models import Asset
+from anthias_common.youtube import dispatch_download
 from anthias_server.api.helpers import AssetCreationError, parse_request
 from anthias_server.api.serializers import (
     AssetSerializer,
@@ -43,6 +44,12 @@ class AssetListViewV1_1(APIView):
             return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
         asset = Asset.objects.create(**serializer.data)
+
+        # Kick off the YouTube download out of band when the
+        # serializer flagged a youtube_asset. See the v1 view for
+        # the full rationale.
+        if serializer._pending_youtube_uri:
+            dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
 
         return Response(
             AssetSerializer(asset).data, status=status.HTTP_201_CREATED
