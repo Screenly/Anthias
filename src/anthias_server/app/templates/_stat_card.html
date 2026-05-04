@@ -2,7 +2,7 @@
 <div class="stat-card{% if span %} stat-card--span-{{ span }}{% endif %}">
   <p class="stat-card__label">{{ label }}</p>
   <div class="stat-card__value">
-    {% if href %}<a href="{{ href }}" rel="noopener" target="_blank" class="text-decoration-none">{{ value }}</a>
+    {% if href %}<a href="{{ href }}" rel="noopener noreferrer" target="_blank" class="text-decoration-none">{{ value }}</a>
     {% else %}{{ value }}{% endif %}
   </div>
   {% if meta %}<div class="stat-card__meta">{{ meta }}</div>{% endif %}
