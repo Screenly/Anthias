@@ -1,10 +1,22 @@
-{% extends "base.html" %}
 {% load static %}
-
-{% block title %}Login to Anthias{% endblock %}
-{% block body_class %}auth-body{% endblock %}
-
-{% block content %}
+{% comment %}
+  Standalone login shell — does NOT extend base.html on purpose.
+  base.html pulls vendor.js, which unconditionally opens /ws with
+  auto-reconnect; that bundle has no role on a pre-auth surface and
+  would put public login renders on the WebSocket fan-out. Mirrors
+  the same shape as _error.html.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Login to Anthias</title>
+  <link href="{% static 'dist/css/tabler-icons.css' %}" rel="stylesheet"/>
+  <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
+  <link rel="icon" href="/static/favicons/favicon.ico"/>
+</head>
+<body class="auth-body">
 <div class="auth-page">
   <main class="auth-shell">
     <div class="auth-card">
@@ -39,4 +51,5 @@
     </div>
   </main>
 </div>
-{% endblock %}
+</body>
+</html>

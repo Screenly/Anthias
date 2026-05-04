@@ -1527,6 +1527,11 @@ $footer-height: 13rem;
 // `.splash-page` is the <body> element. The global body rule above adds
 // 4.5rem of top padding for the navbar that this page does not have —
 // strip it here so the gradient + card actually centre.
+//
+// Don't lock scrolling: the splash is opened from phones (QR scan) as
+// well as the device webview. On a small screen with larger system
+// text, several IP pills + the QR can spill past the viewport, and
+// `overflow: hidden` would make that content unreachable.
 .splash-page {
   margin: 0;
   padding: 0;
@@ -1538,7 +1543,6 @@ $footer-height: 13rem;
     radial-gradient(at 20% 10%, rgba(124, 48, 205, 0.45), transparent 55%),
     radial-gradient(at 85% 90%, rgba(91, 32, 144, 0.4), transparent 55%),
     linear-gradient(160deg, #{$anthias-purple-1} 0%, var(--color-bg-deep) 100%);
-  overflow: hidden;
 }
 
 .splash-shell {

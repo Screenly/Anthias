@@ -49,9 +49,17 @@ class Auth(metaclass=ABCMeta):
     config: dict[str, Any] = {}
 
     @abstractmethod
-    def authenticate(self) -> 'HttpResponse | None':
+    def authenticate(
+        self, request: 'HttpRequest | None' = None
+    ) -> 'HttpResponse | None':
         """
         Let the user authenticate himself.
+
+        :param request: the inbound request that triggered the auth
+            check. Implementations that redirect to a login form use
+            it to attach a ``?next=<original-path>`` so the operator
+            returns to where they were after signing in. Optional —
+            backends with no return-to concept (e.g. NoAuth) ignore it.
         :return: a Response which initiates authentication.
         """
         pass
@@ -78,7 +86,7 @@ class Auth(metaclass=ABCMeta):
 
         try:
             if not self.is_authenticated(request):
-                return self.authenticate()
+                return self.authenticate(request)
         except ValueError as e:
             return HttpResponse(
                 'Authorization backend is unavailable: ' + str(e), status=503
@@ -126,7 +134,7 @@ class NoAuth(Auth):
     def is_authenticated(self, request: 'HttpRequest') -> bool:
         return True
 
-    def authenticate(self) -> None:
+    def authenticate(self, request: 'HttpRequest | None' = None) -> None:
         pass
 
     def check_password(self, password: str) -> bool:
@@ -189,11 +197,26 @@ class BasicAuth(Auth):
     def template(self) -> tuple[str, dict[str, Any]]:
         return 'auth_basic.html', {'user': self.settings['user']}
 
-    def authenticate(self) -> 'HttpResponse':
+    def authenticate(
+        self, request: 'HttpRequest | None' = None
+    ) -> 'HttpResponse':
+        from urllib.parse import urlencode
+
         from django.shortcuts import redirect
         from django.urls import reverse
 
-        return redirect(reverse('anthias_app:login'))
+        login_url = reverse('anthias_app:login')
+        # Round-trip the operator's original destination through the
+        # login form so they don't land on the dashboard after signing
+        # in from a deep link (/settings/, /system-info/, etc.).
+        # request.get_full_path() preserves any query string. The login
+        # view validates `next` via url_has_allowed_host_and_scheme, so
+        # an off-host value smuggled in here can't redirect outward.
+        if request is not None:
+            return redirect(
+                f'{login_url}?{urlencode({"next": request.get_full_path()})}'
+            )
+        return redirect(login_url)
 
     def update_settings(
         self,
