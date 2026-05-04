@@ -822,15 +822,22 @@ def test_skip_buttons_publish_correct_command(
     sub: Any = client.pubsub()
     try:
         sub.subscribe('anthias.viewer')
-        # Drain the subscribe-confirmation frame so the next get_message
-        # call returns the actual publish.
-        deadline = monotonic() + 2.0
+        # Wait for the SUBSCRIBE ack frame before clicking — otherwise
+        # uvicorn can publish faster than the broker registers the
+        # subscription, and the test races. ``get_message`` returning
+        # ``None`` just means no frame arrived in this poll window;
+        # keep polling until the deadline rather than breaking out
+        # early.
+        subscribed = False
+        deadline = monotonic() + 5.0
         while monotonic() < deadline:
-            msg = sub.get_message(timeout=0.1)
+            msg = sub.get_message(timeout=0.2)
             if msg is None:
-                break
+                continue
             if msg.get('type') == 'subscribe':
+                subscribed = True
                 break
+        assert subscribed, 'redis SUBSCRIBE ack never arrived'
 
         page.goto(BASE_URL)
         expect(
