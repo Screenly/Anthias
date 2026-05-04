@@ -239,6 +239,39 @@ def test_authenticate_if_needed_threads_request_through(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize('method', ['post', 'put', 'patch', 'delete'])
+def test_basic_auth_authenticate_drops_next_for_unsafe_methods(
+    basic_auth: BasicAuth, method: str
+) -> None:
+    """A POST/PUT/PATCH/DELETE that 401s would otherwise produce a
+    ?next=/some/write/endpoint that the post-login GET redirect
+    bounces back to → 405. Drop next for unsafe methods so the
+    operator lands on the dashboard instead."""
+    factory = RequestFactory()
+    request = getattr(factory, method)('/api/v2/assets/')
+    response = basic_auth.authenticate(request)
+    assert response.status_code == 302
+    assert response['Location'].endswith('/login/')
+    assert 'next=' not in response['Location']
+
+
+@pytest.mark.django_db
+def test_basic_auth_authenticate_drops_next_for_htmx_partial(
+    basic_auth: BasicAuth,
+) -> None:
+    """Dashboard polls htmx fragments every 5s; if the session
+    expires mid-poll we'd otherwise serialize the partial URL into
+    next, dumping the operator on a bare table fragment after sign-in
+    instead of the parent page."""
+    factory = RequestFactory()
+    request = factory.get('/_partials/asset-table/', HTTP_HX_REQUEST='true')
+    response = basic_auth.authenticate(request)
+    assert response.status_code == 302
+    assert response['Location'].endswith('/login/')
+    assert 'next=' not in response['Location']
+
+
+@pytest.mark.django_db
 def test_basic_auth_update_settings_initial_set(
     basic_auth: BasicAuth, basic_auth_settings: dict[str, Any]
 ) -> None:

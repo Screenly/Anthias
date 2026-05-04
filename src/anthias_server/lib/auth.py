@@ -43,6 +43,32 @@ def verify_password(password: str, stored: str) -> bool:
     return bool(check_password(password, stored))
 
 
+def _is_safe_login_next_source(request: 'HttpRequest') -> bool:
+    """Decide whether a request's path is worth round-tripping through
+    the login form's ``?next=`` parameter.
+
+    Two classes of request must NOT propagate ``next``:
+
+    * **Non-GET methods** (POST/PUT/PATCH/DELETE). After the operator
+      signs in we issue a 302 → next, which the browser follows as a
+      GET. Routes that only accept the original method then 405. The
+      operator landing on a 405 right after signing in is worse than
+      landing on the dashboard, so we drop ``next`` for unsafe
+      methods.
+    * **htmx partial endpoints**. The dashboard polls fragments such
+      as ``assets_table_partial`` every 5s with ``HX-Request: true``;
+      the operator's actual address bar still points at the parent
+      page. Bouncing through ``?next=/_partials/asset-table/`` would
+      land them on a bare fragment URL after sign-in instead of the
+      page they were on.
+    """
+    if request.method != 'GET':
+        return False
+    if request.headers.get('HX-Request') is not None:
+        return False
+    return True
+
+
 class Auth(metaclass=ABCMeta):
     display_name: str = ''
     name: str = ''
@@ -206,17 +232,17 @@ class BasicAuth(Auth):
         from django.urls import reverse
 
         login_url = reverse('anthias_app:login')
+        if request is None or not _is_safe_login_next_source(request):
+            return redirect(login_url)
         # Round-trip the operator's original destination through the
         # login form so they don't land on the dashboard after signing
         # in from a deep link (/settings/, /system-info/, etc.).
         # request.get_full_path() preserves any query string. The login
         # view validates `next` via url_has_allowed_host_and_scheme, so
         # an off-host value smuggled in here can't redirect outward.
-        if request is not None:
-            return redirect(
-                f'{login_url}?{urlencode({"next": request.get_full_path()})}'
-            )
-        return redirect(login_url)
+        return redirect(
+            f'{login_url}?{urlencode({"next": request.get_full_path()})}'
+        )
 
     def update_settings(
         self,
