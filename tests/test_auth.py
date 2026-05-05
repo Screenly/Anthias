@@ -1,15 +1,18 @@
 """Tests for anthias_server.lib.auth.
 
 The legacy Auth/NoAuth/BasicAuth class hierarchy has been retired —
-auth is now Django's built-in (session + DRF SessionAuthentication +
-BearerTokenAuthentication + BasicAuthentication). What's left here:
+auth is now Django's built-in (session via DRF
+``SessionAuthentication`` + the deprecation-logging
+``DeprecatedBasicAuthentication`` for back-compat with pre-2826
+headless callers). A UI-managed personal-token path will replace
+Basic in a follow-up. What's covered here:
 
 * The hash helpers (round-trip, legacy-format detection) — still used
   by the data migration to gate which conf rows can be promoted into
   User.password.
 * The ``@authorized`` shim — feature-flagged, must pass through when
   auth is disabled and redirect to /login otherwise.
-* The Bearer / Basic / Session paths reaching the JSON API.
+* The Session and Basic paths reaching the JSON API.
 * ``apply_auth_settings`` — single source of truth for the settings
   page's auth-update flow on both the HTML and DRF code paths.
 """
