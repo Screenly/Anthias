@@ -53,165 +53,42 @@ def _resp(status_code: int = 200, json_data: Any = None) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# remote_branch_available
+# _fetch_latest_release_tag
 # ---------------------------------------------------------------------------
 
 
-def test_remote_branch_available_no_branch(github_env: None) -> None:
-    assert github.remote_branch_available(None) is None
-    assert github.remote_branch_available('') is None
-
-
-def test_remote_branch_available_happy_path(
+def test_fetch_latest_release_tag_cache_hit(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    with mock.patch.object(
-        github, 'requests_get', return_value=_resp(200)
-    ) as mock_get:
-        result = github.remote_branch_available('master')
-    assert result is True
-    mock_get.assert_called_once()
-    url = mock_get.call_args.args[0]
-    # New behavior (#2797): direct branch endpoint, not /branches list.
-    assert 'branches/master' in url
-    assert redis_data['remote-branch-available'] == '1'
-
-
-def test_remote_branch_available_404_returns_false(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    with mock.patch.object(github, 'requests_get', return_value=_resp(404)):
-        assert github.remote_branch_available('nope') is False
-    assert redis_data['remote-branch-available'] == '0'
-
-
-def test_remote_branch_available_request_exception(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    with mock.patch.object(
-        github,
-        'requests_get',
-        side_effect=requests_exceptions.ConnectionError(),
-    ):
-        assert github.remote_branch_available('master') is None
-    # Backoff key was set.
-    assert 'github-api-error' in redis_data
-
-
-def test_remote_branch_available_5xx_triggers_backoff(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    with mock.patch.object(github, 'requests_get', return_value=_resp(500)):
-        assert github.remote_branch_available('master') is None
-    assert 'github-api-error' in redis_data
-
-
-def test_remote_branch_available_uses_cached_hit(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    redis_data['remote-branch-available'] = '1'
+    redis_data[github.LATEST_RELEASE_TAG_KEY] = 'v2026.5.0'
     with mock.patch.object(github, 'requests_get') as mock_get:
-        assert github.remote_branch_available('master') is True
-    mock_get.assert_not_called()
-
-    redis_data['remote-branch-available'] = '0'
-    with mock.patch.object(github, 'requests_get') as mock_get:
-        assert github.remote_branch_available('master') is False
+        assert github._fetch_latest_release_tag() == 'v2026.5.0'
     mock_get.assert_not_called()
 
 
-def test_remote_branch_available_skips_when_backoff_active(
+def test_fetch_latest_release_tag_backoff_skips_fetch(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
     redis_data['github-api-error'] = 'something'
     with mock.patch.object(github, 'requests_get') as mock_get:
-        assert github.remote_branch_available('master') is None
+        assert github._fetch_latest_release_tag() is None
     mock_get.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# fetch_remote_hash
-# ---------------------------------------------------------------------------
-
-
-def test_fetch_remote_hash_no_branch_env(
-    github_env: None, monkeypatch: Any
+def test_fetch_latest_release_tag_happy_path(
+    github_env: None, redis_data: dict[str, str]
 ) -> None:
-    monkeypatch.delenv('GIT_BRANCH', raising=False)
-    assert github.fetch_remote_hash() == (None, False)
-
-
-def test_fetch_remote_hash_cache_hit(
-    github_env: None, redis_data: dict[str, str], monkeypatch: Any
-) -> None:
-    monkeypatch.setenv('GIT_BRANCH', 'master')
-    redis_data['latest-remote-hash'] = 'abc123'
-    with mock.patch.object(github, 'requests_get') as mock_get:
-        result = github.fetch_remote_hash()
-    assert result == ('abc123', False)
-    mock_get.assert_not_called()
-
-
-def test_fetch_remote_hash_short_circuits_when_branch_unavailable(
-    github_env: None, monkeypatch: Any
-) -> None:
-    monkeypatch.setenv('GIT_BRANCH', 'master')
+    resp = _resp(200, json_data={'tag_name': 'v2026.6.0', 'name': 'Release'})
     with mock.patch.object(
-        github, 'remote_branch_available', return_value=False
-    ):
-        result = github.fetch_remote_hash()
-    assert result == (None, False)
+        github, 'requests_get', return_value=resp
+    ) as mock_get:
+        assert github._fetch_latest_release_tag() == 'v2026.6.0'
+    assert redis_data[github.LATEST_RELEASE_TAG_KEY] == 'v2026.6.0'
+    url = mock_get.call_args.args[0]
+    assert url.endswith('/repos/Screenly/Anthias/releases/latest')
 
 
-def test_fetch_remote_hash_happy_path(
-    github_env: None,
-    redis_data: dict[str, str],
-    monkeypatch: Any,
-) -> None:
-    monkeypatch.setenv('GIT_BRANCH', 'master')
-    resp = _resp(200, json_data={'object': {'sha': 'abc123'}})
-    with (
-        mock.patch.object(
-            github, 'remote_branch_available', return_value=True
-        ),
-        mock.patch.object(github, 'requests_get', return_value=resp),
-    ):
-        result = github.fetch_remote_hash()
-    assert result == ('abc123', True)
-    assert redis_data['latest-remote-hash'] == 'abc123'
-
-
-def test_fetch_remote_hash_request_exception(
-    github_env: None, redis_data: dict[str, str], monkeypatch: Any
-) -> None:
-    monkeypatch.setenv('GIT_BRANCH', 'master')
-    with (
-        mock.patch.object(
-            github, 'remote_branch_available', return_value=True
-        ),
-        mock.patch.object(
-            github,
-            'requests_get',
-            side_effect=requests_exceptions.ConnectionError(),
-        ),
-    ):
-        result = github.fetch_remote_hash()
-    assert result == (None, False)
-    assert 'github-api-error' in redis_data
-
-
-# ---------------------------------------------------------------------------
-# _get_ghcr_anonymous_token
-# ---------------------------------------------------------------------------
-
-
-def test_get_ghcr_anonymous_token_happy_path(github_env: None) -> None:
-    resp = _resp(200, json_data={'token': 'tok-123'})
-    with mock.patch.object(github, 'requests_get', return_value=resp):
-        assert github._get_ghcr_anonymous_token() == 'tok-123'
-
-
-def test_get_ghcr_anonymous_token_request_exception(
+def test_fetch_latest_release_tag_request_exception(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
     with mock.patch.object(
@@ -219,258 +96,264 @@ def test_get_ghcr_anonymous_token_request_exception(
         'requests_get',
         side_effect=requests_exceptions.ConnectionError(),
     ):
-        assert github._get_ghcr_anonymous_token() is None
-    assert redis_data['ghcr-api-error'] == '1'
+        assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
 
 
-def test_get_ghcr_anonymous_token_value_error_on_json(
+def test_fetch_latest_release_tag_5xx_triggers_backoff(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    with mock.patch.object(github, 'requests_get', return_value=_resp(500)):
+        assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
+
+
+def test_fetch_latest_release_tag_invalid_json(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
     resp = _resp(200)
     resp.json.side_effect = ValueError('bad json')
     with mock.patch.object(github, 'requests_get', return_value=resp):
-        assert github._get_ghcr_anonymous_token() is None
-    assert redis_data['ghcr-api-error'] == '1'
+        assert github._fetch_latest_release_tag() is None
+    # Malformed bodies arm the same backoff as transport failures so
+    # the next page render doesn't re-fetch immediately.
+    assert 'github-api-error' in redis_data
+    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
-def test_get_ghcr_anonymous_token_missing_field(
+def test_fetch_latest_release_tag_missing_tag_name(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    resp = _resp(200, json_data={'not_token': 'abc'})
+    resp = _resp(200, json_data={'name': 'Release without tag_name'})
     with mock.patch.object(github, 'requests_get', return_value=resp):
-        assert github._get_ghcr_anonymous_token() is None
-    assert redis_data['ghcr-api-error'] == '1'
+        assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
+    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
-def test_get_ghcr_anonymous_token_non_string_field(
+def test_fetch_latest_release_tag_non_string_tag_name(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    resp = _resp(200, json_data={'token': 12345})
+    resp = _resp(200, json_data={'tag_name': 12345})
     with mock.patch.object(github, 'requests_get', return_value=resp):
-        assert github._get_ghcr_anonymous_token() is None
-    assert redis_data['ghcr-api-error'] == '1'
+        assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
+    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
+
+
+def test_fetch_latest_release_tag_unparseable_tag_name(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """An upstream tag like ``nightly`` must not be cached: with a
+    24h TTL, caching it would pin is_up_to_date() to the fallback
+    verdict for a day even after upstream corrects the tag. Trip the
+    5-minute backoff instead so the next attempt re-fetches once
+    upstream is fixed."""
+    resp = _resp(200, json_data={'tag_name': 'nightly'})
+    with mock.patch.object(github, 'requests_get', return_value=resp):
+        assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
+    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
 # ---------------------------------------------------------------------------
-# _get_ghcr_manifest_digest
+# _parse_version
 # ---------------------------------------------------------------------------
 
 
-def test_get_ghcr_manifest_digest_happy_path(github_env: None) -> None:
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.headers = {'Docker-Content-Digest': 'sha256:abc'}
-    with mock.patch.object(github, 'requests_head', return_value=resp):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') == 'sha256:abc'
+def test_parse_version_strips_leading_v() -> None:
+    a = github._parse_version('v2026.5.0')
+    b = github._parse_version('2026.5.0')
+    assert a is not None and b is not None
+    assert a == b
 
 
-def test_get_ghcr_manifest_digest_404_no_backoff(
+def test_parse_version_invalid_returns_none() -> None:
+    assert github._parse_version('') is None
+    assert github._parse_version('not-a-version') is None
+
+
+def test_parse_version_calver_ordering_is_numeric() -> None:
+    """Catches the bug from the issue: string compare would put 10
+    before 5; packaging.version must compare numerically."""
+    assert github._parse_version('2026.10.0') > github._parse_version(  # type: ignore[operator]
+        '2026.5.0'
+    )
+
+
+# ---------------------------------------------------------------------------
+# is_up_to_date
+# ---------------------------------------------------------------------------
+
+
+def test_is_up_to_date_matching_versions_returns_true(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    resp = MagicMock()
-    resp.status_code = 404
-    resp.headers = {}
-    with mock.patch.object(github, 'requests_head', return_value=resp):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') is None
-    assert 'ghcr-api-error' not in redis_data
-
-
-def test_get_ghcr_manifest_digest_5xx_with_backoff(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    resp = MagicMock()
-    resp.status_code = 500
-    resp.headers = {}
-    with mock.patch.object(github, 'requests_head', return_value=resp):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') is None
-    assert redis_data['ghcr-api-error'] == '1'
-
-
-def test_get_ghcr_manifest_digest_429_with_backoff(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    resp = MagicMock()
-    resp.status_code = 429
-    resp.headers = {}
-    with mock.patch.object(github, 'requests_head', return_value=resp):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') is None
-    assert redis_data['ghcr-api-error'] == '1'
-
-
-def test_get_ghcr_manifest_digest_request_exception(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    with mock.patch.object(
-        github,
-        'requests_head',
-        side_effect=requests_exceptions.ConnectionError(),
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.5.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value='v2026.5.0'
+        ),
     ):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') is None
-    assert redis_data['ghcr-api-error'] == '1'
+        assert github.is_up_to_date() is True
+    assert redis_data[github._verdict_cache_key('2026.5.0')] == '1'
 
 
-def test_get_ghcr_manifest_digest_missing_header_with_backoff(
+def test_is_up_to_date_local_behind_returns_false(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.headers = {}
-    with mock.patch.object(github, 'requests_head', return_value=resp):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') is None
-    assert redis_data['ghcr-api-error'] == '1'
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.5.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value='v2026.6.0'
+        ),
+    ):
+        assert github.is_up_to_date() is False
+    assert redis_data[github._verdict_cache_key('2026.5.0')] == '0'
 
 
-def test_get_ghcr_manifest_digest_empty_header_with_backoff(
+def test_is_up_to_date_local_ahead_returns_true(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.headers = {'Docker-Content-Digest': ''}
-    with mock.patch.object(github, 'requests_head', return_value=resp):
-        assert github._get_ghcr_manifest_digest('tag', 'tok') is None
-    assert redis_data['ghcr-api-error'] == '1'
+    """A local dev bump (e.g. master tip past the last release tag)
+    is still 'up to date' — the indicator is about being behind, not
+    matching exactly."""
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.10.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value='v2026.5.0'
+        ),
+    ):
+        assert github.is_up_to_date() is True
+    assert redis_data[github._verdict_cache_key('2026.10.0')] == '1'
 
 
-# ---------------------------------------------------------------------------
-# is_running_latest_published_image
-# ---------------------------------------------------------------------------
-
-
-def test_is_running_latest_published_image_missing_inputs(
+def test_is_up_to_date_unparseable_local_suppresses_indicator(
     github_env: None,
 ) -> None:
-    assert github.is_running_latest_published_image(None, 'pi4') is None
-    assert github.is_running_latest_published_image('abc1234', None) is None
-    assert github.is_running_latest_published_image('', 'pi4') is None
-    assert github.is_running_latest_published_image('abc1234', '') is None
-
-
-def test_is_running_latest_published_image_cache_hit_match(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    redis_data['latest-published-image-match:pi4:abc1234'] = '1'
-    assert github.is_running_latest_published_image('abc1234', 'pi4') is True
-
-
-def test_is_running_latest_published_image_cache_hit_mismatch(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    redis_data['latest-published-image-match:pi4:abc1234'] = '0'
-    assert github.is_running_latest_published_image('abc1234', 'pi4') is False
-
-
-def test_is_running_latest_published_image_cache_hit_unknown(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    redis_data['latest-published-image-match:pi4:abc1234'] = '?'
-    assert github.is_running_latest_published_image('abc1234', 'pi4') is None
-
-
-def test_is_running_latest_published_image_backoff_active(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    redis_data['ghcr-api-error'] = '1'
-    assert github.is_running_latest_published_image('abc1234', 'pi4') is None
-
-
-def test_is_running_latest_published_image_no_token(github_env: None) -> None:
-    with mock.patch.object(
-        github, '_get_ghcr_anonymous_token', return_value=None
+    """Dev builds without a parseable CalVer get no comparison and no
+    pill. The remote fetch isn't even attempted in that case."""
+    with (
+        mock.patch.object(github, 'get_anthias_release', return_value=''),
+        mock.patch.object(github, '_fetch_latest_release_tag') as fetch_mock,
     ):
-        assert (
-            github.is_running_latest_published_image('abc1234', 'pi4') is None
-        )
+        assert github.is_up_to_date() is True
+    fetch_mock.assert_not_called()
 
 
-def test_is_running_latest_published_image_no_latest_digest(
+def test_is_up_to_date_unparseable_local_string_suppresses_indicator(
     github_env: None,
 ) -> None:
     with (
         mock.patch.object(
-            github, '_get_ghcr_anonymous_token', return_value='tok'
+            github, 'get_anthias_release', return_value='dev-snapshot'
         ),
-        mock.patch.object(
-            github, '_get_ghcr_manifest_digest', return_value=None
-        ),
+        mock.patch.object(github, '_fetch_latest_release_tag') as fetch_mock,
     ):
-        assert (
-            github.is_running_latest_published_image('abc1234', 'pi4') is None
-        )
+        assert github.is_up_to_date() is True
+    fetch_mock.assert_not_called()
 
 
-def test_is_running_latest_published_image_current_404_caches_unknown(
+def test_is_up_to_date_github_error_with_cached_verdict_uses_it(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    # First call returns latest digest, second returns None (404).
-    digests = ['sha256:latest', None]
+    redis_data[github._verdict_cache_key('2026.5.0')] = '1'
     with (
         mock.patch.object(
-            github, '_get_ghcr_anonymous_token', return_value='tok'
+            github, 'get_anthias_release', return_value='2026.5.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value=None
+        ),
+    ):
+        assert github.is_up_to_date() is True
+
+    redis_data[github._verdict_cache_key('2026.5.0')] = '0'
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.5.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value=None
+        ),
+    ):
+        assert github.is_up_to_date() is False
+
+
+def test_is_up_to_date_verdict_cache_does_not_leak_across_releases(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """An upgrade during a GitHub outage must not reuse the previous
+    version's verdict — that verdict was computed against the OLD
+    installed release, so it can be stale either way after an
+    upgrade. Without a cached verdict for the new release, fall back
+    to False so the indicator state catches up to reality on the next
+    successful check."""
+    redis_data[github._verdict_cache_key('2026.5.0')] = '0'
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.6.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value=None
+        ),
+    ):
+        assert github.is_up_to_date() is False
+
+
+def test_is_up_to_date_github_error_no_cache_returns_false(
+    github_env: None,
+) -> None:
+    """First-run fail-pessimistic: don't claim 'up to date' when we
+    have never successfully checked."""
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.5.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value=None
+        ),
+    ):
+        assert github.is_up_to_date() is False
+
+
+def test_is_up_to_date_malformed_remote_tag_falls_back(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    redis_data[github._verdict_cache_key('2026.5.0')] = '1'
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.5.0'
         ),
         mock.patch.object(
             github,
-            '_get_ghcr_manifest_digest',
-            side_effect=digests,
+            '_fetch_latest_release_tag',
+            return_value='not-a-version',
         ),
     ):
-        assert (
-            github.is_running_latest_published_image('abc1234', 'pi4') is None
-        )
-    assert redis_data['latest-published-image-match:pi4:abc1234'] == '?'
+        assert github.is_up_to_date() is True
 
 
-def test_is_running_latest_published_image_match(
-    github_env: None, redis_data: dict[str, str]
+def test_is_up_to_date_malformed_remote_tag_no_cache_returns_false(
+    github_env: None,
 ) -> None:
-    digests = ['sha256:same', 'sha256:same']
     with (
         mock.patch.object(
-            github, '_get_ghcr_anonymous_token', return_value='tok'
+            github, 'get_anthias_release', return_value='2026.5.0'
         ),
         mock.patch.object(
             github,
-            '_get_ghcr_manifest_digest',
-            side_effect=digests,
+            '_fetch_latest_release_tag',
+            return_value='not-a-version',
         ),
     ):
-        assert (
-            github.is_running_latest_published_image('abc1234', 'pi4') is True
-        )
-    assert redis_data['latest-published-image-match:pi4:abc1234'] == '1'
-
-
-def test_is_running_latest_published_image_mismatch(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    digests = ['sha256:latest', 'sha256:older']
-    with (
-        mock.patch.object(
-            github, '_get_ghcr_anonymous_token', return_value='tok'
-        ),
-        mock.patch.object(
-            github,
-            '_get_ghcr_manifest_digest',
-            side_effect=digests,
-        ),
-    ):
-        assert (
-            github.is_running_latest_published_image('abc1234', 'pi4') is False
-        )
-    assert redis_data['latest-published-image-match:pi4:abc1234'] == '0'
-
-
-def test_is_running_latest_published_image_cache_key_scoped(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    """Cache verdict for one (board, hash) doesn't leak to another."""
-    redis_data['latest-published-image-match:pi4:abc1234'] = '1'
-    # Different hash → not a hit → fall through to lookup logic.
-    with mock.patch.object(
-        github, '_get_ghcr_anonymous_token', return_value=None
-    ):
-        assert (
-            github.is_running_latest_published_image('def5678', 'pi4') is None
-        )
+        assert github.is_up_to_date() is False
 
 
 # ---------------------------------------------------------------------------
