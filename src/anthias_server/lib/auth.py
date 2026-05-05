@@ -423,13 +423,24 @@ def _update_existing_operator(
     """Mutate the existing operator row in response to the settings
     form. Each of username / password is independently optional —
     only changes that were actually requested validate the current
-    password."""
+    password.
+
+    ``apply_auth_settings`` runs on every settings save (the form
+    POSTs the whole page, even unrelated fields like splash-screen
+    toggles), so we track which auth fields actually changed and
+    skip the DB write when none of them did. ``update_fields`` on
+    the targeted save also avoids touching columns we didn't touch
+    in memory.
+    """
+    changed_fields: list[str] = []
+
     if new_username and new_username != operator.get_username():
         _require_current_password_correct(
             current_pass_correct, action='username'
         )
         _check_username_available(operator, new_username)
         operator.username = new_username
+        changed_fields.append('username')
 
     if new_pwd:
         _require_current_password_correct(
@@ -439,8 +450,10 @@ def _update_existing_operator(
             raise AuthSettingsError(_ERR_PWD_MISMATCH)
         _validate_password_strength(new_pwd, operator)
         operator.set_password(new_pwd)
+        changed_fields.append('password')
 
-    operator.save()
+    if changed_fields:
+        operator.save(update_fields=changed_fields)
 
 
 def _create_initial_operator(

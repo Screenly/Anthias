@@ -613,6 +613,43 @@ def test_apply_auth_settings_re_enable_with_correct_pwd_succeeds() -> None:
 
 
 @pytest.mark.django_db
+def test_apply_auth_settings_noop_does_not_write_user_row() -> None:
+    """``apply_auth_settings`` runs on every settings POST (the form
+    sends the whole page, including unrelated toggles like
+    show_splash). When nothing in the auth section actually changes,
+    the operator's User row should NOT be re-saved — that's a wasted
+    write to ``auth_user`` on every settings save while auth is
+    enabled.
+
+    Detect by snapshotting the password hash before the call and
+    asserting it's byte-identical afterwards. Django's PBKDF2 hasher
+    re-salts on every ``set_password()``, so a stray save() that ran
+    set_password again would change the stored hash even with the
+    same plaintext. (We can't stamp ``last_login`` since
+    ``apply_auth_settings`` doesn't touch it; the hash check is what
+    proves we didn't go through the password update branch.)
+    """
+    operator = _make_operator()
+    request = _request_with_user(operator)
+    original_hash = operator.password
+    original_pk = operator.pk
+
+    # No new username, no new password, no change of backend.
+    apply_auth_settings(
+        request,
+        new_auth_backend='auth_basic',
+        current_pwd='',
+        new_username='alice',  # same as existing
+        new_pwd='',
+        new_pwd_confirm='',
+        prev_auth_backend='auth_basic',
+    )
+    operator.refresh_from_db()
+    assert operator.pk == original_pk
+    assert operator.password == original_hash
+
+
+@pytest.mark.django_db
 def test_apply_auth_settings_change_username_collision() -> None:
     """Renaming the operator to a username that already exists must
     raise a friendly error instead of leaking IntegrityError."""
