@@ -296,6 +296,15 @@ class AuthSettingsError(ValueError):
 _ERR_INCORRECT_CURRENT = 'Incorrect current password.'
 _ERR_PWD_MISMATCH = 'New passwords do not match!'
 
+# The auth_backend feature flag accepts only these values. The DRF
+# settings serializer already enforces this via a ChoiceField, but the
+# HTML settings form reads ``request.POST.get('auth_backend', '')``
+# raw, so a hand-crafted form could otherwise persist an unknown
+# value and ``@authorized`` would start enforcing login with no
+# matching User row → lockout. Validate centrally here so both write
+# paths share the same gate.
+_VALID_AUTH_BACKENDS = frozenset({'', 'auth_basic'})
+
 
 def _operator_user(
     request: 'HttpRequest',
@@ -418,6 +427,15 @@ def apply_auth_settings(
     project-wide. The HTML form names are still mapped at the call
     site (``settings_save`` and ``DeviceSettingsViewV2.patch``).
     """
+    if new_auth_backend not in _VALID_AUTH_BACKENDS:
+        # Reject before any DB or conf mutation so a hand-crafted POST
+        # can't persist an unknown backend value and lock the device
+        # out (``@authorized`` would start enforcing login with no
+        # operator User row to authenticate against).
+        raise AuthSettingsError(
+            f'Unknown authentication backend: {new_auth_backend!r}'
+        )
+
     operator = _operator_user(request)
 
     current_pass_correct: bool | None = None

@@ -474,6 +474,31 @@ def test_apply_auth_settings_disable_with_correct_password_succeeds() -> None:
     assert User.objects.filter(username='alice').exists()
 
 
+@pytest.mark.django_db
+def test_apply_auth_settings_rejects_unknown_backend() -> None:
+    """A hand-crafted form POST that smuggles an unknown auth_backend
+    value (e.g. 'something-else') must be rejected before any DB or
+    conf mutation. Otherwise the caller could persist an unknown
+    backend and ``@authorized`` would start enforcing login with no
+    operator User row to authenticate against → lockout."""
+    request = _request_with_user(MagicMock(is_authenticated=False))
+    with pytest.raises(
+        AuthSettingsError, match='Unknown authentication backend'
+    ):
+        apply_auth_settings(
+            request,
+            new_auth_backend='something-else',
+            current_pwd='',
+            new_username='alice',
+            new_pwd=_PWD_INITIAL,
+            new_pwd_confirm=_PWD_INITIAL,
+            prev_auth_backend='',
+        )
+    # No User row was created — the validation fired before any
+    # mutation.
+    assert not User.objects.filter(username='alice').exists()
+
+
 # ---------------------------------------------------------------------------
 # DRF authentication paths
 #
