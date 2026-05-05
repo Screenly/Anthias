@@ -89,42 +89,6 @@ $ docker compose exec anthias-server \
 Once you have created a superuser account, you can open the Django admin site at `http://localhost:8000/admin/` (with a trailing slash)
 and login with the credentials you just created.
 
-## Authentication
-
-Anthias gates the dashboard and the JSON API behind Django's built-in
-auth (`django.contrib.auth`). The credential check is enforced by an
-`@authorized` shim that flips on whenever the operator picks **Basic**
-from the Authentication dropdown in **Settings**; on a fresh device the
-default is no auth and the API is open on the LAN.
-
-There are two credential paths that resolve to the same `User` table:
-
-* **Browser session** — POST username + password to `/login/`. The
-  resulting cookie is what the HTML dashboard uses. It also works
-  for `GET` requests against the JSON API, but DRF's
-  `SessionAuthentication` enforces CSRF on `POST` / `PUT` / `PATCH`
-  / `DELETE`, so a cookie-only script will hit 403s on write
-  endpoints unless it also forwards the `csrftoken` cookie as an
-  `X-CSRFToken` header. Treat this path as **browser-only**;
-  headless automation should use the path below.
-* **HTTP Basic** *(legacy, deprecated — current path for headless
-  automation)* — pre-2826 versions of Anthias-CLI and third-party
-  scripts written against the old auth keep working with
-  `Authorization: Basic <b64>`. Every successful Basic-auth request
-  emits a `DEPRECATED: HTTP Basic auth used on <path> by user
-  <name> from <ip>` warning in the server log so we can grep for
-  the last surviving callers before removing the path entirely. A
-  UI-managed personal-token system that will replace Basic for
-  headless callers is tracked as a follow-up.
-
-There's a third, internal-only path for the viewer process: it signs
-its requests to `/api/v2/...` (currently just the asset-recheck
-endpoint) with an HMAC of `settings['django_secret_key']` and sends
-the digest in the `X-Anthias-Internal-Token` header. That secret never
-leaves the device — the viewer and server share the same
-`anthias.conf` — and it bypasses the User table because the viewer
-isn't a credentialed actor. See `anthias_common.internal_auth` for the
-HMAC shape if you're adding a new internal endpoint.
 
 ## Testing
 ### Running the unit tests
