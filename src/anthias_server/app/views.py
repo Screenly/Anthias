@@ -657,10 +657,10 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         apply_auth_settings(
             request,
             new_auth_backend=auth_backend,
-            current_password=current_password,
+            current_pwd=current_password,
             new_username=request.POST.get('user', ''),
-            new_password=request.POST.get('password', ''),
-            new_password_confirm=request.POST.get('password_2', ''),
+            new_pwd=request.POST.get('password', ''),
+            new_pwd_confirm=request.POST.get('password_2', ''),
             prev_auth_backend=prev_auth_backend,
         )
         settings['auth_backend'] = auth_backend

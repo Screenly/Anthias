@@ -37,36 +37,39 @@ def _conf_path() -> str | None:
     return os.path.join(home, '.anthias', 'anthias.conf')
 
 
+def _conf_get(config, section, field):  # type: ignore[no-untyped-def]
+    """Trim helper around configparser — returns '' when the section
+    or key doesn't exist."""
+    if not config.has_section(section):
+        return ''
+    return config.get(section, field, fallback='').strip()
+
+
 def _read_auth_state(path):  # type: ignore[no-untyped-def]
-    """Return ``(auth_backend, username, password_hash)`` extracted
-    from anthias.conf, or ``None`` if the file can't be parsed."""
+    """Return ``(config, auth_backend, username, password_hash)``
+    extracted from anthias.conf, or ``None`` if the file can't be
+    parsed."""
     config = configparser.ConfigParser()
     try:
         config.read(path)
     except configparser.Error:
         logging.exception('Could not parse %s; skipping auth migration', path)
         return None
-    auth_backend = (
-        config.get('main', 'auth_backend', fallback='').strip()
-        if config.has_section('main')
-        else ''
+    return (
+        config,
+        _conf_get(config, 'main', 'auth_backend'),
+        _conf_get(config, 'auth_basic', 'user'),
+        _conf_get(config, 'auth_basic', 'password'),
     )
-    username = (
-        config.get('auth_basic', 'user', fallback='').strip()
-        if config.has_section('auth_basic')
-        else ''
-    )
-    password_hash = (
-        config.get('auth_basic', 'password', fallback='').strip()
-        if config.has_section('auth_basic')
-        else ''
-    )
-    return config, auth_backend, username, password_hash
 
 
-def _promote_user(User, username, password_hash):  # type: ignore[no-untyped-def]
+def _promote_user(  # type: ignore[no-untyped-def]
+    user_model,  # noqa: N803  (Django User model is conventionally `User`,
+    username,  # but Sonar's S117 wants snake_case; rename the param
+    password_hash,  # to keep the linter happy.)
+):
     """Idempotent upsert of the operator User row from the conf hash."""
-    User.objects.update_or_create(
+    user_model.objects.update_or_create(
         username=username,
         defaults={
             'password': password_hash,
@@ -78,7 +81,7 @@ def _promote_user(User, username, password_hash):  # type: ignore[no-untyped-def
 
 
 def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
-    User = apps.get_model('auth', 'User')
+    user_model = apps.get_model('auth', 'User')
 
     path = _conf_path()
     if path is None or not os.path.isfile(path):
@@ -117,7 +120,7 @@ def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
             )
             disable_auth = True
         else:
-            _promote_user(User, username, password_hash)
+            _promote_user(user_model, username, password_hash)
 
     needs_write = False
     if disable_auth:

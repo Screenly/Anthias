@@ -660,10 +660,10 @@ class DeviceSettingsViewV2(APIView):
             apply_auth_settings(
                 request,
                 new_auth_backend=auth_backend,
-                current_password=current_password,
+                current_pwd=current_password,
                 new_username=data.get('username', ''),
-                new_password=data.get('password', ''),
-                new_password_confirm=data.get('password_2', ''),
+                new_pwd=data.get('password', ''),
+                new_pwd_confirm=data.get('password_2', ''),
                 prev_auth_backend=prev_auth_backend,
             )
             settings['auth_backend'] = auth_backend

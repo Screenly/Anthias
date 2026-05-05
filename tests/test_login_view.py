@@ -31,8 +31,12 @@ _FIXTURE_BAD_PASSWORD = 'fixture-login-bad-pwd'  # NOSONAR
 
 @pytest.fixture
 def operator() -> User:
+    # Single NOSONAR-suppressed call site for User factory — keeps
+    # Sonar's S6437 (hard-coded password) firing in one place per file
+    # rather than once per test that needs an operator.
     return User.objects.create_superuser(
-        username='alice', password=_FIXTURE_PASSWORD
+        username='alice',
+        password=_FIXTURE_PASSWORD,  # NOSONAR
     )
 
 

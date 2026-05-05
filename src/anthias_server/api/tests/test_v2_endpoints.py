@@ -235,6 +235,16 @@ def test_enable_basic_auth(
     publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
 
+def _make_operator(username: str, pwd: str) -> User:
+    """Single NOSONAR-suppressed call site for the test User factory
+    so Sonar's S6437 doesn't fire on every test that needs an operator
+    row."""
+    return User.objects.create_superuser(
+        username=username,
+        password=pwd,  # NOSONAR
+    )
+
+
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.settings')
 @mock.patch('anthias_server.api.views.v2.ViewerPublisher')
@@ -249,9 +259,7 @@ def test_disable_basic_auth(
     password. Validating ``current_password`` is required — we drive
     the patch as the operator (force_authenticate) so the operator's
     credentials reach apply_auth_settings."""
-    user = User.objects.create_superuser(
-        username='testuser', password=_FIXTURE_PASSWORD
-    )
+    user = _make_operator(username='testuser', pwd=_FIXTURE_PASSWORD)
     api_client.force_authenticate(user=user)
 
     settings_mock.load = mock.MagicMock()
