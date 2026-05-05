@@ -499,6 +499,69 @@ def test_apply_auth_settings_rejects_unknown_backend() -> None:
     assert not User.objects.filter(username='alice').exists()
 
 
+@pytest.mark.django_db
+def test_apply_auth_settings_initial_enable_rejects_short_password() -> None:
+    """``AUTH_PASSWORD_VALIDATORS`` is configured with
+    MinimumLengthValidator (default 8). Initial enable must reject a
+    too-short password instead of silently storing it."""
+    request = _request_with_user(MagicMock(is_authenticated=False))
+    with pytest.raises(AuthSettingsError, match='too short'):
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd='',
+            new_username='alice',
+            new_pwd='short',  # NOSONAR - 5 chars; under MinimumLengthValidator's 8
+            new_pwd_confirm='short',  # NOSONAR
+            prev_auth_backend='',
+        )
+    # No half-created User row left behind.
+    assert not User.objects.filter(username='alice').exists()
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_change_password_rejects_too_short() -> None:
+    """Same validator stack runs on password change."""
+    user = _make_operator()
+    request = _request_with_user(user)
+    with pytest.raises(AuthSettingsError, match='too short'):
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd=_PWD_OLD,
+            new_username='alice',
+            new_pwd='abc',  # NOSONAR - 3 chars
+            new_pwd_confirm='abc',  # NOSONAR
+            prev_auth_backend='auth_basic',
+        )
+    # Password unchanged; old still verifies.
+    user.refresh_from_db()
+    assert user.check_password(_PWD_OLD)
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_change_username_collision() -> None:
+    """Renaming the operator to a username that already exists must
+    raise a friendly error instead of leaking IntegrityError."""
+    operator = _make_operator(username='alice', pwd=_PWD_OLD)
+    # Another user (e.g. one created via `manage.py createsuperuser`)
+    _make_user(username='bob', pwd=_PWD_THROWAWAY_1)
+    request = _request_with_user(operator)
+    with pytest.raises(AuthSettingsError, match='already taken'):
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd=_PWD_OLD,
+            new_username='bob',  # collides
+            new_pwd='',
+            new_pwd_confirm='',
+            prev_auth_backend='auth_basic',
+        )
+    # Operator's username was NOT changed.
+    operator.refresh_from_db()
+    assert operator.username == 'alice'
+
+
 # ---------------------------------------------------------------------------
 # DRF authentication paths
 #

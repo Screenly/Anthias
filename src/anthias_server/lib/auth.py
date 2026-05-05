@@ -61,7 +61,7 @@ from functools import wraps
 from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar, cast
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser
+    from django.contrib.auth.models import User
     from django.http import HttpRequest, HttpResponse
 
 P = ParamSpec('P')
@@ -308,7 +308,7 @@ _VALID_AUTH_BACKENDS = frozenset({'', 'auth_basic'})
 
 def _operator_user(
     request: 'HttpRequest',
-) -> 'AbstractBaseUser | None':
+) -> 'User | None':
     """The User row whose credentials gate this device.
 
     When auth is currently enabled the calling view is gated by
@@ -321,8 +321,10 @@ def _operator_user(
         return None
     # ``request.user`` is typed as ``Any`` via ``getattr``; narrow it so
     # the function's annotated return type holds without a generic Any
-    # leak (mypy --strict-no-any-return).
-    return cast('AbstractBaseUser', user)
+    # leak (mypy --strict-no-any-return). Anthias uses Django's stock
+    # ``auth.User`` model — no custom ``AUTH_USER_MODEL`` — so the
+    # cast to ``User`` is safe.
+    return cast('User', user)
 
 
 def _require_current_password_correct(
@@ -342,8 +344,53 @@ def _require_current_password_correct(
         raise AuthSettingsError(_ERR_INCORRECT_CURRENT)
 
 
+def _validate_password_strength(
+    new_pwd: str,
+    user: 'User | None',
+) -> None:
+    """Run the project's ``AUTH_PASSWORD_VALIDATORS`` against the
+    proposed password and translate any rejection into
+    ``AuthSettingsError`` so the HTML / DRF surfaces show an
+    operator-readable message instead of leaking ``ValidationError``.
+
+    Without this hook the validators in
+    ``django_project.settings.AUTH_PASSWORD_VALIDATORS``
+    (UserAttributeSimilarity, MinimumLength, CommonPassword,
+    NumericPassword) would silently sit unused — ``set_password()``
+    just hashes whatever you give it.
+    """
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError
+
+    try:
+        validate_password(new_pwd, user=user)
+    except ValidationError as exc:
+        raise AuthSettingsError(' '.join(exc.messages)) from exc
+
+
+def _check_username_available(
+    operator: 'User',
+    new_username: str,
+) -> None:
+    """Reject a username change that would collide with another row
+    before the ``operator.save()`` call raises ``IntegrityError`` on
+    the unique constraint. Anthias is single-operator in practice,
+    but a Django admin createsuperuser leaves a second User behind,
+    and the raw IntegrityError leaks SQL in the messages flash."""
+    from django.contrib.auth.models import User as UserModel
+
+    if (
+        UserModel.objects.filter(username=new_username)
+        .exclude(pk=operator.pk)
+        .exists()
+    ):
+        raise AuthSettingsError(
+            f'Username {new_username!r} is already taken.'
+        )
+
+
 def _update_existing_operator(
-    operator: 'AbstractBaseUser',
+    operator: 'User',
     *,
     new_username: str,
     new_pwd: str,
@@ -358,7 +405,8 @@ def _update_existing_operator(
         _require_current_password_correct(
             current_pass_correct, action='username'
         )
-        operator.username = new_username  # type: ignore[attr-defined]
+        _check_username_available(operator, new_username)
+        operator.username = new_username
 
     if new_pwd:
         _require_current_password_correct(
@@ -366,6 +414,7 @@ def _update_existing_operator(
         )
         if new_pwd != new_pwd_confirm:
             raise AuthSettingsError(_ERR_PWD_MISMATCH)
+        _validate_password_strength(new_pwd, operator)
         operator.set_password(new_pwd)
 
     operator.save()
@@ -387,6 +436,13 @@ def _create_initial_operator(
         raise AuthSettingsError('Must provide password')
     if new_pwd != new_pwd_confirm:
         raise AuthSettingsError(_ERR_PWD_MISMATCH)
+
+    # Validate against AUTH_PASSWORD_VALIDATORS *before* creating the
+    # User row so a rejected password doesn't leave a half-created
+    # superuser behind. Pass an unsaved User instance so the
+    # UserAttributeSimilarity validator can still compare the
+    # password against the proposed username.
+    _validate_password_strength(new_pwd, User(username=new_username))
 
     user, _ = User.objects.update_or_create(
         username=new_username,

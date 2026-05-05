@@ -28,12 +28,31 @@ from __future__ import annotations
 import configparser
 import logging
 import os
-import re
 import tempfile
 
 from django.db import migrations, transaction
 
-_LEGACY_SHA256_HEX = re.compile(r'^[0-9a-f]{64}$')
+
+def _is_django_password_hash(value):  # type: ignore[no-untyped-def]
+    """True iff Django can parse ``value`` as one of its registered
+    password-hasher outputs.
+
+    The previous heuristic was ``'$' in value and not legacy_sha256``,
+    which would happily promote a literal plaintext password
+    containing ``$`` (e.g. ``my$ecret``) into ``User.password`` and
+    then nobody could log in. ``identify_hasher`` actually parses the
+    string against ``settings.PASSWORD_HASHERS`` and raises on any
+    string that isn't a recognised algorithm + payload.
+    """
+    if not value:
+        return False
+    try:
+        from django.contrib.auth.hashers import identify_hasher
+
+        identify_hasher(value)
+    except Exception:
+        return False
+    return True
 
 
 def _conf_path() -> str | None:
@@ -146,8 +165,8 @@ def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
     # decision and the auth-backend feature-flag fix-up below key off
     # the same predicates.
     creds_present = bool(username and password_hash)
-    creds_django_format = creds_present and (
-        not _LEGACY_SHA256_HEX.match(password_hash) and '$' in password_hash
+    creds_django_format = creds_present and _is_django_password_hash(
+        password_hash
     )
 
     # Promote any Django-format hash into a User row regardless of
