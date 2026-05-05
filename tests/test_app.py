@@ -785,27 +785,91 @@ def test_system_info_page_renders(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_skip_next_button_present(reset_assets: None, page: Page) -> None:
-    """The Next/Previous controls fire a viewer Redis publish — we
-    can't observe the side effect without a viewer process, so the
-    test just confirms the controls exist and submit cleanly (no 5xx
-    on the action endpoint)."""
-    Asset.objects.create(**asset_active)
-    page.goto(BASE_URL)
-    expect(
-        page.get_by_role('heading', name='Schedule Overview')
-    ).to_be_visible()
-    _disable_asset_poll(page)
+@pytest.mark.parametrize(
+    ('selector', 'expected_command'),
+    [
+        ('form[action*="control/next"] button[type="submit"]', 'next'),
+        ('form[action*="control/previous"] button[type="submit"]', 'previous'),
+    ],
+)
+def test_skip_buttons_publish_correct_command(
+    reset_assets: None,
+    page: Page,
+    selector: str,
+    expected_command: str,
+) -> None:
+    """Regression for #2821: clicking Next / Previous on the home page
+    must publish the bare ``next`` / ``previous`` token on the
+    ``anthias.viewer`` Redis channel — that's what the viewer's
+    command dispatch table (src/anthias_viewer/__init__.py — ``commands``)
+    keys on. A previous revision sent ``asset_<command>`` instead,
+    which fell through to the ``unknown`` handler so the buttons
+    silently no-op'd in production despite returning a clean 302."""
+    import redis as _redis
 
-    next_btn = page.locator(
-        'form[action*="control/next"] button[type="submit"]'
+    Asset.objects.create(**asset_active)
+
+    # Subscribe to the viewer channel BEFORE clicking. Using a
+    # directly-constructed client (not connect_to_redis) bypasses the
+    # autouse fake in conftest.py — uvicorn is a separate process and
+    # publishes against the real broker either way.
+    # ``pubsub`` typed as Any because redis-py's stubs don't expose
+    # get_message / unsubscribe on the PubSub class (matches the
+    # workaround in src/anthias_viewer/messaging.py).
+    client: Any = _redis.Redis(
+        host='redis', port=6379, db=0, decode_responses=True
     )
-    prev_btn = page.locator(
-        'form[action*="control/previous"] button[type="submit"]'
-    )
-    expect(next_btn).to_be_visible()
-    expect(prev_btn).to_be_visible()
-    next_btn.click()
-    expect(
-        page.get_by_role('heading', name='Schedule Overview')
-    ).to_be_visible()
+    sub: Any = client.pubsub()
+    try:
+        sub.subscribe('anthias.viewer')
+        # Wait for the SUBSCRIBE ack frame before clicking — otherwise
+        # uvicorn can publish faster than the broker registers the
+        # subscription, and the test races. ``get_message`` returning
+        # ``None`` just means no frame arrived in this poll window;
+        # keep polling until the deadline rather than breaking out
+        # early.
+        subscribed = False
+        deadline = monotonic() + 5.0
+        while monotonic() < deadline:
+            msg = sub.get_message(timeout=0.2)
+            if msg is None:
+                continue
+            if msg.get('type') == 'subscribe':
+                subscribed = True
+                break
+        assert subscribed, 'redis SUBSCRIBE ack never arrived'
+
+        page.goto(BASE_URL)
+        expect(
+            page.get_by_role('heading', name='Schedule Overview')
+        ).to_be_visible()
+        _disable_asset_poll(page)
+
+        btn = page.locator(selector)
+        expect(btn).to_be_visible()
+        btn.click()
+        expect(
+            page.get_by_role('heading', name='Schedule Overview')
+        ).to_be_visible()
+
+        published: str | None = None
+        deadline = monotonic() + 5.0
+        while monotonic() < deadline:
+            msg = sub.get_message(timeout=0.5)
+            if msg is None:
+                continue
+            if msg.get('type') != 'message':
+                continue
+            data = msg.get('data')
+            if isinstance(data, str) and data.startswith('viewer '):
+                published = data[len('viewer ') :]
+                break
+        assert published == expected_command, (
+            f'expected viewer publish {expected_command!r}, got {published!r}'
+        )
+    finally:
+        try:
+            sub.unsubscribe()
+            sub.close()
+        except Exception:
+            pass

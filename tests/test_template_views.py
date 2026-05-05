@@ -2,10 +2,10 @@
 
 Each view in src/anthias_server/app/views.py beyond the legacy ``react``,
 ``login`` and ``splash_page`` is exercised here through Django's test
-client — fast, deterministic, no Selenium overhead. The integration
-suite (tests/test_app.py) still drives the full stack via Chrome, but
-that suite hits a parallel uvicorn process and doesn't accumulate
-coverage. These tests do.
+client — fast, deterministic, no browser overhead. The integration
+suite (tests/test_app.py) still drives the full stack via Playwright +
+Chromium, but that suite hits a parallel uvicorn process and doesn't
+accumulate coverage. These tests do.
 """
 
 from __future__ import annotations
@@ -320,16 +320,22 @@ def test_assets_order_persists_play_order(client: Client) -> None:
 
 
 @pytest.mark.django_db
-def test_assets_control_dispatches(client: Client) -> None:
+@pytest.mark.parametrize('command', ['next', 'previous'])
+def test_assets_control_dispatches(client: Client, command: str) -> None:
+    """Regression for #2821: the form-post view must publish the same
+    bare ``next``/``previous`` token the viewer's command dispatch
+    table keys on (src/anthias_viewer/__init__.py — ``commands``).
+    A previous revision sent ``asset_<command>``, which fell through
+    to the ``unknown`` handler and silently no-op'd."""
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
         return_value=None,
     ) as send:
         response = client.post(
-            reverse('anthias_app:assets_control', args=['next'])
+            reverse('anthias_app:assets_control', args=[command])
         )
     assert response.status_code in (200, 302)
-    assert send.called
+    send.assert_called_once_with(command)
 
 
 @pytest.mark.django_db
