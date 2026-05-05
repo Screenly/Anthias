@@ -1,17 +1,22 @@
 """Migrate `[auth_basic]` credentials from anthias.conf into a Django
 User row, then strip the user/password fields from the conf file.
 
-Pre-rebrand installs stored the operator's credentials in
-``$HOME/.anthias/anthias.conf`` (or, in older deployments, the legacy
-``$HOME/.screenly/screenly.conf``). The hash there is already
-PBKDF2-format because ``BasicAuth.update_settings`` had been routing
-through ``django.contrib.auth.hashers.make_password`` for a while, so
-the stored byte-string drops straight into ``User.password`` without
-re-hashing — operators do not have to reset their password during the
-upgrade.
+Looks for ``$HOME/.anthias/anthias.conf`` only. Pre-rebrand
+installations had their conf at ``$HOME/.screenly/screenly.conf``,
+but ``bin/migrate_legacy_paths.sh`` runs *before* Django comes up
+and renames the config dir + file to the new names (leaving a
+back-compat symlink), so by the time this migration executes the
+conf is always at the new path.
 
-Idempotent. Re-runs no-op once the credentials have been moved out of
-the conf and a matching User row exists.
+The hash in the conf is already PBKDF2-format because
+``BasicAuth.update_settings`` had been routing through
+``django.contrib.auth.hashers.make_password`` for a while, so the
+stored byte-string drops straight into ``User.password`` without
+re-hashing — operators do not have to reset their password during
+the upgrade.
+
+Idempotent. Re-runs no-op once the credentials have been moved out
+of the conf and a matching User row exists.
 
 Devices that were running with auth disabled (``auth_backend == ''``)
 or that have a legacy bare-SHA256 hash in the conf produce no User
