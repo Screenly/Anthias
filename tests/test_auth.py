@@ -590,7 +590,13 @@ def test_basic_auth_header_authenticates_for_back_compat(
     authed_operator: User,
 ) -> None:
     """Pre-2826 callers that send Authorization: Basic must keep
-    working; we deliberately retained DRF's BasicAuthentication."""
+    working; we deliberately retained DRF's BasicAuthentication.
+
+    Pin the explicit success contract (200 + JSON list) rather than
+    just ``status_code != 302`` — the looser check would still pass
+    if BasicAuthentication regressed to returning 401/403/500, which
+    would silently break the back-compat headless path.
+    """
     creds = b64encode(f'alice:{_PWD_TOKEN_USER}'.encode()).decode('ascii')
     client = Client()
     with _enable_auth():
@@ -598,16 +604,21 @@ def test_basic_auth_header_authenticates_for_back_compat(
             '/api/v2/assets',
             HTTP_AUTHORIZATION=f'Basic {creds}',
         )
-    # Either the full asset list (200) or — if asset model wiring
-    # rejects the empty fixture state — at minimum NOT a redirect to
-    # login. The redirect would prove auth failed.
-    assert response.status_code != 302
+    assert response.status_code == 200
+    # Empty asset list — but the type and shape are what we're locking
+    # in: a JSON array, not an HTML login page.
+    assert response.headers['Content-Type'].startswith('application/json')
+    assert response.json() == []
 
 
 @pytest.mark.django_db
 def test_basic_auth_header_rejects_wrong_password(
     authed_operator: User,
 ) -> None:
+    """Wrong Basic-auth credentials must produce a deterministic
+    401 with a WWW-Authenticate challenge — not a 302 (which would
+    indicate ``@authorized`` redirected an anonymous request because
+    BasicAuthentication wasn't applied at all)."""
     creds = b64encode(f'alice:{_PWD_WRONG}'.encode()).decode('ascii')
     client = Client()
     with _enable_auth():
@@ -615,6 +626,5 @@ def test_basic_auth_header_rejects_wrong_password(
             '/api/v2/assets',
             HTTP_AUTHORIZATION=f'Basic {creds}',
         )
-    # @authorized bounces unauthenticated requests; either the DRF
-    # 401 or the @authorized 302 is acceptable — both are "not 200".
-    assert response.status_code in (302, 401, 403)
+    assert response.status_code == 401
+    assert response.headers.get('WWW-Authenticate', '').startswith('Basic')
