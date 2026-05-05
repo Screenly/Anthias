@@ -171,6 +171,11 @@ label { text-align: left; }
   letter-spacing: -0.02em;
   margin: 0;
   color: var(--color-text-on-dark);
+  // 30px swallows two lines of vertical space on a narrow phone for
+  // a single-word title. Drop to 24px below the sm breakpoint so the
+  // header bar (title + lede + actions) fits the same vertical
+  // footprint as one asset card underneath.
+  @media (max-width: 640px) { font-size: 1.5rem; }
 }
 
 .page-header-bar {
@@ -414,6 +419,76 @@ label { text-align: left; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: var(--surface-scrim-2); }
   tbody tr.is-dragging td { background: var(--surface-scrim-5); opacity: 0.85; }
+
+  // Below 640px (covers iPhone 13 at 390px and smaller phones),
+  // the 5-column layout with table-layout: fixed crushes the
+  // schedule-window text and the action-icons row. Switch to a
+  // stacked card per row: thead hidden, each cell labelled inline
+  // via attr(data-label), home rows use a 2-col grid for the
+  // duration/toggle/actions strip below the schedule window.
+  @media (max-width: 640px) {
+    table-layout: auto;
+    thead { display: none; }
+
+    tbody tr {
+      display: block;
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--surface-divider);
+    }
+    tbody tr:last-child { border-bottom: none; }
+
+    tbody td,
+    tbody th {
+      display: block;
+      padding: var(--space-1) 0;
+      border: 0;
+      text-align: left;
+
+      &::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--surface-text-muted);
+        margin-bottom: 2px;
+      }
+      // Hide the synthetic label on cells that don't carry one
+      // (integrations table uses <th scope="row"> instead) and on
+      // the home page's Name cell where the title doubles as the
+      // visible label.
+      &:not([data-label])::before,
+      &[data-label="Name"]::before { display: none; }
+    }
+
+    // Home rows: 2-column grid. Name spans both, schedule + duration
+    // share row 2, toggle + actions share row 3. Right-aligned cells
+    // align their labels to match.
+    tbody tr[data-asset-id] {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--space-2) var(--space-3);
+
+      td:nth-child(1) { grid-column: 1 / -1; }
+      td:nth-child(2) { grid-column: 1 / 2; }
+      td:nth-child(3) {
+        grid-column: 2 / 3;
+        text-align: right;
+        &::before { text-align: right; }
+      }
+      td:nth-child(4) { grid-column: 1 / 2; align-self: center; }
+      td:nth-child(5) {
+        grid-column: 2 / 3;
+        align-self: center;
+        &::before { text-align: right; }
+      }
+
+      .action-group { justify-content: flex-end; }
+    }
+
+    tbody tr:hover td { background: transparent; }
+  }
 }
 
 .asset-cell-name {
@@ -705,7 +780,9 @@ label { text-align: left; }
   padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border);
   display: flex;
-  align-items: center;
+  // Align top so a long asset name (preview modal) wraps to multiple
+  // lines without dragging the close button down with it.
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
 
@@ -714,10 +791,14 @@ label { text-align: left; }
     font-size: 1.125rem;
     font-weight: 700;
     letter-spacing: -0.01em;
+    flex: 1 1 auto;
+    min-width: 0;
+    word-break: break-word;
   }
 }
 
 .modal-card__close {
+  flex: none;
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-md);
@@ -774,6 +855,11 @@ label { text-align: left; }
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
+  // Preview modal's footer carries an "Open in new tab" link plus a
+  // help blurb plus the Done button — at narrow widths these can't
+  // share a single row without the link wrapping mid-text. Allow the
+  // row to break so each control gets full horizontal space.
+  flex-wrap: wrap;
 }
 
 // Edit-asset form sections. Two semantic blocks share the same
@@ -1439,6 +1525,36 @@ label { text-align: left; }
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   border-bottom: 1px solid var(--scrim-on-dark-6);
+  position: relative;
+
+  // Below the lg breakpoint (1024px, matching Tailwind's `lg:`) the
+  // menu is gated by the hamburger toggle. Without intervention the
+  // open menu spills past the 4.5rem navbar bg and overlays the
+  // page-header text — see issue #2826. Anchor the open menu as an
+  // absolute dropdown panel below the brand row so it carries its
+  // own background and the body's padding-top reservation stays
+  // accurate.
+  @media (max-width: 1023px) {
+    #navbarNav {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      padding: var(--space-2) var(--space-4) var(--space-3);
+      background: rgba(15, 0, 25, 0.97);
+      backdrop-filter: blur(10px) saturate(140%);
+      -webkit-backdrop-filter: blur(10px) saturate(140%);
+      border-bottom: 1px solid var(--scrim-on-dark-6);
+      box-shadow: var(--shadow-md);
+    }
+    .app-nav-items {
+      gap: 0;
+    }
+    .app-tab-link {
+      width: 100%;
+      padding: 0.65rem 0.75rem !important;
+    }
+  }
 
   .app-nav-brand {
     padding: 0;
@@ -2042,7 +2158,10 @@ body.auth-body {
   border-radius: var(--radius-md);
   font-size: 1.1rem;
   line-height: 1;
-  @media (min-width: 992px) { display: none; }
+  // 1024px matches Tailwind's `lg:hidden` on the toggler markup —
+  // keeping both in sync avoids a dead-zone (992–1023px) where the
+  // toggler hides but the menu's lg:block hasn't kicked in yet.
+  @media (min-width: 1024px) { display: none; }
 }
 .app-nav-items {
   display: flex;
@@ -2050,7 +2169,7 @@ body.auth-body {
   list-style: none;
   margin: 0;
   padding: 0;
-  @media (min-width: 992px) { flex-direction: row; }
+  @media (min-width: 1024px) { flex-direction: row; }
 }
 .app-nav-brand {
   display: inline-flex;
