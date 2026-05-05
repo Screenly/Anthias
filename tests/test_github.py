@@ -115,8 +115,9 @@ def test_fetch_latest_release_tag_invalid_json(
     resp.json.side_effect = ValueError('bad json')
     with mock.patch.object(github, 'requests_get', return_value=resp):
         assert github._fetch_latest_release_tag() is None
-    # Bad JSON isn't a transport failure, so no backoff key — but the
-    # tag isn't cached either.
+    # Malformed bodies arm the same backoff as transport failures so
+    # the next page render doesn't re-fetch immediately.
+    assert 'github-api-error' in redis_data
     assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
@@ -126,6 +127,7 @@ def test_fetch_latest_release_tag_missing_tag_name(
     resp = _resp(200, json_data={'name': 'Release without tag_name'})
     with mock.patch.object(github, 'requests_get', return_value=resp):
         assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
     assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
@@ -135,6 +137,7 @@ def test_fetch_latest_release_tag_non_string_tag_name(
     resp = _resp(200, json_data={'tag_name': 12345})
     with mock.patch.object(github, 'requests_get', return_value=resp):
         assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
     assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
@@ -180,7 +183,7 @@ def test_is_up_to_date_matching_versions_returns_true(
         ),
     ):
         assert github.is_up_to_date() is True
-    assert redis_data[github.LAST_VERDICT_KEY] == '1'
+    assert redis_data[github._verdict_cache_key('2026.5.0')] == '1'
 
 
 def test_is_up_to_date_local_behind_returns_false(
@@ -195,7 +198,7 @@ def test_is_up_to_date_local_behind_returns_false(
         ),
     ):
         assert github.is_up_to_date() is False
-    assert redis_data[github.LAST_VERDICT_KEY] == '0'
+    assert redis_data[github._verdict_cache_key('2026.5.0')] == '0'
 
 
 def test_is_up_to_date_local_ahead_returns_true(
@@ -213,7 +216,7 @@ def test_is_up_to_date_local_ahead_returns_true(
         ),
     ):
         assert github.is_up_to_date() is True
-    assert redis_data[github.LAST_VERDICT_KEY] == '1'
+    assert redis_data[github._verdict_cache_key('2026.10.0')] == '1'
 
 
 def test_is_up_to_date_unparseable_local_suppresses_indicator(
@@ -245,7 +248,7 @@ def test_is_up_to_date_unparseable_local_string_suppresses_indicator(
 def test_is_up_to_date_github_error_with_cached_verdict_uses_it(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    redis_data[github.LAST_VERDICT_KEY] = '1'
+    redis_data[github._verdict_cache_key('2026.5.0')] = '1'
     with (
         mock.patch.object(
             github, 'get_anthias_release', return_value='2026.5.0'
@@ -256,10 +259,31 @@ def test_is_up_to_date_github_error_with_cached_verdict_uses_it(
     ):
         assert github.is_up_to_date() is True
 
-    redis_data[github.LAST_VERDICT_KEY] = '0'
+    redis_data[github._verdict_cache_key('2026.5.0')] = '0'
     with (
         mock.patch.object(
             github, 'get_anthias_release', return_value='2026.5.0'
+        ),
+        mock.patch.object(
+            github, '_fetch_latest_release_tag', return_value=None
+        ),
+    ):
+        assert github.is_up_to_date() is False
+
+
+def test_is_up_to_date_verdict_cache_does_not_leak_across_releases(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """An upgrade during a GitHub outage must not reuse the previous
+    version's verdict — that verdict was computed against the OLD
+    installed release, so it can be stale either way after an
+    upgrade. Without a cached verdict for the new release, fall back
+    to False so the indicator state catches up to reality on the next
+    successful check."""
+    redis_data[github._verdict_cache_key('2026.5.0')] = '0'
+    with (
+        mock.patch.object(
+            github, 'get_anthias_release', return_value='2026.6.0'
         ),
         mock.patch.object(
             github, '_fetch_latest_release_tag', return_value=None
@@ -287,7 +311,7 @@ def test_is_up_to_date_github_error_no_cache_returns_false(
 def test_is_up_to_date_malformed_remote_tag_falls_back(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    redis_data[github.LAST_VERDICT_KEY] = '1'
+    redis_data[github._verdict_cache_key('2026.5.0')] = '1'
     with (
         mock.patch.object(
             github, 'get_anthias_release', return_value='2026.5.0'

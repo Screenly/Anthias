@@ -20,11 +20,13 @@ ERROR_BACKOFF_TTL = 60 * 5
 
 # Cache key for the latest release tag (TTL'd).
 LATEST_RELEASE_TAG_KEY = 'latest-release-tag'
-# Cache key for the most recent successfully-computed verdict. Read
-# only as the fallback when both the tag cache and a fresh fetch
-# fail; written on every fresh comparison. No TTL — overwritten on
-# the next successful check.
-LAST_VERDICT_KEY = 'is-up-to-date:last-verdict'
+# Cache-key prefix for the most recent successfully-computed verdict.
+# Scoped by local release so an upgrade during a GitHub outage doesn't
+# reuse the old version's verdict (the previous "up to date" might no
+# longer apply, and vice versa). Written on every fresh comparison and
+# read only as the fallback when both the tag cache and a fresh fetch
+# fail. No TTL — overwritten on the next successful check.
+LAST_VERDICT_KEY_PREFIX = 'is-up-to-date:last-verdict'
 
 DEFAULT_REQUESTS_TIMEOUT = 5  # seconds
 
@@ -34,12 +36,16 @@ GITHUB_RELEASES_LATEST_URL = (
 GITHUB_API_ACCEPT = 'application/vnd.github+json'
 
 
+def _set_github_error_backoff(action: str) -> None:
+    r.set('github-api-error', action)
+    r.expire('github-api-error', ERROR_BACKOFF_TTL)
+
+
 def handle_github_error(
     exc: exceptions.RequestException,
     action: str,
 ) -> None:
-    r.set('github-api-error', action)
-    r.expire('github-api-error', ERROR_BACKOFF_TTL)
+    _set_github_error_backoff(action)
 
     if exc.response is not None:
         errdesc = exc.response.content
@@ -75,15 +81,21 @@ def _fetch_latest_release_tag() -> str | None:
         handle_github_error(exc, 'latest release')
         return None
 
+    # Trip the same 5-minute backoff for malformed bodies as for
+    # transport failures. Without this, a bad JSON body or missing
+    # tag_name from a 200 response would re-fire the GitHub call on
+    # every page render until upstream fixed the payload.
     try:
         payload = resp.json()
     except ValueError:
         logging.error('Malformed JSON from GitHub /releases/latest')
+        _set_github_error_backoff('latest release: malformed JSON')
         return None
 
     tag = payload.get('tag_name') if isinstance(payload, dict) else None
     if not isinstance(tag, str) or not tag:
         logging.error('Missing tag_name in /releases/latest response')
+        _set_github_error_backoff('latest release: missing tag_name')
         return None
 
     r.set(LATEST_RELEASE_TAG_KEY, tag)
@@ -101,11 +113,16 @@ def _parse_version(value: str) -> Version | None:
         return None
 
 
-def _fallback_verdict() -> bool:
-    """Return the last successfully-computed verdict, or ``False`` if
-    we have never made a successful check (don't claim "up to date"
-    when we don't know)."""
-    cached = r.get(LAST_VERDICT_KEY)
+def _verdict_cache_key(local_release: str) -> str:
+    return f'{LAST_VERDICT_KEY_PREFIX}:{local_release}'
+
+
+def _fallback_verdict(local_release: str) -> bool:
+    """Return the last verdict cached for this exact local release, or
+    ``False`` if there isn't one (don't claim "up to date" when we
+    don't actually know — and don't reuse a verdict computed against a
+    different installed version)."""
+    cached = r.get(_verdict_cache_key(local_release))
     if cached is None:
         return False
     return cached == '1'
@@ -132,13 +149,13 @@ def is_up_to_date() -> bool:
 
     latest_tag = _fetch_latest_release_tag()
     if not latest_tag:
-        return _fallback_verdict()
+        return _fallback_verdict(local_release)
 
     latest_version = _parse_version(latest_tag)
     if latest_version is None:
         logging.error('Malformed tag_name from GitHub: %r', latest_tag)
-        return _fallback_verdict()
+        return _fallback_verdict(local_release)
 
     verdict = local_version >= latest_version
-    r.set(LAST_VERDICT_KEY, '1' if verdict else '0')
+    r.set(_verdict_cache_key(local_release), '1' if verdict else '0')
     return verdict
