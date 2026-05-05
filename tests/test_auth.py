@@ -540,6 +540,79 @@ def test_apply_auth_settings_change_password_rejects_too_short() -> None:
 
 
 @pytest.mark.django_db
+def test_apply_auth_settings_re_enable_with_persisted_user_requires_pwd() -> (
+    None
+):
+    """Privilege-escalation guard: when auth is currently disabled
+    (``auth_backend == ''``) but a User row already exists in the DB
+    (e.g. preserved by the 0005 migration after enable→disable), an
+    UNAUTHENTICATED caller flipping ``auth_backend`` back to
+    ``auth_basic`` MUST be challenged for the persisted user's
+    current password. Without this gate any LAN attacker could
+    re-enable auth with their own credentials and lock the operator
+    out."""
+    # Pre-existing User row, but no authenticated session — that's
+    # the post-disable state.
+    _make_operator(username='alice', pwd=_PWD_OLD)
+    request = _request_with_user(MagicMock(is_authenticated=False))
+
+    # No current_pwd supplied → must be rejected.
+    with pytest.raises(
+        AuthSettingsError,
+        match='supply current password to change authentication method',
+    ):
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd='',
+            new_username='attacker',
+            new_pwd=_PWD_NEW,
+            new_pwd_confirm=_PWD_NEW,
+            prev_auth_backend='',
+        )
+
+    # Wrong current_pwd → also rejected.
+    with pytest.raises(AuthSettingsError, match='Incorrect current password'):
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd=_PWD_WRONG,
+            new_username='attacker',
+            new_pwd=_PWD_NEW,
+            new_pwd_confirm=_PWD_NEW,
+            prev_auth_backend='',
+        )
+
+    # Original operator and password are unchanged.
+    user = User.objects.get(username='alice')
+    assert user.check_password(_PWD_OLD)
+    # No attacker User leaked in.
+    assert not User.objects.filter(username='attacker').exists()
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_re_enable_with_correct_pwd_succeeds() -> None:
+    """Same setup as the privilege-escalation test, but with the
+    correct current password — re-enable should succeed and may
+    rotate the operator's username/password as part of the same
+    request."""
+    _make_operator(username='alice', pwd=_PWD_OLD)
+    request = _request_with_user(MagicMock(is_authenticated=False))
+
+    apply_auth_settings(
+        request,
+        new_auth_backend='auth_basic',
+        current_pwd=_PWD_OLD,
+        new_username='alice',
+        new_pwd=_PWD_NEW,
+        new_pwd_confirm=_PWD_NEW,
+        prev_auth_backend='',
+    )
+    user = User.objects.get(username='alice')
+    assert user.check_password(_PWD_NEW)
+
+
+@pytest.mark.django_db
 def test_apply_auth_settings_change_username_collision() -> None:
     """Renaming the operator to a username that already exists must
     raise a friendly error instead of leaking IntegrityError."""

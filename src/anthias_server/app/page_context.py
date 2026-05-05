@@ -187,13 +187,24 @@ def device_settings() -> dict[str, Any]:
     field), `is_pi5` (whether to hide the 3.5mm jack option), and
     the choice tuples for the auth_backend / date_format dropdowns.
     """
-    from anthias_server.lib.auth import operator_username
+    from anthias_server.lib.auth import _persisted_operator, operator_username
 
     settings.load()
     # parse_cpu_info() returns Mapping[str, int | str] per its stub, so
     # cast to str before substring-checking against the Pi 5 model name —
     # mypy refuses `'X' in (int|str)` even though str-len-check works.
     device_model = str(device_helper.parse_cpu_info().get('model') or '')
+
+    # ``has_saved_basic_auth`` keys the "Current password" field on the
+    # settings page. It needs to be true any time the device has a
+    # persisted operator User row — whether or not auth is currently
+    # enabled — because re-enabling auth requires proving knowledge
+    # of the existing password (see the ``apply_auth_settings``
+    # privilege-escalation guard). Hiding the field when auth is
+    # disabled but a User exists would mask the field the operator is
+    # required to fill in to make the form succeed.
+    has_persisted_operator = _persisted_operator() is not None
+
     return {
         'player_name': settings['player_name'],
         'default_duration': settings['default_duration'],
@@ -208,7 +219,8 @@ def device_settings() -> dict[str, Any]:
         'use_24_hour_clock': settings['use_24_hour_clock'],
         'debug_logging': settings['debug_logging'],
         # Auth-form chrome
-        'has_saved_basic_auth': bool(settings['auth_backend'] == 'auth_basic'),
+        'has_saved_basic_auth': has_persisted_operator
+        or settings['auth_backend'] == 'auth_basic',
         # Hide the 3.5mm jack option on Pi 5 — the jack moved off-board
         # on that revision (matches the React audio-output dropdown).
         'is_pi5': 'Raspberry Pi 5' in device_model,

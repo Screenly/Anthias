@@ -327,6 +327,31 @@ def _operator_user(
     return cast('User', user)
 
 
+def _persisted_operator() -> 'User | None':
+    """The first persisted operator-account User row, if any.
+
+    Used by ``apply_auth_settings`` to detect the case where auth is
+    *currently* disabled (so ``request.user`` is anonymous) but a
+    User row exists from a previous enable→disable cycle (or from the
+    0005 migration that promoted ``[auth_basic]`` credentials into the
+    DB regardless of the current ``auth_backend``). Without this
+    lookup, an unauthenticated LAN caller could flip ``auth_backend``
+    back to ``auth_basic`` with their own username/password and lock
+    out the legitimate operator.
+
+    Mirrors the same selector ``operator_username()`` uses so both
+    sites agree on which User row is "the operator."
+    """
+    from django.contrib.auth.models import User as UserModel
+
+    return (
+        UserModel.objects.filter(is_active=True, is_superuser=True)
+        .order_by('id')
+        .first()
+        or UserModel.objects.order_by('id').first()
+    )
+
+
 def _require_current_password_correct(
     current_pass_correct: bool | None,
     *,
@@ -490,7 +515,18 @@ def apply_auth_settings(
             f'Unknown authentication backend: {new_auth_backend!r}'
         )
 
-    operator = _operator_user(request)
+    # The operator we treat as "owning" this device: the
+    # currently-authenticated session if there is one, otherwise the
+    # User row already persisted in the DB (if any). The fallback is
+    # load-bearing — it closes a privilege-escalation vector. When
+    # auth is disabled the settings page is reachable
+    # unauthenticated, and without the fallback an attacker on the
+    # LAN could flip auth_backend to auth_basic with their own
+    # username + password (we'd hit ``_create_initial_operator`` and
+    # mint a fresh superuser, locking the legitimate operator out).
+    # Treating any persisted User as "the operator" forces the
+    # current-password challenge below.
+    operator = _operator_user(request) or _persisted_operator()
 
     current_pass_correct: bool | None = None
     if current_pwd:
@@ -498,9 +534,14 @@ def apply_auth_settings(
             operator is not None and operator.check_password(current_pwd)
         )
 
-    # Switching the backend off (or to anything else) when one was
-    # already configured requires the current password.
-    if new_auth_backend != prev_auth_backend and prev_auth_backend:
+    # ANY change to auth_backend that touches an existing operator
+    # requires the current password. The previous version of this
+    # check only looked at ``prev_auth_backend`` — i.e. it skipped
+    # the challenge when re-enabling after an enable→disable cycle,
+    # because ``prev_auth_backend == ''`` at that point. With a
+    # persisted operator in the DB that gap meant an unauthenticated
+    # caller could re-enable auth with attacker-chosen credentials.
+    if new_auth_backend != prev_auth_backend and operator is not None:
         if not current_pwd:
             raise AuthSettingsError(
                 'Must supply current password to change authentication method'
