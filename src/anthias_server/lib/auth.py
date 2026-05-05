@@ -384,9 +384,7 @@ def _check_username_available(
         .exclude(pk=operator.pk)
         .exists()
     ):
-        raise AuthSettingsError(
-            f'Username {new_username!r} is already taken.'
-        )
+        raise AuthSettingsError(f'Username {new_username!r} is already taken.')
 
 
 def _update_existing_operator(
