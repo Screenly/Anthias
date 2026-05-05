@@ -242,15 +242,21 @@ def authorized(
         if not settings['auth_backend']:
             return orig(*args, **kwargs)
 
-        if len(args) == 0:
+        # Locate the request by type rather than by position. URL
+        # converters in Django and DRF are passed as kwargs by
+        # default, so for a function-based view ``args`` is normally
+        # ``(request,)`` and for a class-based view it's
+        # ``(self, request)``. But views called directly (unit tests,
+        # nested decorators that re-shuffle args) can pass extra
+        # positionals — the previous ``args[-1]`` heuristic broke on
+        # those by treating e.g. ``asset_id`` as the request. Scan
+        # for the first HttpRequest / DRF Request instance instead.
+        request = next(
+            (a for a in args if isinstance(a, (HttpRequest, Request))),
+            None,
+        )
+        if request is None:
             raise ValueError('No request object passed to decorated function')
-
-        request = args[-1]
-
-        if not isinstance(request, (HttpRequest, Request)):
-            raise ValueError(
-                'Request object is not of type HttpRequest or Request'
-            )
 
         # DRF's Request wraps the underlying Django request; .user
         # delegates to it, so the middleware-set value is visible here.

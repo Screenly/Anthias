@@ -211,6 +211,8 @@ def test_authorized_no_args_raises(monkeypatch: Any) -> None:
 
 
 def test_authorized_non_request_arg_raises(monkeypatch: Any) -> None:
+    """Calls with positional args that don't include a Request object
+    raise — the decorator can't know which side to redirect."""
     fake_settings = {'auth_backend': 'auth_basic'}
     monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
@@ -218,8 +220,31 @@ def test_authorized_non_request_arg_raises(monkeypatch: Any) -> None:
     def view(request: Any) -> str:
         return 'ok'
 
-    with pytest.raises(ValueError, match='not of type HttpRequest'):
+    with pytest.raises(ValueError, match='No request object passed'):
         view('not-a-request')
+
+
+def test_authorized_finds_request_among_positional_args(
+    monkeypatch: Any,
+) -> None:
+    """A view with extra positional args (e.g. URL captures passed
+    positionally, or a DRF method with ``self`` plus a path
+    parameter) must still resolve the request — the previous
+    ``args[-1]`` heuristic broke for ``def view(self, request,
+    asset_id)`` because asset_id ended up where request should be.
+    """
+    fake_settings = {'auth_backend': 'auth_basic'}
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
+
+    @authorized
+    def view(self_: Any, request: Any, asset_id: str) -> str:
+        return f'ok:{asset_id}'
+
+    factory = RequestFactory()
+    req = factory.get('/foo/')
+    req.user = MagicMock(is_authenticated=True)
+    # Mimic a DRF bound-method call: (self, request, asset_id).
+    assert view(object(), req, 'abc-123') == 'ok:abc-123'
 
 
 # ---------------------------------------------------------------------------
