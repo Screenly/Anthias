@@ -141,6 +141,21 @@ def test_fetch_latest_release_tag_non_string_tag_name(
     assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
+def test_fetch_latest_release_tag_unparseable_tag_name(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """An upstream tag like ``nightly`` must not be cached: with a
+    24h TTL, caching it would pin is_up_to_date() to the fallback
+    verdict for a day even after upstream corrects the tag. Trip the
+    5-minute backoff instead so the next attempt re-fetches once
+    upstream is fixed."""
+    resp = _resp(200, json_data={'tag_name': 'nightly'})
+    with mock.patch.object(github, 'requests_get', return_value=resp):
+        assert github._fetch_latest_release_tag() is None
+    assert 'github-api-error' in redis_data
+    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
+
+
 # ---------------------------------------------------------------------------
 # _parse_version
 # ---------------------------------------------------------------------------

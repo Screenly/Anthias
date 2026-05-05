@@ -98,6 +98,15 @@ def _fetch_latest_release_tag() -> str | None:
         _set_github_error_backoff('latest release: missing tag_name')
         return None
 
+    # Validate parseability *before* caching. Otherwise a bad upstream
+    # tag (e.g. a hand-edited release with `nightly`) would be cached
+    # for 24h, locking is_up_to_date() into the fallback verdict for
+    # the full TTL even after upstream corrects the tag.
+    if _parse_version(tag) is None:
+        logging.error('Unparseable tag_name from GitHub: %r', tag)
+        _set_github_error_backoff('latest release: unparseable tag_name')
+        return None
+
     r.set(LATEST_RELEASE_TAG_KEY, tag)
     r.expire(LATEST_RELEASE_TAG_KEY, LATEST_RELEASE_TTL)
     return tag
