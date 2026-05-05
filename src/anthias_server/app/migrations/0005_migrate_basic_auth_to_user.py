@@ -186,6 +186,14 @@ def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
 
     needs_write = False
     if disable_auth:
+        # ``config.set`` raises NoSectionError if [main] is absent.
+        # That section is meant to be present on every Anthias install,
+        # but a hand-edited / minimised conf might not have it — in
+        # that case AnthiasSettings.use_defaults() will recreate it on
+        # next save. Make the migration fail-open by adding the
+        # section here rather than letting an exception abort it.
+        if not config.has_section('main'):
+            config.add_section('main')
         config.set('main', 'auth_backend', '')
         needs_write = True
 

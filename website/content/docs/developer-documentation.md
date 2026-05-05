@@ -100,15 +100,22 @@ default is no auth and the API is open on the LAN.
 There are two credential paths that resolve to the same `User` table:
 
 * **Browser session** — POST username + password to `/login/`. The
-  resulting cookie gates both the HTML dashboard and the JSON API.
-* **HTTP Basic** *(legacy, deprecated)* — pre-2826 versions of
-  Anthias-CLI and third-party scripts written against the old auth
-  keep working with `Authorization: Basic <b64>`. Every successful
-  Basic-auth request emits a `DEPRECATED: HTTP Basic auth used on
-  <path> by user <name> from <ip>` warning in the server log so we
-  can grep for the last surviving callers before removing the path
-  entirely. A UI-managed personal-token system that will replace
-  Basic for headless callers is tracked as a follow-up.
+  resulting cookie is what the HTML dashboard uses. It also works
+  for `GET` requests against the JSON API, but DRF's
+  `SessionAuthentication` enforces CSRF on `POST` / `PUT` / `PATCH`
+  / `DELETE`, so a cookie-only script will hit 403s on write
+  endpoints unless it also forwards the `csrftoken` cookie as an
+  `X-CSRFToken` header. Treat this path as **browser-only**;
+  headless automation should use the path below.
+* **HTTP Basic** *(legacy, deprecated — current path for headless
+  automation)* — pre-2826 versions of Anthias-CLI and third-party
+  scripts written against the old auth keep working with
+  `Authorization: Basic <b64>`. Every successful Basic-auth request
+  emits a `DEPRECATED: HTTP Basic auth used on <path> by user
+  <name> from <ip>` warning in the server log so we can grep for
+  the last surviving callers before removing the path entirely. A
+  UI-managed personal-token system that will replace Basic for
+  headless callers is tracked as a follow-up.
 
 There's a third, internal-only path for the viewer process: it signs
 its requests to `/api/v2/...` (currently just the asset-recheck
