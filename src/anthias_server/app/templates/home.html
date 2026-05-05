@@ -20,13 +20,13 @@
       <form method="post" action="{% url 'anthias_app:assets_control' command='previous' %}" class="inline m-0">
         {% csrf_token %}
         <button type="submit" class="app-btn app-btn-light app-btn-pill" title="Skip to previous asset">
-          <i class="ti ti-player-skip-back-filled"></i><span class="hidden md:inline">Previous</span>
+          <i class="ti ti-player-skip-back"></i><span class="hidden md:inline">Previous</span>
         </button>
       </form>
       <form method="post" action="{% url 'anthias_app:assets_control' command='next' %}" class="inline m-0">
         {% csrf_token %}
         <button type="submit" class="app-btn app-btn-light app-btn-pill" title="Skip to next asset">
-          <i class="ti ti-player-skip-forward-filled"></i><span class="hidden md:inline">Next</span>
+          <i class="ti ti-player-skip-forward"></i><span class="hidden md:inline">Next</span>
         </button>
       </form>
       <button type="button" id="add-asset-button" class="app-btn app-btn-primary app-btn-pill" @click="openAdd()">

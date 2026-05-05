@@ -1,7 +1,7 @@
 {% load asset_filters %}
 {% with pills=asset|schedule_pills %}
 <tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
-  <td>
+  <td data-label="Name" data-no-label>
     <div class="asset-cell-name">
       {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
       <span class="asset-cell-name__icon">
@@ -28,7 +28,7 @@
     </div>
   </td>
   {% with window=asset|schedule_window %}
-  <td>
+  <td data-label="Schedule window">
     <div class="schedule-window schedule-window--{{ window.kind }}">
       <div class="schedule-window__dot" aria-hidden="true"></div>
       <div>
@@ -38,8 +38,8 @@
     </div>
   </td>
   {% endwith %}
-  <td>{{ asset.duration|humanize_duration }}</td>
-  <td>
+  <td data-label="Duration">{{ asset.duration|humanize_duration }}</td>
+  <td data-label="Enabled">
     {% if asset.is_processing %}
     <span class="processing-pill"><i class="ti ti-refresh"></i>Processing</span>
     {% else %}
@@ -57,7 +57,7 @@
     </form>
     {% endif %}
   </td>
-  <td class="text-right">
+  <td class="text-right" data-label="Actions">
     <div class="action-group">
       <button
         type="button"
