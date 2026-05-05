@@ -126,9 +126,7 @@ def is_up_to_date() -> bool:
     make and the indicator should not shout at developers.
     """
     local_release = get_anthias_release()
-    local_version = (
-        _parse_version(local_release) if local_release else None
-    )
+    local_version = _parse_version(local_release) if local_release else None
     if local_version is None:
         return True
 

@@ -223,9 +223,7 @@ def test_is_up_to_date_unparseable_local_suppresses_indicator(
     pill. The remote fetch isn't even attempted in that case."""
     with (
         mock.patch.object(github, 'get_anthias_release', return_value=''),
-        mock.patch.object(
-            github, '_fetch_latest_release_tag'
-        ) as fetch_mock,
+        mock.patch.object(github, '_fetch_latest_release_tag') as fetch_mock,
     ):
         assert github.is_up_to_date() is True
     fetch_mock.assert_not_called()
@@ -238,9 +236,7 @@ def test_is_up_to_date_unparseable_local_string_suppresses_indicator(
         mock.patch.object(
             github, 'get_anthias_release', return_value='dev-snapshot'
         ),
-        mock.patch.object(
-            github, '_fetch_latest_release_tag'
-        ) as fetch_mock,
+        mock.patch.object(github, '_fetch_latest_release_tag') as fetch_mock,
     ):
         assert github.is_up_to_date() is True
     fetch_mock.assert_not_called()
