@@ -428,7 +428,22 @@ label { text-align: left; }
   // duration/toggle/actions strip below the schedule window.
   @media (max-width: 640px) {
     table-layout: auto;
-    thead { display: none; }
+    // Visually hide thead instead of `display: none` so screen
+    // readers still pick up the column headers — `display: none`
+    // would drop them from the accessibility tree along with the
+    // <th scope="col"> associations. The clip/absolute technique is
+    // the WAI-ARIA visually-hidden recipe.
+    thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
 
     tbody tr {
       display: block;
