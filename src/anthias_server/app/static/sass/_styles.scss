@@ -456,10 +456,10 @@ label { text-align: left; }
       }
       // Hide the synthetic label on cells that don't carry one
       // (integrations table uses <th scope="row"> instead) and on
-      // the home page's Name cell where the title doubles as the
-      // visible label.
+      // cells flagged with data-no-label, e.g. the home asset name
+      // cell where the title is its own visible label.
       &:not([data-label])::before,
-      &[data-label="Name"]::before { display: none; }
+      &[data-no-label]::before { display: none; }
     }
 
     // Home rows: 2-column grid. Name spans both, schedule + duration
@@ -780,8 +780,12 @@ label { text-align: left; }
   padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border);
   display: flex;
-  // Align top so a long asset name (preview modal) wraps to multiple
-  // lines without dragging the close button down with it.
+  // Top-aligned across every modal: only the preview modal can carry
+  // a long title (the asset name), but `flex-start` is also fine for
+  // the short titles used by Add / Edit / Delete / Reboot / Shutdown
+  // since each fits one line. With `flex: 1` + `min-width: 0` the
+  // title wraps inside its column instead of dragging the close
+  // button down.
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
@@ -855,10 +859,10 @@ label { text-align: left; }
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  // Preview modal's footer carries an "Open in new tab" link plus a
-  // help blurb plus the Done button — at narrow widths these can't
-  // share a single row without the link wrapping mid-text. Allow the
-  // row to break so each control gets full horizontal space.
+  // Wrap is set on every modal footer but only kicks in when the row
+  // can't fit. The preview modal is the one that actually exercises
+  // it (link + blurb + Done at 390px); other modals' two-button
+  // footers stay on a single row.
   flex-wrap: wrap;
 }
 
@@ -1525,7 +1529,6 @@ label { text-align: left; }
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   border-bottom: 1px solid var(--scrim-on-dark-6);
-  position: relative;
 
   // Below the lg breakpoint (1024px, matching Tailwind's `lg:`) the
   // menu is gated by the hamburger toggle. Without intervention the
@@ -1533,7 +1536,10 @@ label { text-align: left; }
   // page-header text — see issue #2826. Anchor the open menu as an
   // absolute dropdown panel below the brand row so it carries its
   // own background and the body's padding-top reservation stays
-  // accurate.
+  // accurate. The Tailwind `.fixed` utility on the <nav> already
+  // provides the positioned ancestor — don't add a competing
+  // position here, since this rule is non-layered and would beat
+  // `@layer utilities { .fixed }` in the cascade.
   @media (max-width: 1023px) {
     #navbarNav {
       position: absolute;

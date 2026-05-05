@@ -1,7 +1,7 @@
 {% load asset_filters %}
 {% with pills=asset|schedule_pills %}
 <tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
-  <td data-label="Name">
+  <td data-label="Name" data-no-label>
     <div class="asset-cell-name">
       {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
       <span class="asset-cell-name__icon">
