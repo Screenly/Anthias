@@ -26,7 +26,10 @@ from anthias_server.api.helpers import (
     get_active_asset_ids,
     save_active_assets_ordering,
 )
-from anthias_server.lib.auth import hash_password
+from anthias_server.lib.auth import (
+    apply_auth_settings,
+    operator_username,
+)
 from anthias_common.internal_auth import is_internal_request
 from anthias_common.youtube import dispatch_download
 from anthias_server.api.serializers.v2 import (
@@ -548,63 +551,12 @@ class DeviceSettingsViewV2(APIView):
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
                 'username': (
-                    settings['user']
+                    operator_username()
                     if settings['auth_backend'] == 'auth_basic'
                     else ''
                 ),
             }
         )
-
-    def update_auth_settings(
-        self,
-        data: dict[str, Any],
-        auth_backend: str,
-        current_pass_correct: bool | None,
-    ) -> None:
-        if auth_backend == '':
-            return
-
-        if auth_backend != 'auth_basic':
-            return
-
-        new_user = data.get('username', '')
-        new_pass = data.get('password', '')
-        new_pass2 = data.get('password_2', '')
-
-        if settings['password']:
-            if new_user != settings['user']:
-                if current_pass_correct is None:
-                    raise ValueError(
-                        'Must supply current password to change username'
-                    )
-                if not current_pass_correct:
-                    raise ValueError('Incorrect current password.')
-
-                settings['user'] = new_user
-
-            if new_pass:
-                if current_pass_correct is None:
-                    raise ValueError(
-                        'Must supply current password to change password'
-                    )
-                if not current_pass_correct:
-                    raise ValueError('Incorrect current password.')
-
-                if new_pass2 != new_pass:
-                    raise ValueError('New passwords do not match!')
-
-                settings['password'] = hash_password(new_pass)
-
-        else:
-            if new_user:
-                if new_pass and new_pass != new_pass2:
-                    raise ValueError('New passwords do not match!')
-                if not new_pass:
-                    raise ValueError('Must provide password')
-                settings['user'] = new_user
-                settings['password'] = hash_password(new_pass)
-            else:
-                raise ValueError('Must provide username')
 
     @extend_schema(
         summary='Update device settings',
@@ -631,33 +583,17 @@ class DeviceSettingsViewV2(APIView):
             settings.load()
 
             current_password = data.get('current_password', '')
-            auth_backend = data.get('auth_backend', '')
-
-            if (
-                auth_backend != settings['auth_backend']
-                and settings['auth_backend']
-            ):
-                if not current_password:
-                    raise ValueError(
-                        'Must supply current password to change '
-                        'authentication method'
-                    )
-                if settings.auth is None or not settings.auth.check_password(
-                    current_password
-                ):
-                    raise ValueError('Incorrect current password.')
-
+            auth_backend = data.get('auth_backend', settings['auth_backend'])
             prev_auth_backend = settings['auth_backend']
-            if not current_password and prev_auth_backend:
-                current_pass_correct = None
-            else:
-                current_pass_correct = settings.auth_backends[
-                    prev_auth_backend
-                ].check_password(current_password)
-            next_auth_backend = settings.auth_backends[auth_backend]
 
-            self.update_auth_settings(
-                data, next_auth_backend.name, current_pass_correct
+            apply_auth_settings(
+                request,
+                new_auth_backend=auth_backend,
+                current_pwd=current_password,
+                new_username=data.get('username', ''),
+                new_pwd=data.get('password', ''),
+                new_pwd_confirm=data.get('password_2', ''),
+                prev_auth_backend=prev_auth_backend,
             )
             settings['auth_backend'] = auth_backend
 

@@ -187,6 +187,8 @@ def device_settings() -> dict[str, Any]:
     field), `is_pi5` (whether to hide the 3.5mm jack option), and
     the choice tuples for the auth_backend / date_format dropdowns.
     """
+    from anthias_server.lib.auth import operator_username
+
     settings.load()
     # parse_cpu_info() returns Mapping[str, int | str] per its stub, so
     # cast to str before substring-checking against the Pi 5 model name —
@@ -199,7 +201,7 @@ def device_settings() -> dict[str, Any]:
         'audio_output': settings['audio_output'],
         'date_format': settings['date_format'],
         'auth_backend': settings['auth_backend'],
-        'username': settings['user'],
+        'username': operator_username(),
         'show_splash': settings['show_splash'],
         'default_assets': settings['default_assets'],
         'shuffle_playlist': settings['shuffle_playlist'],

@@ -273,9 +273,34 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
-    # The project uses custom authentication classes,
-    # so we need to disable the default ones.
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    # Two auth paths for the JSON API.
+    #
+    # Ordering matters: DRF tries authenticators in sequence and the
+    # first one that recognises the request short-circuits the rest.
+    # ``SessionAuthentication.authenticate`` enforces CSRF on unsafe
+    # methods whenever a session cookie is present, and a missing
+    # ``X-CSRFToken`` raises 403 — which would mask a perfectly valid
+    # ``Authorization: Basic …`` header on the same request (some CLI
+    # tooling shares a cookie jar with the operator's browser).
+    # Run BasicAuthentication first so an explicit Authorization
+    # header always wins over an incidental session cookie.
+    #
+    #   * DeprecatedBasicAuthentication — DRF's stock
+    #     ``BasicAuthentication`` plus a warning log on every successful
+    #     auth. Retained for back-compat with pre-2826 Anthias-CLI
+    #     builds and third-party scripts written against the old auth;
+    #     the deprecation log surfaces the last callers before we
+    #     remove the path.
+    #   * SessionAuthentication — browser dashboard, reuses the cookie
+    #     that gates the HTML views.
+    #
+    # New integrations should use the bearer-token path coming in a
+    # follow-up PR (UI-managed personal tokens, not
+    # username/password exchange).
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'anthias_server.lib.auth.DeprecatedBasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
 }
 
 SPECTACULAR_SETTINGS = {
