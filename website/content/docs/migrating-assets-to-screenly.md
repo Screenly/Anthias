@@ -26,7 +26,16 @@ $ uv sync --group local
 
 Before running the script, you should prepare the following:
 * Your Screenly API key
-* Anthias username and password, if your device has basic authentication enabled
+* Anthias username and password, if your device has authentication enabled
+
+> **Note**
+>
+> The script authenticates with the device using HTTP Basic on the
+> `/api/v2/...` endpoints. If your device runs Anthias 2826 or later,
+> every authenticated request will emit a `DEPRECATED: HTTP Basic
+> auth used …` line in the server log — that's expected. The
+> Basic-auth path is retained for back-compat and will be replaced
+> by a UI-managed personal-token system in a future release.
 
 Run the assets migration script. Follow through the instructions & prompts carefully.
 

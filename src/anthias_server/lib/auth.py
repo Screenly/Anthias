@@ -2,7 +2,7 @@
 
 The legacy ``Auth`` / ``NoAuth`` / ``BasicAuth`` abstractions have been
 retired in favour of Django's built-in primitives. Anthias now has
-four credential paths, each with a distinct caller and trust model:
+three credential paths, each with a distinct caller and trust model:
 
 1. **Browser session** (operators using the dashboard).
    Driven by ``django.contrib.auth``: the login form posts to
@@ -11,35 +11,29 @@ four credential paths, each with a distinct caller and trust model:
    gates both the HTML views (via :func:`authorized`) and the DRF
    API (via DRF's ``SessionAuthentication``).
 
-2. **Bearer token** (preferred for new headless integrations).
-   Issued by ``rest_framework.authtoken``. A caller POSTs
-   ``{username, password}`` to ``/api/v2/auth/token`` once, stores
-   the returned token, and sends ``Authorization: Bearer <token>`` on
-   every subsequent request. :class:`BearerTokenAuthentication`
-   (registered globally in ``django_project.settings.REST_FRAMEWORK``)
-   resolves the token into a ``User`` row before :func:`authorized`
-   runs.
-
-3. **HTTP Basic** (legacy headless path, kept for back-compat).
-   DRF's stock ``BasicAuthentication`` against the same User table.
+2. **HTTP Basic** (legacy headless path, kept for back-compat).
+   DRF's stock ``BasicAuthentication`` against the same User table,
+   wrapped to log a ``DEPRECATED`` warning on every successful auth.
    Pre-2826 versions of Anthias-CLI and any third-party scripts that
-   were written against the old auth will keep working unchanged.
-   New integrations should use bearer tokens — Basic is retained but
-   not advertised.
+   were written against the old auth keep working unchanged. The
+   bearer-token path that will eventually replace this is tracked as
+   a follow-up — it needs its own UI for create / list / revoke and
+   a multi-token model with hashed storage, neither of which fits in
+   this PR.
 
-4. **Viewer ↔ server shared secret** (intra-device, same trust
+3. **Viewer ↔ server shared secret** (intra-device, same trust
    boundary).
-   The viewer process can't carry an operator session or own a long-
-   lived token, but it does need to call a small set of internal
-   endpoints (currently just ``AssetRecheckViewV2``). It signs
-   requests with an HMAC of ``settings['django_secret_key']`` and
-   sends the digest in ``X-Anthias-Internal-Token``; the server
-   verifies via :func:`anthias_common.internal_auth.is_internal_request`.
-   This is *not* a user-facing credential — it bypasses the User
-   table entirely and is only safe because the secret never leaves
-   the device. New endpoints that the viewer needs to call should
-   gate on ``is_internal_request`` directly rather than going
-   through :func:`authorized`.
+   The viewer process can't carry an operator session, but it does
+   need to call a small set of internal endpoints (currently just
+   ``AssetRecheckViewV2``). It signs requests with an HMAC of
+   ``settings['django_secret_key']`` and sends the digest in
+   ``X-Anthias-Internal-Token``; the server verifies via
+   :func:`anthias_common.internal_auth.is_internal_request`. This is
+   *not* a user-facing credential — it bypasses the User table
+   entirely and is only safe because the secret never leaves the
+   device. New endpoints that the viewer needs to call should gate
+   on ``is_internal_request`` directly rather than going through
+   :func:`authorized`.
 
 This module's surface is:
 
@@ -47,9 +41,9 @@ This module's surface is:
   hashers, kept so callers don't have to import them on every site
   and so the data migration can sniff for non-Django-format strings
   in ``anthias.conf`` before promoting them into ``User.password``.
-* ``BearerTokenAuthentication`` — DRF auth class that accepts the
-  ``Bearer`` scheme (instead of the stock ``Token`` keyword) on top
-  of the same ``rest_framework.authtoken`` table.
+* ``DeprecatedBasicAuthentication`` — DRF's ``BasicAuthentication``
+  with a per-success ``logger.warning`` so production logs surface
+  the last callers still using the legacy header.
 * ``authorized`` — feature-flagged ``@login_required``. Bypasses when
   the operator turned auth off (``settings['auth_backend'] == ''``)
   and otherwise redirects to the login page with the request's
@@ -105,25 +99,16 @@ def verify_password(password: str, stored: str) -> bool:
     return bool(check_password(password, stored))
 
 
-def _build_auth_classes() -> dict[str, type]:
-    """Build the DRF auth classes lazily.
+def _build_deprecated_basic_auth_class() -> type:
+    """Build the deprecation-logging Basic auth class lazily.
 
-    DRF's auth classes reach for ``rest_framework`` at import time,
-    which fails on the viewer process (it doesn't load
-    ``rest_framework`` at all — see the ``ANTHIAS_SERVICE != 'viewer'``
-    branch in ``django_project.settings``). Wrapping the import in a
-    factory means viewer ``import lib.auth`` doesn't pull DRF in.
+    DRF reaches for ``rest_framework`` at import time, which fails on
+    the viewer process (it doesn't load ``rest_framework`` at all —
+    see the ``ANTHIAS_SERVICE != 'viewer'`` branch in
+    ``django_project.settings``). Wrapping the import in a factory
+    means viewer ``import lib.auth`` doesn't pull DRF in.
     """
-    from rest_framework.authentication import (
-        BasicAuthentication,
-        TokenAuthentication,
-    )
-
-    class BearerTokenAuthentication(TokenAuthentication):
-        # DRF's stock keyword is ``Token``; the operator-facing label
-        # everywhere else (issue, docs, this module) is ``Bearer``.
-        # Same table, same lookup — only the header prefix differs.
-        keyword = 'Bearer'
+    from rest_framework.authentication import BasicAuthentication
 
     class DeprecatedBasicAuthentication(BasicAuthentication):
         """``BasicAuthentication`` that logs a deprecation warning on
@@ -132,10 +117,9 @@ def _build_auth_classes() -> dict[str, type]:
 
         Pre-2826 versions of Anthias-CLI sent ``Authorization: Basic
         <b64(user:pass)>`` to /api/v2/...; we keep accepting that
-        header for back-compat but it's on the chopping block.
-        Operators should migrate to bearer tokens
-        (POST /api/v2/auth/token) — log line tells them which IP
-        and which path is still using the old scheme.
+        header for back-compat but it's on the chopping block. The
+        log line tells us which IP and which path is still using
+        the old scheme.
         """
 
         def authenticate_credentials(  # type: ignore[no-untyped-def]
@@ -162,27 +146,21 @@ def _build_auth_classes() -> dict[str, type]:
             logger.warning(
                 'DEPRECATED: HTTP Basic auth used on %s by user %r from '
                 '%s. The Basic auth path is retained for back-compat '
-                'only and will be removed in a future release. Migrate '
-                'to bearer tokens via POST /api/v2/auth/token.',
+                'only and will be removed in a future release.',
                 path,
                 user.get_username(),
                 client_ip,
             )
             return result
 
-    return {
-        'BearerTokenAuthentication': BearerTokenAuthentication,
-        'DeprecatedBasicAuthentication': DeprecatedBasicAuthentication,
-    }
+    return DeprecatedBasicAuthentication
 
 
 # Resolved at import time when DRF is available; on the viewer this
 # attribute is not used (settings.REST_FRAMEWORK is gated behind the
 # same ANTHIAS_SERVICE check) so the missing dep doesn't matter.
 try:
-    _classes = _build_auth_classes()
-    BearerTokenAuthentication = _classes['BearerTokenAuthentication']
-    DeprecatedBasicAuthentication = _classes['DeprecatedBasicAuthentication']
+    DeprecatedBasicAuthentication = _build_deprecated_basic_auth_class()
 except ImportError:
     pass
 

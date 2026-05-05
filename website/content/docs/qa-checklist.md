@@ -45,7 +45,9 @@ Running unit tests is a good way to make sure that the code is working as expect
 10. Enable any video asset with sounds and choose **HDMI** for the **Audio output**. Make sure that the sound works.
 11. Enable any video file with sounds and choose **3.5mm** jack for the **Audio output**. Make sure that the sound works.
 12. Choose any format for the **Date format**. Go to the assets page and make sure that the date field uses the correct format.
-13. Enable authentication by selecting **Basic** from the **Authentication** dropdown. Reload page and make sure that you'll now be prompted to enter a username and a password.
+13. Enable authentication by selecting **Basic** from the **Authentication** dropdown, set a username + password, save, then reload. You should be prompted to log in. Verify both credential paths still reach the API:
+    * Browser session — log in via the form, dashboard works.
+    * Legacy HTTP Basic — `curl -u user:pass http://<device>/api/v2/assets` still works, and the server logs a `DEPRECATED: HTTP Basic auth used …` warning.
 14. Click the **Get Backup** button. Delete all assets. Click on **Upload and Recover** and make sure that the assets are restored.
 15. Try to reboot or shutdown the device by clicking on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
 16. Go to the **System Info** page and make sure that all information are correct.

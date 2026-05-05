@@ -449,7 +449,7 @@ def test_apply_auth_settings_disable_with_correct_password_succeeds() -> None:
 # ---------------------------------------------------------------------------
 # DRF authentication paths
 #
-# Sanity: each of the four credential paths reaches the /api/v2/assets
+# Sanity: each surviving credential path reaches the /api/v2/assets
 # endpoint when the device has auth enabled. We exercise them through
 # the actual HTTP stack rather than mocking out @authorized so we
 # catch regressions in the middleware ordering / DRF auth class
@@ -457,12 +457,8 @@ def test_apply_auth_settings_disable_with_correct_password_succeeds() -> None:
 
 
 @pytest.fixture
-def operator_with_token() -> tuple[User, str]:
-    from rest_framework.authtoken.models import Token
-
-    user = _make_operator(pwd=_PWD_TOKEN_USER)
-    token = Token.objects.create(user=user)
-    return user, token.key
+def authed_operator() -> User:
+    return _make_operator(pwd=_PWD_TOKEN_USER)
 
 
 def _enable_auth() -> Any:
@@ -475,7 +471,7 @@ def _enable_auth() -> Any:
 
 @pytest.mark.django_db
 def test_basic_auth_header_authenticates_for_back_compat(
-    operator_with_token: tuple[User, str],
+    authed_operator: User,
 ) -> None:
     """Pre-2826 callers that send Authorization: Basic must keep
     working; we deliberately retained DRF's BasicAuthentication."""
@@ -494,7 +490,7 @@ def test_basic_auth_header_authenticates_for_back_compat(
 
 @pytest.mark.django_db
 def test_basic_auth_header_rejects_wrong_password(
-    operator_with_token: tuple[User, str],
+    authed_operator: User,
 ) -> None:
     creds = b64encode(f'alice:{_PWD_WRONG}'.encode()).decode('ascii')
     client = Client()
@@ -506,73 +502,3 @@ def test_basic_auth_header_rejects_wrong_password(
     # @authorized bounces unauthenticated requests; either the DRF
     # 401 or the @authorized 302 is acceptable — both are "not 200".
     assert response.status_code in (302, 401, 403)
-
-
-@pytest.mark.django_db
-def test_bearer_token_authenticates(
-    operator_with_token: tuple[User, str],
-) -> None:
-    """BearerTokenAuthentication (subclass of TokenAuthentication with
-    keyword='Bearer') is the preferred path for new headless callers."""
-    _, token = operator_with_token
-    client = Client()
-    with _enable_auth():
-        response = client.get(
-            '/api/v2/assets',
-            HTTP_AUTHORIZATION=f'Bearer {token}',
-        )
-    assert response.status_code != 302
-
-
-@pytest.mark.django_db
-def test_bearer_token_rejects_unknown_token() -> None:
-    client = Client()
-    with _enable_auth():
-        response = client.get(
-            '/api/v2/assets',
-            HTTP_AUTHORIZATION='Bearer nope-not-a-real-token',
-        )
-    assert response.status_code in (302, 401, 403)
-
-
-@pytest.mark.django_db
-def test_obtain_auth_token_endpoint(
-    operator_with_token: tuple[User, str],
-) -> None:
-    """POST /api/v2/auth/token/ with valid creds returns a token; the
-    token resolves back to the same user via Bearer auth."""
-    client = Client()
-    response = client.post(
-        '/api/v2/auth/token',
-        data={'username': 'alice', 'password': _PWD_TOKEN_USER},
-        content_type='application/json',
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert 'token' in body
-    assert isinstance(body['token'], str) and len(body['token']) >= 10
-
-
-@pytest.mark.django_db
-def test_obtain_auth_token_endpoint_rejects_bad_password(
-    operator_with_token: tuple[User, str],
-) -> None:
-    client = Client()
-    response = client.post(
-        '/api/v2/auth/token',
-        data={'username': 'alice', 'password': _PWD_WRONG},
-        content_type='application/json',
-    )
-    assert response.status_code == 400
-    assert 'error' in response.json()
-
-
-@pytest.mark.django_db
-def test_obtain_auth_token_endpoint_requires_username_and_password() -> None:
-    client = Client()
-    response = client.post(
-        '/api/v2/auth/token',
-        data={},
-        content_type='application/json',
-    )
-    assert response.status_code == 400

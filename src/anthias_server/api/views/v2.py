@@ -12,7 +12,6 @@ import requests
 from drf_spectacular.utils import extend_schema
 from hurry.filesize import size
 from rest_framework import status
-from rest_framework.authtoken.models import Token
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -311,76 +310,6 @@ class NetworkIpAddressesViewV2(APIView):
     )
     def get(self, request: Request) -> Response:
         return Response({'ip_addresses': _safe_ip_addresses()})
-
-
-class ObtainAuthTokenViewV2(APIView):
-    """Exchange username + password for a long-lived bearer token.
-
-    Headless callers (Anthias-CLI, cron jobs) hit this once with the
-    operator's credentials, store the returned token, and then send
-    ``Authorization: Bearer <token>`` on every other request — see the
-    :class:`anthias_server.lib.auth.BearerTokenAuthentication` registered
-    in ``REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']``.
-
-    Tokens are persisted in ``rest_framework.authtoken``'s single Token
-    table (1:1 with User). We deliberately do NOT auto-rotate on each
-    obtain — re-issuing the same token if one already exists keeps
-    existing scripts working when the operator re-runs the bootstrap
-    flow. Compromise recovery is still available: deleting the row
-    (admin UI or ``Token.objects.filter(user=...).delete()``) revokes
-    the token, and the next obtain call mints a fresh one.
-
-    Unauthenticated by design — the credentials in the body ARE the
-    auth — so it overrides the global ``authentication_classes`` /
-    ``permission_classes`` defaults.
-    """
-
-    authentication_classes: list[Any] = []
-    permission_classes: list[Any] = []
-
-    @extend_schema(
-        summary='Obtain a bearer token',
-        request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'username': {'type': 'string'},
-                    'password': {'type': 'string'},
-                },
-                'required': ['username', 'password'],
-            },
-        },
-        responses={
-            200: {
-                'type': 'object',
-                'properties': {'token': {'type': 'string'}},
-            },
-            400: {
-                'type': 'object',
-                'properties': {'error': {'type': 'string'}},
-            },
-        },
-    )
-    def post(self, request: Request) -> Response:
-        from django.contrib.auth import authenticate
-
-        username = request.data.get('username') or ''
-        password = request.data.get('password') or ''
-        if not username or not password:
-            return Response(
-                {'error': 'Username and password are required.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        user = authenticate(request, username=username, password=password)
-        if user is None:
-            return Response(
-                {'error': 'Invalid credentials.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key})
 
 
 class AssetListViewV2(APIView):
