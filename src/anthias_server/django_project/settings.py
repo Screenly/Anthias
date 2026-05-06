@@ -286,11 +286,12 @@ REST_FRAMEWORK = {
     # header always wins over an incidental session cookie.
     #
     #   * DeprecatedBasicAuthentication — DRF's stock
-    #     ``BasicAuthentication`` plus a warning log on every successful
-    #     auth. Retained for back-compat with pre-2826 Anthias-CLI
-    #     builds and third-party scripts written against the old auth;
-    #     the deprecation log surfaces the last callers before we
-    #     remove the path.
+    #     ``BasicAuthentication`` plus a throttled warning log
+    #     (one line per (user, IP, path) per 1-hour TTL) so we can
+    #     identify the last callers without flooding the log when a
+    #     polling client hammers a single endpoint. Retained for
+    #     back-compat with pre-2826 Anthias-CLI builds and
+    #     third-party scripts written against the old auth.
     #   * SessionAuthentication — browser dashboard, reuses the cookie
     #     that gates the HTML views.
     #

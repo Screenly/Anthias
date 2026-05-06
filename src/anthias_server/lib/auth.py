@@ -13,13 +13,17 @@ three credential paths, each with a distinct caller and trust model:
 
 2. **HTTP Basic** (legacy headless path, kept for back-compat).
    DRF's stock ``BasicAuthentication`` against the same User table,
-   wrapped to log a ``DEPRECATED`` warning on every successful auth.
-   Pre-2826 versions of Anthias-CLI and any third-party scripts that
-   were written against the old auth keep working unchanged. The
-   bearer-token path that will eventually replace this is tracked as
-   a follow-up — it needs its own UI for create / list / revoke and
-   a multi-token model with hashed storage, neither of which fits in
-   this PR.
+   wrapped to log a ``DEPRECATED`` warning when Basic auth is used.
+   The log is throttled per ``(user, IP, path)`` tuple with a 1-hour
+   TTL so a chatty polling client (e.g. Anthias-CLI hitting
+   ``/api/v2/info`` every few seconds) doesn't flood the log; the
+   signal we care about is "this caller is still on Basic", not the
+   request rate. Pre-2826 versions of Anthias-CLI and any third-party
+   scripts that were written against the old auth keep working
+   unchanged. The bearer-token path that will eventually replace
+   this is tracked as a follow-up — it needs its own UI for create /
+   list / revoke and a multi-token model with hashed storage,
+   neither of which fits in this PR.
 
 3. **Viewer ↔ server shared secret** (intra-device, same trust
    boundary).
@@ -42,8 +46,10 @@ This module's surface is:
   and so the data migration can sniff for non-Django-format strings
   in ``anthias.conf`` before promoting them into ``User.password``.
 * ``DeprecatedBasicAuthentication`` — DRF's ``BasicAuthentication``
-  with a per-success ``logger.warning`` so production logs surface
-  the last callers still using the legacy header.
+  with a throttled ``logger.warning`` (one line per ``(user, IP,
+  path)`` per ``_BASIC_AUTH_LOG_TTL_S``) so production logs surface
+  the last callers still using the legacy header without being
+  flooded by chatty polling clients.
 * ``authorized`` — feature-flagged ``@login_required``. Bypasses when
   the operator turned auth off (``settings['auth_backend'] == ''``)
   and otherwise redirects to the login page with the request's
@@ -155,17 +161,19 @@ def _build_deprecated_basic_auth_class() -> type:
     from rest_framework.authentication import BasicAuthentication
 
     class DeprecatedBasicAuthentication(BasicAuthentication):
-        """``BasicAuthentication`` that logs a deprecation warning on
-        every successful auth so we can grep production logs for the
-        last surviving callers before removing the path entirely.
+        """``BasicAuthentication`` that logs a deprecation warning the
+        first time it sees each ``(user, client_ip, path)`` tuple
+        (and again after ``_BASIC_AUTH_LOG_TTL_S``) so we can grep
+        production logs for the last surviving callers before
+        removing the path entirely.
 
         Pre-2826 versions of Anthias-CLI sent ``Authorization: Basic
         <b64(user:pass)>`` to /api/v2/...; we keep accepting that
         header for back-compat but it's on the chopping block. The
         log line tells us which IP and which path is still using
-        the old scheme — throttled per (user, IP, path) per
-        ``_BASIC_AUTH_LOG_TTL_S`` so a chatty polling client doesn't
-        flood the log.
+        the old scheme; per-tuple throttling keeps the log signal
+        clean without flooding when a polling client hammers a
+        single endpoint.
         """
 
         def authenticate_credentials(  # type: ignore[no-untyped-def]
