@@ -762,7 +762,7 @@ def test_ffprobe_summary_handles_missing_streams() -> None:
     with mock.patch.object(
         processing, '_ffprobe_streams', return_value=fake_probe_payload
     ):
-        summary = processing._ffprobe_summary('/tmp/example.mp4')
+        summary = processing._ffprobe_summary('fixture.mp4')
     assert summary['audio_codec'] == 'aac'
     assert summary['video_codec'] == 'unknown'
 
@@ -775,7 +775,7 @@ def test_ffprobe_summary_handles_no_audio_track() -> None:
         ],
     }
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
-        summary = processing._ffprobe_summary('/tmp/foo.mp4')
+        summary = processing._ffprobe_summary('fixture.mp4')
     assert summary['video_codec'] == 'h264'
     assert summary['audio_codec'] == 'none'
 
@@ -793,7 +793,7 @@ def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
         'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
     }
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
-        summary = processing._ffprobe_summary('/tmp/whatever.bin')
+        summary = processing._ffprobe_summary('fixture.bin')
     # The picked token matches the passthrough set.
     assert summary['container'] in processing._PASSTHROUGH_CONTAINERS
 
@@ -807,7 +807,7 @@ def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
         'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
     }
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
-        summary = processing._ffprobe_summary('/tmp/foo.mp4')
+        summary = processing._ffprobe_summary('fixture.mp4')
     assert summary['container'] == 'unsupported_format'
     assert summary['container'] not in processing._PASSTHROUGH_CONTAINERS
 
@@ -819,7 +819,7 @@ def test_ffprobe_summary_falls_back_to_extension_when_format_missing() -> None:
     raising."""
     fake: dict[str, Any] = {'format': {}, 'streams': []}
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
-        summary = processing._ffprobe_summary('/tmp/clip.mkv')
+        summary = processing._ffprobe_summary('fixture.mkv')
     assert summary['container'] == 'mkv'
 
 
@@ -837,7 +837,7 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
             truncate=False,
         ),
     ):
-        summary = processing._ffprobe_summary('/tmp/corrupt.mp4')
+        summary = processing._ffprobe_summary('fixture.mp4')
     assert summary == {
         'container': 'unknown',
         'video_codec': 'unknown',
@@ -1098,7 +1098,7 @@ def test_ffprobe_streams_parses_json() -> None:
     with mock.patch.object(
         sh, 'ffprobe', create=True, return_value=_FakeBuf(payload)
     ):
-        result = processing._ffprobe_streams('/tmp/x.mp4')
+        result = processing._ffprobe_streams('fixture.mp4')
     assert result['streams'][0]['codec_name'] == 'h264'
 
 
