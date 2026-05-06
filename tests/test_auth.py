@@ -613,6 +613,38 @@ def test_apply_auth_settings_re_enable_with_correct_pwd_succeeds() -> None:
 
 
 @pytest.mark.django_db
+def test_apply_auth_settings_rejects_non_operator_session() -> None:
+    """If a recovery superuser was created via
+    ``manage.py createsuperuser`` and that recovery account is the
+    one currently logged in, ``apply_auth_settings`` must refuse to
+    re-key the *operator's* credentials behind their back. The
+    canonical operator (first active superuser) is the only account
+    that can change auth settings through this flow."""
+    # Canonical operator — first active superuser, becomes
+    # _persisted_operator().
+    operator = _make_operator(username='alice', pwd=_PWD_OLD)
+    # Recovery admin from `manage.py createsuperuser`. Also a
+    # superuser, but distinct row.
+    recovery = _make_operator(username='recovery', pwd=_PWD_NEW)
+    request = _request_with_user(recovery)
+
+    with pytest.raises(AuthSettingsError, match='operator account'):
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd=_PWD_NEW,
+            new_username='hijacked',
+            new_pwd=_PWD_THROWAWAY_1,
+            new_pwd_confirm=_PWD_THROWAWAY_1,
+            prev_auth_backend='auth_basic',
+        )
+    # Operator's credentials are untouched.
+    operator.refresh_from_db()
+    assert operator.username == 'alice'
+    assert operator.check_password(_PWD_OLD)
+
+
+@pytest.mark.django_db
 def test_apply_auth_settings_noop_does_not_write_user_row() -> None:
     """``apply_auth_settings`` runs on every settings POST (the form
     sends the whole page, including unrelated toggles like
@@ -689,7 +721,8 @@ def authed_operator() -> User:
 
 def _enable_auth() -> Any:
     """Patch the global settings dict so @authorized treats auth as
-    enabled. Returns the patcher start handle for the caller to stop."""
+    enabled. Returns a ``patch.dict`` context manager — use as
+    ``with _enable_auth(): ...`` so the patch is reverted on exit."""
     return patch.dict(
         'anthias_server.settings.settings.data', {'auth_backend': 'auth_basic'}
     )

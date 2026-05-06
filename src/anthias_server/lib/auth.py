@@ -586,18 +586,32 @@ def apply_auth_settings(
             f'Unknown authentication backend: {new_auth_backend!r}'
         )
 
-    # The operator we treat as "owning" this device: the
-    # currently-authenticated session if there is one, otherwise the
-    # User row already persisted in the DB (if any). The fallback is
-    # load-bearing — it closes a privilege-escalation vector. When
-    # auth is disabled the settings page is reachable
-    # unauthenticated, and without the fallback an attacker on the
-    # LAN could flip auth_backend to auth_basic with their own
-    # username + password (we'd hit ``_create_initial_operator`` and
-    # mint a fresh superuser, locking the legitimate operator out).
-    # Treating any persisted User as "the operator" forces the
-    # current-password challenge below.
-    operator = _operator_user(request) or _persisted_operator()
+    # The operator who "owns" this device is the canonical persisted
+    # User (first active superuser, falling back to first User) —
+    # consistent with what ``operator_username()`` and the settings-page
+    # pre-fill use, so an admin who ran ``manage.py createsuperuser``
+    # to create a recovery account can't accidentally end up modifying
+    # the wrong row through this flow.
+    #
+    # If a session is active AND it doesn't match the canonical
+    # operator, refuse: the caller is authenticated as somebody else
+    # (e.g. the recovery superuser) and shouldn't be re-keying the
+    # operator's credentials. The settings page lookups would also
+    # have shown them the operator's username, not their own.
+    #
+    # When no canonical operator exists yet, ``operator`` is None and
+    # we fall through to ``_create_initial_operator`` for first-time
+    # enable.
+    operator = _persisted_operator()
+    session_user = _operator_user(request)
+    if (
+        operator is not None
+        and session_user is not None
+        and session_user.pk != operator.pk
+    ):
+        raise AuthSettingsError(
+            'Only the operator account can change authentication settings.'
+        )
 
     current_pass_correct: bool | None = None
     if current_pwd:

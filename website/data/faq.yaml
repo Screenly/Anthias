@@ -138,7 +138,7 @@
       answer: |
         Devices with the **Basic** authentication mode enabled in **Settings** require credentials on every API call. Two paths resolve to the same operator account:
 
-        * **Browser session cookie** — what the dashboard uses. POSTing to `/login/` and re-using the cookie also works for `GET` API calls, but DRF's `SessionAuthentication` enforces CSRF on `POST` / `PUT` / `PATCH` / `DELETE`, so a cookie-only script will get 403s on writes unless it also forwards the `csrftoken` cookie as an `X-CSRFToken` header. This path is best treated as **browser-only**.
+        * **Browser session cookie** — what the dashboard uses. Treat this path as **browser-only**: a naive headless POST to `/login/` will 403 because the login form itself is CSRF-protected (the script has to GET `/login/` first, parse out the `csrfmiddlewaretoken` form field and the `csrftoken` cookie, then POST both back), and DRF's `SessionAuthentication` enforces CSRF *again* on every API write (`POST` / `PUT` / `PATCH` / `DELETE`) by requiring an `X-CSRFToken` header. Cookie-only scripts that skip either step get 403s.
         * **HTTP Basic** *(legacy, deprecated — use this for headless automation today)* — `Authorization: Basic <base64(user:pass)>`. Retained for back-compat with pre-2826 Anthias-CLI and third-party scripts; the server logs a `DEPRECATED:` warning on every successful Basic auth. A UI-managed personal-token system that will replace Basic for headless callers is tracked as a follow-up.
 
         Devices with authentication disabled (the default on a fresh install) accept either of these but don't require them.
