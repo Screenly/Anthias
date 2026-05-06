@@ -142,6 +142,13 @@ mypy = [
     "django-stubs-ext==6.0.3",
     "djangorestframework==3.16.1",
     "drf-spectacular==0.29.0",
+    # Pillow ships PEP 561 stubs (py.typed). The processing module
+    # imports PIL at top level, so mypy needs the package resolvable
+    # to type-check the upload-time normalisation pipeline.
+    # pillow-heif is intentionally not pinned here — it's listed in
+    # tool.mypy.overrides above so its missing-import error is
+    # ignored, mirroring the cec / pydbus / sh / vlc pattern.
+    "Pillow==12.1.0",
     "pytz==2025.2",
     "whitenoise==6.12.0",
 ]
