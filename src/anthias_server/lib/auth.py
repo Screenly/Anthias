@@ -69,7 +69,7 @@ import logging
 import os.path
 import re
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ParamSpec, TypeVar, cast
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -270,27 +270,42 @@ def _build_drf_auth_classes() -> dict[str, type]:
     }
 
 
-# Resolved at import time when DRF is available. On the viewer
-# process ``rest_framework`` isn't installed (it's gated behind the
-# ``ANTHIAS_SERVICE != 'viewer'`` branch in ``INSTALLED_APPS``), so
-# this import fails silently. ``REST_FRAMEWORK`` itself is defined
-# unconditionally in ``django_project.settings``, but DRF only
-# resolves the dotted-string class names in
-# ``DEFAULT_AUTHENTICATION_CLASSES`` when its app starts up — the
-# viewer never loads the ``rest_framework`` app, so the missing
-# attribute on this module never gets dereferenced. Viewer-side code
-# only uses ``lib.auth`` for the hash helpers and ``_is_legacy_sha256``,
-# neither of which needs the auth class.
-try:
-    _drf_auth_classes = _build_drf_auth_classes()
-    DeprecatedBasicAuthentication = _drf_auth_classes[
-        'DeprecatedBasicAuthentication'
-    ]
-    GatedSessionAuthentication = _drf_auth_classes[
-        'GatedSessionAuthentication'
-    ]
-except ImportError:
-    pass
+_DRF_AUTH_CLASS_NAMES = frozenset(
+    {'DeprecatedBasicAuthentication', 'GatedSessionAuthentication'}
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy build of DRF auth classes via PEP-562 module ``__getattr__``.
+
+    DRF resolves the dotted-string class names in
+    ``REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES']`` only when its
+    app loads — at which point ``rest_framework`` is guaranteed to
+    be importable AND Django is fully configured. Building the
+    classes lazily means we never run the factory in environments
+    where DRF isn't loaded:
+
+    * Viewer image — its dep group in ``pyproject.toml`` excludes
+      ``djangorestframework``, and the viewer's INSTALLED_APPS skips
+      ``rest_framework`` anyway. ``__getattr__`` never fires because
+      nothing in the viewer asks for these names.
+    * Tooling / test bootstrap — code paths that import ``lib.auth``
+      before ``django.setup()`` (or from a non-server process) only
+      use the hash helpers and the regex; they never touch the auth
+      classes, so the factory never runs.
+
+    Once first accessed, the classes are cached on the module via
+    ``globals().update`` so subsequent lookups skip the factory.
+    Errors from the factory (``ImportError`` if DRF really isn't
+    installed, ``ImproperlyConfigured`` if Django isn't ready, etc.)
+    propagate to the caller — by that point the caller really did
+    want a DRF class, so a hard failure is the right answer.
+    """
+    if name not in _DRF_AUTH_CLASS_NAMES:
+        raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+    classes = _build_drf_auth_classes()
+    globals().update(classes)
+    return classes[name]
 
 
 def _is_safe_login_next_source(request: 'HttpRequest') -> bool:
