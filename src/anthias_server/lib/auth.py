@@ -108,6 +108,41 @@ def verify_password(password: str, stored: str) -> bool:
     return bool(check_password(password, stored))
 
 
+# Throttle window for the DEPRECATED-Basic-auth log line. The signal
+# we want is "this caller is still on Basic" — knowing it once an
+# hour per (user, IP, path) is enough to chase down stragglers, and
+# it's much cheaper than firing one WARNING per request when a
+# polling Anthias-CLI hits /api/v2/info every 10s.
+#
+# In-process dict is a singleton per uvicorn worker; multi-worker
+# deploys may emit a few more lines than this nominally allows, but
+# the bound stays per-worker and the cardinality is low (a single
+# operator account, a small handful of LAN IPs and API paths). Worst
+# case of a race-on-write is one extra log line, which is fine.
+_BASIC_AUTH_LOG_TTL_S = 3600.0
+_basic_auth_log_seen: dict[tuple[str, str, str], float] = {}
+
+
+def _should_log_basic_auth_use(
+    username: str, client_ip: str, path: str
+) -> bool:
+    """Per-(user, IP, path) throttle on the deprecation log line.
+
+    Returns True the first time a particular tuple is seen (or after
+    the TTL expires) and False during the throttle window.
+    Side-effects update ``_basic_auth_log_seen``.
+    """
+    import time
+
+    key = (username, client_ip, path)
+    now = time.monotonic()
+    expiry = _basic_auth_log_seen.get(key)
+    if expiry is not None and expiry > now:
+        return False
+    _basic_auth_log_seen[key] = now + _BASIC_AUTH_LOG_TTL_S
+    return True
+
+
 def _build_deprecated_basic_auth_class() -> type:
     """Build the deprecation-logging Basic auth class lazily.
 
@@ -128,7 +163,9 @@ def _build_deprecated_basic_auth_class() -> type:
         <b64(user:pass)>`` to /api/v2/...; we keep accepting that
         header for back-compat but it's on the chopping block. The
         log line tells us which IP and which path is still using
-        the old scheme.
+        the old scheme — throttled per (user, IP, path) per
+        ``_BASIC_AUTH_LOG_TTL_S`` so a chatty polling client doesn't
+        flood the log.
         """
 
         def authenticate_credentials(  # type: ignore[no-untyped-def]
@@ -152,14 +189,18 @@ def _build_deprecated_basic_auth_class() -> type:
                 if request is not None
                 else 'unknown'
             )
-            logger.warning(
-                'DEPRECATED: HTTP Basic auth used on %s by user %r from '
-                '%s. The Basic auth path is retained for back-compat '
-                'only and will be removed in a future release.',
-                path,
-                user.get_username(),
-                client_ip,
-            )
+            if _should_log_basic_auth_use(
+                user.get_username(), client_ip, path
+            ):
+                logger.warning(
+                    'DEPRECATED: HTTP Basic auth used on %s by user %r '
+                    'from %s. The Basic auth path is retained for '
+                    'back-compat only and will be removed in a future '
+                    'release.',
+                    path,
+                    user.get_username(),
+                    client_ip,
+                )
             return result
 
     return DeprecatedBasicAuthentication

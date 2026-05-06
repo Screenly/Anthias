@@ -738,3 +738,55 @@ def test_basic_auth_header_rejects_wrong_password(
         )
     assert response.status_code == 401
     assert response.headers.get('WWW-Authenticate', '').startswith('Basic')
+
+
+@pytest.mark.django_db
+def test_basic_auth_deprecation_log_throttled(
+    authed_operator: User, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The DEPRECATED Basic-auth log must fire at most once per
+    (user, client_ip, path) within the throttle window — a polling
+    Anthias-CLI hitting the same endpoint every few seconds would
+    otherwise flood the log with identical warnings."""
+    import logging
+
+    from anthias_server.lib import auth as auth_module
+
+    # Clear any state left by other tests sharing the in-process
+    # throttle dict.
+    auth_module._basic_auth_log_seen.clear()
+
+    creds = b64encode(f'alice:{_PWD_TOKEN_USER}'.encode()).decode('ascii')
+    client = Client()
+    with _enable_auth(), caplog.at_level(logging.WARNING):
+        for _ in range(5):
+            response = client.get(
+                '/api/v2/assets',
+                HTTP_AUTHORIZATION=f'Basic {creds}',
+            )
+            assert response.status_code == 200
+
+    deprecated = [
+        r
+        for r in caplog.records
+        if 'DEPRECATED: HTTP Basic auth' in r.getMessage()
+    ]
+    # Exactly one warning across all five identical requests.
+    assert len(deprecated) == 1, (
+        f'expected 1 DEPRECATED log line, got {len(deprecated)}'
+    )
+
+    # Different client_ip should not be throttled by the previous
+    # entry — a new tuple gets its own log line.
+    with _enable_auth(), caplog.at_level(logging.WARNING):
+        client.get(
+            '/api/v2/assets',
+            HTTP_AUTHORIZATION=f'Basic {creds}',
+            REMOTE_ADDR='10.0.0.42',
+        )
+    deprecated_after = [
+        r
+        for r in caplog.records
+        if 'DEPRECATED: HTTP Basic auth' in r.getMessage()
+    ]
+    assert len(deprecated_after) == 2
