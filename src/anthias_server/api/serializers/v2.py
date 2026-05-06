@@ -115,10 +115,19 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'play_time_to',
             'is_reachable',
             'last_reachability_check',
+            'metadata',
         ]
         read_only_fields = [
             'is_reachable',
             'last_reachability_check',
+            # ``metadata`` is owned by the upload-pipeline tasks
+            # (image_normalize_asset, video_normalize_asset). Operators
+            # can read the original-extension / transcoded / error
+            # bookkeeping but can't overwrite it from the API — letting
+            # them stomp on it would invite "transcoded=true but the
+            # file is the original" desync. Same posture as
+            # is_reachable / last_reachability_check above.
+            'metadata',
         ]
 
 

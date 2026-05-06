@@ -81,6 +81,12 @@ def build_image(
         'git',
         'iproute2',
         'libcec7',
+        # Runtime dep for pillow-heif's libheif binding. ~1 MB
+        # extracted, in base so anthias-server (image normalisation
+        # pipeline) and anthias-celery (the worker that actually runs
+        # the conversion) both inherit it. Inert on the viewer
+        # process; harmless to ship there too.
+        'libheif1',
         'lsb-release',
         'procps',
         'psmisc',

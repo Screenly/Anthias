@@ -707,3 +707,71 @@ def revalidate_asset_url(asset_id: str) -> None:
         is_reachable=reachable,
         last_reachability_check=timezone.now(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Asset normalisation pipeline (image / video)
+# ---------------------------------------------------------------------------
+#
+# Implementation lives in ``anthias_server.processing`` to keep this
+# file focused on the existing celery surface and to make the
+# unit-test boundary explicit (the module functions are called
+# directly without going through Celery). The thin wrappers below are
+# the actual celery.task entry points so the task names register on
+# the worker and ``apply_async`` works out of the box.
+from anthias_server import processing  # noqa: E402
+
+NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
+
+
+@celery.task(
+    base=processing._NormalizeAssetTask,
+    time_limit=300,
+    autoretry_for=(OSError,),
+    retry_backoff=10,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=2,
+)
+def normalize_image_asset(asset_id: str) -> None:
+    """Convert HEIC / HEIF / TIFF uploads to lossless WebP.
+
+    No-ops if the row is missing or has already been finalised
+    (duplicate task fire / operator-edited row). Permanent decode
+    failures (corrupt HEIC) raise so ``_NormalizeAssetTask.on_failure``
+    writes ``metadata.error_message`` and clears ``is_processing``.
+
+    Retries on OSError covers transient disk pressure / a temporary
+    libheif read hiccup; Pillow's UnidentifiedImageError is permanent
+    and lands directly on on_failure.
+    """
+    asset = processing._row_or_none(asset_id)
+    if asset is None:
+        return
+    processing._run_image_normalisation(asset)
+
+
+@celery.task(
+    base=processing._NormalizeAssetTask,
+    time_limit=NORMALIZE_VIDEO_TIME_LIMIT_S,
+    autoretry_for=(OSError,),
+    retry_backoff=15,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=1,
+)
+def normalize_video_asset(asset_id: str) -> None:
+    """Probe the upload and either passthrough or transcode to H.264 MP4.
+
+    ffmpeg is wrapped with ``-threads 2`` so two cores stay free for
+    the on-device viewer; the celery worker itself runs under
+    ``nice -n 19 ionice -c 3`` (set in docker-compose.yml.tmpl).
+
+    Retry policy mirrors ``download_youtube_asset``: OSError gets one
+    retry (transient IO), ffmpeg subprocess failures and timeouts are
+    permanent and land on on_failure.
+    """
+    asset = processing._row_or_none(asset_id)
+    if asset is None:
+        return
+    processing._run_video_normalisation(asset)

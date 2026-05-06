@@ -90,7 +90,16 @@
             <i class="ti ti-cloud-upload" style="font-size: 2.25rem; opacity: 0.55"></i>
             <p class="mb-1 font-semibold mt-2">Click to choose a file</p>
             <p class="muted-label mb-0">Image or video. Upload starts immediately.</p>
-            <input type="file" class="hidden" id="add-file" name="file_upload" accept="image/*,video/*"
+            {# Browser MIME globs cover JPEG/PNG/WebP/GIF/MP4/WebM/MKV out of
+               the box. iOS HEIC and TIFF still slip through `image/*` on
+               some browsers, and macOS QuickTime .mov / .m4v likewise on
+               `video/*` — listing extensions explicitly keeps the file
+               picker showing them as selectable rather than greyed out.
+               The server-side normalisation pipeline (HEIC/HEIF/TIFF →
+               WebP, exotic video codecs → H.264 MP4) makes the wider
+               accept range safe to surface here. #}
+            <input type="file" class="hidden" id="add-file" name="file_upload"
+              accept="image/*,video/*,.heic,.heif,.tif,.tiff,.mov,.m4v,.mkv,.webm,.avi,.mpg,.mpeg,.ts,.flv"
               @change="if ($event.target.files.length) { uploadFileName = $event.target.files[0].name; $event.target.form.requestSubmit() }">
           </label>
 

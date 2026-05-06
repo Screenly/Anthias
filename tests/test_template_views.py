@@ -567,17 +567,20 @@ def test_prettify_upload_name(raw: str, expected: str) -> None:
 
 
 @pytest.mark.django_db
-def test_assets_upload_video_marks_processing_and_queues_probe(
+def test_assets_upload_video_marks_processing_and_queues_normalize(
     client: Client,
 ) -> None:
     """Video uploads return immediately with is_processing=True and
-    enqueue the duration probe as a Celery task so ffprobe doesn't
-    block the upload POST on slow hardware."""
+    enqueue ``normalize_video_asset`` so ffprobe + (potential)
+    transcode don't block the upload POST on slow hardware. The new
+    normalisation task subsumes the old probe-only task: every
+    upload runs through ffprobe regardless, and the passthrough
+    branch is the cheap "probe + write duration" path."""
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     with (
         mock.patch(
-            'anthias_server.celery_tasks.probe_video_duration.delay'
+            'anthias_server.celery_tasks.normalize_video_asset.delay'
         ) as delay_mock,
         mock.patch(
             'anthias_server.settings.ViewerPublisher.send_to_viewer',
@@ -599,7 +602,84 @@ def test_assets_upload_video_marks_processing_and_queues_probe(
     assert created is not None
     assert created.name == 'Clip'
     assert created.is_processing is True
+    # The on-disk filename now carries the source extension so the
+    # normalisation task can identify it without re-running guess_type.
+    assert created.uri and created.uri.endswith('.mp4')
     delay_mock.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_heic_marks_processing_and_queues_image_normalize(
+    client: Client,
+) -> None:
+    """HEIC / HEIF / TIFF uploads route through the image
+    normalisation task so the viewer only ever has to render
+    formats it already supports. Other image types (JPEG, PNG)
+    skip the pipeline."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as delay_mock,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.HEIC',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    assert created.is_processing is True
+    # mimetypes.guess_extension('image/heic') returns '.heic'; the
+    # operator-uppercased '.HEIC' is the secondary fallback path.
+    assert created.uri and created.uri.endswith('.heic')
+    delay_mock.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_jpeg_skips_normalization(client: Client) -> None:
+    """JPEG / PNG / WebP uploads land ready-to-play — no Celery hop."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_video_asset.delay'
+        ) as video_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.jpg',
+                    b'\xff\xd8\xff\xe0\x00\x10JFIF',
+                    content_type='image/jpeg',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    assert created.is_processing is False
+    image_delay.assert_not_called()
+    video_delay.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

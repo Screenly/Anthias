@@ -56,6 +56,15 @@ server = [
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
     "packaging==26.1",
+    # Pillow + pillow-heif power the upload-time image normalisation
+    # pipeline (HEIC / HEIF / TIFF → lossless WebP). pillow-heif
+    # registers a libheif-backed Pillow plugin at import time; the
+    # libheif1 system package is supplied by the base image (see
+    # docker/Dockerfile.server.j2). Pillow itself is otherwise unused
+    # — adding it here instead of relying on a transitive import keeps
+    # the dependency explicit.
+    "Pillow==12.1.0",
+    "pillow-heif==1.2.1",
     "psutil==7.2.1",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
@@ -220,6 +229,7 @@ module = [
     "cec",
     "channels_redis.*",
     "hurry.filesize",
+    "pillow_heif",
     "pydbus",
     "sh",
     "vlc",

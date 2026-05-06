@@ -2,7 +2,7 @@ import logging
 import tarfile
 import uuid
 from datetime import datetime
-from mimetypes import guess_type
+from mimetypes import guess_extension, guess_type
 from os import path, remove
 from urllib.parse import urlparse, urlunparse
 
@@ -259,26 +259,50 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # has a breadcrumb back to what they picked.
     display_name = _prettify_upload_name(upload_name)
 
+    # Preserve the source extension on disk so the normalisation
+    # pipeline can identify the format from the filename without
+    # re-running guess_type. Falls back to whatever the upload
+    # carried — guess_extension returns '.jpg' / '.heic' / '.mp4' etc.
+    # for the formats we care about; if mimetypes can't map the type
+    # we leave it off rather than synthesise a misleading suffix.
+    src_ext = guess_extension(file_type) or ''
+    if not src_ext:
+        # Trust the operator-supplied name as a last resort.
+        # path.splitext('foo.HEIC')[1] → '.HEIC'; lowercase so the
+        # downstream task's case-insensitive ext check still hits.
+        src_ext = path.splitext(upload_name)[1].lower()
+
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
     # uploaded with the same name (different content), silently
     # overwriting the older one.
     final_name = uuid.uuid4().hex
-    final_path = path.join(settings['assetdir'], final_name)
+    final_path = path.join(settings['assetdir'], f'{final_name}{src_ext}')
     with open(final_path, 'wb') as f:
         for chunk in file_upload.chunks():
             f.write(chunk)
 
     mimetype = file_type.split('/')[0]
-    # Video duration is resolved out of band by the
-    # `probe_video_duration` Celery task — ffprobe can take several
-    # seconds on a Pi 1/Zero and we don't want the upload POST to block
-    # the operator's modal that long. The row is created with
-    # is_processing=True so the table renders a "Processing" pill until
-    # the worker writes the real duration back; the API's v2 path uses
-    # the same convention. Images keep the configured default.
-    duration = settings['default_duration']
+    # Decide which Celery task — if any — needs to run before the
+    # viewer can play the row.
+    #   * Videos always go through the normalisation pipeline: the
+    #     passthrough branch of normalize_video_asset is the same
+    #     "ffprobe + write duration" the old probe_video_duration
+    #     did, and the transcode branch covers the non-H.264 case
+    #     this issue exists to fix.
+    #   * HEIC / HEIF / TIFF images are converted to lossless WebP.
+    #     Other images (JPEG / PNG / WebP / GIF) skip the pipeline
+    #     entirely and land ready-to-play.
     is_video = mimetype == 'video'
+    needs_image_normalize = mimetype == 'image' and src_ext.lower() in {
+        '.heic',
+        '.heif',
+        '.tif',
+        '.tiff',
+    }
+    is_processing = is_video or needs_image_normalize
+
+    duration = settings['default_duration']
 
     now = timezone.now()
     # Count is_enabled rows (the same partition the home page uses to
@@ -295,20 +319,31 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         mimetype=mimetype,
         duration=duration,
         is_enabled=True,
-        is_processing=is_video,
+        is_processing=is_processing,
         play_order=play_order,
         start_date=now,
         end_date=now + timedelta(days=30),
     )
     if is_video:
-        from anthias_server.celery_tasks import probe_video_duration
+        from anthias_server.celery_tasks import normalize_video_asset
 
-        probe_video_duration.delay(asset.asset_id)
+        normalize_video_asset.delay(asset.asset_id)
         return _asset_table_response(
             request,
             toast=(
                 'info',
                 f'Uploaded {upload_name} — analysing video…',
+            ),
+        )
+    if needs_image_normalize:
+        from anthias_server.celery_tasks import normalize_image_asset
+
+        normalize_image_asset.delay(asset.asset_id)
+        return _asset_table_response(
+            request,
+            toast=(
+                'info',
+                f'Uploaded {upload_name} — converting image…',
             ),
         )
     return _asset_table_response(

@@ -64,7 +64,17 @@ services:
     # and a separate celery image was duplicating ~825 MB extracted of
     # identical content per device. See refactor: drop celery image.
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    # ``nice -n 19 ionice -c 3`` lowers CPU and IO priority to the
+    # idle class so the upload-time normalisation pipeline (HEIC→WebP,
+    # exotic-codec → H.264 transcode) never starves the on-device
+    # viewer mid-playback. Both wrappers are no-ops when the system is
+    # idle — a background sweep on a quiet device still runs at
+    # full speed; only contention with the viewer process slows it
+    # down. Subprocesses (ffmpeg, ffprobe, Pillow's libheif binding)
+    # inherit the wrapper's settings, so a single configure here
+    # covers every workload the worker spawns.
     command: >
+      nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
