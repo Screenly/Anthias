@@ -292,15 +292,20 @@ REST_FRAMEWORK = {
     #     polling client hammers a single endpoint. Retained for
     #     back-compat with pre-2826 Anthias-CLI builds and
     #     third-party scripts written against the old auth.
-    #   * SessionAuthentication — browser dashboard, reuses the cookie
-    #     that gates the HTML views.
+    #   * GatedSessionAuthentication — DRF's stock
+    #     ``SessionAuthentication`` plus the same ``auth_backend``
+    #     gate as DeprecatedBasicAuthentication: when auth is
+    #     disabled (``settings['auth_backend'] == ''``) both classes
+    #     no-op so the documented "auth disabled = API is fully
+    #     open" contract holds even for clients that happen to carry
+    #     a session cookie or a malformed Authorization header.
     #
     # New integrations should use the bearer-token path coming in a
     # follow-up PR (UI-managed personal tokens, not
     # username/password exchange).
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'anthias_server.lib.auth.DeprecatedBasicAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'anthias_server.lib.auth.GatedSessionAuthentication',
     ],
 }
 

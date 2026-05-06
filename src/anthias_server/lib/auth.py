@@ -49,7 +49,12 @@ This module's surface is:
   with a throttled ``logger.warning`` (one line per ``(user, IP,
   path)`` per ``_BASIC_AUTH_LOG_TTL_S``) so production logs surface
   the last callers still using the legacy header without being
-  flooded by chatty polling clients.
+  flooded by chatty polling clients. Also gated by ``auth_backend``
+  (no-ops when the operator has turned auth off).
+* ``GatedSessionAuthentication`` — DRF's ``SessionAuthentication``
+  with the same auth-backend gate so an incidental session cookie
+  doesn't trigger CSRF rejection on write endpoints when auth is
+  disabled.
 * ``authorized`` — feature-flagged ``@login_required``. Bypasses when
   the operator turned auth off (``settings['auth_backend'] == ''``)
   and otherwise redirects to the login page with the request's
@@ -149,18 +154,55 @@ def _should_log_basic_auth_use(
     return True
 
 
-def _build_deprecated_basic_auth_class() -> type:
-    """Build the deprecation-logging Basic auth class lazily.
+def _build_drf_auth_classes() -> dict[str, type]:
+    """Build the DRF auth classes lazily.
 
     DRF reaches for ``rest_framework`` at import time, which fails on
     the viewer process (it doesn't load ``rest_framework`` at all —
     see the ``ANTHIAS_SERVICE != 'viewer'`` branch in
     ``django_project.settings``). Wrapping the import in a factory
     means viewer ``import lib.auth`` doesn't pull DRF in.
-    """
-    from rest_framework.authentication import BasicAuthentication
 
-    class DeprecatedBasicAuthentication(BasicAuthentication):
+    Returns both:
+
+    * ``DeprecatedBasicAuthentication`` — Basic auth + throttled
+      deprecation warning.
+    * ``GatedSessionAuthentication`` — DRF's stock
+      ``SessionAuthentication`` with the ``_AuthBackendGated`` mixin.
+
+    Both inherit ``_AuthBackendGated`` so they short-circuit when
+    ``settings['auth_backend']`` is empty: the documented contract is
+    "auth disabled = the API is fully open", which DRF's authenticators
+    would otherwise violate. Stock ``SessionAuthentication`` enforces
+    CSRF whenever a session cookie is present (403 on unsafe methods
+    without ``X-CSRFToken``); stock ``BasicAuthentication`` returns
+    401 when an ``Authorization: Basic …`` header has wrong creds.
+    Neither is appropriate when auth is turned off.
+    """
+    from rest_framework.authentication import (
+        BasicAuthentication,
+        SessionAuthentication,
+    )
+
+    class _AuthBackendGated:
+        """Mixin: ``authenticate()`` returns ``None`` (= "this class
+        doesn't recognise the request, try the next one") when the
+        operator has turned auth off via ``settings['auth_backend']``.
+        Layered on top of any DRF authenticator so the auth-disabled
+        contract holds: when ``auth_backend == ''`` the API is fully
+        open and credentials/cookies are simply ignored.
+        """
+
+        def authenticate(self, request):  # type: ignore[no-untyped-def]
+            from anthias_server.settings import settings as device_settings
+
+            if not device_settings['auth_backend']:
+                return None
+            return super().authenticate(request)  # type: ignore[misc]
+
+    class DeprecatedBasicAuthentication(
+        _AuthBackendGated, BasicAuthentication
+    ):
         """``BasicAuthentication`` that logs a deprecation warning the
         first time it sees each ``(user, client_ip, path)`` tuple
         (and again after ``_BASIC_AUTH_LOG_TTL_S``) so we can grep
@@ -211,7 +253,21 @@ def _build_deprecated_basic_auth_class() -> type:
                 )
             return result
 
-    return DeprecatedBasicAuthentication
+    class GatedSessionAuthentication(_AuthBackendGated, SessionAuthentication):
+        """``SessionAuthentication`` that no-ops when auth is disabled.
+
+        DRF's stock class enforces CSRF on unsafe methods whenever a
+        session cookie is present (writes 403 to writes without
+        ``X-CSRFToken``). With ``auth_backend == ''`` we want the API
+        to be fully open even for clients that incidentally carry a
+        cookie — the mixin makes that happen by short-circuiting
+        ``authenticate`` before the CSRF check runs.
+        """
+
+    return {
+        'DeprecatedBasicAuthentication': DeprecatedBasicAuthentication,
+        'GatedSessionAuthentication': GatedSessionAuthentication,
+    }
 
 
 # Resolved at import time when DRF is available. On the viewer
@@ -226,7 +282,13 @@ def _build_deprecated_basic_auth_class() -> type:
 # only uses ``lib.auth`` for the hash helpers and ``_is_legacy_sha256``,
 # neither of which needs the auth class.
 try:
-    DeprecatedBasicAuthentication = _build_deprecated_basic_auth_class()
+    _drf_auth_classes = _build_drf_auth_classes()
+    DeprecatedBasicAuthentication = _drf_auth_classes[
+        'DeprecatedBasicAuthentication'
+    ]
+    GatedSessionAuthentication = _drf_auth_classes[
+        'GatedSessionAuthentication'
+    ]
 except ImportError:
     pass
 

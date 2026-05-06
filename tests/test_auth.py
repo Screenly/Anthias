@@ -823,3 +823,46 @@ def test_basic_auth_deprecation_log_throttled(
         if 'DEPRECATED: HTTP Basic auth' in r.getMessage()
     ]
     assert len(deprecated_after) == 2
+
+
+@pytest.mark.django_db
+def test_auth_disabled_ignores_drf_authenticators(
+    authed_operator: User,
+) -> None:
+    """When ``settings['auth_backend'] == ''`` (auth disabled), the
+    documented contract is "API is fully open". DRF's stock auth
+    classes would violate that — ``SessionAuthentication`` raises
+    403 on unsafe methods without ``X-CSRFToken``,
+    ``BasicAuthentication`` raises 401 on a malformed header. The
+    Anthias-flavoured wrappers (``GatedSessionAuthentication``,
+    ``DeprecatedBasicAuthentication``) both inherit
+    ``_AuthBackendGated`` which returns ``None`` early when auth is
+    disabled, so neither rejection fires.
+
+    This test asserts both shapes pass through to a 200, which is
+    impossible with stock DRF classes — the previous wiring would
+    have returned 401 on the wrong-Basic-creds case.
+    """
+    client = Client()
+    # auth_backend is '' by default in tests; do NOT enter
+    # ``_enable_auth()`` here, that's the whole point.
+
+    # 1. Wrong Basic-auth header. Stock BasicAuthentication would 401.
+    creds = b64encode(f'alice:{_PWD_WRONG}'.encode()).decode('ascii')
+    response = client.get(
+        '/api/v2/assets', HTTP_AUTHORIZATION=f'Basic {creds}'
+    )
+    assert response.status_code == 200
+
+    # 2. Authenticated session + POST without CSRF token. Stock
+    #    SessionAuthentication.enforce_csrf would 403.
+    client.force_login(authed_operator)
+    response = client.post(
+        '/api/v2/assets',
+        data='{}',
+        content_type='application/json',
+    )
+    # Either a normal 4xx for body-shape (no name, etc.) or a 200 —
+    # but explicitly NOT 403 (the CSRF rejection we're guarding
+    # against). The view dispatches and the auth/CSRF gate is silent.
+    assert response.status_code != 403
