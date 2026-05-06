@@ -512,11 +512,17 @@ def test_video_exotic_codec_transcodes_to_h264_mp4(
     assert asset.is_processing is False
     notify.assert_called_once_with('vid-tc')
 
-    # Verify the output is actually H.264 MP4 — not just an
-    # extension-rename of the source.
+    # Verify the output is actually H.264 in a passthrough-eligible
+    # container — not just an extension-rename of the source. The
+    # container check uses the passthrough set rather than asserting
+    # ``container == 'mp4'`` directly because ffprobe's
+    # format.format_name reports a comma-joined synonym list for MP4
+    # files (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``); _ffprobe_summary
+    # picks whichever token first matches the passthrough set, and
+    # the exact pick is implementation detail.
     summary = processing._ffprobe_summary(final_uri)
     assert summary['video_codec'] == 'h264'
-    assert summary['container'] == 'mp4'
+    assert summary['container'] in processing._PASSTHROUGH_CONTAINERS
 
 
 @pytest_ffmpeg
@@ -726,6 +732,13 @@ def test_video_zero_byte_output_fails_clean(asset_dir: str) -> None:
         with pytest.raises(RuntimeError, match='no output'):
             processing._run_video_normalisation(asset)
 
+    # The empty staging file must be removed too, not just the
+    # error raised — otherwise cleanup() would have to GC it
+    # later via the orphan-file sweep. Same contract as the
+    # timeout/error branches above.
+    leftover = [n for n in os.listdir(asset_dir) if 'staging' in n]
+    assert not leftover, f'staging leftover after empty output: {leftover}'
+
 
 # ---------------------------------------------------------------------------
 # ffprobe summary parsing — tested independently of the runner
@@ -765,6 +778,49 @@ def test_ffprobe_summary_handles_no_audio_track() -> None:
         summary = processing._ffprobe_summary('/tmp/foo.mp4')
     assert summary['video_codec'] == 'h264'
     assert summary['audio_codec'] == 'none'
+
+
+def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
+    """Defensive: ffprobe-reported ``format.format_name`` beats the
+    filename. A ``.bin`` file that's actually an MP4 must classify
+    as passthrough-eligible — and a ``.mp4`` file whose bytes are
+    actually a non-passthrough format (e.g. ``avi``) must classify
+    out of the passthrough set despite the misleading extension."""
+    # MP4 bytes hidden behind an arbitrary extension.
+    mp4_format_name = 'mov,mp4,m4a,3gp,3g2,mj2'
+    fake = {
+        'format': {'format_name': mp4_format_name},
+        'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('/tmp/whatever.bin')
+    # The picked token matches the passthrough set.
+    assert summary['container'] in processing._PASSTHROUGH_CONTAINERS
+
+    # AVI bytes hidden behind a `.mp4` filename — must NOT pass
+    # through. avi is intentionally in the passthrough list (h264
+    # in avi is fine), but if format.format_name returns just
+    # 'foo' (made up, not in our set) we report that token verbatim
+    # so the caller falls through to transcode.
+    fake = {
+        'format': {'format_name': 'unsupported_format'},
+        'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('/tmp/foo.mp4')
+    assert summary['container'] == 'unsupported_format'
+    assert summary['container'] not in processing._PASSTHROUGH_CONTAINERS
+
+
+def test_ffprobe_summary_falls_back_to_extension_when_format_missing() -> None:
+    """When ffprobe doesn't populate ``format.format_name`` (older
+    ffprobe builds, malformed input), fall back to the filename
+    extension so we still get a deterministic answer rather than
+    raising."""
+    fake: dict[str, Any] = {'format': {}, 'streams': []}
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('/tmp/clip.mkv')
+    assert summary['container'] == 'mkv'
 
 
 def test_ffprobe_summary_handles_probe_failure() -> None:

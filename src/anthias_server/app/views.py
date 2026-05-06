@@ -247,7 +247,59 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         return _asset_table_response(request)
 
     upload_name: str = file_upload.name
+
+    # Three-step format detection so HEIC/HEIF/TIFF uploads on hosts
+    # with a sparse mimetypes DB (some Pi base images don't ship
+    # ``image/heic`` mappings out of the box) still classify
+    # correctly. Order: mimetypes.guess_type → Django's
+    # UploadedFile.content_type (the browser's own header) → the
+    # filename extension as last resort. Once any step yields
+    # image/* or video/*, take it; otherwise reject.
     file_type = guess_type(upload_name)[0] or ''
+    if file_type.split('/')[0] not in ('image', 'video'):
+        # ``UploadedFile.content_type`` is the Content-Type the browser
+        # sent in the multipart request. Modern browsers tag HEIC /
+        # HEIF / TIFF correctly even when the host's mimetypes DB
+        # doesn't carry the entry, so this catches the common case.
+        client_type = (getattr(file_upload, 'content_type', '') or '').lower()
+        if client_type.split('/')[0] in ('image', 'video'):
+            file_type = client_type
+        else:
+            # Last resort: classify by extension. Mirrors the format
+            # set the normalisation pipeline can handle so a typo'd
+            # extension still falls through to the rejection branch
+            # below rather than silently routing through the wrong
+            # branch.
+            ext = path.splitext(upload_name)[1].lower()
+            image_exts = {
+                '.jpg',
+                '.jpeg',
+                '.png',
+                '.gif',
+                '.webp',
+                '.svg',
+                '.bmp',
+                '.heic',
+                '.heif',
+                '.tif',
+                '.tiff',
+            }
+            video_exts = {
+                '.mp4',
+                '.mov',
+                '.mkv',
+                '.webm',
+                '.avi',
+                '.flv',
+                '.mpg',
+                '.mpeg',
+                '.ts',
+                '.m4v',
+            }
+            if ext in image_exts:
+                file_type = f'image/{ext.lstrip(".")}'
+            elif ext in video_exts:
+                file_type = f'video/{ext.lstrip(".")}'
     if file_type.split('/')[0] not in ('image', 'video'):
         messages.error(request, 'Invalid file type. Expected image or video.')
         return _asset_table_response(request)

@@ -404,14 +404,35 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
         (s for s in streams if s.get('codec_type') == 'audio'),
         None,
     )
-    container_ext = _ext(input_path).lstrip('.')
+    # Container resolution prefers ffprobe's ``format.format_name``
+    # over the filename extension: a ``.mov`` file that's actually
+    # MKV bytes (or a ``.bin`` extension hiding an mp4) would be
+    # mis-classified as passthrough-eligible if we trusted the
+    # filename. ffprobe reports a comma-joined list of synonyms
+    # (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``) — we accept the
+    # passthrough decision if ANY token matches the supported set.
+    # Falls back to the extension only when ffprobe couldn't
+    # populate format_name (probe failed; shouldn't happen here
+    # since we already returned 'unknown' above on probe error).
+    fmt = (probe.get('format') or {}).get('format_name') or ''
+    fmt_tokens = [t.strip().lower() for t in fmt.split(',') if t.strip()]
+    if fmt_tokens:
+        # Pick the first token that's in the passthrough set; if
+        # none match, take the first reported token verbatim so
+        # downstream branching produces a deterministic 'unknown'.
+        container = next(
+            (t for t in fmt_tokens if t in _PASSTHROUGH_CONTAINERS),
+            fmt_tokens[0],
+        )
+    else:
+        container = _ext(input_path).lstrip('.') or 'unknown'
     video_codec = ((video or {}).get('codec_name') or 'unknown').lower()
     if audio is None:
         audio_codec = 'none'
     else:
         audio_codec = (audio.get('codec_name') or 'unknown').lower()
     return {
-        'container': container_ext,
+        'container': container,
         'video_codec': video_codec,
         'audio_codec': audio_codec,
     }
@@ -538,30 +559,35 @@ def _run_video_normalisation(asset: Asset) -> None:
     if path.normpath(staging) == path.normpath(src_uri):
         staging = f'{base_no_ext}.staging.transcoded.mp4'
 
+    def _drop_staging() -> None:
+        # All transcode failure paths converge through this helper so
+        # a partially-written staging file never lingers after a raise.
+        # cleanup() would eventually GC it as an orphan, but doing it
+        # inline keeps /anthias_assets/ free of debris an operator
+        # might trip over.
+        try:
+            os.remove(staging)
+        except OSError:
+            pass
+
     try:
         _transcode_to_h264_mp4(src_uri, staging)
     except sh.TimeoutException as exc:
-        # Clean up the half-written staging file and let on_failure
-        # land. Time-limit overruns are surfaced as TimeoutException;
-        # without the explicit cleanup here the next run would skip
-        # ahead past os.replace's overwrite (which is fine) but a
-        # cleanup() sweep would eventually GC the staging file as an
-        # orphan — better to drop it now.
-        try:
-            os.remove(staging)
-        except OSError:
-            pass
+        # Time-limit overruns are surfaced as TimeoutException; let
+        # on_failure land so is_processing clears.
+        _drop_staging()
         raise RuntimeError(f'ffmpeg timed out for {src_uri!r}: {exc}') from exc
     except sh.ErrorReturnCode as exc:
-        try:
-            os.remove(staging)
-        except OSError:
-            pass
+        _drop_staging()
         raise RuntimeError(
             f'ffmpeg failed for {src_uri!r}: {exc.stderr!r}'
         ) from exc
 
     if not path.isfile(staging) or os.stat(staging).st_size == 0:
+        # ffmpeg sometimes returns exit 0 but produces an empty file
+        # (broken stream, silent codec mismatch). Reject the result
+        # and clean up the empty file rather than promoting it.
+        _drop_staging()
         raise RuntimeError(f'ffmpeg produced no output for {src_uri!r}')
 
     os.replace(staging, final_uri)

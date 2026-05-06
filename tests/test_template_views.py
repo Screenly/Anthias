@@ -648,6 +648,49 @@ def test_assets_upload_heic_marks_processing_and_queues_image_normalize(
 
 
 @pytest.mark.django_db
+def test_assets_upload_heic_classifies_via_content_type_when_mimedb_sparse(
+    client: Client,
+) -> None:
+    """Defensive against hosts whose mimetypes DB doesn't carry
+    image/heic. The browser's Content-Type ride-along (or the
+    extension fallback) must still classify the upload as an
+    image and route it through normalisation."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    # Patch guess_type to simulate a sparse mimetypes DB that doesn't
+    # know about HEIC. The browser's Content-Type then carries the
+    # classification.
+    with (
+        mock.patch(
+            'anthias_server.app.views.guess_type',
+            return_value=(None, None),
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.heic',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    assert created.is_processing is True
+    image_delay.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
 def test_assets_upload_jpeg_skips_normalization(client: Client) -> None:
     """JPEG / PNG / WebP uploads land ready-to-play — no Celery hop."""
     from django.core.files.uploadedfile import SimpleUploadedFile
