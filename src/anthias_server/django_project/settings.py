@@ -273,9 +273,40 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
-    # The project uses custom authentication classes,
-    # so we need to disable the default ones.
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    # Two auth paths for the JSON API.
+    #
+    # Ordering matters: DRF tries authenticators in sequence and the
+    # first one that recognises the request short-circuits the rest.
+    # ``SessionAuthentication.authenticate`` enforces CSRF on unsafe
+    # methods whenever a session cookie is present, and a missing
+    # ``X-CSRFToken`` raises 403 — which would mask a perfectly valid
+    # ``Authorization: Basic …`` header on the same request (some CLI
+    # tooling shares a cookie jar with the operator's browser).
+    # Run BasicAuthentication first so an explicit Authorization
+    # header always wins over an incidental session cookie.
+    #
+    #   * DeprecatedBasicAuthentication — DRF's stock
+    #     ``BasicAuthentication`` plus a throttled warning log
+    #     (one line per (user, IP, path) per 1-hour TTL) so we can
+    #     identify the last callers without flooding the log when a
+    #     polling client hammers a single endpoint. Retained for
+    #     back-compat with pre-2826 Anthias-CLI builds and
+    #     third-party scripts written against the old auth.
+    #   * GatedSessionAuthentication — DRF's stock
+    #     ``SessionAuthentication`` plus the same ``auth_backend``
+    #     gate as DeprecatedBasicAuthentication: when auth is
+    #     disabled (``settings['auth_backend'] == ''``) both classes
+    #     no-op so the documented "auth disabled = API is fully
+    #     open" contract holds even for clients that happen to carry
+    #     a session cookie or a malformed Authorization header.
+    #
+    # New integrations should use the bearer-token path coming in a
+    # follow-up PR (UI-managed personal tokens, not
+    # username/password exchange).
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'anthias_server.lib.auth.DeprecatedBasicAuthentication',
+        'anthias_server.lib.auth.GatedSessionAuthentication',
+    ],
 }
 
 SPECTACULAR_SETTINGS = {

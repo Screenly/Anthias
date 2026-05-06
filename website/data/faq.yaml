@@ -133,3 +133,12 @@
     - question: Where is the API reference?
       answer: |
         See the [API page](/api/) for endpoints grouped by tag with their parameters and response schemas. The live ReDoc-rendered docs are also served straight from each device at `http://<device-ip>/api/docs/`.
+
+    - question: How do I authenticate API calls?
+      answer: |
+        Devices with the **Basic** authentication mode enabled in **Settings** require credentials on every API call. Two paths resolve to the same operator account:
+
+        * **Browser session cookie** — what the dashboard uses. Treat this path as **browser-only**: a naive headless POST to `/login/` will 403 because the login form itself is CSRF-protected (the script has to GET `/login/` first, parse out the `csrfmiddlewaretoken` form field and the `csrftoken` cookie, then POST both back), and DRF's `SessionAuthentication` enforces CSRF *again* on every API write (`POST` / `PUT` / `PATCH` / `DELETE`) by requiring an `X-CSRFToken` header. Cookie-only scripts that skip either step get 403s.
+        * **HTTP Basic** *(legacy, deprecated — use this for headless automation today)* — `Authorization: Basic <base64(user:pass)>`. Retained for back-compat with pre-2826 Anthias-CLI and third-party scripts; the server logs a `DEPRECATED:` warning the first time it sees each `(user, client IP, path)` tuple and then again roughly once an hour for the same tuple (throttled so a polling client doesn't flood the log). A UI-managed personal-token system that will replace Basic for headless callers is tracked as a follow-up.
+
+        Devices with authentication disabled (the default on a fresh install) accept either of these but don't require them.
