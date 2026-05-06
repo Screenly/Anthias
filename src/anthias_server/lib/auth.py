@@ -156,9 +156,17 @@ def _build_deprecated_basic_auth_class() -> type:
     return DeprecatedBasicAuthentication
 
 
-# Resolved at import time when DRF is available; on the viewer this
-# attribute is not used (settings.REST_FRAMEWORK is gated behind the
-# same ANTHIAS_SERVICE check) so the missing dep doesn't matter.
+# Resolved at import time when DRF is available. On the viewer
+# process ``rest_framework`` isn't installed (it's gated behind the
+# ``ANTHIAS_SERVICE != 'viewer'`` branch in ``INSTALLED_APPS``), so
+# this import fails silently. ``REST_FRAMEWORK`` itself is defined
+# unconditionally in ``django_project.settings``, but DRF only
+# resolves the dotted-string class names in
+# ``DEFAULT_AUTHENTICATION_CLASSES`` when its app starts up — the
+# viewer never loads the ``rest_framework`` app, so the missing
+# attribute on this module never gets dereferenced. Viewer-side code
+# only uses ``lib.auth`` for the hash helpers and ``_is_legacy_sha256``,
+# neither of which needs the auth class.
 try:
     DeprecatedBasicAuthentication = _build_deprecated_basic_auth_class()
 except ImportError:
