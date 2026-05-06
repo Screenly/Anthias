@@ -810,12 +810,14 @@ def test_basic_auth_deprecation_log_throttled(
     )
 
     # Different client_ip should not be throttled by the previous
-    # entry — a new tuple gets its own log line.
+    # entry — a new tuple gets its own log line. Use TEST-NET-1
+    # (RFC 5737) so the value is unambiguously a documentation/test
+    # placeholder and Sonar's hardcoded-IP hotspot doesn't fire.
     with _enable_auth(), caplog.at_level(logging.WARNING):
         client.get(
             '/api/v2/assets',
             HTTP_AUTHORIZATION=f'Basic {creds}',
-            REMOTE_ADDR='10.0.0.42',
+            REMOTE_ADDR='192.0.2.42',  # NOSONAR (RFC 5737 doc IP)
         )
     deprecated_after = [
         r
