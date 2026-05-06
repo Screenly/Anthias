@@ -63,6 +63,15 @@ from typing import TYPE_CHECKING, Callable, ParamSpec, TypeVar, cast
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
     from django.http import HttpRequest, HttpResponse
+    from rest_framework.request import Request as DRFRequest
+
+    # ``apply_auth_settings`` and ``_operator_user`` are called from
+    # both the Django HTML write path (``HttpRequest``) and the DRF
+    # API write path (``rest_framework.request.Request``). DRF's
+    # Request wraps the underlying Django request and delegates
+    # ``.user``, so the body of these helpers handles both shapes
+    # the same way; the annotation just needs to admit either one.
+    AnyRequest = HttpRequest | DRFRequest
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -315,7 +324,7 @@ _VALID_AUTH_BACKENDS = frozenset({'', 'auth_basic'})
 
 
 def _operator_user(
-    request: 'HttpRequest',
+    request: 'AnyRequest',
 ) -> 'User | None':
     """The User row whose credentials gate this device.
 
@@ -501,7 +510,7 @@ def _create_initial_operator(
 
 
 def apply_auth_settings(
-    request: 'HttpRequest',
+    request: 'AnyRequest',
     *,
     new_auth_backend: str,
     current_pwd: str,
