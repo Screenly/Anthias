@@ -115,7 +115,7 @@ from pydbus import SessionBus
 bus = SessionBus()
 browser_bus = bus.get('anthias.webview', '/Anthias')
 
-browser_bus.loadPage("www.example.com")
+browser_bus.loadPage("https://www.example.com")
 browser_bus.setReloadInterval(30)  # reload every 30s; 0 disables
 ```
 
