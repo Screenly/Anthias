@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QImage>
 #include <QMovie>
+#include <QTimer>
 #include <QUrl>
 
 class View : public QWidget
@@ -18,6 +19,7 @@ public:
 
     void loadPage(const QString &uri);
     void loadImage(const QString &uri);
+    void setReloadInterval(int seconds);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -52,4 +54,11 @@ private:
     // we can drop it before issuing stop() on the next loadPage and
     // avoid a synchronous loadFinished(false) racing into a stale slot.
     QMetaObject::Connection pageLoadConnection;
+
+    // Per-asset auto-refresh timer. When non-null and active, fires
+    // currentWebView->reload() every N seconds. Cleared on every
+    // loadPage / loadImage so a fresh asset starts from a clean slate;
+    // setReloadInterval re-arms it. Owned by the View (parent=this).
+    QTimer* reloadTimer;
+    void stopReloadTimer();
 };

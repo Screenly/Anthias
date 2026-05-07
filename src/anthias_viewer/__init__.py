@@ -140,7 +140,18 @@ def load_browser() -> None:
     )
 
 
-def view_webpage(uri: str) -> None:
+def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
+    """Display a webpage and arm its per-asset auto-refresh timer.
+
+    ``reload_interval_s`` mirrors ``Asset.metadata['refresh_interval_s']``:
+    0 (the default, and the value used for splash / fallback URLs)
+    leaves the existing webview without a reload timer; a positive value
+    reloads the visible page on that cadence so dashboards / status
+    pages stay current. We always re-send setReloadInterval — even
+    when the URL is unchanged from the previous tick — so an edit that
+    only flips the interval (no URI change) takes effect on the next
+    asset_loop iteration.
+    """
     global current_browser_url
 
     if browser is None or not browser.is_alive():
@@ -148,6 +159,7 @@ def view_webpage(uri: str) -> None:
     if current_browser_url is not uri:
         browser_bus.loadPage(uri)
         current_browser_url = uri
+    browser_bus.setReloadInterval(int(reload_interval_s))
     logging.info('Current url is {0}'.format(current_browser_url))
 
 
@@ -311,7 +323,21 @@ def asset_loop(scheduler: Any) -> None:
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
-            view_webpage(uri)
+            # Per-asset auto-refresh — feature #2813. ``metadata`` is a
+            # JSONField (defaults to {}); the column was historically
+            # nullable so be defensive. Anything non-int / negative is
+            # rejected on write by the v2 serializer + the page-form
+            # handler, but a hand-crafted DB row could still slip a
+            # garbage value through, so coerce-or-zero here rather
+            # than trust the read.
+            metadata = asset.get('metadata') or {}
+            try:
+                interval = int(metadata.get('refresh_interval_s') or 0)
+            except (TypeError, ValueError):
+                interval = 0
+            if interval < 0:
+                interval = 0
+            view_webpage(uri, reload_interval_s=interval)
         elif 'video' or 'streaming' in mime:
             view_video(uri, asset['duration'])
         else:

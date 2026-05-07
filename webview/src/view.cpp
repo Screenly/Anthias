@@ -78,6 +78,7 @@ View::View(QWidget* parent) : QWidget(parent)
     movie = nullptr;
     isAnimatedImage = false;
     loadGenerationId = 0;
+    reloadTimer = nullptr;
 }
 
 View::~View()
@@ -85,6 +86,7 @@ View::~View()
     if (pageLoadConnection) {
         QObject::disconnect(pageLoadConnection);
     }
+    stopReloadTimer();
     stopAnimation();
 }
 
@@ -115,6 +117,10 @@ void View::loadPage(const QString &uri)
     const quint64 requestId = ++loadGenerationId;
     currentImage = QImage();
     stopAnimation();
+    // Drop any per-asset reload timer left over from the previous
+    // webpage. setReloadInterval re-arms it after the new page load
+    // commits if the next asset still wants auto-refresh.
+    stopReloadTimer();
     nextWebViewReady = false;
 
     // Drop any prior loadFinished handler before stop() — a synchronous
@@ -175,6 +181,10 @@ void View::loadImage(const QString &preUri)
         QObject::disconnect(pageLoadConnection);
         pageLoadConnection = QMetaObject::Connection{};
     }
+    // Webpage auto-refresh only applies while a webpage is on screen;
+    // killing the timer here keeps a stale reload from firing into the
+    // (now hidden) QWebEngineView after the viewer rotates to an image.
+    stopReloadTimer();
     webView1->stop();
     webView2->stop();
 
@@ -356,6 +366,41 @@ void View::setupAnimation()
     movie->jumpToFrame(0);
     currentImage = movie->currentImage();
     update();
+}
+
+void View::setReloadInterval(int seconds)
+{
+    // Per-asset auto-refresh. The viewer calls this right after each
+    // loadPage() with the asset's metadata.refresh_interval_s value
+    // (0 when the field is absent or explicitly disabled). 0 stops the
+    // timer; a positive value (re)arms it. The timer reloads the
+    // visible web view in place via reload() — no buffer swap, since
+    // this is a refresh of the page already on screen, not a transition
+    // to a new URL.
+    stopReloadTimer();
+
+    if (seconds <= 0) {
+        return;
+    }
+
+    reloadTimer = new QTimer(this);
+    reloadTimer->setInterval(seconds * 1000);
+    connect(reloadTimer, &QTimer::timeout, this, [this]() {
+        if (currentWebView) {
+            qDebug() << "Auto-refreshing web page";
+            currentWebView->reload();
+        }
+    });
+    reloadTimer->start();
+}
+
+void View::stopReloadTimer()
+{
+    if (reloadTimer) {
+        reloadTimer->stop();
+        reloadTimer->deleteLater();
+        reloadTimer = nullptr;
+    }
 }
 
 void View::switchToNextWebView()

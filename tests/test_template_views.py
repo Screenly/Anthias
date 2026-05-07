@@ -464,6 +464,100 @@ def test_assets_update_via_post(client: Client, asset: Asset) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_update_writes_refresh_interval_to_metadata(
+    client: Client, asset: Asset
+) -> None:
+    """The webpage auto-refresh field on the edit modal — feature #2813
+    — POSTs ``refresh_interval_s`` alongside the rest of the form.
+    The handler must merge it into ``Asset.metadata`` rather than
+    overwriting the dict, so any pipeline-owned keys
+    (original_ext / transcoded / error_message) survive an operator
+    edit."""
+    asset.metadata = {'original_ext': '.heic', 'transcoded': True}
+    asset.save(update_fields=['metadata'])
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'mimetype': 'webpage',
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'refresh_interval_s': '45',
+            },
+        )
+
+    asset.refresh_from_db()
+    assert asset.metadata == {
+        'original_ext': '.heic',
+        'transcoded': True,
+        'refresh_interval_s': 45,
+    }
+
+
+@pytest.mark.django_db
+def test_assets_update_clears_refresh_interval_on_empty_input(
+    client: Client, asset: Asset
+) -> None:
+    """An empty ``refresh_interval_s`` from the edit form means the
+    operator cleared the field, which the AC for #2813 specifies must
+    disable auto-refresh — recorded as 0 (the viewer treats 0 the
+    same as a missing key)."""
+    asset.metadata = {'refresh_interval_s': 60}
+    asset.save(update_fields=['metadata'])
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'mimetype': 'webpage',
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'refresh_interval_s': '',
+            },
+        )
+
+    asset.refresh_from_db()
+    assert asset.metadata.get('refresh_interval_s') == 0
+
+
+@pytest.mark.django_db
+def test_assets_update_clamps_oversize_refresh_interval(
+    client: Client, asset: Asset
+) -> None:
+    """The form-level handler clamps (rather than 400s) for friendlier
+    UX — the strict validation lives on the v2 API. 86400 (24h) is
+    the cap shared with REFRESH_INTERVAL_S_MAX in the v2 serializer."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'mimetype': 'webpage',
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'refresh_interval_s': '999999',
+            },
+        )
+    asset.refresh_from_db()
+    assert asset.metadata.get('refresh_interval_s') == 86400
+
+
+@pytest.mark.django_db
 def test_assets_update_missing_id_is_no_op(client: Client) -> None:
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',

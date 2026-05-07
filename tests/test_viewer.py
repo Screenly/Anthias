@@ -185,6 +185,76 @@ def test_load_browser_times_out_when_handshake_never_arrives(
         viewer_fixtures.p_cmd.stop()
 
 
+def test_view_webpage_arms_reload_interval(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """``view_webpage`` must always call ``setReloadInterval`` after
+    ``loadPage`` — even when the URI is unchanged from the previous
+    tick, since an asset edit that flips only the interval (no URI
+    change) needs the new value to take effect on the next rotation.
+    Feature #2813."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_url', None
+        ),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com', 30)
+
+    fake_bus.loadPage.assert_called_once_with('https://example.com')
+    fake_bus.setReloadInterval.assert_called_once_with(30)
+
+
+def test_view_webpage_default_zero_interval(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Splash / fallback callers pass no interval, which becomes 0 —
+    the C++ side treats that as "disable the timer", so this is the
+    no-auto-refresh contract for legacy code paths."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_url', None
+        ),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com')
+
+    fake_bus.setReloadInterval.assert_called_once_with(0)
+
+
+def test_view_webpage_resets_interval_on_unchanged_url(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """When the URI matches ``current_browser_url`` we skip the
+    ``loadPage`` D-Bus call (cheap no-op), but ``setReloadInterval``
+    still has to fire so an interval-only edit takes effect without
+    a URI change."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    uri = 'https://example.com'
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', uri),
+    ):
+        viewer_fixtures.u.view_webpage(uri, 90)
+
+    fake_bus.loadPage.assert_not_called()
+    fake_bus.setReloadInterval.assert_called_once_with(90)
+
+
 def test_watchdog_should_create_file_if_not_exists(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:

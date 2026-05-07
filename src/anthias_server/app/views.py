@@ -525,6 +525,27 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
         asset.play_time_from = None
         asset.play_time_to = None
 
+    # Webpage auto-refresh — feature #2813. Persisted inside
+    # ``metadata`` so the upload pipeline's read-only posture on that
+    # field is preserved. The edit modal only renders the input for
+    # webpage assets, so a missing key here means "non-webpage edit,
+    # leave the metadata alone"; an empty string means "operator
+    # cleared the field, disable auto-refresh" (stored as 0, the
+    # viewer treats it the same as a missing key). Out-of-range /
+    # non-int values are clamped instead of 400'd because this is a
+    # server-rendered form (the v2 API does the strict 400). Range
+    # mirrors v2's REFRESH_INTERVAL_S_MAX (24h).
+    raw_interval = request.POST.get('refresh_interval_s')
+    if raw_interval is not None:
+        try:
+            interval = int(raw_interval.strip() or 0)
+        except ValueError:
+            interval = 0
+        interval = max(0, min(interval, 86400))
+        metadata = dict(asset.metadata or {})
+        metadata['refresh_interval_s'] = interval
+        asset.metadata = metadata
+
     asset.save()
     ViewerPublisher.get_instance().send_to_viewer('reload')
     return _asset_table_response(request, toast=('success', 'Changes saved'))

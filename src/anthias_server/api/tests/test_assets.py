@@ -275,6 +275,152 @@ def test_v2_create_with_play_days_round_trips(
 
 
 @pytest.mark.django_db
+def test_v2_post_with_refresh_interval_round_trips(
+    api_client: APIClient,
+) -> None:
+    """POST round-trip for the webpage auto-refresh interval.
+
+    The interval lives inside ``Asset.metadata`` (so the upload
+    pipeline's read-only stance on metadata is preserved) but is
+    surfaced as a top-level ``refresh_interval_s`` field on the v2
+    response via SerializerMethodField, and accepted as a write_only
+    field on the create serializer. Verifies the value lands on the
+    persisted row, not just on the response.
+    """
+    response = api_client.post(
+        reverse('api:asset_list_v2'),
+        data={**ASSET_CREATION_DATA, 'refresh_interval_s': 30},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['refresh_interval_s'] == 30
+    assert response.data['metadata'] == {'refresh_interval_s': 30}
+
+    # GET the freshly created row through the read serializer to make
+    # sure the response above isn't echoing the request — round-trip
+    # through the DB confirms the post-create metadata save fired.
+    asset_id = response.data['asset_id']
+    detail = api_client.get(reverse('api:asset_detail_v2', args=[asset_id]))
+    assert detail.status_code == status.HTTP_200_OK
+    assert detail.data['refresh_interval_s'] == 30
+
+
+@pytest.mark.django_db
+def test_v2_post_without_refresh_interval_defaults_to_zero(
+    api_client: APIClient,
+) -> None:
+    """A create without ``refresh_interval_s`` reads back as 0 (the
+    "no auto-refresh" default), and ``metadata`` is left as an empty
+    dict so the upload pipeline's other keys aren't shadowed by a
+    stub entry."""
+    response = api_client.post(
+        reverse('api:asset_list_v2'),
+        data=ASSET_CREATION_DATA,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['refresh_interval_s'] == 0
+    assert response.data['metadata'] == {}
+
+
+@pytest.mark.django_db
+def test_v2_patch_refresh_interval_round_trips(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """PATCH a single ``refresh_interval_s`` (partial update) onto an
+    existing webpage asset and read the new value back."""
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'refresh_interval_s': 45},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['refresh_interval_s'] == 45
+    assert response.data['metadata'] == {'refresh_interval_s': 45}
+
+
+@pytest.mark.django_db
+def test_v2_patch_negative_refresh_interval_rejected(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'refresh_interval_s': -1},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'refresh_interval_s' in response.data
+
+
+@pytest.mark.django_db
+def test_v2_patch_refresh_interval_over_cap_rejected(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """24h cap (REFRESH_INTERVAL_S_MAX = 86400) — anything above is a
+    typo (operator entered milliseconds, etc.) and should fail
+    validation rather than persist a value the viewer would honour."""
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'refresh_interval_s': 86401},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'refresh_interval_s' in response.data
+
+
+@pytest.mark.django_db
+def test_v2_patch_refresh_interval_preserves_pipeline_metadata(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """Operator-driven refresh_interval_s edits must not stomp on the
+    upload pipeline's metadata keys (original_ext, transcoded,
+    error_message). Pre-seeding the row with a pipeline payload and
+    then PATCHing the interval is the canonical regression for the
+    "transcoded=true but file is original" desync that motivated
+    making metadata read-only on the create/update serializers."""
+    from anthias_server.app.models import Asset
+
+    asset_id = v2_asset_detail_url.rstrip('/').rsplit('/', 1)[-1]
+    asset = Asset.objects.get(asset_id=asset_id)
+    asset.metadata = {'original_ext': '.heic', 'transcoded': False}
+    asset.save(update_fields=['metadata'])
+
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'refresh_interval_s': 60},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['metadata'] == {
+        'original_ext': '.heic',
+        'transcoded': False,
+        'refresh_interval_s': 60,
+    }
+
+
+@pytest.mark.django_db
+def test_v2_patch_refresh_interval_zero_disables(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """0 stores explicitly; the viewer treats 0 the same as a missing
+    key (no auto-refresh). Operators clearing the field from the edit
+    modal POST 0 to disable rather than DELETE the metadata key, so
+    the round-trip should accept 0 and surface 0 on read."""
+    api_client.patch(
+        v2_asset_detail_url,
+        data={'refresh_interval_s': 30},
+        format='json',
+    )
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'refresh_interval_s': 0},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['refresh_interval_s'] == 0
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_create_youtube_asset_dispatches_celery_task(
     api_client: APIClient, version: str

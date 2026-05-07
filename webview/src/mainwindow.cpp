@@ -22,3 +22,8 @@ void MainWindow::loadImage(const QString &uri)
 {
     view->loadImage(uri);
 }
+
+void MainWindow::setReloadInterval(int seconds)
+{
+    view->setReloadInterval(seconds);
+}
