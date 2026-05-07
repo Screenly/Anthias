@@ -12,7 +12,6 @@ import pydbus
 import requests
 import sh as sh
 
-from anthias_server.app.models import clamp_refresh_interval
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
@@ -45,6 +44,7 @@ from anthias_common.utils import (  # noqa: E402
     detect_screen_resolution,
     string_to_bool,
 )
+from anthias_server.app.models import clamp_refresh_interval  # noqa: E402
 from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
 from anthias_viewer.scheduling import Scheduler  # noqa: E402
 
