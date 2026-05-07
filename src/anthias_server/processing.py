@@ -504,7 +504,15 @@ def _run_image_normalisation(asset: Asset) -> None:
     if src_ext not in NORMALIZE_IMAGE_EXTS:
         # Defensive: caller routed something we don't convert.
         # Treat as a no-op success rather than re-encoding a JPEG.
-        Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
+        # Clearing ``error_message`` matters when the row is being
+        # re-uploaded after a previous failed attempt — without it
+        # the operator would still see the "Failed" pill on a row
+        # that's now actually fine.
+        metadata = dict(asset.metadata or {})
+        metadata.pop('error_message', None)
+        Asset.objects.filter(asset_id=asset_id).update(
+            is_processing=False, metadata=metadata
+        )
         _notify(asset_id)
         return
 
@@ -623,15 +631,29 @@ def _ffprobe_streams(input_path: str) -> dict[str, Any]:
 def _ffprobe_summary(input_path: str) -> dict[str, str]:
     """Reduce ffprobe's payload to the three dimensions we branch on.
 
-    Returns a dict with ``container`` (lowercase ext, no dot),
-    ``video_codec`` (or ``''`` if no video stream), and
-    ``audio_codec`` (``'none'`` if no audio stream). Anything missing
-    from the probe output is treated as 'unknown' so the caller can
-    fall through to transcode.
+    Returns a dict with three keys, all populated:
+      * ``container`` — lowercase format token, ``'unknown'`` if
+        ffprobe couldn't decide.
+      * ``video_codec`` — lowercase codec name, ``'unknown'`` if
+        the file has no video stream or the probe failed.
+      * ``audio_codec`` — lowercase codec name, ``'none'`` when the
+        file genuinely carries no audio stream, or ``'unknown'`` if
+        the audio stream existed but ffprobe couldn't name its
+        codec.
+
+    Any failure (timeout, ffprobe non-zero exit, ffprobe missing
+    from PATH) collapses to all-'unknown' so the caller falls
+    through to the transcode branch — better to spend the cycles
+    re-encoding than to let an unplayable file sit in rotation.
     """
     try:
         probe = _ffprobe_streams(input_path)
-    except (sh.TimeoutException, sh.ErrorReturnCode):
+    except (sh.TimeoutException, sh.ErrorReturnCode, sh.CommandNotFound):
+        # ``CommandNotFound`` covers stripped-down images / dev
+        # boxes without ffprobe in PATH — same recovery as a probe
+        # that ran but couldn't decide: report 'unknown' across the
+        # board so the runner falls through to the transcode (which
+        # itself ultimately fails clean if ffmpeg is also missing).
         return {
             'container': 'unknown',
             'video_codec': 'unknown',

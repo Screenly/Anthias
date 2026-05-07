@@ -403,6 +403,30 @@ def test_image_jpeg_routes_no_op(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
+def test_image_no_op_path_clears_stale_error_message(asset_dir: str) -> None:
+    """A row being re-uploaded after a previous failed conversion
+    carries ``metadata.error_message``. When the new upload is a
+    format the pipeline doesn't convert (JPEG/PNG/etc.), the no-op
+    branch must still wipe the stale error so the operator's table
+    doesn't keep showing the "Failed" pill on a row that's now
+    fine."""
+    src = path.join(asset_dir, 'photo.jpg')
+    _write_image(src, 'JPEG', mode='RGB')
+    asset = _make_processing_asset(
+        'img-retry-jpeg',
+        src,
+        metadata={'error_message': 'previous attempt: libheif crashed'},
+    )
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_image_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert 'error_message' not in asset.metadata
+
+
+@pytest.mark.django_db
 def test_image_row_already_finalized_no_op(asset_dir: str) -> None:
     """Duplicate task fire on an already-finalised row → no-op. Same
     contract download_youtube_asset enforces."""
@@ -971,6 +995,26 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
             stderr=b'invalid',
             truncate=False,
         ),
+    ):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary == {
+        'container': 'unknown',
+        'video_codec': 'unknown',
+        'audio_codec': 'unknown',
+    }
+
+
+def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
+    """A stripped-down container or dev box without ffprobe in PATH
+    must not crash the normalisation task. ``sh.CommandNotFound``
+    is raised before any subprocess starts; the helper collapses
+    it to the same all-'unknown' summary as a probe-runtime error,
+    so the caller falls through to the transcode branch (which
+    will then itself fail clean if ffmpeg is also missing)."""
+    with mock.patch.object(
+        processing,
+        '_ffprobe_streams',
+        side_effect=sh.CommandNotFound('ffprobe not on PATH'),
     ):
         summary = processing._ffprobe_summary('fixture.mp4')
     assert summary == {
