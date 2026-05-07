@@ -116,7 +116,7 @@ def build_image(
     elif service == 'test':
         context.update(get_test_context())
 
-    context.update(get_uv_builder_context(service))
+    context.update(get_uv_builder_context(service, board))
 
     generate_dockerfile(
         service,

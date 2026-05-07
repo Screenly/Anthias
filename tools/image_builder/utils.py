@@ -62,7 +62,9 @@ def generate_dockerfile(service: str, context: dict[str, Any]) -> None:
         f.write(dockerfile)
 
 
-def get_uv_builder_context(service: str) -> dict[str, Any]:
+def get_uv_builder_context(
+    service: str, board: str | None = None
+) -> dict[str, Any]:
     service_to_group = {
         'server': 'server',
         'viewer': 'viewer',
@@ -81,6 +83,45 @@ def get_uv_builder_context(service: str) -> dict[str, Any]:
             'libdbus-1-dev',
             'libdbus-glib-1-dev',
         ]
+
+    # Pillow / pillow-heif build deps for legacy 32-bit Pi boards.
+    # Pillow 11+ dropped armv7l manylinux wheels (its release notes
+    # spell this out), and pillow-heif likewise ships only x86_64 /
+    # aarch64 wheels. uv's resolution on a pi2 / pi3 image build
+    # therefore falls back to sdist, which requires the system
+    # headers below to compile from source. Without them, the
+    # ``uv sync`` step in ``uv-builder`` would fail at gcc on every
+    # 32-bit Pi build.
+    #
+    # 64-bit boards (pi4-64 / pi5 / x86) and the test image
+    # (always built on amd64 in CI) get binary wheels and don't
+    # need any of this — adding the deps unconditionally would
+    # waste ~70 MB of layer space on every image we don't need
+    # them in.
+    armv7_boards = {'pi2', 'pi3'}
+    if uv_group == 'server' and board in armv7_boards:
+        builder_extra_apt.extend(
+            [
+                # Pillow's documented build-time deps. ``-dev``
+                # variants ship the headers compile from source
+                # needs; the runtime ``.so`` files are pulled in
+                # by base_apt_dependencies via libjpeg62-turbo,
+                # libfreetype6, etc., or transitively by
+                # cec-utils / ffmpeg.
+                'libjpeg62-turbo-dev',
+                'libfreetype-dev',
+                'liblcms2-dev',
+                'libopenjp2-7-dev',
+                'libtiff-dev',
+                'libwebp-dev',
+                'zlib1g-dev',
+                # pillow-heif: libheif-dev exposes the libheif1
+                # API headers so the cython binding can compile.
+                # libheif1 itself is already in
+                # base_apt_dependencies (runtime).
+                'libheif-dev',
+            ]
+        )
 
     return {
         'uv_group': uv_group,
