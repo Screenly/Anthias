@@ -54,6 +54,14 @@ __license__ = 'Dual License: GPLv2 and Commercial License'
 
 
 current_browser_url: str | None = None
+# Latched True->False on the first failure of ``setReloadInterval`` —
+# version skew between the running viewer and the AnthiasWebview
+# binary persists for the lifetime of the viewer process, so once we
+# know the slot isn't there we don't need to keep paying the D-Bus
+# round-trip or flooding journald with warnings every rotation.
+# An operator who upgrades the webview package should restart the
+# viewer anyway; that resets the cache.
+_webview_supports_set_reload_interval: bool = True
 browser: Any = None
 loop_is_stopped: bool = False
 browser_bus: Any = None
@@ -167,16 +175,21 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     # against an older AnthiasWebview (version skew during rollout, or
     # a WEBVIEW_VERSION override pinning a pre-2026.05 tarball) would
     # raise here and abort the asset loop, taking the screen down.
-    # Catch broadly: log a warning and keep playing the page without
-    # auto-refresh, which matches the old webview's behaviour.
-    try:
-        browser_bus.setReloadInterval(int(reload_interval_s))
-    except Exception as exc:
-        logging.warning(
-            'setReloadInterval not supported by webview '
-            '(version skew?); auto-refresh disabled for this asset: %s',
-            exc,
-        )
+    # Catch broadly on the first call, log once, and latch the
+    # capability flag so subsequent rotations skip the D-Bus hop and
+    # don't refill journald with the same warning every cycle.
+    global _webview_supports_set_reload_interval
+    if _webview_supports_set_reload_interval:
+        try:
+            browser_bus.setReloadInterval(int(reload_interval_s))
+        except Exception as exc:
+            _webview_supports_set_reload_interval = False
+            logging.warning(
+                'setReloadInterval not supported by webview '
+                '(version skew?); auto-refresh disabled until viewer '
+                'restart: %s',
+                exc,
+            )
     logging.info('Current url is {0}'.format(current_browser_url))
 
 

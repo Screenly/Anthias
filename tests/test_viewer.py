@@ -236,7 +236,9 @@ def test_view_webpage_falls_back_when_setreloadinterval_unsupported(
     D-Bus slot — calling it raises and would otherwise abort the
     asset_loop, taking the screen down. The viewer must catch and
     keep playing the page without auto-refresh, matching the old
-    no-auto-refresh behaviour."""
+    no-auto-refresh behaviour, AND latch the capability flag so the
+    next rotation doesn't pay the D-Bus round-trip again or refill
+    journald with a duplicate warning."""
     fake_bus = mock.Mock()
     fake_bus.setReloadInterval.side_effect = RuntimeError(
         'no such D-Bus method'
@@ -248,11 +250,21 @@ def test_view_webpage_falls_back_when_setreloadinterval_unsupported(
         mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
         mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
         mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u,
+            '_webview_supports_set_reload_interval',
+            True,
+        ),
     ):
-        # Must not raise.
+        # First call: must not raise; should attempt setReloadInterval.
         viewer_fixtures.u.view_webpage('https://example.com', 30)
+        # Second call (same URL: no loadPage hop, but the unsupported
+        # path still ran on the first call) must NOT call
+        # setReloadInterval again — capability is latched off.
+        viewer_fixtures.u.view_webpage('https://example.com', 60)
 
     fake_bus.loadPage.assert_called_once_with('https://example.com')
+    assert fake_bus.setReloadInterval.call_count == 1
 
 
 def test_view_webpage_resets_interval_on_unchanged_url(
