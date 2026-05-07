@@ -1052,6 +1052,56 @@ def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
     assert summary['container'] not in processing._PASSTHROUGH_CONTAINERS
 
 
+@pytest.mark.parametrize(
+    ('format_name', 'description'),
+    [
+        # Real ffprobe format_name strings observed for each container
+        # in the passthrough set. The decision must classify them all
+        # as eligible — without ``mpegts`` / ``matroska`` in the set,
+        # an MPEG-TS or MKV upload would force an unnecessary transcode
+        # despite both being playable on every Anthias-supported board.
+        ('mov,mp4,m4a,3gp,3g2,mj2', '.mp4 / .m4v / .mov'),
+        ('matroska,webm', '.mkv / .webm'),
+        ('mpegts', '.ts'),
+        ('mpeg', '.mpg / .mpeg'),
+        ('flv', '.flv'),
+        ('avi', '.avi'),
+    ],
+)
+def test_passthrough_containers_match_real_ffprobe_format_names(
+    format_name: str, description: str
+) -> None:
+    """Every container that's listed in ``_PASSTHROUGH_CONTAINERS`` as
+    a "we accept this" must actually match what ffprobe writes for
+    real files of that container — not just the file's extension.
+
+    Regression: ffprobe reports ``mpegts`` for .ts (not ``ts``) and
+    ``matroska`` for .mkv (not ``mkv``). The passthrough set used to
+    carry only the short extension labels, so MPEG-TS uploads were
+    being unnecessarily re-encoded. Adding the canonical ffprobe
+    names to the set keeps the decision consistent between the
+    extension-fallback and format_name-driven detection paths.
+    """
+    fake = {
+        'format': {'format_name': format_name},
+        'streams': [
+            {'codec_type': 'video', 'codec_name': 'h264'},
+            {'codec_type': 'audio', 'codec_name': 'aac'},
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.unused')
+    assert summary['container'] in processing._PASSTHROUGH_CONTAINERS, (
+        f'{description}: ffprobe format_name={format_name!r} resolved to '
+        f'{summary["container"]!r} which is not in _PASSTHROUGH_CONTAINERS'
+    )
+    pi5 = processing._BOARD_PROFILES['pi5']
+    assert processing._video_can_passthrough(summary, pi5), (
+        f'{description}: passthrough check rejected a real-ffprobe-name '
+        f'container; would force an unnecessary transcode'
+    )
+
+
 def test_ffprobe_summary_falls_back_to_extension_when_format_missing() -> None:
     """When ffprobe doesn't populate ``format.format_name`` (older
     ffprobe builds, malformed input), fall back to the filename

@@ -57,15 +57,49 @@ from anthias_common.utils import get_video_duration
 from anthias_server.app.models import Asset
 
 
-# Container extensions whose H.264/HEVC payloads play directly in mpv
-# / VLC on the Pi without remuxing. Anything outside this set falls
-# through to a full transcode regardless of codec — a "passthrough"
-# rename to .mkv that preserves a weird container would still need a
-# downstream remux to land in MP4, and the viewer's media stack is
-# happiest on .mp4. Keeping the list explicit also stops a typo'd
-# extension from being silently retained.
+# Containers whose H.264/HEVC payloads play directly in mpv / VLC
+# on the Pi without remuxing. Anything outside this set falls through
+# to a full transcode regardless of codec — a "passthrough" rename
+# preserving a weird container would still need a downstream remux
+# to land in MP4, and the viewer's media stack is happiest on .mp4.
+# Keeping the list explicit also stops a typo'd extension from being
+# silently retained.
+#
+# The set carries BOTH the short extension labels (``ts``, ``mkv``,
+# ``mpg``) AND the canonical ffprobe ``format_name`` tokens
+# (``mpegts``, ``matroska``, ``mpeg``) because the same set is
+# matched against two sources of truth:
+#
+#   * the upload's filename extension (extension fallback path in
+#     ``_ffprobe_summary`` — short labels), and
+#   * ffprobe's reported ``format.format_name`` (canonical names).
+#
+# A pure short-label set would force unnecessary transcodes whenever
+# ffprobe's name (e.g. ``mpegts`` for an MPEG-TS upload) didn't
+# match the extension's short label (``ts``). Listing both keeps the
+# decision aligned across detection paths.
 _PASSTHROUGH_CONTAINERS = frozenset(
-    {'mp4', 'm4v', 'mkv', 'mov', 'webm', 'ts', 'mpg', 'mpeg', 'flv', 'avi'}
+    {
+        # Short extension labels (matched against filename ext).
+        'mp4',
+        'm4v',
+        'mkv',
+        'mov',
+        'webm',
+        'ts',
+        'mpg',
+        'mpeg',
+        'flv',
+        'avi',
+        # ffprobe ``format_name`` tokens not already covered above.
+        # ``matroska`` for .mkv (ffprobe reports ``matroska,webm``).
+        # ``mpegts`` for .ts (ffprobe reports ``mpegts`` not ``ts``).
+        # ``mov`` / ``mp4`` / ``mpeg`` / ``flv`` / ``avi`` / ``webm``
+        # are the canonical names *and* extension labels — only
+        # listed once above.
+        'matroska',
+        'mpegts',
+    }
 )
 
 
