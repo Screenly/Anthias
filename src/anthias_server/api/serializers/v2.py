@@ -109,12 +109,17 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
         # Pulled out of metadata so it shows up as a first-class column
         # on GET; the field is itself written from UpdateAssetSerializerV2
         # back into metadata. Default 0 = no auto-refresh, mirroring the
-        # viewer's handling for assets without the key set.
+        # viewer's handling for assets without the key set. Clamp the
+        # read to ``>= 0`` (per Copilot): the serializer's write path
+        # rejects negatives, but a hand-edited row or a legacy import
+        # could leave a junk value in there, and surfacing it on GET
+        # would contradict the API's documented contract.
         value = (obj.metadata or {}).get('refresh_interval_s', 0)
         try:
-            return int(value)
+            interval = int(value)
         except (TypeError, ValueError):
             return 0
+        return max(0, interval)
 
     class Meta:
         model = Asset

@@ -56,9 +56,21 @@ private:
     QMetaObject::Connection pageLoadConnection;
 
     // Per-asset auto-refresh timer. When non-null and active, fires
-    // currentWebView->reload() every N seconds. Cleared on every
-    // loadPage / loadImage so a fresh asset starts from a clean slate;
-    // setReloadInterval re-arms it. Owned by the View (parent=this).
+    // currentWebView->reload() every ``pendingReloadIntervalS`` seconds.
+    // Cleared on every loadPage / loadImage so a fresh asset starts
+    // from a clean slate. Owned by the View (parent=this).
     QTimer* reloadTimer;
+
+    // Most recently requested auto-refresh cadence, in seconds. 0 = no
+    // auto-refresh. Held separately from the timer because
+    // setReloadInterval can land *while a page load is still in flight*
+    // (loadPage queues a load into nextWebView, then the viewer calls
+    // setReloadInterval before the swap completes); arming a QTimer
+    // immediately would target the still-visible *previous* page via
+    // currentWebView->reload(). We instead remember the value here and
+    // arm the timer in switchToNextWebView() once the new page is
+    // actually visible. Per Copilot review on PR #2841.
+    int pendingReloadIntervalS;
     void stopReloadTimer();
+    void armReloadTimer();
 };

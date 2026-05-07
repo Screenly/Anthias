@@ -156,7 +156,11 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
 
     if browser is None or not browser.is_alive():
         load_browser()
-    if current_browser_url is not uri:
+    # ``!=`` (value comparison) — using ``is not`` here was an identity
+    # check that worked only because the asset_loop happened to pass the
+    # same str object on consecutive ticks; any loop that reconstructs
+    # the URL from JSON each tick would defeat the dedup. Per-Copilot.
+    if current_browser_url != uri:
         browser_bus.loadPage(uri)
         current_browser_url = uri
     browser_bus.setReloadInterval(int(reload_interval_s))
@@ -338,7 +342,13 @@ def asset_loop(scheduler: Any) -> None:
             if interval < 0:
                 interval = 0
             view_webpage(uri, reload_interval_s=interval)
-        elif 'video' or 'streaming' in mime:
+        elif 'video' in mime or 'streaming' in mime:
+            # Operator-precedence fix per Copilot: the prior
+            # ``'video' or 'streaming' in mime`` evaluated as
+            # ``'video' or ('streaming' in mime)`` — i.e. the truthy
+            # literal short-circuited and the branch ran for every
+            # mimetype, which made the ``else: Unknown MimeType`` arm
+            # below unreachable.
             view_video(uri, asset['duration'])
         else:
             logging.error('Unknown MimeType %s', mime)

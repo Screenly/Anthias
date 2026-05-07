@@ -399,6 +399,26 @@ def test_v2_patch_refresh_interval_preserves_pipeline_metadata(
 
 
 @pytest.mark.django_db
+def test_v2_get_clamps_negative_refresh_interval(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """The serializer's write path rejects negatives, but a hand-edited
+    row or a legacy import could leave a junk value in metadata.
+    GET should clamp to 0 rather than echo a negative value (which
+    would contradict the documented contract). Per Copilot review."""
+    from anthias_server.app.models import Asset
+
+    asset_id = v2_asset_detail_url.rstrip('/').rsplit('/', 1)[-1]
+    asset = Asset.objects.get(asset_id=asset_id)
+    asset.metadata = {'refresh_interval_s': -42}
+    asset.save(update_fields=['metadata'])
+
+    response = api_client.get(v2_asset_detail_url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['refresh_interval_s'] == 0
+
+
+@pytest.mark.django_db
 def test_v2_patch_refresh_interval_zero_disables(
     api_client: APIClient, v2_asset_detail_url: str
 ) -> None:
