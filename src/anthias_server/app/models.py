@@ -8,6 +8,15 @@ from django.utils import timezone
 
 ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 
+# Upper bound for ``Asset.metadata['refresh_interval_s']`` (seconds).
+# 24h cap acts as a typo guard — anything beyond is almost certainly
+# a units mistake — and is a hostile-input guard for the int math
+# in the C++ webview's setReloadInterval (``seconds * 1000`` would
+# otherwise overflow). Imported by the v2 serializer (write
+# validation), the form handler (clamping), and mirrored by
+# kMaxReloadIntervalS in webview/src/view.cpp.
+REFRESH_INTERVAL_S_MAX = 86400
+
 
 def generate_asset_id() -> str:
     return uuid.uuid4().hex

@@ -280,7 +280,7 @@
                   <div class="app-floating">
                     <input type="number" class="app-input" id="edit-refresh-interval"
                       name="refresh_interval_s"
-                      min="0" max="86400" step="1"
+                      min="0" max="{{ refresh_interval_s_max }}" step="1"
                       :value="(editAsset.metadata && editAsset.metadata.refresh_interval_s) || ''"
                       placeholder="0">
                     <label for="edit-refresh-interval">Auto-refresh interval (seconds)</label>

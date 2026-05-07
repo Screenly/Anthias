@@ -17,7 +17,7 @@ from rest_framework.serializers import (
     TimeField,
 )
 
-from anthias_server.app.models import Asset
+from anthias_server.app.models import Asset, REFRESH_INTERVAL_S_MAX
 from anthias_server.api.serializers import UpdateAssetSerializer
 from anthias_server.api.serializers.mixins import CreateAssetSerializerMixin
 
@@ -52,11 +52,10 @@ def _normalise_play_days(value: list[int]) -> list[int]:
 
 # Per-asset webpage auto-refresh cadence is stored inside ``Asset.metadata``
 # but exposed as a top-level field on the v2 serializers so ``metadata``
-# can stay read-only (the upload pipeline owns those keys). 24h cap is a
-# UI / typo guard — anything beyond that is almost certainly a "tried to
-# enter milliseconds" mistake — and matches the assets_update form
-# handler, which mirrors this validation server-side.
-REFRESH_INTERVAL_S_MAX = 86400
+# can stay read-only (the upload pipeline owns those keys). The cap
+# itself lives on the model (REFRESH_INTERVAL_S_MAX, imported above) so
+# the form handler in app/views.py and the v2 API agree on the same
+# value without drift.
 
 
 def _validate_time_window(

@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
+from anthias_server.app.models import REFRESH_INTERVAL_S_MAX
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import (
@@ -533,15 +534,16 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     # cleared the field, disable auto-refresh" (stored as 0, the
     # viewer treats it the same as a missing key). Out-of-range /
     # non-int values are clamped instead of 400'd because this is a
-    # server-rendered form (the v2 API does the strict 400). Range
-    # mirrors v2's REFRESH_INTERVAL_S_MAX (24h).
+    # server-rendered form (the v2 API does the strict 400). The cap
+    # is shared with the v2 serializer via REFRESH_INTERVAL_S_MAX so
+    # the two paths can't drift.
     raw_interval = request.POST.get('refresh_interval_s')
     if raw_interval is not None:
         try:
             interval = int(raw_interval.strip() or 0)
         except ValueError:
             interval = 0
-        interval = max(0, min(interval, 86400))
+        interval = max(0, min(interval, REFRESH_INTERVAL_S_MAX))
         metadata = dict(asset.metadata or {})
         metadata['refresh_interval_s'] = interval
         asset.metadata = metadata
