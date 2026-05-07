@@ -225,10 +225,51 @@ def _resolve_board_profile() -> _BoardProfile:
     return _BOARD_PROFILES.get(device_type, _DEFAULT_PROFILE)
 
 
-# Image extensions we route through the conversion task. Anything not
-# in this set is left as-is — the existing pipeline already handles
-# JPEG/PNG/WebP/GIF/BMP via direct Qt webview rendering.
-NORMALIZE_IMAGE_EXTS = frozenset({'.heic', '.heif', '.tif', '.tiff'})
+# Image extensions we route through the conversion task. The
+# motivation differs by format:
+#
+#   * HEIC / HEIF — Qt webview can't render them at all on most
+#     boards (libheif binding is server-side only via pillow-heif).
+#   * TIFF — patchy browser support; a multi-page TIFF flattens
+#     awkwardly. Normalising flattens it once, deterministically.
+#   * BMP — uncompressed; a 4K BMP is ~30 MB vs ~1 MB as WebP.
+#     Browsers do render BMP, but the on-disk size matters on a Pi
+#     and BMP is a one-shot convert (Pillow built-in, no apt dep).
+#   * ICO — Windows icons. Often multi-frame; the largest frame is
+#     what we want, flattened to a single WebP.
+#   * TGA — Truevision Targa (screenshot tools, game assets). No
+#     browser support.
+#   * JPEG 2000 (.jp2/.j2k/.jpx/.jpc/.jpf) — scanner output. No
+#     browser support.
+#   * AVIF — modern phone exports / Android camera output. Modern
+#     Chromium renders AVIF, but the Qt5 WebEngine on legacy Pi 2/3
+#     predates the AVIF support in Chromium 85, so converting on
+#     upload guarantees the viewer renders correctly across the
+#     fleet without per-board branching.
+#
+# JPEG / PNG / WebP / GIF / SVG stay untouched — already
+# viewer-friendly *and* well-compressed.
+#
+# All formats above are handled by Pillow's built-in decoders (no
+# extra apt or wheel dependency beyond pillow-heif, which is
+# already required for HEIC/HEIF).
+NORMALIZE_IMAGE_EXTS = frozenset(
+    {
+        '.heic',
+        '.heif',
+        '.tif',
+        '.tiff',
+        '.bmp',
+        '.ico',
+        '.tga',
+        '.jp2',
+        '.j2k',
+        '.jpx',
+        '.jpc',
+        '.jpf',
+        '.avif',
+    }
+)
 
 
 def needs_image_normalisation(uri_or_filename: str) -> bool:

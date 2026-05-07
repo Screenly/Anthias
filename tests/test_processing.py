@@ -220,19 +220,55 @@ def _make_video(
 @pytest.mark.parametrize(
     ('fmt', 'ext'),
     [
+        # TIFF — both extension spellings must route through the
+        # same path; covers the multi-page-flatten case implicitly
+        # (Pillow opens the first frame).
         ('TIFF', '.tif'),
         ('TIFF', '.tiff'),
+        # BMP — uncompressed source, dramatic size win after WebP.
+        ('BMP', '.bmp'),
+        # ICO — Windows icon. Pillow saves+reloads as a single
+        # frame, which is what we want for a signage asset.
+        ('ICO', '.ico'),
+        # TGA — Truevision Targa, common in screenshot tools.
+        ('TGA', '.tga'),
+        # JPEG 2000 family — every Pillow-recognised extension we
+        # accept must round-trip.
+        ('JPEG2000', '.jp2'),
+        ('JPEG2000', '.j2k'),
+        ('JPEG2000', '.jpx'),
+        # AVIF — modern phone camera output. Pillow 12+ supports
+        # AVIF natively; round-trip proves the libavif binding is
+        # actually linked at runtime, not just registered.
+        ('AVIF', '.avif'),
     ],
 )
-def test_image_tiff_converts_to_lossless_webp(
+def test_image_normalises_to_lossless_webp_across_formats(
     asset_dir: str, fmt: str, ext: str
 ) -> None:
-    """TIFF → WebP, original removed, row's URI swapped, metadata
-    populated. Both ``.tif`` and ``.tiff`` extensions route through
-    the same path."""
+    """Every entry in ``NORMALIZE_IMAGE_EXTS`` produces a valid WebP
+    output: the original is removed, the row's URI is swapped to the
+    new ``.webp`` path, ``metadata.original_ext`` carries the source
+    extension, and the resulting file actually decodes back as WebP
+    (not a stub or a bytewise-renamed source).
+
+    Parametrising over the full grid catches a future change to
+    ``_convert_image_to_webp`` that breaks one decoder while leaving
+    the others intact — e.g. a move to a non-RGBA convert mode would
+    crash JPEG2000 (which Pillow opens in mode 'RGB' by default for
+    some files), and a Pillow version drop that loses libavif would
+    fail AVIF specifically. Each case is one assertion per
+    invariant; failures point at one row in the matrix."""
     src = path.join(asset_dir, f'fixture{ext}')
-    _write_image(src, fmt)
-    asset = _make_processing_asset('img-tiff', src)
+    # AVIF needs RGB (Pillow's libavif binding doesn't accept RGBA on
+    # write); ICO/TGA/JP2/BMP all accept RGBA. The conversion target
+    # (``_convert_image_to_webp``'s internal ``.convert('RGBA')``) is
+    # what unifies — just make sure the SOURCE encodes happily.
+    if fmt in ('AVIF', 'JPEG2000'):
+        _write_image(src, fmt, mode='RGB', colour=(0, 200, 0))
+    else:
+        _write_image(src, fmt)
+    asset = _make_processing_asset(f'img-{fmt.lower()}', src)
 
     with mock.patch.object(processing, '_notify') as notify:
         processing._run_image_normalisation(asset)
@@ -241,12 +277,12 @@ def test_image_tiff_converts_to_lossless_webp(
     expected_uri = path.join(asset_dir, 'fixture.webp')
     assert asset.uri == expected_uri
     assert path.isfile(expected_uri)
-    assert not path.exists(src), 'original tiff must be removed'
+    assert not path.exists(src), f'original {ext} must be removed'
     assert asset.is_processing is False
     assert asset.mimetype == 'image'
     assert asset.metadata['original_ext'] == ext
     assert asset.metadata['converted'] is True
-    notify.assert_called_once_with('img-tiff')
+    notify.assert_called_once_with(f'img-{fmt.lower()}')
 
     # Round-trip the WebP — proves the file isn't a stub.
     with Image.open(expected_uri) as im:
@@ -1212,15 +1248,35 @@ def test_normalize_on_failure_no_args_is_safe() -> None:
 @pytest.mark.parametrize(
     ('filename', 'expected'),
     [
+        # Every entry in NORMALIZE_IMAGE_EXTS routes through; case
+        # variants exercise the case-insensitive lstrip-and-lower
+        # path in ``_ext``.
         ('foo.heic', True),
         ('FOO.HEIC', True),
         ('foo.heif', True),
         ('foo.tif', True),
         ('foo.tiff', True),
+        ('foo.bmp', True),
+        ('foo.BMP', True),
+        ('foo.ico', True),
+        ('foo.tga', True),
+        ('foo.jp2', True),
+        ('foo.j2k', True),
+        ('foo.jpx', True),
+        ('foo.jpc', True),
+        ('foo.jpf', True),
+        ('foo.avif', True),
+        # Already-friendly formats stay untouched — no Celery hop.
         ('foo.jpg', False),
+        ('foo.jpeg', False),
         ('foo.png', False),
         ('foo.webp', False),
+        ('foo.gif', False),
+        ('foo.svg', False),
+        # No extension and unknown extensions also fall through to
+        # the no-op branch.
         ('foo', False),
+        ('foo.psd', False),
     ],
 )
 def test_needs_image_normalisation(filename: str, expected: bool) -> None:

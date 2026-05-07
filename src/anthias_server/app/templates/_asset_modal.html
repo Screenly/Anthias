@@ -99,7 +99,7 @@
                WebP, exotic video codecs → H.264 MP4) makes the wider
                accept range safe to surface here. #}
             <input type="file" class="hidden" id="add-file" name="file_upload"
-              accept="image/*,video/*,.heic,.heif,.tif,.tiff,.mov,.m4v,.mkv,.webm,.avi,.mpg,.mpeg,.ts,.flv"
+              accept="image/*,video/*,.heic,.heif,.tif,.tiff,.bmp,.ico,.tga,.jp2,.j2k,.jpx,.jpc,.jpf,.avif,.mov,.m4v,.mkv,.webm,.avi,.mpg,.mpeg,.ts,.flv"
               @change="if ($event.target.files.length) { uploadFileName = $event.target.files[0].name; $event.target.form.requestSubmit() }">
           </label>
 
