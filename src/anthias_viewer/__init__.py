@@ -163,7 +163,21 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     if current_browser_url != uri:
         browser_bus.loadPage(uri)
         current_browser_url = uri
-    browser_bus.setReloadInterval(int(reload_interval_s))
+    # ``setReloadInterval`` is a new D-Bus method (added with this
+    # feature). A viewer running against an older AnthiasWebview build
+    # — version skew during rollout, or a WEBVIEW_VERSION override that
+    # pins to a pre-2026.05 tarball — would raise here and abort the
+    # asset loop, taking the screen down. Catch broadly: log a warning
+    # and keep playing the page without auto-refresh, which is exactly
+    # the behaviour the old webview already gave us. Per Copilot review.
+    try:
+        browser_bus.setReloadInterval(int(reload_interval_s))
+    except Exception as exc:
+        logging.warning(
+            'setReloadInterval not supported by webview '
+            '(version skew?); auto-refresh disabled for this asset: %s',
+            exc,
+        )
     logging.info('Current url is {0}'.format(current_browser_url))
 
 

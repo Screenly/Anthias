@@ -399,23 +399,35 @@ def test_v2_patch_refresh_interval_preserves_pipeline_metadata(
 
 
 @pytest.mark.django_db
-def test_v2_get_clamps_negative_refresh_interval(
-    api_client: APIClient, v2_asset_detail_url: str
+@pytest.mark.parametrize(
+    'stored,expected',
+    [
+        (-42, 0),  # negative clamped up to 0
+        (999999, 86400),  # huge value clamped down to 24h cap
+    ],
+)
+def test_v2_get_clamps_out_of_range_refresh_interval(
+    api_client: APIClient,
+    v2_asset_detail_url: str,
+    stored: int,
+    expected: int,
 ) -> None:
-    """The serializer's write path rejects negatives, but a hand-edited
-    row or a legacy import could leave a junk value in metadata.
-    GET should clamp to 0 rather than echo a negative value (which
-    would contradict the documented contract). Per Copilot review."""
+    """The serializer's write path rejects out-of-range values, but a
+    hand-edited row or a legacy import could leave a junk value in
+    metadata. GET should clamp to the documented 0..86400 contract
+    rather than echo whatever's in the column — a UI that round-tripped
+    the raw value would let the operator save a value the next PATCH
+    would 400 on. Per Copilot review (rounds 1 and 2)."""
     from anthias_server.app.models import Asset
 
     asset_id = v2_asset_detail_url.rstrip('/').rsplit('/', 1)[-1]
     asset = Asset.objects.get(asset_id=asset_id)
-    asset.metadata = {'refresh_interval_s': -42}
+    asset.metadata = {'refresh_interval_s': stored}
     asset.save(update_fields=['metadata'])
 
     response = api_client.get(v2_asset_detail_url)
     assert response.status_code == status.HTTP_200_OK
-    assert response.data['refresh_interval_s'] == 0
+    assert response.data['refresh_interval_s'] == expected
 
 
 @pytest.mark.django_db

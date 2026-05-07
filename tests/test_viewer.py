@@ -228,6 +228,33 @@ def test_view_webpage_default_zero_interval(
     fake_bus.setReloadInterval.assert_called_once_with(0)
 
 
+def test_view_webpage_falls_back_when_setreloadinterval_unsupported(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """An older AnthiasWebview build (or a WEBVIEW_VERSION pin to a
+    pre-2026.05 tarball) doesn't expose the ``setReloadInterval``
+    D-Bus slot — calling it raises and would otherwise abort the
+    asset_loop, taking the screen down. The viewer must catch and
+    keep playing the page without auto-refresh, matching the old
+    no-auto-refresh behaviour. Per Copilot review (round 2)."""
+    fake_bus = mock.Mock()
+    fake_bus.setReloadInterval.side_effect = RuntimeError(
+        'no such D-Bus method'
+    )
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+    ):
+        # Must not raise.
+        viewer_fixtures.u.view_webpage('https://example.com', 30)
+
+    fake_bus.loadPage.assert_called_once_with('https://example.com')
+
+
 def test_view_webpage_resets_interval_on_unchanged_url(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:

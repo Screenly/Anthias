@@ -374,6 +374,14 @@ void View::setupAnimation()
     update();
 }
 
+// Mirrors the v2 serializer's REFRESH_INTERVAL_S_MAX. Caps a hostile
+// or buggy D-Bus caller — the multiplication ``seconds * 1000`` later
+// in armReloadTimer would otherwise overflow ``int`` for values north
+// of ~2.1M and produce a wraparound cadence (small or negative). The
+// server side validates the range on write but the D-Bus contract is
+// trust-no-one (anything on the session bus could call this).
+static constexpr int kMaxReloadIntervalS = 86400;
+
 void View::setReloadInterval(int seconds)
 {
     // Per-asset auto-refresh. The viewer calls this right after each
@@ -385,8 +393,16 @@ void View::setReloadInterval(int seconds)
     // page and arming now would race the swap and reload the wrong
     // page (Copilot review, PR #2841). When no load is pending — the
     // common URL-unchanged-since-last-tick case where the viewer
-    // skips loadPage() — arm immediately.
-    pendingReloadIntervalS = (seconds > 0) ? seconds : 0;
+    // skips loadPage() — arm immediately. ``seconds`` is clamped to
+    // [0, kMaxReloadIntervalS] to defend against int-overflow on the
+    // millisecond multiplication done at arm time.
+    if (seconds <= 0) {
+        pendingReloadIntervalS = 0;
+    } else if (seconds > kMaxReloadIntervalS) {
+        pendingReloadIntervalS = kMaxReloadIntervalS;
+    } else {
+        pendingReloadIntervalS = seconds;
+    }
     stopReloadTimer();
 
     if (!pageLoadConnection) {
@@ -408,9 +424,13 @@ void View::armReloadTimer()
 
     reloadTimer = new QTimer(this);
     reloadTimer->setInterval(pendingReloadIntervalS * 1000);
+    // Don't qDebug() the reload itself — short intervals (5–10s) would
+    // flood journald to the point of unusability for very little
+    // diagnostic value. A failure to load shows up via the existing
+    // pageLoadConnection / loadFinished path; reload() succeeding is
+    // the boring case.
     connect(reloadTimer, &QTimer::timeout, this, [this]() {
         if (currentWebView) {
-            qDebug() << "Auto-refreshing web page";
             currentWebView->reload();
         }
     });
