@@ -718,6 +718,7 @@ def test_video_ffprobe_failure_falls_through_to_transcode(
         'container': 'unknown',
         'video_codec': 'unknown',
         'audio_codec': 'unknown',
+        'duration_seconds': None,
     }
 
     def fake_transcode(_in: str, out: str, _profile: Any = None) -> None:
@@ -1132,7 +1133,124 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
         'container': 'unknown',
         'video_codec': 'unknown',
         'audio_codec': 'unknown',
+        'duration_seconds': None,
     }
+
+
+def test_ffprobe_summary_extracts_duration_from_probe_payload() -> None:
+    """The runner reuses ``summary['duration_seconds']`` on the
+    passthrough path so we don't shell ffprobe twice. Confirm the
+    helper extracts ``format.duration`` correctly: floors to 1s
+    (sub-second clips can't slot a 0s rotation entry), returns
+    None when missing or unparseable."""
+    payload: dict[str, Any] = {
+        'format': {
+            'format_name': 'mov,mp4,m4a,3gp,3g2,mj2',
+            'duration': '12.7',
+        },
+        'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
+    }
+    with mock.patch.object(
+        processing, '_ffprobe_streams', return_value=payload
+    ):
+        summary = processing._ffprobe_summary('clip.mp4')
+    assert summary['duration_seconds'] == 12
+
+    # Sub-second clip floors to 1 (matches the YouTube-task rule).
+    payload['format']['duration'] = '0.4'
+    with mock.patch.object(
+        processing, '_ffprobe_streams', return_value=payload
+    ):
+        summary = processing._ffprobe_summary('clip.mp4')
+    assert summary['duration_seconds'] == 1
+
+    # Missing duration → None.
+    del payload['format']['duration']
+    with mock.patch.object(
+        processing, '_ffprobe_streams', return_value=payload
+    ):
+        summary = processing._ffprobe_summary('clip.mp4')
+    assert summary['duration_seconds'] is None
+
+    # Unparseable string → None (rather than crashing the task).
+    payload['format']['duration'] = 'N/A'
+    with mock.patch.object(
+        processing, '_ffprobe_streams', return_value=payload
+    ):
+        summary = processing._ffprobe_summary('clip.mp4')
+    assert summary['duration_seconds'] is None
+
+
+@pytest.mark.django_db
+def test_video_passthrough_uses_summary_duration_no_second_probe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The passthrough branch must reuse the duration the summary
+    already extracted; calling ``get_video_duration`` (which would
+    re-shell ffprobe) is a regression. Asserts via mock-not-called."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'clip.mp4')
+    with open(src, 'wb') as fh:
+        fh.write(b'\x00' * 64)
+    asset = _make_processing_asset('vid-no-2nd-probe', src, mimetype='video')
+
+    summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'audio_codec': 'aac',
+        'duration_seconds': 42,
+    }
+    with (
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch.object(processing, 'get_video_duration') as get_dur,
+        mock.patch.object(processing, '_notify'),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.duration == 42
+    # Crucially: the second ffprobe shell never happened.
+    get_dur.assert_not_called()
+
+
+def test_resolve_duration_seconds_swallows_probe_exceptions() -> None:
+    """``get_video_duration`` raises on ffprobe errors. After a
+    successful transcode the row is otherwise ready to play; failing
+    the entire task because the post-transcode duration probe stumbled
+    would lose all the work. Helper must catch and return None so the
+    runner just skips the duration update and lets the operator edit
+    manually."""
+    with mock.patch.object(
+        processing,
+        'get_video_duration',
+        side_effect=Exception('Bad video format'),
+    ):
+        # Should NOT raise.
+        result = processing._resolve_duration_seconds('clip.mp4')
+    assert result is None
+
+
+def test_format_subprocess_stderr_byte_trim_handles_multibyte_utf8() -> None:
+    """The trim is documented as a byte limit; multibyte characters
+    in the keep window must not push the decoded string over the
+    limit. Edge case: trimming mid-multibyte produces a replacement
+    character rather than a UnicodeDecodeError."""
+    tail = '— ffmpeg final error: invalid bitstream — '
+    big = b'x' * 2000 + tail.encode('utf-8')
+    exc = sh.ErrorReturnCode_1(
+        full_cmd='ffmpeg ...',
+        stdout=b'',
+        stderr=big,
+        truncate=False,
+    )
+    out = processing._format_subprocess_stderr(exc)
+    # The tail end (which has the diagnostic) is preserved.
+    assert 'invalid bitstream' in out
+    # The decoded string never exceeds the byte budget plus a small
+    # margin for the leading ellipsis character.
+    assert len(out.encode('utf-8')) <= processing._STDERR_TAIL_BYTES + 4
 
 
 def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
@@ -1152,6 +1270,7 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
         'container': 'unknown',
         'video_codec': 'unknown',
         'audio_codec': 'unknown',
+        'duration_seconds': None,
     }
 
 

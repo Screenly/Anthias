@@ -396,16 +396,31 @@ def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
     ffmpeg's diagnostic always lands at the end. ``replace`` rather
     than ``ignore`` so we never silently swallow a broken byte that
     might have been the only signal.
+
+    Trim happens *before* decode so the constant truly bounds bytes,
+    not characters — multibyte UTF-8 sequences in the keep-window
+    therefore can't push the decoded string over the limit. A
+    decode-then-len trim would have surprised under non-ASCII
+    output (rare in ffmpeg, but possible when an input filename
+    appears in the diagnostic).
     """
     raw = exc.stderr or b''
     if isinstance(raw, str):
         text = raw
-    else:
-        text = raw.decode('utf-8', errors='replace')
-    text = text.strip()
-    if len(text) > _STDERR_TAIL_BYTES:
-        text = '…' + text[-_STDERR_TAIL_BYTES:]
-    return text
+        if len(text.encode('utf-8')) > _STDERR_TAIL_BYTES:
+            text = '…' + text[-_STDERR_TAIL_BYTES:]
+        return text.strip()
+    if len(raw) > _STDERR_TAIL_BYTES:
+        # ``errors='replace'`` covers the case where the byte trim
+        # cuts a multibyte UTF-8 sequence in half — the half-byte is
+        # rendered as the replacement character rather than crashing.
+        return (
+            '…'
+            + raw[-_STDERR_TAIL_BYTES:]
+            .decode('utf-8', errors='replace')
+            .strip()
+        )
+    return raw.decode('utf-8', errors='replace').strip()
 
 
 def _set_processing_error(asset_id: str, message: str) -> None:
@@ -689,10 +704,10 @@ def _ffprobe_streams(input_path: str) -> dict[str, Any]:
     return parsed
 
 
-def _ffprobe_summary(input_path: str) -> dict[str, str]:
-    """Reduce ffprobe's payload to the three dimensions we branch on.
+def _ffprobe_summary(input_path: str) -> dict[str, Any]:
+    """Reduce ffprobe's payload to the dimensions we branch on.
 
-    Returns a dict with three keys, all populated:
+    Returns a dict with four keys, all populated:
       * ``container`` — lowercase format token, ``'unknown'`` if
         ffprobe couldn't decide.
       * ``video_codec`` — lowercase codec name, ``'unknown'`` if
@@ -701,11 +716,16 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
         file genuinely carries no audio stream, or ``'unknown'`` if
         the audio stream existed but ffprobe couldn't name its
         codec.
+      * ``duration_seconds`` — integer seconds (floor 1) or
+        ``None`` if ffprobe didn't report ``format.duration``.
+        Pulled from the same probe payload so the runner doesn't
+        re-shell ffprobe just for duration on the passthrough path.
 
     Any failure (timeout, ffprobe non-zero exit, ffprobe missing
-    from PATH) collapses to all-'unknown' so the caller falls
-    through to the transcode branch — better to spend the cycles
-    re-encoding than to let an unplayable file sit in rotation.
+    from PATH) collapses to all-'unknown' / ``duration_seconds=None``
+    so the caller falls through to the transcode branch — better to
+    spend the cycles re-encoding than to let an unplayable file sit
+    in rotation.
     """
     try:
         probe = _ffprobe_streams(input_path)
@@ -719,6 +739,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
             'container': 'unknown',
             'video_codec': 'unknown',
             'audio_codec': 'unknown',
+            'duration_seconds': None,
         }
     streams = probe.get('streams') or []
     video = next(
@@ -729,6 +750,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
         (s for s in streams if s.get('codec_type') == 'audio'),
         None,
     )
+    fmt_data = probe.get('format') or {}
     # Container resolution prefers ffprobe's ``format.format_name``
     # over the filename extension: a ``.mov`` file that's actually
     # MKV bytes (or a ``.bin`` extension hiding an mp4) would be
@@ -739,7 +761,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
     # Falls back to the extension only when ffprobe couldn't
     # populate format_name (probe failed; shouldn't happen here
     # since we already returned 'unknown' above on probe error).
-    fmt = (probe.get('format') or {}).get('format_name') or ''
+    fmt = fmt_data.get('format_name') or ''
     fmt_tokens = [t.strip().lower() for t in fmt.split(',') if t.strip()]
     if fmt_tokens:
         # Pick the first token that's in the passthrough set; if
@@ -756,15 +778,31 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
         audio_codec = 'none'
     else:
         audio_codec = (audio.get('codec_name') or 'unknown').lower()
+    # Duration extracted from the same probe payload — the runner
+    # uses this in the passthrough path so we don't shell ffprobe
+    # twice (once for codec/container summary, once for duration)
+    # on the common case. Floors to 1s so a sub-second clip can't
+    # slot a 0s entry into the viewer rotation. Missing or
+    # unparseable -> None.
+    raw_duration = fmt_data.get('duration')
+    duration_seconds: int | None
+    if raw_duration is None:
+        duration_seconds = None
+    else:
+        try:
+            duration_seconds = max(1, int(float(raw_duration)))
+        except (TypeError, ValueError):
+            duration_seconds = None
     return {
         'container': container,
         'video_codec': video_codec,
         'audio_codec': audio_codec,
+        'duration_seconds': duration_seconds,
     }
 
 
 def _video_can_passthrough(
-    summary: dict[str, str],
+    summary: dict[str, Any],
     profile: _BoardProfile | None = None,
 ) -> bool:
     """``True`` if the file is in a format the *target board's* viewer
@@ -841,14 +879,37 @@ def _transcode_to_target(
 
 
 def _resolve_duration_seconds(uri: str) -> int | None:
-    """ffprobe-driven duration for the post-normalisation row.
+    """ffprobe-driven duration for the post-transcode row.
 
-    Mirrors ``probe_video_duration`` but inlined here so the
-    normalisation task can update the row in a single write. Returns
-    None if ffprobe is unavailable or probe failed; the caller skips
-    duration-on-success in that case (matches existing behaviour).
+    Used only on the transcode branch (where the file path changed
+    so the summary's pre-transcode duration is no longer
+    representative). The passthrough branch reuses the duration
+    pulled from ``_ffprobe_summary`` to avoid a second ffprobe shell.
+
+    Returns ``None`` when:
+      * ffprobe is unavailable in this environment
+        (``get_video_duration`` returns None on CommandNotFound),
+      * the probe ran but couldn't extract a duration line, OR
+      * the probe raised any exception.
+
+    The exception-swallowing branch matters: ``get_video_duration``
+    raises on ``sh.ErrorReturnCode_1`` ("Bad video format") and on
+    bare ``Exception`` for unexpected failures. After a successful
+    transcode the file is on disk and the row is otherwise ready —
+    failing the *whole task* because the post-transcode duration
+    probe stumbled would be an own-goal. Keep duration best-effort
+    and let the operator edit the row's duration manually if
+    needed.
     """
-    delta = get_video_duration(uri)
+    try:
+        delta = get_video_duration(uri)
+    except Exception:
+        logging.exception(
+            'normalize_video_asset: post-transcode duration probe '
+            'failed for %s; leaving duration unset',
+            uri,
+        )
+        return None
     if delta is None:
         return None
     return max(1, int(delta.total_seconds()))
@@ -881,9 +942,14 @@ def _run_video_normalisation(asset: Asset) -> None:
             'is_processing': False,
             'metadata': metadata,
         }
-        duration = _resolve_duration_seconds(src_uri)
-        if duration is not None:
-            update['duration'] = duration
+        # Reuse the duration from ``_ffprobe_summary`` rather than
+        # re-shelling ffprobe via ``get_video_duration``: the file
+        # didn't move, so the summary's value is authoritative.
+        # Saves one ffprobe invocation per passthrough row — the
+        # common case on a per-board-codec-matched fleet.
+        passthrough_duration = summary.get('duration_seconds')
+        if isinstance(passthrough_duration, int):
+            update['duration'] = passthrough_duration
         Asset.objects.filter(asset_id=asset_id).update(**update)
         _notify(asset_id)
         return
