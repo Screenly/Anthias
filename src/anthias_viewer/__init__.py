@@ -121,8 +121,17 @@ BROWSER_HANDSHAKE_LINE = 'Anthias service start'
 
 
 def load_browser() -> None:
-    global browser
+    global browser, _webview_supports_set_reload_interval
     logging.info('Loading browser...')
+
+    # Re-probe the setReloadInterval capability against the freshly
+    # launched binary. The flag latches OFF on UnknownMethod, but a
+    # webview crash + restart (or an in-place upgrade then process
+    # bounce) might bring up a binary that *does* support the slot —
+    # we don't want to leave auto-refresh disabled forever in that
+    # case. Resetting on every launch keeps the latch tied to the
+    # actual running process, not the viewer's lifetime.
+    _webview_supports_set_reload_interval = True
 
     browser = sh.Command('AnthiasWebview')(_bg=True, _err_to_out=True)
 
@@ -216,7 +225,11 @@ def view_image(uri: str) -> None:
 
     if browser is None or not browser.is_alive():
         load_browser()
-    if current_browser_url is not uri:
+    # Value comparison (matches view_webpage): an ``is not`` identity
+    # check would only short-circuit when the asset_loop happens to
+    # pass the same str object on consecutive ticks, which a JSON-
+    # reconstructed URL would defeat.
+    if current_browser_url != uri:
         browser_bus.loadImage(uri)
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))

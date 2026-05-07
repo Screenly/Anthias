@@ -259,6 +259,38 @@ def test_view_webpage_latches_off_on_unknown_method(
     assert fake_bus.setReloadInterval.call_count == 1
 
 
+def test_load_browser_resets_set_reload_interval_capability(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """If the webview process crashed and we latched off, the next
+    ``load_browser()`` should re-enable capability detection — the
+    fresh process might be a newer build that supports the slot,
+    and we shouldn't leave auto-refresh permanently disabled because
+    the *old* process didn't have it."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    _stub_browser_stdout_chunks(
+        browser_proc,
+        [b'Anthias service start\n'],
+    )
+    browser_proc.is_alive.return_value = True
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with mock.patch.object(
+            viewer_fixtures.u,
+            '_webview_supports_set_reload_interval',
+            False,
+        ):
+            viewer_fixtures.u.load_browser()
+            assert (
+                viewer_fixtures.u._webview_supports_set_reload_interval
+                is True
+            )
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
 def test_view_webpage_does_not_latch_off_on_transient_dbus_error(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
