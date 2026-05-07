@@ -818,7 +818,14 @@ def normalize_image_asset(asset_id: str) -> None:
     max_retries=1,
 )
 def normalize_video_asset(asset_id: str) -> None:
-    """Probe the upload and either passthrough or transcode to H.264 MP4.
+    """Probe the upload; passthrough or transcode to a board-appropriate
+    codec in MP4.
+
+    The output codec is decided by ``processing._resolve_board_profile``:
+    libx264 on legacy Pi 2/Pi 3 (mmal-vc4 path; no HEVC hardware) and
+    libx265 with the iOS-friendly ``-tag:v hvc1`` on Pi 4-64 / Pi 5 /
+    x86 (mpv path; HEVC hardware-decoded on Pi 4 / x86, software on
+    Pi 5). The on-device player only ever sees a codec it can decode.
 
     ffmpeg is wrapped with ``-threads 2`` so two cores stay free for
     the on-device viewer; the celery worker itself runs under

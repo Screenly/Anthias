@@ -265,11 +265,14 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         if client_type.split('/')[0] in ('image', 'video'):
             file_type = client_type
         else:
-            # Last resort: classify by extension. Mirrors the format
-            # set the normalisation pipeline can handle so a typo'd
-            # extension still falls through to the rejection branch
-            # below rather than silently routing through the wrong
-            # branch.
+            # Last resort: classify by extension. The image set is the
+            # union of "viewer-friendly direct uploads" (jpg/png/...
+            # — never normalised) and ``NORMALIZE_IMAGE_EXTS`` (the
+            # full set the upload pipeline knows how to convert). The
+            # latter is a single source of truth, so adding a new
+            # normalisable format only touches one place.
+            from anthias_server.processing import NORMALIZE_IMAGE_EXTS
+
             ext = path.splitext(upload_name)[1].lower()
             image_exts = {
                 '.jpg',
@@ -278,12 +281,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
                 '.gif',
                 '.webp',
                 '.svg',
-                '.bmp',
-                '.heic',
-                '.heif',
-                '.tif',
-                '.tiff',
-            }
+            } | NORMALIZE_IMAGE_EXTS
             video_exts = {
                 '.mp4',
                 '.mov',

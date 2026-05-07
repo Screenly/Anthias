@@ -331,9 +331,43 @@ def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
             processing._run_image_normalisation(asset)
 
     # No webp produced; the source file is left in place for the
-    # operator to inspect / re-upload.
+    # operator to inspect / re-upload. Staging .webp.tmp must also
+    # be gone — same contract as the video pipeline's _drop_staging.
     assert not path.exists(path.join(asset_dir, 'broken.webp'))
+    assert not path.exists(path.join(asset_dir, 'broken.webp.tmp'))
     assert path.exists(src)
+
+
+@pytest.mark.django_db
+def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
+    """If Pillow writes some bytes to the staging file and *then*
+    raises mid-encode (disk pressure, codec crash), the runner must
+    clean up the partial .webp.tmp before propagating. Mocking
+    ``_convert_image_to_webp`` to half-write + raise is the cheapest
+    way to exercise that path deterministically — a real OSError
+    mid-WebP-encode is hard to provoke from userspace."""
+    src = path.join(asset_dir, 'fixture.tiff')
+    _write_image(src, 'TIFF')
+    asset = _make_processing_asset('img-partial', src)
+
+    def half_write(_in: str, staging: str) -> None:
+        with open(staging, 'wb') as fh:
+            fh.write(b'partial WebP bytes')
+        raise OSError('disk full mid-encode')
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_convert_image_to_webp', side_effect=half_write
+        ),
+    ):
+        with pytest.raises(OSError, match='disk full'):
+            processing._run_image_normalisation(asset)
+
+    # No leftover .webp.tmp in the asset dir — the runner removed it
+    # before the raise propagated.
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
 
 
 @pytest.mark.django_db
@@ -739,7 +773,65 @@ def test_video_ffmpeg_error_cleans_staging(asset_dir: str) -> None:
         with pytest.raises(RuntimeError) as excinfo:
             processing._run_video_normalisation(asset)
 
-    assert 'Invalid data found' in str(excinfo.value)
+    msg = str(excinfo.value)
+    assert 'Invalid data found' in msg
+    # The error message goes straight into metadata.error_message
+    # which renders on the operator-facing "Failed" pill — must NOT
+    # contain a Python bytes repr (``b'...'``) wrapper.
+    assert "b'Invalid" not in msg, (
+        'stderr should be decoded for operator display'
+    )
+
+
+def test_format_subprocess_stderr_decodes_and_trims() -> None:
+    """``_format_subprocess_stderr`` must produce operator-readable
+    text: bytes decoded as UTF-8 (with replacement for malformed
+    bytes), no ``b'...'`` wrapper, very long output trimmed to its
+    tail (where ffmpeg's actual diagnostic lives)."""
+    # 1) Plain bytes decode cleanly.
+    exc = sh.ErrorReturnCode_1(
+        full_cmd='ffmpeg ...',
+        stdout=b'',
+        stderr=b'Invalid data found in input\n',
+        truncate=False,
+    )
+    out = processing._format_subprocess_stderr(exc)
+    assert out == 'Invalid data found in input'
+    assert "b'" not in out
+
+    # 2) Malformed UTF-8 doesn't crash — replacement char is fine.
+    exc = sh.ErrorReturnCode_1(
+        full_cmd='ffmpeg ...',
+        stdout=b'',
+        stderr=b'broken\xff byte',
+        truncate=False,
+    )
+    out = processing._format_subprocess_stderr(exc)
+    assert 'broken' in out and 'byte' in out
+
+    # 3) Long stderr is tail-trimmed with an ellipsis prefix so the
+    # operator sees the diagnostic, not 4 KB of build-info preamble.
+    long_tail = 'final-error-line'
+    big = b'x' * 2000 + long_tail.encode()
+    exc = sh.ErrorReturnCode_1(
+        full_cmd='ffmpeg ...',
+        stdout=b'',
+        stderr=big,
+        truncate=False,
+    )
+    out = processing._format_subprocess_stderr(exc)
+    assert out.startswith('…')
+    assert long_tail in out
+    assert len(out) <= processing._STDERR_TAIL_BYTES + 1
+
+    # 4) Empty stderr returns the empty string, not "b''".
+    exc = sh.ErrorReturnCode_1(
+        full_cmd='ffmpeg ...',
+        stdout=b'',
+        stderr=b'',
+        truncate=False,
+    )
+    assert processing._format_subprocess_stderr(exc) == ''
 
 
 @pytest.mark.django_db

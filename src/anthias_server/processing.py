@@ -332,6 +332,37 @@ def _ext(filename: str) -> str:
     return path.splitext(filename)[1].lower()
 
 
+# Operator-facing diagnostics surface via ``metadata.error_message``,
+# which renders as a hover tooltip on the row's "Failed" pill — bytes
+# repr (``b'...'``) reads as gibberish there. ``_STDERR_TAIL_BYTES``
+# trims ffmpeg's pre-amble (build info, configuration, library
+# versions) so the operator sees the actual error line, not 4 KB of
+# noise.
+_STDERR_TAIL_BYTES = 800
+
+
+def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
+    """Decode the tail of a subprocess's stderr to a readable string.
+
+    ``sh.ErrorReturnCode.stderr`` is ``bytes``; returning it via
+    ``f'{exc.stderr!r}'`` would surface ``b'...'`` to the operator.
+    Decode as UTF-8 with replacement (so a malformed byte doesn't
+    crash the error path), strip whitespace, keep only the tail —
+    ffmpeg's diagnostic always lands at the end. ``replace`` rather
+    than ``ignore`` so we never silently swallow a broken byte that
+    might have been the only signal.
+    """
+    raw = exc.stderr or b''
+    if isinstance(raw, str):
+        text = raw
+    else:
+        text = raw.decode('utf-8', errors='replace')
+    text = text.strip()
+    if len(text) > _STDERR_TAIL_BYTES:
+        text = '…' + text[-_STDERR_TAIL_BYTES:]
+    return text
+
+
 def _set_processing_error(asset_id: str, message: str) -> None:
     """Persist a human-readable error and clear is_processing.
 
@@ -484,14 +515,33 @@ def _run_image_normalisation(asset: Asset) -> None:
     # already sweeps stale .tmp after 1h.
     staging = f'{final_uri}.tmp'
 
+    def _drop_image_staging() -> None:
+        # Mirror the video-pipeline cleanup contract: every failure
+        # path through ``_convert_image_to_webp`` removes the staging
+        # ``.webp.tmp`` before propagating, so a partial Pillow write
+        # (disk pressure, libheif crash mid-decode) never leaves
+        # debris for the operator to trip over.
+        try:
+            os.remove(staging)
+        except OSError:
+            pass
+
     try:
         _convert_image_to_webp(src_uri, staging)
     except UnidentifiedImageError as exc:
         # Pillow couldn't decode — almost always a corrupt upload.
         # Re-raise with a clearer name; on_failure formats the message.
+        _drop_image_staging()
         raise UnidentifiedImageError(
             f'could not decode image {src_uri!r}: {exc}'
         ) from exc
+    except Exception:
+        # Any other failure (OSError / disk pressure, libheif crash,
+        # WebP encoder rejecting the mode) must also clean up before
+        # bubbling. ``except Exception`` rather than ``BaseException``
+        # so KeyboardInterrupt / SystemExit still abort cleanly.
+        _drop_image_staging()
+        raise
 
     # Atomic rename within the same dir — POSIX guarantees this is
     # observed as a single inode swap. os.replace overwrites an
@@ -764,13 +814,15 @@ def _run_video_normalisation(asset: Asset) -> None:
     # GCed by the orphan-file sweep.
     base_no_ext = path.splitext(src_uri)[0]
     final_uri = f'{base_no_ext}.mp4'
+    # ``staging`` deliberately uses a ``.staging.mp4`` suffix rather
+    # than ``.mp4.tmp``: ffmpeg picks its muxer from the output
+    # extension, and ``.tmp`` makes it bail with "Unable to choose an
+    # output format". The suffix also guarantees ``staging != src_uri``
+    # for the in-place transcode case (a non-h264 ``.mp4`` whose
+    # ``base_no_ext`` matches): ffmpeg keeps reading from src_uri while
+    # writing to a distinct path. ``os.replace`` then atomically swaps
+    # the input out for the transcoded output.
     staging = f'{base_no_ext}.staging.mp4'
-    # Edge case: source already lives at ``<base>.mp4`` (a non-h264
-    # .mp4 fell through here). The staging name must NOT collide
-    # with the source on rename — using a distinct suffix keeps the
-    # input safe to read while ffmpeg writes to the staging file.
-    if path.normpath(staging) == path.normpath(src_uri):
-        staging = f'{base_no_ext}.staging.transcoded.mp4'
 
     def _drop_staging() -> None:
         # All transcode failure paths converge through this helper so
@@ -792,8 +844,13 @@ def _run_video_normalisation(asset: Asset) -> None:
         raise RuntimeError(f'ffmpeg timed out for {src_uri!r}: {exc}') from exc
     except sh.ErrorReturnCode as exc:
         _drop_staging()
+        # ``exc.stderr`` is bytes; ``!r`` would render it as
+        # ``b'...'`` in the operator-facing metadata.error_message.
+        # Decode + trim the tail for readability — ffmpeg's last few
+        # lines of stderr are usually the diagnostic, the rest is
+        # build-info noise.
         raise RuntimeError(
-            f'ffmpeg failed for {src_uri!r}: {exc.stderr!r}'
+            f'ffmpeg failed for {src_uri!r}: {_format_subprocess_stderr(exc)}'
         ) from exc
 
     if not path.isfile(staging) or os.stat(staging).st_size == 0:
