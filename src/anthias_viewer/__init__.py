@@ -175,21 +175,39 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     # against an older AnthiasWebview (version skew during rollout, or
     # a WEBVIEW_VERSION override pinning a pre-2026.05 tarball) would
     # raise here and abort the asset loop, taking the screen down.
-    # Catch broadly on the first call, log once, and latch the
-    # capability flag so subsequent rotations skip the D-Bus hop and
-    # don't refill journald with the same warning every cycle.
+    # Latch the capability flag *only* for "the method doesn't exist"
+    # — transient D-Bus failures (bus disconnect, timeout, race during
+    # a webview restart) are logged at debug and retried next rotation
+    # so they don't permanently disable auto-refresh on a webview
+    # that actually supports it.
     global _webview_supports_set_reload_interval
     if _webview_supports_set_reload_interval:
         try:
             browser_bus.setReloadInterval(int(reload_interval_s))
         except Exception as exc:
-            _webview_supports_set_reload_interval = False
-            logging.warning(
-                'setReloadInterval not supported by webview '
-                '(version skew?); auto-refresh disabled until viewer '
-                'restart: %s',
-                exc,
+            message = str(exc)
+            # pydbus surfaces missing-slot errors with the D-Bus error
+            # code 'org.freedesktop.DBus.Error.UnknownMethod' in the
+            # exception message. Match either the code or the human
+            # phrasing so we don't miss it across pydbus versions.
+            method_missing = (
+                'UnknownMethod' in message
+                or 'no such method' in message.lower()
             )
+            if method_missing:
+                _webview_supports_set_reload_interval = False
+                logging.warning(
+                    'setReloadInterval not supported by webview '
+                    '(version skew?); auto-refresh disabled until '
+                    'viewer restart: %s',
+                    exc,
+                )
+            else:
+                logging.debug(
+                    'Transient setReloadInterval failure (will retry '
+                    'next rotation): %s',
+                    exc,
+                )
     logging.info('Current url is {0}'.format(current_browser_url))
 
 

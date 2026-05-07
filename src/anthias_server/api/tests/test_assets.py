@@ -399,6 +399,37 @@ def test_v2_patch_refresh_interval_preserves_pipeline_metadata(
 
 
 @pytest.mark.django_db
+def test_v2_get_normalises_refresh_interval_in_metadata_too(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """The top-level ``refresh_interval_s`` and the embedded
+    ``metadata['refresh_interval_s']`` must agree on the response —
+    a row with an out-of-range stored value would otherwise produce
+    contradictory JSON (top-level clamped to 0, metadata still echoing
+    -42), and a client reading metadata could re-submit the bad
+    value. Other metadata keys (upload-pipeline state) pass
+    through untouched."""
+    from anthias_server.app.models import Asset
+
+    asset_id = v2_asset_detail_url.rstrip('/').rsplit('/', 1)[-1]
+    asset = Asset.objects.get(asset_id=asset_id)
+    asset.metadata = {
+        'refresh_interval_s': 999999,
+        'original_ext': '.heic',
+        'transcoded': True,
+    }
+    asset.save(update_fields=['metadata'])
+
+    response = api_client.get(v2_asset_detail_url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['refresh_interval_s'] == 86400
+    assert response.data['metadata']['refresh_interval_s'] == 86400
+    # Pipeline-owned keys must pass through unchanged.
+    assert response.data['metadata']['original_ext'] == '.heic'
+    assert response.data['metadata']['transcoded'] is True
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     'stored,expected',
     [

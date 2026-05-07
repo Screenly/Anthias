@@ -90,10 +90,30 @@ def _validate_time_window(
     return attrs
 
 
+def _clamp_refresh_interval(value: Any) -> int:
+    """Clamp ``metadata['refresh_interval_s']`` to ``[0, MAX]``.
+
+    The serializer's write path rejects out-of-range values, but a
+    hand-edited row or a legacy import could leave a junk value in
+    there. Surfacing it as-is would contradict the documented
+    0..REFRESH_INTERVAL_S_MAX contract and could let a client UI
+    display / accept a value the next PATCH would 400 on. Used by
+    both the top-level ``refresh_interval_s`` field and the
+    sanitised ``metadata`` dict so the two halves of the response
+    can't disagree.
+    """
+    try:
+        interval = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(interval, REFRESH_INTERVAL_S_MAX))
+
+
 class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
     is_active = SerializerMethodField()
     play_days = SerializerMethodField()
     refresh_interval_s = SerializerMethodField()
+    metadata = SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_active(self, obj: Asset) -> bool:
@@ -108,19 +128,25 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
         # Pulled out of metadata so it shows up as a first-class column
         # on GET; the field is itself written from UpdateAssetSerializerV2
         # back into metadata. Default 0 = no auto-refresh, mirroring the
-        # viewer's handling for assets without the key set. Clamp both
-        # bounds on read: the serializer's write path rejects out-of-
-        # range values, but a hand-edited row or a legacy import could
-        # leave a junk value in there. Surfacing it as-is would
-        # contradict the documented 0..REFRESH_INTERVAL_S_MAX contract
-        # and could let a client UI display / accept a value the next
-        # PATCH would 400 on.
-        value = (obj.metadata or {}).get('refresh_interval_s', 0)
-        try:
-            interval = int(value)
-        except (TypeError, ValueError):
-            return 0
-        return max(0, min(interval, REFRESH_INTERVAL_S_MAX))
+        # viewer's handling for assets without the key set.
+        return _clamp_refresh_interval(
+            (obj.metadata or {}).get('refresh_interval_s', 0)
+        )
+
+    @extend_schema_field({'type': 'object', 'additionalProperties': True})
+    def get_metadata(self, obj: Asset) -> dict[str, Any]:
+        # Sanitise ``refresh_interval_s`` in the embedded metadata too,
+        # so a legacy/hand-edited row can't return a top-level
+        # ``refresh_interval_s: 0`` while the ``metadata`` field still
+        # echoes the raw out-of-range value. Other keys (the upload-
+        # pipeline's original_ext / transcoded / error_message) pass
+        # through untouched.
+        raw = dict(obj.metadata or {})
+        if 'refresh_interval_s' in raw:
+            raw['refresh_interval_s'] = _clamp_refresh_interval(
+                raw['refresh_interval_s']
+            )
+        return raw
 
     class Meta:
         model = Asset
