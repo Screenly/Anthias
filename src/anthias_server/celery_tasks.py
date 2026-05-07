@@ -321,15 +321,23 @@ def probe_video_duration(asset_id: str) -> None:
 
 
 class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
-    """Custom Task subclass so ``on_failure`` clears ``is_processing``
-    when the download fails, mirroring ``_ProbeVideoTask``.
+    """Custom Task subclass that funnels failures through the same
+    metadata-error contract as ``_NormalizeAssetTask``.
+
+    Sharing the failure path means a failed YouTube download lands in
+    the same operator-visible state as a failed HEIC conversion or
+    failed video transcode: ``is_processing=False`` *and* a populated
+    ``metadata.error_message`` that the asset table renders as a
+    "Failed" pill (with the message on the hover tooltip). Without
+    that unification, a yt-dlp DownloadError would clear the
+    Processing pill but leave no on-row diagnostic — the operator
+    couldn't tell a fresh download from a 404'd one.
 
     The previous in-process daemon thread swallowed yt-dlp's exit
     code, so a failed download silently left the row stuck at
-    "Processing" with an empty .mp4 — the operator had no way to
-    unblock it without editing the database. Now any uncaught
-    exception (DownloadError, ExtractorError, ...) bubbles to celery
-    and lands here once retries are exhausted.
+    "Processing" with an empty .mp4. Now any uncaught exception
+    (DownloadError, ExtractorError, ...) bubbles to celery and lands
+    here once retries are exhausted.
     """
 
     def on_failure(
@@ -344,10 +352,18 @@ class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
         if not asset_id:
             return
         try:
-            Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
-            from anthias_server.app.consumers import notify_asset_update
+            # Reuse the helpers in anthias_server.processing so the
+            # YouTube and normalize pipelines share the exact same
+            # "row failed" semantics — single source of truth for the
+            # error_message contract instead of two near-duplicate
+            # blocks that could drift.
+            from anthias_server.processing import (
+                _notify,
+                _set_processing_error,
+            )
 
-            notify_asset_update(asset_id)
+            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+            _notify(asset_id)
         except Exception:
             logging.exception(
                 'download_youtube_asset on_failure cleanup failed for %s',
@@ -392,9 +408,16 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     The row is created upstream with ``mimetype='video'``,
     ``is_processing=True``, and ``uri`` already pointing at the
     eventual ``<assetdir>/<asset_id>.mp4``. This task overwrites
-    ``name`` (with the resolved title) and ``duration``, then clears
-    ``is_processing`` and nudges the viewer + browser the same way
-    ``probe_video_duration`` does.
+    ``name`` (with the resolved title), seeds metadata, and then
+    *chains into* ``normalize_video_asset`` — leaving the row
+    ``is_processing=True`` so the same per-board passthrough /
+    transcode pass runs on YouTube downloads as on direct file
+    uploads. That matters because yt-dlp's ``format_sort:
+    vcodec:h264`` is a *preference*, not a guarantee: when no H.264
+    rendition is available yt-dlp falls back to whatever it can get
+    (vp9 webm, av1, ...). Without the chain, those downloads would
+    land on a pi3 device unplayable. With it, the same codec grid
+    that protects file uploads protects YouTube downloads too.
 
     Uses yt-dlp as a Python library rather than a CLI shellout: a
     single ``extract_info(uri, download=True)`` call returns title +
@@ -496,9 +519,28 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         except (TypeError, ValueError):
             duration = None
 
+    # Stamp the metadata bag the same way normalize_video_asset
+    # would: ``source='youtube'`` so an operator (or future failure
+    # diagnostic) can tell at a glance where the row came from, and
+    # ``source_url`` so the original watch URL is recoverable even
+    # after ``name`` is overwritten with the resolved title.
+    metadata = dict(asset.metadata or {})
+    metadata.update(
+        {
+            'source': 'youtube',
+            'source_url': uri,
+        }
+    )
+    metadata.pop('error_message', None)
+
     update: dict[str, Any] = {
-        'is_processing': False,
+        # ``is_processing`` deliberately stays True — normalize_video
+        # below clears it once its probe + (optional) transcode
+        # finishes. A single state transition (Processing → Done)
+        # reads better in the table than the previous two-step
+        # (Processing → Done → maybe-still-needs-work).
         'name': title,
+        'metadata': metadata,
     }
     if duration is not None:
         update['duration'] = duration
@@ -512,15 +554,30 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         update['uri'] = location
     Asset.objects.filter(asset_id=asset_id).update(**update)
 
-    # Tell the viewer to reload its playlist now that the file
-    # exists and the row is fully materialised.
-    r.publish('anthias.viewer', 'reload')
+    # Browser-side nudge so the table picks up the resolved title +
+    # duration immediately. The "Processing" pill stays on (the row
+    # is still ``is_processing=True``) until normalize_video_asset
+    # finishes its pass and clears the flag — at which point the
+    # same _notify helper fires again from the normalize task and
+    # the pill drops. Using processing._notify here keeps the YouTube
+    # path on the same publish/notify primitives as the rest of the
+    # pipeline; the previous direct ``r.publish`` + manual import
+    # of notify_asset_update was a near-duplicate of that helper.
+    from anthias_server.processing import (
+        _notify,
+        dispatch_normalize_video,
+    )
 
-    # Browser-side nudge so the table drops "Processing" and picks
-    # up the resolved title/duration without waiting for the 5s poll.
-    from anthias_server.app.consumers import notify_asset_update
+    _notify(asset_id)
 
-    notify_asset_update(asset_id)
+    # Hand off to the per-board normalisation pass. This is what
+    # gives YouTube downloads the same codec / container guarantees
+    # as direct file uploads: ffprobe → passthrough on H.264/HEVC
+    # (per board profile) or transcode to libx264/libx265 otherwise.
+    # It also writes ``original_ext`` / ``transcoded`` /
+    # ``transcode_target`` to metadata, so the operator's view of a
+    # YouTube row carries the same diagnostic shape as a file upload.
+    dispatch_normalize_video(asset_id)
 
 
 @celery.task

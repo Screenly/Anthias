@@ -42,6 +42,18 @@
   <td data-label="Enabled">
     {% if asset.is_processing %}
     <span class="processing-pill"><i class="ti ti-refresh"></i>Processing</span>
+    {% elif asset.metadata.error_message %}
+    {% comment %} Processing failed and the celery task wrote
+       metadata.error_message via _NormalizeAssetTask.on_failure. Show
+       a small badge with a hover tooltip carrying the full message
+       (truecate via the title attribute, no extra JS) so the operator
+       can see *why* the row never finalised, edit/delete it, or
+       re-upload a fixed file. {% endcomment %}
+    <span class="error-pill"
+          title="{{ asset.metadata.error_message }}"
+          aria-label="Processing failed: {{ asset.metadata.error_message }}">
+      <i class="ti ti-alert-triangle"></i>Failed
+    </span>
     {% else %}
     <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
       {% csrf_token %}

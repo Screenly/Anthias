@@ -105,6 +105,54 @@ def test_asset_table_partial(client: Client, asset: Asset) -> None:
     assert (asset.name or '') in response.content.decode()
 
 
+@pytest.mark.django_db
+def test_asset_row_renders_error_pill_when_processing_failed(
+    client: Client,
+) -> None:
+    """A row whose normalisation task failed (metadata.error_message
+    populated, is_processing cleared) renders the warn-coloured
+    "Failed" pill in place of the active toggle. The full error
+    message rides along on the title attribute so the operator can
+    hover for context without a separate modal."""
+    Asset.objects.create(
+        asset_id='asset-failed',
+        name='broken upload',
+        uri='/data/anthias_assets/asset-failed.heic',
+        mimetype='image',
+        duration=10,
+        is_enabled=False,
+        is_processing=False,
+        play_order=0,
+        metadata={'error_message': 'UnidentifiedImageError: bad header'},
+    )
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'error-pill' in body
+    # The hover-tooltip carries the full message verbatim.
+    assert 'UnidentifiedImageError: bad header' in body
+    # The active toggle and the in-progress pill must NOT be rendered
+    # for this row — the error pill replaces them both.
+    assert 'asset-failed' in body
+    # processing-pill belongs to in-flight rows, not failed ones.
+    assert (
+        body.count('processing-pill') == 0
+        or 'asset-failed' not in body.split('processing-pill', 1)[0][-200:]
+    )
+
+
+@pytest.mark.django_db
+def test_asset_row_no_error_pill_when_metadata_clean(
+    client: Client, asset: Asset
+) -> None:
+    """The vanilla happy-path row (no metadata, not processing) shows
+    the active-toggle, not the error pill."""
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert 'error-pill' not in body
+    assert 'activity-toggle' in body
+
+
 # ---------------------------------------------------------------------------
 # Page-context helpers — lightweight unit tests that bypass the HTTP
 # layer so coverage of the tiny pure-Python functions doesn't depend on
