@@ -39,8 +39,8 @@ class Asset(models.Model):
     is_reachable = models.BooleanField(default=True)
     last_reachability_check = models.DateTimeField(blank=True, null=True)
     # Per-asset bag of processing-pipeline state. Carries flags written
-    # by the upload-time normalisation tasks (image_normalize_asset,
-    # video_normalize_asset) — original file extension, whether a
+    # by the upload-time normalisation tasks (normalize_image_asset,
+    # normalize_video_asset) — original file extension, whether a
     # transcode happened, the last processing error if any — without
     # widening the schema for each new field. The pipeline writes; the
     # model itself never reads/branches on it. Default ``dict`` (not

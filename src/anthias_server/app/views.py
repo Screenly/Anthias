@@ -309,18 +309,38 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # has a breadcrumb back to what they picked.
     display_name = _prettify_upload_name(upload_name)
 
+    mimetype = file_type.split('/')[0]
+
     # Preserve the source extension on disk so the normalisation
     # pipeline can identify the format from the filename without
-    # re-running guess_type. Falls back to whatever the upload
-    # carried — guess_extension returns '.jpg' / '.heic' / '.mp4' etc.
-    # for the formats we care about; if mimetypes can't map the type
-    # we leave it off rather than synthesise a misleading suffix.
+    # re-running guess_type. Three-step fallback so the file never
+    # lands extensionless if we can possibly avoid it (an
+    # extensionless file silently bypasses the normalise pipeline
+    # via ``needs_image_normalisation`` returning False).
+    #   1. ``guess_extension(file_type)`` — works for every MIME
+    #      that's in the host's mimetypes DB.
+    #   2. ``path.splitext(upload_name)[1]`` — operator-supplied
+    #      filename. Covers the case where the browser tagged the
+    #      upload with a generic MIME but the file itself was named
+    #      ``photo.HEIC``. lowercase'd so the case-insensitive ext
+    #      check downstream still matches.
+    #   3. Map ``image/<subtype>`` → ``.<subtype>`` if that ext is
+    #      in ``NORMALIZE_IMAGE_EXTS``. Covers an Android share
+    #      with no filename on a host whose mimetypes DB doesn't
+    #      carry the modern ``image/heic`` / ``image/avif`` /
+    #      ``image/jp2`` entries — without it, a HEIC upload from
+    #      a clean Pi base image could slip past normalisation
+    #      and fail to render.
     src_ext = guess_extension(file_type) or ''
     if not src_ext:
-        # Trust the operator-supplied name as a last resort.
-        # path.splitext('foo.HEIC')[1] → '.HEIC'; lowercase so the
-        # downstream task's case-insensitive ext check still hits.
         src_ext = path.splitext(upload_name)[1].lower()
+    if not src_ext:
+        from anthias_server.processing import NORMALIZE_IMAGE_EXTS
+
+        subtype = file_type.split('/', 1)[1] if '/' in file_type else ''
+        candidate_ext = f'.{subtype}'
+        if mimetype == 'image' and candidate_ext in NORMALIZE_IMAGE_EXTS:
+            src_ext = candidate_ext
 
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
@@ -332,7 +352,6 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         for chunk in file_upload.chunks():
             f.write(chunk)
 
-    mimetype = file_type.split('/')[0]
     # Decide which Celery task — if any — needs to run before the
     # viewer can play the row.
     #   * Videos always go through the normalisation pipeline: the

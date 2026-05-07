@@ -739,6 +739,67 @@ def test_assets_upload_heic_classifies_via_content_type_when_mimedb_sparse(
 
 
 @pytest.mark.django_db
+def test_assets_upload_extensionless_heic_falls_back_to_mime_subtype(
+    client: Client,
+) -> None:
+    """The worst-case mimetypes-DB / filename combination: the host
+    doesn't know ``image/heic`` AND the browser sent the file
+    without a usable filename extension (e.g. an Android share that
+    renames the upload to ``image.tmp`` or ``content``). Without the
+    third-step ``image/<subtype>`` mapping, ``src_ext`` would be
+    empty, the file would land on disk extensionless, and
+    ``needs_image_normalisation`` would return False — the HEIC
+    would slip past the pipeline and never render. The mapping in
+    ``assets_upload`` keeps the pipeline trigger working."""
+    from mimetypes import guess_extension as real_guess_extension
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    def sparse_guess_extension(file_type: str) -> str | None:
+        # Pretend the host's mimetypes DB doesn't know about HEIC.
+        if file_type == 'image/heic':
+            return None
+        return real_guess_extension(file_type)
+
+    with (
+        mock.patch(
+            'anthias_server.app.views.guess_type',
+            return_value=(None, None),
+        ),
+        mock.patch(
+            'anthias_server.app.views.guess_extension',
+            side_effect=sparse_guess_extension,
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    # No file extension on the operator-supplied name.
+                    'image',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    # The file landed with the .heic extension recovered from the
+    # MIME subtype, so the normalise pipeline triggered.
+    assert created.uri and created.uri.endswith('.heic')
+    assert created.is_processing is True
+    image_delay.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
 def test_assets_upload_jpeg_skips_normalization(client: Client) -> None:
     """JPEG / PNG / WebP uploads land ready-to-play — no Celery hop."""
     from django.core.files.uploadedfile import SimpleUploadedFile
