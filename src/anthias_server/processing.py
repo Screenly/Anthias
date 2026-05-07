@@ -429,8 +429,9 @@ def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
 def _set_processing_error(asset_id: str, message: str) -> None:
     """Persist a human-readable error and clear is_processing.
 
-    Both tasks land here on a permanent failure (corrupt upload,
-    encrypted PDF, broken HEIC). Writing ``metadata.error_message``
+    Both tasks land here on a permanent failure (corrupt HEIC,
+    truncated TIFF, ffmpeg refusing an exotic codec, ffmpeg
+    producing a zero-byte transcode). Writing ``metadata.error_message``
     instead of leaving the row stuck at ``is_processing=True`` is the
     contract called out by the issue's acceptance criteria. Operators
     surface the message via the v2 API's ``metadata`` field.
