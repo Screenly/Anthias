@@ -359,11 +359,14 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     #     "ffprobe + write duration" the old probe_video_duration
     #     did, and the transcode branch covers the non-H.264 case
     #     this issue exists to fix.
-    #   * HEIC / HEIF / TIFF / BMP images are converted to lossless
-    #     WebP. Other images (JPEG / PNG / WebP / GIF) skip the
-    #     pipeline entirely and land ready-to-play. The exact set
-    #     lives in anthias_server.processing.NORMALIZE_IMAGE_EXTS so
-    #     adding a new format only touches one place.
+    #   * Images whose extension is in
+    #     anthias_server.processing.NORMALIZE_IMAGE_EXTS (HEIC /
+    #     HEIF / TIFF / BMP / ICO / TGA / JPEG 2000 family / AVIF)
+    #     are converted to lossless WebP. JPEG / PNG / WebP / GIF
+    #     / SVG skip the pipeline entirely and land ready-to-play.
+    #     The set lives in one place so adding a new format only
+    #     touches that constant — this comment is intentionally
+    #     not the source of truth.
     from anthias_server.processing import needs_image_normalisation
 
     is_video = mimetype == 'video'
