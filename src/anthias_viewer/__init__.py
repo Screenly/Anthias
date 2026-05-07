@@ -12,7 +12,7 @@ import pydbus
 import requests
 import sh as sh
 
-from anthias_server.app.models import REFRESH_INTERVAL_S_MAX
+from anthias_server.app.models import clamp_refresh_interval
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
@@ -390,16 +390,14 @@ def asset_loop(scheduler: Any) -> None:
             # nullable so be defensive. Anything non-int / out-of-range
             # is rejected on write by the v2 serializer + the page-form
             # handler, but a hand-crafted DB row could still slip a
-            # garbage value through, so clamp on the read side too —
-            # the C++ webview's setReloadInterval also clamps, but
-            # doing it here means we don't pay the D-Bus round-trip
-            # for an obviously bogus value.
+            # garbage value through, so clamp on read here too via the
+            # shared helper. The C++ webview's setReloadInterval also
+            # clamps, but doing it here means we don't pay the D-Bus
+            # round-trip for an obviously bogus value.
             metadata = asset.get('metadata') or {}
-            try:
-                interval = int(metadata.get('refresh_interval_s') or 0)
-            except (TypeError, ValueError):
-                interval = 0
-            interval = max(0, min(interval, REFRESH_INTERVAL_S_MAX))
+            interval = clamp_refresh_interval(
+                metadata.get('refresh_interval_s')
+            )
             view_webpage(uri, reload_interval_s=interval)
         elif 'video' in mime or 'streaming' in mime:
             # ``'video' or 'streaming' in mime`` parses as ``'video'

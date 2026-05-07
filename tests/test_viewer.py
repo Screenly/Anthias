@@ -237,7 +237,7 @@ def test_view_webpage_latches_off_on_unknown_method(
     rotation skips the D-Bus hop instead of refilling journald."""
     fake_bus = mock.Mock()
     fake_bus.setReloadInterval.side_effect = RuntimeError(
-        "GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: "
+        'GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: '
         "No such method 'setReloadInterval'"
     )
     fake_browser = mock.Mock()
@@ -283,8 +283,7 @@ def test_load_browser_resets_set_reload_interval_capability(
         ):
             viewer_fixtures.u.load_browser()
             assert (
-                viewer_fixtures.u._webview_supports_set_reload_interval
-                is True
+                viewer_fixtures.u._webview_supports_set_reload_interval is True
             )
     finally:
         viewer_fixtures.p_sleep.stop()

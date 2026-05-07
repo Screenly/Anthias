@@ -147,18 +147,14 @@ def _to_dict(obj: Any) -> Any:
         # value would otherwise put the <input type="number" max="...">
         # in :invalid state and block form submission entirely (the
         # operator couldn't save *any* changes). Mirrors the v2 API's
-        # response normalisation in AssetSerializerV2.get_metadata.
+        # response normalisation via the shared clamp helper.
         meta = out.get('metadata')
         if isinstance(meta, dict) and 'refresh_interval_s' in meta:
-            from anthias_server.app.models import REFRESH_INTERVAL_S_MAX
+            from anthias_server.app.models import clamp_refresh_interval
 
-            try:
-                v = int(meta['refresh_interval_s'])
-            except (TypeError, ValueError):
-                v = 0
             meta = dict(meta)
-            meta['refresh_interval_s'] = max(
-                0, min(v, REFRESH_INTERVAL_S_MAX)
+            meta['refresh_interval_s'] = clamp_refresh_interval(
+                meta['refresh_interval_s']
             )
             out['metadata'] = meta
         return out

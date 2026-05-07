@@ -18,6 +18,24 @@ ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 REFRESH_INTERVAL_S_MAX = 86400
 
 
+def clamp_refresh_interval(value: object) -> int:
+    """Coerce an arbitrary ``metadata['refresh_interval_s']`` value to
+    a safe int in ``[0, REFRESH_INTERVAL_S_MAX]``.
+
+    The serializer's write path rejects out-of-range values, but a
+    hand-edited row, a legacy import, or a non-int JSON value could
+    leave junk in the column. Every read site (v2 serializer, edit-
+    modal ``to_json`` filter, viewer ``asset_loop``, page-form
+    handler) funnels through this so the clamp can't drift between
+    them.
+    """
+    try:
+        interval = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(interval, REFRESH_INTERVAL_S_MAX))
+
+
 def generate_asset_id() -> str:
     return uuid.uuid4().hex
 

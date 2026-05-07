@@ -18,7 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
-from anthias_server.app.models import REFRESH_INTERVAL_S_MAX
+from anthias_server.app.models import clamp_refresh_interval
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import (
@@ -539,13 +539,10 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     # the two paths can't drift.
     raw_interval = request.POST.get('refresh_interval_s')
     if raw_interval is not None:
-        try:
-            interval = int(raw_interval.strip() or 0)
-        except ValueError:
-            interval = 0
-        interval = max(0, min(interval, REFRESH_INTERVAL_S_MAX))
         metadata = dict(asset.metadata or {})
-        metadata['refresh_interval_s'] = interval
+        metadata['refresh_interval_s'] = clamp_refresh_interval(
+            raw_interval.strip() or 0
+        )
         asset.metadata = metadata
 
     asset.save()
