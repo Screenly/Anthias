@@ -734,7 +734,11 @@ def test_download_youtube_asset_success_chains_into_normalize_video(
         'title': 'Never Gonna Give You Up',
         'duration': 213,
     }
+    fake_redis = mock.MagicMock()
     with (
+        mock.patch(
+            'anthias_common.utils.connect_to_redis', return_value=fake_redis
+        ),
         mock.patch(
             'anthias_server.app.consumers.notify_asset_update'
         ) as mock_notify,
@@ -755,7 +759,14 @@ def test_download_youtube_asset_success_chains_into_normalize_video(
     assert a.metadata['source'] == 'youtube'
     assert a.metadata['source_url'] == 'https://www.youtube.com/watch?v=abc'
 
+    # Browser-side notify fires so the dashboard picks up the title.
     mock_notify.assert_called_once_with('yt-1')
+    # Viewer reload publish does NOT — the row is still
+    # is_processing=True, so the on-device viewer would just reload
+    # to a row it can't display anyway. The chained
+    # normalize_video_asset publishes the reload once is_processing
+    # clears.
+    fake_redis.publish.assert_not_called()
     mock_dispatch_normalize.assert_called_once_with('yt-1')
 
 

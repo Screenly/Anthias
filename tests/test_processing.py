@@ -1770,7 +1770,32 @@ def test_notify_swallows_notify_errors() -> None:
     ):
         # Should not raise.
         processing._notify('asset-1')
+    # The viewer-reload publish ran first and succeeded; the
+    # subsequent notify failure was caught.
     fake_redis.publish.assert_called_once()
+
+
+def test_notify_browser_only_skips_viewer_reload() -> None:
+    """Intermediate hops that leave is_processing=True (e.g. the
+    YouTube task before chaining into normalize_video) call
+    ``_notify(..., reload_viewer=False)`` so the on-device viewer
+    doesn't reload its playlist for a row that's still mid-flight.
+    The browser-side update still fires so the dashboard picks up
+    the new title/duration immediately."""
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch(
+            'anthias_common.utils.connect_to_redis', return_value=fake_redis
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as browser_notify,
+    ):
+        processing._notify('asset-1', reload_viewer=False)
+    # Viewer publish never happened.
+    fake_redis.publish.assert_not_called()
+    # Browser nudge still went out.
+    browser_notify.assert_called_once_with('asset-1')
 
 
 # ---------------------------------------------------------------------------

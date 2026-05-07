@@ -560,16 +560,20 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     # is still ``is_processing=True``) until normalize_video_asset
     # finishes its pass and clears the flag — at which point the
     # same _notify helper fires again from the normalize task and
-    # the pill drops. Using processing._notify here keeps the YouTube
-    # path on the same publish/notify primitives as the rest of the
-    # pipeline; the previous direct ``r.publish`` + manual import
-    # of notify_asset_update was a near-duplicate of that helper.
+    # the pill drops. ``reload_viewer=False`` keeps this
+    # intermediate hop browser-only: the on-device viewer doesn't
+    # need to reload its playlist for a row that's still in the
+    # processing state, and the chained normalize step's _notify
+    # will publish the reload once the file is final. Saves the
+    # viewer one redundant playlist refresh on every YouTube
+    # upload — meaningful on a Pi 1/Zero where the reload
+    # rebuilds the rotation against the SD card.
     from anthias_server.processing import (
         _notify,
         dispatch_normalize_video,
     )
 
-    _notify(asset_id)
+    _notify(asset_id, reload_viewer=False)
 
     # Hand off to the per-board normalisation pass. This is what
     # gives YouTube downloads the same codec / container guarantees

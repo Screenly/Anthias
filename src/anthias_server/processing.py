@@ -405,15 +405,18 @@ def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
     appears in the diagnostic).
     """
     raw = exc.stderr or b''
+    # Normalise to bytes so both the str-input and bytes-input
+    # paths share the same byte-precise trim. ``sh.ErrorReturnCode``
+    # surfaces stderr as bytes in practice, but the typing on the
+    # sh side is loose — converting once here means a multibyte
+    # character in either branch is bounded by the same byte
+    # budget instead of one branch trimming by characters.
     if isinstance(raw, str):
-        text = raw
-        if len(text.encode('utf-8')) > _STDERR_TAIL_BYTES:
-            text = '…' + text[-_STDERR_TAIL_BYTES:]
-        return text.strip()
+        raw = raw.encode('utf-8', errors='replace')
     if len(raw) > _STDERR_TAIL_BYTES:
         # ``errors='replace'`` covers the case where the byte trim
-        # cuts a multibyte UTF-8 sequence in half — the half-byte is
-        # rendered as the replacement character rather than crashing.
+        # cuts a multibyte UTF-8 sequence in half — the half-byte
+        # renders as the replacement character rather than crashing.
         return (
             '…'
             + raw[-_STDERR_TAIL_BYTES:]
@@ -444,25 +447,41 @@ def _set_processing_error(asset_id: str, message: str) -> None:
     )
 
 
-def _notify(asset_id: str) -> None:
-    """Browser + viewer refresh nudge after a successful normalisation.
+def _notify(asset_id: str, *, reload_viewer: bool = True) -> None:
+    """Browser refresh nudge, plus optional viewer playlist reload.
 
-    Same trigger every other write path uses (see
-    ``probe_video_duration`` / ``download_youtube_asset``). The
-    publisher and notifier are imported lazily so this module stays
-    importable from contexts that don't carry the Channels / Redis
-    runtime (test collection on hosts without those wired up).
+    Two notification kinds, both best-effort:
+
+    * **Browser** — ``notify_asset_update`` posts to the dashboard
+      WebSocket so the operator's table picks up the new
+      title/duration/state without waiting for the 5s poll. Always
+      fires.
+    * **Viewer** — Redis-publish ``anthias.viewer:reload`` so the
+      on-device viewer reloads its playlist. Only fires when the
+      row has reached its terminal state — i.e. ``is_processing``
+      just cleared and the file at ``Asset.uri`` is the one the
+      viewer should play. Setting ``reload_viewer=False`` lets
+      intermediate hops (e.g. ``download_youtube_asset`` writing
+      the title before chaining into ``normalize_video_asset``)
+      update the dashboard without churning the viewer through a
+      reload it's only going to do again moments later.
+
+    The publisher and notifier are imported lazily so this module
+    stays importable from contexts that don't carry the Channels /
+    Redis runtime (test collection on hosts without those wired up).
     """
-    from anthias_common.utils import connect_to_redis
     from anthias_server.app.consumers import notify_asset_update
 
-    try:
-        connect_to_redis().publish('anthias.viewer', 'reload')
-    except Exception:
-        # The viewer poll picks up the change ~1 tick later; a Redis
-        # flake here doesn't block the operator from seeing the new
-        # asset.
-        logging.exception('normalize task: viewer reload publish failed')
+    if reload_viewer:
+        from anthias_common.utils import connect_to_redis
+
+        try:
+            connect_to_redis().publish('anthias.viewer', 'reload')
+        except Exception:
+            # The viewer poll picks up the change ~1 tick later; a
+            # Redis flake here doesn't block the operator from
+            # seeing the new asset.
+            logging.exception('normalize task: viewer reload publish failed')
     try:
         notify_asset_update(asset_id)
     except Exception:
