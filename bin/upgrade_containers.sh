@@ -25,10 +25,20 @@ if [[ ! "$MODE" =~ ^(pull|build)$ ]]; then
     exit 1
 fi
 
-# The `getmac` module might exit with non-zero exit code if no MAC address is found.
-set +e
-export MAC_ADDRESS=`${HOME}/installer_venv/bin/python -m getmac`
-set -e
+# Host MAC of the interface carrying the default route — used as the
+# device identifier (exposed via /api/v2/ and the admin UI). The
+# container only sees its own veth on the docker bridge, so we resolve
+# this on the host and inject it via the MAC_ADDRESS env var below.
+# Empty when no default route is published (e.g. install behind a
+# captive portal); the in-container fallback in
+# anthias_common/utils.py:_detect_local_mac then picks whatever the
+# container can see.
+DEFAULT_IFACE=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
+if [ -n "$DEFAULT_IFACE" ]; then
+    export MAC_ADDRESS=$(cat "/sys/class/net/${DEFAULT_IFACE}/address" 2>/dev/null || echo '')
+else
+    export MAC_ADDRESS=''
+fi
 
 if [ -z "$DOCKER_TAG" ]; then
     export DOCKER_TAG="latest"

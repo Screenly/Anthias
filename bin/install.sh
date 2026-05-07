@@ -16,6 +16,22 @@ ARCHITECTURE=$(uname -m)
 # Pin uv to match docker/uv-builder.j2 so host and image use the same binary.
 UV_PIN_VERSION="0.9.17"
 
+# Ephemeral install-time venv for ansible-core + the host-group deps.
+# Created in install_ansible(), torn down by the EXIT trap below — the
+# venv has no runtime role, so there's no reason to leave 100+ MB of
+# Python state in $HOME after the playbook finishes. Earlier releases
+# kept it at /home/$USER/installer_venv, which deserved a heuristic to
+# detect and replace pre-uv layouts; with the venv ephemeral, that's no
+# longer needed.
+INSTALLER_VENV=""
+
+cleanup_installer_venv() {
+    if [ -n "${INSTALLER_VENV}" ] && [ -d "${INSTALLER_VENV}" ]; then
+        rm -rf "${INSTALLER_VENV}"
+    fi
+}
+trap cleanup_installer_venv EXIT
+
 INTRO_MESSAGE=(
     "Anthias runs on a dedicated Raspberry Pi (2/3/4-64-bit/5) or x86 device."
     "The host will be repurposed for digital signage — on a Pi you lose the"
@@ -208,23 +224,18 @@ function install_ansible() {
     fi
     export PATH="$HOME/.local/bin:$PATH"
 
-    # On upgrade from a pre-uv install, replace any installer_venv that
-    # was built by `python3 -m venv` so uv can take it over cleanly.
-    local INSTALLER_VENV="/home/${USER}/installer_venv"
-    if [ -d "${INSTALLER_VENV}" ] && \
-        ! grep -q '^uv = ' "${INSTALLER_VENV}/pyvenv.cfg" 2>/dev/null; then
-        rm -rf "${INSTALLER_VENV}"
-    fi
-
-    # Resolve and install the `host` dependency group from pyproject.toml.
-    # `--python ">=3.13"` matches pyproject.toml's requires-python pin —
-    # Trixie ships 3.13 by default, so the installer just picks up the
-    # system interpreter on supported hosts. Older Debian releases
-    # (Bookworm = 3.11) are no longer supported on the host.
+    # Provision the venv in a fresh tmpdir each run so a previous
+    # install's interpreter/layout can never collide with this one.
+    # Earlier releases pinned a constraint here (`--python ">=3.13"`)
+    # which uv resolves to the latest matching managed interpreter — on
+    # Bookworm that picked 3.14, while pyproject's `.python-version`
+    # asks for 3.13, and the disagreement triggered a tear-down on
+    # every subsequent `uv sync` (Fixes #2842). Letting `.python-version`
+    # be the single source of truth keeps both invocations aligned.
+    INSTALLER_VENV=$(mktemp -d -t anthias-installer-venv.XXXXXX)
     UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
-            --python ">=3.13" \
             --no-default-groups \
             --group host \
             --no-install-project
@@ -272,11 +283,15 @@ function run_ansible_playbook() {
     fi
 
     # Point Ansible at the venv's Python — we no longer install
-    # python3 system-wide in the bootstrap step.
-    export ANSIBLE_PYTHON_INTERPRETER="/home/${USER}/installer_venv/bin/python"
+    # python3 system-wide in the bootstrap step. Both this and the
+    # ansible-playbook path interpolate INSTALLER_VENV at parse time, so
+    # the literal tmpdir path crosses the sudo boundary as the argv —
+    # no env-forwarding gymnastics needed beyond -E preserving
+    # ANSIBLE_PYTHON_INTERPRETER itself.
+    export ANSIBLE_PYTHON_INTERPRETER="${INSTALLER_VENV}/bin/python"
 
     sudo -E -u "${USER}" \
-        "/home/${USER}/installer_venv/bin/ansible-playbook" \
+        "${INSTALLER_VENV}/bin/ansible-playbook" \
         site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
 }
 

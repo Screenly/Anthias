@@ -287,12 +287,14 @@ def get_node_mac_address() -> str:
         return 'Unknown'
 
     # MAC_ADDRESS is injected by bin/upgrade_containers.sh on production
-    # installs (host MAC, not the container veth). When that env var
-    # isn't set — dev `docker-compose.dev.yml` doesn't define it, and
-    # operators running the prebuilt images standalone may miss it too
-    # — fall back to detecting whatever MAC is reachable from inside
-    # the container via the getmac package. That's the best signal we
-    # have without --net=host, and it beats showing 'Unable to retrieve'.
+    # installs (host MAC of the default-route iface, read from
+    # /sys/class/net on the host — the container only sees its own
+    # veth on the docker bridge). When that env var isn't set — dev
+    # `docker-compose.dev.yml` doesn't define it, and operators running
+    # the prebuilt images standalone may miss it too — fall back to
+    # detecting whatever MAC is reachable from inside the container.
+    # That's the best signal we have without --net=host, and it beats
+    # showing 'Unable to retrieve'.
     env_value = os.getenv('MAC_ADDRESS')
     if env_value:
         return env_value
