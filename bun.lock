@@ -6,7 +6,7 @@
       "name": "anthias",
       "dependencies": {
         "@fontsource/plus-jakarta-sans": "^5.2.8",
-        "@tabler/icons-webfont": "^3.41.1",
+        "@tabler/icons-webfont": "^3.43.0",
         "alpinejs": "^3.15.12",
         "flatpickr": "^4.6.13",
         "htmx.org": "^2.0.10",
@@ -73,9 +73,9 @@
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
-    "@tabler/icons": ["@tabler/icons@3.41.1", "", {}, "sha512-OaRnVbRmH2nHtFeg+RmMJ/7m2oBIF9XCJAUD5gQnMrpK9f05ydj8MZrAf3NZQqOXyxGN1UBL0D5IKLLEUfr74Q=="],
+    "@tabler/icons": ["@tabler/icons@3.43.0", "", {}, "sha512-qXwS17Op9jqr3Asvu31fejyw8+OnRDKH7oR8nQXyUgW1pI44ET8OKG9kssy+XIvvAIyej6gZdGmviNUn1VMfPw=="],
 
-    "@tabler/icons-webfont": ["@tabler/icons-webfont@3.41.1", "", { "dependencies": { "@tabler/icons": "3.41.1", "svg-path-commander": "^2.1.11", "svgtofont": "^6.5.0" } }, "sha512-XPbuQ1KR3HsK9mnMgW8NHNHbzfS85UVwDRkLT3D8I2TaiDkxpm835yHEx7SuwDcZqy263y0C8jORpKApZi4Kiw=="],
+    "@tabler/icons-webfont": ["@tabler/icons-webfont@3.43.0", "", { "dependencies": { "@tabler/icons": "3.43.0", "svg-path-commander": "^2.1.11", "svgtofont": "^6.5.0" } }, "sha512-5gk7Mp5a4FwMEBqCcNRqtEwN+RX0H/eqyjOWxHmtDgGsaMhN/swnMj4DCYsCNn4TO/3GnPGiuLDjDGZOeQg+OQ=="],
 
     "@tailwindcss/cli": ["@tailwindcss/cli@4.2.4", "", { "dependencies": { "@parcel/watcher": "^2.5.1", "@tailwindcss/node": "4.2.4", "@tailwindcss/oxide": "4.2.4", "enhanced-resolve": "^5.19.0", "mri": "^1.2.0", "picocolors": "^1.1.1", "tailwindcss": "4.2.4" }, "bin": { "tailwindcss": "dist/index.mjs" } }, "sha512-e87GGhuXxnyQPyA0TS8an/3wNpj+OUmx8u0F4BicYr48TF72032AIu5917rRYaWm7HorXi3GSZ/uG+ohqP6AKA=="],
 
