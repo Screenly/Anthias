@@ -144,6 +144,9 @@ docker compose exec anthias-server python manage.py createsuperuser
 ### Qt/C++ (WebView)
 - Use macros for Qt5/Qt6 cross-version compatibility
 
+### Django templates
+- `{# … #}` only comments out a single line. Anything that wraps to the next line renders verbatim in the page. Use `{% comment %}…{% endcomment %}` for any comment that does not fit on one line.
+
 ## API Versions
 
 The REST API has multiple versions at `/api/v1/`, `/api/v1.1/`, `/api/v1.2/`, and `/api/v2/`. The v2 API (in `api/views/v2.py`) is the current primary API using DRF with drf-spectacular for OpenAPI schema generation.
