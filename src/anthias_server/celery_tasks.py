@@ -9,6 +9,7 @@ from typing import Any
 import django
 import sh
 from celery import Celery, Task
+from PIL import UnidentifiedImageError
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 django.setup()
@@ -785,32 +786,38 @@ NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
     base=processing._NormalizeAssetTask,
     time_limit=300,
     autoretry_for=(OSError,),
-    # ``FileNotFoundError`` is-a ``OSError`` so the autoretry_for
-    # filter would catch it — but a missing source file isn't a
-    # transient condition; retrying just keeps the row in
-    # ``is_processing=True`` longer before the inevitable
-    # ``on_failure`` lands. Excluding it here lets the on_failure
-    # path write ``metadata.error_message`` immediately.
-    dont_autoretry_for=(FileNotFoundError,),
+    # Two OSError subclasses are permanent and must NOT trigger a
+    # retry — they'd just keep the row in ``is_processing=True``
+    # longer before the inevitable on_failure lands:
+    #   * ``FileNotFoundError`` — source file gone between row
+    #     creation and pickup (cleanup raced operator, disk pressure).
+    #   * ``UnidentifiedImageError`` — Pillow decoded the header far
+    #     enough to refuse the file (corrupt HEIC, truncated TIFF,
+    #     mis-typed extension). It inherits from OSError so the
+    #     autoretry_for filter would otherwise sweep it up; listing
+    #     it explicitly here makes the failure surface immediately.
+    dont_autoretry_for=(FileNotFoundError, UnidentifiedImageError),
     retry_backoff=10,
     retry_backoff_max=300,
     retry_jitter=True,
     max_retries=2,
 )
 def normalize_image_asset(asset_id: str) -> None:
-    """Convert HEIC / HEIF / TIFF uploads to lossless WebP.
+    """Convert every extension in
+    ``processing.NORMALIZE_IMAGE_EXTS`` (HEIC / HEIF / TIFF / BMP /
+    ICO / TGA / JPEG 2000 family / AVIF) to lossless WebP.
 
     No-ops if the row is missing or has already been finalised
     (duplicate task fire / operator-edited row). Permanent decode
     failures (corrupt HEIC) raise so ``_NormalizeAssetTask.on_failure``
     writes ``metadata.error_message`` and clears ``is_processing``.
 
-    Retries on OSError covers transient disk pressure / a temporary
-    libheif read hiccup; Pillow's UnidentifiedImageError is permanent
-    and lands directly on on_failure. ``FileNotFoundError`` (source
-    file gone between row creation and pickup) is excluded from
-    autoretry — see the ``dont_autoretry_for`` rationale on the
-    decorator.
+    Retries on OSError cover transient disk pressure / a temporary
+    libheif read hiccup. Two OSError subclasses are excluded from
+    autoretry via ``dont_autoretry_for`` because they're permanent:
+    ``FileNotFoundError`` (source file gone) and Pillow's
+    ``UnidentifiedImageError`` (corrupt input). See the decorator's
+    inline comment for the rationale.
     """
     asset = processing._row_or_none(asset_id)
     if asset is None:

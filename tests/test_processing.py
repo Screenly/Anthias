@@ -1412,15 +1412,21 @@ def test_normalize_image_asset_celery_no_op_when_row_missing() -> None:
     run.assert_not_called()
 
 
-def test_normalize_tasks_exclude_filenotfounderror_from_autoretry() -> None:
+def test_normalize_tasks_exclude_permanent_oserrors_from_autoretry() -> None:
     """Both normalisation tasks have ``autoretry_for=(OSError,)`` so a
-    transient disk hiccup is retried automatically. ``FileNotFoundError``
-    is-a ``OSError`` so the autoretry filter would otherwise catch it
-    too — but a missing source file is permanent, and retrying just
-    delays the on_failure that writes ``metadata.error_message``.
-    Confirm both tasks were registered with
-    ``dont_autoretry_for=(FileNotFoundError,)`` so the exclusion is
-    in effect at celery-config time.
+    transient disk hiccup is retried automatically. Several OSError
+    subclasses are permanent and must be excluded so they land on
+    on_failure immediately:
+
+      * ``FileNotFoundError`` — source file disappeared between row
+        creation and pickup.
+      * ``UnidentifiedImageError`` (image task only) — Pillow refused
+        to decode the file. Inherits from OSError, so without the
+        explicit exclusion the autoretry filter would sweep it up.
+
+    Confirms the exclusions are in effect at celery-config time so a
+    future change to the decorators can't silently regress the
+    immediate-fail contract.
     """
     from anthias_server.celery_tasks import (
         normalize_image_asset,
@@ -1443,6 +1449,16 @@ def test_normalize_tasks_exclude_filenotfounderror_from_autoretry() -> None:
             f'{task.name} expected dont_autoretry_for to include '
             f'FileNotFoundError so missing-source raises immediately'
         )
+
+    # Image task additionally excludes UnidentifiedImageError (Pillow
+    # only — video has no Pillow path).
+    assert UnidentifiedImageError in tuple(
+        getattr(normalize_image_asset, 'dont_autoretry_for', ())
+    ), (
+        'normalize_image_asset expected dont_autoretry_for to include '
+        'UnidentifiedImageError so corrupt-image raises immediately '
+        '(it inherits from OSError)'
+    )
 
 
 @pytest.mark.django_db
