@@ -2,9 +2,16 @@
 
 Two tasks under test:
 
-* ``normalize_image_asset`` — HEIC / HEIF / TIFF → lossless WebP.
-* ``normalize_video_asset`` — passthrough or libx264 transcode driven
-  by an ffprobe call against the source.
+* ``normalize_image_asset`` — every extension in
+  ``NORMALIZE_IMAGE_EXTS`` (HEIC / HEIF / TIFF / BMP / ICO / TGA /
+  JPEG 2000 family / AVIF) → lossless WebP. JPEG / PNG / WebP / GIF
+  / SVG short-circuit through the no-op branch.
+* ``normalize_video_asset`` — passthrough or transcode driven by an
+  ffprobe call against the source. Transcode target depends on the
+  board profile resolved from ``DEVICE_TYPE``: libx264 on legacy Pi
+  2 / Pi 3 (no HEVC hardware), libx265 + ``-tag:v hvc1`` on Pi 4-64
+  / Pi 5 / x86. The grid lives in ``processing._BOARD_PROFILES``
+  and is exercised end-to-end by the per-board parametrised tests.
 
 Fixtures are generated programmatically (Pillow + ffmpeg) so the test
 suite is self-contained — no checked-in binary blobs to drift, and
@@ -19,8 +26,8 @@ Tests deliberately exercise the underlying helper functions
 than the celery wrappers — the wrappers are thin enough that calling
 ``.run()`` would just retest the same code path while bringing
 celery's eager-mode plumbing into scope. The wrapper-side guarantees
-(``Task.on_failure`` clearing ``is_processing``) get their own
-dedicated tests below.
+(``Task.on_failure`` clearing ``is_processing``, autoretry config)
+get their own dedicated tests below.
 """
 
 from __future__ import annotations

@@ -2,9 +2,15 @@
 
 Two Celery tasks that run on every fresh upload:
 
-* ``normalize_image_asset`` — converts HEIC / HEIF / TIFF to lossless
-  WebP via Pillow + pillow-heif. The Qt webview only ever needs to
-  render formats it can already display.
+* ``normalize_image_asset`` — converts every extension in
+  ``NORMALIZE_IMAGE_EXTS`` (HEIC / HEIF / TIFF / BMP / ICO / TGA /
+  JPEG 2000 family / AVIF) to lossless WebP via Pillow (+ pillow-heif
+  for the HEIF family). The Qt webview only ever needs to render
+  formats it can already display, and storage on the device's SD
+  card is the load-bearing concern for the uncompressed sources
+  (BMP especially). JPEG / PNG / WebP / GIF / SVG short-circuit
+  through the no-op branch — they're already viewer-friendly *and*
+  well-compressed.
 * ``normalize_video_asset`` — probes the upload's container/codec with
   ffprobe and either passes it through (rename only) or transcodes
   with ffmpeg's ``-threads 2`` to a board-appropriate codec: libx264
@@ -273,7 +279,12 @@ NORMALIZE_IMAGE_EXTS = frozenset(
 
 
 def needs_image_normalisation(uri_or_filename: str) -> bool:
-    """``True`` for HEIC/HEIF/TIFF uploads.
+    """``True`` if the upload's extension is in ``NORMALIZE_IMAGE_EXTS``.
+
+    The set covers HEIC / HEIF / TIFF / BMP / ICO / TGA / JPEG 2000
+    family / AVIF — everything the pipeline knows how to convert to
+    lossless WebP. Already-viewer-friendly formats (JPEG / PNG / WebP
+    / GIF / SVG) return ``False`` and skip the Celery hop entirely.
 
     Covers both raw filenames (``foo.HEIC``) and the staged-upload
     URIs ``CreateAssetSerializerMixin`` writes (``<assetdir>/<id>.tif``).
