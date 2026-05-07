@@ -228,18 +228,34 @@ def test_view_webpage_default_zero_interval(
     fake_bus.setReloadInterval.assert_called_once_with(0)
 
 
-def test_view_webpage_latches_off_on_unknown_method(
+@pytest.mark.parametrize(
+    'error_message,expected_call_count',
+    [
+        # An older AnthiasWebview without setReloadInterval raises
+        # UnknownMethod — viewer must latch the capability flag off
+        # so the next rotation skips the D-Bus hop instead of
+        # refilling journald.
+        (
+            'GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: '
+            "No such method 'setReloadInterval'",
+            1,
+        ),
+        # Transient D-Bus error (bus disconnect, timeout, race during
+        # webview restart) must NOT permanently disable auto-refresh:
+        # the method exists, the call just failed once. Next rotation
+        # retries and the warning is debug-level so journald isn't
+        # flooded.
+        ('Connection closed by peer', 2),
+    ],
+    ids=['unknown-method-latches', 'transient-error-retries'],
+)
+def test_view_webpage_setreloadinterval_failure_modes(
     viewer_fixtures: _ViewerFixtures,
+    error_message: str,
+    expected_call_count: int,
 ) -> None:
-    """An older AnthiasWebview without ``setReloadInterval`` raises
-    a UnknownMethod D-Bus error. The viewer must catch it, keep
-    playing the page, AND latch the capability flag so the next
-    rotation skips the D-Bus hop instead of refilling journald."""
     fake_bus = mock.Mock()
-    fake_bus.setReloadInterval.side_effect = RuntimeError(
-        'GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: '
-        "No such method 'setReloadInterval'"
-    )
+    fake_bus.setReloadInterval.side_effect = RuntimeError(error_message)
     fake_browser = mock.Mock()
     fake_browser.is_alive.return_value = True
 
@@ -256,7 +272,7 @@ def test_view_webpage_latches_off_on_unknown_method(
         viewer_fixtures.u.view_webpage('https://example.com', 30)
         viewer_fixtures.u.view_webpage('https://example.com', 60)
 
-    assert fake_bus.setReloadInterval.call_count == 1
+    assert fake_bus.setReloadInterval.call_count == expected_call_count
 
 
 def test_load_browser_resets_set_reload_interval_capability(
@@ -288,39 +304,6 @@ def test_load_browser_resets_set_reload_interval_capability(
     finally:
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
-
-
-def test_view_webpage_does_not_latch_off_on_transient_dbus_error(
-    viewer_fixtures: _ViewerFixtures,
-) -> None:
-    """A transient D-Bus error (bus disconnect, timeout, race during
-    webview restart) must NOT permanently disable auto-refresh: the
-    method exists, the call just failed once. Next rotation should
-    retry, and the warning lands at debug level so journald isn't
-    flooded."""
-    fake_bus = mock.Mock()
-    fake_bus.setReloadInterval.side_effect = RuntimeError(
-        'Connection closed by peer'
-    )
-    fake_browser = mock.Mock()
-    fake_browser.is_alive.return_value = True
-
-    with (
-        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
-        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
-        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
-        mock.patch.object(
-            viewer_fixtures.u,
-            '_webview_supports_set_reload_interval',
-            True,
-        ),
-    ):
-        viewer_fixtures.u.view_webpage('https://example.com', 30)
-        viewer_fixtures.u.view_webpage('https://example.com', 60)
-
-    # Both rotations attempted setReloadInterval — capability NOT
-    # latched off.
-    assert fake_bus.setReloadInterval.call_count == 2
 
 
 def test_view_webpage_resets_interval_on_unchanged_url(

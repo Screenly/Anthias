@@ -340,28 +340,21 @@ def test_v2_patch_refresh_interval_round_trips(
 
 
 @pytest.mark.django_db
-def test_v2_patch_negative_refresh_interval_rejected(
-    api_client: APIClient, v2_asset_detail_url: str
+@pytest.mark.parametrize(
+    'value',
+    [-1, 86401],
+    ids=['negative', 'over-24h-cap'],
+)
+def test_v2_patch_refresh_interval_out_of_range_rejected(
+    api_client: APIClient, v2_asset_detail_url: str, value: int
 ) -> None:
+    """Both bounds of the documented 0..REFRESH_INTERVAL_S_MAX range
+    must 400 on write. ``-1`` is the just-below-zero case; ``86401``
+    catches the typo (operator entered milliseconds, etc.) that the
+    24h cap exists to prevent."""
     response = api_client.patch(
         v2_asset_detail_url,
-        data={'refresh_interval_s': -1},
-        format='json',
-    )
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert 'refresh_interval_s' in response.data
-
-
-@pytest.mark.django_db
-def test_v2_patch_refresh_interval_over_cap_rejected(
-    api_client: APIClient, v2_asset_detail_url: str
-) -> None:
-    """24h cap (REFRESH_INTERVAL_S_MAX = 86400) — anything above is a
-    typo (operator entered milliseconds, etc.) and should fail
-    validation rather than persist a value the viewer would honour."""
-    response = api_client.patch(
-        v2_asset_detail_url,
-        data={'refresh_interval_s': 86401},
+        data={'refresh_interval_s': value},
         format='json',
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
