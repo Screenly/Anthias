@@ -565,10 +565,20 @@ def test_image_pipeline_clears_prior_error(asset_dir: str) -> None:
 @pytest.mark.django_db
 def test_set_processing_error_writes_metadata(asset_dir: str) -> None:
     """Direct test of the failure-state contract: error message
-    persisted, is_processing cleared, prior metadata preserved."""
-    asset = _make_processing_asset(
-        'img-err',
-        path.join(asset_dir, 'broken.tiff'),
+    persisted, is_processing cleared, prior metadata preserved,
+    and the row disabled so the viewer's scheduler can't pick up
+    a known-bad asset."""
+    asset = Asset.objects.create(
+        asset_id='img-err',
+        name='img-err',
+        uri=path.join(asset_dir, 'broken.tiff'),
+        mimetype='image',
+        duration=10,
+        # Row was active before the failure (the operator enabled it
+        # at create time). The error path must flip is_enabled too.
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
         metadata={'original_ext': '.tiff'},
     )
     processing._set_processing_error(asset.asset_id, 'libheif: bad input')
@@ -578,6 +588,11 @@ def test_set_processing_error_writes_metadata(asset_dir: str) -> None:
     assert asset.metadata['error_message'] == 'libheif: bad input'
     # Earlier metadata keys are merged, not stomped on.
     assert asset.metadata['original_ext'] == '.tiff'
+    # Row disabled: the viewer's scheduling.generate_asset_list
+    # filters on is_enabled+date, not metadata.error_message — so
+    # without this flip a failed conversion would still get queued
+    # for playback even though the file at uri is unplayable.
+    assert asset.is_enabled is False
 
 
 # ---------------------------------------------------------------------------

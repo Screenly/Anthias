@@ -255,13 +255,44 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # UploadedFile.content_type (the browser's own header) → the
     # filename extension as last resort. Once any step yields
     # image/* or video/*, take it; otherwise reject.
+    from anthias_server.processing import NORMALIZE_IMAGE_EXTS
+
+    client_type = (getattr(file_upload, 'content_type', '') or '').lower()
     file_type = guess_type(upload_name)[0] or ''
+
+    # Misnamed-file upgrade: if the operator renamed a HEIC to
+    # ``photo.jpg`` (or any normalisable format to a passthrough
+    # extension), ``guess_type`` returns the lying mime
+    # ``image/jpeg`` and the file would be saved as ``.jpg``,
+    # bypassing the normalise pipeline and silently failing to
+    # render. Cross-check the browser's Content-Type: when *it*
+    # advertises a subtype that maps to a NORMALIZE_IMAGE_EXTS
+    # extension (and the top-level matches), trust the browser.
+    # The browser typically sniffs based on actual file bytes, so
+    # it sees through the rename. Only upgrades — never downgrades
+    # — to avoid the inverse case (a JPEG with a .heic extension
+    # the browser somehow tagged as image/jpeg) accidentally
+    # routing into the pipeline.
+    if (
+        client_type
+        and file_type
+        and client_type.split('/')[0] == file_type.split('/')[0]
+        and client_type != file_type
+    ):
+        client_subtype = client_type.split('/', 1)[1]
+        client_ext = f'.{client_subtype}'
+        guessed_ext = (guess_extension(file_type) or '').lower()
+        if (
+            client_ext in NORMALIZE_IMAGE_EXTS
+            and guessed_ext not in NORMALIZE_IMAGE_EXTS
+        ):
+            file_type = client_type
+
     if file_type.split('/')[0] not in ('image', 'video'):
         # ``UploadedFile.content_type`` is the Content-Type the browser
         # sent in the multipart request. Modern browsers tag HEIC /
         # HEIF / TIFF correctly even when the host's mimetypes DB
         # doesn't carry the entry, so this catches the common case.
-        client_type = (getattr(file_upload, 'content_type', '') or '').lower()
         if client_type.split('/')[0] in ('image', 'video'):
             file_type = client_type
         else:
@@ -271,8 +302,6 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             # full set the upload pipeline knows how to convert). The
             # latter is a single source of truth, so adding a new
             # normalisable format only touches one place.
-            from anthias_server.processing import NORMALIZE_IMAGE_EXTS
-
             ext = path.splitext(upload_name)[1].lower()
             image_exts = {
                 '.jpg',

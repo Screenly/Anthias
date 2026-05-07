@@ -800,6 +800,53 @@ def test_assets_upload_extensionless_heic_falls_back_to_mime_subtype(
 
 
 @pytest.mark.django_db
+def test_assets_upload_misnamed_heic_uses_browser_content_type(
+    client: Client,
+) -> None:
+    """If the operator renames a HEIC to ``photo.jpg`` and uploads,
+    ``mimetypes.guess_type('photo.jpg')`` returns ``image/jpeg`` and
+    the file would otherwise be saved as ``.jpg`` — bypassing the
+    normalise pipeline. Modern browsers sniff the actual file
+    bytes and tag the upload with the correct ``image/heic``
+    Content-Type, though, so the upload view cross-checks the
+    browser's tag and upgrades the classification when it points
+    at a normalisable subtype. Asserts the file lands as ``.heic``
+    with the normalise task dispatched."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                # Filename ends in .jpg; browser sniffed the bytes
+                # and tagged Content-Type accurately.
+                'file_upload': SimpleUploadedFile(
+                    'photo.jpg',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    # Browser's image/heic Content-Type wins over the lying
+    # filename — the file lands with the correct extension and
+    # the normalise pipeline is dispatched.
+    assert created.uri and created.uri.endswith('.heic')
+    assert created.is_processing is True
+    image_delay.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
 def test_assets_upload_jpeg_skips_normalization(client: Client) -> None:
     """JPEG / PNG / WebP uploads land ready-to-play — no Celery hop."""
     from django.core.files.uploadedfile import SimpleUploadedFile

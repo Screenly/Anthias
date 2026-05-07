@@ -442,8 +442,19 @@ def _set_processing_error(asset_id: str, message: str) -> None:
         return
     metadata = dict(asset.metadata or {})
     metadata['error_message'] = message
+    # Disable the row alongside clearing is_processing. The viewer's
+    # scheduling.generate_asset_list filters on ``is_enabled`` + date
+    # window only — it doesn't check ``metadata.error_message`` —
+    # so without flipping is_enabled here, a failed conversion would
+    # still get queued for playback even though the file at
+    # ``Asset.uri`` is the unconverted (and likely unplayable)
+    # original. The operator can re-enable from the dashboard once
+    # they've fixed or replaced the upload; the new "Failed" pill
+    # in _asset_row.html replaces the active toggle anyway, so the
+    # operator notices before they re-enable.
     Asset.objects.filter(asset_id=asset_id).update(
         is_processing=False,
+        is_enabled=False,
         metadata=metadata,
     )
 
