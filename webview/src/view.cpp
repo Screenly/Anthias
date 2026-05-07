@@ -391,9 +391,9 @@ void View::setReloadInterval(int seconds)
     // actually visible — a load is in flight when ``pageLoadConnection``
     // is set, in which case currentWebView is still the *previous*
     // page and arming now would race the swap and reload the wrong
-    // page (Copilot review, PR #2841). When no load is pending — the
-    // common URL-unchanged-since-last-tick case where the viewer
-    // skips loadPage() — arm immediately. ``seconds`` is clamped to
+    // page. When no load is pending — the common
+    // URL-unchanged-since-last-tick case where the viewer skips
+    // loadPage() — arm immediately. ``seconds`` is clamped to
     // [0, kMaxReloadIntervalS] to defend against int-overflow on the
     // millisecond multiplication done at arm time.
     if (seconds <= 0) {

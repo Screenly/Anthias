@@ -110,12 +110,12 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
         # on GET; the field is itself written from UpdateAssetSerializerV2
         # back into metadata. Default 0 = no auto-refresh, mirroring the
         # viewer's handling for assets without the key set. Clamp both
-        # bounds on read (per Copilot): the serializer's write path
-        # rejects out-of-range values, but a hand-edited row or a legacy
-        # import could leave a junk value in there. Surfacing it as-is
-        # would contradict the documented 0..REFRESH_INTERVAL_S_MAX
-        # contract and could let a client UI display / accept a value
-        # the next PATCH would 400 on.
+        # bounds on read: the serializer's write path rejects out-of-
+        # range values, but a hand-edited row or a legacy import could
+        # leave a junk value in there. Surfacing it as-is would
+        # contradict the documented 0..REFRESH_INTERVAL_S_MAX contract
+        # and could let a client UI display / accept a value the next
+        # PATCH would 400 on.
         value = (obj.metadata or {}).get('refresh_interval_s', 0)
         try:
             interval = int(value)

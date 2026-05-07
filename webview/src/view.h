@@ -69,7 +69,7 @@ private:
     // immediately would target the still-visible *previous* page via
     // currentWebView->reload(). We instead remember the value here and
     // arm the timer in switchToNextWebView() once the new page is
-    // actually visible. Per Copilot review on PR #2841.
+    // actually visible.
     int pendingReloadIntervalS;
     void stopReloadTimer();
     void armReloadTimer();

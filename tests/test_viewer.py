@@ -236,7 +236,7 @@ def test_view_webpage_falls_back_when_setreloadinterval_unsupported(
     D-Bus slot — calling it raises and would otherwise abort the
     asset_loop, taking the screen down. The viewer must catch and
     keep playing the page without auto-refresh, matching the old
-    no-auto-refresh behaviour. Per Copilot review (round 2)."""
+    no-auto-refresh behaviour."""
     fake_bus = mock.Mock()
     fake_bus.setReloadInterval.side_effect = RuntimeError(
         'no such D-Bus method'

@@ -417,7 +417,7 @@ def test_v2_get_clamps_out_of_range_refresh_interval(
     metadata. GET should clamp to the documented 0..86400 contract
     rather than echo whatever's in the column — a UI that round-tripped
     the raw value would let the operator save a value the next PATCH
-    would 400 on. Per Copilot review (rounds 1 and 2)."""
+    would 400 on."""
     from anthias_server.app.models import Asset
 
     asset_id = v2_asset_detail_url.rstrip('/').rsplit('/', 1)[-1]
