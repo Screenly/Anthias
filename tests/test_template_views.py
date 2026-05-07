@@ -105,6 +105,54 @@ def test_asset_table_partial(client: Client, asset: Asset) -> None:
     assert (asset.name or '') in response.content.decode()
 
 
+@pytest.mark.django_db
+def test_asset_row_renders_error_pill_when_processing_failed(
+    client: Client,
+) -> None:
+    """A row whose normalisation task failed (metadata.error_message
+    populated, is_processing cleared) renders the warn-coloured
+    "Failed" pill in place of the active toggle. The full error
+    message rides along on the title attribute so the operator can
+    hover for context without a separate modal."""
+    Asset.objects.create(
+        asset_id='asset-failed',
+        name='broken upload',
+        uri='/data/anthias_assets/asset-failed.heic',
+        mimetype='image',
+        duration=10,
+        is_enabled=False,
+        is_processing=False,
+        play_order=0,
+        metadata={'error_message': 'UnidentifiedImageError: bad header'},
+    )
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'error-pill' in body
+    # The hover-tooltip carries the full message verbatim.
+    assert 'UnidentifiedImageError: bad header' in body
+    # The active toggle and the in-progress pill must NOT be rendered
+    # for this row — the error pill replaces them both.
+    assert 'asset-failed' in body
+    # processing-pill belongs to in-flight rows, not failed ones.
+    assert (
+        body.count('processing-pill') == 0
+        or 'asset-failed' not in body.split('processing-pill', 1)[0][-200:]
+    )
+
+
+@pytest.mark.django_db
+def test_asset_row_no_error_pill_when_metadata_clean(
+    client: Client, asset: Asset
+) -> None:
+    """The vanilla happy-path row (no metadata, not processing) shows
+    the active-toggle, not the error pill."""
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert 'error-pill' not in body
+    assert 'activity-toggle' in body
+
+
 # ---------------------------------------------------------------------------
 # Page-context helpers — lightweight unit tests that bypass the HTTP
 # layer so coverage of the tiny pure-Python functions doesn't depend on
@@ -567,17 +615,20 @@ def test_prettify_upload_name(raw: str, expected: str) -> None:
 
 
 @pytest.mark.django_db
-def test_assets_upload_video_marks_processing_and_queues_probe(
+def test_assets_upload_video_marks_processing_and_queues_normalize(
     client: Client,
 ) -> None:
     """Video uploads return immediately with is_processing=True and
-    enqueue the duration probe as a Celery task so ffprobe doesn't
-    block the upload POST on slow hardware."""
+    enqueue ``normalize_video_asset`` so ffprobe + (potential)
+    transcode don't block the upload POST on slow hardware. The new
+    normalisation task subsumes the old probe-only task: every
+    upload runs through ffprobe regardless, and the passthrough
+    branch is the cheap "probe + write duration" path."""
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     with (
         mock.patch(
-            'anthias_server.celery_tasks.probe_video_duration.delay'
+            'anthias_server.celery_tasks.normalize_video_asset.delay'
         ) as delay_mock,
         mock.patch(
             'anthias_server.settings.ViewerPublisher.send_to_viewer',
@@ -599,7 +650,235 @@ def test_assets_upload_video_marks_processing_and_queues_probe(
     assert created is not None
     assert created.name == 'Clip'
     assert created.is_processing is True
+    # The on-disk filename now carries the source extension so the
+    # normalisation task can identify it without re-running guess_type.
+    assert created.uri and created.uri.endswith('.mp4')
     delay_mock.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_heic_marks_processing_and_queues_image_normalize(
+    client: Client,
+) -> None:
+    """HEIC / HEIF / TIFF uploads route through the image
+    normalisation task so the viewer only ever has to render
+    formats it already supports. Other image types (JPEG, PNG)
+    skip the pipeline."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as delay_mock,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.HEIC',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    assert created.is_processing is True
+    # mimetypes.guess_extension('image/heic') returns '.heic'; the
+    # operator-uppercased '.HEIC' is the secondary fallback path.
+    assert created.uri and created.uri.endswith('.heic')
+    delay_mock.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_heic_classifies_via_content_type_when_mimedb_sparse(
+    client: Client,
+) -> None:
+    """Defensive against hosts whose mimetypes DB doesn't carry
+    image/heic. The browser's Content-Type ride-along (or the
+    extension fallback) must still classify the upload as an
+    image and route it through normalisation."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    # Patch guess_type to simulate a sparse mimetypes DB that doesn't
+    # know about HEIC. The browser's Content-Type then carries the
+    # classification.
+    with (
+        mock.patch(
+            'anthias_server.app.views.guess_type',
+            return_value=(None, None),
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.heic',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    assert created.is_processing is True
+    image_delay.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_extensionless_heic_falls_back_to_mime_subtype(
+    client: Client,
+) -> None:
+    """The worst-case mimetypes-DB / filename combination: the host
+    doesn't know ``image/heic`` AND the browser sent the file
+    without a usable filename extension (e.g. an Android share that
+    renames the upload to ``image.tmp`` or ``content``). Without the
+    third-step ``image/<subtype>`` mapping, ``src_ext`` would be
+    empty, the file would land on disk extensionless, and
+    ``needs_image_normalisation`` would return False — the HEIC
+    would slip past the pipeline and never render. The mapping in
+    ``assets_upload`` keeps the pipeline trigger working."""
+    from mimetypes import guess_extension as real_guess_extension
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    def sparse_guess_extension(file_type: str) -> str | None:
+        # Pretend the host's mimetypes DB doesn't know about HEIC.
+        if file_type == 'image/heic':
+            return None
+        return real_guess_extension(file_type)
+
+    with (
+        mock.patch(
+            'anthias_server.app.views.guess_type',
+            return_value=(None, None),
+        ),
+        mock.patch(
+            'anthias_server.app.views.guess_extension',
+            side_effect=sparse_guess_extension,
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    # No file extension on the operator-supplied name.
+                    'image',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    # The file landed with the .heic extension recovered from the
+    # MIME subtype, so the normalise pipeline triggered.
+    assert created.uri and created.uri.endswith('.heic')
+    assert created.is_processing is True
+    image_delay.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_misnamed_heic_uses_browser_content_type(
+    client: Client,
+) -> None:
+    """If the operator renames a HEIC to ``photo.jpg`` and uploads,
+    ``mimetypes.guess_type('photo.jpg')`` returns ``image/jpeg`` and
+    the file would otherwise be saved as ``.jpg`` — bypassing the
+    normalise pipeline. Modern browsers sniff the actual file
+    bytes and tag the upload with the correct ``image/heic``
+    Content-Type, though, so the upload view cross-checks the
+    browser's tag and upgrades the classification when it points
+    at a normalisable subtype. Asserts the file lands as ``.heic``
+    with the normalise task dispatched."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                # Filename ends in .jpg; browser sniffed the bytes
+                # and tagged Content-Type accurately.
+                'file_upload': SimpleUploadedFile(
+                    'photo.jpg',
+                    b'\x00\x00\x00\x18ftypheic',
+                    content_type='image/heic',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    # Browser's image/heic Content-Type wins over the lying
+    # filename — the file lands with the correct extension and
+    # the normalise pipeline is dispatched.
+    assert created.uri and created.uri.endswith('.heic')
+    assert created.is_processing is True
+    image_delay.assert_called_once_with(created.asset_id)
+
+
+@pytest.mark.django_db
+def test_assets_upload_jpeg_skips_normalization(client: Client) -> None:
+    """JPEG / PNG / WebP uploads land ready-to-play — no Celery hop."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as image_delay,
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_video_asset.delay'
+        ) as video_delay,
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.jpg',
+                    b'\xff\xd8\xff\xe0\x00\x10JFIF',
+                    content_type='image/jpeg',
+                ),
+            },
+        )
+
+    created = Asset.objects.filter(mimetype='image').first()
+    assert created is not None
+    assert created.is_processing is False
+    image_delay.assert_not_called()
+    video_delay.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

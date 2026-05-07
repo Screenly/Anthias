@@ -38,6 +38,15 @@ class Asset(models.Model):
     play_time_to = models.TimeField(blank=True, null=True)
     is_reachable = models.BooleanField(default=True)
     last_reachability_check = models.DateTimeField(blank=True, null=True)
+    # Per-asset bag of processing-pipeline state. Carries flags written
+    # by the upload-time normalisation tasks (normalize_image_asset,
+    # normalize_video_asset) — original file extension, whether a
+    # transcode happened, the last processing error if any — without
+    # widening the schema for each new field. The pipeline writes; the
+    # model itself never reads/branches on it. Default ``dict`` (not
+    # None) so callers can ``asset.metadata['k'] = v`` without an
+    # ``or {}`` guard.
+    metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = 'assets'

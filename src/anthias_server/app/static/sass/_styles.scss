@@ -727,6 +727,26 @@ label { text-align: left; }
   color: var(--surface-text-muted);
 }
 
+// Shown in place of the active toggle when the upload-time
+// normalisation pipeline failed (corrupt HEIC, ffmpeg error, etc.).
+// Same shape as .processing-pill so the column layout doesn't shift
+// between in-progress / failed / done states; warn-coloured so a
+// row that needs operator attention is visible at a glance. The
+// hover tooltip on the element itself carries metadata.error_message
+// from the row.
+.error-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--color-warning-soft, #fef3c7);
+  color: var(--color-warning-strong, #92400e);
+  cursor: help;
+}
+
 // -----------------------------------------------------------------------------
 // 10. Empty state
 // -----------------------------------------------------------------------------

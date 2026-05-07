@@ -87,11 +87,19 @@
 
         If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
 
+    - question: What image and video files can I upload?
+      answer: |
+        Pretty much anything you'd take with a phone or download from the web. Photos from iPhones (HEIC), Android phones, scanners, and screenshots all work — Anthias quietly converts unusual formats into something it knows how to display.
+
+        Videos work the same way. Drop in a clip from your phone or a camera, or pick something off your computer; if it's not in a format your screen plays smoothly, Anthias prepares it for you in the background. Most files don't need any conversion at all and start playing right away.
+
+        While a file is being prepared you'll see a **Processing** badge next to it in the dashboard. If something goes wrong (a corrupt file, for example), you'll see a **Failed** badge with a brief explanation when you hover over it, so you can fix or remove it without hunting through logs.
+
     - question: Can I display YouTube videos?
       answer: |
-        Yes — paste a YouTube URL into the **Add Asset** dialog. Anthias uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) behind the scenes to fetch and cache the video locally so it plays without buffering at runtime.
+        Yes — paste a YouTube URL into the **Add Asset** dialog. Anthias downloads the video and stores it on the device, so playback is smooth, doesn't buffer, and never shows ads or recommended-video overlays.
 
-        If a particular video fails to load, it's almost always because YouTube has changed something on their end and yt-dlp needs an update — pulling the latest Anthias release usually fixes it. Embedding a live YouTube page directly (as a webpage asset) is generally not recommended; the bundled WebView isn't tuned for streaming video playback.
+        If a particular video fails to load, it's almost always because YouTube has changed something on their end — updating Anthias to the latest release usually fixes it.
 
     - question: How do I switch audio between HDMI and the 3.5mm jack?
       answer: |

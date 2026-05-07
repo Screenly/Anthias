@@ -32,6 +32,10 @@ from anthias_server.lib.auth import (
 )
 from anthias_common.internal_auth import is_internal_request
 from anthias_common.youtube import dispatch_download
+from anthias_server.processing import (
+    dispatch_normalize_image,
+    dispatch_normalize_video,
+)
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -351,6 +355,17 @@ class AssetListViewV2(APIView):
         # title + duration once yt-dlp finishes.
         if serializer._pending_youtube_uri:
             dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+
+        # Normalisation pipeline: HEIC/HEIF/TIFF → WebP, exotic video
+        # → H.264 MP4. Dispatched after persistence (same pattern as
+        # the YouTube hop above) so the row's ``asset_id`` is already
+        # written to the DB by the time the worker picks it up. The
+        # row was set ``is_processing=True`` by ``prepare_asset``;
+        # the task clears it once the file lands.
+        if serializer._pending_normalize == 'image':
+            dispatch_normalize_image(asset.asset_id)
+        elif serializer._pending_normalize == 'video':
+            dispatch_normalize_video(asset.asset_id)
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)

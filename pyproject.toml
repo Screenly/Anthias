@@ -56,6 +56,15 @@ server = [
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
     "packaging==26.1",
+    # Pillow + pillow-heif power the upload-time image normalisation
+    # pipeline (HEIC / HEIF / TIFF → lossless WebP). pillow-heif
+    # registers a libheif-backed Pillow plugin at import time; the
+    # libheif1 system package is supplied by the base image (see
+    # docker/Dockerfile.server.j2). Pillow itself is otherwise unused
+    # — adding it here instead of relying on a transitive import keeps
+    # the dependency explicit.
+    "Pillow==12.1.0",
+    "pillow-heif==1.2.1",
     "psutil==7.2.1",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
@@ -133,6 +142,13 @@ mypy = [
     "django-stubs-ext==6.0.3",
     "djangorestframework==3.16.1",
     "drf-spectacular==0.29.0",
+    # Pillow ships PEP 561 stubs (py.typed). The processing module
+    # imports PIL at top level, so mypy needs the package resolvable
+    # to type-check the upload-time normalisation pipeline.
+    # pillow-heif is intentionally not pinned here — it's listed in
+    # tool.mypy.overrides above so its missing-import error is
+    # ignored, mirroring the cec / pydbus / sh / vlc pattern.
+    "Pillow==12.1.0",
     "pytz==2025.2",
     "whitenoise==6.12.0",
 ]
@@ -220,6 +236,7 @@ module = [
     "cec",
     "channels_redis.*",
     "hurry.filesize",
+    "pillow_heif",
     "pydbus",
     "sh",
     "vlc",

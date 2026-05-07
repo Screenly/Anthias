@@ -9,6 +9,7 @@ from typing import Any
 import django
 import sh
 from celery import Celery, Task
+from PIL import UnidentifiedImageError
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
 django.setup()
@@ -321,15 +322,23 @@ def probe_video_duration(asset_id: str) -> None:
 
 
 class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
-    """Custom Task subclass so ``on_failure`` clears ``is_processing``
-    when the download fails, mirroring ``_ProbeVideoTask``.
+    """Custom Task subclass that funnels failures through the same
+    metadata-error contract as ``_NormalizeAssetTask``.
+
+    Sharing the failure path means a failed YouTube download lands in
+    the same operator-visible state as a failed HEIC conversion or
+    failed video transcode: ``is_processing=False`` *and* a populated
+    ``metadata.error_message`` that the asset table renders as a
+    "Failed" pill (with the message on the hover tooltip). Without
+    that unification, a yt-dlp DownloadError would clear the
+    Processing pill but leave no on-row diagnostic — the operator
+    couldn't tell a fresh download from a 404'd one.
 
     The previous in-process daemon thread swallowed yt-dlp's exit
     code, so a failed download silently left the row stuck at
-    "Processing" with an empty .mp4 — the operator had no way to
-    unblock it without editing the database. Now any uncaught
-    exception (DownloadError, ExtractorError, ...) bubbles to celery
-    and lands here once retries are exhausted.
+    "Processing" with an empty .mp4. Now any uncaught exception
+    (DownloadError, ExtractorError, ...) bubbles to celery and lands
+    here once retries are exhausted.
     """
 
     def on_failure(
@@ -344,10 +353,18 @@ class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
         if not asset_id:
             return
         try:
-            Asset.objects.filter(asset_id=asset_id).update(is_processing=False)
-            from anthias_server.app.consumers import notify_asset_update
+            # Reuse the helpers in anthias_server.processing so the
+            # YouTube and normalize pipelines share the exact same
+            # "row failed" semantics — single source of truth for the
+            # error_message contract instead of two near-duplicate
+            # blocks that could drift.
+            from anthias_server.processing import (
+                _notify,
+                _set_processing_error,
+            )
 
-            notify_asset_update(asset_id)
+            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+            _notify(asset_id)
         except Exception:
             logging.exception(
                 'download_youtube_asset on_failure cleanup failed for %s',
@@ -392,9 +409,16 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     The row is created upstream with ``mimetype='video'``,
     ``is_processing=True``, and ``uri`` already pointing at the
     eventual ``<assetdir>/<asset_id>.mp4``. This task overwrites
-    ``name`` (with the resolved title) and ``duration``, then clears
-    ``is_processing`` and nudges the viewer + browser the same way
-    ``probe_video_duration`` does.
+    ``name`` (with the resolved title), seeds metadata, and then
+    *chains into* ``normalize_video_asset`` — leaving the row
+    ``is_processing=True`` so the same per-board passthrough /
+    transcode pass runs on YouTube downloads as on direct file
+    uploads. That matters because yt-dlp's ``format_sort:
+    vcodec:h264`` is a *preference*, not a guarantee: when no H.264
+    rendition is available yt-dlp falls back to whatever it can get
+    (vp9 webm, av1, ...). Without the chain, those downloads would
+    land on a pi3 device unplayable. With it, the same codec grid
+    that protects file uploads protects YouTube downloads too.
 
     Uses yt-dlp as a Python library rather than a CLI shellout: a
     single ``extract_info(uri, download=True)`` call returns title +
@@ -496,9 +520,28 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         except (TypeError, ValueError):
             duration = None
 
+    # Stamp the metadata bag the same way normalize_video_asset
+    # would: ``source='youtube'`` so an operator (or future failure
+    # diagnostic) can tell at a glance where the row came from, and
+    # ``source_url`` so the original watch URL is recoverable even
+    # after ``name`` is overwritten with the resolved title.
+    metadata = dict(asset.metadata or {})
+    metadata.update(
+        {
+            'source': 'youtube',
+            'source_url': uri,
+        }
+    )
+    metadata.pop('error_message', None)
+
     update: dict[str, Any] = {
-        'is_processing': False,
+        # ``is_processing`` deliberately stays True — normalize_video
+        # below clears it once its probe + (optional) transcode
+        # finishes. A single state transition (Processing → Done)
+        # reads better in the table than the previous two-step
+        # (Processing → Done → maybe-still-needs-work).
         'name': title,
+        'metadata': metadata,
     }
     if duration is not None:
         update['duration'] = duration
@@ -512,15 +555,34 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         update['uri'] = location
     Asset.objects.filter(asset_id=asset_id).update(**update)
 
-    # Tell the viewer to reload its playlist now that the file
-    # exists and the row is fully materialised.
-    r.publish('anthias.viewer', 'reload')
+    # Browser-side nudge so the table picks up the resolved title +
+    # duration immediately. The "Processing" pill stays on (the row
+    # is still ``is_processing=True``) until normalize_video_asset
+    # finishes its pass and clears the flag — at which point the
+    # same _notify helper fires again from the normalize task and
+    # the pill drops. ``reload_viewer=False`` keeps this
+    # intermediate hop browser-only: the on-device viewer doesn't
+    # need to reload its playlist for a row that's still in the
+    # processing state, and the chained normalize step's _notify
+    # will publish the reload once the file is final. Saves the
+    # viewer one redundant playlist refresh on every YouTube
+    # upload — meaningful on a Pi 1/Zero where the reload
+    # rebuilds the rotation against the SD card.
+    from anthias_server.processing import (
+        _notify,
+        dispatch_normalize_video,
+    )
 
-    # Browser-side nudge so the table drops "Processing" and picks
-    # up the resolved title/duration without waiting for the 5s poll.
-    from anthias_server.app.consumers import notify_asset_update
+    _notify(asset_id, reload_viewer=False)
 
-    notify_asset_update(asset_id)
+    # Hand off to the per-board normalisation pass. This is what
+    # gives YouTube downloads the same codec / container guarantees
+    # as direct file uploads: ffprobe → passthrough on H.264/HEVC
+    # (per board profile) or transcode to libx264/libx265 otherwise.
+    # It also writes ``original_ext`` / ``transcoded`` /
+    # ``transcode_target`` to metadata, so the operator's view of a
+    # YouTube row carries the same diagnostic shape as a file upload.
+    dispatch_normalize_video(asset_id)
 
 
 @celery.task
@@ -707,3 +769,97 @@ def revalidate_asset_url(asset_id: str) -> None:
         is_reachable=reachable,
         last_reachability_check=timezone.now(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Asset normalisation pipeline (image / video)
+# ---------------------------------------------------------------------------
+#
+# Implementation lives in ``anthias_server.processing`` to keep this
+# file focused on the existing celery surface and to make the
+# unit-test boundary explicit (the module functions are called
+# directly without going through Celery). The thin wrappers below are
+# the actual celery.task entry points so the task names register on
+# the worker and ``apply_async`` works out of the box.
+from anthias_server import processing  # noqa: E402
+
+NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
+
+
+@celery.task(
+    base=processing._NormalizeAssetTask,
+    time_limit=300,
+    autoretry_for=(OSError,),
+    # Two OSError subclasses are permanent and must NOT trigger a
+    # retry — they'd just keep the row in ``is_processing=True``
+    # longer before the inevitable on_failure lands:
+    #   * ``FileNotFoundError`` — source file gone between row
+    #     creation and pickup (cleanup raced operator, disk pressure).
+    #   * ``UnidentifiedImageError`` — Pillow decoded the header far
+    #     enough to refuse the file (corrupt HEIC, truncated TIFF,
+    #     mis-typed extension). It inherits from OSError so the
+    #     autoretry_for filter would otherwise sweep it up; listing
+    #     it explicitly here makes the failure surface immediately.
+    dont_autoretry_for=(FileNotFoundError, UnidentifiedImageError),
+    retry_backoff=10,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=2,
+)
+def normalize_image_asset(asset_id: str) -> None:
+    """Convert every extension in
+    ``processing.NORMALIZE_IMAGE_EXTS`` (HEIC / HEIF / TIFF / BMP /
+    ICO / TGA / JPEG 2000 family / AVIF) to lossless WebP.
+
+    No-ops if the row is missing or has already been finalised
+    (duplicate task fire / operator-edited row). Permanent decode
+    failures (corrupt HEIC) raise so ``_NormalizeAssetTask.on_failure``
+    writes ``metadata.error_message`` and clears ``is_processing``.
+
+    Retries on OSError cover transient disk pressure / a temporary
+    libheif read hiccup. Two OSError subclasses are excluded from
+    autoretry via ``dont_autoretry_for`` because they're permanent:
+    ``FileNotFoundError`` (source file gone) and Pillow's
+    ``UnidentifiedImageError`` (corrupt input). See the decorator's
+    inline comment for the rationale.
+    """
+    asset = processing._row_or_none(asset_id)
+    if asset is None:
+        return
+    processing._run_image_normalisation(asset)
+
+
+@celery.task(
+    base=processing._NormalizeAssetTask,
+    time_limit=NORMALIZE_VIDEO_TIME_LIMIT_S,
+    autoretry_for=(OSError,),
+    # Same rationale as normalize_image_asset above: a missing source
+    # file is permanent and should land on on_failure right away.
+    dont_autoretry_for=(FileNotFoundError,),
+    retry_backoff=15,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=1,
+)
+def normalize_video_asset(asset_id: str) -> None:
+    """Probe the upload; passthrough or transcode to a board-appropriate
+    codec in MP4.
+
+    The output codec is decided by ``processing._resolve_board_profile``:
+    libx264 on legacy Pi 2/Pi 3 (mmal-vc4 path; no HEVC hardware) and
+    libx265 with the iOS-friendly ``-tag:v hvc1`` on Pi 4-64 / Pi 5 /
+    x86 (mpv path; HEVC hardware-decoded on Pi 4 / x86, software on
+    Pi 5). The on-device player only ever sees a codec it can decode.
+
+    ffmpeg is wrapped with ``-threads 2`` so two cores stay free for
+    the on-device viewer; the celery worker itself runs under
+    ``nice -n 19 ionice -c 3`` (set in docker-compose.yml.tmpl).
+
+    Retry policy mirrors ``download_youtube_asset``: OSError gets one
+    retry (transient IO), ffmpeg subprocess failures and timeouts are
+    permanent and land on on_failure.
+    """
+    asset = processing._row_or_none(asset_id)
+    if asset is None:
+        return
+    processing._run_video_normalisation(asset)

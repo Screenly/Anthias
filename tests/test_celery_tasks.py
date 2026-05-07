@@ -718,12 +718,17 @@ def fake_youtube_dl() -> Iterator[mock.MagicMock]:
 
 
 @pytest.mark.django_db
-def test_download_youtube_asset_success_writes_title_and_duration(
+def test_download_youtube_asset_success_chains_into_normalize_video(
     fake_youtube_dl: mock.MagicMock,
 ) -> None:
-    """Happy path: extract_info returns a populated info dict;
-    is_processing clears, name + duration are persisted, viewer +
-    browser get a refresh nudge."""
+    """Happy path: extract_info returns populated info; the YouTube
+    task writes title + duration + ``metadata['source']`` /
+    ``metadata['source_url']``, fires the browser-side notify hop,
+    and dispatches ``normalize_video_asset`` so the per-board codec
+    grid runs on the downloaded file. ``is_processing`` deliberately
+    stays True — normalize clears it once its probe + (optional)
+    transcode finishes, giving the operator a single Processing →
+    Done state transition rather than the previous flicker."""
     _make_youtube_asset()
     fake_youtube_dl.extract_info.return_value = {
         'title': 'Never Gonna Give You Up',
@@ -731,21 +736,38 @@ def test_download_youtube_asset_success_writes_title_and_duration(
     }
     fake_redis = mock.MagicMock()
     with (
-        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch(
+            'anthias_common.utils.connect_to_redis', return_value=fake_redis
+        ),
         mock.patch(
             'anthias_server.app.consumers.notify_asset_update'
         ) as mock_notify,
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_dispatch_normalize,
     ):
         download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
 
     a = Asset.objects.get(asset_id='yt-1')
     assert a.name == 'Never Gonna Give You Up'
     assert a.duration == 213
-    assert a.is_processing is False
+    # Row stays in-flight until normalize finishes.
+    assert a.is_processing is True
+    # YouTube origin recorded so an operator can tell at a glance
+    # where the row came from, and the original URL is recoverable
+    # after ``name`` is overwritten with the resolved title.
+    assert a.metadata['source'] == 'youtube'
+    assert a.metadata['source_url'] == 'https://www.youtube.com/watch?v=abc'
 
-    # Same notifications as probe_video_duration on success.
-    fake_redis.publish.assert_any_call('anthias.viewer', 'reload')
+    # Browser-side notify fires so the dashboard picks up the title.
     mock_notify.assert_called_once_with('yt-1')
+    # Viewer reload publish does NOT — the row is still
+    # is_processing=True, so the on-device viewer would just reload
+    # to a row it can't display anyway. The chained
+    # normalize_video_asset publishes the reload once is_processing
+    # clears.
+    fake_redis.publish.assert_not_called()
+    mock_dispatch_normalize.assert_called_once_with('yt-1')
 
 
 @pytest.mark.django_db
@@ -771,7 +793,10 @@ def test_download_youtube_asset_writes_to_persisted_uri(
         play_order=0,
     )
     fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 5}
-    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
         download_youtube_asset('yt-uri', 'https://youtu.be/abc')
     # ydl_opts is the first positional arg to the YoutubeDL ctor.
     fake_cls = fake_youtube_dl._cls
@@ -805,7 +830,10 @@ def test_download_youtube_asset_backfills_uri_when_row_uri_missing(
         play_order=0,
     )
     fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 5}
-    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
         download_youtube_asset('yt-empty', 'https://youtu.be/abc')
 
     a = Asset.objects.get(asset_id='yt-empty')
@@ -826,7 +854,10 @@ def test_download_youtube_asset_floors_subsecond_duration_to_one(
         'title': 't',
         'duration': 0.4,
     }
-    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
         download_youtube_asset('yt-1', 'https://youtu.be/abc')
     assert Asset.objects.get(asset_id='yt-1').duration == 1
 
@@ -836,19 +867,24 @@ def test_download_youtube_asset_handles_missing_duration(
     fake_youtube_dl: mock.MagicMock,
 ) -> None:
     """Live streams / radio uploads omit duration. Persist what we
-    have (title) without overwriting the placeholder duration."""
+    have (title) without overwriting the placeholder duration. Row
+    stays ``is_processing=True`` so normalize_video can finalise."""
     _make_youtube_asset()
     fake_youtube_dl.extract_info.return_value = {
         'title': 'Live now',
         'duration': None,
     }
-    with mock.patch('anthias_server.app.consumers.notify_asset_update'):
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
         download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
     a = Asset.objects.get(asset_id='yt-1')
     assert a.name == 'Live now'
     # Placeholder seeded by the serializer; not overwritten.
     assert a.duration == 0
-    assert a.is_processing is False
+    # is_processing left True for the chained normalize_video pass.
+    assert a.is_processing is True
 
 
 @pytest.mark.django_db
@@ -898,24 +934,30 @@ def test_download_youtube_asset_failure_propagates_for_on_failure(
 
 
 @pytest.mark.django_db
-def test_download_youtube_asset_on_failure_clears_processing() -> None:
+def test_download_youtube_asset_on_failure_writes_error_metadata() -> None:
     """When Celery declares the task failed, is_processing must
-    flip back to False so the operator can interact with the row.
-    Otherwise the "Processing" pill sticks forever."""
+    flip back to False AND ``metadata.error_message`` must carry the
+    exception type + message so the asset table renders the "Failed"
+    pill (with the message on hover) — same operator-visible
+    contract as a HEIC/video normalisation failure. Without this
+    unification, a yt-dlp DownloadError would clear the Processing
+    pill but leave no on-row diagnostic."""
     _make_youtube_asset()
-    fake_redis = mock.MagicMock()
     with (
-        mock.patch.object(celery_tasks_module, 'r', fake_redis),
         mock.patch(
             'anthias_server.app.consumers.notify_asset_update'
         ) as mock_notify,
     ):
         download_youtube_asset.on_failure(
-            RuntimeError('boom'),
+            RuntimeError('404 Not Found'),
             task_id='t-1',
             args=('yt-1',),
             kwargs={},
             einfo=None,
         )
-    assert Asset.objects.get(asset_id='yt-1').is_processing is False
+    a = Asset.objects.get(asset_id='yt-1')
+    assert a.is_processing is False
+    # Same shape as _NormalizeAssetTask.on_failure: ExceptionType: msg.
+    assert 'RuntimeError' in a.metadata['error_message']
+    assert '404 Not Found' in a.metadata['error_message']
     mock_notify.assert_called_once_with('yt-1')

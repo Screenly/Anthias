@@ -2,7 +2,7 @@ import logging
 import tarfile
 import uuid
 from datetime import datetime
-from mimetypes import guess_type
+from mimetypes import guess_extension, guess_type
 from os import path, remove
 from urllib.parse import urlparse, urlunparse
 
@@ -247,7 +247,86 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         return _asset_table_response(request)
 
     upload_name: str = file_upload.name
+
+    # Three-step format detection so HEIC/HEIF/TIFF uploads on hosts
+    # with a sparse mimetypes DB (some Pi base images don't ship
+    # ``image/heic`` mappings out of the box) still classify
+    # correctly. Order: mimetypes.guess_type → Django's
+    # UploadedFile.content_type (the browser's own header) → the
+    # filename extension as last resort. Once any step yields
+    # image/* or video/*, take it; otherwise reject.
+    from anthias_server.processing import NORMALIZE_IMAGE_EXTS
+
+    client_type = (getattr(file_upload, 'content_type', '') or '').lower()
     file_type = guess_type(upload_name)[0] or ''
+
+    # Misnamed-file upgrade: if the operator renamed a HEIC to
+    # ``photo.jpg`` (or any normalisable format to a passthrough
+    # extension), ``guess_type`` returns the lying mime
+    # ``image/jpeg`` and the file would be saved as ``.jpg``,
+    # bypassing the normalise pipeline and silently failing to
+    # render. Cross-check the browser's Content-Type: when *it*
+    # advertises a subtype that maps to a NORMALIZE_IMAGE_EXTS
+    # extension (and the top-level matches), trust the browser.
+    # The browser typically sniffs based on actual file bytes, so
+    # it sees through the rename. Only upgrades — never downgrades
+    # — to avoid the inverse case (a JPEG with a .heic extension
+    # the browser somehow tagged as image/jpeg) accidentally
+    # routing into the pipeline.
+    if (
+        client_type
+        and file_type
+        and client_type.split('/')[0] == file_type.split('/')[0]
+        and client_type != file_type
+    ):
+        client_subtype = client_type.split('/', 1)[1]
+        client_ext = f'.{client_subtype}'
+        guessed_ext = (guess_extension(file_type) or '').lower()
+        if (
+            client_ext in NORMALIZE_IMAGE_EXTS
+            and guessed_ext not in NORMALIZE_IMAGE_EXTS
+        ):
+            file_type = client_type
+
+    if file_type.split('/')[0] not in ('image', 'video'):
+        # ``UploadedFile.content_type`` is the Content-Type the browser
+        # sent in the multipart request. Modern browsers tag HEIC /
+        # HEIF / TIFF correctly even when the host's mimetypes DB
+        # doesn't carry the entry, so this catches the common case.
+        if client_type.split('/')[0] in ('image', 'video'):
+            file_type = client_type
+        else:
+            # Last resort: classify by extension. The image set is the
+            # union of "viewer-friendly direct uploads" (jpg/png/...
+            # — never normalised) and ``NORMALIZE_IMAGE_EXTS`` (the
+            # full set the upload pipeline knows how to convert). The
+            # latter is a single source of truth, so adding a new
+            # normalisable format only touches one place.
+            ext = path.splitext(upload_name)[1].lower()
+            image_exts = {
+                '.jpg',
+                '.jpeg',
+                '.png',
+                '.gif',
+                '.webp',
+                '.svg',
+            } | NORMALIZE_IMAGE_EXTS
+            video_exts = {
+                '.mp4',
+                '.mov',
+                '.mkv',
+                '.webm',
+                '.avi',
+                '.flv',
+                '.mpg',
+                '.mpeg',
+                '.ts',
+                '.m4v',
+            }
+            if ext in image_exts:
+                file_type = f'image/{ext.lstrip(".")}'
+            elif ext in video_exts:
+                file_type = f'video/{ext.lstrip(".")}'
     if file_type.split('/')[0] not in ('image', 'video'):
         messages.error(request, 'Invalid file type. Expected image or video.')
         return _asset_table_response(request)
@@ -259,26 +338,73 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # has a breadcrumb back to what they picked.
     display_name = _prettify_upload_name(upload_name)
 
+    mimetype = file_type.split('/')[0]
+
+    # Preserve the source extension on disk so the normalisation
+    # pipeline can identify the format from the filename without
+    # re-running guess_type. Three-step fallback so the file never
+    # lands extensionless if we can possibly avoid it (an
+    # extensionless file silently bypasses the normalise pipeline
+    # via ``needs_image_normalisation`` returning False).
+    #   1. ``guess_extension(file_type)`` — works for every MIME
+    #      that's in the host's mimetypes DB.
+    #   2. ``path.splitext(upload_name)[1]`` — operator-supplied
+    #      filename. Covers the case where the browser tagged the
+    #      upload with a generic MIME but the file itself was named
+    #      ``photo.HEIC``. lowercase'd so the case-insensitive ext
+    #      check downstream still matches.
+    #   3. Map ``image/<subtype>`` → ``.<subtype>`` if that ext is
+    #      in ``NORMALIZE_IMAGE_EXTS``. Covers an Android share
+    #      with no filename on a host whose mimetypes DB doesn't
+    #      carry the modern ``image/heic`` / ``image/avif`` /
+    #      ``image/jp2`` entries — without it, a HEIC upload from
+    #      a clean Pi base image could slip past normalisation
+    #      and fail to render.
+    src_ext = guess_extension(file_type) or ''
+    if not src_ext:
+        src_ext = path.splitext(upload_name)[1].lower()
+    if not src_ext:
+        from anthias_server.processing import NORMALIZE_IMAGE_EXTS
+
+        subtype = file_type.split('/', 1)[1] if '/' in file_type else ''
+        candidate_ext = f'.{subtype}'
+        if mimetype == 'image' and candidate_ext in NORMALIZE_IMAGE_EXTS:
+            src_ext = candidate_ext
+
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
     # uploaded with the same name (different content), silently
     # overwriting the older one.
     final_name = uuid.uuid4().hex
-    final_path = path.join(settings['assetdir'], final_name)
+    final_path = path.join(settings['assetdir'], f'{final_name}{src_ext}')
     with open(final_path, 'wb') as f:
         for chunk in file_upload.chunks():
             f.write(chunk)
 
-    mimetype = file_type.split('/')[0]
-    # Video duration is resolved out of band by the
-    # `probe_video_duration` Celery task — ffprobe can take several
-    # seconds on a Pi 1/Zero and we don't want the upload POST to block
-    # the operator's modal that long. The row is created with
-    # is_processing=True so the table renders a "Processing" pill until
-    # the worker writes the real duration back; the API's v2 path uses
-    # the same convention. Images keep the configured default.
-    duration = settings['default_duration']
+    # Decide which Celery task — if any — needs to run before the
+    # viewer can play the row.
+    #   * Videos always go through the normalisation pipeline: the
+    #     passthrough branch of normalize_video_asset is the same
+    #     "ffprobe + write duration" the old probe_video_duration
+    #     did, and the transcode branch covers the non-H.264 case
+    #     this issue exists to fix.
+    #   * Images whose extension is in
+    #     anthias_server.processing.NORMALIZE_IMAGE_EXTS (HEIC /
+    #     HEIF / TIFF / BMP / ICO / TGA / JPEG 2000 family / AVIF)
+    #     are converted to lossless WebP. JPEG / PNG / WebP / GIF
+    #     / SVG skip the pipeline entirely and land ready-to-play.
+    #     The set lives in one place so adding a new format only
+    #     touches that constant — this comment is intentionally
+    #     not the source of truth.
+    from anthias_server.processing import needs_image_normalisation
+
     is_video = mimetype == 'video'
+    needs_image_normalize = mimetype == 'image' and needs_image_normalisation(
+        final_path
+    )
+    is_processing = is_video or needs_image_normalize
+
+    duration = settings['default_duration']
 
     now = timezone.now()
     # Count is_enabled rows (the same partition the home page uses to
@@ -295,20 +421,31 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         mimetype=mimetype,
         duration=duration,
         is_enabled=True,
-        is_processing=is_video,
+        is_processing=is_processing,
         play_order=play_order,
         start_date=now,
         end_date=now + timedelta(days=30),
     )
     if is_video:
-        from anthias_server.celery_tasks import probe_video_duration
+        from anthias_server.celery_tasks import normalize_video_asset
 
-        probe_video_duration.delay(asset.asset_id)
+        normalize_video_asset.delay(asset.asset_id)
         return _asset_table_response(
             request,
             toast=(
                 'info',
                 f'Uploaded {upload_name} — analysing video…',
+            ),
+        )
+    if needs_image_normalize:
+        from anthias_server.celery_tasks import normalize_image_asset
+
+        normalize_image_asset.delay(asset.asset_id)
+        return _asset_table_response(
+            request,
+            toast=(
+                'info',
+                f'Uploaded {upload_name} — converting image…',
             ),
         )
     return _asset_table_response(

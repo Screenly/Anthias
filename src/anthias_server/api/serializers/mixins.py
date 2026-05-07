@@ -11,6 +11,7 @@ from anthias_common.utils import (
     url_fails,
 )
 from anthias_common.youtube import youtube_destination_path
+from anthias_server.processing import needs_image_normalisation
 from anthias_server.settings import settings
 
 from . import (
@@ -29,6 +30,15 @@ class CreateAssetSerializerMixin:
     # choking on an unknown column. None means "not a YouTube asset"
     # and the view skips the dispatch.
     _pending_youtube_uri: str | None = None
+
+    # Set to ``'image'`` or ``'video'`` by ``prepare_asset`` when the
+    # newly created row needs the normalisation pipeline to run before
+    # the viewer can play it. The view dispatches the matching Celery
+    # task once the row is persisted, mirroring the existing
+    # ``_pending_youtube_uri`` hand-off. ``None`` means "no
+    # normalisation needed" — most uploads (JPEG/PNG/WebP/MP4 H.264)
+    # land in this path.
+    _pending_normalize: str | None = None
 
     def prepare_asset(
         self,
@@ -65,12 +75,14 @@ class CreateAssetSerializerMixin:
         if not asset_id:
             asset['asset_id'] = uuid.uuid4().hex
 
+        is_local_upload = False
         if not asset_id and uri.startswith('/'):
             path_name = path.join(settings['assetdir'], asset['asset_id'])
             ext_name = data.get('ext', '')
             new_uri = f'{path_name}{ext_name}'
             rename(uri, new_uri)
             uri = new_uri
+            is_local_upload = True
 
         # Exact match — substring `'youtube_asset' in mimetype`
         # would also fire on `not_youtube_asset` and crash on a
@@ -93,18 +105,43 @@ class CreateAssetSerializerMixin:
 
         asset['uri'] = uri
 
+        # Decide whether the new row needs the normalisation pipeline.
+        # Only locally-uploaded files are eligible: YouTube downloads
+        # are already handled by their own Celery task (and land at
+        # the asset's eventual ``.mp4`` URI), and HTTP / RTSP URIs
+        # never get rewritten in-place. Anything that goes through the
+        # pipeline lands as ``is_processing=True`` so the viewer skips
+        # it during rotation until the task clears the flag.
+        needs_image = is_local_upload and needs_image_normalisation(uri)
+        needs_video = (
+            is_local_upload
+            and not is_youtube
+            and 'video' in (asset['mimetype'] or '')
+        )
+
         if 'video' in asset['mimetype'] and not is_youtube:
             duration_raw = data.get('duration')
             if duration_raw is not None and int(duration_raw) == 0:
-                video_duration = get_video_duration(uri)
-                if video_duration is None:
-                    raise AssetCreationError(
-                        f'Could not determine duration of video {uri!r}'
+                if needs_video:
+                    # Defer ffprobe to ``normalize_video_asset``: a
+                    # passthrough-eligible upload still needs a
+                    # duration probe, but doing it inline here would
+                    # double the work for transcoded files (the
+                    # task re-runs probe on the .mp4 it produces).
+                    # 0 is the row's placeholder until the task
+                    # finalises it — same convention used by
+                    # ``download_youtube_asset``.
+                    asset['duration'] = 0
+                else:
+                    video_duration = get_video_duration(uri)
+                    if video_duration is None:
+                        raise AssetCreationError(
+                            f'Could not determine duration of video {uri!r}'
+                        )
+                    duration = video_duration.total_seconds()
+                    asset['duration'] = (
+                        duration if version == 'v2' else int(duration)
                     )
-                duration = video_duration.total_seconds()
-                asset['duration'] = (
-                    duration if version == 'v2' else int(duration)
-                )
             else:
                 raise AssetCreationError(
                     'Duration must be zero for video assets.'
@@ -151,6 +188,20 @@ class CreateAssetSerializerMixin:
             raise AssetCreationError(
                 'Could not retrieve file. Check the asset URL.'
             )
+
+        # Hand the row off to the normalisation pipeline. We do this
+        # *after* the reachability probe so a typo'd URL still 400s
+        # synchronously instead of getting stuck in "Processing" until
+        # the task fails. ``_pending_normalize`` tells the create view
+        # which Celery task to dispatch with the freshly persisted
+        # asset_id; ``is_processing`` blocks the viewer from picking
+        # up the row mid-conversion.
+        if needs_image:
+            self._pending_normalize = 'image'
+            asset['is_processing'] = True if version == 'v2' else 1
+        elif needs_video:
+            self._pending_normalize = 'video'
+            asset['is_processing'] = True if version == 'v2' else 1
 
         return asset
 
