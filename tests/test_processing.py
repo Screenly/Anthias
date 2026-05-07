@@ -346,6 +346,57 @@ def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
+def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
+    """A malicious image (or a misclassified scan) advertising
+    enormous dimensions must be rejected *before* any pixel decode
+    happens. The check reads ``image.size`` from the format header
+    and raises a ValueError that on_failure surfaces via
+    ``metadata.error_message`` — same contract as a corrupt input.
+
+    Mocks ``Image.open`` to return a stub whose ``.size`` exceeds
+    the cap, so the test runs without writing a real billion-pixel
+    fixture (which would itself need GBs of memory at create time)."""
+    src = path.join(asset_dir, 'bomb.tiff')
+    _write_image(src, 'TIFF')  # real fixture that would otherwise decode
+    asset = _make_processing_asset('img-bomb', src)
+
+    bomb_size = (processing._MAX_IMAGE_PIXELS // 8 + 1, 8)
+
+    class _FakeImage:
+        size = bomb_size
+        format = 'TIFF'
+
+        def __enter__(self) -> '_FakeImage':
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def convert(self, _mode: str) -> 'mock.MagicMock':
+            # Should never be reached — the size check raises first.
+            raise AssertionError(
+                'convert() called on a bomb input — size check missed'
+            )
+
+        def save(self, *_: object, **__: object) -> None:
+            raise AssertionError('save() called on a bomb input')
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch(
+            'anthias_server.processing.Image.open',
+            return_value=_FakeImage(),
+        ),
+    ):
+        with pytest.raises(ValueError, match='exceed cap'):
+            processing._run_image_normalisation(asset)
+
+    # Staging cleanup contract still holds for the bomb path.
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
+
+
+@pytest.mark.django_db
 def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
     """If Pillow writes some bytes to the staging file and *then*
     raises mid-encode (disk pressure, codec crash), the runner must

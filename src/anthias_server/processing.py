@@ -517,6 +517,30 @@ except Exception:  # pragma: no cover - graceful no-op on hosts w/o libheif
     )
 
 
+# Hard cap on decoded image dimensions. A signage upload at the
+# resolutions this fleet actually plays back tops out around 4K
+# (~8 MP) and the largest legitimate phone-camera HEIC is ~50 MP.
+# Setting the cap here protects the worker from decompression-bomb
+# inputs that decode to billions of pixels (Pillow's default
+# DecompressionBombWarning fires at ~89 MP with a softer
+# DecompressionBombError at 2× — both are easy to bypass on certain
+# HEIF/AVIF inputs through pillow-heif). _convert_image_to_webp
+# checks ``image.size`` against this constant *before* any decode,
+# so an oversized input is rejected from the format header rather
+# than after a multi-GB allocation.
+_MAX_IMAGE_PIXELS = 50_000_000
+
+# Tighten Pillow's *global* default to the same value so any path
+# that goes through ``Image.open`` outside the upload pipeline
+# (e.g. a future viewer-side helper, a test fixture mistake) gets
+# the same protection for free. Pillow's check warns at this
+# threshold and raises DecompressionBombError at 2× — by that
+# point ``_convert_image_to_webp``'s explicit guard has already
+# rejected the input. Setting it here means lowering the default
+# applies process-wide on the celery worker.
+Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+
+
 class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
     """Common ``on_failure`` for both normalisation tasks.
 
@@ -568,8 +592,33 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
     the memory cost — meaningful on a Pi 5 decoding a 50 MP HEIC
     where the pixel buffer is ~200 MB. By saving inside the
     context manager we hold exactly one decoded copy at a time.
+
+    Decompression-bomb guard: an attacker can craft a tiny image
+    file (e.g. a few KB on disk) that decodes to billions of
+    pixels and exhausts worker memory. Pillow ships
+    ``MAX_IMAGE_PIXELS`` (default ~89 MP) which raises
+    ``DecompressionBombError`` past 2× that threshold, but it warns
+    only at the first level — and pillow-heif's own decoder can
+    bypass the check entirely on certain HEIF/AVIF inputs. We add
+    an explicit ``image.size`` cap at ``_MAX_IMAGE_PIXELS`` so the
+    pipeline rejects oversized inputs deterministically before any
+    pixel buffer is allocated. A 50 MP cap is well above any phone
+    camera output (modern flagships top out around 200 MP only on
+    the sensor — JPEG/HEIC files compress to a max of ~50 MP at the
+    common 4:3 aspect ratios) but tiny compared to the ~10 GP
+    payloads typical bomb fixtures advertise.
     """
     with Image.open(input_path) as image:
+        # Reject decompression bombs *before* any decode work
+        # happens. ``image.size`` is read from the format header
+        # and doesn't trigger pixel decode, so this guard is cheap
+        # even on a malicious file.
+        width, height = image.size
+        if width * height > _MAX_IMAGE_PIXELS:
+            raise ValueError(
+                f'image dimensions {width}x{height} exceed cap '
+                f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
+            )
         # ``convert('RGBA')`` is a no-op when the source is already
         # RGBA (e.g. an HEIC with alpha) and a colour-correct upcast
         # otherwise. The result is a new Image (its own pixel
