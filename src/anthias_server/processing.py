@@ -526,15 +526,23 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
       * ``Image.open`` is lazy — the actual decode happens on first
         pixel access (``save`` triggers it). UnidentifiedImageError
         bubbles out of this function for ``on_failure`` to land on.
+
+    Memory: keep the encode inside the ``with Image.open`` block.
+    ``Image.convert('RGBA')`` already returns a new image with a
+    full pixel buffer; calling ``.copy()`` on top of that doubled
+    the memory cost — meaningful on a Pi 5 decoding a 50 MP HEIC
+    where the pixel buffer is ~200 MB. By saving inside the
+    context manager we hold exactly one decoded copy at a time.
     """
     with Image.open(input_path) as image:
         # ``convert('RGBA')`` is a no-op when the source is already
         # RGBA (e.g. an HEIC with alpha) and a colour-correct upcast
-        # otherwise. ``copy()`` so the underlying file handle can
-        # close before we serialise out the WebP.
-        rgba = image.convert('RGBA').copy()
-
-    rgba.save(output_path, 'WEBP', lossless=True, method=6)
+        # otherwise. The result is a new Image (its own pixel
+        # buffer) that's safe to use after ``image`` closes — but
+        # serialise inside the ``with`` so we never hold both the
+        # source decoder state *and* the converted buffer at once.
+        rgba = image.convert('RGBA')
+        rgba.save(output_path, 'WEBP', lossless=True, method=6)
 
 
 def _run_image_normalisation(asset: Asset) -> None:

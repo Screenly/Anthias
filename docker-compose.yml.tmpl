@@ -66,7 +66,7 @@ services:
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
     # ``nice -n 19 ionice -c 3`` lowers CPU and IO priority to the
     # idle class so the upload-time normalisation pipeline (HEIC→WebP,
-    # exotic-codec → H.264 transcode) never starves the on-device
+    # exotic-codec → board-appropriate H.264/HEVC transcode) never starves the on-device
     # viewer mid-playback. Both wrappers are no-ops when the system is
     # idle — a background sweep on a quiet device still runs at
     # full speed; only contention with the viewer process slows it
