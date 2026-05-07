@@ -554,8 +554,16 @@ def _run_image_normalisation(asset: Asset) -> None:
     # Atomic rename within the same dir — POSIX guarantees this is
     # observed as a single inode swap. os.replace overwrites an
     # existing .webp (e.g. a re-run of the task on the same asset),
-    # which is the right semantics here.
-    os.replace(staging, final_uri)
+    # which is the right semantics here. A rename failure
+    # (filesystem full, permissions, cross-device link mid-pipeline)
+    # must still drop the staging file so the "no leftover .tmp"
+    # contract holds — without the guard a stale .webp.tmp would
+    # only get cleaned up by the cleanup() sweep an hour later.
+    try:
+        os.replace(staging, final_uri)
+    except OSError:
+        _drop_image_staging()
+        raise
 
     # Drop the original now that the WebP has landed. cleanup() would
     # eventually sweep it as an orphan once the row's uri is updated,
@@ -882,7 +890,16 @@ def _run_video_normalisation(asset: Asset) -> None:
         _drop_staging()
         raise RuntimeError(f'ffmpeg produced no output for {src_uri!r}')
 
-    os.replace(staging, final_uri)
+    # Same rename-failure cleanup as the image pipeline: the atomic
+    # rename normally succeeds in <1ms, but a filesystem-full /
+    # permissions / cross-device error here would otherwise leave
+    # the staging file hanging around. Mirror the contract by
+    # dropping it on any OSError.
+    try:
+        os.replace(staging, final_uri)
+    except OSError:
+        _drop_staging()
+        raise
 
     # Drop the original if it lived under a different name (e.g. a
     # ProRes .mov whose transcoded H.264 lands at the same base.mp4).

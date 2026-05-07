@@ -785,6 +785,13 @@ NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
     base=processing._NormalizeAssetTask,
     time_limit=300,
     autoretry_for=(OSError,),
+    # ``FileNotFoundError`` is-a ``OSError`` so the autoretry_for
+    # filter would catch it — but a missing source file isn't a
+    # transient condition; retrying just keeps the row in
+    # ``is_processing=True`` longer before the inevitable
+    # ``on_failure`` lands. Excluding it here lets the on_failure
+    # path write ``metadata.error_message`` immediately.
+    dont_autoretry_for=(FileNotFoundError,),
     retry_backoff=10,
     retry_backoff_max=300,
     retry_jitter=True,
@@ -800,7 +807,10 @@ def normalize_image_asset(asset_id: str) -> None:
 
     Retries on OSError covers transient disk pressure / a temporary
     libheif read hiccup; Pillow's UnidentifiedImageError is permanent
-    and lands directly on on_failure.
+    and lands directly on on_failure. ``FileNotFoundError`` (source
+    file gone between row creation and pickup) is excluded from
+    autoretry — see the ``dont_autoretry_for`` rationale on the
+    decorator.
     """
     asset = processing._row_or_none(asset_id)
     if asset is None:
@@ -812,6 +822,9 @@ def normalize_image_asset(asset_id: str) -> None:
     base=processing._NormalizeAssetTask,
     time_limit=NORMALIZE_VIDEO_TIME_LIMIT_S,
     autoretry_for=(OSError,),
+    # Same rationale as normalize_image_asset above: a missing source
+    # file is permanent and should land on on_failure right away.
+    dont_autoretry_for=(FileNotFoundError,),
     retry_backoff=15,
     retry_backoff_max=300,
     retry_jitter=True,

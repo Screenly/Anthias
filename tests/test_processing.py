@@ -371,6 +371,38 @@ def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
+def test_image_rename_failure_cleans_staging(asset_dir: str) -> None:
+    """The atomic ``os.replace(staging, final_uri)`` normally succeeds
+    in <1ms, but a filesystem-full / permissions / cross-device error
+    there would otherwise leave the .webp.tmp behind. Wrap-the-rename
+    contract: any OSError on rename drops the staging file before
+    propagating, matching the timeout/error/zero-byte branches."""
+    src = path.join(asset_dir, 'fixture.tiff')
+    _write_image(src, 'TIFF')
+    asset = _make_processing_asset('img-rename-fail', src)
+
+    real_replace = os.replace
+
+    def boom(staging: str, final_uri: str) -> None:
+        # Verify the staging file actually exists before we explode —
+        # otherwise the test would also pass if Pillow never wrote.
+        assert path.isfile(staging), 'precondition: staging must exist'
+        raise OSError('simulated cross-device rename failure')
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch('anthias_server.processing.os.replace', side_effect=boom),
+    ):
+        with pytest.raises(OSError, match='cross-device'):
+            processing._run_image_normalisation(asset)
+
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
+    assert not leftover, f'image staging leftover after rename: {leftover}'
+    # The real replace was never called.
+    del real_replace
+
+
+@pytest.mark.django_db
 def test_image_missing_file_raises_filenotfound(asset_dir: str) -> None:
     """Source file disappeared between row creation and task
     pickup (cleanup raced operator, disk pressure). Fail clean so
@@ -899,6 +931,48 @@ def test_video_zero_byte_output_fails_clean(asset_dir: str) -> None:
     assert not leftover, f'staging leftover after empty output: {leftover}'
 
 
+@pytest.mark.django_db
+def test_video_rename_failure_cleans_staging(asset_dir: str) -> None:
+    """Video pipeline mirrors the image-pipeline contract: an OSError
+    on the post-transcode ``os.replace(staging, final_uri)`` (disk
+    full, permissions, cross-device) drops the .staging.mp4 file
+    before propagating."""
+    src = path.join(asset_dir, 'odd.mov')
+    with open(src, 'wb') as fh:
+        fh.write(b'\x00' * 16)
+    asset = _make_processing_asset('vid-rename-fail', src, mimetype='video')
+
+    summary = {
+        'container': 'mov',
+        'video_codec': 'prores',
+        'audio_codec': 'aac',
+    }
+
+    def good_transcode(_in: str, staging: str, _profile: Any = None) -> None:
+        with open(staging, 'wb') as fh:
+            fh.write(b'\x00\x00\x00\x18ftypmp42')
+
+    def boom(staging: str, final_uri: str) -> None:
+        assert path.isfile(staging), 'precondition: staging must exist'
+        raise OSError('simulated rename failure')
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch.object(
+            processing, '_transcode_to_target', side_effect=good_transcode
+        ),
+        mock.patch('anthias_server.processing.os.replace', side_effect=boom),
+    ):
+        with pytest.raises(OSError, match='rename failure'):
+            processing._run_video_normalisation(asset)
+
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.staging.mp4')]
+    assert not leftover, f'video staging leftover after rename: {leftover}'
+
+
 # ---------------------------------------------------------------------------
 # ffprobe summary parsing — tested independently of the runner
 # ---------------------------------------------------------------------------
@@ -1329,6 +1403,39 @@ def test_normalize_image_asset_celery_no_op_when_row_missing() -> None:
     with mock.patch.object(processing, '_run_image_normalisation') as run:
         normalize_image_asset('does-not-exist')
     run.assert_not_called()
+
+
+def test_normalize_tasks_exclude_filenotfounderror_from_autoretry() -> None:
+    """Both normalisation tasks have ``autoretry_for=(OSError,)`` so a
+    transient disk hiccup is retried automatically. ``FileNotFoundError``
+    is-a ``OSError`` so the autoretry filter would otherwise catch it
+    too — but a missing source file is permanent, and retrying just
+    delays the on_failure that writes ``metadata.error_message``.
+    Confirm both tasks were registered with
+    ``dont_autoretry_for=(FileNotFoundError,)`` so the exclusion is
+    in effect at celery-config time.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    for task in (normalize_image_asset, normalize_video_asset):
+        # ``autoretry_for`` and ``dont_autoretry_for`` are read off
+        # the celery Task instance via the per-task options dict that
+        # ``add_autoretry_behaviour`` populates at registration. They
+        # are not declared as class attributes on the Task type, so
+        # mypy needs a getattr to see them; the ``celery-types``
+        # stubs we use don't model these dynamic options.
+        autoretry_for = tuple(getattr(task, 'autoretry_for', ()))
+        dont_autoretry_for = tuple(getattr(task, 'dont_autoretry_for', ()))
+        assert OSError in autoretry_for, (
+            f'{task.name} expected autoretry_for=(OSError,)'
+        )
+        assert FileNotFoundError in dont_autoretry_for, (
+            f'{task.name} expected dont_autoretry_for to include '
+            f'FileNotFoundError so missing-source raises immediately'
+        )
 
 
 @pytest.mark.django_db
