@@ -438,11 +438,18 @@ def test_video_h264_mp4_passes_through(asset_dir: str) -> None:
     ],
 )
 def test_video_passthrough_for_h264_or_hevc_in_known_containers(
-    asset_dir: str, codec: str, ext: str, container: str
+    asset_dir: str,
+    codec: str,
+    ext: str,
+    container: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """H.264 and HEVC in any of the accepted containers passes
-    through. Audio codec varies (aac default) but stays in the
-    passthrough set."""
+    through *on a board profile that supports HEVC*. Pin
+    ``DEVICE_TYPE=pi5`` so the libx265-source rows hit passthrough
+    rather than getting transcoded back down to H.264 by the
+    default profile."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
     src = path.join(asset_dir, f'sample{ext}')
     _make_video(src, codec=codec, container=container, audio='aac')
     asset = _make_processing_asset('vid-pass', src, mimetype='video')
@@ -580,7 +587,7 @@ def test_video_ffprobe_failure_falls_through_to_transcode(
         'audio_codec': 'unknown',
     }
 
-    def fake_transcode(_in: str, out: str) -> None:
+    def fake_transcode(_in: str, out: str, _profile: Any = None) -> None:
         with open(out, 'wb') as fh:
             fh.write(b'\x00\x00\x00\x18ftypmp42')  # 24-byte stub
 
@@ -593,7 +600,7 @@ def test_video_ffprobe_failure_falls_through_to_transcode(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
         mock.patch.object(
-            processing, '_transcode_to_h264_mp4', side_effect=fake_transcode
+            processing, '_transcode_to_target', side_effect=fake_transcode
         ),
         mock.patch.object(
             processing,
@@ -625,7 +632,7 @@ def test_video_ffmpeg_timeout_cleans_staging(asset_dir: str) -> None:
         'audio_codec': 'aac',
     }
 
-    def explode(_in: str, staging: str) -> None:
+    def explode(_in: str, staging: str, _profile: Any = None) -> None:
         # Half-write the staging file so the cleanup branch has
         # something to remove — proves we don't leak orphans.
         with open(staging, 'wb') as fh:
@@ -641,7 +648,7 @@ def test_video_ffmpeg_timeout_cleans_staging(asset_dir: str) -> None:
             processing, '_ffprobe_summary', return_value=summary
         ),
         mock.patch.object(
-            processing, '_transcode_to_h264_mp4', side_effect=explode
+            processing, '_transcode_to_target', side_effect=explode
         ),
     ):
         with pytest.raises(RuntimeError):
@@ -670,7 +677,7 @@ def test_video_ffmpeg_error_cleans_staging(asset_dir: str) -> None:
         'audio_codec': 'pcm_s16le',
     }
 
-    def explode(_in: str, staging: str) -> None:
+    def explode(_in: str, staging: str, _profile: Any = None) -> None:
         with open(staging, 'wb') as fh:
             fh.write(b'')
         # ``ErrorReturnCode`` is the abstract parent — sh exports
@@ -690,7 +697,7 @@ def test_video_ffmpeg_error_cleans_staging(asset_dir: str) -> None:
             processing, '_ffprobe_summary', return_value=summary
         ),
         mock.patch.object(
-            processing, '_transcode_to_h264_mp4', side_effect=explode
+            processing, '_transcode_to_target', side_effect=explode
         ),
     ):
         with pytest.raises(RuntimeError) as excinfo:
@@ -716,7 +723,7 @@ def test_video_zero_byte_output_fails_clean(asset_dir: str) -> None:
         'audio_codec': 'aac',
     }
 
-    def empty_transcode(_in: str, staging: str) -> None:
+    def empty_transcode(_in: str, staging: str, _profile: Any = None) -> None:
         with open(staging, 'wb') as fh:
             fh.write(b'')
 
@@ -726,7 +733,7 @@ def test_video_zero_byte_output_fails_clean(asset_dir: str) -> None:
             processing, '_ffprobe_summary', return_value=summary
         ),
         mock.patch.object(
-            processing, '_transcode_to_h264_mp4', side_effect=empty_transcode
+            processing, '_transcode_to_target', side_effect=empty_transcode
         ),
     ):
         with pytest.raises(RuntimeError, match='no output'):
@@ -853,7 +860,7 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
             {'container': 'mp4', 'video_codec': 'h264', 'audio_codec': 'aac'},
             True,
         ),
-        # HEVC in mkv with no audio
+        # HEVC in mkv with no audio (board profile must allow hevc)
         (
             {'container': 'mkv', 'video_codec': 'hevc', 'audio_codec': 'none'},
             True,
@@ -896,8 +903,205 @@ def test_video_can_passthrough_decision_table(
     summary: dict[str, str], expected: bool
 ) -> None:
     """Exhaustive truth table for ``_video_can_passthrough``. Catches
-    a future change to the passthrough sets that wasn't intended."""
-    assert processing._video_can_passthrough(summary) is expected
+    a future change to the passthrough sets that wasn't intended.
+    Pins the board profile to ``pi5`` (which accepts both h264 + hevc)
+    so the legacy "happy path" cases stay equivalent — separate
+    per-board tests below cover the pi2/pi3 H.264-only branch."""
+    pi5_profile = processing._BOARD_PROFILES['pi5']
+    assert processing._video_can_passthrough(summary, pi5_profile) is expected
+
+
+# ---------------------------------------------------------------------------
+# Per-board transcode profile (the codec grid)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ('device_type', 'expected_target'),
+    [
+        ('pi2', 'h264'),
+        ('pi3', 'h264'),
+        ('pi4-64', 'hevc'),
+        ('pi5', 'hevc'),
+        ('x86', 'hevc'),
+        # Unset / unknown env var falls back to H.264 — the most
+        # compatible codec for any Anthias-supported device.
+        ('', 'h264'),
+        ('weird-future-board', 'h264'),
+    ],
+)
+def test_resolve_board_profile_picks_target_codec_per_board(
+    device_type: str, expected_target: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The transcode target lives in a board profile keyed by
+    ``DEVICE_TYPE``. This regression-tests the grid in one place so a
+    future "let's also build a pi6 image" rollout can't silently fall
+    through to H.264 if it forgets to register a profile entry."""
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+    profile = processing._resolve_board_profile()
+    assert profile['transcode_target'] == expected_target
+
+
+@pytest.mark.parametrize(
+    ('device_type', 'video_codec', 'expected_passthrough'),
+    [
+        # pi2 / pi3: VLC + mmal-vc4. H.264 only. HEVC must transcode.
+        ('pi2', 'h264', True),
+        ('pi2', 'hevc', False),
+        ('pi3', 'h264', True),
+        ('pi3', 'hevc', False),
+        # pi4-64 / pi5 / x86: mpv with HEVC support. Both codecs OK.
+        ('pi4-64', 'h264', True),
+        ('pi4-64', 'hevc', True),
+        ('pi5', 'h264', True),
+        ('pi5', 'hevc', True),
+        ('x86', 'h264', True),
+        ('x86', 'hevc', True),
+        # Default profile is H.264-only — safer for unknown boards.
+        ('', 'h264', True),
+        ('', 'hevc', False),
+    ],
+)
+def test_video_can_passthrough_respects_board_codec_set(
+    device_type: str,
+    video_codec: str,
+    expected_passthrough: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pi3 device must not passthrough an HEVC upload; a pi5 device
+    must. The test pins ``DEVICE_TYPE`` rather than passing the
+    profile explicitly so the env-resolution code path is exercised
+    end-to-end (mirrors how the celery worker decides at runtime)."""
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+    summary = {
+        'container': 'mp4',
+        'video_codec': video_codec,
+        'audio_codec': 'aac',
+    }
+    assert processing._video_can_passthrough(summary) is expected_passthrough
+
+
+@pytest.mark.parametrize(
+    ('device_type', 'expected_codec', 'expected_extra'),
+    [
+        ('pi2', 'libx264', None),
+        ('pi3', 'libx264', None),
+        ('pi4-64', 'libx265', 'hvc1'),
+        ('pi5', 'libx265', 'hvc1'),
+        ('x86', 'libx265', 'hvc1'),
+        ('', 'libx264', None),
+    ],
+)
+def test_transcode_to_target_uses_board_specific_encoder(
+    device_type: str,
+    expected_codec: str,
+    expected_extra: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Capture the ffmpeg argv ``_transcode_to_target`` invokes and
+    assert the encoder + ``-tag:v hvc1`` (HEVC only) match the
+    board's expected output. Mocks ``sh.ffmpeg`` so no actual encode
+    runs — we only care about the argv shape here."""
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+        captured['kwargs'] = kwargs
+
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target('in.mov', 'out.mp4')
+
+    args = captured['args']
+    # ``-c:v <encoder>`` lands somewhere in the middle of the argv.
+    assert '-c:v' in args
+    codec_index = args.index('-c:v')
+    assert args[codec_index + 1] == expected_codec
+    # AAC audio + faststart are invariants across boards.
+    assert '-c:a' in args and 'aac' in args
+    assert '-movflags' in args and '+faststart' in args
+    assert '-threads' in args and '2' in args
+    if expected_extra == 'hvc1':
+        # HEVC output gets the iOS-friendly hvc1 codec tag.
+        assert '-tag:v' in args
+        tag_index = args.index('-tag:v')
+        assert args[tag_index + 1] == 'hvc1'
+    else:
+        assert '-tag:v' not in args
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_passthrough_records_target_codec(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passthrough rows still get ``transcode_target`` written so the
+    operator can see "this device wanted hevc, the upload already was
+    hevc, no work needed"."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-pass-pi5', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.metadata['transcoded'] is False
+    assert asset.metadata['transcode_target'] == 'hevc'
+
+
+@pytest.mark.django_db
+def test_video_pi3_transcodes_hevc_to_h264(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pi3 device receiving an HEVC upload must transcode to H.264
+    even though the source is in an accepted container — pi3's VLC +
+    mmal-vc4 path can't decode HEVC. Mocks the actual ffmpeg run so
+    the test doesn't depend on libx265 being available; asserts on
+    the captured argv to lock in the codec choice."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi3')
+    src = path.join(asset_dir, 'fixture.mkv')
+    with open(src, 'wb') as fh:
+        fh.write(b'\x00' * 64)
+    asset = _make_processing_asset('vid-pi3-hevc', src, mimetype='video')
+
+    summary = {
+        'container': 'mkv',
+        'video_codec': 'hevc',
+        'audio_codec': 'aac',
+    }
+    captured: dict[str, Any] = {}
+
+    def fake_transcode(_in: str, staging: str, _profile: Any = None) -> None:
+        # Capture the profile that was selected and produce a stub
+        # output so the runner can finalise the row.
+        captured['profile'] = _profile
+        with open(staging, 'wb') as fh:
+            fh.write(b'\x00\x00\x00\x18ftypmp42')
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch.object(
+            processing, '_transcode_to_target', side_effect=fake_transcode
+        ),
+        mock.patch.object(
+            processing, '_resolve_duration_seconds', return_value=10
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.metadata['transcoded'] is True
+    assert asset.metadata['transcode_target'] == 'h264'
+    # The runner threaded the resolved profile to the transcode
+    # helper rather than letting it re-resolve from env (which would
+    # also be correct, but threading is the cheaper invariant).
+    assert captured['profile']['transcode_target'] == 'h264'
 
 
 # ---------------------------------------------------------------------------

@@ -6,10 +6,12 @@ Two Celery tasks that run on every fresh upload:
   WebP via Pillow + pillow-heif. The Qt webview only ever needs to
   render formats it can already display.
 * ``normalize_video_asset`` — probes the upload's container/codec with
-  ffprobe and either passes it through (rename only) or transcodes to
-  H.264 + AAC in MP4 with ffmpeg's ``-threads 2`` and a single -crf 23
-  preset. The Pi's mpv/VLC pipeline only ever sees H.264/HEVC video
-  this way.
+  ffprobe and either passes it through (rename only) or transcodes
+  with ffmpeg's ``-threads 2`` to a board-appropriate codec: libx264
+  on legacy Pi 2/Pi 3 (mmal-vc4 path; no hardware HEVC) and libx265
+  with the iOS-friendly ``hvc1`` tag on Pi 4-64 / Pi 5 / x86 (mpv
+  path; HEVC hardware-decoded on Pi 4 / x86, software on Pi 5). The
+  on-device player only ever sees a codec it can decode.
 
 Both tasks follow the YouTube-download Celery pattern in
 ``anthias_server.celery_tasks``:
@@ -61,18 +63,167 @@ _PASSTHROUGH_CONTAINERS = frozenset(
 )
 
 
-# Video codecs ffmpeg labels these names that the viewer's mpv/VLC
-# pipeline plays directly. Anything else (ProRes, MJPEG, VP9 at the
-# wrong container, AV1 on hardware that can't decode it, etc.) → forced
-# transcode to libx264 below.
-_PASSTHROUGH_VIDEO_CODECS = frozenset({'h264', 'hevc'})
-
 # Audio codecs the viewer can demux without a transcode. ``None`` is
 # represented as the literal string ``'none'`` so a probe result with
 # no audio stream still falls in the "passthrough OK" set.
 _PASSTHROUGH_AUDIO_CODECS = frozenset(
     {'aac', 'mp3', 'opus', 'vorbis', 'ac3', 'none'}
 )
+
+
+# ---------------------------------------------------------------------------
+# Per-board transcode profile
+# ---------------------------------------------------------------------------
+#
+# The right "video codec" for an Anthias device depends on what the
+# on-device player can hardware-decode (or software-decode at real
+# time). The matrix this PR locks in:
+#
+#   ┌──────────┬─────────────────┬──────────────┬──────────────┐
+#   │ Board    │ Player          │ HEVC OK?     │ Target codec │
+#   ├──────────┼─────────────────┼──────────────┼──────────────┤
+#   │ pi2/pi3  │ VLC + mmal-vc4  │ no           │ H.264        │
+#   │ pi4-64   │ mpv + V4L2 HEVC │ HW-decoded   │ HEVC         │
+#   │ pi5      │ mpv + SW decode │ A76 SW @ 1080p │ HEVC       │
+#   │ x86      │ mpv + va/nv/qsv │ HW-decoded   │ HEVC         │
+#   │ unset    │ (dev / unknown) │ assume no    │ H.264        │
+#   └──────────┴─────────────────┴──────────────┴──────────────┘
+#
+# Two reasons to actually emit HEVC instead of always-H.264:
+#
+#   1. Storage. Anthias devices have small SD cards / eMMC modules; an
+#      HEVC re-encode at equivalent visual quality is roughly 30–50%
+#      smaller than H.264. For a fleet rotating dozens of clips that
+#      compounds.
+#   2. Decode load. Pi 5 has no hardware video decoder at all; the CPU
+#      handles every codec in software. HEVC's better compression at
+#      the same quality means fewer bits the decoder has to chew
+#      through, which trades coding-tool complexity for raw
+#      bandwidth — a wash on Pi 5 in practice, but never worse.
+#
+# The mapping keys match ``DEVICE_TYPE`` (set by the image builder in
+# the Dockerfile, read at celery-task time via ``os.environ``) rather
+# than the runtime-detected ``get_device_type()``. The celery worker
+# shares the env var with anthias-server; it does NOT mount
+# ``/proc/device-tree/model`` from the host. The image builder also
+# uses these exact strings (``pi2`` / ``pi3`` / ``pi4-64`` / ``pi5`` /
+# ``x86``), so a build-time decision and the transcode-time decision
+# always agree. Fallback to ``_DEFAULT_PROFILE`` (H.264) when the env
+# var is unset — keeps the dev-environment path safe and gives an
+# unknown future board the most-compatible codec.
+_BoardProfile = dict[str, Any]
+
+
+# ffmpeg encoder args. Each list is what gets passed between ``-i
+# <input>`` and ``<output>`` for the video stream — audio always
+# becomes AAC 192k via _AUDIO_TRANSCODE_ARGS. ``-tag:v hvc1`` on the
+# HEVC encoder writes the iOS-friendly ``hvc1`` codec tag instead of
+# ffmpeg's default ``hev1``; mpv/VLC handle either, but hvc1 is the
+# broader-compat choice if we ever serve these files to a browser.
+#
+# CRF values are chosen to roughly match perceived quality across
+# codecs: libx264 CRF 23 ≈ libx265 CRF 28. Both leave plenty of
+# headroom for a fleet's typical image-and-text signage content.
+_H264_VIDEO_ARGS = [
+    '-c:v',
+    'libx264',
+    '-preset',
+    'medium',
+    '-crf',
+    '23',
+]
+
+_HEVC_VIDEO_ARGS = [
+    '-c:v',
+    'libx265',
+    '-preset',
+    'medium',
+    '-crf',
+    '28',
+    '-tag:v',
+    'hvc1',
+]
+
+_AUDIO_TRANSCODE_ARGS = ['-c:a', 'aac', '-b:a', '192k']
+
+
+_DEFAULT_PROFILE: _BoardProfile = {
+    # Default lands on H.264 — safe on every Anthias-supported device,
+    # and the fallback for ``DEVICE_TYPE`` unset (dev environment) or
+    # an unrecognised value.
+    'transcode_target': 'h264',
+    'passthrough_video_codecs': frozenset({'h264'}),
+    'video_args': _H264_VIDEO_ARGS,
+}
+
+
+_BOARD_PROFILES: dict[str, _BoardProfile] = {
+    # Legacy 32-bit Pi boards: VLC + mmal-vc4 path. mmal hardware
+    # decode is H.264-only, the CPU is too slow to software-decode
+    # 1080p HEVC, so HEVC is *not* in the passthrough set — uploading
+    # an HEVC clip to a pi2/pi3 must go through a libx264 transcode.
+    'pi2': {
+        'transcode_target': 'h264',
+        'passthrough_video_codecs': frozenset({'h264'}),
+        'video_args': _H264_VIDEO_ARGS,
+    },
+    'pi3': {
+        'transcode_target': 'h264',
+        'passthrough_video_codecs': frozenset({'h264'}),
+        'video_args': _H264_VIDEO_ARGS,
+    },
+    # 64-bit Pi 4 with mpv + KMS (`--vo=drm`): the kernel's V4L2
+    # stateful HEVC decoder driver (/dev/video10 family) is wired up
+    # and mpv's ``--hwdec=auto-safe`` selects ``v4l2request`` for
+    # hevc. Both H.264 and HEVC pass through.
+    'pi4-64': {
+        'transcode_target': 'hevc',
+        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
+        'video_args': _HEVC_VIDEO_ARGS,
+    },
+    # Pi 5: no hardware video decoder block at all (RP1 dropped it
+    # vs. pi4). The Cortex-A76 quad-core software-decodes 1080p H.264
+    # *and* 1080p HEVC at real time, so HEVC is fine. Picking HEVC
+    # also saves disk: a typical 5-minute clip is ~30% smaller after
+    # re-encode than the equivalent H.264 at perceptual parity.
+    'pi5': {
+        'transcode_target': 'hevc',
+        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
+        'video_args': _HEVC_VIDEO_ARGS,
+    },
+    # x86: mpv + ``--hwdec=auto-safe`` selects vaapi (Intel/AMD),
+    # nvdec (NVIDIA), or qsv (Intel iGPU) and every modern x86
+    # platform handles both H.264 and HEVC in hardware. Even on a
+    # software-decode-only x86 box, the CPU has plenty of headroom.
+    'x86': {
+        'transcode_target': 'hevc',
+        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
+        'video_args': _HEVC_VIDEO_ARGS,
+    },
+}
+
+
+def _resolve_board_profile() -> _BoardProfile:
+    """Map the runtime ``DEVICE_TYPE`` env var to a transcode profile.
+
+    The image builder writes ``DEVICE_TYPE=<board>`` into the server
+    image's env at build time (see ``docker/Dockerfile.server.j2``);
+    the celery worker inherits the same env. Looking it up here means
+    a transcode pipeline running on a pi5 image always picks the pi5
+    profile, even if the underlying CPU briefly looks different to
+    /proc inspection (Balena / dev workflows can run amd64 builds on
+    x86 hardware while still claiming a Pi target).
+
+    Falls back to ``_DEFAULT_PROFILE`` (H.264) on:
+      * unset env var (host dev environment, ``ENVIRONMENT=test``),
+      * a future board name we haven't profiled yet.
+
+    The H.264 default is the most compatible choice — every Anthias
+    device, present and historic, plays libx264.
+    """
+    device_type = os.environ.get('DEVICE_TYPE', '').strip().lower()
+    return _BOARD_PROFILES.get(device_type, _DEFAULT_PROFILE)
+
 
 # Image extensions we route through the conversion task. Anything not
 # in this set is left as-is — the existing pipeline already handles
@@ -438,43 +589,67 @@ def _ffprobe_summary(input_path: str) -> dict[str, str]:
     }
 
 
-def _video_can_passthrough(summary: dict[str, str]) -> bool:
-    """``True`` if the file is in a format the viewer plays directly.
+def _video_can_passthrough(
+    summary: dict[str, str],
+    profile: _BoardProfile | None = None,
+) -> bool:
+    """``True`` if the file is in a format the *target board's* viewer
+    plays directly.
 
     The probe needs to answer "yes" to all three questions: is the
-    container one we accept; is the video codec H.264/HEVC; is the
-    audio codec one of the demuxer-compatible set (or absent). Any
-    'unknown' answer (probe failed, exotic codec) triggers a
-    transcode — better to spend the cycles than to let an
-    unplayable file sit in the rotation.
+    container one we accept; is the video codec one the board's
+    player handles (H.264 only on pi2/pi3 — they have no HEVC
+    hardware and an A53 CPU can't software-decode HEVC at 1080p; H.264
+    + HEVC on pi4-64/pi5/x86); is the audio codec one of the
+    demuxer-compatible set (or absent). Any 'unknown' answer (probe
+    failed, exotic codec) triggers a transcode — better to spend the
+    cycles than to let an unplayable file sit in the rotation.
+
+    ``profile`` defaults to the board profile resolved from
+    ``DEVICE_TYPE`` so callers don't have to thread it through. Tests
+    pass a specific profile to assert per-board behaviour without
+    mutating the env.
     """
+    if profile is None:
+        profile = _resolve_board_profile()
     if summary.get('container') not in _PASSTHROUGH_CONTAINERS:
         return False
-    if summary.get('video_codec') not in _PASSTHROUGH_VIDEO_CODECS:
+    if summary.get('video_codec') not in profile['passthrough_video_codecs']:
         return False
     if summary.get('audio_codec') not in _PASSTHROUGH_AUDIO_CODECS:
         return False
     return True
 
 
-def _transcode_to_h264_mp4(input_path: str, output_path: str) -> None:
-    """Run the canonical libx264 + AAC transcode.
+def _transcode_to_target(
+    input_path: str,
+    output_path: str,
+    profile: _BoardProfile | None = None,
+) -> None:
+    """Run a libx264 or libx265 transcode picked by the board profile.
+
+    Profile decides codec + encoder args; the *invariants* are:
 
     * ``-y`` and ``-nostdin`` keep ffmpeg non-interactive (it would
       otherwise prompt on overwrite or block waiting for input).
     * ``-threads 2`` caps CPU usage so the viewer keeps two cores
       free on Pi 4 / Pi 5; combined with the ``nice -n 19 ionice -c
       3`` wrapper on the celery worker this means a transcode
-      effectively never disrupts active playback.
-    * ``-preset medium -crf 23`` is libx264's well-known "transparent
-      enough at moderate bitrate" default; not pushing for fast/slow
-      keeps results stable.
+      effectively never disrupts active playback. libx265 honours the
+      same flag and parallelises within those two threads.
     * ``-c:a aac -b:a 192k`` matches every Anthias-supplied default
-      asset's audio profile.
+      asset's audio profile, regardless of video codec.
     * ``-movflags +faststart`` shifts the moov atom to the front of
-      the file so playback can begin before the file is fully buffered
-      — relevant when the viewer is fed via an HTTP serve later.
+      the file so playback can begin before the file is fully
+      buffered — relevant when the viewer is fed via an HTTP serve
+      later, and harmless otherwise.
+
+    The ``profile`` parameter lets callers (read: tests) override the
+    env-resolved profile so a single host can exercise both the
+    libx264 and libx265 branches without mutating ``DEVICE_TYPE``.
     """
+    if profile is None:
+        profile = _resolve_board_profile()
     sh.ffmpeg(
         '-y',
         '-nostdin',
@@ -482,16 +657,8 @@ def _transcode_to_h264_mp4(input_path: str, output_path: str) -> None:
         '2',
         '-i',
         input_path,
-        '-c:v',
-        'libx264',
-        '-preset',
-        'medium',
-        '-crf',
-        '23',
-        '-c:a',
-        'aac',
-        '-b:a',
-        '192k',
+        *profile['video_args'],
+        *_AUDIO_TRANSCODE_ARGS,
         '-movflags',
         '+faststart',
         output_path,
@@ -521,16 +688,21 @@ def _run_video_normalisation(asset: Asset) -> None:
 
     src_ext = _ext(src_uri)
     summary = _ffprobe_summary(src_uri)
+    profile = _resolve_board_profile()
 
     metadata = dict(asset.metadata or {})
     metadata['original_ext'] = src_ext
     metadata.pop('error_message', None)
 
-    if _video_can_passthrough(summary):
+    if _video_can_passthrough(summary, profile):
         # No re-encode. Keep the file at its current uri; flip the
         # in-progress flag and write the duration if ffprobe could
-        # answer for it.
+        # answer for it. Recording ``transcode_target`` even on the
+        # passthrough path keeps an operator's metadata view
+        # consistent — they can see "this device wanted hevc, the
+        # upload already was hevc, no work needed" without inferring.
         metadata['transcoded'] = False
+        metadata['transcode_target'] = profile['transcode_target']
         update: dict[str, Any] = {
             'is_processing': False,
             'metadata': metadata,
@@ -571,7 +743,7 @@ def _run_video_normalisation(asset: Asset) -> None:
             pass
 
     try:
-        _transcode_to_h264_mp4(src_uri, staging)
+        _transcode_to_target(src_uri, staging, profile)
     except sh.TimeoutException as exc:
         # Time-limit overruns are surfaced as TimeoutException; let
         # on_failure land so is_processing clears.
@@ -606,6 +778,14 @@ def _run_video_normalisation(asset: Asset) -> None:
     duration = _resolve_duration_seconds(final_uri)
 
     metadata['transcoded'] = True
+    # ``transcode_target`` records what we *aimed* to produce so an
+    # operator can see "this row was re-encoded to hevc on a pi5
+    # device" without re-probing the file. The actual codec landed in
+    # the file is identical to this target — ffmpeg only deviates
+    # silently if the encoder is unavailable, which is fatal at this
+    # point (libx265 ships in the apt ffmpeg build for every Anthias
+    # board, see the configure flags in image_builder).
+    metadata['transcode_target'] = profile['transcode_target']
     update_dict: dict[str, Any] = {
         'uri': final_uri,
         'mimetype': 'video',
