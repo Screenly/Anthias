@@ -200,9 +200,7 @@ def test_view_webpage_arms_reload_interval(
     with (
         mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
         mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
-        mock.patch.object(
-            viewer_fixtures.u, 'current_browser_url', None
-        ),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
     ):
         viewer_fixtures.u.view_webpage('https://example.com', 30)
 
@@ -223,9 +221,7 @@ def test_view_webpage_default_zero_interval(
     with (
         mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
         mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
-        mock.patch.object(
-            viewer_fixtures.u, 'current_browser_url', None
-        ),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
     ):
         viewer_fixtures.u.view_webpage('https://example.com')
 
