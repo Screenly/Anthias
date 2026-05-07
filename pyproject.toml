@@ -89,7 +89,7 @@ viewer = [
 dev = [
     "pytest==9.0.3",
     "pytest-cov==6.0.0",
-    "pytest-django==4.10.0",
+    "pytest-django==4.12.0",
     "pytest-mock==3.14.0",
     "pytest-xdist==3.6.1",
     "playwright==1.59.0",
