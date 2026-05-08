@@ -258,7 +258,7 @@ function build_qt () {
 }
 
 # Modify paths for build process
-/usr/local/bin/sysroot-relativelinks.py /sysroot
+python3 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_cross_compile_tool
 fetch_rpi_firmware

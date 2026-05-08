@@ -141,10 +141,15 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt5-sysroot-apt-{{ artifact_boar
     dpkg --purge libraspberrypi-dev
 
 
-FROM --platform=$BUILDPLATFORM {{ base_image }}:{{ base_image_tag }} AS webview-builder
+FROM --platform=linux/amd64 {{ base_image }}:{{ base_image_tag }} AS webview-builder
 
 USER root
 
+# Pinned to linux/amd64 (not $BUILDPLATFORM): the Linaro 7.4.1
+# cross-compiler downloaded below is the x86_64 host tarball, so this
+# stage must run on x86_64. CI is amd64; arm64 build hosts (e.g. Apple
+# Silicon) will execute this stage under QEMU.
+#
 # Host build tools only. The webview app builds against the pre-built
 # Qt 5 toolchain, so we don't need the Qt 5 / QtWebEngine source-build
 # stack (chromium's bison/flex/gperf/ninja/gyp/python2.7). python3 is

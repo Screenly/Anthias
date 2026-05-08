@@ -250,9 +250,13 @@ RUN printf 'Types: deb\nURIs: http://archive.debian.org/debian\nSuites: bullseye
 
 WORKDIR /build
 
-RUN wget -q https://raw.githubusercontent.com/riscv/riscv-poky/master/scripts/sysroot-relativelinks.py \
-        -O /usr/local/bin/sysroot-relativelinks.py && \
-    chmod +x /usr/local/bin/sysroot-relativelinks.py
+# sysroot-relativelinks.py is now vendored in-tree alongside this
+# Dockerfile (see webview/sysroot-relativelinks.py, pinned to a
+# Yocto/poky upstream commit). bin/rebuild_qt5_toolchain.sh runs the
+# build with WEBVIEW_DIR (the webview/ directory) as the docker
+# context, so a plain COPY picks up the vendored copy without re-curling
+# from raw.githubusercontent.com.
+COPY sysroot-relativelinks.py /usr/local/bin/sysroot-relativelinks.py
 
 RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=builder /lib/ /sysroot/lib/
