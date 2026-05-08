@@ -6,9 +6,9 @@
 # executes a remote shell script at workflow runtime, and the
 # third-party `oven-sh/setup-bun` action.
 #
-# Required env: BUN_VERSION (e.g. "1.3.13"). The GitHub-hosted runners
-# we use are linux/amd64; if that ever changes, extend the platform
-# detection below.
+# Required env: BUN_VERSION (e.g. "1.3.13"). The arch case below
+# already covers x86_64 and aarch64 Linux runners; extend it if a
+# different platform is ever introduced.
 set -euo pipefail
 
 : "${BUN_VERSION:?BUN_VERSION must be set in the environment}"
