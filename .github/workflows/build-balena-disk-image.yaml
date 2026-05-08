@@ -327,9 +327,14 @@ jobs:
           DOWNLOAD_SIZE=$(wc -c < "$ARTIFACT.img.zst")
 
           # Match the format `sha256sum` would have written so the
-          # sidecar is a drop-in input to `sha256sum -c`.
+          # sidecar is a drop-in input to `sha256sum -c`. The
+          # uncompressed line uses `$ARTIFACT.img` (not the local
+          # intermediate `$BALENA_IMAGE.img`) because that's the
+          # filename a user gets when they decompress with
+          # `zstd -d $ARTIFACT.img.zst` — the local name is a
+          # CI-internal artefact that the release asset never carries.
           {
-            printf '%s  %s\n' "$IMAGE_SHA256" "$BALENA_IMAGE.img"
+            printf '%s  %s\n' "$IMAGE_SHA256" "$ARTIFACT.img"
             printf '%s  %s\n' "$DOWNLOAD_SHA256" "$ARTIFACT.img.zst"
           } > "$ARTIFACT.sha256"
 
