@@ -29,6 +29,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
+    logging:
+      driver: journald
+      options:
+        tag: anthias-server
 
   anthias-viewer:
     image: ghcr.io/screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
@@ -55,6 +59,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
+    logging:
+      driver: journald
+      options:
+        tag: anthias-viewer
 
   anthias-celery:
     # Runs on the same image as anthias-server with a CMD override.
@@ -94,6 +102,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
     labels:
       io.balena.features.supervisor-api: '1'
+    logging:
+      driver: journald
+      options:
+        tag: anthias-celery
 
   redis:
     image: ghcr.io/screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
@@ -105,6 +117,10 @@ services:
     restart: always
     volumes:
       - redis-data:/var/lib/redis
+    logging:
+      driver: journald
+      options:
+        tag: anthias-redis
 
 volumes:
   resin-data:

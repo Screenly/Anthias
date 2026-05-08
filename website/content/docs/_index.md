@@ -12,9 +12,11 @@ and `raspberrypi` for the hostname, then run:
 $ ssh pi@raspberrypi
 ```
 
-Anthias makes use of Docker for containerization. To get the logs from the
-containers, you can either make use of the `docker logs` command or you can
-use the `docker compose logs` command.
+Anthias ships its container logs through the host's `systemd-journald`,
+so the system handles rotation and retention for you and there is no
+unbounded `*-json.log` file under `/var/lib/docker/containers/` to fill
+the SD card. You can read the logs three ways: `docker logs`,
+`docker compose logs`, or `journalctl` directly.
 
 ### Using `docker logs`
 
@@ -58,6 +60,30 @@ $ docker compose logs -f ${SERVICE_NAME}
 ```
 
 Check out [this section](/docs/development/#understanding-the-components-that-make-up-anthias) of the Developer documentation page for the list of available services.
+
+### Using `journalctl`
+
+Each service is tagged in the journal so you can pull logs without
+docker. Useful when you want to grep across a long time range or
+combine container logs with system logs:
+
+```bash
+$ journalctl -f CONTAINER_TAG=anthias-server
+$ journalctl --since "1 hour ago" CONTAINER_TAG=anthias-viewer
+```
+
+The available tags are `anthias-server`, `anthias-viewer`,
+`anthias-celery`, and `anthias-redis`.
+
+Journal retention is controlled by `systemd-journald` (see
+`/etc/systemd/journald.conf` — `SystemMaxUse` caps total disk usage,
+defaulting to 10% of the filesystem). If you want to free space
+immediately:
+
+```bash
+$ sudo journalctl --vacuum-time=2d   # drop entries older than 2 days
+$ sudo journalctl --vacuum-size=200M # cap journal at 200 MB
+```
 
 ## Enabling SSH
 
