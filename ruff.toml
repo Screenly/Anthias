@@ -1,5 +1,12 @@
 line-length = 79
-exclude = ["src/anthias_server/app/migrations/*.py", "src/anthias_server/api/migrations/*.py"]
+exclude = [
+    "src/anthias_server/app/migrations/*.py",
+    "src/anthias_server/api/migrations/*.py",
+    # Vendored verbatim from a pinned Yocto/poky upstream commit; see
+    # the file header. Reformatting would put the file off-pin and
+    # silently break the provenance comment.
+    "webview/sysroot-relativelinks.py",
+]
 target-version = "py313"
 
 [format]
