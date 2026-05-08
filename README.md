@@ -15,7 +15,7 @@
 
 <br>
 
-![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
+![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/website/assets/images/color.svg?raw=true "Anthias Logo")
 
 <br>
 
