@@ -7,13 +7,12 @@ on:
     paths:
       - '.github/workflows/deploy-website.yaml'
       - 'website/**'
-      - 'tools/raspberry_pi_imager/**'
 
-  # Re-deploy the marketing site whenever a release is published — the
-  # build-balena-disk-image workflow's final step creates the GitHub
-  # release with the new *.img.zst artefacts, so by the time this fires
-  # the assets are queryable from the GitHub API and rpi-imager.json
-  # picks them up. `prereleases` are included intentionally because
+  # Re-deploy the marketing site when a new release is published. The
+  # release workflow (build-balena-disk-image.yaml) attaches the
+  # consolidated rpi-imager.json as a release asset; this job fetches
+  # whatever's on the latest release at deploy time and ships it as a
+  # static file. `prereleases` are included intentionally because
   # build-balena-disk-image.yaml currently flags every release as
   # prerelease=true.
   release:
@@ -36,32 +35,9 @@ concurrency:
 env:
   BUN_VERSION: '1.3.13'
   HUGO_VERSION: '0.157.0'
-  UV_VERSION: '0.7.12'
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
-        with:
-          version: ${{ env.UV_VERSION }}
-
-      - name: Run rpi-imager tests
-        # The repo-wide pytest addopts in pyproject.toml include
-        # pytest-playwright flags (--browser, --tracing, --screenshot,
-        # --output) for the integration suite. The website group
-        # doesn't pull pytest-playwright, so we override addopts here
-        # to keep just --strict-markers — otherwise pytest dies with
-        # "unrecognized arguments" before any test runs.
-        run: uv run --no-dev --group website -m pytest --confcutdir=tools/raspberry_pi_imager tools/raspberry_pi_imager/tests/ -v -o "addopts=--strict-markers"
-
-  # Build job
   build:
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -77,15 +53,12 @@ jobs:
           rm hugo.deb
           hugo version
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5
-        with:
-          version: ${{ env.UV_VERSION }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+      # Manual bun install — same toolchain we use elsewhere in the
+      # repo. Avoids third-party setup actions.
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
 
       - name: Install website dependencies
         run: bun install --frozen-lockfile
@@ -98,37 +71,28 @@ jobs:
       - name: Build website
         run: hugo --source website --minify
 
-      - name: Build Raspberry Pi Imager JSON
-        run: uv run --no-dev --group website python -m tools.raspberry_pi_imager.build_pi_imager_json > website/public/rpi-imager.json
+      # Fetch rpi-imager.json from the latest GitHub release. The file
+      # is built by build-balena-disk-image.yaml when a release is
+      # cut, then served at /rpi-imager.json. Falls back to an empty
+      # os_list if no release has the asset yet (first run after this
+      # refactor lands; can be removed once one new-format release
+      # exists).
+      - name: Fetch rpi-imager.json from latest release
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Validate rpi-imager.json
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Syntax check
-          jq . < website/public/rpi-imager.json > /dev/null
-
-          # Must have os_list array
-          jq -e '.os_list | type == "array"' < website/public/rpi-imager.json > /dev/null
-
-          # Each entry must have required fields. jq's has() takes one
-          # key at a time, so iterate the required-key list with `all`.
-          jq -e '
-            .os_list[] as $entry
-            | ["name","description","icon","website","url","extract_size","extract_sha256","image_download_size","image_download_sha256","release_date"]
-            | all(. as $k | $entry | has($k))
-          ' < website/public/rpi-imager.json > /dev/null
-
-          # Sizes must be numbers, not strings
-          jq -e '.os_list[] | (.extract_size | type == "number") and (.image_download_size | type == "number")' < website/public/rpi-imager.json > /dev/null
-
-          # No pi1 entries
-          jq -e '[.os_list[] | .name | test("pi1")] | any | not' < website/public/rpi-imager.json > /dev/null
-
-          # All URLs must be HTTPS
-          jq -e '[.os_list[] | .url | startswith("https://")] | all' < website/public/rpi-imager.json > /dev/null
-
-          echo "rpi-imager.json validation passed"
+          set -euo pipefail
+          mkdir -p website/public
+          if gh release download --pattern rpi-imager.json \
+              --dir website/public \
+              --repo Screenly/Anthias \
+              --clobber 2>/dev/null; then
+            echo "Fetched rpi-imager.json from latest release"
+            jq . website/public/rpi-imager.json > /dev/null
+          else
+            echo "::warning::No rpi-imager.json on latest release yet; shipping empty os_list."
+            printf '%s\n' '{"os_list": []}' > website/public/rpi-imager.json
+          fi
 
       - name: Show build output
         run: find website/public

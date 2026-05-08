@@ -12,6 +12,7 @@ from tools.raspberry_pi_imager.build_pi_imager_json import (
     build_imager_json,
     get_asset_list,
     get_board_from_url,
+    get_latest_tag,
     retrieve_and_patch_json,
 )
 
@@ -117,6 +118,21 @@ def mock_full_build(mock_requests_get: MagicMock) -> MagicMock:
 
     mock_requests_get.side_effect = side_effect
     return mock_requests_get
+
+
+# ---------------------------------------------------------------------------
+# get_latest_tag
+# ---------------------------------------------------------------------------
+
+
+def test_get_latest_tag_honours_release_tag_env(
+    mock_requests_get: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('RELEASE_TAG', 'v9.9.9')
+
+    assert get_latest_tag() == 'v9.9.9'
+    mock_requests_get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

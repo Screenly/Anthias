@@ -1,41 +1,199 @@
 name: Build Balena Disk Images
+
+# Triggered by GitHub release publication (the stable channel — see
+# issue #2769) or manually via workflow_dispatch for re-runs of an
+# existing release. Master pushes only build/push containers; they
+# don't fire this workflow.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to be used for the release'
+        description: >-
+          Existing release tag to (re)build images for. Must match an
+          already-published GitHub release.
         required: true
         type: string
-      commit:
-        description: 'Commit or branch name'
-        required: false
-        type: string
-        default: 'master'
-      docker-tag:
-        description: 'Docker tag to be used for the release'
-        required: true
-        type: string
+
+env:
+  # Bumped from 22.4.15. Same npm package name (`balena-cli`).
+  BALENA_CLI_VERSION: '25.1.3'
 
 jobs:
-  create-docker-tag-file:
+  # Single source of truth for tag/commit/short-hash so every downstream
+  # job derives identical values. Keeps the trigger-specific lookup logic
+  # in one place.
+  resolve-context:
     runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      commit: ${{ steps.derive.outputs.commit }}
+      short-hash: ${{ steps.derive.outputs.short-hash }}
     steps:
-      - name: Create docker tag file
+      - name: Resolve tag from trigger
+        id: tag
         run: |
-          echo ${{ inputs.docker-tag }} > docker-tag
-      - name: Upload docker tag file
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout at tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          name: docker-tag
-          path: docker-tag
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Compute commit + short hash
+        id: derive
+        run: |
+          COMMIT=$(git rev-parse HEAD)
+          SHORT_HASH=$(git rev-parse --short HEAD)
+          {
+            echo "tag=${{ steps.tag.outputs.tag }}"
+            echo "commit=$COMMIT"
+            echo "short-hash=$SHORT_HASH"
+          } >> "$GITHUB_OUTPUT"
+
+  # Verify the GHCR images for the release commit exist before doing
+  # anything that mutates fleet state. If a release is cut from a commit
+  # that hasn't been built by docker-build.yaml (e.g. a non-master
+  # commit, or master before its build finished), fail loudly here so
+  # the fleet isn't deployed to with images that aren't in the registry.
+  preflight:
+    needs: resolve-context
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: read
+    steps:
+      # ubuntu-24.04 ships Docker + buildx, so no setup needed; manual
+      # `docker login` keeps the workflow free of third-party actions.
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
+
+      - name: Verify all <short-hash>-<board> images exist in GHCR
+        env:
+          SHORT_HASH: ${{ needs.resolve-context.outputs.short-hash }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for board in pi2 pi3 pi4-64 pi5; do
+            for service in server viewer redis; do
+              ref="ghcr.io/screenly/anthias-${service}:${SHORT_HASH}-${board}"
+              if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
+                missing+=("$ref")
+              fi
+            done
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing GHCR images for release commit ${SHORT_HASH}:"
+            printf '  %s\n' "${missing[@]}"
+            echo "Cut the release from a master commit whose docker-build.yaml run has finished, or run docker-build.yaml manually first." >&2
+            exit 1
+          fi
 
   generate-openapi-schema:
+    needs: resolve-context
     uses: ./.github/workflows/generate-openapi-schema.yml
     permissions:
       contents: write
 
-  balena-build-images:
+  # Push the docker-compose pinned to <short-hash>-<board> images to the
+  # board's balena fleet. This is the "OTA stable channel" half of the
+  # release: existing fleet devices auto-update to this commit.
+  # Replaces the deprecated balena-io/deploy-to-balena-action with
+  # direct balena-cli calls so the toolchain is current.
+  balena-cloud-deploy:
+    needs: [resolve-context, preflight]
     strategy:
+      fail-fast: false
+      matrix:
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve-context.outputs.tag }}
+
+      # Bun replaces actions/setup-node + npm: same toolchain we already
+      # use for the website / frontend. Manual install keeps the
+      # workflow free of third-party action dependencies. Node ships
+      # with ubuntu-24.04 so balena-cli's runtime is available without
+      # extra setup.
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Install balena CLI
+        run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
+
+      - name: Login to balena
+        env:
+          BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
+        run: balena login --token "$BALENA_TOKEN"
+
+      - name: Resolve fleet slug + env vars
+        env:
+          SHORT_HASH: ${{ needs.resolve-context.outputs.short-hash }}
+        run: |
+          case "${{ matrix.board }}" in
+            pi2)    FLEET=anthias-pi2 ;;
+            pi3)    FLEET=anthias-pi3 ;;
+            pi4-64) FLEET=anthias-pi4 ;;
+            pi5)    FLEET=anthias-pi5 ;;
+          esac
+          {
+            echo "FLEET_SLUG=$FLEET"
+            echo "GIT_SHORT_HASH=$SHORT_HASH"
+            echo "BOARD=${{ matrix.board }}"
+            echo "SHM_SIZE=256mb"
+          } >> "$GITHUB_ENV"
+
+      - name: Render balena docker-compose
+        run: |
+          mkdir -p balena-deploy
+          cp balena.yml balena-deploy/
+          envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
+
+          # Pi 5 doesn't expose /dev/vchiq; strip the bind mount.
+          if [ "${{ matrix.board }}" == "pi5" ]; then
+            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+              balena-deploy/docker-compose.yml
+          fi
+
+      # `balena deploy` (vs `balena push`) takes the rendered compose
+      # file and points the fleet at the existing GHCR images — no
+      # remote build. Wrapped in a 3-attempt retry because balena
+      # cloud routinely 5xx/ESOCKETTIMEDOUTs the upload step.
+      - name: Deploy to balena fleet
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if balena deploy "screenly_ose/$FLEET_SLUG" \
+                --source balena-deploy; then
+              exit 0
+            fi
+            echo "balena deploy attempt $attempt failed; backing off"
+            sleep $((30 + RANDOM % 120))
+          done
+          echo "::error::balena deploy failed for $FLEET_SLUG after 3 attempts"
+          exit 1
+
+  # Download balena OS, preload with the fleet's `latest` (the commit
+  # we just pushed in balena-cloud-deploy), package as .img.zst, and
+  # emit per-board metadata used to build rpi-imager.json.
+  balena-build-images:
+    needs: [resolve-context, balena-cloud-deploy]
+    strategy:
+      fail-fast: false
       matrix:
         board: ['pi2', 'pi3', 'pi4-64', 'pi5']
     runs-on: ubuntu-24.04
@@ -44,42 +202,49 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: Checkout
+      - name: Checkout at tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve-context.outputs.tag }}
 
       - name: Install zstd
         run: |
           sudo apt-get update
           sudo apt-get install -y zstd
 
-      - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: '22.21.0'
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
 
       - name: Install balena CLI
-        run: npm install -g balena-cli@22.4.15
+        run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
 
       - name: Login to balena
         env:
           BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
         run: balena login --token "$BALENA_TOKEN"
 
-      - name: Get base board
+      - name: Resolve image + fleet slug
         run: |
-          if [ "${{ matrix.board }}" == 'pi2' ]; then
-            echo "BALENA_IMAGE=raspberry-pi2" >> "$GITHUB_ENV"
-            echo "FLEET_SLUG=anthias-pi2" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi3' ]; then
-            echo "BALENA_IMAGE=raspberrypi3" >> "$GITHUB_ENV"
-            echo "FLEET_SLUG=anthias-pi3" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi4-64' ]; then
-            echo "BALENA_IMAGE=raspberrypi4-64" >> "$GITHUB_ENV"
-            echo "FLEET_SLUG=anthias-pi4" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi5' ]; then
-            echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
-            echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
-          fi
+          case "${{ matrix.board }}" in
+            pi2)
+              echo "BALENA_IMAGE=raspberry-pi2" >> "$GITHUB_ENV"
+              echo "FLEET_SLUG=anthias-pi2" >> "$GITHUB_ENV"
+              ;;
+            pi3)
+              echo "BALENA_IMAGE=raspberrypi3" >> "$GITHUB_ENV"
+              echo "FLEET_SLUG=anthias-pi3" >> "$GITHUB_ENV"
+              ;;
+            pi4-64)
+              echo "BALENA_IMAGE=raspberrypi4-64" >> "$GITHUB_ENV"
+              echo "FLEET_SLUG=anthias-pi4" >> "$GITHUB_ENV"
+              ;;
+            pi5)
+              echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
+              echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
+              ;;
+          esac
 
       - name: Download OS image
         run: |
@@ -110,13 +275,16 @@ jobs:
           sha256sum "$(date -I)-$BALENA_IMAGE.img.zst" >> \
             "$(date -I)-$BALENA_IMAGE.sha256"
 
-          # Build Raspberry Pi Imager metadata
+          # Per-board metadata snippet, uploaded to the release alongside
+          # the .img.zst it describes. tools/raspberry_pi_imager/
+          # build_pi_imager_json.py reads these back from the release
+          # and consolidates them into rpi-imager.json.
           jq --null-input \
             --arg BOARD "${{ matrix.board }}" \
             --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
-            --arg IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
+            --argjson IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
             --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.img.zst" | cut -d ' ' -f 1)" \
-            --arg DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.img.zst" | xargs)" \
+            --argjson DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.img.zst" | xargs)" \
             --arg RELEASE_DATE "$(date -I)" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
@@ -129,13 +297,6 @@ jobs:
               "image_download_sha256": $DOWNLOAD_SHA256,
               "release_date": $RELEASE_DATE
             }' > "$(date -I)-$BALENA_IMAGE.json"
-
-      - name: List files before upload
-        run: |
-          echo "Current directory contents:"
-          ls -la
-          echo "Files matching pattern:"
-          ls -la ./*raspberry*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -151,37 +312,98 @@ jobs:
         with:
           subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
 
-  create-release:
-    needs: [create-docker-tag-file, generate-openapi-schema, balena-build-images]
+  # Phase 1 release upload: ensure the release exists, then attach the
+  # disk images, per-board metadata snippets, OpenAPI schema, and the
+  # docker-tag pointer file. The per-board snippets need to be on the
+  # release before the build-rpi-imager-json job runs because
+  # tools/raspberry_pi_imager/build_pi_imager_json.py reads them back
+  # via the GitHub API.
+  upload-release-assets:
+    needs:
+      - resolve-context
+      - generate-openapi-schema
+      - balena-build-images
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Download docker tag
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Checkout at tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          name: docker-tag
-          path: .
+          ref: ${{ needs.resolve-context.outputs.tag }}
 
       - name: Download OpenAPI schema
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: anthias-api-schema
-          path: .
+          path: assets
 
       - name: Download balena images
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: balena-images-*
-          path: .
+          path: assets
           merge-multiple: true
 
-      - name: Create release
-        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+      - name: Write docker-tag asset
+        env:
+          SHORT_HASH: ${{ needs.resolve-context.outputs.short-hash }}
+        run: |
+          printf '%s\n' "$SHORT_HASH" > assets/docker-tag
+
+      - name: Ensure release exists, then upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-context.outputs.tag }}
+          COMMIT: ${{ needs.resolve-context.outputs.commit }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --target "$COMMIT" \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+          ls -la assets
+          gh release upload "$TAG" assets/* --clobber
+
+  # Phase 2 release upload: with per-board snippets now on the release,
+  # invoke the existing tools/raspberry_pi_imager/build_pi_imager_json
+  # generator (which queries the GitHub API for the release's assets)
+  # and attach the consolidated rpi-imager.json. RELEASE_TAG bypasses
+  # the script's `/releases/latest` lookup so prereleases work too.
+  build-rpi-imager-json:
+    needs: [resolve-context, upload-release-assets]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          allowUpdates: true
-          generateReleaseNotes: true
-          prerelease: true
-          artifacts: "docker-tag,*raspberry*.img.zst,*raspberry*.sha256,*raspberry*.json,anthias-api-schema.json"
-          tag: ${{ inputs.tag }}
-          commit: ${{ inputs.commit }}
+          ref: ${{ needs.resolve-context.outputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Install requests
+        run: pip install 'requests==2.33.1'
+
+      - name: Generate rpi-imager.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.resolve-context.outputs.tag }}
+        run: |
+          python -m tools.raspberry_pi_imager.build_pi_imager_json \
+            > rpi-imager.json
+          jq . rpi-imager.json
+
+      - name: Upload rpi-imager.json to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-context.outputs.tag }}
+        run: |
+          gh release upload "$TAG" rpi-imager.json --clobber
