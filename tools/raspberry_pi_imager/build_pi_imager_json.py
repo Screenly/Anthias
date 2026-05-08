@@ -46,9 +46,11 @@ def get_github_headers() -> dict[str, str]:
 
 def get_latest_tag() -> str:
     # Honour an explicit RELEASE_TAG override before hitting the API.
-    # /releases/latest skips prereleases by design, so the disk-image
-    # workflow (which currently flags releases as prereleases) needs
-    # to pass the tag in directly.
+    # Callers that already know which release they want (the
+    # disk-image workflow does, since it's release-triggered) should
+    # pass the tag directly. The fallback below uses /releases/latest,
+    # which excludes prereleases by design — so the override is also
+    # the way to target a prerelease without a manual API call.
     if tag := os.environ.get('RELEASE_TAG'):
         return tag
 

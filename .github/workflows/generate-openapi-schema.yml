@@ -46,6 +46,17 @@ on:
       - '!.cursor/**'
       - '!.claude/**'
   workflow_call:
+    inputs:
+      ref:
+        description: >-
+          Git ref to check out before generating the schema. Defaults to
+          the workflow's default ref (master push / PR head). The
+          release-triggered disk-image workflow passes the release tag
+          here so the OpenAPI schema attached to the release matches
+          the rest of the release artefacts.
+        required: false
+        type: string
+        default: ''
 
 jobs:
   generate-openapi-schema:
@@ -57,6 +68,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Python 3.13
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6

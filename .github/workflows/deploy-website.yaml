@@ -8,13 +8,11 @@ on:
       - '.github/workflows/deploy-website.yaml'
       - 'website/**'
 
-  # Re-deploy the marketing site when a new release is published. The
+  # Re-deploy the marketing site when a release is published. The
   # release workflow (build-balena-disk-image.yaml) attaches the
-  # consolidated rpi-imager.json as a release asset; this job fetches
-  # whatever's on the latest release at deploy time and ships it as a
-  # static file. `prereleases` are included intentionally because
-  # build-balena-disk-image.yaml currently flags every release as
-  # prerelease=true.
+  # consolidated rpi-imager.json as a release asset; the build job
+  # fetches it (by tag on release-triggered runs, latest otherwise)
+  # and Hugo serves it as a static file at /rpi-imager.json.
   release:
     types: [published]
 
@@ -71,26 +69,41 @@ jobs:
       - name: Build website
         run: hugo --source website --minify
 
-      # Fetch rpi-imager.json from the latest GitHub release. The file
-      # is built by build-balena-disk-image.yaml when a release is
-      # cut, then served at /rpi-imager.json. Falls back to an empty
-      # os_list if no release has the asset yet (first run after this
-      # refactor lands; can be removed once one new-format release
-      # exists).
-      - name: Fetch rpi-imager.json from latest release
+      # Fetch rpi-imager.json from the GitHub release. The file is
+      # built by build-balena-disk-image.yaml at release time and
+      # served at /rpi-imager.json.
+      #
+      # On release-triggered runs we pin to the release that fired this
+      # workflow (github.event.release.tag_name) so the website always
+      # matches what was just published — even if the release is
+      # flagged as prerelease, in which case `latest` would skip it.
+      # Push/manual runs pull from the latest release. Falls back to
+      # an empty os_list if no matching asset is available yet (first
+      # run after this refactor lands; safe to remove the fallback
+      # once one new-format release exists).
+      - name: Fetch rpi-imager.json from release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           mkdir -p website/public
-          if gh release download --pattern rpi-imager.json \
+          if [ -n "${RELEASE_TAG:-}" ]; then
+            target=( "$RELEASE_TAG" )
+            label="release $RELEASE_TAG"
+          else
+            target=()
+            label="latest release"
+          fi
+          if gh release download "${target[@]}" \
+              --pattern rpi-imager.json \
               --dir website/public \
               --repo Screenly/Anthias \
               --clobber 2>/dev/null; then
-            echo "Fetched rpi-imager.json from latest release"
+            echo "Fetched rpi-imager.json from $label"
             jq . website/public/rpi-imager.json > /dev/null
           else
-            echo "::warning::No rpi-imager.json on latest release yet; shipping empty os_list."
+            echo "::warning::No rpi-imager.json on $label; shipping empty os_list."
             printf '%s\n' '{"os_list": []}' > website/public/rpi-imager.json
           fi
 

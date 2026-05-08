@@ -41,6 +41,7 @@ jobs:
       run: |
         uv venv
         uv pip install --group dev-host
+        uv pip install --group website
 
     - name: Run Ruff linting checks
       run: |
@@ -49,3 +50,13 @@ jobs:
     - name: Run Ruff formatting checks
       run: |
         uv run ruff format --check .
+
+    # The repo-wide pytest addopts in pyproject.toml include
+    # pytest-playwright flags; the rpi-imager unit tests don't pull
+    # pytest-playwright, so override addopts here. Same pattern the old
+    # deploy-website test job used; this is now the rpi-imager
+    # generator's only PR-time CI gate after that job was removed.
+    - name: Run rpi-imager generator tests
+      run: |
+        uv run --group website pytest tools/raspberry_pi_imager/tests/ \
+          -v -o "addopts=--strict-markers"

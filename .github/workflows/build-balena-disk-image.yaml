@@ -19,6 +19,9 @@ on:
 env:
   # Bumped from 22.4.15. Same npm package name (`balena-cli`).
   BALENA_CLI_VERSION: '25.1.3'
+  # Pin to match deploy-website.yaml so disk-image builds and the site
+  # build use the same Bun, and so balena-cli installs are deterministic.
+  BUN_VERSION: '1.3.13'
 
 jobs:
   # Single source of truth for tag/commit/short-hash so every downstream
@@ -101,6 +104,8 @@ jobs:
   generate-openapi-schema:
     needs: resolve-context
     uses: ./.github/workflows/generate-openapi-schema.yml
+    with:
+      ref: ${{ needs.resolve-context.outputs.tag }}
     permissions:
       contents: write
 
@@ -129,7 +134,7 @@ jobs:
       # extra setup.
       - name: Install bun
         run: |
-          curl -fsSL https://bun.sh/install | bash
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
 
       - name: Install balena CLI
@@ -214,7 +219,7 @@ jobs:
 
       - name: Install bun
         run: |
-          curl -fsSL https://bun.sh/install | bash
+          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
 
       - name: Install balena CLI
