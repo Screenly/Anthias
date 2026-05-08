@@ -73,4 +73,25 @@ ENV DEVICE_TYPE={{ device_type }}
 ENV DJANGO_SETTINGS_MODULE="anthias_server.django_project.settings"
 ENV PYTHONPATH="/usr/src/app/src"
 
+{% if environment == 'production' %}
+# collectstatic at image build time. Source files (admin static + the
+# bun-built dist/ copied in above) are immutable from this point on, so
+# there's no reason to repeat the work on every container start. The
+# previous setup ran `collectstatic --clear` from start_server.sh into
+# a host bind-mount on /data/anthias/staticfiles — same data, every
+# restart, into a writable host scratch dir. Baking the result into the
+# image lets us drop the bind-mount, the runtime invocation, and one
+# of the reasons /home/<user>/anthias has to persist after install.
+#
+# `HOME=/tmp/anthias-build` is throwaway: importing the Django settings
+# module instantiates AnthiasSettings(), which writes a default
+# anthias.conf into $HOME/.anthias/ if one isn't there yet. At runtime
+# start_server.sh seeds /data/.anthias from ansible/roles/anthias/files/
+# before this same import happens; at build time we just give it a
+# scratch dir and remove it after collectstatic finishes.
+RUN mkdir -p /tmp/anthias-build/.anthias && \
+    HOME=/tmp/anthias-build python -m anthias_server.manage collectstatic --noinput --clear && \
+    rm -rf /tmp/anthias-build
+{% endif %}
+
 CMD ["bash", "bin/start_server.sh"]

@@ -25,7 +25,6 @@ services:
       - resin-data:/data
       - /home/${USER}/.anthias:/data/.anthias
       - /home/${USER}/anthias_assets:/data/anthias_assets
-      - /home/${USER}/anthias/staticfiles:/data/anthias/staticfiles
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     labels:
