@@ -147,7 +147,8 @@ USER root
 
 # Host build tools only. The webview app builds against the pre-built
 # Qt 5 toolchain, so we don't need the Qt 5 / QtWebEngine source-build
-# stack (chromium's bison/flex/gperf/ninja/gyp/python2.7).
+# stack (chromium's bison/flex/gperf/ninja/gyp/python2.7). python3 is
+# required for sysroot-relativelinks.py.
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -157,19 +158,17 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt5-host-apt,sharing=locked \
     apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
-        ccache \
         curl \
+        python3 \
         xz-utils
 
 WORKDIR /build
 
-# sysroot-relativelinks.py rewrites absolute symlinks under /sysroot
-# to be relative; without it gcc resolves them against the build
-# host's filesystem instead of the cross sysroot.
-RUN curl --proto '=https' --tlsv1.2 -fsSL \
-        https://raw.githubusercontent.com/riscv/riscv-poky/master/scripts/sysroot-relativelinks.py \
-        -o /usr/local/bin/sysroot-relativelinks.py && \
-    chmod +x /usr/local/bin/sysroot-relativelinks.py
+# sysroot-relativelinks.py is vendored at webview/ so the Qt 5 build
+# isn't gated on an unpinned curl from raw.githubusercontent.com.
+# Rewrites absolute symlinks under /sysroot to relative so cross-gcc
+# resolves them inside the sysroot, not the build host's filesystem.
+COPY webview/sysroot-relativelinks.py /usr/local/bin/sysroot-relativelinks.py
 
 RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=qt5-sysroot /lib/ /sysroot/lib/
@@ -186,10 +185,13 @@ RUN /usr/local/bin/sysroot-relativelinks.py /sysroot
 # Linaro gcc-7.4.1 — hardcoded path matches the CROSS_COMPILE setting
 # baked into the Qt 5 toolchain's qmake.conf at original toolchain
 # build time (webview/build_qt5.sh `-device-option CROSS_COMPILE=`).
+# SHA256-pinned: Linaro doesn't publish signed manifests for these
+# legacy 7.4 binaries, so the hash is the trust anchor.
 RUN mkdir -p /src && \
     cd /src && \
     curl --proto '=https' --tlsv1.2 -fsSL -o gcc-linaro.tar.xz \
         https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz && \
+    echo '3c951cf1941d0fa06d64cc0d5e88612b209d8123b273fa26c16d70bd7bc6b163  gcc-linaro.tar.xz' | sha256sum -c - && \
     tar xf gcc-linaro.tar.xz && \
     rm gcc-linaro.tar.xz
 
@@ -210,12 +212,9 @@ COPY webview/src /src/{{ artifact_board }}/webview/src
 COPY webview/res /src/{{ artifact_board }}/webview/res
 WORKDIR /src/{{ artifact_board }}/webview
 
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.ccache,id=qt5-webview-ccache-{{ artifact_board }} \
-{% endif %}
-    /src/{{ artifact_board }}/qt5pi/bin/qmake && \
+# webview is 3 .cpp files; ccache wiring through Linaro's cross-gcc
+# would save seconds at most, so plain make.
+RUN /src/{{ artifact_board }}/qt5pi/bin/qmake && \
     make -j"$(nproc)" && \
     make install
 

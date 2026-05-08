@@ -17,19 +17,17 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt6-builder-apt-{{ artifact_boar
     apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
-        ccache \
         qt6-base-dev \
         qt6-webengine-dev
 COPY webview/AnthiasWebview.pro /src/webview/AnthiasWebview.pro
 COPY webview/src /src/webview/src
 COPY webview/res /src/webview/res
 WORKDIR /src/webview
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/root/.ccache,id=qt6-webview-ccache-{{ artifact_board }} \
-{% endif %}
-    qmake6 && \
+# webview is 3 .cpp files (~6s on x86 native, ~30s under arm64 QEMU);
+# adding ccache would only save a couple of seconds on incremental
+# rebuilds and the cache mount + apt install + PATH wiring would
+# outweigh the saving.
+RUN qmake6 && \
     make -j"$(nproc)" && \
     make install
 RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
