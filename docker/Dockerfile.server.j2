@@ -19,7 +19,7 @@
    requirement we'd need to either drop bun (e.g. back to Node, which
    still ships armv7 binaries) or check `static/dist/` into the
    image / a cache and skip this stage entirely. #}
-FROM --platform=$BUILDPLATFORM oven/bun:1.3.13-slim AS bun-builder
+FROM --platform=$BUILDPLATFORM ghcr.io/screenly/bun:1.3.13-slim AS bun-builder
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -62,7 +62,7 @@ COPY --from=bun-builder \
     /app/src/anthias_server/app/static/dist/ \
     /usr/src/app/src/anthias_server/app/static/dist/
 {% else %}
-COPY --from=oven/bun:1.3.13-slim /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=ghcr.io/screenly/bun:1.3.13-slim /usr/local/bin/bun /usr/local/bin/bun
 RUN ln -sf bun /usr/local/bin/bunx
 {% endif %}
 
