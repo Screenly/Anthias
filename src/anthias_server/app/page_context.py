@@ -254,9 +254,15 @@ def assets() -> dict[str, Any]:
             inactive.append(asset)
     active.sort(key=lambda a: a.play_order)
     inactive.sort(key=lambda a: a.play_order)
+    from anthias_server.app.models import REFRESH_INTERVAL_S_MAX
+
     return {
         'active_assets': active,
         'inactive_assets': inactive,
+        # Render the auto-refresh input's ``max`` attribute from the
+        # same constant the v2 serializer / form handler use, so the
+        # client-side and server-side caps can't drift.
+        'refresh_interval_s_max': REFRESH_INTERVAL_S_MAX,
     }
 
 

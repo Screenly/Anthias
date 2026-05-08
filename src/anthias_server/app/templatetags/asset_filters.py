@@ -142,6 +142,21 @@ def _to_dict(obj: Any) -> Any:
             v = out.get(key)
             if isinstance(v, str) and len(v) >= 5:
                 out[key] = v[:5]
+        # Sanitise metadata['refresh_interval_s'] before it reaches the
+        # edit modal: a legacy / hand-edited row with an out-of-range
+        # value would otherwise put the <input type="number" max="...">
+        # in :invalid state and block form submission entirely (the
+        # operator couldn't save *any* changes). Mirrors the v2 API's
+        # response normalisation via the shared clamp helper.
+        meta = out.get('metadata')
+        if isinstance(meta, dict) and 'refresh_interval_s' in meta:
+            from anthias_server.app.models import clamp_refresh_interval
+
+            meta = dict(meta)
+            meta['refresh_interval_s'] = clamp_refresh_interval(
+                meta['refresh_interval_s']
+            )
+            out['metadata'] = meta
         return out
     return _coerce(obj)
 

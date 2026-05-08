@@ -15,6 +15,7 @@ class MainWindow : public QMainWindow
     public slots:
         void loadPage(const QString &uri);
         void loadImage(const QString &uri);
+        void setReloadInterval(int seconds);
 
     private:
         View *view = nullptr;

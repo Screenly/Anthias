@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
+from anthias_server.app.models import clamp_refresh_interval
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import (
@@ -524,6 +525,25 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     else:
         asset.play_time_from = None
         asset.play_time_to = None
+
+    # Webpage auto-refresh — feature #2813. Persisted inside
+    # ``metadata`` so the upload pipeline's read-only posture on that
+    # field is preserved. The edit modal only renders the input for
+    # webpage assets, so a missing key here means "non-webpage edit,
+    # leave the metadata alone"; an empty string means "operator
+    # cleared the field, disable auto-refresh" (stored as 0, the
+    # viewer treats it the same as a missing key). Out-of-range /
+    # non-int values are clamped instead of 400'd because this is a
+    # server-rendered form (the v2 API does the strict 400). The cap
+    # is shared with the v2 serializer via REFRESH_INTERVAL_S_MAX so
+    # the two paths can't drift.
+    raw_interval = request.POST.get('refresh_interval_s')
+    if raw_interval is not None:
+        metadata = dict(asset.metadata or {})
+        metadata['refresh_interval_s'] = clamp_refresh_interval(
+            raw_interval.strip() or 0
+        )
+        asset.metadata = metadata
 
     asset.save()
     ViewerPublisher.get_instance().send_to_viewer('reload')

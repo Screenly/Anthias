@@ -347,6 +347,22 @@ class AssetListViewV2(APIView):
 
         active_asset_ids = get_active_asset_ids()
         asset = Asset.objects.create(**serializer.data)
+        # Apply ``metadata`` (set by CreateAssetSerializerV2.validate()
+        # when the operator passes ``refresh_interval_s``). It lives in
+        # ``validated_data`` rather than ``serializer.data`` because
+        # ``metadata`` isn't a declared field on the create serializer
+        # — surfacing it as one would open the upload-pipeline-owned
+        # bag (original_ext, transcoded, error_message) for arbitrary
+        # client writes. Pulling it from validated_data and applying
+        # post-create keeps the read-only stance on metadata while
+        # still letting the dedicated refresh_interval_s knob round-
+        # trip on POST.
+        post_create_metadata = serializer.validated_data.get('metadata')
+        if post_create_metadata:
+            existing = dict(asset.metadata or {})
+            existing.update(post_create_metadata)
+            asset.metadata = existing
+            asset.save(update_fields=['metadata'])
         asset.refresh_from_db()
 
         # Kick off the YouTube download out of band when the

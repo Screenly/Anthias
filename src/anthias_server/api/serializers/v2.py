@@ -17,7 +17,11 @@ from rest_framework.serializers import (
     TimeField,
 )
 
-from anthias_server.app.models import Asset
+from anthias_server.app.models import (
+    Asset,
+    REFRESH_INTERVAL_S_MAX,
+    clamp_refresh_interval,
+)
 from anthias_server.api.serializers import UpdateAssetSerializer
 from anthias_server.api.serializers.mixins import CreateAssetSerializerMixin
 
@@ -48,6 +52,14 @@ def _normalise_play_days(value: list[int]) -> list[int]:
             'entirely, disable the asset (is_enabled=false).'
         )
     return deduped
+
+
+# Per-asset webpage auto-refresh cadence is stored inside ``Asset.metadata``
+# but exposed as a top-level field on the v2 serializers so ``metadata``
+# can stay read-only (the upload pipeline owns those keys). The cap
+# itself lives on the model (REFRESH_INTERVAL_S_MAX, imported above) so
+# the form handler in app/views.py and the v2 API agree on the same
+# value without drift.
 
 
 def _validate_time_window(
@@ -85,6 +97,8 @@ def _validate_time_window(
 class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
     is_active = SerializerMethodField()
     play_days = SerializerMethodField()
+    refresh_interval_s = SerializerMethodField()
+    metadata = SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_active(self, obj: Asset) -> bool:
@@ -93,6 +107,31 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
     @extend_schema_field({'type': 'array', 'items': {'type': 'integer'}})
     def get_play_days(self, obj: Asset) -> list[int]:
         return obj.get_play_days()
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_refresh_interval_s(self, obj: Asset) -> int:
+        # Pulled out of metadata so it shows up as a first-class column
+        # on GET; the field is itself written from UpdateAssetSerializerV2
+        # back into metadata. Default 0 = no auto-refresh, mirroring the
+        # viewer's handling for assets without the key set.
+        return clamp_refresh_interval(
+            (obj.metadata or {}).get('refresh_interval_s', 0)
+        )
+
+    @extend_schema_field({'type': 'object', 'additionalProperties': True})
+    def get_metadata(self, obj: Asset) -> dict[str, Any]:
+        # Sanitise ``refresh_interval_s`` in the embedded metadata too,
+        # so a legacy/hand-edited row can't return a top-level
+        # ``refresh_interval_s: 0`` while the ``metadata`` field still
+        # echoes the raw out-of-range value. Other keys (the upload-
+        # pipeline's original_ext / transcoded / error_message) pass
+        # through untouched.
+        raw = dict(obj.metadata or {})
+        if 'refresh_interval_s' in raw:
+            raw['refresh_interval_s'] = clamp_refresh_interval(
+                raw['refresh_interval_s']
+            )
+        return raw
 
     class Meta:
         model = Asset
@@ -116,6 +155,7 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'is_reachable',
             'last_reachability_check',
             'metadata',
+            'refresh_interval_s',
         ]
         read_only_fields = [
             'is_reachable',
@@ -126,7 +166,10 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             # bookkeeping but can't overwrite it from the API — letting
             # them stomp on it would invite "transcoded=true but the
             # file is the original" desync. Same posture as
-            # is_reachable / last_reachability_check above.
+            # is_reachable / last_reachability_check above. The webpage
+            # auto-refresh interval is surfaced as its own writable
+            # field (refresh_interval_s) so operators can edit just
+            # that one key without opening the whole bag.
             'metadata',
         ]
 
@@ -162,13 +205,41 @@ class CreateAssetSerializerV2(
     )
     play_time_from = TimeField(required=False, allow_null=True)
     play_time_to = TimeField(required=False, allow_null=True)
+    # write_only because ``Asset`` has no ``refresh_interval_s`` column
+    # — the value lives inside ``metadata``. Keeping it out of
+    # ``serializer.data`` avoids ``Asset.objects.create(**serializer.data)``
+    # crashing on an unknown kwarg in the v2 POST view; the field is
+    # surfaced back on the response via ``AssetSerializerV2``'s
+    # SerializerMethodField. The view applies ``validated_data['metadata']``
+    # (set in ``validate()`` below) to the persisted row after create().
+    refresh_interval_s = IntegerField(
+        required=False,
+        write_only=True,
+        min_value=0,
+        max_value=REFRESH_INTERVAL_S_MAX,
+    )
 
     def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         _validate_time_window(data)
-        return self.prepare_asset(data, version='v2')
+        prepared = self.prepare_asset(data, version='v2')
+        # POST round-trip for the webpage auto-refresh interval. Land it
+        # in ``metadata`` so a fresh row that gets created with a
+        # refresh interval doesn't need a follow-up PATCH to take
+        # effect. Skipping the key entirely (rather than storing 0)
+        # keeps ``metadata`` a clean ``{}`` for assets that didn't ask
+        # for auto-refresh, matching what the upload pipeline expects.
+        # ``metadata`` is not a declared field on this serializer, so
+        # it appears in ``validated_data`` but not in ``serializer.data``
+        # — the v2 POST view reads it from ``validated_data`` and
+        # applies it to the asset after Asset.objects.create().
+        if 'refresh_interval_s' in data:
+            metadata = dict(prepared.get('metadata') or {})
+            metadata['refresh_interval_s'] = int(data['refresh_interval_s'])
+            prepared['metadata'] = metadata
+        return prepared
 
 
 class UpdateAssetSerializerV2(UpdateAssetSerializer):
@@ -183,6 +254,11 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     )
     play_time_from = TimeField(required=False, allow_null=True)
     play_time_to = TimeField(required=False, allow_null=True)
+    refresh_interval_s = IntegerField(
+        required=False,
+        min_value=0,
+        max_value=REFRESH_INTERVAL_S_MAX,
+    )
 
     def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
@@ -196,6 +272,20 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
         for field in ('play_days', 'play_time_from', 'play_time_to'):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
+        if 'refresh_interval_s' in validated_data:
+            # Merge into metadata so pipeline-owned keys (original_ext,
+            # transcoded, error_message) survive the update — clobbering
+            # them via dict assignment would resurrect the
+            # "transcoded=true but file is original" desync we made
+            # ``metadata`` read-only to prevent. For non-webpage assets
+            # we accept and persist the value but it's a no-op at
+            # playback time (viewer only branches on refresh_interval_s
+            # for ``mimetype contains 'web'``).
+            metadata = dict(instance.metadata or {})
+            metadata['refresh_interval_s'] = int(
+                validated_data['refresh_interval_s']
+            )
+            instance.metadata = metadata
         return super().update(instance, validated_data)
 
 

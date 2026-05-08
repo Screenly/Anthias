@@ -98,7 +98,14 @@ The resulting files will be placed in `~/tmp-pi5/build/release`.
 DBus is used for communication.
 Webview registers `anthias.webview` object at `/Anthias` address on the session bus.
 
-Webview provides 2 methods:`loadPage` and `loadImage`.
+Webview provides 3 methods: `loadPage`, `loadImage`, and
+`setReloadInterval`.
+
+`setReloadInterval(seconds)` arms a per-asset auto-refresh timer that
+reloads the visible web page every `seconds` seconds (`0` disables it).
+The timer is cleared automatically on the next `loadPage`/`loadImage`,
+so the caller arms it once after each `loadPage` and the webview
+forgets it on the next rotation.
 
 Example of interaction (python):
 
@@ -108,7 +115,8 @@ from pydbus import SessionBus
 bus = SessionBus()
 browser_bus = bus.get('anthias.webview', '/Anthias')
 
-browser_bus.loadPage("www.example.com")
+browser_bus.loadPage("https://www.example.com")
+browser_bus.setReloadInterval(30)  # reload every 30s; 0 disables
 ```
 
 Supported protocols: `http://`, `https://`

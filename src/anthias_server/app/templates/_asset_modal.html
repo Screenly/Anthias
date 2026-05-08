@@ -155,11 +155,13 @@
           },
           get hasAdvancedDefaults() {
             const days = editAsset.play_days_list || [];
+            const refresh = editAsset.metadata && editAsset.metadata.refresh_interval_s;
             return days.length === 7 &&
                    !editAsset.play_time_from &&
                    !editAsset.play_time_to &&
                    !editAsset.nocache &&
-                   !editAsset.skip_asset_check;
+                   !editAsset.skip_asset_check &&
+                   !refresh;
           },
           advancedOpen: false,
         }"
@@ -260,6 +262,34 @@
                   <label class="app-check-label ml-2" for="edit-skip">Skip asset check</label>
                 </div>
               </div>
+
+              {% comment %} Per-asset auto-refresh interval (feature #2813).
+                 Only meaningful for webpage assets — the viewer reads
+                 metadata.refresh_interval_s in view_webpage and arms a
+                 setReloadInterval D-Bus call to the QtWebEngine
+                 process. 0 / empty disables; max 86400 (24h) matches
+                 the v2 serializer's REFRESH_INTERVAL_S_MAX cap. The
+                 input lives inside the existing Advanced disclosure
+                 (rather than a top-level webpage-only section) to
+                 keep the Edit modal's primary surface consistent
+                 across mimetypes.
+              {% endcomment %}
+              <template x-if="editAsset.mimetype === 'webpage'">
+                <div>
+                  <div class="modal-section__divider"></div>
+                  <div class="app-floating">
+                    <input type="number" class="app-input" id="edit-refresh-interval"
+                      name="refresh_interval_s"
+                      min="0" max="{{ refresh_interval_s_max }}" step="1"
+                      :value="(editAsset.metadata && editAsset.metadata.refresh_interval_s) || ''"
+                      placeholder="0">
+                    <label for="edit-refresh-interval">Auto-refresh interval (seconds)</label>
+                  </div>
+                  <p class="modal-section__hint mt-2 mb-0">
+                    Reload the page on this cadence so dashboards stay current. Empty or 0 disables.
+                  </p>
+                </div>
+              </template>
             </div>
           </section>
         </div>
