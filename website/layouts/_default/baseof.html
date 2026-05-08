@@ -46,8 +46,8 @@
            matching the current viewport actually fetches. */ -}}
     {{- if .IsHome -}}
       {{- $hero := partialCached "hero-images.html" . -}}
-    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" imagesrcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x" fetchpriority="high">
-    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" imagesrcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x" fetchpriority="high">
+    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" href="{{ $hero.mobile1xW.RelPermalink }}" imagesrcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x" fetchpriority="high">
+    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" href="{{ $hero.desk1xW.RelPermalink }}" imagesrcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x" fetchpriority="high">
     {{- end }}
 
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
