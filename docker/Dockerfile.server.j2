@@ -75,7 +75,7 @@ ENV PYTHONPATH="/usr/src/app/src"
 
 {% if environment == 'production' %}
 # collectstatic at image build time. Source files (admin static + the
-# bun-built dist/ COPYed in above) are immutable from this point on, so
+# bun-built dist/ copied in above) are immutable from this point on, so
 # there's no reason to repeat the work on every container start. The
 # previous setup ran `collectstatic --clear` from start_server.sh into
 # a host bind-mount on /data/anthias/staticfiles — same data, every
