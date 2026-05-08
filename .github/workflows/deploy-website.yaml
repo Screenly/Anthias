@@ -52,11 +52,11 @@ jobs:
           hugo version
 
       # Manual bun install — same toolchain we use elsewhere in the
-      # repo. Avoids third-party setup actions.
+      # repo. The script verifies the archive's SHA-256 against the
+      # release's SHASUMS256.txt before installing, avoiding the
+      # remote-script execution of `curl bun.sh/install | bash`.
       - name: Install bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+        run: bash .github/workflows/scripts/install-bun.sh
 
       - name: Install website dependencies
         run: bun install --frozen-lockfile
@@ -101,7 +101,27 @@ jobs:
               --repo Screenly/Anthias \
               --clobber 2>/dev/null; then
             echo "Fetched rpi-imager.json from $label"
-            jq . website/public/rpi-imager.json > /dev/null
+
+            # Stronger validation than just `jq .`: catches a release
+            # asset that's well-formed JSON but missing required
+            # fields or carries the wrong types. Mirrors the checks
+            # the old in-workflow regen step ran before this file
+            # moved to being a release asset.
+            f=website/public/rpi-imager.json
+            jq -e '.os_list | type == "array"' "$f" > /dev/null
+            jq -e '
+              .os_list[] as $entry
+              | ["name","description","icon","website","url",
+                 "extract_size","extract_sha256","image_download_size",
+                 "image_download_sha256","release_date"]
+              | all(. as $k | $entry | has($k))
+            ' "$f" > /dev/null
+            jq -e '.os_list[] |
+              (.extract_size | type == "number") and
+              (.image_download_size | type == "number")' "$f" > /dev/null
+            jq -e '[.os_list[] | .name | test("pi1")] | any | not' "$f" > /dev/null
+            jq -e '[.os_list[] | .url | startswith("https://")] | all' "$f" > /dev/null
+            echo "rpi-imager.json validation passed"
           else
             echo "::warning::No rpi-imager.json on $label; shipping empty os_list."
             printf '%s\n' '{"os_list": []}' > website/public/rpi-imager.json

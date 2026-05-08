@@ -31,7 +31,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.derive.outputs.tag }}
-      commit: ${{ steps.derive.outputs.commit }}
       short-hash: ${{ steps.derive.outputs.short-hash }}
     steps:
       - name: Resolve tag from trigger
@@ -49,15 +48,12 @@ jobs:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 1
 
-      - name: Compute commit + short hash
+      - name: Compute short hash
         id: derive
         run: |
-          COMMIT=$(git rev-parse HEAD)
-          SHORT_HASH=$(git rev-parse --short HEAD)
           {
             echo "tag=${{ steps.tag.outputs.tag }}"
-            echo "commit=$COMMIT"
-            echo "short-hash=$SHORT_HASH"
+            echo "short-hash=$(git rev-parse --short HEAD)"
           } >> "$GITHUB_OUTPUT"
 
   # Verify the GHCR images for the release commit exist before doing
@@ -127,15 +123,14 @@ jobs:
         with:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
-      # Bun replaces actions/setup-node + npm: same toolchain we already
-      # use for the website / frontend. Manual install keeps the
-      # workflow free of third-party action dependencies. Node ships
-      # with ubuntu-24.04 so balena-cli's runtime is available without
+      # Bun replaces actions/setup-node + npm: same toolchain we use
+      # for the website / frontend. The install script verifies the
+      # archive checksum against the release's SHASUMS256.txt rather
+      # than piping a remote shell script into bash. Node ships with
+      # ubuntu-24.04 so balena-cli's runtime is available without
       # extra setup.
       - name: Install bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+        run: bash .github/workflows/scripts/install-bun.sh
 
       - name: Install balena CLI
         run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
@@ -218,9 +213,7 @@ jobs:
           sudo apt-get install -y zstd
 
       - name: Install bun
-        run: |
-          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+        run: bash .github/workflows/scripts/install-bun.sh
 
       - name: Install balena CLI
         run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
@@ -275,10 +268,14 @@ jobs:
 
       - name: Package up image
         run: |
-          sha256sum "$BALENA_IMAGE.img" >> "$(date -I)-$BALENA_IMAGE.sha256"
-          zstd -19 -T0 "$BALENA_IMAGE.img" -o "$(date -I)-$BALENA_IMAGE.img.zst"
-          sha256sum "$(date -I)-$BALENA_IMAGE.img.zst" >> \
-            "$(date -I)-$BALENA_IMAGE.sha256"
+          # Capture BUILD_DATE once so every filename and metadata
+          # field references the same date, even if the step happens
+          # to span UTC midnight.
+          BUILD_DATE=$(date -I)
+          sha256sum "$BALENA_IMAGE.img" >> "$BUILD_DATE-$BALENA_IMAGE.sha256"
+          zstd -19 -T0 "$BALENA_IMAGE.img" -o "$BUILD_DATE-$BALENA_IMAGE.img.zst"
+          sha256sum "$BUILD_DATE-$BALENA_IMAGE.img.zst" >> \
+            "$BUILD_DATE-$BALENA_IMAGE.sha256"
 
           # Per-board metadata snippet, uploaded to the release alongside
           # the .img.zst it describes. tools/raspberry_pi_imager/
@@ -288,9 +285,9 @@ jobs:
             --arg BOARD "${{ matrix.board }}" \
             --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
             --argjson IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
-            --arg DOWNLOAD_SHA256 "$(sha256sum "$(date -I)-$BALENA_IMAGE.img.zst" | cut -d ' ' -f 1)" \
-            --argjson DOWNLOAD_SIZE "$(wc -c < "$(date -I)-$BALENA_IMAGE.img.zst" | xargs)" \
-            --arg RELEASE_DATE "$(date -I)" \
+            --arg DOWNLOAD_SHA256 "$(sha256sum "$BUILD_DATE-$BALENA_IMAGE.img.zst" | cut -d ' ' -f 1)" \
+            --argjson DOWNLOAD_SIZE "$(wc -c < "$BUILD_DATE-$BALENA_IMAGE.img.zst" | xargs)" \
+            --arg RELEASE_DATE "$BUILD_DATE" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
               "description": "Anthias, formerly known as Screenly OSE, is the most popular open source digital signage project in the world.",
@@ -301,7 +298,7 @@ jobs:
               "image_download_size": $DOWNLOAD_SIZE,
               "image_download_sha256": $DOWNLOAD_SHA256,
               "release_date": $RELEASE_DATE
-            }' > "$(date -I)-$BALENA_IMAGE.json"
+            }' > "$BUILD_DATE-$BALENA_IMAGE.json"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -356,18 +353,20 @@ jobs:
         run: |
           printf '%s\n' "$SHORT_HASH" > assets/docker-tag
 
-      - name: Ensure release exists, then upload assets
+      # The workflow_dispatch input contract requires the release to
+      # already exist (the release event always satisfies that on its
+      # own trigger). Failing loudly here keeps a manual run from
+      # publishing a fresh release — and OTA-deploying fleets — from
+      # an unintended tag/commit.
+      - name: Verify release exists, then upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.resolve-context.outputs.tag }}
-          COMMIT: ${{ needs.resolve-context.outputs.commit }}
         run: |
           set -euo pipefail
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              --target "$COMMIT" \
-              --title "$TAG" \
-              --generate-notes
+            echo "::error::Release $TAG does not exist. Create it (Releases → Draft a new release) before running this workflow." >&2
+            exit 1
           fi
 
           ls -la assets
