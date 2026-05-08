@@ -27,7 +27,17 @@ INSTALLER_VENV=""
 
 cleanup_installer_venv() {
     if [ -n "${INSTALLER_VENV}" ] && [ -d "${INSTALLER_VENV}" ]; then
-        rm -rf "${INSTALLER_VENV}"
+        # Ansible's `become: true` tasks run python from this venv as
+        # root and end up writing __pycache__/*.pyc entries owned by
+        # root. A plain user-level rm therefore can't clean the tree.
+        # By the time the EXIT trap fires, modify_permissions() has
+        # already installed the NOPASSWD sudoers rule for the install
+        # user, so `sudo -n` succeeds non-interactively. Fall back to
+        # a best-effort user-space rm if the trap fires earlier in
+        # the script (i.e. before modify_permissions ran).
+        sudo -n rm -rf "${INSTALLER_VENV}" 2>/dev/null \
+            || rm -rf "${INSTALLER_VENV}" 2>/dev/null \
+            || true
     fi
 }
 trap cleanup_installer_venv EXIT
