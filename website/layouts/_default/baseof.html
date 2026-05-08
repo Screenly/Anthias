@@ -45,14 +45,9 @@
            links with mutually exclusive media queries — only the one
            matching the current viewport actually fetches. */ -}}
     {{- if .IsHome -}}
-      {{- $hMobile1xW := (resources.Get "images/overview-mobile.png").Process "webp" -}}
-      {{- $hMobile2xW := (resources.Get "images/overview-mobile@2x.png").Process "webp" -}}
-      {{- $hMobile3xW := (resources.Get "images/overview-mobile@3x.png").Process "webp" -}}
-      {{- $hDesk1xW   := (resources.Get "images/overview.png").Process "webp" -}}
-      {{- $hDesk2xW   := (resources.Get "images/overview@2x.png").Process "webp" -}}
-      {{- $hDesk3xW   := (resources.Get "images/overview@3x.png").Process "webp" -}}
-    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" imagesrcset="{{ $hMobile1xW.RelPermalink }}, {{ $hMobile2xW.RelPermalink }} 2x, {{ $hMobile3xW.RelPermalink }} 3x" fetchpriority="high">
-    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" imagesrcset="{{ $hDesk1xW.RelPermalink }}, {{ $hDesk2xW.RelPermalink }} 2x, {{ $hDesk3xW.RelPermalink }} 3x" fetchpriority="high">
+      {{- $hero := partialCached "hero-images.html" . -}}
+    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" imagesrcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x" fetchpriority="high">
+    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" imagesrcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x" fetchpriority="high">
     {{- end }}
 
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">

@@ -1273,6 +1273,15 @@ html {
   outline: 2px solid var(--color-brand-purple);
   outline-offset: 2px;
 }
+.hero-img {
+  aspect-ratio: 509 / 301;
+  height: auto;
+}
+@media (min-width: 768px) {
+  .hero-img {
+    aspect-ratio: 1112 / 1044;
+  }
+}
 .docs-prose {
   color: #2a1f33;
   font-size: 1rem;

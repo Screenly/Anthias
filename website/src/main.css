@@ -28,6 +28,20 @@ html {
   outline-offset: 2px;
 }
 
+/* Reserve the right hero box per breakpoint regardless of which
+   <picture> <source> the browser picks. width/height on <source>
+   would do this too, but stamping it via CSS works in legacy browsers
+   and keeps the markup uncluttered. */
+.hero-img {
+  aspect-ratio: 509 / 301;
+  height: auto;
+}
+@media (min-width: 768px) {
+  .hero-img {
+    aspect-ratio: 1112 / 1044;
+  }
+}
+
 @utility btn-primary {
   background: linear-gradient(133.73deg, #fff963 14.42%, #ffd800 108.14%);
   border: 1px solid #fff963;

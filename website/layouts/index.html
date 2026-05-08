@@ -22,36 +22,22 @@
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 pb-8">
-        {{- $heroMobile1x := resources.Get "images/overview-mobile.png" -}}
-        {{- $heroMobile2x := resources.Get "images/overview-mobile@2x.png" -}}
-        {{- $heroMobile3x := resources.Get "images/overview-mobile@3x.png" -}}
-        {{- $heroDesk1x   := resources.Get "images/overview.png" -}}
-        {{- $heroDesk2x   := resources.Get "images/overview@2x.png" -}}
-        {{- $heroDesk3x   := resources.Get "images/overview@3x.png" -}}
-        {{- $heroMobile1xW := $heroMobile1x.Process "webp" -}}
-        {{- $heroMobile2xW := $heroMobile2x.Process "webp" -}}
-        {{- $heroMobile3xW := $heroMobile3x.Process "webp" -}}
-        {{- $heroDesk1xW   := $heroDesk1x.Process   "webp" -}}
-        {{- $heroDesk2xW   := $heroDesk2x.Process   "webp" -}}
-        {{- $heroDesk3xW   := $heroDesk3x.Process   "webp" -}}
+        {{- $hero := partialCached "hero-images.html" . -}}
         {{- /* Single <picture> so the browser only fetches the source
-               that matches the current viewport. Per-source width/height
-               keeps CLS at zero across the breakpoint. */ -}}
+               matching the current viewport. CSS aspect-ratio on the
+               <img> reserves the right box per breakpoint, keeping
+               CLS at zero whether the mobile or desktop source loads. */ -}}
         <picture>
             <source type="image/webp" media="(max-width: 767px)"
-                width="{{ $heroMobile1x.Width }}" height="{{ $heroMobile1x.Height }}"
-                srcset="{{ $heroMobile1xW.RelPermalink }}, {{ $heroMobile2xW.RelPermalink }} 2x, {{ $heroMobile3xW.RelPermalink }} 3x">
+                srcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x">
             <source type="image/webp" media="(min-width: 768px)"
-                width="{{ $heroDesk1x.Width }}" height="{{ $heroDesk1x.Height }}"
-                srcset="{{ $heroDesk1xW.RelPermalink }}, {{ $heroDesk2xW.RelPermalink }} 2x, {{ $heroDesk3xW.RelPermalink }} 3x">
+                srcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x">
             <source media="(max-width: 767px)"
-                width="{{ $heroMobile1x.Width }}" height="{{ $heroMobile1x.Height }}"
-                srcset="{{ $heroMobile1x.RelPermalink }}, {{ $heroMobile2x.RelPermalink }} 2x, {{ $heroMobile3x.RelPermalink }} 3x">
+                srcset="{{ $hero.mobile1x.RelPermalink }}, {{ $hero.mobile2x.RelPermalink }} 2x, {{ $hero.mobile3x.RelPermalink }} 3x">
             <img
-                class="rounded-t-lg w-full"
-                width="{{ $heroDesk1x.Width }}" height="{{ $heroDesk1x.Height }}"
-                srcset="{{ $heroDesk1x.RelPermalink }}, {{ $heroDesk2x.RelPermalink }} 2x, {{ $heroDesk3x.RelPermalink }} 3x"
-                src="{{ $heroDesk1x.RelPermalink }}"
+                class="hero-img rounded-t-lg w-full"
+                srcset="{{ $hero.desk1x.RelPermalink }}, {{ $hero.desk2x.RelPermalink }} 2x, {{ $hero.desk3x.RelPermalink }} 3x"
+                src="{{ $hero.desk1x.RelPermalink }}"
                 alt="Anthias dashboard showing scheduled content"
                 fetchpriority="high"
                 decoding="async">
