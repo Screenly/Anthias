@@ -85,14 +85,12 @@ jobs:
           out=website/public/rpi-imager.json
 
           assets=$(gh release view \
-            --repo Screenly/Anthias \
             --json assets \
             --jq '[.assets[].name]')
           if echo "$assets" | jq -e 'index("rpi-imager.json")' > /dev/null; then
             gh release download \
               --pattern rpi-imager.json \
               --dir website/public \
-              --repo Screenly/Anthias \
               --clobber
             echo "Fetched rpi-imager.json from latest release"
 
