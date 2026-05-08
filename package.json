@@ -1,6 +1,6 @@
 {
   "name": "anthias",
-  "version": "1.0.0",
+  "version": "2026.05.0",
   "scripts": {
     "_build_note": "Alpine evaluates @click expressions against a `with(scope)`-style closure at runtime. Bun's --minify-identifiers renames internal Alpine vars (and our handler names in home.ts) in ways that break that lookup — silently. Stick to whitespace+syntax minification, which trims the bundle by half without touching identifiers.",
     "build:vendor": "bun build ./src/anthias_server/app/static/src/vendor.ts --outfile=./src/anthias_server/app/static/dist/js/vendor.js --target=browser --minify-whitespace --minify-syntax",
