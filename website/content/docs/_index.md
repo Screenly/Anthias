@@ -21,6 +21,19 @@ driver, so they don't write the unbounded `*-json.log` files under
 installs. You can read the logs three ways: `docker logs`,
 `docker compose logs`, or `journalctl` directly.
 
+> **Note**
+>
+> Switching the driver only affects future writes. Devices that were
+> on the old `json-file` driver will still have the existing log files
+> on disk after upgrading. To reclaim that space, truncate the leftover
+> files in place (Docker keeps them open, so deleting can confuse the
+> daemon — `truncate -s 0` is safe):
+>
+> ```bash
+> $ sudo find /var/lib/docker/containers/ -name "*-json.log" \
+>     -exec truncate -s 0 {} +
+> ```
+
 ### Using `docker logs`
 
 For instance, the command below will show you the logs from the server container:
