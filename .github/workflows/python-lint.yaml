@@ -56,7 +56,17 @@ jobs:
     # pytest-playwright, so override addopts here. Same pattern the old
     # deploy-website test job used; this is now the rpi-imager
     # generator's only PR-time CI gate after that job was removed.
+    #
+    # We invoke `.venv/bin/pytest` directly rather than `uv run`. `uv run`
+    # implicitly syncs the project venv with the default group set
+    # (which includes the `dev` group — pytest-django==4.12.0 ships
+    # there), and pytest-django then auto-activates as a plugin,
+    # reads `DJANGO_SETTINGS_MODULE` from pyproject.toml, and tries to
+    # bootstrap Django — which fails on the first transitive import
+    # the curated venv doesn't have (pytz, channels, etc.). Calling
+    # the venv binary directly preserves the minimal `dev-host +
+    # website` install above and keeps this fast unit-only gate.
     - name: Run rpi-imager generator tests
       run: |
-        uv run --group website pytest tools/raspberry_pi_imager/tests/ \
+        .venv/bin/pytest tools/raspberry_pi_imager/tests/ \
           -v -o "addopts=--strict-markers"
