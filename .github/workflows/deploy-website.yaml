@@ -73,14 +73,18 @@ jobs:
       # built by build-balena-disk-image.yaml at release time and
       # served at /rpi-imager.json.
       #
-      # On release-triggered runs we pin to the release that fired this
-      # workflow (github.event.release.tag_name) so the website always
-      # matches what was just published — even if the release is
-      # flagged as prerelease, in which case `latest` would skip it.
-      # Push/manual runs pull from the latest release. Falls back to
-      # an empty os_list if no matching asset is available yet (first
-      # run after this refactor lands; safe to remove the fallback
-      # once one new-format release exists).
+      # On release-triggered runs we pin to the release that fired
+      # this workflow (github.event.release.tag_name) so the website
+      # always matches what was just published — even if the release
+      # is flagged as prerelease, in which case `latest` would skip
+      # it. Push/manual runs pull from the latest release.
+      #
+      # We probe the release with `gh release view` first so that we
+      # can distinguish "release exists but asset is missing" (the
+      # transition fallback path; expected immediately after this
+      # refactor lands) from transient errors (auth/rate-limit/
+      # network), which must fail the deploy rather than silently
+      # ship an empty os_list.
       - name: Fetch rpi-imager.json from release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,6 +92,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p website/public
+          out=website/public/rpi-imager.json
+
           if [ -n "${RELEASE_TAG:-}" ]; then
             target=( "$RELEASE_TAG" )
             label="release $RELEASE_TAG"
@@ -95,11 +101,17 @@ jobs:
             target=()
             label="latest release"
           fi
-          if gh release download "${target[@]}" \
+
+          assets=$(gh release view "${target[@]}" \
+            --repo Screenly/Anthias \
+            --json assets \
+            --jq '[.assets[].name]')
+          if echo "$assets" | jq -e 'index("rpi-imager.json")' > /dev/null; then
+            gh release download "${target[@]}" \
               --pattern rpi-imager.json \
               --dir website/public \
               --repo Screenly/Anthias \
-              --clobber 2>/dev/null; then
+              --clobber
             echo "Fetched rpi-imager.json from $label"
 
             # Stronger validation than just `jq .`: catches a release
@@ -107,24 +119,23 @@ jobs:
             # fields or carries the wrong types. Mirrors the checks
             # the old in-workflow regen step ran before this file
             # moved to being a release asset.
-            f=website/public/rpi-imager.json
-            jq -e '.os_list | type == "array"' "$f" > /dev/null
+            jq -e '.os_list | type == "array"' "$out" > /dev/null
             jq -e '
               .os_list[] as $entry
               | ["name","description","icon","website","url",
                  "extract_size","extract_sha256","image_download_size",
                  "image_download_sha256","release_date"]
               | all(. as $k | $entry | has($k))
-            ' "$f" > /dev/null
+            ' "$out" > /dev/null
             jq -e '.os_list[] |
               (.extract_size | type == "number") and
-              (.image_download_size | type == "number")' "$f" > /dev/null
-            jq -e '[.os_list[] | .name | test("pi1")] | any | not' "$f" > /dev/null
-            jq -e '[.os_list[] | .url | startswith("https://")] | all' "$f" > /dev/null
+              (.image_download_size | type == "number")' "$out" > /dev/null
+            jq -e '[.os_list[] | .name | test("pi1")] | any | not' "$out" > /dev/null
+            jq -e '[.os_list[] | .url | startswith("https://")] | all' "$out" > /dev/null
             echo "rpi-imager.json validation passed"
           else
-            echo "::warning::No rpi-imager.json on $label; shipping empty os_list."
-            printf '%s\n' '{"os_list": []}' > website/public/rpi-imager.json
+            echo "::warning::$label has no rpi-imager.json asset; shipping empty os_list."
+            printf '%s\n' '{"os_list": []}' > "$out"
           fi
 
       - name: Show build output

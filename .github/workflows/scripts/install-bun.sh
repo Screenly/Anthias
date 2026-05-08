@@ -55,4 +55,12 @@ fi
 unzip -q "$archive" -d "$workdir"
 sudo install -m 0755 "$workdir/bun-${target}/bun" /usr/local/bin/bun
 
+# Bun's global package installs (e.g. `bun install -g balena-cli`) drop
+# their executables into ~/.bun/bin, which isn't on PATH on a fresh
+# runner. Append it to GITHUB_PATH so subsequent steps can resolve
+# globally-installed CLIs by name.
+if [[ -n "${GITHUB_PATH:-}" ]]; then
+    echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+fi
+
 bun --version
