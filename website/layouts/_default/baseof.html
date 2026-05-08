@@ -194,15 +194,19 @@
         function load() {
           if (loaded) return;
           loaded = true;
-          var s = document.createElement('script');
-          s.async = true;
-          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6';
-          document.head.appendChild(s);
+          // Stand up dataLayer and queue the initial gtag calls
+          // BEFORE appending the async script, so any cached gtag.js
+          // that parses immediately finds the queue already populated
+          // and doesn't drop our 'js'/'config' events.
           globalThis.dataLayer = globalThis.dataLayer || [];
           function gtag() { dataLayer.push(arguments); }
           globalThis.gtag = gtag;
           gtag('js', new Date());
           gtag('config', 'G-W6BH3H6SZ6');
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6';
+          document.head.appendChild(s);
         }
         ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(
           function (ev) { addEventListener(ev, load, { once: true, passive: true }); }

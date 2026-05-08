@@ -28,10 +28,9 @@ html {
   outline-offset: 2px;
 }
 
-/* Reserve the right hero box per breakpoint regardless of which
-   <picture> <source> the browser picks. width/height on <source>
-   would do this too, but stamping it via CSS works in legacy browsers
-   and keeps the markup uncluttered. */
+/* Switch the <img>'s aspect-ratio per breakpoint so the layout box
+   matches whichever <picture> <source> the browser picked, keeping
+   CLS at zero across the mobile/desktop split. */
 .hero-img {
   aspect-ratio: 509 / 301;
   height: auto;
