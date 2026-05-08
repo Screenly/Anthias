@@ -29,6 +29,11 @@ on:
       - '!.cursor/**'
       - '!.claude/**'
       - '!src/anthias_host_agent/**'
+      # rpi-imager generator and the bun installer script don't
+      # affect the container image build; skip docker-build runs that
+      # only touch them.
+      - '!tools/raspberry_pi_imager/**'
+      - '!.github/workflows/scripts/install-bun.sh'
   workflow_dispatch:
 
 jobs:

@@ -51,9 +51,14 @@ jobs:
       - name: Compute short hash
         id: derive
         run: |
+          # `--short=7` pins the abbreviation length so the value
+          # always matches the 7-char tags that docker-build.yaml
+          # publishes (e.g. `<7-char>-<board>`). Plain `--short` lets
+          # git widen the abbreviation when the repo grows, which
+          # would silently look up tags that never exist.
           {
             echo "tag=${{ steps.tag.outputs.tag }}"
-            echo "short-hash=$(git rev-parse --short HEAD)"
+            echo "short-hash=$(git rev-parse --short=7 HEAD)"
           } >> "$GITHUB_OUTPUT"
 
   # Verify the GHCR images for the release commit exist before doing
@@ -411,3 +416,19 @@ jobs:
           TAG: ${{ needs.resolve-context.outputs.tag }}
         run: |
           gh release upload "$TAG" rpi-imager.json --clobber
+
+      # Now that rpi-imager.json is on the release, fan out to the
+      # website-deploy workflow. We trigger explicitly from here
+      # rather than letting deploy-website react to release:published
+      # — that would race this job's upload step and ship an empty
+      # os_list for the brief window before the asset exists.
+      # `--ref` must point at a branch the workflow file lives on;
+      # the repo's default branch is the canonical home.
+      - name: Trigger website deploy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh workflow run deploy-website.yaml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$DEFAULT_BRANCH"

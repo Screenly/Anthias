@@ -23,6 +23,10 @@ on:
       - '!tests/**'
       - '!.cursor/**'
       - '!.claude/**'
+      # rpi-imager generator and the bun installer script don't
+      # affect schema generation; skip runs that only touch them.
+      - '!tools/raspberry_pi_imager/**'
+      - '!.github/workflows/scripts/install-bun.sh'
   pull_request:
     branches:
       - master
@@ -45,6 +49,10 @@ on:
       - '!tests/**'
       - '!.cursor/**'
       - '!.claude/**'
+      # rpi-imager generator and the bun installer script don't
+      # affect schema generation; skip runs that only touch them.
+      - '!tools/raspberry_pi_imager/**'
+      - '!.github/workflows/scripts/install-bun.sh'
   workflow_call:
     inputs:
       ref:

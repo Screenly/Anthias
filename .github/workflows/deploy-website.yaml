@@ -6,17 +6,14 @@ on:
       - master
     paths:
       - '.github/workflows/deploy-website.yaml'
+      - '.github/workflows/scripts/install-bun.sh'
       - 'website/**'
 
-  # Re-deploy the marketing site when a release is published. The
-  # release workflow (build-balena-disk-image.yaml) attaches the
-  # consolidated rpi-imager.json as a release asset; the build job
-  # fetches it (by tag on release-triggered runs, latest otherwise)
-  # and Hugo serves it as a static file at /rpi-imager.json.
-  release:
-    types: [published]
-
-  # Allows you to run this workflow manually from the Actions tab
+  # Re-deploy when a release is cut: build-balena-disk-image.yaml
+  # invokes this workflow via `gh workflow run` after it finishes
+  # uploading rpi-imager.json to the release, so this job is
+  # guaranteed to see the freshly-published asset (and won't ship an
+  # empty os_list while the upload step is still in flight).
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -69,50 +66,35 @@ jobs:
       - name: Build website
         run: hugo --source website --minify
 
-      # Fetch rpi-imager.json from the GitHub release. The file is
-      # built by build-balena-disk-image.yaml at release time and
-      # served at /rpi-imager.json.
+      # Fetch rpi-imager.json from the latest GitHub release. The
+      # file is built by build-balena-disk-image.yaml at release time
+      # and Hugo serves it at /rpi-imager.json.
       #
-      # On release-triggered runs we pin to the release that fired
-      # this workflow (github.event.release.tag_name) so the website
-      # always matches what was just published — even if the release
-      # is flagged as prerelease, in which case `latest` would skip
-      # it. Push/manual runs pull from the latest release.
-      #
-      # We probe the release with `gh release view` first so that we
-      # can distinguish "release exists but asset is missing" (the
-      # transition fallback path; expected immediately after this
-      # refactor lands) from transient errors (auth/rate-limit/
-      # network), which must fail the deploy rather than silently
-      # ship an empty os_list.
+      # We probe with `gh release view --json assets` first so we can
+      # distinguish "release exists but asset is missing" (transition
+      # fallback path; expected immediately after this refactor
+      # lands) from transient errors (auth/rate-limit/network), which
+      # must fail the deploy rather than silently ship an empty
+      # os_list.
       - name: Fetch rpi-imager.json from release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           mkdir -p website/public
           out=website/public/rpi-imager.json
 
-          if [ -n "${RELEASE_TAG:-}" ]; then
-            target=( "$RELEASE_TAG" )
-            label="release $RELEASE_TAG"
-          else
-            target=()
-            label="latest release"
-          fi
-
-          assets=$(gh release view "${target[@]}" \
+          assets=$(gh release view \
             --repo Screenly/Anthias \
             --json assets \
             --jq '[.assets[].name]')
           if echo "$assets" | jq -e 'index("rpi-imager.json")' > /dev/null; then
-            gh release download "${target[@]}" \
+            gh release download \
               --pattern rpi-imager.json \
               --dir website/public \
               --repo Screenly/Anthias \
               --clobber
-            echo "Fetched rpi-imager.json from $label"
+            echo "Fetched rpi-imager.json from latest release"
 
             # Stronger validation than just `jq .`: catches a release
             # asset that's well-formed JSON but missing required
@@ -134,7 +116,7 @@ jobs:
             jq -e '[.os_list[] | .url | startswith("https://")] | all' "$out" > /dev/null
             echo "rpi-imager.json validation passed"
           else
-            echo "::warning::$label has no rpi-imager.json asset; shipping empty os_list."
+            echo "::warning::Latest release has no rpi-imager.json asset; shipping empty os_list."
             printf '%s\n' '{"os_list": []}' > "$out"
           fi
 
