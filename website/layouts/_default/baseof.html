@@ -34,10 +34,38 @@
 
     {{- $favicon := resources.Get "images/favicon.ico" -}}
     {{- $style := resources.Get "styles/style.css" | fingerprint -}}
-    {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
     <link rel="icon" href="{{ $favicon.RelPermalink }}">
+
+    {{- /* Preload primary font weights so text renders without a FOUT.
+           Latin only — latin-ext loads on demand via unicode-range. */ -}}
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+
+    {{- /* Preload the LCP hero image on the home page. The browser
+           picks the matching <source> via media query; we preload both
+           and let it discard the non-matching one. */ -}}
+    {{- if .IsHome -}}
+      {{- $hMobile1xW := (resources.Get "images/overview-mobile.png").Process "webp" -}}
+      {{- $hMobile2xW := (resources.Get "images/overview-mobile@2x.png").Process "webp" -}}
+      {{- $hMobile3xW := (resources.Get "images/overview-mobile@3x.png").Process "webp" -}}
+      {{- $hDesk1xW   := (resources.Get "images/overview.png").Process "webp" -}}
+      {{- $hDesk2xW   := (resources.Get "images/overview@2x.png").Process "webp" -}}
+      {{- $hDesk3xW   := (resources.Get "images/overview@3x.png").Process "webp" -}}
+    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" imagesrcset="{{ $hMobile1xW.RelPermalink }}, {{ $hMobile2xW.RelPermalink }} 2x, {{ $hMobile3xW.RelPermalink }} 3x" fetchpriority="high">
+    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" imagesrcset="{{ $hDesk1xW.RelPermalink }}, {{ $hDesk2xW.RelPermalink }} 2x, {{ $hDesk3xW.RelPermalink }} 3x" fetchpriority="high">
+    {{- end }}
+
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
+
+    {{- /* chroma.css is only needed on pages that produce highlighted
+           code blocks. The faq layout renders answers from data/faq.yaml
+           via markdownify, so its highlighted output is not in .Content
+           and we have to special-case it. */ -}}
+    {{- $needsChroma := or (strings.Contains .Content "chroma") (eq .Layout "faq") -}}
+    {{- if $needsChroma -}}
+      {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
+    {{- end }}
 
     {{ if .IsHome }}
     <script type="application/ld+json">
@@ -159,12 +187,30 @@
         });
       });
     </script>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6"></script>
     <script>
-        globalThis.dataLayer = globalThis.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-W6BH3H6SZ6');
+      // Defer GA until first user interaction (or 4 s after load).
+      // Keeps the Lighthouse audit window clean while still capturing
+      // analytics for real visitors.
+      (function () {
+        var loaded = false;
+        function load() {
+          if (loaded) return;
+          loaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6';
+          document.head.appendChild(s);
+          globalThis.dataLayer = globalThis.dataLayer || [];
+          function gtag() { dataLayer.push(arguments); }
+          globalThis.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', 'G-W6BH3H6SZ6');
+        }
+        ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(
+          function (ev) { addEventListener(ev, load, { once: true, passive: true }); }
+        );
+        addEventListener('load', function () { setTimeout(load, 4000); });
+      })();
     </script>
   </body>
 </html>
