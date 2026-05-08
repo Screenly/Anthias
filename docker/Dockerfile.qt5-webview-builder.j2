@@ -180,7 +180,7 @@ COPY --from=qt5-sysroot /usr/lib/ /sysroot/usr/lib/
 # fontconfig probe failing silently.
 COPY --from=qt5-sysroot /usr/share/pkgconfig/ /sysroot/usr/share/pkgconfig/
 
-RUN /usr/local/bin/sysroot-relativelinks.py /sysroot
+RUN python3 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 # Linaro gcc-7.4.1 — hardcoded path matches the CROSS_COMPILE setting
 # baked into the Qt 5 toolchain's qmake.conf at original toolchain
