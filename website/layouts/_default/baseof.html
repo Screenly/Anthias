@@ -41,9 +41,9 @@
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 
-    {{- /* Preload the LCP hero image on the home page. The browser
-           picks the matching <source> via media query; we preload both
-           and let it discard the non-matching one. */ -}}
+    {{- /* Preload the LCP hero image on the home page. Two preload
+           links with mutually exclusive media queries — only the one
+           matching the current viewport actually fetches. */ -}}
     {{- if .IsHome -}}
       {{- $hMobile1xW := (resources.Get "images/overview-mobile.png").Process "webp" -}}
       {{- $hMobile2xW := (resources.Get "images/overview-mobile@2x.png").Process "webp" -}}
@@ -58,10 +58,13 @@
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
 
     {{- /* chroma.css is only needed on pages that produce highlighted
-           code blocks. The faq layout renders answers from data/faq.yaml
-           via markdownify, so its highlighted output is not in .Content
+           code blocks. Hugo wraps each block in <pre class="chroma">,
+           so that exact attribute is the precise sentinel — looser
+           matches like "chroma" alone would false-positive on prose.
+           The faq layout renders answers from data/faq.yaml via
+           markdownify, so its highlighted output is not in .Content
            and we have to special-case it. */ -}}
-    {{- $needsChroma := or (strings.Contains .Content "chroma") (eq .Layout "faq") -}}
+    {{- $needsChroma := or (strings.Contains .Content `class="chroma"`) (eq .Layout "faq") -}}
     {{- if $needsChroma -}}
       {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
@@ -209,7 +212,12 @@
         ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(
           function (ev) { addEventListener(ev, load, { once: true, passive: true }); }
         );
-        addEventListener('load', function () { setTimeout(load, 4000); });
+        // bfcache restores can land here with the page already loaded;
+        // schedule the timeout immediately in that case instead of
+        // waiting for a 'load' event that has already fired.
+        function scheduleFallback() { setTimeout(load, 4000); }
+        if (document.readyState === 'complete') scheduleFallback();
+        else addEventListener('load', scheduleFallback);
       })();
     </script>
   </body>

@@ -34,23 +34,19 @@
         {{- $heroDesk1xW   := $heroDesk1x.Process   "webp" -}}
         {{- $heroDesk2xW   := $heroDesk2x.Process   "webp" -}}
         {{- $heroDesk3xW   := $heroDesk3x.Process   "webp" -}}
-        <picture class="md:hidden block">
-            <source
-                type="image/webp"
-                srcset="{{ $heroMobile1xW.RelPermalink }}, {{ $heroMobile2xW.RelPermalink }} 2x, {{ $heroMobile3xW.RelPermalink }} 3x">
-            <img
-                class="rounded-t-lg w-full"
+        {{- /* Single <picture> so the browser only fetches the source
+               that matches the current viewport. Per-source width/height
+               keeps CLS at zero across the breakpoint. */ -}}
+        <picture>
+            <source type="image/webp" media="(max-width: 767px)"
                 width="{{ $heroMobile1x.Width }}" height="{{ $heroMobile1x.Height }}"
-                srcset="{{ $heroMobile1x.RelPermalink }}, {{ $heroMobile2x.RelPermalink }} 2x, {{ $heroMobile3x.RelPermalink }} 3x"
-                src="{{ $heroMobile1x.RelPermalink }}"
-                alt="Anthias dashboard showing scheduled content"
-                fetchpriority="high"
-                decoding="async">
-        </picture>
-        <picture class="hidden md:block">
-            <source
-                type="image/webp"
+                srcset="{{ $heroMobile1xW.RelPermalink }}, {{ $heroMobile2xW.RelPermalink }} 2x, {{ $heroMobile3xW.RelPermalink }} 3x">
+            <source type="image/webp" media="(min-width: 768px)"
+                width="{{ $heroDesk1x.Width }}" height="{{ $heroDesk1x.Height }}"
                 srcset="{{ $heroDesk1xW.RelPermalink }}, {{ $heroDesk2xW.RelPermalink }} 2x, {{ $heroDesk3xW.RelPermalink }} 3x">
+            <source media="(max-width: 767px)"
+                width="{{ $heroMobile1x.Width }}" height="{{ $heroMobile1x.Height }}"
+                srcset="{{ $heroMobile1x.RelPermalink }}, {{ $heroMobile2x.RelPermalink }} 2x, {{ $heroMobile3x.RelPermalink }} 3x">
             <img
                 class="rounded-t-lg w-full"
                 width="{{ $heroDesk1x.Width }}" height="{{ $heroDesk1x.Height }}"
