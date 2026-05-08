@@ -51,7 +51,13 @@ jobs:
           version: ${{ env.UV_VERSION }}
 
       - name: Run rpi-imager tests
-        run: uv run --no-dev --group website -m pytest --confcutdir=tools/raspberry_pi_imager tools/raspberry_pi_imager/tests/ -v
+        # The repo-wide pytest addopts in pyproject.toml include
+        # pytest-playwright flags (--browser, --tracing, --screenshot,
+        # --output) for the integration suite. The website group
+        # doesn't pull pytest-playwright, so we override addopts here
+        # to keep just --strict-markers — otherwise pytest dies with
+        # "unrecognized arguments" before any test runs.
+        run: uv run --no-dev --group website -m pytest --confcutdir=tools/raspberry_pi_imager tools/raspberry_pi_imager/tests/ -v -o "addopts=--strict-markers"
 
   # Build job
   build:
