@@ -359,8 +359,14 @@
   .inline-block {
     display: inline-block;
   }
+  .inline-flex {
+    display: inline-flex;
+  }
   .table {
     display: table;
+  }
+  .h-4 {
+    height: calc(var(--spacing) * 4);
   }
   .h-5 {
     height: calc(var(--spacing) * 5);
@@ -370,6 +376,9 @@
   }
   .h-10 {
     height: calc(var(--spacing) * 10);
+  }
+  .w-4 {
+    width: calc(var(--spacing) * 4);
   }
   .w-5 {
     width: calc(var(--spacing) * 5);
@@ -591,6 +600,12 @@
     border-color: color-mix(in srgb, #fff 10%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       border-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+    }
+  }
+  .border-white\/20 {
+    border-color: color-mix(in srgb, #fff 20%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-white) 20%, transparent);
     }
   }
   .border-zinc-100 {
@@ -900,6 +915,12 @@
       color: color-mix(in oklab, var(--color-white) 70%, transparent);
     }
   }
+  .text-white\/90 {
+    color: color-mix(in srgb, #fff 90%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-white) 90%, transparent);
+    }
+  }
   .text-zinc-400 {
     color: var(--color-zinc-400);
   }
@@ -957,6 +978,16 @@
         background-color: color-mix(in srgb, #000 5%, transparent);
         @supports (color: color-mix(in lab, red, red)) {
           background-color: color-mix(in oklab, var(--color-black) 5%, transparent);
+        }
+      }
+    }
+  }
+  .hover\:bg-white\/15 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: color-mix(in srgb, #fff 15%, transparent);
+        @supports (color: color-mix(in lab, red, red)) {
+          background-color: color-mix(in oklab, var(--color-white) 15%, transparent);
         }
       }
     }
@@ -1241,6 +1272,15 @@ html {
 :focus-visible {
   outline: 2px solid var(--color-brand-purple);
   outline-offset: 2px;
+}
+.hero-img {
+  aspect-ratio: 509 / 301;
+  height: auto;
+}
+@media (min-width: 768px) {
+  .hero-img {
+    aspect-ratio: 1112 / 1044;
+  }
 }
 .docs-prose {
   color: #2a1f33;
