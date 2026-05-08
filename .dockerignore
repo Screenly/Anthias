@@ -67,3 +67,12 @@ docker-compose.*
 # (~1.5 GB of source + tarballs); without this entry, COPY . into the
 # viewer image bloats by the same amount and yields a multi-GB image.
 .qt5-toolchain-build
+
+# Build-time-only tooling. tools/raspberry_pi_imager/ is the
+# generator that turns the GitHub release's per-board JSON snippets
+# into rpi-imager.json; it never runs inside the runtime image.
+# Excluding it keeps the matching path-trigger filter in
+# docker-build.yaml semantically honest — changes under this directory
+# really cannot alter image content, so skipping the container rebuild
+# is correct rather than a footgun.
+tools/raspberry_pi_imager

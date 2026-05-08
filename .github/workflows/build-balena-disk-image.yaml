@@ -27,7 +27,21 @@ jobs:
   # Single source of truth for tag/commit/short-hash so every downstream
   # job derives identical values. Keeps the trigger-specific lookup logic
   # in one place.
+  #
+  # `if:` filters `release: published` events so only Anthias-core
+  # release tags (`v<version>`, e.g. `v2026.05.0`) trigger the
+  # pipeline. The build-webview.yaml workflow publishes its own
+  # `WebView-v<version>` GitHub releases on tag pushes; without this
+  # guard, every webview release would also fire balena OTA deploys
+  # and disk-image builds for an unrelated tag. workflow_dispatch
+  # always passes through (caller is human, tag is explicit input).
+  # All downstream jobs `needs: resolve-context`, so a single skip
+  # here cascades through the whole pipeline.
   resolve-context:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'release' &&
+       startsWith(github.event.release.tag_name, 'v'))
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.derive.outputs.tag }}
@@ -298,9 +312,26 @@ jobs:
           # the regex in tools/raspberry_pi_imager/build_pi_imager_json
           # so the consolidation step can route entries by board.
           ARTIFACT="$BUILD_DATE-anthias-$BOARD"
-          sha256sum "$BALENA_IMAGE.img" >> "$ARTIFACT.sha256"
+
+          # Hash + size each large artefact exactly once and reuse
+          # the values for both the .sha256 sidecar and the JSON
+          # metadata snippet. Hashing a multi-GB image is the
+          # dominant cost in this step, and it used to run twice per
+          # file (once for the sidecar, once inline in jq) — so this
+          # halves the wall-clock time of the package step.
+          IMAGE_SHA256=$(sha256sum "$BALENA_IMAGE.img" | awk '{print $1}')
+          IMAGE_SIZE=$(wc -c < "$BALENA_IMAGE.img")
+
           zstd -19 -T0 "$BALENA_IMAGE.img" -o "$ARTIFACT.img.zst"
-          sha256sum "$ARTIFACT.img.zst" >> "$ARTIFACT.sha256"
+          DOWNLOAD_SHA256=$(sha256sum "$ARTIFACT.img.zst" | awk '{print $1}')
+          DOWNLOAD_SIZE=$(wc -c < "$ARTIFACT.img.zst")
+
+          # Match the format `sha256sum` would have written so the
+          # sidecar is a drop-in input to `sha256sum -c`.
+          {
+            printf '%s  %s\n' "$IMAGE_SHA256" "$BALENA_IMAGE.img"
+            printf '%s  %s\n' "$DOWNLOAD_SHA256" "$ARTIFACT.img.zst"
+          } > "$ARTIFACT.sha256"
 
           # Per-board metadata snippet, uploaded to the release
           # alongside the .img.zst it describes.
@@ -308,10 +339,10 @@ jobs:
           # (s/.img.zst$/.json/) and consolidates into rpi-imager.json.
           jq --null-input \
             --arg BOARD "$BOARD" \
-            --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
-            --argjson IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
-            --arg DOWNLOAD_SHA256 "$(sha256sum "$ARTIFACT.img.zst" | cut -d ' ' -f 1)" \
-            --argjson DOWNLOAD_SIZE "$(wc -c < "$ARTIFACT.img.zst" | xargs)" \
+            --arg IMAGE_SHA256 "$IMAGE_SHA256" \
+            --argjson IMAGE_SIZE "$IMAGE_SIZE" \
+            --arg DOWNLOAD_SHA256 "$DOWNLOAD_SHA256" \
+            --argjson DOWNLOAD_SIZE "$DOWNLOAD_SIZE" \
             --arg RELEASE_DATE "$BUILD_DATE" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
