@@ -13,9 +13,12 @@ $ ssh pi@raspberrypi
 ```
 
 Anthias ships its container logs through the host's `systemd-journald`,
-so the system handles rotation and retention for you and there is no
-unbounded `*-json.log` file under `/var/lib/docker/containers/` to fill
-the SD card. You can read the logs three ways: `docker logs`,
+so the system handles rotation and retention for you. The four core
+services (`anthias-server`, `anthias-viewer`, `anthias-celery`, `redis`)
+plus the optional `anthias-caddy` TLS sidecar all use the journald
+driver, so they don't write the unbounded `*-json.log` files under
+`/var/lib/docker/containers/` that can fill an SD card on long-running
+installs. You can read the logs three ways: `docker logs`,
 `docker compose logs`, or `journalctl` directly.
 
 ### Using `docker logs`
@@ -68,12 +71,21 @@ docker. Useful when you want to grep across a long time range or
 combine container logs with system logs:
 
 ```bash
-$ journalctl -f CONTAINER_TAG=anthias-server
-$ journalctl --since "1 hour ago" CONTAINER_TAG=anthias-viewer
+$ sudo journalctl -f CONTAINER_TAG=anthias-server
+$ sudo journalctl --since "1 hour ago" CONTAINER_TAG=anthias-viewer
 ```
 
 The available tags are `anthias-server`, `anthias-viewer`,
-`anthias-celery`, and `anthias-redis`.
+`anthias-celery`, `anthias-redis`, and (when TLS is enabled)
+`anthias-caddy`.
+
+> **Note**
+>
+> The Anthias installer adds your user to the `adm` group, which on
+> Debian/Raspberry Pi OS grants read access to the journal once you've
+> logged out and back in (and provided the journal is persistent —
+> i.e. `/var/log/journal/` exists). On systems where that's set up you
+> can drop the `sudo` from the commands above.
 
 Journal retention is controlled by `systemd-journald` (see
 `/etc/systemd/journald.conf` — `SystemMaxUse` caps total disk usage,
