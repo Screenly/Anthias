@@ -33,13 +33,25 @@ jobs:
       tag: ${{ steps.derive.outputs.tag }}
       short-hash: ${{ steps.derive.outputs.short-hash }}
     steps:
+      # Expressions are pulled into env vars rather than substituted
+      # inline so the bash heredoc stays free of GitHub-expression
+      # interpolation (no quoting traps, no risk of an arbitrary tag
+      # name being interpreted as shell). `github.event.inputs.tag`
+      # (rather than `inputs.tag`) is the event-payload field, which
+      # is null on `release` events — that keeps us out of the
+      # `inputs` context, which is only populated for
+      # workflow_dispatch/workflow_call.
       - name: Resolve tag from trigger
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DISPATCH_TAG: ${{ github.event.inputs.tag }}
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "tag=$DISPATCH_TAG" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout at tag
@@ -393,8 +405,12 @@ jobs:
   build-rpi-imager-json:
     needs: [resolve-context, upload-release-assets]
     runs-on: ubuntu-24.04
+    # `contents: write` is for `gh release upload`; `actions: write` is
+    # for the `gh workflow run deploy-website.yaml` fan-out at the end
+    # of this job (Actions API call, not a contents-touching op).
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout at tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

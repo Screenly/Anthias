@@ -74,10 +74,29 @@ jobs:
       COMPOSE_FILE: docker-compose.dev.yml
 
     steps:
+      # Resolve the checkout ref before invoking actions/checkout so
+      # the `inputs` context (only populated under workflow_call) is
+      # only read in one place, with `github.ref` as the fallback for
+      # push/PR runs. INPUT_REF is empty on push/PR events because
+      # the `inputs` context isn't populated there — `${{ inputs.ref }}`
+      # interpolates to an empty string in that case rather than
+      # erroring.
+      - name: Resolve checkout ref
+        id: ref
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          DEFAULT_REF: ${{ github.ref }}
+        run: |
+          if [[ -n "$INPUT_REF" ]]; then
+            echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$DEFAULT_REF" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ steps.ref.outputs.ref }}
 
       - name: Set up Python 3.13
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
