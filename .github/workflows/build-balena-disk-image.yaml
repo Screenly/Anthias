@@ -272,26 +272,34 @@ jobs:
             --fleet "screenly_ose/$FLEET_SLUG"
 
       - name: Package up image
+        env:
+          BOARD: ${{ matrix.board }}
         run: |
           # Capture BUILD_DATE once so every filename and metadata
           # field references the same date, even if the step happens
           # to span UTC midnight.
           BUILD_DATE=$(date -I)
-          sha256sum "$BALENA_IMAGE.img" >> "$BUILD_DATE-$BALENA_IMAGE.sha256"
-          zstd -19 -T0 "$BALENA_IMAGE.img" -o "$BUILD_DATE-$BALENA_IMAGE.img.zst"
-          sha256sum "$BUILD_DATE-$BALENA_IMAGE.img.zst" >> \
-            "$BUILD_DATE-$BALENA_IMAGE.sha256"
+          # Final artefacts embed the board slug rather than balena's
+          # image name (which is `raspberry-pi2` / `raspberrypi3` /
+          # `raspberrypi4-64` / `raspberrypi5` — inconsistently
+          # hyphenated). The `anthias-<board>.img.zst` shape matches
+          # the regex in tools/raspberry_pi_imager/build_pi_imager_json
+          # so the consolidation step can route entries by board.
+          ARTIFACT="$BUILD_DATE-anthias-$BOARD"
+          sha256sum "$BALENA_IMAGE.img" >> "$ARTIFACT.sha256"
+          zstd -19 -T0 "$BALENA_IMAGE.img" -o "$ARTIFACT.img.zst"
+          sha256sum "$ARTIFACT.img.zst" >> "$ARTIFACT.sha256"
 
-          # Per-board metadata snippet, uploaded to the release alongside
-          # the .img.zst it describes. tools/raspberry_pi_imager/
-          # build_pi_imager_json.py reads these back from the release
-          # and consolidates them into rpi-imager.json.
+          # Per-board metadata snippet, uploaded to the release
+          # alongside the .img.zst it describes.
+          # build_pi_imager_json.py fetches it via the same base name
+          # (s/.img.zst$/.json/) and consolidates into rpi-imager.json.
           jq --null-input \
-            --arg BOARD "${{ matrix.board }}" \
+            --arg BOARD "$BOARD" \
             --arg IMAGE_SHA256 "$(sha256sum "$BALENA_IMAGE.img" | cut -d ' ' -f 1)" \
             --argjson IMAGE_SIZE "$(wc -c < "$BALENA_IMAGE.img" | xargs)" \
-            --arg DOWNLOAD_SHA256 "$(sha256sum "$BUILD_DATE-$BALENA_IMAGE.img.zst" | cut -d ' ' -f 1)" \
-            --argjson DOWNLOAD_SIZE "$(wc -c < "$BUILD_DATE-$BALENA_IMAGE.img.zst" | xargs)" \
+            --arg DOWNLOAD_SHA256 "$(sha256sum "$ARTIFACT.img.zst" | cut -d ' ' -f 1)" \
+            --argjson DOWNLOAD_SIZE "$(wc -c < "$ARTIFACT.img.zst" | xargs)" \
             --arg RELEASE_DATE "$BUILD_DATE" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
@@ -303,21 +311,21 @@ jobs:
               "image_download_size": $DOWNLOAD_SIZE,
               "image_download_sha256": $DOWNLOAD_SHA256,
               "release_date": $RELEASE_DATE
-            }' > "$BUILD_DATE-$BALENA_IMAGE.json"
+            }' > "$ARTIFACT.json"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: balena-images-${{ matrix.board }}
           path: |
-            ./*raspberry*.img.zst
-            ./*raspberry*.sha256
-            ./*raspberry*.json
+            ./*-anthias-*.img.zst
+            ./*-anthias-*.sha256
+            ./*-anthias-*.json
 
       - name: Attest
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
-          subject-path: '${{ github.workspace }}/*raspberry*.img.zst'
+          subject-path: '${{ github.workspace }}/*-anthias-*.img.zst'
 
   # Phase 1 release upload: ensure the release exists, then attach the
   # disk images, per-board metadata snippets, OpenAPI schema, and the
