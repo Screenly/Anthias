@@ -1,0 +1,68 @@
+# Mirror oven/bun (Docker Hub) onto ghcr.io/screenly/bun so CI and
+# anyone building images locally pulls bun from a registry we
+# control instead of hitting Docker Hub's anonymous rate limit.
+# This whole workflow becomes redundant once oven-sh/bun publishes
+# official GHCR images — track https://github.com/oven-sh/bun/issues/30365.
+# `docker buildx imagetools create` is a manifest-level copy: it
+# rewrites the manifest pointer so all per-arch layers are inherited
+# from the source registry without re-uploading content. The op is
+# idempotent — re-runs against an unchanged source produce no new
+# digest, so the daily cron is a cheap re-assertion rather than a
+# republish.
+#
+# Bumping the bun tag: update the BUN_TAG below AND the matching
+# `oven/bun:<tag>` -> `ghcr.io/screenly/bun:<tag>` references in
+# docker/Dockerfile.server.j2 and docker/Dockerfile.test.j2 in the
+# same PR, then trigger this workflow via `workflow_dispatch` before
+# the dependent change merges so the new tag is mirrored before any
+# build tries to pull it.
+
+name: Mirror bun image to GHCR
+
+on:
+  schedule:
+    # Daily at 04:17 UTC — off-peak and offset from the top-of-hour
+    # cron stampede that GitHub-hosted runners see.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    env:
+      BUN_TAG: 1.3.13-slim
+      SRC_IMAGE: oven/bun
+      DST_IMAGE: ghcr.io/screenly/bun
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror ${{ env.SRC_IMAGE }}:${{ env.BUN_TAG }} -> ${{ env.DST_IMAGE }}:${{ env.BUN_TAG }}
+        run: |
+          set -euo pipefail
+          src="${SRC_IMAGE}:${BUN_TAG}"
+          dst="${DST_IMAGE}:${BUN_TAG}"
+          for attempt in 1 2 3 4 5; do
+            if docker buildx imagetools create -t "${dst}" "${src}"; then
+              echo "Mirrored ${src} -> ${dst}"
+              exit 0
+            fi
+            if [ "${attempt}" -lt 5 ]; then
+              delay=$((2 ** attempt))
+              echo "Attempt ${attempt} failed; retrying in ${delay}s..." >&2
+              sleep "${delay}"
+            fi
+          done
+          echo "Giving up after 5 attempts mirroring ${src} -> ${dst}" >&2
+          exit 1
