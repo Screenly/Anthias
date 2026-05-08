@@ -6,10 +6,11 @@
 # under .qt5-toolchain-build/release/ at the repo root, ready to be
 # attached to a `WebView-v*` GitHub release.
 #
-# This is an out-of-band prereq for the Trixie migration:
-# webview/build_webview_with_qt5.sh fetches these tarballs from the
-# release tag pinned at line 21 (QT5_TOOLCHAIN_TAG). If that release
-# doesn't yet have trixie-* artifacts, pi2/pi3 CI fails with
+# This is an out-of-band prereq: docker/Dockerfile.qt5-webview-builder.j2
+# fetches these tarballs from the release the viewer image references
+# via tools/image_builder/utils.py (qt5_toolchain_url, currently
+# WebView-v2026.04.1). If that release doesn't have trixie-* artifacts
+# for both pi2 and pi3, pi2/pi3 viewer image builds fail with
 #     sha256sum: no properly formatted checksum lines found
 # (the curl on the missing .sha256 falls back to a 404 HTML page).
 #
@@ -28,10 +29,7 @@
 #
 # Idempotent: rerunning skips a board whose tarball already exists.
 # Delete the .tar.gz under .qt5-toolchain-build/release/ to force a
-# rebuild for that board. Set BUILD_WEBVIEW=0 to skip the bonus
-# webview-* tarball build (the Dockerfile defaults BUILD_WEBVIEW=1, so
-# build_qt5.sh produces both qt5-* and webview-* by default; passing
-# BUILD_WEBVIEW=0 here overrides that for a toolchain-only run).
+# rebuild for that board.
 
 set -euo pipefail
 
@@ -76,8 +74,6 @@ docker buildx build \
     -t "${IMAGE_TAG}" \
     "${WEBVIEW_DIR}"
 
-WEBVIEW_VERSION="${WEBVIEW_VERSION:-$(date -u +%Y.%m).0-dev}"
-
 for board in "${BOARDS[@]}"; do
     expected_tarball="${OUT_DIR}/qt5-5.15.14-trixie-${board}.tar.gz"
     if [[ -f "${expected_tarball}" ]]; then
@@ -100,8 +96,6 @@ for board in "${BOARDS[@]}"; do
         -v "${OUT_DIR}:/build:Z" \
         -v "${WEBVIEW_DIR}:/webview:ro" \
         -e "TARGET=${board}" \
-        -e "WEBVIEW_VERSION=${WEBVIEW_VERSION}" \
-        -e "BUILD_WEBVIEW=${BUILD_WEBVIEW:-1}" \
         -e "MAKE_CORES=${MAKE_CORES}" \
         "${IMAGE_TAG}" \
         /webview/build_qt5.sh
@@ -114,10 +108,10 @@ echo
 echo "Verify checksums:"
 echo "  (cd '${OUT_DIR}' && sha256sum -c qt5-5.15.14-trixie-*.tar.gz.sha256)"
 echo
-echo "Upload to a WebView-v* release. If you re-use the tag pinned at"
-echo "webview/build_webview_with_qt5.sh:21 (currently WebView-v2026.04.1),"
-echo "no source change is needed; otherwise bump QT5_TOOLCHAIN_TAG to"
-echo "the new tag in the same commit."
+echo "Upload to a WebView-v* release. If you re-use the tag the viewer"
+echo "image references in tools/image_builder/utils.py via qt5_toolchain_url"
+echo "(currently WebView-v2026.04.1), no source change is needed;"
+echo "otherwise bump that URL to the new tag in the same commit."
 echo "  gh release upload <WebView-vX.Y.Z> \\"
 echo "      '${OUT_DIR}'/qt5-5.15.14-trixie-pi2.tar.gz{,.sha256} \\"
 echo "      '${OUT_DIR}'/qt5-5.15.14-trixie-pi3.tar.gz{,.sha256}"

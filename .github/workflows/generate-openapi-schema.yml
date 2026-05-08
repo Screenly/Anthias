@@ -7,10 +7,8 @@ on:
     paths:
       - '**'
       - '!.editorconfig'
-      - '!webview/**'
       - '!website/**'
       - '!.github/workflows/deploy-website.yaml'
-      - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/workflows/python-lint.yaml'
       - '!.github/release.yml'
@@ -29,10 +27,8 @@ on:
     paths:
       - '**'
       - '!.editorconfig'
-      - '!webview/**'
       - '!website/**'
       - '!.github/workflows/deploy-website.yaml'
-      - '!.github/workflows/build-webview.yaml'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/workflows/python-lint.yaml'
       - '!.github/release.yml'
