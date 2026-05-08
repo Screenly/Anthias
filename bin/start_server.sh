@@ -64,8 +64,9 @@ if [[ "$ENVIRONMENT" == "development" ]]; then
         --reload-include "*.css" \
         "${UVICORN_PROXY_ARGS[@]}"
 else
-    echo "Generating Django static files..."
-    python -m anthias_server.manage collectstatic --clear --noinput
+    # collectstatic ran at image build time (docker/Dockerfile.server.j2)
+    # — STATIC_ROOT is baked into the read-only image layer. No runtime
+    # invocation needed.
     echo "Starting uvicorn..."
     exec uvicorn anthias_server.django_project.asgi:application \
         --host "$UVICORN_BIND_HOST" \

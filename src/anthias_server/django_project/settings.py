@@ -242,7 +242,14 @@ except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = '/data/anthias/staticfiles'
+# Baked into the production server image at build time
+# (docker/Dockerfile.server.j2 runs `manage.py collectstatic` after
+# the bun-built dist/ is COPYed in). The runtime container treats
+# this path as read-only: admin assets + collected app static is
+# immutable per-image. Dev (DEBUG=True) bypasses STATIC_ROOT
+# entirely via WHITENOISE_USE_FINDERS below, so the path doesn't
+# need to exist in the dev image.
+STATIC_ROOT = '/usr/src/app/staticfiles'
 
 # Dev runs uvicorn (not runserver) and skips collectstatic, so files
 # only exist in STATICFILES_DIRS — let WhiteNoise fall back to the
