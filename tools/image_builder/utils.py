@@ -187,7 +187,10 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # configured with `-no-xcb -no-xcb-xlib -qpa eglfs` (see
     # webview/build_qt{5,6}.sh) and runs under QT_QPA_PLATFORM=linuxfb
     # straight on KMS/DRM, so Qt has no X code path to dlopen. mpv
-    # uses --vo=drm. Same reason there's nothing wayland-related here.
+    # uses --vo=drm. Wayland is similarly absent on Pi for the same
+    # reason; the x86 board is the one exception (it has no /dev/fb0,
+    # so the qt6-wayland + cage pair is added to the per-board apt
+    # extension below).
     viewer_extra_apt_dependencies = [
         'ca-certificates',
         'dbus-daemon',
