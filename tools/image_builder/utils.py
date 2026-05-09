@@ -263,6 +263,20 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
                 'qt6-image-formats-plugins',
             ]
         )
+
+        if board == 'x86':
+            # balenaOS x86 has no /dev/fb0 for Qt's linuxfb plugin and
+            # no host display server. cage is a kiosk wlroots
+            # compositor that talks straight to KMS; qt6-wayland is
+            # the Qt platform plugin the viewer loads to render into
+            # cage's surface. See docker/Dockerfile.viewer.j2 and
+            # bin/start_viewer.sh for the runtime wiring.
+            viewer_extra_apt_dependencies.extend(
+                [
+                    'cage',
+                    'qt6-wayland',
+                ]
+            )
     else:
         # libraspberrypi0 already comes in via base_apt_dependencies on
         # 32-bit Pi boards (see __main__.py), so it's deliberately not

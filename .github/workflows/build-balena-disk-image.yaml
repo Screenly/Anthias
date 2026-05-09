@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           missing=()
-          for board in pi2 pi3 pi4-64 pi5; do
+          for board in pi2 pi3 pi4-64 pi5 x86; do
             for service in server viewer redis; do
               ref="ghcr.io/screenly/anthias-${service}:${SHORT_HASH}-${board}"
               if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
@@ -146,7 +146,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout at tag
@@ -180,6 +180,7 @@ jobs:
             pi3)    FLEET=anthias-pi3 ;;
             pi4-64) FLEET=anthias-pi4 ;;
             pi5)    FLEET=anthias-pi5 ;;
+            x86)    FLEET=anthias-x86 ;;
           esac
           {
             echo "FLEET_SLUG=$FLEET"
@@ -194,11 +195,13 @@ jobs:
           cp balena.yml balena-deploy/
           envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
 
-          # Pi 5 doesn't expose /dev/vchiq; strip the bind mount.
-          if [ "${{ matrix.board }}" == "pi5" ]; then
-            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-              balena-deploy/docker-compose.yml
-          fi
+          # Pi 5 and x86 don't expose /dev/vchiq; strip the bind mount.
+          case "${{ matrix.board }}" in
+            pi5|x86)
+              sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+                balena-deploy/docker-compose.yml
+              ;;
+          esac
 
       # `balena deploy` (vs `balena push`) takes the rendered compose
       # file and points the fleet at the existing GHCR images — no
@@ -226,7 +229,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -272,6 +275,14 @@ jobs:
             pi5)
               echo "BALENA_IMAGE=raspberrypi5" >> "$GITHUB_ENV"
               echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
+              ;;
+            x86)
+              # genericx86-64-ext is balena's UEFI-boot generic
+              # x86_64 device type — works on most modern PCs / NUCs.
+              # Users without UEFI need a different image; intel-nuc
+              # is the legacy alternative.
+              echo "BALENA_IMAGE=genericx86-64-ext" >> "$GITHUB_ENV"
+              echo "FLEET_SLUG=anthias-x86" >> "$GITHUB_ENV"
               ;;
           esac
 

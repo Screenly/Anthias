@@ -100,8 +100,23 @@ fi
 # --preserve-env=XDG_RUNTIME_DIR forces sudo to forward the runtime dir
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
-sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH -E -u viewer \
-    dbus-run-session /venv/bin/python -m anthias_viewer &
+#
+# x86 boards run under `cage`, a kiosk wlroots compositor, because
+# balenaOS x86 doesn't expose /dev/fb0 (Qt's linuxfb plugin has nothing
+# to draw to) and there's no host display server. cage acquires DRM
+# master as root, exports WAYLAND_DISPLAY for its child, and exits when
+# the child exits — so the existing kill -0 watchdog below still works.
+# The inner sudo drops back to the viewer user; WAYLAND_DISPLAY has to
+# be added to --preserve-env to survive sudo's env scrub.
+if [ "$DEVICE_TYPE" = "x86" ]; then
+    cage -- sudo \
+        --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY \
+        -E -u viewer \
+        dbus-run-session /venv/bin/python -m anthias_viewer &
+else
+    sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH -E -u viewer \
+        dbus-run-session /venv/bin/python -m anthias_viewer &
+fi
 
 # Wait for the viewer
 while true; do
