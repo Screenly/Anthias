@@ -37,7 +37,6 @@ here are the links to the images:
 * [Raspberry Pi 4](https://hub.balena.io/fleets-for-good/1971389/anthias-pi4)
 * [Raspberry Pi 3](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3)
 * [Raspberry Pi 2](https://hub.balena.io/fleets-for-good/1971385/anthias-pi2)
-* [Raspberry Pi 1](https://hub.balena.io/fleets-for-good/1971378/anthias-pi1)
 
 Go to one of the links above and click the *Join* button, then select either *Ethernet only* or *Wifi + Ethernet* for Network options.
 You can either click the *Flash* button to open balenaEtcher (make sure that it's installed) or download the image file and flash it using your preferred imager.
@@ -111,7 +110,7 @@ installation.
 
 > **Note**
 >
-> During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes. On a Raspberry Pi Zero or Raspberry Pi Model B with a class 4 SD card, the installation will take hours.
+> During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes.
 
 #### Prompt: Network Management
 
