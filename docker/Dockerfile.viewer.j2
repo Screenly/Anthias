@@ -49,7 +49,15 @@ RUN curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{
     rm "webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz"
 
 ENV QT_QPA_EGLFS_FORCE888=1
+{% if board == 'x86' %}
+# balenaOS x86 doesn't expose /dev/fb0, so the linuxfb plugin has
+# nothing to draw to. Run Qt under Wayland instead; bin/start_viewer.sh
+# wraps the viewer in `cage`, a kiosk Wayland compositor that talks to
+# KMS via wlroots.
+ENV QT_QPA_PLATFORM=wayland
+{% else %}
 ENV QT_QPA_PLATFORM=linuxfb
+{% endif %}
 
 # Turn on debug logging for now
 #ENV QT_LOGGING_RULES=qt.qpa.*=true
