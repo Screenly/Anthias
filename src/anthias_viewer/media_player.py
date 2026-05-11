@@ -70,11 +70,17 @@ class MPVMediaPlayer(MediaPlayer):
         # When the viewer runs under a Wayland compositor (x86 uses
         # `cage`, a wlroots kiosk compositor), the compositor holds DRM
         # master, so --vo=drm would be denied. Route mpv through
-        # Wayland-EGL instead. `cage` exports WAYLAND_DISPLAY for its
-        # child; bin/start_viewer.sh preserves it through sudo so the
-        # viewer (and this subprocess) inherit it.
+        # dmabuf-wayland instead: decoded frames are handed to the
+        # compositor as DMA-BUFs (wp_linux_dmabuf_v1) and scanned out
+        # directly, skipping the GL upload/swap chain that stalls with
+        # --vo=gpu under wlroots. Paired with --hwdec=auto-safe below,
+        # VAAPI-capable iGPUs decode straight into NV12 DMA-BUFs for
+        # zero-copy playback; software decode still works via the same
+        # VO. `cage` exports WAYLAND_DISPLAY for its child;
+        # bin/start_viewer.sh preserves it through sudo so this
+        # subprocess inherits it.
         if os.environ.get('WAYLAND_DISPLAY'):
-            vo_args = ['--vo=gpu', '--gpu-context=wayland']
+            vo_args = ['--vo=dmabuf-wayland']
         else:
             vo_args = ['--vo=drm']
 

@@ -241,10 +241,12 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     ]
 
     if is_qt6:
-        # pi4-64/pi5/x86 use mpv (--vo=drm) for video. VLC is
-        # deliberately *not* installed: MediaPlayerProxy in
-        # viewer/media_player.py routes Qt6 boards to MPVMediaPlayer,
-        # so VLC would just be ~80–100 MB of dead weight here.
+        # pi4-64/pi5 use mpv --vo=drm; x86 uses mpv --vo=dmabuf-wayland
+        # under cage (see MPVMediaPlayer.play in
+        # src/anthias_viewer/media_player.py). VLC is deliberately
+        # *not* installed: MediaPlayerProxy routes Qt6 boards to
+        # MPVMediaPlayer, so VLC would just be ~80–100 MB of dead
+        # weight here.
         viewer_extra_apt_dependencies.extend(
             [
                 'mpv',
@@ -259,12 +261,19 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
             # no host display server. cage is a kiosk wlroots
             # compositor that talks straight to KMS; qt6-wayland is
             # the Qt platform plugin the viewer loads to render into
-            # cage's surface. See docker/Dockerfile.viewer.j2 and
-            # bin/start_viewer.sh for the runtime wiring.
+            # cage's surface. va-driver-all is a Debian metapackage
+            # that pulls in intel-media-va-driver (modern Intel iHD),
+            # i965-va-driver (older Intel), and mesa-va-drivers
+            # (Gallium / AMD radeonsi etc.), so the image runs on any
+            # x86 GPU without per-vendor build variants — mpv's
+            # --hwdec=auto-safe picks whichever VAAPI driver matches
+            # the device at runtime. See docker/Dockerfile.viewer.j2
+            # and bin/start_viewer.sh for the runtime wiring.
             viewer_extra_apt_dependencies.extend(
                 [
                     'cage',
                     'qt6-wayland',
+                    'va-driver-all',
                 ]
             )
     else:

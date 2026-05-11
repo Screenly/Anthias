@@ -121,8 +121,7 @@ def test_play_uses_wayland_vo_when_compositor_running(
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--vo=gpu' in args[0]
-    assert '--gpu-context=wayland' in args[0]
+    assert '--vo=dmabuf-wayland' in args[0]
     assert '--vo=drm' not in args[0]
 
 
