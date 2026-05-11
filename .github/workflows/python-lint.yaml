@@ -41,6 +41,7 @@ jobs:
       run: |
         uv venv
         uv pip install --group dev-host
+        uv pip install --group website
 
     - name: Run Ruff linting checks
       run: |
@@ -49,3 +50,25 @@ jobs:
     - name: Run Ruff formatting checks
       run: |
         uv run ruff format --check .
+
+    # The repo-wide pytest addopts in pyproject.toml include
+    # pytest-playwright flags; the rpi-imager unit tests don't pull
+    # pytest-playwright, so override addopts here. Same pattern the old
+    # deploy-website test job used; this is now the rpi-imager
+    # generator's only PR-time CI gate after that job was removed.
+    #
+    # `-p no:django` bypasses the pytest-django plugin. The earlier
+    # `uv run ruff check` steps implicitly sync the project venv with
+    # the default group set (the `dev` group ships pytest-django
+    # 4.12.0 + playwright + etc.), so by the time we get here the
+    # plugin is sitting in `.venv` as an auto-loading entry-point.
+    # Without `-p no:django`, it would read `DJANGO_SETTINGS_MODULE`
+    # from pyproject.toml and try to bootstrap Django — which fails
+    # on the first transitive import the curated env doesn't have
+    # (pytz, channels, …). The rpi-imager generator tests don't need
+    # Django at all, so just disable the plugin.
+    - name: Run rpi-imager generator tests
+      run: |
+        .venv/bin/pytest tools/raspberry_pi_imager/tests/ \
+          -p no:django \
+          -v -o "addopts=--strict-markers"

@@ -27,6 +27,11 @@ on:
       - '!.cursor/**'
       - '!.claude/**'
       - '!src/anthias_host_agent/**'
+      # rpi-imager generator and the bun installer script don't
+      # affect the container image build; skip docker-build runs that
+      # only touch them.
+      - '!tools/raspberry_pi_imager/**'
+      - '!.github/workflows/scripts/install-bun.sh'
   workflow_dispatch:
 
 jobs:
@@ -223,74 +228,3 @@ jobs:
         env:
           NAMESPACE: screenly/anthias
         run: bash .github/workflows/scripts/mirror-latest-tags.sh
-
-  balena:
-    if: ${{ github.ref == 'refs/heads/master' }}
-    needs: buildx
-    strategy:
-      matrix:
-        board: ['pi2', 'pi3', 'pi4-64', 'pi5']
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set Docker tag
-        run: |
-          {
-            echo "GIT_SHORT_HASH=$(git rev-parse --short HEAD)"
-            echo "BOARD=${{ matrix.board }}"
-            echo "SHM_SIZE=256mb"
-          } >> "$GITHUB_ENV"
-
-      - name: Get fleet slug
-        run: |
-          if [ "${{ matrix.board }}" == 'pi2' ]; then
-            echo "FLEET_SLUG=anthias-pi2" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi3' ]; then
-            echo "FLEET_SLUG=anthias-pi3" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi4-64' ]; then
-            echo "FLEET_SLUG=anthias-pi4" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.board }}" == 'pi5' ]; then
-            echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
-          fi
-
-      - name: Prepare Balena file
-        run: |
-          # Generate a docker-compose file for Balena with the correct board
-          mkdir -p balena-deploy
-
-          # Copy in the Balena yaml file
-          cp balena.yml balena-deploy/
-
-          # Generate the docker-compose file
-          envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
-
-          # Remove bind mounts to `/dev/vchiq` for Raspberry Pi 5
-          if [ "${{ matrix.board }}" == "pi5" ]; then
-            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-              balena-deploy/docker-compose.yml
-          fi
-
-      - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
-        id: build
-        continue-on-error: true
-        with:
-          balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/${{ env.FLEET_SLUG }}
-          source: balena-deploy
-
-      - name: Sleep random sleep before retry
-        if: ${{ failure() && steps.build.conclusion == 'failure' }}
-        run: |
-          sleep $((120 + RANDOM % 900));
-
-      # Balena deploy often fails with 'ESOCKETTIMEDOUT'.
-      # This adds some retry logic.
-      - uses: balena-io/deploy-to-balena-action@638e3085dfe40b8c3cef2a34fe9d0874e572de4e # master
-        id: build-retry
-        if: ${{ failure() && steps.build.conclusion == 'failure' }}
-        with:
-          balena_token: ${{ secrets.BALENA_TOKEN }}
-          fleet: screenly_ose/${{ env.FLEET_SLUG }}
-          source: balena-deploy
