@@ -109,6 +109,15 @@ fi
 # The inner sudo drops back to the viewer user; WAYLAND_DISPLAY has to
 # be added to --preserve-env to survive sudo's env scrub.
 if [ "$DEVICE_TYPE" = "x86" ]; then
+    # libseat's default `logind` backend D-Buses into systemd-logind to
+    # acquire a session, but containers have no logind session — cage
+    # exits with "Could not get primary session for user". Switch to
+    # the `builtin` direct-device backend; the viewer container runs
+    # privileged so /dev/dri and /dev/input are open to it.
+    # WLR_LIBINPUT_NO_DEVICES=1 lets wlroots start without input
+    # devices — a digital-signage kiosk has no keyboard or mouse.
+    export LIBSEAT_BACKEND=builtin
+    export WLR_LIBINPUT_NO_DEVICES=1
     cage -- sudo \
         --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY \
         -E -u viewer \
