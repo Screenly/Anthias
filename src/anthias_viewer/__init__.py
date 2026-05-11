@@ -182,9 +182,10 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
         browser_bus.loadPage(uri)
         current_browser_url = uri
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
-    # against an older AnthiasWebview (version skew during rollout, or
-    # a WEBVIEW_VERSION override pinning a pre-2026.05 tarball) would
-    # raise here and abort the asset loop, taking the screen down.
+    # against an older AnthiasWebview (version skew across a fleet
+    # rollout, where the viewer container has rotated to a newer image
+    # but the webview process hasn't been restarted yet) would raise
+    # here and abort the asset loop, taking the screen down.
     # Latch the capability flag *only* for "the method doesn't exist"
     # — transient D-Bus failures (bus disconnect, timeout, race during
     # a webview restart) are logged at debug and retried next rotation

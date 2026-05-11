@@ -2,6 +2,41 @@
 # vim: ft=dockerfile
 {% include 'uv-builder.j2' %}
 
+{% if is_qt6 %}
+{# Qt 6 boards (pi4-64, pi5, x86): Debian apt provides qt6-base-dev
+   and qt6-webengine-dev directly, so the builder stage runs at the
+   target platform (under QEMU on x86 build hosts) and just qmake's
+   the in-tree webview/ source. #}
+FROM {{ base_image }}:{{ base_image_tag }} AS webview-builder
+USER root
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,id=qt6-builder-apt-{{ artifact_board }},sharing=locked \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        qt6-base-dev \
+        qt6-webengine-dev
+COPY webview/AnthiasWebview.pro /src/webview/AnthiasWebview.pro
+COPY webview/src /src/webview/src
+COPY webview/res /src/webview/res
+WORKDIR /src/webview
+# webview is 3 .cpp files (~6s on x86 native, ~30s under arm64 QEMU);
+# adding ccache would only save a couple of seconds on incremental
+# rebuilds and the cache mount + apt install + PATH wiring would
+# outweigh the saving.
+RUN qmake6 && \
+    make -j"$(nproc)" && \
+    make install
+RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
+    mv AnthiasWebview /out/bin/ && \
+    cp -r /src/webview/res /out/share/AnthiasWebview/
+{% else %}
+{% include 'Dockerfile.qt5-webview-builder.j2' %}
+{% endif %}
+
 {% include 'Dockerfile.base.j2' %}
 
 {% if disable_cache_mounts %}
@@ -23,30 +58,14 @@ COPY --from=uv-builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 ENV VIRTUAL_ENV="/venv"
 
-# QT Base from packages does not support eglfs.
-# Qt 5 boards (Pi 1-4 32-bit) get a custom cross-built Qt runtime via the
-# qt5-* archive below; Qt 6 boards use Debian's apt qt6-* packages and so
-# only need the WebView binary archive.
-
 {% if not is_qt6 %}
-RUN curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" \
-        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" && \
-    curl "{{webview_base_url}}/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" \
-        -sL -o "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
-    cd /tmp && \
-    sha256sum -c "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
-    tar -xzf "/tmp/qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" -C /usr/local && \
-    rm "qt{{qt_major_version}}-{{qt_version}}-{{debian_version}}-{{artifact_board}}.tar.gz"
+# Qt 5 boards: copy the whole qt5pi tree to its configured runtime
+# prefix (-prefix /usr/local/qt5pi at toolchain build time). Qt 6
+# boards get their runtime libs from qt6-*-dev installed above.
+COPY --from=webview-builder /out/qt5pi /usr/local/qt5pi
 {% endif %}
-
-RUN curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" \
-        -sL -o "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" && \
-    curl "{{webview_base_url}}/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" \
-        -sL -o "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
-    cd /tmp && \
-    sha256sum -c "webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz.sha256" && \
-    tar -xzf "/tmp/webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz" -C /usr/local && \
-    rm "webview-{{webview_version}}-{{debian_version}}-{{artifact_board}}.tar.gz"
+COPY --from=webview-builder /out/bin/AnthiasWebview /usr/local/bin/AnthiasWebview
+COPY --from=webview-builder /out/share/AnthiasWebview /usr/local/share/AnthiasWebview
 
 ENV QT_QPA_EGLFS_FORCE888=1
 ENV QT_QPA_PLATFORM=linuxfb

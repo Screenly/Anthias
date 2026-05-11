@@ -1,4 +1,3 @@
-import os
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
@@ -145,27 +144,16 @@ def get_test_context() -> dict[str, Any]:
 def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
-    # CalVer release of the WebView (YYYY.MM.PATCH). Bump this default
-    # together with the corresponding WebView-v* tag in the release.
-    # Override via WEBVIEW_VERSION env when building the viewer image
-    # ahead of (or against a fork of) the canonical release — useful
-    # while the new WebView-v* tag is still being cut, since
-    # Dockerfile.viewer.j2 will otherwise 404 when fetching the
-    # not-yet-published artifact.
-    webview_version = os.environ.get('WEBVIEW_VERSION', '2026.05.0')
-    webview_base_url = f'{releases_url}/WebView-v{webview_version}'
-
     is_qt6 = board in ['pi5', 'pi4-64', 'x86']
 
-    # Qt version is only used to pull the cross-built Qt 5 toolchain
-    # archive on legacy 32-bit Pi boards; Qt 6 boards consume Qt from
-    # apt and don't need this in the artifact name.
-    if is_qt6:
-        qt_version = '6.4.2'
-    else:
-        qt_version = '5.15.14'
-
+    # Qt version is only relevant for the Qt 5 path: pi2/pi3 pull the
+    # cross-built Qt 5 toolchain tarball at build time. Qt 5 is frozen
+    # for these boards, so the toolchain stays pinned to the
+    # WebView-v2026.04.1 release indefinitely. Qt 6 boards install Qt
+    # straight from Debian apt (qt6-*-dev in viewer_extra_apt below).
+    qt_version = '6.4.2' if is_qt6 else '5.15.14'
     qt_major_version = qt_version.split('.')[0]
+    qt5_toolchain_url = f'{releases_url}/WebView-v2026.04.1'
 
     # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
     # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,
@@ -175,17 +163,16 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # so it dedups across images. Anything listed here is unique to
     # the viewer image.
     #
-    # Most of the long *-dev list this file used to carry was needed
-    # to *build* Qt + the WebView. Now that both ship as prebuilt
-    # tarballs (downloaded in Dockerfile.viewer.j2) the runtime image
-    # only needs the .so files those binaries link against — i.e. the
-    # non -dev runtime libs. The list below is the still-being-trimmed
-    # remainder; expect more to fall off as ldd-driven cleanup
-    # continues.
+    # The list below is the still-being-trimmed remainder of runtime
+    # libs the WebView binary links against; expect more to fall off
+    # as ldd-driven cleanup continues. (Qt itself is built in a
+    # multi-stage builder inside Dockerfile.viewer.j2, not installed
+    # from apt at runtime — except on Qt 6 boards where qt6-*-dev
+    # below also provides the runtime libs.)
     #
     # X11/XCB packages are intentionally absent: the WebView is
     # configured with `-no-xcb -no-xcb-xlib -qpa eglfs` (see
-    # webview/build_qt{5,6}.sh) and runs under QT_QPA_PLATFORM=linuxfb
+    # webview/build_qt5.sh) and runs under QT_QPA_PLATFORM=linuxfb
     # straight on KMS/DRM, so Qt has no X code path to dlopen. mpv
     # uses --vo=drm. Same reason there's nothing wayland-related here.
     viewer_extra_apt_dependencies = [
@@ -285,8 +272,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'viewer_extra_apt_dependencies': viewer_extra_apt_dependencies,
         'qt_version': qt_version,
         'qt_major_version': qt_major_version,
-        'webview_version': webview_version,
-        'webview_base_url': webview_base_url,
+        'qt5_toolchain_url': qt5_toolchain_url,
         'is_qt6': is_qt6,
         'artifact_board': board,
     }

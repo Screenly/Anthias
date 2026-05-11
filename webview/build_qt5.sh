@@ -1,4 +1,10 @@
 #!/bin/bash
+# Qt 5 toolchain builder. Run via bin/rebuild_qt5_toolchain.sh inside
+# the webview/Dockerfile builder image; emits
+# qt5-5.15.14-trixie-{pi2,pi3}.tar.gz under /build for upload to a
+# WebView-v* GitHub release. Not wired into CI — the viewer image
+# now compiles the webview app inline against the toolchain artifact
+# this script produces (see docker/Dockerfile.qt5-webview-builder.j2).
 
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 # -*- sh-basic-offset: 4 -*-
@@ -17,12 +23,6 @@ DEBIAN_VERSION=$(lsb_release -cs)
 # ~3-4 GB during the chromium compile, so the default `nproc + 2`
 # happily OOMs anything <40 GB RAM on a 16-core box.
 MAKE_CORES="${MAKE_CORES:-$(expr $(nproc) + 2)}"
-
-# WEBVIEW_VERSION is the CalVer release identifier (YYYY.MM.PATCH).
-# CI extracts it from the WebView-v* tag; for local builds the caller
-# can set it explicitly, otherwise we fall back to a date-stamped dev
-# version so the artifact filename is still well-formed.
-WEBVIEW_VERSION="${WEBVIEW_VERSION:-$(date -u +%Y.%m).0-dev}"
 
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
@@ -250,33 +250,15 @@ function build_qt () {
         echo "QT Build already exist."
     fi
 
-    if [ "${BUILD_WEBVIEW-x}" == "1" ]; then
-        cp -rf /webview "$SRC_DIR/"
-
-        pushd "$SRC_DIR/webview"
-
-        "$SRC_DIR/qt${QT_MAJOR}pi/bin/qmake"
-        make -j"$MAKE_CORES"
-        make install
-
-        mkdir -p fakeroot/bin fakeroot/share/AnthiasWebview
-        mv AnthiasWebview fakeroot/bin/
-        cp -rf /webview/res fakeroot/share/AnthiasWebview/
-
-        local ARCHIVE="webview-$WEBVIEW_VERSION-$DEBIAN_VERSION-$1.tar.gz"
-
-        pushd fakeroot
-        tar cfz "$BUILD_TARGET/$ARCHIVE" .
-        popd
-
-        pushd "$BUILD_TARGET"
-        sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
-        popd
-    fi
+    # The webview app itself is now compiled inside the viewer image
+    # (docker/Dockerfile.qt5-webview-builder.j2 includes this Qt 5
+    # toolchain at build time). This script only emits the toolchain
+    # tarball — bin/rebuild_qt5_toolchain.sh uploads it to the frozen
+    # WebView-v2026.04.1 release.
 }
 
 # Modify paths for build process
-/usr/local/bin/sysroot-relativelinks.py /sysroot
+python3 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 fetch_cross_compile_tool
 fetch_rpi_firmware
@@ -284,7 +266,8 @@ fetch_rpi_firmware
 if [ ! "${TARGET-}" ]; then
     # Iterate the surviving Qt 5 boards. Pi 1 and the 32-bit Pi 4 path
     # were retired with the Trixie / drop-Balena upgrade; Pi 4 64-bit
-    # and Pi 5 use Qt 6 from Debian apt instead (see webview/docker/).
+    # and Pi 5 use Qt 6 from Debian apt (built inline in the viewer
+    # image's webview-builder stage; see docker/Dockerfile.viewer.j2).
     for device in pi3 pi2; do
         build_qt "$device"
     done
