@@ -54,6 +54,10 @@ fi
 
 unzip -q "$archive" -d "$workdir"
 sudo install -m 0755 "$workdir/bun-${target}/bun" /usr/local/bin/bun
+# Bun dispatches on argv[0]: invoked as `bunx`, it runs the package
+# executor (equivalent to `bun x`). The upstream bun.sh/install script
+# creates this symlink; replicate it here so `bunx` is resolvable.
+sudo ln -sf bun /usr/local/bin/bunx
 
 # Bun's global package installs (e.g. `bun install -g balena-cli`) drop
 # their executables into ~/.bun/bin, which isn't on PATH on a fresh
