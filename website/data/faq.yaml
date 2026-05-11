@@ -54,6 +54,21 @@
 
         Then connect with `ssh <user>@<device-ip>`.
 
+    - question: I'm installing Anthias on Debian on x86 and `sudo` is missing — how do I add it?
+      answer: |
+        A stock Debian install doesn't include `sudo` (and often not `curl` either) if you set a root password during installation. Bootstrap both as root before running the Anthias installer:
+
+        ```bash
+        $ su -
+        # apt update && apt install -y sudo curl
+        # usermod -aG sudo <your-user>
+        # exit
+        ```
+
+        Log out and back in so your shell picks up the new group, then continue with the [x86 install steps](/docs/x86-installation/).
+
+        If you instead reinstall Debian and leave the root password blank, the Debian installer wires your regular user up as a `sudo` user automatically and you can skip this step.
+
 - group: Display & playback
   items:
     - question: How do I rotate the screen for portrait orientation?
