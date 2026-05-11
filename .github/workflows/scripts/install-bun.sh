@@ -56,7 +56,10 @@ unzip -q "$archive" -d "$workdir"
 sudo install -m 0755 "$workdir/bun-${target}/bun" /usr/local/bin/bun
 # Bun dispatches on argv[0]: invoked as `bunx`, it runs the package
 # executor (equivalent to `bun x`). The upstream bun.sh/install script
-# creates this symlink; replicate it here so `bunx` is resolvable.
+# does not lay down this symlink, but oven-sh/setup-bun — which this
+# script replaces — did, and website/package.json's css:build invokes
+# `bunx @tailwindcss/cli`. Recreate the symlink so callers keep
+# working.
 sudo ln -sf bun /usr/local/bin/bunx
 
 # Bun's global package installs (e.g. `bun install -g balena-cli`) drop
