@@ -118,10 +118,19 @@ if [ "$DEVICE_TYPE" = "x86" ]; then
     # devices — a digital-signage kiosk has no keyboard or mouse.
     export LIBSEAT_BACKEND=builtin
     export WLR_LIBINPUT_NO_DEVICES=1
-    cage -- sudo \
-        --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY \
-        -E -u viewer \
-        dbus-run-session /venv/bin/python -m anthias_viewer &
+    # cage runs as root (Dockerfile's USER root) and creates the
+    # Wayland socket with root:root 0600 perms, so `sudo -u viewer`
+    # below can't connect (Qt: "Failed to create wl_display
+    # (Permission denied)"). Chown the socket to viewer in cage's
+    # child *before* dropping privileges. cage exports WAYLAND_DISPLAY
+    # before exec'ing the child, so the path is fully resolved here.
+    cage -- bash -c '
+        chown viewer "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" 2>/dev/null || true
+        exec sudo \
+            --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY \
+            -E -u viewer \
+            dbus-run-session /venv/bin/python -m anthias_viewer
+    ' &
 else
     sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH -E -u viewer \
         dbus-run-session /venv/bin/python -m anthias_viewer &
