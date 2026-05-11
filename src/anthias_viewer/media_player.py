@@ -70,8 +70,9 @@ class MPVMediaPlayer(MediaPlayer):
         # When the viewer runs under a Wayland compositor (x86 uses
         # `cage`, a wlroots kiosk compositor), the compositor holds DRM
         # master, so --vo=drm would be denied. Route mpv through
-        # Wayland-EGL instead. WAYLAND_DISPLAY is set in
-        # bin/start_viewer.sh and forwarded through sudo.
+        # Wayland-EGL instead. `cage` exports WAYLAND_DISPLAY for its
+        # child; bin/start_viewer.sh preserves it through sudo so the
+        # viewer (and this subprocess) inherit it.
         if os.environ.get('WAYLAND_DISPLAY'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         else:
