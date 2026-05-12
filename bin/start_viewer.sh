@@ -33,22 +33,6 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 chown viewer:video "${XDG_RUNTIME_DIR}"
 chmod 700 "${XDG_RUNTIME_DIR}"
 
-# Pick up the host's system locale (issue #480). The Pi user configures
-# their preferred language with `raspi-config` / `update-locale`, which
-# writes LANG/LANGUAGE into /etc/default/locale. We bind-mount that file
-# into the container (see docker-compose.yml.tmpl) and source it here so
-# the env vars are exported into the viewer + child AnthiasWebview
-# processes; the C++ webview then reads QLocale::system() to build an
-# Accept-Language header so multi-language URL assets serve content in
-# the operator's language instead of always defaulting to English.
-# No-op if the file is missing (balena hosts, dev containers) — the
-# webview falls back to its built-in default in that case.
-if [ -f /etc/default/locale ]; then
-    set -a
-    . /etc/default/locale
-    set +a
-fi
-
 # Temporary workaround for watchdog
 touch /tmp/anthias.watchdog
 chown viewer /tmp/anthias.watchdog

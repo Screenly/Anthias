@@ -46,6 +46,16 @@ services:
       - PORT=8080
       - NOREFRESH=1
       - LISTEN=anthias-server
+      # Forward the host's system locale into the viewer container so
+      # AnthiasWebview can send a matching Accept-Language header (issue
+      # #480 — multi-language URL assets used to render in English
+      # regardless of the Pi's locale). upgrade_containers.sh sources
+      # /etc/default/locale before running envsubst, so these substitute
+      # to whatever update-locale wrote (empty when the host has no
+      # locale configured — the webview then falls back to QtWebEngine's
+      # default rather than to "C").
+      - LANG=${LANG}
+      - LANGUAGE=${LANGUAGE}
     privileged: true
     restart: always
     shm_size: ${SHM_SIZE_KB}kb
@@ -56,12 +66,6 @@ services:
       - /home/${USER}/anthias_assets:/data/anthias_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-      # Surface the host's system locale (LANG, LANGUAGE) to the viewer
-      # so AnthiasWebview can send an Accept-Language header derived
-      # from it — fixes issue #480 where multi-language URL assets
-      # always rendered in English regardless of the Pi's locale config.
-      # start_viewer.sh sources this file at boot.
-      - /etc/default/locale:/etc/default/locale:ro
     labels:
       io.balena.features.supervisor-api: '1'
     logging:
