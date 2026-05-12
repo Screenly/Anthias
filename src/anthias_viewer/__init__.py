@@ -44,6 +44,7 @@ from anthias_common.utils import (  # noqa: E402
     detect_screen_resolution,
     string_to_bool,
 )
+from anthias_server.app.models import Asset  # noqa: E402
 from anthias_server.app.models import clamp_refresh_interval  # noqa: E402
 from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
 from anthias_viewer.scheduling import Scheduler  # noqa: E402
@@ -105,7 +106,7 @@ commands = {
     'next': lambda _: skip_asset(scheduler),
     'previous': lambda _: skip_asset(scheduler, back=True),
     'asset': lambda asset_id: navigate_to_asset(scheduler, asset_id),
-    'reload': lambda _: load_settings(),
+    'reload': lambda _: _handle_reload(),
     'stop': lambda _: setattr(
         __import__('__main__'), 'loop_is_stopped', stop_loop(scheduler)
     ),
@@ -274,6 +275,51 @@ def load_settings() -> None:
     logging.getLogger().setLevel(
         logging.DEBUG if settings['debug_logging'] else logging.INFO
     )
+
+
+def _handle_reload() -> None:
+    """Process a ``reload`` message from the server.
+
+    Reloads settings (so a settings.patch() change takes effect
+    immediately) and then signals a skip when the currently-displayed
+    asset has been deleted or deactivated — issue #2430.
+    """
+    load_settings()
+    _skip_if_current_asset_inactive()
+
+
+def _skip_if_current_asset_inactive() -> None:
+    """Cut short the current rotation if the displayed asset is gone.
+
+    Issue #2430: deleting or deactivating an asset that's currently on
+    screen would only take effect after its full ``duration`` elapsed —
+    a 1-hour image kept showing for the rest of the hour. The server
+    publishes ``reload`` on every mutation; here we check whether the
+    asset we're displaying is still active, and pop the ``skip_event``
+    if not so ``asset_loop`` advances on the next tick. Playlist
+    refresh itself happens inside ``get_next_asset`` via the existing
+    ``get_db_mtime`` short-circuit, so we don't touch ``scheduler``
+    state from the subscriber thread — we only signal.
+    """
+    if scheduler is None:
+        return
+    current_id = scheduler.current_asset_id
+    if not current_id:
+        return
+    try:
+        asset = Asset.objects.filter(asset_id=current_id).first()
+    except Exception:
+        logging.exception(
+            'reload: failed to check current asset %s; skipping skip-decision',
+            current_id,
+        )
+        return
+    if asset is None or not asset.is_active():
+        logging.info(
+            'Current asset %s is no longer active; signalling skip',
+            current_id,
+        )
+        get_skip_event().set()
 
 
 def _asset_is_displayable(asset: dict[str, Any]) -> bool:

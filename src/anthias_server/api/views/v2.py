@@ -431,6 +431,13 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
         save_active_assets_ordering(active_asset_ids)
         asset.refresh_from_db()
 
+        # An edit can flip is_enabled or push the asset out of its
+        # date / play_days / play_time window — both effectively
+        # deactivate it. Tell the viewer so it can skip past the row
+        # immediately instead of finishing the originally scheduled
+        # duration (issue #2430).
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+
         return Response(AssetSerializerV2(asset).data)
 
     @extend_schema(
