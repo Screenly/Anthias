@@ -59,15 +59,26 @@ ASSET_REVALIDATION_INTERVAL_S = 60 * 15
 
 # Sweep cadence for the stuck-``is_processing`` reconciler. 10 min is
 # short enough that an operator sees a hung row recover within one
-# UI sit-down, long enough that the sweep cost (one SELECT, one
-# UPDATE per stuck row) is negligible on a fleet device.
+# UI sit-down. The per-tick cost is bounded by the number of stuck
+# rows: one initial SELECT over ``is_processing=True``, then per row
+# either a stamp (SELECT + UPDATE inside ``stamp_processing_start``)
+# or a normalize re-dispatch (which itself stamps). On a healthy
+# fleet the filtered set is usually empty so the tick costs one
+# SELECT total; only a backlog of stuck rows scales the work up.
 RECONCILE_STUCK_INTERVAL_S = 60 * 10
 
 # Age threshold for considering a row stuck. Has to be *longer* than
 # the longest reasonable Celery task: ``NORMALIZE_VIDEO_TIME_LIMIT_S``
 # is 30 min and ``YOUTUBE_DOWNLOAD_TIME_LIMIT_S`` is 15 min, so 60 min
-# is a safe floor — a row past that has had its worker time-limit
-# expire (and on_failure should have already run) at least once.
+# is a safe floor. A row past the threshold either had its worker
+# time-limit expire (in which case ``on_failure`` should already have
+# cleared the flag — and the reconciler only sees rows where it
+# didn't, e.g. SIGKILL before on_failure could run) OR was never
+# picked up at all (Redis flake during ``.delay()``, worker crashed
+# between enqueue and accept, container restart mid-dispatch). The
+# threshold doesn't distinguish the two cases — it just says "if a
+# row has carried ``is_processing=True`` for over an hour, something
+# went wrong, recover it".
 RECONCILE_STUCK_THRESHOLD_S = 60 * 60
 
 # Singleton lock for the stuck-row reconciler — same SETNX +
