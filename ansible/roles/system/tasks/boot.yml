@@ -41,11 +41,17 @@
     src: "{{ system_cmdline_path }}.orig"
   register: system_cmdline_orig
 
+# cmdline.txt is owned authoritatively by this role: we render every
+# Anthias-managed kernel parameter and intentionally drop unknown
+# tokens, same tradeoff config.txt makes. The allowlist below is the
+# only escape hatch — extend it deliberately, one well-understood
+# parameter family at a time. Device-specific cmdline customisation
+# belongs in a future drop-in mechanism, not in cmdline.txt.orig
+# inheritance.
 - name: Extract preserved boot args from cmdline.txt.orig
   ansible.builtin.set_fact:
     system_cmdline_root_args: "{{ system_cmdline_orig_tokens | select('match', '^root=') | list }}"
-    # Preserve wifi regulatory tokens (cfg80211.*) that raspi-config
-    # writes to cmdline.txt — they aren't Anthias-managed and dropping
+    # cfg80211.*: wifi regulatory tokens raspi-config writes. Dropping
     # them silently reverts wifi regdom to the kernel default.
     system_cmdline_preserved_args: "{{ system_cmdline_orig_tokens | select('match', '^cfg80211\\.') | list }}"
   vars:
@@ -62,8 +68,8 @@
     system_cmdline_root_arg: "{{ system_cmdline_root_args[0] }}"
 
 - name: Render cmdline.txt from template
-  ansible.builtin.copy:
-    content: "{{ lookup('template', 'cmdline.txt.j2') }}\n"
+  ansible.builtin.template:
+    src: cmdline.txt.j2
     dest: "{{ system_cmdline_path }}"
     owner: root
     group: root
