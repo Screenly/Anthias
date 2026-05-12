@@ -22,7 +22,7 @@ class _MPVFixtures:
 
 
 @pytest.fixture
-def mpv(monkeypatch: pytest.MonkeyPatch) -> Iterator[_MPVFixtures]:
+def mpv() -> Iterator[_MPVFixtures]:
     fixtures = _MPVFixtures()
     fixtures.player = MPVMediaPlayer()
 
@@ -104,6 +104,20 @@ def test_play_does_not_pin_mode_on_x86(
     args, _ = mock_popen.call_args
     assert '--drm-mode=1920x1080@60' not in args[0]
     assert '--vd-lavc-threads=4' not in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_wayland_vo_on_x86(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--vo=gpu' in args[0]
+    assert '--gpu-context=wayland' in args[0]
+    assert '--vo=drm' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')

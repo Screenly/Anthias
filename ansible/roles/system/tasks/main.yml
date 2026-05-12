@@ -5,6 +5,10 @@
     - touches-boot-partition
     - raspberry-pi
 
+- name: Configure GRUB cmdline for Plymouth (x86)
+  ansible.builtin.include_tasks: grub.yml
+  when: device_type == 'x86'
+
 - name: Install/remove apt packages
   ansible.builtin.include_tasks: packages.yml
 
