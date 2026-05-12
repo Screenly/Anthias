@@ -47,7 +47,7 @@ server = [
     "certifi==2026.4.22",
     "channels==4.3.1",
     "channels-redis==4.3.0",
-    "Django==5.2.13",
+    "Django==5.2.14",
     "djangorestframework==3.16.1",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.3",
@@ -62,7 +62,7 @@ server = [
     # docker/Dockerfile.server.j2). Pillow itself is otherwise unused
     # — adding it here instead of relying on a transitive import keeps
     # the dependency explicit.
-    "Pillow==12.1.0",
+    "Pillow==12.2.0",
     "pillow-heif==1.2.1",
     "psutil==7.2.1",
     "pydbus==0.6.0",
@@ -81,7 +81,7 @@ server = [
 viewer = [
     "cec==0.2.8",
     "certifi==2026.4.22",
-    "Django==5.2.13",
+    "Django==5.2.14",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
     "pydbus==0.6.0",
@@ -135,7 +135,7 @@ mypy = [
     { include-group = "docker-image-builder" },
     "channels==4.3.1",
     "channels-redis==4.3.0",
-    "Django==5.2.13",
+    "Django==5.2.14",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.3",
     "djangorestframework==3.16.1",
@@ -146,7 +146,7 @@ mypy = [
     # pillow-heif is intentionally not pinned here — it's listed in
     # tool.mypy.overrides above so its missing-import error is
     # ignored, mirroring the cec / pydbus / sh / vlc pattern.
-    "Pillow==12.1.0",
+    "Pillow==12.2.0",
     "pytz==2025.2",
     "whitenoise==6.12.0",
 ]
