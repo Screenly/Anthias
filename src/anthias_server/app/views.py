@@ -43,6 +43,12 @@ r = connect_to_redis()
 
 _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 
+# Plain ``.<alnum>`` literal — anything else is rejected by
+# ``assets_upload`` so a hostile ``Content-Disposition: filename=``
+# can't smuggle ``/`` or ``..`` into the on-disk path (CodeQL
+# py/path-injection on ``open(final_path, ...)``).
+_SAFE_EXT_RE = re.compile(r'\.[A-Za-z0-9]{1,16}')
+
 
 def _parse_local_datetime(value: str) -> datetime:
     """Parse a date/time the edit-form posts back from Flatpickr.
@@ -360,6 +366,16 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # lands extensionless if we can possibly avoid it (an
     # extensionless file silently bypasses the normalise pipeline
     # via ``needs_image_normalisation`` returning False).
+    #
+    # Every candidate must clear ``_SAFE_EXT_RE`` (a plain
+    # ``.<alnum>`` literal) before we accept it — a hostile
+    # ``Content-Disposition: filename=`` value can otherwise smuggle
+    # ``/`` or ``..`` into ``final_path`` (CodeQL py/path-injection).
+    # Each step also falls back to the next one if its own candidate
+    # fails the regex, so an upload with a junk filename ext still
+    # gets the MIME-subtype fallback that keeps the HEIC-on-sparse-DB
+    # pipeline-routing test green.
+    #
     #   1. ``guess_extension(file_type)`` — works for every MIME
     #      that's in the host's mimetypes DB.
     #   2. ``path.splitext(upload_name)[1]`` — operator-supplied
@@ -374,22 +390,19 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     #      ``image/jp2`` entries — without it, a HEIC upload from
     #      a clean Pi base image could slip past normalisation
     #      and fail to render.
-    src_ext = guess_extension(file_type) or ''
+    def _safe_ext(candidate: str) -> str:
+        return candidate if _SAFE_EXT_RE.fullmatch(candidate) else ''
+
+    src_ext = _safe_ext(guess_extension(file_type) or '')
     if not src_ext:
-        src_ext = path.splitext(upload_name)[1].lower()
+        src_ext = _safe_ext(path.splitext(upload_name)[1].lower())
     if not src_ext:
         from anthias_server.processing import NORMALIZE_IMAGE_EXTS
 
         subtype = file_type.split('/', 1)[1] if '/' in file_type else ''
         candidate_ext = f'.{subtype}'
         if mimetype == 'image' and candidate_ext in NORMALIZE_IMAGE_EXTS:
-            src_ext = candidate_ext
-
-    # Drop anything that isn't a plain ``.<alnum>`` extension so a
-    # hostile ``Content-Disposition: filename=`` value can't smuggle
-    # ``/`` or ``..`` into ``final_path`` (CodeQL py/path-injection).
-    if src_ext and not re.fullmatch(r'\.[A-Za-z0-9]{1,16}', src_ext):
-        src_ext = ''
+            src_ext = _safe_ext(candidate_ext)
 
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
