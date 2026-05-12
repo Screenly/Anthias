@@ -83,6 +83,11 @@
     creates: "{{ anthias_user_home }}/.anthias-venv/bin/python"
   environment:
     UV_PROJECT_ENVIRONMENT: "{{ anthias_user_home }}/.anthias-venv"
+  # ansible-lint's partial-become rule wants `become` and `become_user`
+  # paired at the same level. The play already runs with `become: true`,
+  # so this is a no-op semantically — the explicit pairing keeps lint
+  # quiet and survives future play-level become changes.
+  become: true
   become_user: "{{ anthias_user }}"
   vars:
     anthias_user_home: "/home/{{ anthias_user }}"
