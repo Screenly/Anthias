@@ -405,6 +405,13 @@ function set_device_type() {
         # Generic 64-bit ARM SBC fallback (Orange Pi, Rock Pi, Banana Pi, …).
         # Best-effort: stack runs on any board with mainline Mesa DRM/KMS;
         # video decode falls back to software since hwdec varies per SoC.
+        # Intentional catch-all — a future Pi model whose model string
+        # drifts past the regexes above will land here too. The cost is
+        # software decode + no Pi-specific boot tweaks; the alternative
+        # would be loud-failing every new SBC variant until someone
+        # extends the device_tree dispatch above, which we'd rather
+        # avoid for "best-effort" boards. Loud failure stays reserved
+        # for non-aarch64 unknown hosts (the else branch below).
         export DEVICE_TYPE="arm64"
     else
         echo "Unsupported device. Anthias supports Pi 2/3/4 (64-bit)/5, x86, and 64-bit ARM SBCs (best-effort)." >&2

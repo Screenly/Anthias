@@ -63,8 +63,9 @@
   # on at the very first FROM ("failed to parse platform"). The
   # buildkit-backed plugin handles `$BUILDPLATFORM` correctly. Pull-
   # mode boards don't need it for the steady-state path but the
-  # plugin is < 15 MB extracted, so installing unconditionally is
-  # cheaper than diverging the apt list per board.
+  # plugin is ~15 MB to download / ~67 MB extracted (numbers from
+  # the docker-buildx-plugin_0.33.0 deb on arm64), so installing
+  # unconditionally is cheaper than diverging the apt list per board.
   ansible.builtin.apt:
     name:
       - docker-ce:{{ system_architecture }}
@@ -87,7 +88,7 @@
   vars:
     anthias_required_groups: >-
       {{ anthias_base_groups +
-         (anthias_pi_groups if is_raspberry_pi else []) }}
+         (anthias_pi_groups if device_is_pi else []) }}
     anthias_base_groups: &base_groups
       - docker
       - adm
@@ -106,7 +107,7 @@
     # apply Pi-specific group/user logic to it. device_type is the
     # authoritative discriminator and is validated upstream in
     # ansible/site.yml's pre_tasks.
-    is_raspberry_pi: &is_pi >-
+    device_is_pi: &is_pi >-
       {{ device_type in ['pi2', 'pi3', 'pi4-64', 'pi5'] }}
 
 - name: Ensure Anthias user is in required groups
@@ -114,8 +115,8 @@
     name: "{{ anthias_user }}"
     group: "{{ anthias_user }}"
     append: true
-    groups: "{{ anthias_base_groups + (anthias_pi_groups if is_raspberry_pi else []) }}"
+    groups: "{{ anthias_base_groups + (anthias_pi_groups if device_is_pi else []) }}"
   vars:
     anthias_base_groups: *base_groups
     anthias_pi_groups: *pi_groups
-    is_raspberry_pi: *is_pi
+    device_is_pi: *is_pi

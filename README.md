@@ -51,7 +51,7 @@ Things to know before you pick a board:
 - **Videos decode in software** — fine for casual 720p, stutter-prone at 1080p on slower SoCs, not suitable for 4K. If your content is mostly video, prefer a Pi 4 / 5 or x86.
 - **Images and web pages run smoothly** across the supported boards.
 - **Tested boards:** Rock Pi 4, Rock 5, Orange Pi 5, Banana Pi M5. Allwinner H616 / H618 boards (e.g. Orange Pi Zero 3) currently have weaker mainline display support and are best limited to non-video content.
-- The Plymouth boot splash is wired up but often silently no-ops on non-Pi boards because their bootloaders don't expose an early DRM device — expect a few seconds of black before your content appears.
+- The Plymouth boot splash is wired up but typically does not display on non-Pi boards (their U-Boot bootloaders don't hand the kernel an early DRM device for Plymouth to draw to). The kernel boot log scrolls on the screen until the viewer takes over and renders your first asset — functionally fine, just less polished than the Pi or x86 boot.
 
 Per-SoC hardware video decode (Rockchip `rkmpp`, Allwinner `cedrus`, Amlogic `meson-vdec`) is the planned follow-up; see [issue #2849](https://github.com/Screenly/Anthias/issues/2849).
 

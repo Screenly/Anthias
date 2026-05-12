@@ -130,7 +130,7 @@
 
         * **Videos play, but the work is done in software.** Raspberry Pi and modern Intel PCs have a dedicated video chip that does the heavy lifting; on these other boards we haven't wired that up yet, so the main CPU is doing the decoding. In practice, anything up to a smooth 720p clip is fine. 1080p is usable on faster boards but can stutter on slower ones. 4K isn't a good fit. **If your content is mostly video, especially HD video walls, stick with a Raspberry Pi 4 / 5 or an x86 mini-PC.**
         * **Images and web pages are no problem.** Slideshows, dashboards, menus, and most web content run beautifully across the whole range — the limitation above is specifically about video.
-        * **The boot splash screen may not appear.** Most non-Pi boards boot in a way that doesn't show our splash. The screen will be blank for a few seconds and then your content appears. Everything still works; it just looks a bit less polished during startup.
+        * **No Anthias boot splash.** Most non-Pi boards don't display our splash — you'll see the kernel boot log scroll on the screen until Anthias starts and shows your first asset (usually a minute or two from power-on). Everything works fine; startup just looks less polished than on a Raspberry Pi.
         * **Tested boards.** Rock Pi 4, Rock 5, Orange Pi 5, and Banana Pi M5 are known to work well. Orange Pi Zero 3 (and other Allwinner H616 / H618 boards) currently have weaker mainline driver support and are best limited to images and web content.
 
         See [issue #2849](https://github.com/Screenly/Anthias/issues/2849) for the roadmap on per-board hardware video acceleration.

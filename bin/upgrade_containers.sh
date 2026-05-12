@@ -59,7 +59,9 @@ elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
     export DEVICE_TYPE="pi2"
 elif [ "$(uname -m)" = "aarch64" ]; then
     # Generic 64-bit ARM SBC fallback — matches the install.sh branch.
-    # See bin/install.sh::set_device_type for the rationale.
+    # Intentional catch-all: a future Pi model whose model string
+    # doesn't yet match the regexes above also lands here. See
+    # bin/install.sh::set_device_type for the rationale.
     export DEVICE_TYPE="arm64"
 else
     echo "Unsupported device. Anthias supports Pi 2/3/4/5, x86, and 64-bit ARM SBCs." >&2
