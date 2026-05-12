@@ -1,5 +1,6 @@
 import uuid
 
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiRequest,
@@ -89,7 +90,7 @@ class AssetViewV1(APIView, DeleteAssetViewMixin):
         asset_id: str,
         format: str | None = None,
     ) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
         return Response(AssetSerializer(asset).data)
 
     @extend_schema(
@@ -104,7 +105,7 @@ class AssetViewV1(APIView, DeleteAssetViewMixin):
         asset_id: str,
         format: str | None = None,
     ) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
 
         data = parse_request(request)
         serializer = UpdateAssetSerializer(asset, data=data, partial=False)
@@ -232,5 +233,5 @@ class ViewerCurrentAssetViewV1(APIView):
         if not current_asset_id:
             return Response([])
 
-        queryset = Asset.objects.get(asset_id=current_asset_id)
-        return Response(AssetSerializer(queryset).data)
+        asset = get_object_or_404(Asset, asset_id=current_asset_id)
+        return Response(AssetSerializer(asset).data)

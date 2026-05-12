@@ -193,6 +193,21 @@ def test_delete_asset_should_return_204(
     assert len(assets) == 0
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_unknown_asset_id_returns_404(
+    api_client: APIClient, version: str
+) -> None:
+    # Asset.objects.get(asset_id=...) used to bubble DoesNotExist as a
+    # 500 here; views now use get_object_or_404 so a deleted or
+    # mistyped id maps cleanly to 404 across every API version.
+    detail_url = reverse(f'api:asset_detail_{version}', args=['nonexistent'])
+    assert api_client.get(detail_url).status_code == status.HTTP_404_NOT_FOUND
+    assert (
+        api_client.delete(detail_url).status_code == status.HTTP_404_NOT_FOUND
+    )
+
+
 @pytest.fixture
 def v2_asset_detail_url(api_client: APIClient) -> str:
     asset = api_client.post(

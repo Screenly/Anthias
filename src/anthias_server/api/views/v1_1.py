@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -73,7 +74,7 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
     )
     @authorized
     def get(self, request: Request, asset_id: str) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
         return Response(AssetSerializer(asset).data)
 
     @extend_schema(
@@ -83,7 +84,7 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
     )
     @authorized
     def put(self, request: Request, asset_id: str) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
 
         data = parse_request(request)
         serializer = UpdateAssetSerializer(asset, data=data, partial=False)

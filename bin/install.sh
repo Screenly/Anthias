@@ -25,14 +25,15 @@ ARCHITECTURE=$(uname -m)
 # Pin uv to match docker/uv-builder.j2 so host and image use the same binary.
 UV_PIN_VERSION="0.9.17"
 
-# Ephemeral install-time venv for ansible-core + the host-group deps.
-# Created in install_ansible(), torn down by the EXIT trap below — the
-# venv has no runtime role, so there's no reason to leave 100+ MB of
-# Python state in $HOME after the playbook finishes. Earlier releases
-# kept it at /home/$USER/installer_venv, which deserved a heuristic to
-# detect and replace pre-uv layouts; with the venv ephemeral, that's no
-# longer needed.
+# Ephemeral install-time venv for ansible-core. Created in
+# install_ansible(), torn down by the EXIT trap below. A separate
+# *persistent* venv at HOST_AGENT_VENV (see provision_host_agent_venv
+# below) is what the anthias-host-agent.service systemd unit
+# ExecStart actually executes — keeping the two venvs distinct lets
+# the installer-only Python state (~100 MB) come and go with each
+# install without taking the host-agent down.
 INSTALLER_VENV=""
+HOST_AGENT_VENV="/home/${USER}/installer_venv"
 
 cleanup_installer_venv() {
     if [ -n "${INSTALLER_VENV}" ] && [ -d "${INSTALLER_VENV}" ]; then
@@ -333,12 +334,53 @@ function install_ansible() {
     # every subsequent `uv sync` (Fixes #2842). Letting `.python-version`
     # be the single source of truth keeps both invocations aligned.
     INSTALLER_VENV=$(mktemp -d -t anthias-installer-venv.XXXXXX)
+    # UV_LINK_MODE=copy: ~/.cache/uv and /tmp are on different
+    # filesystems on most Pi/Debian installs (tmpfs vs the SD card),
+    # so uv's default hardlink fails and falls back to copy with a
+    # warning. Force copy mode to match what we actually want.
     UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
+    UV_LINK_MODE=copy \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
             --no-default-groups \
             --group host \
             --no-install-project
+}
+
+function provision_host_agent_venv() {
+    display_section "Provision Host Agent Python Environment"
+
+    # Permanent venv consumed by anthias-host-agent.service. The unit
+    # template (ansible/roles/anthias/templates/anthias-host-agent.service)
+    # hardcodes this path so a Trixie/Python-3.13 cutover that retires
+    # the system interpreter the host-agent was launched with leaves a
+    # 203/EXEC loop until reinstall — recreating the venv unconditionally
+    # on every install + upgrade is what keeps the service self-healing.
+    if [ -d "${HOST_AGENT_VENV}" ]; then
+        # Same sudo-with-fallback pattern as cleanup_installer_venv:
+        # earlier runs may have left root-owned __pycache__ entries.
+        sudo -n rm -rf "${HOST_AGENT_VENV}" 2>/dev/null \
+            || rm -rf "${HOST_AGENT_VENV}" 2>/dev/null
+    fi
+    UV_PROJECT_ENVIRONMENT="${HOST_AGENT_VENV}" \
+        uv sync \
+            --project "${ANTHIAS_REPO_DIR}" \
+            --no-default-groups \
+            --group host \
+            --no-install-project
+
+    # On upgrade the unit is already loaded and running with the
+    # *previous* venv's interpreter (Python keeps its image even after
+    # the venv directory is unlinked), so the ansible task's
+    # `state: started` is a no-op and the new deps never get picked
+    # up. Restart explicitly when the unit is present. On a fresh
+    # install the unit doesn't exist yet, so the check is a no-op and
+    # ansible's `state: started` does the first start.
+    if systemctl list-unit-files anthias-host-agent.service \
+        >/dev/null 2>&1 \
+        && systemctl is-active --quiet anthias-host-agent.service; then
+        sudo systemctl restart anthias-host-agent.service
+    fi
 }
 
 function set_device_type() {
@@ -614,6 +656,7 @@ function main() {
     clone_repo
     post_clone_migrate_legacy_paths
     install_ansible
+    provision_host_agent_venv
     run_ansible_playbook
 
     upgrade_docker_containers

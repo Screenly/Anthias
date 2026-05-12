@@ -9,6 +9,7 @@ from typing import Any
 import psutil
 import redis
 import requests
+from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import filesizeformat
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -412,7 +413,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
     @extend_schema(summary='Get asset')
     @authorized
     def get(self, request: Request, asset_id: str) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
         serializer = self.serializer_class(asset)
         return Response(serializer.data)
 
@@ -422,7 +423,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
         asset_id: str,
         partial: bool = False,
     ) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
         serializer = UpdateAssetSerializerV2(
             asset, data=request.data, partial=partial
         )

@@ -8,5 +8,5 @@ COMPOSE_ARGS=(
 
 bin/generate_dev_mode_dockerfiles.sh
 
-docker compose "${COMPOSE_ARGS[@]}" down
-docker compose "${COMPOSE_ARGS[@]}" up -d --build
+docker compose "${COMPOSE_ARGS[@]}" down --remove-orphans
+docker compose "${COMPOSE_ARGS[@]}" up -d --build --remove-orphans
