@@ -110,6 +110,20 @@ def _detect_hdmi_audio_device() -> str:
 
 
 def get_alsa_audio_device() -> str:
+    # device_helper.get_device_type() reads /proc/device-tree/model and
+    # falls back to 'pi1' for any aarch64 host whose model line isn't a
+    # Pi regex match (Rock Pi, Orange Pi, Banana Pi, …). The Pi-firmware
+    # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
+    # those boards, so route via DEVICE_TYPE env first and only fall
+    # through to the Pi-name dispatch when we're actually on a Pi.
+    if os.environ.get('DEVICE_TYPE') == 'generic-arm64':
+        # No portable per-SoC HDMI card name across Rockchip /
+        # Allwinner / Amlogic, so defer to ALSA's `default` device.
+        # Operators with a non-standard HDMI sink can override via
+        # ~/.asoundrc (already bind-mounted into the viewer container
+        # — see docker-compose.yml.tmpl).
+        return 'default'
+
     device_type = get_device_type()
     if settings['audio_output'] == 'local':
         if device_type == 'pi5':

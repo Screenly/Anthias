@@ -65,7 +65,7 @@
     group: root
     validate: /usr/sbin/visudo -cf %s
 
-- name: Create persistent runtime venv for host-managed services
+- name: Sync persistent runtime venv for host-managed services
   # `bin/install.sh::install_ansible` uses a `mktemp`-allocated venv
   # for the installer itself, torn down by the EXIT trap so $HOME
   # doesn't accumulate stale Python state. That ephemeral path can't
@@ -73,6 +73,13 @@
   # (referenced below) needs its own stable venv. Re-syncing the
   # `host` group keeps the dependency set in lockstep with the
   # installer's — uv resolves both from the same pyproject.toml.
+  #
+  # Run on every playbook invocation rather than gating on
+  # `creates: …/bin/python`: `uv sync` is idempotent (no-op when
+  # already in sync with the lockfile), so the cost is a sub-second
+  # resolver check, but a gate would silently skip dependency
+  # updates on Anthias upgrades whenever pyproject.toml / uv.lock
+  # changed.
   ansible.builtin.command:
     cmd: >-
       {{ anthias_user_home }}/.local/bin/uv sync
@@ -80,9 +87,13 @@
       --no-default-groups
       --group host
       --no-install-project
-    creates: "{{ anthias_user_home }}/.anthias-venv/bin/python"
   environment:
     UV_PROJECT_ENVIRONMENT: "{{ anthias_user_home }}/.anthias-venv"
+  # Treat the task as "changed" only when uv's output actually
+  # mentions installing/upgrading/removing a package; the steady-state
+  # "Audited N packages" line stays at ok.
+  register: anthias_runtime_venv_sync
+  changed_when: anthias_runtime_venv_sync.stderr is search('^[+\\-~]', multiline=True)
   # ansible-lint's partial-become rule wants `become` and `become_user`
   # paired at the same level. The play already runs with `become: true`,
   # so this is a no-op semantically — the explicit pairing keeps lint

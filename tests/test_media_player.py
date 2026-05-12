@@ -125,6 +125,39 @@ def test_play_uses_wayland_vo_on_x86(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_wayland_vo_on_generic_arm64(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    # generic-arm64 runs under cage (same as x86), so mpv must go
+    # through --vo=gpu --gpu-context=wayland — cage holds DRM master
+    # and would deny --vo=drm.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'generic-arm64'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--vo=gpu' in args[0]
+    assert '--gpu-context=wayland' in args[0]
+    assert '--vo=drm' not in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_default_alsa_device_on_generic_arm64(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    # No portable per-SoC HDMI card name exists across Rockchip /
+    # Allwinner / Amlogic, so generic-arm64 defers to ALSA's
+    # `default` device rather than the Pi-firmware vc4hdmi* / HID
+    # cards the regular dispatch would otherwise pick.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'generic-arm64'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--audio-device=alsa/default' in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_uses_local_audio_device_when_configured(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:

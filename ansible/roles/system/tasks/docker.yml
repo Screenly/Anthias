@@ -54,18 +54,17 @@
   # docker-ce is Multi-Arch: foreign so requesting `:arm64` removes
   # the `:armhf` install (and pulls dependencies in the new arch).
   #
-  # docker-buildx-plugin is technically only a *Recommends* of
-  # docker-ce, and `install_recommends: false` above means we have to
-  # name it explicitly. Pi / x86 installs run `upgrade_containers.sh`
-  # with `MODE=pull` (the default) — `docker compose pull` doesn't
-  # need buildx, so historically the plugin was absent and nothing
-  # noticed. generic-arm64 has no published image tag yet, so its
-  # bootstrap path forces `MODE=build`, which goes through `docker
-  # compose build`. Without buildx the build falls back to the legacy
-  # builder, which can't parse `FROM --platform=$BUILDPLATFORM ...`
-  # in our Dockerfiles and dies on the very first FROM. Installing
-  # the plugin unconditionally is the smallest fix and is harmless on
-  # pull-mode boards.
+  # docker-buildx-plugin is a *Recommends* of docker-ce, and
+  # `install_recommends: false` above means we have to name it
+  # explicitly. Required for any `upgrade_containers.sh MODE=build`
+  # run — our Dockerfiles use `FROM --platform=$BUILDPLATFORM …`
+  # (see e.g. docker/Dockerfile.server.j2's bun-builder stage),
+  # which the legacy `docker build` builder can't parse and dies
+  # on at the very first FROM ("failed to parse platform"). The
+  # buildkit-backed plugin handles `$BUILDPLATFORM` correctly. Pull-
+  # mode boards don't need it for the steady-state path but the
+  # plugin is < 15 MB extracted, so installing unconditionally is
+  # cheaper than diverging the apt list per board.
   ansible.builtin.apt:
     name:
       - docker-ce:{{ system_architecture }}
