@@ -76,6 +76,18 @@ from anthias_common.utils import (
 from anthias_server.settings import ViewerPublisher, settings
 
 r = connect_to_redis()
+logger = logging.getLogger(__name__)
+
+
+# Single canonical operator-facing message for any failure to reach
+# Screenly's API. Surfaced from the v2 integration endpoints in place
+# of the raw RequestException text so the response body never carries
+# transport-level state (resolved IPs, errno strings, proxy detail)
+# — see CodeQL's information-exposure rule.
+_SCREENLY_NETWORK_USER_MESSAGE = (
+    "Could not reach Screenly. Check this device's internet "
+    'connection and try again.'
+)
 
 
 # Bounded HTTP timeout for the Balena supervisor lookup below. Hit by
@@ -854,9 +866,19 @@ class ScreenlyValidateTokenViewV2(APIView):
 
         try:
             valid = validate_token(token)
-        except requests.RequestException as error:
+        except requests.RequestException:
+            # Log the underlying transport error server-side for
+            # diagnostics; don't echo it into the response — exception
+            # detail can leak environment state (resolved hostnames,
+            # proxy chain, socket-level errno text) that's not useful
+            # to the operator and is flagged by CodeQL's information-
+            # exposure check.
+            logger.warning('Screenly token validate failed', exc_info=True)
             return Response(
-                {'valid': False, 'error': f'Could not reach Screenly: {error}'},
+                {
+                    'valid': False,
+                    'error': _SCREENLY_NETWORK_USER_MESSAGE,
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -872,15 +894,20 @@ class ScreenlyValidateTokenViewV2(APIView):
                 token, MIGRATION_ASSET_GROUP_TITLE
             )
         except ScreenlyMigrationError as error:
+            # ``ScreenlyMigrationError`` messages are crafted in
+            # ``screenly_migration`` for operator display (they wrap
+            # Screenly's own error string, not Python exception state),
+            # so exposing the .user_message attribute is intentional.
             return Response(
-                {'valid': True, 'error': str(error)},
+                {'valid': True, 'error': error.user_message},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        except requests.RequestException as error:
+        except requests.RequestException:
+            logger.warning('Screenly ensure_asset_group failed', exc_info=True)
             return Response(
                 {
                     'valid': True,
-                    'error': f'Could not reach Screenly: {error}',
+                    'error': _SCREENLY_NETWORK_USER_MESSAGE,
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
@@ -946,10 +973,22 @@ class ScreenlyMigrateAssetViewV2(APIView):
                 token, asset, asset_group_id=asset_group_id
             )
         except ScreenlyMigrationError as error:
-            return Response({'success': False, 'error': str(error)})
-        except requests.RequestException as error:
+            # See ScreenlyValidateTokenViewV2.post — .user_message is
+            # the operator-display string we constructed in
+            # screenly_migration; using it (rather than str(error))
+            # keeps the response free of exception state.
+            return Response({'success': False, 'error': error.user_message})
+        except requests.RequestException:
+            logger.warning(
+                'Screenly migrate_asset failed for %s',
+                asset_id,
+                exc_info=True,
+            )
             return Response(
-                {'success': False, 'error': f'Network error: {error}'},
+                {
+                    'success': False,
+                    'error': _SCREENLY_NETWORK_USER_MESSAGE,
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

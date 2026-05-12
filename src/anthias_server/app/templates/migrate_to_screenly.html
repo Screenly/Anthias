@@ -132,7 +132,30 @@
       <p class="muted-label"><i class="ti ti-loader animate-spin"></i> Loading assets…</p>
     </div>
 
-    <div class="settings-stack" x-show="!loadingAssets && !assets.length" x-cloak>
+    <div
+      class="settings-stack"
+      x-show="!loadingAssets && assetsError"
+      x-cloak
+      role="alert"
+      aria-live="assertive"
+    >
+      <div class="empty-state">
+        <div class="empty-state__icon"><i class="ti ti-alert-triangle"></i></div>
+        <p class="empty-state__title">Couldn't load assets</p>
+        <p class="empty-state__description" x-text="assetsError"></p>
+      </div>
+      <div class="flex justify-start">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+      </div>
+    </div>
+
+    <div
+      class="settings-stack"
+      x-show="!loadingAssets && !assetsError && !assets.length"
+      x-cloak
+    >
       <div class="empty-state">
         <div class="empty-state__icon"><i class="ti ti-photo-off"></i></div>
         <p class="empty-state__title">No assets to migrate</p>
@@ -326,6 +349,7 @@ function migrateToScreenly() {
     tokenError: '',
     validating: false,
     loadingAssets: false,
+    assetsError: '',
     assets: [],
     selected: {},
     results: [],
@@ -364,17 +388,30 @@ function migrateToScreenly() {
 
     async loadAssets() {
       this.loadingAssets = true
+      this.assetsError = ''
       this.assets = []
       this.selected = {}
       try {
         const response = await fetch(ENDPOINTS.assets, { credentials: 'same-origin' })
+        if (!response.ok) {
+          // Surface a real error rather than treating it as "no
+          // assets" — operators acted on the misleading empty-state
+          // copy when /api/v2/assets returned a 500 (auth-misconfig
+          // or DB lock), thinking they had nothing to migrate.
+          this.assetsError = `Couldn't load assets (HTTP ${response.status}). Try reloading the page.`
+          return
+        }
         const data = await response.json()
-        this.assets = Array.isArray(data) ? data : []
+        if (!Array.isArray(data)) {
+          this.assetsError = 'Couldn\'t parse the asset list response. Try reloading the page.'
+          return
+        }
+        this.assets = data
         for (const a of this.assets) {
           this.selected[a.asset_id] = true
         }
       } catch (e) {
-        this.assets = []
+        this.assetsError = String(e)
       } finally {
         this.loadingAssets = false
       }

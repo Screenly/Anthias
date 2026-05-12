@@ -170,7 +170,7 @@ class TestAuthHeaders:
 
 
 class TestValidateToken:
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_returns_true_on_200(self, get_mock: MagicMock) -> None:
         get_mock.return_value = _fake_response(200, json_body=[])
         assert screenly_migration.validate_token('good') is True
@@ -178,7 +178,7 @@ class TestValidateToken:
         _, kwargs = get_mock.call_args
         assert kwargs['headers']['Authorization'] == 'Token good'
 
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     @pytest.mark.parametrize('code', [401, 403])
     def test_returns_false_on_auth_failure(
         self, get_mock: MagicMock, code: int
@@ -186,7 +186,7 @@ class TestValidateToken:
         get_mock.return_value = _fake_response(code, json_body={'error': 'no'})
         assert screenly_migration.validate_token('bad') is False
 
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_raises_on_5xx(self, get_mock: MagicMock) -> None:
         # 5xx should propagate as a RequestException so the caller can
         # distinguish "your token is bad" from "Screenly is down".
@@ -194,7 +194,7 @@ class TestValidateToken:
         with pytest.raises(requests.HTTPError):
             screenly_migration.validate_token('x')
 
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_propagates_network_error(self, get_mock: MagicMock) -> None:
         get_mock.side_effect = requests.ConnectionError('boom')
         with pytest.raises(requests.ConnectionError):
@@ -207,8 +207,8 @@ class TestValidateToken:
 
 
 class TestEnsureAssetGroup:
-    @patch.object(screenly_migration.requests, 'post')
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_returns_existing_id_without_post(
         self, get_mock: MagicMock, post_mock: MagicMock
     ) -> None:
@@ -221,8 +221,8 @@ class TestEnsureAssetGroup:
         assert gid == 'GROUP123'
         post_mock.assert_not_called()
 
-    @patch.object(screenly_migration.requests, 'post')
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_creates_group_when_lookup_empty(
         self, get_mock: MagicMock, post_mock: MagicMock
     ) -> None:
@@ -235,8 +235,8 @@ class TestEnsureAssetGroup:
         _, kwargs = post_mock.call_args
         assert kwargs['json'] == {'title': 'g'}
 
-    @patch.object(screenly_migration.requests, 'post')
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_falls_back_to_create_when_lookup_fails(
         self, get_mock: MagicMock, post_mock: MagicMock
     ) -> None:
@@ -250,8 +250,8 @@ class TestEnsureAssetGroup:
         gid = screenly_migration.ensure_asset_group('t', 'g')
         assert gid == 'NEW999'
 
-    @patch.object(screenly_migration.requests, 'post')
-    @patch.object(screenly_migration.requests, 'get')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
+    @patch('anthias_server.lib.screenly_migration.requests.get')
     def test_raises_screenly_error_on_create_failure(
         self, get_mock: MagicMock, post_mock: MagicMock
     ) -> None:
@@ -286,7 +286,7 @@ class TestMigrateAsset:
             uri=str(target),
         )
 
-    @patch.object(screenly_migration.requests, 'post')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_url_asset_uses_source_url(self, post_mock: MagicMock) -> None:
         post_mock.return_value = _fake_response(
             201, json_body=[{'id': 'OUTID'}]
@@ -301,11 +301,18 @@ class TestMigrateAsset:
         assert kwargs['data']['source_url'] == 'https://wireload.net/'
         assert kwargs['data']['asset_group_id'] == 'GID'
         assert kwargs['data']['title'] == 'Wireload'
+        # migrate_asset returns dict[str, Any] | list[Any]; the
+        # postgREST-style response shape is a single-row list, so
+        # narrow before indexing or mypy complains.
+        assert isinstance(result, list)
         assert result[0]['id'] == 'OUTID'
 
-    @patch.object(screenly_migration.requests, 'post')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_local_asset_uses_multipart_with_pretty_filename(
-        self, post_mock: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        post_mock: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Point ANTHIAS_ASSETS_ROOT at the temp dir so the safety guard
         # in ``_resolve_local_path`` lets the test file through.
@@ -317,9 +324,7 @@ class TestMigrateAsset:
             201, json_body=[{'id': 'OUTID'}]
         )
 
-        screenly_migration.migrate_asset(
-            'tok', asset, asset_group_id='GID'
-        )
+        screenly_migration.migrate_asset('tok', asset, asset_group_id='GID')
 
         _, kwargs = post_mock.call_args
         assert 'source_url' not in kwargs['data']
@@ -330,7 +335,7 @@ class TestMigrateAsset:
         filename, fileobj = kwargs['files']['file']
         assert filename == 'My Day 2.png'
 
-    @patch.object(screenly_migration.requests, 'post')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_local_asset_missing_file_raises_error(
         self,
         post_mock: MagicMock,
@@ -350,7 +355,7 @@ class TestMigrateAsset:
         assert 'File not found' in str(exc.value)
         post_mock.assert_not_called()
 
-    @patch.object(screenly_migration.requests, 'post')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_screenly_rejection_surfaces_status_and_detail(
         self, post_mock: MagicMock
     ) -> None:
@@ -364,7 +369,7 @@ class TestMigrateAsset:
         assert '413' in msg
         assert 'payload too large' in msg
 
-    @patch.object(screenly_migration.requests, 'post')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_no_uri_asset_raises_before_request(
         self, post_mock: MagicMock
     ) -> None:
@@ -373,7 +378,7 @@ class TestMigrateAsset:
             screenly_migration.migrate_asset('tok', asset)
         post_mock.assert_not_called()
 
-    @patch.object(screenly_migration.requests, 'post')
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_html_error_body_collapses_to_one_line(
         self, post_mock: MagicMock
     ) -> None:
@@ -467,9 +472,7 @@ class TestValidateTokenEndpoint:
         validate_url: str,
     ) -> None:
         validate_mock.side_effect = requests.ConnectionError('boom')
-        response = api_client.post(
-            validate_url, {'token': 'x'}, format='json'
-        )
+        response = api_client.post(validate_url, {'token': 'x'}, format='json')
         assert response.status_code == 502
         assert response.json()['valid'] is False
         assert 'Could not reach Screenly' in response.json()['error']

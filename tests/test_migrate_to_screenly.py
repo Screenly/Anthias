@@ -37,7 +37,9 @@ DEFAULT_TIMEOUT_MS = 15_000
 # ---------------------------------------------------------------------------
 
 
-def _asset_row(asset_id: str, name: str, mimetype: str, uri: str) -> dict[str, Any]:
+def _asset_row(
+    asset_id: str, name: str, mimetype: str, uri: str
+) -> dict[str, Any]:
     """Minimum fields ``Asset.objects.create`` accepts plus the
     schedule-window defaults so the row shows on the home page too.
     Mirrors the seed helpers in tests/test_app.py."""
@@ -59,7 +61,9 @@ def _asset_row(asset_id: str, name: str, mimetype: str, uri: str) -> dict[str, A
 SEED_ASSETS = [
     _asset_row('a1', 'Demo Reel', 'video', '/data/anthias_assets/abc1.mp4'),
     _asset_row('a2', 'Company Site', 'webpage', 'https://example.com/promo'),
-    _asset_row('a3', 'Welcome Splash', 'image', '/data/anthias_assets/abc3.png'),
+    _asset_row(
+        'a3', 'Welcome Splash', 'image', '/data/anthias_assets/abc3.png'
+    ),
 ]
 
 
@@ -125,7 +129,9 @@ def _mock_validate_invalid(page: Page) -> None:
 
 
 def _mock_validate_valid(
-    page: Page, group_id: str = 'GROUP01', group_title: str = 'Migrated from Anthias'
+    page: Page,
+    group_id: str = 'GROUP01',
+    group_title: str = 'Migrated from Anthias',
 ) -> None:
     page.route(
         '**/api/v2/integrations/screenly/validate',
@@ -143,7 +149,9 @@ def _mock_validate_valid(
     )
 
 
-def _mock_migrate_per_asset(page: Page, outcomes: dict[str, dict[str, Any]]) -> None:
+def _mock_migrate_per_asset(
+    page: Page, outcomes: dict[str, dict[str, Any]]
+) -> None:
     """Map each asset_id to a canned migrate response.
 
     ``outcomes`` is keyed by asset_id and each value is the JSON body
@@ -191,9 +199,7 @@ def test_settings_page_links_to_migration_wizard(
     expect(
         page.get_by_role('heading', name='Migrate to Screenly')
     ).to_be_visible()
-    expect(
-        page.get_by_role('heading', name='Get started')
-    ).to_be_visible()
+    expect(page.get_by_role('heading', name='Get started')).to_be_visible()
 
 
 @pytest.mark.integration
@@ -261,8 +267,15 @@ def test_valid_token_loads_asset_picker_with_seed_rows(
         page.get_by_role('heading', name='Choose assets to migrate')
     ).to_be_visible()
     # Destination group title must thread through to the UI so the
-    # operator knows where assets will land.
-    expect(page.get_by_text('Migrated from Anthias')).to_be_visible()
+    # operator knows where assets will land. Scope to the picker's
+    # header — the wizard renders a sibling label on the done state
+    # too, so an unscoped get_by_text would match twice and fail
+    # strict-mode.
+    expect(
+        page.locator('section.surface')
+        .filter(has_text='Choose assets to migrate')
+        .get_by_text('Migrated from Anthias')
+    ).to_be_visible()
     # All three seed rows visible.
     for spec in SEED_ASSETS:
         expect(page.get_by_text(spec['name'])).to_be_visible()
@@ -422,9 +435,7 @@ def test_empty_library_shows_empty_state(
     page.get_by_role('button', name='Continue').click()
 
     expect(page.get_by_text('No assets to migrate')).to_be_visible()
-    expect(
-        page.get_by_text('This player has no assets yet.')
-    ).to_be_visible()
+    expect(page.get_by_text('This player has no assets yet.')).to_be_visible()
 
 
 @pytest.mark.integration
@@ -448,9 +459,7 @@ def test_show_hide_token_toggle(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_empty_state_has_back_button(
-    reset_assets: None, page: Page
-) -> None:
+def test_empty_state_has_back_button(reset_assets: None, page: Page) -> None:
     """A device with no assets should still offer a way back to the
     token step — without it the operator is stranded on the picker."""
     _mock_validate_valid(page)
@@ -487,9 +496,17 @@ def test_uri_basename_shown_for_local_assets(
         page.get_by_role('heading', name='Choose assets to migrate')
     ).to_be_visible()
 
-    # The picker should NEVER leak the /data/ prefix.
-    body = page.content()
-    assert '/data/anthias_assets/' not in body
+    # The picker should NEVER leak the /data/ prefix into a rendered
+    # row. page.content() would false-positive here — displayUri()
+    # itself contains the literal '/data/anthias_assets/' as a
+    # prefix check inside the inline <script>. Scope to the table.
+    table = (
+        page.locator('section.surface')
+        .filter(has_text='Choose assets to migrate')
+        .locator('table.asset-table')
+    )
+    table_text = table.inner_text()
+    assert '/data/anthias_assets/' not in table_text
 
     # But it should show the basenames AND let URL-backed assets
     # keep their full URL.

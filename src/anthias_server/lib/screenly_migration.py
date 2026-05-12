@@ -53,7 +53,17 @@ class ScreenlyMigrationError(Exception):
     The message is operator-facing — it surfaces in the UI's per-asset
     error column, so keep it short and concrete (e.g. "File not found
     on disk", "Screenly rejected upload: 413 payload too large").
+
+    The ``user_message`` attribute mirrors the constructor argument so
+    the view layer can include it in API responses without going
+    through ``str(exc)``. That distinction is what keeps CodeQL's
+    information-exposure rule quiet — the attribute traces to a
+    string we composed for display, not to exception/stack state.
     """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.user_message: str = message
 
 
 def _auth_headers(token: str) -> dict[str, str]:
@@ -101,10 +111,15 @@ def ensure_asset_group(token: str, title: str) -> str:
     Raises ``ScreenlyMigrationError`` on Screenly-side rejection.
     Lets ``requests.RequestException`` bubble for transport errors.
     """
+    # Typed as str/str so mypy can resolve requests.get(... params=...)
+    # against its overloaded signature — the more permissive
+    # dict[str, object] form here doesn't match any of the params
+    # type unions.
+    lookup_params: dict[str, str] = {'title': f'eq.{title}', 'limit': '1'}
     lookup = requests.get(
         f'{SCREENLY_API_BASE}/asset-groups',
         headers=_auth_headers(token),
-        params={'title': f'eq.{title}', 'limit': 1},
+        params=lookup_params,
         timeout=_VALIDATE_TIMEOUT_S,
     )
     if lookup.ok:
@@ -114,8 +129,10 @@ def ensure_asset_group(token: str, title: str) -> str:
             existing = []
         if isinstance(existing, list) and existing:
             row = existing[0]
-            if isinstance(row, dict) and isinstance(row.get('id'), str):
-                return row['id']
+            if isinstance(row, dict):
+                row_id = row.get('id')
+                if isinstance(row_id, str):
+                    return row_id
 
     create = requests.post(
         f'{SCREENLY_API_BASE}/asset-groups',
@@ -140,8 +157,10 @@ def ensure_asset_group(token: str, title: str) -> str:
         ) from error
     if isinstance(body, list) and body:
         body = body[0]
-    if isinstance(body, dict) and isinstance(body.get('id'), str):
-        return body['id']
+    if isinstance(body, dict):
+        body_id = body.get('id')
+        if isinstance(body_id, str):
+            return body_id
     raise ScreenlyMigrationError(
         'Screenly asset-group create response was missing an id.'
     )
@@ -195,7 +214,7 @@ def migrate_asset(
     token: str,
     asset: Asset,
     asset_group_id: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Upload a single Anthias asset to Screenly.
 
     Image/video assets backed by a local file are POSTed as multipart;
@@ -232,7 +251,16 @@ def migrate_asset(
             raise ScreenlyMigrationError(
                 f'File not found on device: {local_path.name}'
             )
-        file_handle = local_path.open('rb')
+        # is_file() races with a concurrent delete and doesn't catch
+        # permission/IO problems on the read side; surface those as
+        # per-asset errors instead of letting them bubble as 500s.
+        try:
+            file_handle = local_path.open('rb')
+        except OSError as error:
+            raise ScreenlyMigrationError(
+                f'Could not read {local_path.name} on device: '
+                f'{error.strerror or type(error).__name__}'
+            ) from error
         upload_filename = _build_upload_filename(asset, local_path)
         files = {'file': (upload_filename, file_handle)}
     else:
@@ -257,11 +285,20 @@ def migrate_asset(
         )
 
     try:
-        return response.json()
+        parsed = response.json()
     except ValueError:
         # Screenly returned 2xx with no body — uncommon but harmless;
         # report success with a stub payload rather than failing the row.
         return {}
+    # Narrow the json() Any return so the caller's downstream typing
+    # stays honest; Screenly's create endpoint returns a single-row
+    # array under Prefer: return=representation, so list[Any] is the
+    # common shape, with dict tolerated for forward-compat.
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
 
 
 def _extract_screenly_error(response: requests.Response) -> str:
