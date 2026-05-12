@@ -604,6 +604,10 @@ def test_mpv_skips_video_rotate_on_x86(mock_popen: Any) -> None:
     """x86 inherits the compositor transform via wayland; double-
     rotating in mpv would undo wlr-randr's work."""
     player = MPVMediaPlayer()
+    # Patch get_device_type to 'x86' so get_alsa_audio_device() takes
+    # the HID-card fallback branch — patching it to 'pi5' while
+    # DEVICE_TYPE=x86 would route through _detect_hdmi_audio_device()
+    # and stat /sys/class/drm, making the test depend on the host.
     with (
         patch(
             'anthias_viewer.media_player.settings',
@@ -611,7 +615,7 @@ def test_mpv_skips_video_rotate_on_x86(mock_popen: Any) -> None:
         ),
         patch(
             'anthias_viewer.media_player.get_device_type',
-            return_value='pi5',  # routed through MPVMediaPlayer
+            return_value='x86',
         ),
         patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}),
     ):

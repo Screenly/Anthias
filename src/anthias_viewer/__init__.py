@@ -175,19 +175,35 @@ def _apply_wlr_transform(rotation_deg: int) -> None:
     transform = _wlr_transform_value(rotation_deg)
     for name in _wlr_output_names():
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ['wlr-randr', '--output', name, '--transform', transform],
                 capture_output=True,
                 text=True,
                 timeout=5,
                 check=False,
             )
-            logging.info(
-                'Applied wlroots transform %s to output %s', transform, name
-            )
         except (FileNotFoundError, subprocess.SubprocessError) as exc:
             logging.warning(
                 'wlr-randr --transform failed for %s: %s', name, exc
+            )
+            continue
+        # Don't blanket-log "Applied" on every invocation: cage may not
+        # be ready yet at viewer startup, an EDID-renamed output can
+        # vanish between list and apply, or wlroots can reject the
+        # transform for an output that doesn't support it. Treat
+        # returncode==0 as success and surface stderr on failure so a
+        # silently-broken rotation is debuggable from journald.
+        if result.returncode == 0:
+            logging.info(
+                'Applied wlroots transform %s to output %s', transform, name
+            )
+        else:
+            logging.warning(
+                'wlr-randr --transform %s on %s exited %d: %s',
+                transform,
+                name,
+                result.returncode,
+                (result.stderr or '').strip(),
             )
 
 
@@ -462,6 +478,17 @@ def _maybe_reapply_rotation() -> None:
         return
 
     # linuxfb path — kill the webview so asset_loop respawns it.
+    # Latch _last_applied_rotation NOW (rather than waiting for
+    # load_browser() to overwrite it after the respawn): a second
+    # ``reload`` arriving in the gap between terminate() and the next
+    # asset_loop tick would otherwise compare the unchanged settings
+    # value against the still-stale latch, decide rotation is "again"
+    # changing, and re-fire terminate() / skip_event on an already-
+    # dying webview process — which spams the warning log and could
+    # race the respawn. load_browser() unconditionally re-reads the
+    # setting and re-assigns this variable, so the latch is still
+    # accurate once the new process is up.
+    _last_applied_rotation = rotation
     global browser
     if browser is not None:
         try:

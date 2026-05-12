@@ -814,6 +814,42 @@ def test_apply_wlr_transform_invokes_wlr_randr_per_output() -> None:
         assert call.args[0][call.args[0].index('--transform') + 1] == '180'
 
 
+def test_apply_wlr_transform_logs_warning_on_nonzero_exit(
+    caplog: Any,
+) -> None:
+    """wlr-randr's exit code is informative — cage may not be ready
+    yet, the output name can vanish between list and apply, etc. The
+    helper must surface stderr on failure rather than blanket-logging
+    "Applied" on every invocation. Copilot review of #2882."""
+
+    def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
+        result = mock.Mock()
+        if argv == ['wlr-randr']:
+            result.returncode = 0
+            result.stdout = 'HDMI-A-1\n  Enabled: yes\n'
+            result.stderr = ''
+        else:
+            result.returncode = 1
+            result.stdout = ''
+            result.stderr = 'invalid output\n'
+        return result
+
+    with (
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch('anthias_viewer.subprocess.run', side_effect=_fake_run),
+        caplog.at_level(logging.WARNING, logger='root'),
+    ):
+        viewer._apply_wlr_transform(90)
+
+    warning_records = [
+        r for r in caplog.records if r.levelno >= logging.WARNING
+    ]
+    assert any('invalid output' in r.getMessage() for r in warning_records)
+    assert not any(
+        'Applied wlroots transform' in r.getMessage() for r in caplog.records
+    )
+
+
 def test_handle_reload_reapplies_rotation_when_changed(
     reset_rotation_state: None,
 ) -> None:
@@ -876,4 +912,32 @@ def test_handle_reload_terminates_webview_on_linuxfb_rotation_change(
     # short-circuit on the value comparison against the freshly-spawned
     # webview (which knows nothing about the old URL).
     assert viewer.current_browser_url is None
+    skip.set.assert_called_once()
+    # _last_applied_rotation is latched immediately, NOT only after
+    # load_browser() respawns the webview. Otherwise a second `reload`
+    # arriving in the gap would treat rotation as still-changed and
+    # terminate the already-dying process a second time.
+    assert viewer._last_applied_rotation == 270
+
+
+def test_handle_reload_linuxfb_idempotent_under_repeat(
+    reset_rotation_state: None,
+) -> None:
+    """Two ``reload`` messages back-to-back with the same rotation must
+    not double-terminate AnthiasWebview — issue raised by Copilot in
+    review of #2882."""
+    fake_browser = mock.Mock()
+    skip = mock.Mock()
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch.object(viewer, 'MediaPlayerProxy'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+        viewer._handle_reload()
+    fake_browser.terminate.assert_called_once()
     skip.set.assert_called_once()
