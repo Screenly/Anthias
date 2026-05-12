@@ -345,14 +345,23 @@ def stamp_processing_start(asset_id: str) -> None:
     Treat the symbol as a stable internal API; the reconciler depends
     on the field being written at every dispatch.
 
-    Concurrency: the read-modify-write below preserves the existing
-    metadata bag — wrapped in ``transaction.atomic()`` so a
-    near-simultaneous metadata write (an operator PATCH, a worker
-    landing ``error_message``) is serialised at the DB layer rather
-    than racing with this SELECT. On SQLite (Anthias's default) the
-    DB is single-writer at the file level anyway, so the wrap is
-    primarily documenting intent; on Postgres / MySQL the atomic
-    block produces an actual transaction boundary.
+    Concurrency: the read-modify-write below is a known race against
+    arbitrary other writers of ``Asset.metadata`` — a worker landing
+    ``error_message`` between our SELECT and UPDATE, an operator
+    PATCH, etc. would be clobbered by our UPDATE. The wider codebase
+    accepts the same race in sibling helpers (see ``_set_processing_error``,
+    the normalize-task success path). We accept it here because the
+    practical window is microscopic: stamps fire at *dispatch* time,
+    *before* the worker picks the task up, and the dispatching code
+    has just created or filter-updated the same row a few statements
+    earlier. ``select_for_update()`` would close it on Postgres /
+    MySQL but is a no-op on SQLite — Anthias's only deployed backend
+    — so we'd be paying complexity for zero practical safety today.
+
+    The ``transaction.atomic()`` wrap gives the SELECT / UPDATE pair
+    a transaction boundary on backends that support it; the savepoint
+    is cheap and survives a future switch to a multi-writer backend
+    without code changes here.
 
     No-op for a row that doesn't exist: a row that disappeared
     between dispatch enqueue and this update is silently dropped via

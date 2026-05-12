@@ -345,7 +345,11 @@ class InfoViewMixin(APIView):
                 'example': {
                     'viewlog': 'Not yet implemented',
                     'loadavg': 0.1,
-                    'free_space': '10G',
+                    # Shape matches ``django.template.defaultfilters.filesizeformat``:
+                    # number with one decimal, non-breaking space ( ),
+                    # full unit label (KB / MB / GB / TB). Old hurry.filesize
+                    # output ("10G") was removed in the 2026.05.1 release.
+                    'free_space': '10.0 GB',
                     'display_power': 'on',
                     'up_to_date': True,
                 },
