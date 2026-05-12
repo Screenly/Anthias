@@ -361,6 +361,14 @@ function migrateToScreenly() {
     },
 
     async validate() {
+      // Re-entrancy guard. The Continue button is disabled while
+      // ``validating`` is true, but ``@keydown.enter.prevent``
+      // fires on every Enter-press regardless — a user holding
+      // Enter (or hammering it impatiently) would otherwise queue
+      // duplicate validate requests and race the ``assetGroupId``
+      // assignment + step transition at the end. First call wins;
+      // subsequent calls no-op until it returns.
+      if (this.validating) return
       this.tokenError = ''
       // The Continue button is disabled when the token is empty,
       // but Enter still triggers @keydown.enter.prevent. Guard
