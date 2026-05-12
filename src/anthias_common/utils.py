@@ -136,11 +136,19 @@ def get_balena_supervisor_version() -> str:
 
 def get_node_ip() -> str:
     """
-    Returns the node's IP address.
-    We're using an API call to the supervisor for this on Balena
-    and an environment variable set by `install.sh` for other environments.
-    The reason for this is because we can't retrieve the host IP from
-    within Docker.
+    Returns the node's IP address(es) as a whitespace-separated string,
+    or ``'Unable to retrieve IP.'`` / ``'Unknown'`` on failure.
+
+    The container can't see the host's real interfaces (just its veth on
+    the docker bridge), so the actual IP lookup happens out-of-process:
+
+    * **Balena:** one API call to the local supervisor.
+    * **Bare metal:** the ``anthias-host-agent`` systemd unit runs on the
+      host, enumerates real interfaces with netifaces, and writes the
+      results to Redis. This function publishes ``hostcmd:
+      set_ip_addresses`` to trigger a refresh, waits up to ~80s
+      (60s ``host_agent_ready`` + 20s ``ip_addresses_ready``) for
+      host_agent to populate the cache, then reads ``ip_addresses``.
     """
 
     if is_balena_app():
