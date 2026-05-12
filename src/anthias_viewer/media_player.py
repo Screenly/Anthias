@@ -8,12 +8,13 @@ from anthias_server.settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
 
-# Track whether the no-connected-HDMI fallback has already been
-# logged at WARNING in this process. `get_alsa_audio_device()` runs
-# on every play()/set_asset(), so repeated WARNINGs would spam the
-# viewer log when no display is connected. The first miss is still
-# loud; subsequent ones drop to DEBUG.
-_hdmi_fallback_warned = False
+# Last device that `_detect_hdmi_audio_device()` resolved to in this
+# process. `get_alsa_audio_device()` runs on every play()/set_asset(),
+# so we only emit INFO/WARNING when the result changes (transitions
+# between "HDMI-A-1 connected", "HDMI-A-2 connected", and the fallback)
+# and drop to DEBUG otherwise. None means "haven't detected yet" — the
+# first call always logs at the higher level.
+_last_detected_device: str | None = None
 
 
 def _detect_hdmi_audio_device() -> str:
@@ -46,7 +47,11 @@ def _detect_hdmi_audio_device() -> str:
         entries = []
 
     hdmi_to_alsa = {'HDMI-A-1': 'vc4hdmi0', 'HDMI-A-2': 'vc4hdmi1'}
-    ports: list[tuple[str, os.DirEntry[str]]] = []
+    # Annotation is a string so it is not evaluated at import time —
+    # `os.DirEntry[str]` is subscriptable on 3.9+, but quoting it keeps
+    # this module loadable on any interpreter without depending on
+    # PEP-585 runtime support.
+    ports: 'list[tuple[str, os.DirEntry[str]]]' = []
     for entry in entries:
         for suffix in hdmi_to_alsa:
             if entry.name.endswith(suffix):
@@ -57,33 +62,51 @@ def _detect_hdmi_audio_device() -> str:
     # even if a non-vc4 DRM card lex-sorts ahead (e.g. card0-...).
     ports.sort(key=lambda pair: pair[0])
 
+    detected_entry_name: str | None = None
+    detected_card: str | None = None
     for suffix, entry in ports:
         card_name = hdmi_to_alsa[suffix]
         status_path = os.path.join(entry.path, 'status')
         try:
             with open(status_path) as f:
                 if f.read().strip() == 'connected':
-                    logging.info(
-                        'Detected connected HDMI: %s -> sysdefault:CARD=%s',
-                        entry.name,
-                        card_name,
-                    )
-                    return f'sysdefault:CARD={card_name}'
+                    detected_entry_name = entry.name
+                    detected_card = card_name
+                    break
         except OSError as exc:
             logging.debug(
                 'HDMI status read failed for %s: %s', status_path, exc
             )
 
-    global _hdmi_fallback_warned
-    msg = (
-        'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0'
-    )
-    if _hdmi_fallback_warned:
-        logging.debug(msg)
+    global _last_detected_device
+    if detected_card is not None:
+        device = f'sysdefault:CARD={detected_card}'
+        if device != _last_detected_device:
+            logging.info(
+                'Detected connected HDMI: %s -> %s',
+                detected_entry_name,
+                device,
+            )
+        else:
+            logging.debug(
+                'Detected connected HDMI: %s -> %s',
+                detected_entry_name,
+                device,
+            )
+        _last_detected_device = device
+        return device
+
+    device = 'sysdefault:CARD=vc4hdmi0'
+    if device != _last_detected_device:
+        # First call, or we just lost a previously detected
+        # connection — be loud so the cause is visible in logs.
+        logging.warning(
+            'No connected HDMI detected, falling back to %s', device
+        )
     else:
-        logging.warning(msg)
-        _hdmi_fallback_warned = True
-    return 'sysdefault:CARD=vc4hdmi0'
+        logging.debug('No connected HDMI detected, falling back to %s', device)
+    _last_detected_device = device
+    return device
 
 
 def get_alsa_audio_device() -> str:
