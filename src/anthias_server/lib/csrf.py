@@ -52,10 +52,10 @@ def _hostname(value: str) -> str | None:
     no port; same site from the user's perspective, but the raw
     netloc/get_host() strings disagree.
     """
-    # The ``http://`` here is a synthetic scheme so ``urlsplit`` will
-    # parse a bare ``Host`` header value into a hostname+port; nothing
-    # is ever sent over the wire on this scheme, so S5332 doesn't apply.
-    candidate = value if '://' in value else f'http://{value}'  # NOSONAR
+    # Protocol-relative prefix (``//host[:port]``) is enough for
+    # ``urlsplit`` to recognise a bare ``Host`` value as a netloc
+    # without baking a literal scheme into this file.
+    candidate = value if '://' in value else f'//{value}'
     try:
         host = urlsplit(candidate).hostname
     except ValueError:
