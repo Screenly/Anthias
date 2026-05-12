@@ -34,6 +34,7 @@
       pi4-64: arm64
       pi3: armhf
       pi2: armhf
+      generic-arm64: arm64
 
 - name: Add Docker repo
   # copy, not lineinfile, so a stale `[arch=...]` entry from an earlier
@@ -52,11 +53,25 @@
   # On hosts already running the wrong arch, apt swaps automatically:
   # docker-ce is Multi-Arch: foreign so requesting `:arm64` removes
   # the `:armhf` install (and pulls dependencies in the new arch).
+  #
+  # docker-buildx-plugin is technically only a *Recommends* of
+  # docker-ce, and `install_recommends: false` above means we have to
+  # name it explicitly. Pi / x86 installs run `upgrade_containers.sh`
+  # with `MODE=pull` (the default) — `docker compose pull` doesn't
+  # need buildx, so historically the plugin was absent and nothing
+  # noticed. generic-arm64 has no published image tag yet, so its
+  # bootstrap path forces `MODE=build`, which goes through `docker
+  # compose build`. Without buildx the build falls back to the legacy
+  # builder, which can't parse `FROM --platform=$BUILDPLATFORM ...`
+  # in our Dockerfiles and dies on the very first FROM. Installing
+  # the plugin unconditionally is the smallest fix and is harmless on
+  # pull-mode boards.
   ansible.builtin.apt:
     name:
       - docker-ce:{{ system_architecture }}
       - docker-ce-cli:{{ system_architecture }}
       - docker-compose-plugin:{{ system_architecture }}
+      - docker-buildx-plugin:{{ system_architecture }}
     update_cache: true
     install_recommends: false
 

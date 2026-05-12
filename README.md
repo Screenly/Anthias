@@ -42,6 +42,19 @@ See [this](https://anthias.screenly.io/docs/install/) page for options on how to
 
 See the [supported hardware](https://anthias.screenly.io/get-started/#supported-hardware) section on the website for the full list of supported devices.
 
+### Generic 64-bit ARM SBCs (best-effort)
+
+The installer recognizes any 64-bit ARM host that isn't a Raspberry Pi as `generic-arm64` and runs the same Anthias stack on it — [Armbian](https://www.armbian.com) on Rock Pi, Orange Pi, Banana Pi and similar boards. The dashboard, scheduler, and asset library all work as on a Pi.
+
+Things to know before you pick a board:
+
+- **Videos decode in software** — fine for casual 720p, stutter-prone at 1080p on slower SoCs, not suitable for 4K. If your content is mostly video, prefer a Pi 4 / 5 or x86.
+- **Images and web pages run smoothly** across the supported boards.
+- **Tested boards:** Rock Pi 4, Rock 5, Orange Pi 5, Banana Pi M5. Allwinner H616 / H618 boards (e.g. Orange Pi Zero 3) currently have weaker mainline display support and are best limited to non-video content.
+- The Plymouth boot splash is wired up but often silently no-ops on non-Pi boards because their bootloaders don't expose an early DRM device — expect a few seconds of black before your content appears.
+
+Per-SoC hardware video decode (Rockchip `rkmpp`, Allwinner `cedrus`, Amlogic `meson-vdec`) is the planned follow-up; see [issue #2849](https://github.com/Screenly/Anthias/issues/2849).
+
 ## :star: Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Screenly/Anthias&type=Date)](https://star-history.com/#Screenly/Anthias&Date)

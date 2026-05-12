@@ -22,6 +22,17 @@ def get_build_parameters(build_target: str) -> dict[str, Any]:
             'base_image': BASE_IMAGE,
             'target_platform': 'linux/arm64/v8',
         }
+    if build_target == 'generic-arm64':
+        # Generic 64-bit ARM SBC fallback (Orange Pi, Rock Pi, Banana Pi, …).
+        # Effectively a thinner pi5 variant: Qt 6, arm64, no libraspberrypi0
+        # / Broadcom userland in the runtime base. The viewer wiring mirrors
+        # x86's cage + wayland path because non-Pi ARM SBCs typically have
+        # no /dev/fb0 (Armbian boots Mesa straight to DRM/KMS).
+        return {
+            'board': 'generic-arm64',
+            'base_image': BASE_IMAGE,
+            'target_platform': 'linux/arm64/v8',
+        }
     if build_target == 'pi3':
         return {
             'board': 'pi3',
@@ -144,7 +155,7 @@ def get_test_context() -> dict[str, Any]:
 def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
-    is_qt6 = board in ['pi5', 'pi4-64', 'x86']
+    is_qt6 = board in ['pi5', 'pi4-64', 'x86', 'generic-arm64']
 
     # Qt version is only relevant for the Qt 5 path: pi2/pi3 pull the
     # cross-built Qt 5 toolchain tarball at build time. Qt 5 is frozen
@@ -256,23 +267,39 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
             ]
         )
 
-        if board == 'x86':
+        if board in ('x86', 'generic-arm64'):
             # balenaOS x86 has no /dev/fb0 for Qt's linuxfb plugin and
             # no host display server. cage is a kiosk wlroots
             # compositor that talks straight to KMS; qt6-wayland is
             # the Qt platform plugin the viewer loads to render into
-            # cage's surface. va-driver-all is a Debian metapackage
-            # that pulls in intel-media-va-driver (modern Intel iHD),
-            # i965-va-driver (older Intel), and mesa-va-drivers
-            # (Gallium / AMD radeonsi etc.), so the image runs on any
-            # x86 GPU without per-vendor build variants — mpv's
-            # --hwdec=auto-safe picks whichever VAAPI driver matches
-            # the device at runtime. See docker/Dockerfile.viewer.j2
-            # and bin/start_viewer.sh for the runtime wiring.
+            # cage's surface. The same wiring fits generic-arm64
+            # (non-Pi 64-bit ARM SBCs running Armbian): no /dev/fb0
+            # by default, so cage is the portable kiosk path.
             viewer_extra_apt_dependencies.extend(
                 [
                     'cage',
                     'qt6-wayland',
+                ]
+            )
+
+        if board == 'x86':
+            # va-driver-all is a Debian metapackage that pulls in
+            # intel-media-va-driver (modern Intel iHD), i965-va-driver
+            # (older Intel), and mesa-va-drivers (Gallium / AMD
+            # radeonsi etc.), so the image runs on any x86 GPU without
+            # per-vendor build variants — mpv's --hwdec=auto-safe
+            # picks whichever VAAPI driver matches the device at
+            # runtime.
+            #
+            # Deliberately NOT shipped on generic-arm64: Rockchip
+            # (rkvdec/hantro), Allwinner (cedrus), and Amlogic
+            # (meson-vdec) all expose hardware decode via V4L2 M2M /
+            # request API, not VAAPI; mesa-va-drivers only covers
+            # radeonsi/nouveau/etc., so on those SoCs va-driver-all
+            # would just be dead weight. Per-SoC hwdec for ARM SBCs
+            # is a Tier-2 follow-up.
+            viewer_extra_apt_dependencies.extend(
+                [
                     'va-driver-all',
                 ]
             )

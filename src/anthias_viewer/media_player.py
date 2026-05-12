@@ -182,7 +182,10 @@ class MPVMediaPlayer(MediaPlayer):
         # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
         # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
         # they own the framebuffer directly with no compositor.
-        if device_type == 'x86':
+        # generic-arm64 (non-Pi ARM SBCs on Armbian) goes the same
+        # route as x86 because the viewer container is wrapped in
+        # cage there too; hwdec is best-effort per SoC.
+        if device_type in ('x86', 'generic-arm64'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         else:
             vo_args = ['--vo=drm']
@@ -264,11 +267,16 @@ class MediaPlayerProxy:
         if cls.INSTANCE is None:
             # pi4-64 runs Qt6 + linuxfb like pi5/x86, so VLC's GL/GLES2/XCB
             # outputs have no parent window to draw into. Route it to mpv,
-            # which renders straight to KMS via --vo=drm.
-            is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
+            # which renders straight to KMS via --vo=drm. The same MPV
+            # path covers generic-arm64 (non-Pi 64-bit ARM SBCs running
+            # Armbian), which the device_helper falls back to 'pi1' for
+            # since /proc/device-tree/model doesn't match any Pi regex
+            # — without this override they'd silently route to VLC.
+            device_env = os.environ.get('DEVICE_TYPE')
+            force_mpv = device_env in ('pi4-64', 'generic-arm64')
             if (
                 get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
-                and not is_pi4_64
+                and not force_mpv
             ):
                 cls.INSTANCE = VLCMediaPlayer()
             else:

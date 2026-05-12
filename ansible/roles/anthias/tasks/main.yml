@@ -65,6 +65,28 @@
     group: root
     validate: /usr/sbin/visudo -cf %s
 
+- name: Create persistent runtime venv for host-managed services
+  # `bin/install.sh::install_ansible` uses a `mktemp`-allocated venv
+  # for the installer itself, torn down by the EXIT trap so $HOME
+  # doesn't accumulate stale Python state. That ephemeral path can't
+  # back a long-lived systemd unit, so the host_agent service
+  # (referenced below) needs its own stable venv. Re-syncing the
+  # `host` group keeps the dependency set in lockstep with the
+  # installer's — uv resolves both from the same pyproject.toml.
+  ansible.builtin.command:
+    cmd: >-
+      {{ anthias_user_home }}/.local/bin/uv sync
+      --project {{ anthias_user_home }}/anthias
+      --no-default-groups
+      --group host
+      --no-install-project
+    creates: "{{ anthias_user_home }}/.anthias-venv/bin/python"
+  environment:
+    UV_PROJECT_ENVIRONMENT: "{{ anthias_user_home }}/.anthias-venv"
+  become_user: "{{ anthias_user }}"
+  vars:
+    anthias_user_home: "/home/{{ anthias_user }}"
+
 - name: Install Anthias systemd units
   ansible.builtin.template:
     src: "{{ item }}"

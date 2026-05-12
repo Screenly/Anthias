@@ -536,6 +536,26 @@ def test_get_instance_returns_mpv_for_pi5_and_x86(
     assert isinstance(instance, MPVMediaPlayer)
 
 
+def test_get_instance_returns_mpv_for_generic_arm64(
+    reset_media_proxy: None,
+) -> None:
+    # device_helper.get_device_type() falls back to 'pi1' on any
+    # aarch64 host whose /proc/device-tree/model isn't a Pi regex
+    # match — so the override must come from DEVICE_TYPE env, the
+    # only thing that distinguishes a Rock Pi / Orange Pi from a
+    # genuinely old Pi 1.
+    MediaPlayerProxy.INSTANCE = None
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi1',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'generic-arm64'}),
+    ):
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, MPVMediaPlayer)
+
+
 def test_get_instance_returns_mpv_for_pi4_64(reset_media_proxy: None) -> None:
     MediaPlayerProxy.INSTANCE = None
     with (

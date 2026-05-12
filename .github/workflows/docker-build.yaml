@@ -71,7 +71,7 @@ jobs:
       # dedup at the registry level. See refactor: drop celery image.
       fail-fast: false
       matrix:
-        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86']
+        board: ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86', 'generic-arm64']
         python-version: ["3.13"]
     runs-on: ubuntu-24.04
 
