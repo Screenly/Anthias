@@ -32,6 +32,21 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
     # persisted. None means "not a YouTube asset" → skip dispatch.
     _pending_youtube_uri: str | None = None
 
+    # Set to ``'video'`` by ``prepare_asset`` when the freshly persisted
+    # row needs the video-normalisation pipeline to run before the
+    # viewer can play it (e.g. an MPEG-1 sample that lands on a board
+    # whose player only handles H.264 / HEVC). The view then dispatches
+    # ``normalize_video_asset`` via the shared ``dispatch_pending_normalize``
+    # helper. ``None`` means "no normalisation needed".
+    #
+    # Image normalisation is deliberately *not* wired here — v1 / v1.1
+    # never converted HEIC / HEIF / TIFF on upload, and changing that
+    # would shift response-time and asset-state semantics for legacy
+    # clients that depend on synchronous availability. The video gap
+    # is the GH #2870 regression; image normalisation stays a v1.2 / v2
+    # opt-in.
+    _pending_normalize: str | None = None
+
     def __init__(
         self,
         *args: Any,
@@ -72,11 +87,19 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
 
         validate_uri(uri)
 
+        # Record whether this row came from a local upload (the
+        # /api/v1/file_asset companion endpoint dropped the file at a
+        # local path before the create POST). ``is_local_upload``
+        # gates the normalize dispatch below: a remote HTTP / RTSP
+        # video URL should never go through the on-device transcode
+        # pipeline, only the locally-staged ``.tmp`` uploads do.
+        is_local_upload = False
         if not asset['asset_id']:
             asset['asset_id'] = uuid.uuid4().hex
             if uri.startswith('/'):
                 rename(uri, path.join(settings['assetdir'], asset['asset_id']))
                 uri = path.join(settings['assetdir'], asset['asset_id'])
+                is_local_upload = True
 
         # Exact match — substring `'youtube_asset' in mimetype`
         # would also fire on `not_youtube_asset` and crash on a
@@ -161,6 +184,23 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
             and url_fails(asset['uri'])
         ):
             raise Exception('Could not retrieve file. Check the asset URL.')
+
+        # Flag the freshly-uploaded local video for the normalisation
+        # pipeline. Fixes GH #2870: pre-fix, v1 / v1.1 left the file
+        # in whatever codec the operator uploaded (e.g. MPEG-1 on an
+        # x86 board with passthrough_video_codecs={'h264','hevc'}),
+        # and the viewer silently skipped it forever. Set
+        # ``is_processing=1`` so the viewer drops the in-flight row
+        # from rotation until ``normalize_video_asset`` finalises it.
+        # Image normalisation deliberately stays opt-in via v1.2 / v2
+        # — see the class-level ``_pending_normalize`` docstring.
+        if (
+            is_local_upload
+            and not is_youtube
+            and 'video' in (asset['mimetype'] or '')
+        ):
+            self._pending_normalize = 'video'
+            asset['is_processing'] = 1
 
         return asset
 

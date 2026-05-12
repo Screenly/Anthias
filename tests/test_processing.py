@@ -1785,19 +1785,126 @@ def test_needs_image_normalisation(filename: str, expected: bool) -> None:
 
 
 def test_dispatch_normalize_image_invokes_celery_task() -> None:
-    with mock.patch(
-        'anthias_server.celery_tasks.normalize_image_asset.delay'
-    ) as delay:
+    # ``_stamp_processing_start`` writes ``metadata.processing_started_at``
+    # for the reconciler — irrelevant to this delay-was-called check, so
+    # mocked out to keep the test off the DB.
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_image_asset.delay'
+        ) as delay,
+        mock.patch('anthias_server.processing._stamp_processing_start'),
+    ):
         processing.dispatch_normalize_image('asset-1')
     delay.assert_called_once_with('asset-1')
 
 
 def test_dispatch_normalize_video_invokes_celery_task() -> None:
-    with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
-    ) as delay:
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks.normalize_video_asset.delay'
+        ) as delay,
+        mock.patch('anthias_server.processing._stamp_processing_start'),
+    ):
         processing.dispatch_normalize_video('asset-2')
     delay.assert_called_once_with('asset-2')
+
+
+@pytest.mark.django_db
+def test_dispatch_normalize_video_stamps_processing_started_at() -> None:
+    """``dispatch_normalize_video`` writes
+    ``metadata.processing_started_at`` so the periodic reconciler can
+    age the row. Regression guard for GH #2870's second fix line —
+    without the stamp, a stuck row has no signal the reconciler can
+    use to decide whether enough time has elapsed to re-dispatch."""
+    Asset.objects.create(
+        asset_id='stamped-vid',
+        name='Test',
+        uri='/data/anthias_assets/stamped-vid.mp4',
+        mimetype='video',
+        duration=10,
+        is_enabled=True,
+        is_processing=True,
+        metadata={'foo': 'bar'},
+    )
+    with mock.patch('anthias_server.celery_tasks.normalize_video_asset.delay'):
+        processing.dispatch_normalize_video('stamped-vid')
+    a = Asset.objects.get(asset_id='stamped-vid')
+    assert 'processing_started_at' in a.metadata
+    # Existing metadata keys preserved.
+    assert a.metadata['foo'] == 'bar'
+    # The stamp is a valid ISO-8601 string.
+    from datetime import datetime
+
+    datetime.fromisoformat(a.metadata['processing_started_at'])
+
+
+class _FakeSerializer:
+    """Stand-in for the four API serializer classes — the dispatch
+    helper only reads ``_pending_normalize``, so a minimal duck type
+    is enough to test the branch logic without spinning up DRF."""
+
+    def __init__(self, pending: str | None) -> None:
+        self._pending_normalize = pending
+
+
+def test_dispatch_pending_normalize_routes_video() -> None:
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as v, mock.patch(
+        'anthias_server.processing.dispatch_normalize_image'
+    ) as i:
+        processing.dispatch_pending_normalize(
+            _FakeSerializer('video'), 'asset-vid'
+        )
+    v.assert_called_once_with('asset-vid')
+    i.assert_not_called()
+
+
+def test_dispatch_pending_normalize_routes_image() -> None:
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as v, mock.patch(
+        'anthias_server.processing.dispatch_normalize_image'
+    ) as i:
+        processing.dispatch_pending_normalize(
+            _FakeSerializer('image'), 'asset-img'
+        )
+    i.assert_called_once_with('asset-img')
+    v.assert_not_called()
+
+
+def test_dispatch_pending_normalize_noop_when_unset() -> None:
+    """A serializer that didn't flag normalisation (most uploads:
+    JPEG/PNG/H.264) leaves the helper as a no-op — no spurious
+    Celery dispatch."""
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as v, mock.patch(
+        'anthias_server.processing.dispatch_normalize_image'
+    ) as i:
+        processing.dispatch_pending_normalize(
+            _FakeSerializer(None), 'asset-plain'
+        )
+    v.assert_not_called()
+    i.assert_not_called()
+
+
+def test_dispatch_pending_normalize_handles_missing_attribute() -> None:
+    """A serializer class that doesn't carry ``_pending_normalize``
+    at all must not crash — defends against a future serializer
+    that doesn't route through the shared mixin."""
+
+    class _Bare:
+        pass
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as v, mock.patch(
+        'anthias_server.processing.dispatch_normalize_image'
+    ) as i:
+        processing.dispatch_pending_normalize(_Bare(), 'asset-bare')
+    v.assert_not_called()
+    i.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

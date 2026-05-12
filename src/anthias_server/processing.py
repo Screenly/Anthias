@@ -330,6 +330,27 @@ def needs_image_normalisation(uri_or_filename: str) -> bool:
     return _ext(uri_or_filename) in NORMALIZE_IMAGE_EXTS
 
 
+def _stamp_processing_start(asset_id: str) -> None:
+    """Mark ``metadata['processing_started_at']`` to the current UTC.
+
+    Read by the periodic reconciler (``reconcile_stuck_processing``)
+    to age rows that have been ``is_processing=True`` longer than the
+    longest reasonable transcode. Stored as an ISO-8601 string in the
+    existing JSON metadata bag (no schema migration). Best-effort: a
+    row that disappeared between dispatch enqueue and this update is
+    a no-op via the filter().update() pattern.
+    """
+    from django.utils import timezone
+
+    now_iso = timezone.now().isoformat()
+    asset = Asset.objects.filter(asset_id=asset_id).first()
+    if asset is None:
+        return
+    metadata = dict(asset.metadata or {})
+    metadata['processing_started_at'] = now_iso
+    Asset.objects.filter(asset_id=asset_id).update(metadata=metadata)
+
+
 def dispatch_normalize_image(asset_id: str) -> None:
     """Queue ``normalize_image_asset`` for the just-persisted row.
 
@@ -337,17 +358,57 @@ def dispatch_normalize_image(asset_id: str) -> None:
     importable from contexts (the API serializers, tests) that don't
     want celery's broker connection set up at import time. Mirrors
     ``anthias_common.youtube.dispatch_download``.
+
+    Stamps ``metadata.processing_started_at`` so the reconciler can
+    age a row that the worker never picked up (crashed worker, OOM
+    kill, dispatch enqueue racing a redis flake).
     """
     from anthias_server.celery_tasks import normalize_image_asset
 
+    _stamp_processing_start(asset_id)
     normalize_image_asset.delay(asset_id)
 
 
 def dispatch_normalize_video(asset_id: str) -> None:
-    """Queue ``normalize_video_asset`` for the just-persisted row."""
+    """Queue ``normalize_video_asset`` for the just-persisted row.
+
+    See ``dispatch_normalize_image`` for the metadata stamp rationale.
+    """
     from anthias_server.celery_tasks import normalize_video_asset
 
+    _stamp_processing_start(asset_id)
     normalize_video_asset.delay(asset_id)
+
+
+def dispatch_pending_normalize(serializer: Any, asset_id: str) -> None:
+    """Branch on ``serializer._pending_normalize`` and dispatch.
+
+    Single hand-off point shared by every API version's create view
+    (v1 / v1.1 / v1.2 / v2). ``prepare_asset`` stamps the attribute
+    *and* flips ``is_processing=True`` for image/video uploads that
+    need normalisation; the create view then calls this helper after
+    persistence so the matching Celery task picks the row up. v1 and
+    v1.1 used to skip this dispatch entirely (the per-version create
+    views grew the branching inline as v1.2 / v2 were added, and the
+    legacy endpoints were left behind), which left every video
+    uploaded through those endpoints stuck at ``is_processing=True``
+    forever — see GH #2870. Centralising the branch here means the
+    next added or renamed version inherits the dispatch automatically.
+
+    ``serializer`` is typed as ``Any`` because the four versions use
+    four different serializer classes (``CreateAssetSerializerV1_1``,
+    ``CreateAssetSerializerV1_2``, ``CreateAssetSerializerV2``) which
+    share the ``_pending_normalize`` attribute via the
+    ``CreateAssetSerializerMixin`` but don't share a single declared
+    base for typing. Missing-attribute is treated as "no normalisation
+    needed" so a hypothetical future serializer that doesn't route
+    through the mixin still wouldn't crash this code path.
+    """
+    pending = getattr(serializer, '_pending_normalize', None)
+    if pending == 'image':
+        dispatch_normalize_image(asset_id)
+    elif pending == 'video':
+        dispatch_normalize_video(asset_id)
 
 
 def _row_or_none(asset_id: str) -> Asset | None:

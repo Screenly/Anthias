@@ -75,7 +75,17 @@ def dispatch_download(asset_id: str, source_uri: str) -> None:
 
     Lazy import keeps the celery_tasks module out of import paths
     that don't need it (e.g. the viewer or anthias_common itself).
+
+    Stamps ``metadata.processing_started_at`` so the periodic
+    reconciler can recover a row whose download task was lost
+    (worker SIGKILL between enqueue and pickup, redis flake during
+    dispatch). Lives in ``anthias_server.processing`` because that's
+    where the reconciler reads the field; importing it here is
+    safe — the module is already loaded by the same celery worker
+    that runs this task.
     """
     from anthias_server.celery_tasks import download_youtube_asset
+    from anthias_server.processing import _stamp_processing_start
 
+    _stamp_processing_start(asset_id)
     download_youtube_asset.delay(asset_id, source_uri)

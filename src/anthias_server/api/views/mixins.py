@@ -7,9 +7,9 @@ from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
 from typing import Any
 
+from django.template.defaultfilters import filesizeformat
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from hurry.filesize import size
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
@@ -358,7 +358,7 @@ class InfoViewMixin(APIView):
 
         # Calculate disk space
         slash = statvfs('/')
-        free_space = size(slash.f_bavail * slash.f_frsize)
+        free_space = filesizeformat(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
         return Response(

@@ -551,3 +551,162 @@ def test_create_youtube_asset_dispatches_celery_task(
     }.items():
         if v != version:
             m.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_create_video_asset_dispatches_normalize_task(
+    api_client: APIClient,
+    version: str,
+) -> None:
+    """Every API version that accepts a local video upload must
+    dispatch ``normalize_video_asset`` after persisting the row.
+
+    Regression test for GH #2870: v1 and v1.1 originally skipped this
+    dispatch, leaving the row in whatever codec the operator uploaded
+    (e.g. MPEG-1) — the viewer's per-board passthrough set then
+    silently dropped it from rotation forever. Parametrized so a
+    future create-view regression for any version fails this test
+    instead of leaking into production silently.
+    """
+    # ``stack`` lets the same test cover both serializer surfaces
+    # (v1/v1.1 use ``serializers.v1_1.*`` symbols; v1.2/v2 use the
+    # shared ``serializers.mixins.*`` symbols) without duplicating
+    # the test body. Each version's serializer renames the staged
+    # ``.tmp`` file into assetdir before persistence — for a test
+    # without a real on-disk file we patch the rename out; same for
+    # the url_fails reachability probe.
+    local_video_uri = '/data/anthias_assets/test-video.mp4'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': local_video_uri,
+        'mimetype': 'video',
+        # v1.2 / v2 mixin requires duration=0 for video uploads (it
+        # defers ffprobe to the normalize task). v1.1 also accepts
+        # 0; we mock get_video_duration so its synchronous probe
+        # doesn't try to ffprobe a non-existent path.
+        'duration': 0,
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+
+    with (
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_dispatch,
+        mock.patch('anthias_server.processing._stamp_processing_start'),
+        mock.patch('anthias_server.api.serializers.mixins.rename'),
+        mock.patch('anthias_server.api.serializers.v1_1.rename'),
+        mock.patch(
+            'anthias_server.api.serializers.mixins.validate_uri',
+            return_value=True,
+        ),
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.url_fails',
+            return_value=False,
+        ),
+        # v1.1's prepare_asset calls get_video_duration synchronously
+        # when duration is 0; return a non-None timedelta so the
+        # validator accepts the row.
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.get_video_duration',
+            return_value=__import__('datetime').timedelta(seconds=10),
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    asset_id = response.data['asset_id']
+    mock_dispatch.assert_called_once_with(asset_id)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1_2', 'v2'])
+def test_create_heic_image_dispatches_normalize_task_on_v1_2_and_v2(
+    api_client: APIClient,
+    version: str,
+) -> None:
+    """HEIC uploads route through ``normalize_image_asset`` on v1.2 / v2
+    only — image normalisation deliberately stays opt-in for the older
+    endpoints (see ``CreateAssetSerializerV1_1._pending_normalize``
+    docstring for the rationale). Same dispatch-gap regression guard as
+    the video test but scoped to the versions where image normalize is
+    wired."""
+    local_heic_uri = '/data/anthias_assets/test-image.heic'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': local_heic_uri,
+        'mimetype': 'image',
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+
+    with (
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_image'
+        ) as mock_dispatch,
+        mock.patch('anthias_server.processing._stamp_processing_start'),
+        mock.patch('anthias_server.api.serializers.mixins.rename'),
+        mock.patch(
+            'anthias_server.api.serializers.mixins.validate_uri',
+            return_value=True,
+        ),
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    asset_id = response.data['asset_id']
+    mock_dispatch.assert_called_once_with(asset_id)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1'])
+def test_create_heic_image_does_not_dispatch_on_legacy_endpoints(
+    api_client: APIClient,
+    version: str,
+) -> None:
+    """v1 / v1.1 deliberately do NOT route HEIC uploads through the
+    image-normalize pipeline. Image normalisation is opt-in via v1.2 /
+    v2 — promoting it on the legacy endpoints would change synchronous
+    availability semantics for older clients (see
+    ``CreateAssetSerializerV1_1._pending_normalize`` docstring).
+
+    The flip side of GH #2870: video normalisation IS dispatched on
+    v1 / v1.1 (the bug being fixed), but image normalisation stays
+    where it was. This test guards against a future "consistency"
+    refactor accidentally promoting image dispatch onto the legacy
+    surface."""
+    local_heic_uri = '/data/anthias_assets/test-image.heic'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': local_heic_uri,
+        'mimetype': 'image',
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+
+    with (
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_image'
+        ) as mock_dispatch,
+        mock.patch('anthias_server.api.serializers.v1_1.rename'),
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.url_fails',
+            return_value=False,
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    mock_dispatch.assert_not_called()
