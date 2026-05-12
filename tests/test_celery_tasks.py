@@ -974,6 +974,7 @@ from datetime import timedelta  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from anthias_server.celery_tasks import (  # noqa: E402
+    RECONCILE_STUCK_LOCK_KEY,
     RECONCILE_STUCK_THRESHOLD_S,
     reconcile_stuck_processing,
 )
@@ -1200,3 +1201,79 @@ def test_reconcile_skips_rows_not_processing(
         reconcile_stuck_processing.apply()
 
     mock_video.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_reconcile_treats_naive_timestamp_as_unstamped(
+    eager_celery_reconcile: None,
+) -> None:
+    """A naive (no tzinfo) ISO-8601 string in
+    ``metadata.processing_started_at`` could come from a hand-edited
+    backup. Comparing it against the tz-aware ``cutoff`` would raise
+    ``TypeError`` and abort the sweep — handle it the same way as a
+    malformed string: stamp on first sight, re-evaluate on the next
+    sweep. Guards against a single bad row breaking the whole sweep
+    for everyone else."""
+    naive = '2020-01-01T00:00:00'  # well past threshold, but no tz
+    _make_stuck_asset(
+        asset_id='naive-ts',
+        processing_started_at=naive,
+        mimetype='video',
+    )
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+    a = Asset.objects.get(asset_id='naive-ts')
+    # The naive value was overwritten with a fresh tz-aware stamp.
+    new_stamp = a.metadata['processing_started_at']
+    assert new_stamp != naive
+    from datetime import datetime
+
+    assert datetime.fromisoformat(new_stamp).tzinfo is not None
+
+
+@pytest.mark.django_db
+def test_reconcile_lock_prevents_overlap(
+    eager_celery_reconcile: None,
+) -> None:
+    """A second beat tick that fires while the reconciler is running
+    must be a no-op. Mirrors ``revalidate_asset_urls`` behaviour: only
+    one sweep at a time re-dispatches a given stuck row, regardless of
+    how many workers run embedded beat."""
+    old = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+    ).isoformat()
+    _make_stuck_asset(processing_started_at=old, mimetype='video')
+
+    # Pre-acquire the lock to simulate a sweep already in flight.
+    celery_tasks_module.r.set(RECONCILE_STUCK_LOCK_KEY, 'someone-else')
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    # Saw the lock and exited without re-dispatching.
+    mock_video.assert_not_called()
+    # Critically did NOT clobber the existing holder's token.
+    assert (
+        celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) == 'someone-else'
+    )
+
+
+@pytest.mark.django_db
+def test_reconcile_lock_released_after_clean_run(
+    eager_celery_reconcile: None,
+) -> None:
+    """The ``finally`` block must release our token so the next beat
+    tick can run."""
+    _make_stuck_asset(processing_started_at=None, mimetype='video')
+
+    with mock.patch('anthias_server.processing.dispatch_normalize_video'):
+        reconcile_stuck_processing.apply()
+
+    assert celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) is None

@@ -77,12 +77,27 @@ def dispatch_download(asset_id: str, source_uri: str) -> None:
     that don't need it (e.g. the viewer or anthias_common itself).
 
     Stamps ``metadata.processing_started_at`` so the periodic
-    reconciler can recover a row whose download task was lost
-    (worker SIGKILL between enqueue and pickup, redis flake during
-    dispatch). Lives in ``anthias_server.processing`` because that's
-    where the reconciler reads the field; importing it here is
-    safe — the module is already loaded by the same celery worker
-    that runs this task.
+    ``reconcile_stuck_processing`` task can recover a YouTube row
+    whose download went missing (worker SIGKILL between enqueue and
+    pickup, redis flake during dispatch). Recovery is *not* a
+    re-download — the reconciler doesn't have the original watch URL
+    to hand to yt-dlp, and ``metadata.source_url`` is only written
+    *after* the download task completes (see
+    ``download_youtube_asset``). Instead, the row's
+    ``mimetype='video'`` routes it through the same
+    ``normalize_video_asset`` re-dispatch path as a stuck local-file
+    upload. That task's first guard is ``path.isfile(src_uri)``; for
+    a never-downloaded YouTube row this fails immediately with
+    ``FileNotFoundError`` and the ``_NormalizeAssetTask.on_failure``
+    hook clears ``is_processing`` and writes
+    ``metadata.error_message`` — giving the operator an explicit
+    "Failed" pill (with the diagnostic on hover) and a re-upload
+    affordance rather than a row stuck on "Processing" forever.
+
+    The stamp helper lives in ``anthias_server.processing`` because
+    that's where the reconciler reads the field; importing it here
+    is safe — the same celery worker that runs this task already has
+    that module loaded.
     """
     from anthias_server.celery_tasks import download_youtube_asset
     from anthias_server.processing import _stamp_processing_start
