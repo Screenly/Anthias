@@ -139,6 +139,21 @@
 
   <div id="upgrade-section"></div>
 
+  {# ===== Migrate to Screenly ===== #}
+  <section class="settings-section mt-4">
+    <header>
+      <div>
+        <h2>Migrate to Screenly</h2>
+        <p class="settings-section__lede">Copy this player's assets to a Screenly cloud account.</p>
+      </div>
+      <div class="settings-section__actions">
+        <a href="{% url 'anthias_app:migrate_to_screenly' %}" class="app-btn app-btn-outline-dark">
+          <i class="ti ti-cloud-upload"></i><span>Start migration</span>
+        </a>
+      </div>
+    </header>
+  </section>
+
   {# ===== Backup & restore ===== #}
   <section class="settings-section mt-4">
     <header>

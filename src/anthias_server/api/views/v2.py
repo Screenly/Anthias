@@ -38,8 +38,17 @@ from anthias_server.api.serializers.v2 import (
     CreateAssetSerializerV2,
     DeviceSettingsSerializerV2,
     IntegrationsSerializerV2,
+    ScreenlyMigrateAssetSerializerV2,
+    ScreenlyTokenSerializerV2,
     UpdateAssetSerializerV2,
     UpdateDeviceSettingsSerializerV2,
+)
+from anthias_server.lib.screenly_migration import (
+    MIGRATION_ASSET_GROUP_TITLE,
+    ScreenlyMigrationError,
+    ensure_asset_group,
+    migrate_asset,
+    validate_token,
 )
 from anthias_server.api.views.mixins import (
     AssetContentViewMixin,
@@ -800,3 +809,170 @@ class IntegrationsViewV2(APIView):
         serializer = self.serializer_class(data=data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.data)
+
+
+class ScreenlyValidateTokenViewV2(APIView):
+    """Probe a Screenly v4.1 API token and reserve the migration group.
+
+    Two steps in one round-trip because the wizard's UX is "click
+    Continue → either an error or the asset picker". Validating the
+    token alone would leave a follow-up call between Continue and the
+    next screen, and the asset-group creation is cheap (idempotent
+    get-or-create against ``/asset-groups``). The token is not stored;
+    each request forwards it inline.
+    """
+
+    serializer_class = ScreenlyTokenSerializerV2
+
+    @extend_schema(
+        summary='Validate a Screenly v4.1 API token and prepare the '
+        'migration asset-group',
+        request=ScreenlyTokenSerializerV2,
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'valid': {'type': 'boolean'},
+                    'asset_group_id': {
+                        'type': 'string',
+                        'nullable': True,
+                    },
+                    'asset_group_title': {
+                        'type': 'string',
+                        'nullable': True,
+                    },
+                    'error': {'type': 'string', 'nullable': True},
+                },
+            },
+        },
+    )
+    @authorized
+    def post(self, request: Request) -> Response:
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data['token']
+
+        try:
+            valid = validate_token(token)
+        except requests.RequestException as error:
+            return Response(
+                {'valid': False, 'error': f'Could not reach Screenly: {error}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not valid:
+            return Response({'valid': False})
+
+        # Pre-create the destination group so the per-asset path is a
+        # simple POST. Surfacing the failure here (rather than on every
+        # asset) gives the operator one clear error instead of N noisy
+        # ones if Screenly's group endpoint is misbehaving.
+        try:
+            asset_group_id = ensure_asset_group(
+                token, MIGRATION_ASSET_GROUP_TITLE
+            )
+        except ScreenlyMigrationError as error:
+            return Response(
+                {'valid': True, 'error': str(error)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except requests.RequestException as error:
+            return Response(
+                {
+                    'valid': True,
+                    'error': f'Could not reach Screenly: {error}',
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                'valid': True,
+                'asset_group_id': asset_group_id,
+                'asset_group_title': MIGRATION_ASSET_GROUP_TITLE,
+            }
+        )
+
+
+class ScreenlyMigrateAssetViewV2(APIView):
+    """Forward a single Anthias asset to the configured Screenly account.
+
+    Per-asset rather than batch on purpose: the UI shows live progress
+    and continues past individual failures, which matches the way
+    operators run this (large libraries, some assets reachable, some
+    not). Batching would either swallow partial failures or hand-roll
+    the same loop server-side with worse feedback.
+    """
+
+    serializer_class = ScreenlyMigrateAssetSerializerV2
+
+    @extend_schema(
+        summary='Migrate one asset to Screenly v4.1',
+        request=ScreenlyMigrateAssetSerializerV2,
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                    'screenly_asset_id': {
+                        'type': 'string',
+                        'nullable': True,
+                    },
+                    'error': {'type': 'string', 'nullable': True},
+                },
+            },
+        },
+    )
+    @authorized
+    def post(self, request: Request) -> Response:
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data['token']
+        asset_id = serializer.validated_data['asset_id']
+        asset_group_id = (
+            serializer.validated_data.get('asset_group_id') or None
+        )
+
+        try:
+            asset = Asset.objects.get(pk=asset_id)
+        except Asset.DoesNotExist:
+            return Response(
+                {'success': False, 'error': 'Asset not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            screenly_payload = migrate_asset(
+                token, asset, asset_group_id=asset_group_id
+            )
+        except ScreenlyMigrationError as error:
+            return Response({'success': False, 'error': str(error)})
+        except requests.RequestException as error:
+            return Response(
+                {'success': False, 'error': f'Network error: {error}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Screenly's create endpoint returns a postgREST-style array
+        # with a single row when ``Prefer: return=representation`` is
+        # set. Unwrap to the row before reading ``id``.
+        row: dict[str, Any] = {}
+        if isinstance(screenly_payload, list) and screenly_payload:
+            first = screenly_payload[0]
+            if isinstance(first, dict):
+                row = first
+        elif isinstance(screenly_payload, dict):
+            row = screenly_payload
+
+        # Be defensive on the field name — we want the UI to keep
+        # working if Screenly renames the id key.
+        screenly_asset_id = (
+            row.get('id') or row.get('asset_id') or row.get('ulid')
+        )
+
+        return Response(
+            {
+                'success': True,
+                'screenly_asset_id': screenly_asset_id,
+            }
+        )
