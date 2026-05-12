@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Bash-interpreter guard. `set -o pipefail` below is a bashism that
+# would abort with a cryptic message under dash/ash; surface a clear
+# error before we reach it so users running `sh install.sh` know what
+# went wrong.
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "error: install.sh must be run with bash, not sh/dash." >&2
+    exit 1
+fi
+
 set -euo pipefail
 
 BRANCH="master"
@@ -50,20 +59,16 @@ INTRO_MESSAGE=(
     "for anything else."
     ""
     "When prompted for the version, you can choose between the following:"
-    "  - **latest:** Installs the latest version from the \`master\` branch."
-    "  - **tag:** Installs a pinned version based on the tag name."
+    "  - latest: Installs the latest version from the master branch."
+    "  - tag: Installs a pinned version based on the tag name."
     ""
-    "Take note that \`latest\` is a rolling release."
+    "Take note that 'latest' is a rolling release."
 )
 MANAGE_NETWORK_PROMPT=(
     "Would you like Anthias to manage the network for you?"
 )
 VERSION_PROMPT=(
     "Which version of Anthias would you like to install?"
-)
-VERSION_PROMPT_CHOICES=(
-    "latest"
-    "tag"
 )
 SYSTEM_UPGRADE_PROMPT=(
     "Would you like to perform a full system upgrade as well?"
@@ -83,50 +88,135 @@ TITLE_TEXT=$(cat <<EOF
 EOF
 )
 
-# Install gum from Charm.sh.
-# Gum helps you write shell scripts more efficiently.
+# Anthias brand styling. The CSS palette (sass/_variables.scss) is built
+# from purples (#270035–#8819C7) and yellows (#FFD800–#FFF963); whiptail's
+# NEWT_COLORS only accepts the 16 named ANSI colors, so we map purple to
+# magenta/brightmagenta and the accent to yellow. The ANSI escapes below
+# are used for the plain-text banner/section headers that print between
+# long-running install steps, kept off when stdout is not a TTY.
+export NEWT_COLORS='
+root=,magenta
+border=brightmagenta,white
+window=black,white
+shadow=black,gray
+title=white,magenta
+button=black,yellow
+actbutton=white,brightmagenta
+compactbutton=black,white
+checkbox=black,white
+actcheckbox=yellow,brightmagenta
+entry=black,white
+disentry=gray,white
+label=black,white
+listbox=black,white
+actlistbox=white,brightmagenta
+sellistbox=black,yellow
+actsellistbox=white,brightmagenta
+textbox=black,white
+acttextbox=white,brightmagenta
+emptyscale=,white
+fullscale=,brightmagenta
+helpline=yellow,magenta
+roottext=yellow,magenta
+'
+
+if [ -t 1 ]; then
+    ANSI_PURPLE=$'\033[1;35m'
+    ANSI_YELLOW=$'\033[1;33m'
+    ANSI_RESET=$'\033[0m'
+else
+    ANSI_PURPLE=''
+    ANSI_YELLOW=''
+    ANSI_RESET=''
+fi
+
+# whiptail/jq/curl/ca-certificates ship with Debian/Raspbian by default;
+# the apt install is a safety net for minimal images. curl runs before
+# install_packages now (release menu fetch + connectivity probe), so it
+# must be present here rather than later in the pipeline.
 function install_prerequisites() {
-    if [ -f /usr/bin/gum ] && [ -f /usr/bin/jq ]; then
+    if [ -f /usr/bin/whiptail ] \
+        && [ -f /usr/bin/jq ] \
+        && [ -f /usr/bin/curl ] \
+        && [ -f /etc/ssl/certs/ca-certificates.crt ]; then
         return
     fi
 
-    sudo apt -y update && sudo apt -y install gnupg
-
-    sudo mkdir -p /etc/apt/keyrings
-    curl -fsSL https://repo.charm.sh/apt/gpg.key | \
-        sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
-        | sudo tee /etc/apt/sources.list.d/charm.list
-
-    sudo apt -y update && sudo apt -y install gum jq
+    sudo apt -y update && sudo apt -y install \
+        whiptail jq curl ca-certificates
 }
 
 function display_banner() {
     local TITLE="${1:-Anthias Installer}"
-    local COLOR="212"
-
-    gum style \
-        --foreground "${COLOR}" \
-        --border-foreground "${COLOR}" \
-        --border "thick" \
-        --margin "1 1" \
-        --padding "2 6" \
-        "${TITLE}"
+    echo
+    echo "${ANSI_PURPLE}${TITLE}${ANSI_RESET}"
+    echo
 }
 
 function display_section() {
     local TITLE="${1:-Section}"
-    local COLOR="#00FFFF"
+    local LINE="======================================================================"
+    echo
+    echo "${ANSI_YELLOW}${LINE}${ANSI_RESET}"
+    echo "${ANSI_PURPLE}  ${TITLE}${ANSI_RESET}"
+    echo "${ANSI_YELLOW}${LINE}${ANSI_RESET}"
+    echo
+}
 
-    gum style \
-        --foreground "${COLOR}" \
-        --border-foreground "${COLOR}" \
-        --border "thick" \
-        --align center \
-        --width 95 \
-        --margin "1 1" \
-        --padding "1 4" \
-        "${TITLE}"
+# Preflight: refuse to run as root, require ${USER} to be set. The
+# script elevates with sudo where needed and writes user-owned state
+# under /home/${USER}; running the whole script as root would put
+# venvs and sudoers entries in the wrong place.
+function require_supported_environment() {
+    if [ "$(id -u)" -eq 0 ] || [ "${USER:-}" = "root" ]; then
+        echo "error: install.sh must not be run as root." >&2
+        echo "       Run it as the user that will own the Anthias install" >&2
+        echo "       (e.g. 'pi' or 'anthias'); the script elevates with sudo" >&2
+        echo "       only where required." >&2
+        exit 1
+    fi
+
+    if [ -z "${USER:-}" ]; then
+        echo "error: \$USER is unset; run install.sh from a login shell." >&2
+        exit 1
+    fi
+}
+
+# Preflight: confirm github.com is reachable before we burn an apt-get
+# update + start prompting the user. Saves a long, confusing failure
+# when the device has no network configured yet.
+function require_network() {
+    if ! curl -fsSL --max-time 10 -o /dev/null "${GITHUB_API_REPO_URL}"; then
+        echo "error: cannot reach ${GITHUB_API_REPO_URL}" >&2
+        echo "       install.sh needs network access to fetch releases and" >&2
+        echo "       clone the repo. Verify connectivity and retry." >&2
+        exit 1
+    fi
+}
+
+# Emit TAG<TAB>DESCRIPTION lines for the version menu. Filters to
+# non-draft, non-prerelease releases that have a `docker-tag` asset
+# attached (the only ones the installer can actually use); capped at
+# the 10 most recent so the menu fits on an 80×24 console.
+function fetch_release_menu_options() {
+    curl -fsSL --max-time 15 \
+        "${GITHUB_API_REPO_URL}/releases?per_page=30" 2>/dev/null \
+        | jq -r '
+            .[]
+            | select(.draft == false)
+            | select(.prerelease == false)
+            | select(.assets[]?.name == "docker-tag")
+            | "\(.tag_name)\tReleased \(.published_at[0:10])"
+        ' 2>/dev/null \
+        | head -n 10 \
+        || true
+}
+
+function fetch_docker_tag_for_release() {
+    local TAG="$1"
+    curl -fsSL --max-time 15 \
+        "${GITHUB_RELEASES_URL}/download/${TAG}/docker-tag" 2>/dev/null \
+        || true
 }
 
 function initialize_ansible() {
@@ -307,7 +397,10 @@ function set_device_type() {
 
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
-    set_device_type
+
+    # DEVICE_TYPE is already exported by main() via set_device_type as
+    # a preflight, so unsupported hardware fails before the long apt
+    # pipeline starts.
 
     # Forwarded to the playbook so the screenly role can pin
     # /usr/local/sbin/upgrade_anthias.sh to the same ref the user picked.
@@ -320,8 +413,7 @@ function run_ansible_playbook() {
     # written by modify_permissions later in this script.
     if [ ! -f "/etc/sudoers.d/010_${USER}-nopasswd" ]; then
         ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
-        gum format \
-            "**Note:** Ansible may prompt for your sudo password below."
+        echo "Note: Ansible may prompt for your sudo password below."
         echo
     fi
 
@@ -428,85 +520,118 @@ function write_anthias_version() {
 function post_installation() {
     display_section "Installation Complete"
 
-    echo
-
-    gum style --foreground "#00FFFF" \
-        "A reboot is required to complete the installation." \
-        | gum format
-
+    local PROMPT="A reboot is required to complete the installation."
     if [ -n "${SSH_CONNECTION:-}" ]; then
-        echo
-        gum style --foreground "#FFAA00" \
-            "**Heads up:** you appear to be connected over SSH; rebooting will drop your session." \
-            | gum format
+        PROMPT+=$'\n\nHeads up: you appear to be connected over SSH; rebooting will drop your session.'
     fi
+    PROMPT+=$'\n\nDo you want to reboot now?'
 
-    echo
-
-    gum confirm "Do you want to reboot now?" && \
-        gum style --foreground "#FF00FF" "Rebooting..." | gum format && \
+    if whiptail \
+        --title "Anthias Installer" \
+        --yesno "${PROMPT}" 14 70; then
+        echo "Rebooting..."
         sudo reboot
+    fi
 }
 
 function set_custom_version() {
     BRANCH=$(
-        gum input \
-            --header "Enter the tag name you want to install" \
+        whiptail \
+            --title "Anthias Installer" \
+            --inputbox "Enter the tag name you want to install:" \
+            10 70 \
+            3>&1 1>&2 2>&3
     )
 
     local STATUS_CODE
-    STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-        "${GITHUB_API_REPO_URL}/git/refs/tags/${BRANCH}")
+    STATUS_CODE=$(curl -fsS -o /dev/null -w "%{http_code}" \
+        "${GITHUB_API_REPO_URL}/git/refs/tags/${BRANCH}" || echo "000")
 
     if [ "$STATUS_CODE" -ne 200 ]; then
-        gum style "Invalid tag name." \
-            | gum format
-        echo
+        whiptail \
+            --title "Anthias Installer" \
+            --msgbox "Invalid tag name." 8 60
         exit 1
     fi
 
-    local DOCKER_TAG_FILE_URL="${GITHUB_RELEASES_URL}/download/${BRANCH}/docker-tag"
-    STATUS_CODE=$(curl -sL -o /dev/null -w "%{http_code}" \
-        "$DOCKER_TAG_FILE_URL")
-
-    if [ "$STATUS_CODE" -ne 200 ]; then
-        gum style "This version doesn't have a \`docker-tag\` file." \
-            | gum format
-        echo
+    DOCKER_TAG=$(fetch_docker_tag_for_release "${BRANCH}")
+    if [ -z "${DOCKER_TAG}" ]; then
+        whiptail \
+            --title "Anthias Installer" \
+            --msgbox "This version doesn't have a docker-tag file." 8 60
         exit 1
     fi
-
-    DOCKER_TAG=$(curl -sL "$DOCKER_TAG_FILE_URL")
 }
 
 function main() {
+    require_supported_environment
+    set_device_type
+
     install_prerequisites && clear
+
+    require_network
 
     display_banner "${TITLE_TEXT}"
 
-    gum format "${INTRO_MESSAGE[@]}"
-    echo
-    gum confirm "Do you still want to continue?" || exit 0
+    local INTRO
+    INTRO=$(printf '%s\n' "${INTRO_MESSAGE[@]}")
+    whiptail \
+        --title "Anthias Installer" \
+        --yesno "${INTRO}"$'\n\nDo you still want to continue?' \
+        20 76 \
+        || exit 0
 
-    if gum confirm "${MANAGE_NETWORK_PROMPT[@]}"; then
+    if whiptail \
+        --title "Anthias Installer" \
+        --yesno "${MANAGE_NETWORK_PROMPT[*]}" 10 70; then
         export MANAGE_NETWORK="Yes"
     else
         export MANAGE_NETWORK="No"
     fi
 
+    # Build the version menu from the live GitHub release list, with
+    # "latest" pinned at the top and "other" as an escape hatch for
+    # tags not in the recent window (or if the API call is empty).
+    local -a MENU_OPTS=(
+        "latest" "Tip of master branch (rolling release)"
+    )
+    local TAG DESC
+    while IFS=$'\t' read -r TAG DESC; do
+        [ -n "${TAG}" ] && MENU_OPTS+=("${TAG}" "${DESC}")
+    done < <(fetch_release_menu_options)
+    MENU_OPTS+=("other" "Enter a specific tag name manually")
+
     VERSION=$(
-        gum choose \
-            --header "${VERSION_PROMPT[*]}" \
-            -- "${VERSION_PROMPT_CHOICES[@]}"
+        whiptail \
+            --title "Anthias Installer" \
+            --menu "${VERSION_PROMPT[*]}" 22 76 12 \
+            "${MENU_OPTS[@]}" \
+            3>&1 1>&2 2>&3
     )
 
-    if [ "${VERSION}" == "latest" ]; then
-        BRANCH="master"
-    else
-        set_custom_version
-    fi
+    case "${VERSION}" in
+        latest)
+            BRANCH="master"
+            ;;
+        other)
+            set_custom_version
+            ;;
+        *)
+            BRANCH="${VERSION}"
+            DOCKER_TAG=$(fetch_docker_tag_for_release "${BRANCH}")
+            if [ -z "${DOCKER_TAG}" ]; then
+                whiptail \
+                    --title "Anthias Installer" \
+                    --msgbox "Could not fetch docker-tag for ${BRANCH}." \
+                    8 60
+                exit 1
+            fi
+            ;;
+    esac
 
-    if gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}"; then
+    if whiptail \
+        --title "Anthias Installer" \
+        --yesno "${SYSTEM_UPGRADE_PROMPT[*]}" 10 70; then
         SYSTEM_UPGRADE="Yes"
     else
         SYSTEM_UPGRADE="No"
@@ -514,10 +639,10 @@ function main() {
     fi
 
     display_section "User Input Summary"
-    gum format "**Manage Network:**     ${MANAGE_NETWORK}"
-    gum format "**Branch/Tag:**         \`${BRANCH}\`"
-    gum format "**System Upgrade:**     ${SYSTEM_UPGRADE}"
-    gum format "**Docker Tag Prefix:**  \`${DOCKER_TAG}\`"
+    echo "Manage Network:     ${MANAGE_NETWORK}"
+    echo "Branch/Tag:         ${BRANCH}"
+    echo "System Upgrade:     ${SYSTEM_UPGRADE}"
+    echo "Docker Tag Prefix:  ${DOCKER_TAG}"
 
     initialize_ansible
     initialize_locales
