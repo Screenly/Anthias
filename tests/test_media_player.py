@@ -22,13 +22,9 @@ class _MPVFixtures:
 
 
 @pytest.fixture
-def mpv(monkeypatch: pytest.MonkeyPatch) -> Iterator[_MPVFixtures]:
+def mpv() -> Iterator[_MPVFixtures]:
     fixtures = _MPVFixtures()
     fixtures.player = MPVMediaPlayer()
-
-    # Tests assume the DRM (non-Wayland) path unless a test opts in;
-    # drop WAYLAND_DISPLAY in case the dev shell has it set.
-    monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
 
     patch_settings = patch('anthias_viewer.media_player.settings')
     patch_device_type = patch(
@@ -111,13 +107,11 @@ def test_play_does_not_pin_mode_on_x86(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_when_compositor_running(
+def test_play_uses_wayland_vo_on_x86(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict(
-        'os.environ', {'DEVICE_TYPE': 'x86', 'WAYLAND_DISPLAY': 'wayland-0'}
-    ):
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
