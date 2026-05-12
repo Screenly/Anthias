@@ -889,6 +889,13 @@ class ScreenlyValidateTokenViewV2(APIView):
         # simple POST. Surfacing the failure here (rather than on every
         # asset) gives the operator one clear error instead of N noisy
         # ones if Screenly's group endpoint is misbehaving.
+        #
+        # On failure we return ``valid: False`` (rather than
+        # ``valid: True`` paired with an error) so the field
+        # consistently means "token validated AND the wizard can
+        # proceed". A client that checks only ``valid`` won't be
+        # tricked into showing the asset picker when group setup
+        # actually failed.
         try:
             asset_group_id = ensure_asset_group(
                 token, MIGRATION_ASSET_GROUP_TITLE
@@ -899,14 +906,14 @@ class ScreenlyValidateTokenViewV2(APIView):
             # Screenly's own error string, not Python exception state),
             # so exposing the .user_message attribute is intentional.
             return Response(
-                {'valid': True, 'error': error.user_message},
+                {'valid': False, 'error': error.user_message},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         except requests.RequestException:
             logger.warning('Screenly ensure_asset_group failed', exc_info=True)
             return Response(
                 {
-                    'valid': True,
+                    'valid': False,
                     'error': _SCREENLY_NETWORK_USER_MESSAGE,
                 },
                 status=status.HTTP_502_BAD_GATEWAY,

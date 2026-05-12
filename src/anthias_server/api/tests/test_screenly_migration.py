@@ -518,7 +518,11 @@ class TestValidateTokenEndpoint:
         validate_url: str,
     ) -> None:
         # Token validated but group creation failed — operator gets
-        # one clear error, not N noisy ones.
+        # one clear error, not N noisy ones. ``valid`` must come back
+        # False on the 502 path: the field means "token validated AND
+        # the wizard can proceed", so a partial-failure (token ok but
+        # group setup busted) shouldn't read as ``valid: True`` to a
+        # client that only checks that flag.
         validate_mock.return_value = True
         group_mock.side_effect = screenly_migration.ScreenlyMigrationError(
             'boom'
@@ -528,7 +532,7 @@ class TestValidateTokenEndpoint:
         )
         assert response.status_code == 502
         body = response.json()
-        assert body['valid'] is True
+        assert body['valid'] is False
         assert 'boom' in body['error']
 
     def test_missing_token_is_400(

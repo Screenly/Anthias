@@ -374,6 +374,11 @@ function migrateToScreenly() {
         this.tokenError = 'Paste your Screenly API token first.'
         return
       }
+      // Persist the trimmed value back to state so subsequent
+      // migrate calls send the same string we just validated. A
+      // copy-paste with trailing whitespace would otherwise validate
+      // successfully and then 401 on the per-asset POSTs.
+      this.token = token
       this.validating = true
       try {
         const { ok, status, payload } = await postJson(ENDPOINTS.validate, { token })
