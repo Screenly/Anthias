@@ -241,12 +241,12 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     ]
 
     if is_qt6:
-        # pi4-64/pi5 use mpv --vo=drm; x86 uses mpv --vo=dmabuf-wayland
-        # under cage (see MPVMediaPlayer.play in
-        # src/anthias_viewer/media_player.py). VLC is deliberately
-        # *not* installed: MediaPlayerProxy routes Qt6 boards to
-        # MPVMediaPlayer, so VLC would just be ~80–100 MB of dead
-        # weight here.
+        # pi4-64/pi5 use mpv --vo=drm; x86 uses mpv --vo=gpu
+        # --gpu-context=wayland under cage with VAAPI hwdec (see
+        # MPVMediaPlayer.play in src/anthias_viewer/media_player.py).
+        # VLC is deliberately *not* installed: MediaPlayerProxy routes
+        # Qt6 boards to MPVMediaPlayer, so VLC would just be ~80–100 MB
+        # of dead weight here.
         viewer_extra_apt_dependencies.extend(
             [
                 'mpv',
