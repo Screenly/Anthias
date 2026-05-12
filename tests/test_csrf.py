@@ -13,6 +13,15 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
+# The whole point of this suite is exercising plain-HTTP Origin headers
+# against an HTTP-served Anthias — that's the deployment shape the bug
+# happens on. Sonar's S5332 would flag every ``HTTP_ORIGIN='http://...'``
+# call site, so funnel through module-level constants with a single
+# NOSONAR per literal.
+_HTTP_SAME_HOST_ORIGIN = 'http://anthias.local'  # NOSONAR
+_HTTP_CROSS_HOST_ORIGIN = 'http://attacker.example'  # NOSONAR
+_HTTPS_SAME_HOST_ORIGIN = 'https://anthias.local'
+
 
 def _seed_form_token(client: Client, host: str) -> str:
     """Render the home page so the middleware sets ``csrftoken`` on
@@ -38,7 +47,7 @@ def test_same_host_http_origin_passes() -> None:
         reverse('anthias_app:assets_control', args=['next']),
         data={'csrfmiddlewaretoken': token},
         HTTP_HOST='anthias.local',
-        HTTP_ORIGIN='http://anthias.local',
+        HTTP_ORIGIN=_HTTP_SAME_HOST_ORIGIN,
     )
     assert response.status_code == 302
 
@@ -55,7 +64,7 @@ def test_same_host_https_origin_on_http_passes() -> None:
         reverse('anthias_app:assets_control', args=['next']),
         data={'csrfmiddlewaretoken': token},
         HTTP_HOST='anthias.local',
-        HTTP_ORIGIN='https://anthias.local',
+        HTTP_ORIGIN=_HTTPS_SAME_HOST_ORIGIN,
     )
     assert response.status_code == 302
 
@@ -68,7 +77,7 @@ def test_cross_host_origin_still_rejected() -> None:
         reverse('anthias_app:assets_control', args=['next']),
         data={'csrfmiddlewaretoken': token},
         HTTP_HOST='anthias.local',
-        HTTP_ORIGIN='http://attacker.example',
+        HTTP_ORIGIN=_HTTP_CROSS_HOST_ORIGIN,
     )
     assert response.status_code == 403
 
@@ -83,7 +92,7 @@ def test_missing_token_still_rejected() -> None:
     response = client.post(
         reverse('anthias_app:assets_control', args=['next']),
         HTTP_HOST='anthias.local',
-        HTTP_ORIGIN='https://anthias.local',
+        HTTP_ORIGIN=_HTTPS_SAME_HOST_ORIGIN,
     )
     assert response.status_code == 403
 
@@ -96,7 +105,7 @@ def test_bad_token_still_rejected() -> None:
         reverse('anthias_app:assets_control', args=['next']),
         data={'csrfmiddlewaretoken': 'not-the-real-token-12345678'},
         HTTP_HOST='anthias.local',
-        HTTP_ORIGIN='https://anthias.local',
+        HTTP_ORIGIN=_HTTPS_SAME_HOST_ORIGIN,
     )
     assert response.status_code == 403
 

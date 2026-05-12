@@ -116,7 +116,11 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
+    # SameHostOriginCsrfMiddleware subclasses Django's
+    # ``CsrfViewMiddleware`` (see src/anthias_server/lib/csrf.py) — CSRF
+    # protection is still in place. Sonar's S4502 pattern-matches the
+    # bare class name though, so flag this site as reviewed.
+    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',  # NOSONAR
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
