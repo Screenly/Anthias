@@ -74,8 +74,10 @@ ALLOWED_HOSTS = [
 # CSRF_TRUSTED_ORIGINS is intentionally not set. Django only honours
 # subdomain wildcards there (e.g. https://*.example.com), so a leading
 # 'http://*' / 'https://*' would be a no-op rather than the broad
-# allowlist it appears to be. Same-origin POSTs pass without it via
-# Django's built-in Host/Origin equality check.
+# allowlist it appears to be. Same-host POSTs still pass through the
+# custom SameHostOriginCsrfMiddleware below, which also tolerates
+# scheme drift caused by a TLS-terminating proxy in front of
+# anthias-server (issue #2867).
 
 
 # Application definition
@@ -114,7 +116,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
