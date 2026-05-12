@@ -557,12 +557,11 @@ def test_create_youtube_asset_dispatches_celery_task(
 # Viewer wake-ups on mutation — issue #2430
 # ---------------------------------------------------------------------------
 #
-# Delete / update / reorder must publish ``reload`` so the viewer can
-# advance past the just-modified asset instead of finishing its
-# originally-scheduled duration on screen. The viewer-side decision of
-# whether to actually skip lives in _skip_if_current_asset_inactive
-# (tested in tests/test_viewer.py); here we just assert the wake-up
-# is sent.
+# Delete / update must publish ``reload`` so the viewer can advance
+# past the just-modified asset instead of finishing its originally-
+# scheduled duration on screen. The viewer-side decision of whether to
+# actually skip lives in _skip_if_current_asset_inactive (tested in
+# tests/test_viewer.py); here we just assert the wake-up is sent.
 
 
 @pytest.mark.django_db
@@ -586,6 +585,7 @@ def test_delete_asset_publishes_reload(
     'version,publisher_target',
     [
         ('v1', 'anthias_server.api.views.v1.ViewerPublisher'),
+        ('v1_1', 'anthias_server.api.views.v1_1.ViewerPublisher'),
         ('v1_2', 'anthias_server.api.helpers.ViewerPublisher'),
         ('v2', 'anthias_server.api.helpers.ViewerPublisher'),
     ],
@@ -593,7 +593,7 @@ def test_delete_asset_publishes_reload(
 def test_update_asset_publishes_reload(
     api_client: APIClient, version: str, publisher_target: str
 ) -> None:
-    """v1.put writes its own publish; v1_2/v2 share the helper."""
+    """v1.x put writes its own publish; v1_2/v2 share the helper."""
     with mock.patch(publisher_target) as publisher_mock:
         publisher_instance = mock.MagicMock()
         publisher_mock.get_instance.return_value = publisher_instance
@@ -606,24 +606,3 @@ def test_update_asset_publishes_reload(
         _update_asset(api_client, asset['asset_id'], data, version)
 
         publisher_instance.send_to_viewer.assert_called_once_with('reload')
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    'url_name', ['api:playlist_order_v1', 'api:playlist_order_v2']
-)
-@mock.patch('anthias_server.api.views.mixins.ViewerPublisher')
-def test_playlist_order_publishes_reload(
-    publisher_mock: Any, api_client: APIClient, url_name: str
-) -> None:
-    publisher_instance = mock.MagicMock()
-    publisher_mock.get_instance.return_value = publisher_instance
-
-    asset = _create_asset(api_client, ASSET_CREATION_DATA, 'v2')
-
-    response = api_client.post(
-        reverse(url_name), data={'ids': asset['asset_id']}
-    )
-
-    assert response.status_code == status.HTTP_204_NO_CONTENT
-    publisher_instance.send_to_viewer.assert_called_once_with('reload')

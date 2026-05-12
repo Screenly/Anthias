@@ -301,11 +301,6 @@ class PlaylistOrderViewMixin(APIView):
         asset_ids = request.data.get('ids', '').split(',')
         save_active_assets_ordering(asset_ids)
 
-        # Reordering can drop an asset from the active set (it's now
-        # absent from the ids list). Notify the viewer so it can skip
-        # past the displayed asset if that happened (issue #2430).
-        ViewerPublisher.get_instance().send_to_viewer('reload')
-
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
