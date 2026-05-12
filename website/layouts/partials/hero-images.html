@@ -1,0 +1,25 @@
+{{- /* Single source of truth for the home-page hero images. Returns
+       a dict of the original PNG resources and their WebP variants so
+       both <head> preloads (baseof.html) and the <picture> markup
+       (index.html) stay in lockstep. Wrap calls in partialCached so
+       the .Process "webp" work runs once per build. */ -}}
+{{- $mobile1x := resources.Get "images/overview-mobile.png" -}}
+{{- $mobile2x := resources.Get "images/overview-mobile@2x.png" -}}
+{{- $mobile3x := resources.Get "images/overview-mobile@3x.png" -}}
+{{- $desk1x   := resources.Get "images/overview.png" -}}
+{{- $desk2x   := resources.Get "images/overview@2x.png" -}}
+{{- $desk3x   := resources.Get "images/overview@3x.png" -}}
+{{- return dict
+    "mobile1x"  $mobile1x
+    "mobile2x"  $mobile2x
+    "mobile3x"  $mobile3x
+    "desk1x"    $desk1x
+    "desk2x"    $desk2x
+    "desk3x"    $desk3x
+    "mobile1xW" ($mobile1x.Process "webp")
+    "mobile2xW" ($mobile2x.Process "webp")
+    "mobile3xW" ($mobile3x.Process "webp")
+    "desk1xW"   ($desk1x.Process   "webp")
+    "desk2xW"   ($desk2x.Process   "webp")
+    "desk3xW"   ($desk3x.Process   "webp")
+-}}

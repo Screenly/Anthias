@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from viewer.media_player import (
+from anthias_viewer.media_player import (
     MPVMediaPlayer,
     MediaPlayerProxy,
     VLCMediaPlayer,
@@ -22,13 +22,13 @@ class _MPVFixtures:
 
 
 @pytest.fixture
-def mpv(monkeypatch: pytest.MonkeyPatch) -> Iterator[_MPVFixtures]:
+def mpv() -> Iterator[_MPVFixtures]:
     fixtures = _MPVFixtures()
     fixtures.player = MPVMediaPlayer()
 
-    patch_settings = patch('viewer.media_player.settings')
+    patch_settings = patch('anthias_viewer.media_player.settings')
     patch_device_type = patch(
-        'viewer.media_player.get_device_type', return_value='pi4'
+        'anthias_viewer.media_player.get_device_type', return_value='pi4'
     )
 
     fixtures.mock_settings = patch_settings.start()
@@ -43,10 +43,10 @@ def mpv(monkeypatch: pytest.MonkeyPatch) -> Iterator[_MPVFixtures]:
 
 
 @patch(
-    'viewer.media_player._detect_hdmi_audio_device',
+    'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_invokes_popen_with_expected_args(
     mock_popen: Any, _mock_detect: Any, mpv: _MPVFixtures
 ) -> None:
@@ -69,7 +69,7 @@ def test_play_invokes_popen_with_expected_args(
     )
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_pins_1080p_mode_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -84,7 +84,7 @@ def test_play_pins_1080p_mode_on_pi4_64(
     assert '--hwdec=v4l2m2m-copy' not in args[0]
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_pins_1080p_mode_on_pi5(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -97,7 +97,7 @@ def test_play_pins_1080p_mode_on_pi5(
     assert '--vd-lavc-threads=4' in args[0]
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_does_not_pin_mode_on_x86(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -110,7 +110,21 @@ def test_play_does_not_pin_mode_on_x86(
     assert '--vd-lavc-threads=4' not in args[0]
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_wayland_vo_on_x86(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--vo=gpu' in args[0]
+    assert '--gpu-context=wayland' in args[0]
+    assert '--vo=drm' not in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_uses_local_audio_device_when_configured(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -122,7 +136,7 @@ def test_play_uses_local_audio_device_when_configured(
     assert '--audio-device=alsa/plughw:CARD=Headphones' in args[0]
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_reloads_settings_each_call(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -131,7 +145,7 @@ def test_play_reloads_settings_each_call(
     mpv.mock_settings.load.assert_called_once()
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_is_playing_returns_true_when_process_running(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -145,7 +159,7 @@ def test_is_playing_returns_true_when_process_running(
     assert mpv.player.is_playing()
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_is_playing_returns_false_when_process_finished(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -163,7 +177,7 @@ def test_is_playing_returns_false_when_no_process(mpv: _MPVFixtures) -> None:
     assert not mpv.player.is_playing()
 
 
-@patch('viewer.media_player.subprocess.Popen')
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_stop_terminates_process(mock_popen: Any, mpv: _MPVFixtures) -> None:
     mock_process = MagicMock()
     mock_popen.return_value = mock_process
@@ -178,7 +192,7 @@ def test_stop_terminates_process(mock_popen: Any, mpv: _MPVFixtures) -> None:
 
 @pytest.fixture
 def alsa_settings() -> Iterator[Any]:
-    patch_settings = patch('viewer.media_player.settings')
+    patch_settings = patch('anthias_viewer.media_player.settings')
     mock_settings = patch_settings.start()
     try:
         yield mock_settings
@@ -188,7 +202,9 @@ def alsa_settings() -> Iterator[Any]:
 
 def test_local_on_pi5_uses_hdmi_card(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'local'
-    with patch('viewer.media_player.get_device_type', return_value='pi5'):
+    with patch(
+        'anthias_viewer.media_player.get_device_type', return_value='pi5'
+    ):
         assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
@@ -198,7 +214,7 @@ def test_local_on_other_pi_uses_headphones(
 ) -> None:
     alsa_settings.__getitem__.return_value = 'local'
     with patch(
-        'viewer.media_player.get_device_type',
+        'anthias_viewer.media_player.get_device_type',
         return_value=device_type,
     ):
         assert get_alsa_audio_device() == 'plughw:CARD=Headphones'
@@ -211,11 +227,11 @@ def test_hdmi_on_pi4_pi5_uses_detected_device(
     alsa_settings.__getitem__.return_value = 'hdmi'
     with (
         patch(
-            'viewer.media_player.get_device_type',
+            'anthias_viewer.media_player.get_device_type',
             return_value=device_type,
         ),
         patch(
-            'viewer.media_player._detect_hdmi_audio_device',
+            'anthias_viewer.media_player._detect_hdmi_audio_device',
             return_value='sysdefault:CARD=vc4hdmi1',
         ) as mock_detect,
     ):
@@ -229,7 +245,7 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
 ) -> None:
     alsa_settings.__getitem__.return_value = 'hdmi'
     with patch(
-        'viewer.media_player.get_device_type',
+        'anthias_viewer.media_player.get_device_type',
         return_value=device_type,
     ):
         assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi'
@@ -237,12 +253,14 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
 
 def test_hdmi_on_x86_falls_back_to_hid(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'hdmi'
-    with patch('viewer.media_player.get_device_type', return_value='x86'):
+    with patch(
+        'anthias_viewer.media_player.get_device_type', return_value='x86'
+    ):
         assert get_alsa_audio_device() == 'sysdefault:CARD=HID'
 
 
 def test_detect_hdmi_returns_first_connected_port() -> None:
-    from viewer.media_player import _detect_hdmi_audio_device
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
 
     statuses = {
         '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
@@ -258,14 +276,17 @@ def test_detect_hdmi_returns_first_connected_port() -> None:
         return StringIO(statuses[path])
 
     with (
-        patch('viewer.media_player.os.path.exists', side_effect=fake_exists),
+        patch(
+            'anthias_viewer.media_player.os.path.exists',
+            side_effect=fake_exists,
+        ),
         patch('builtins.open', side_effect=fake_open),
     ):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
 def test_detect_hdmi_returns_second_port_when_only_it_is_connected() -> None:
-    from viewer.media_player import _detect_hdmi_audio_device
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
 
     statuses = {
         '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
@@ -281,24 +302,31 @@ def test_detect_hdmi_returns_second_port_when_only_it_is_connected() -> None:
         return StringIO(statuses[path])
 
     with (
-        patch('viewer.media_player.os.path.exists', side_effect=fake_exists),
+        patch(
+            'anthias_viewer.media_player.os.path.exists',
+            side_effect=fake_exists,
+        ),
         patch('builtins.open', side_effect=fake_open),
     ):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi1'
 
 
 def test_detect_hdmi_falls_back_when_no_status_files() -> None:
-    from viewer.media_player import _detect_hdmi_audio_device
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
 
-    with patch('viewer.media_player.os.path.exists', return_value=False):
+    with patch(
+        'anthias_viewer.media_player.os.path.exists', return_value=False
+    ):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
 def test_detect_hdmi_falls_back_on_oserror() -> None:
-    from viewer.media_player import _detect_hdmi_audio_device
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
 
     with (
-        patch('viewer.media_player.os.path.exists', return_value=True),
+        patch(
+            'anthias_viewer.media_player.os.path.exists', return_value=True
+        ),
         patch('builtins.open', side_effect=OSError('boom')),
     ):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
@@ -322,9 +350,9 @@ def vlc() -> Iterator[_VLCFixtures]:
     fixtures.mock_vlc_player.get_media.return_value = fixtures.mock_media
     fixtures.player.player = fixtures.mock_vlc_player
 
-    patch_settings = patch('viewer.media_player.settings')
+    patch_settings = patch('anthias_viewer.media_player.settings')
     patch_device_type = patch(
-        'viewer.media_player.get_device_type', return_value='pi4'
+        'anthias_viewer.media_player.get_device_type', return_value='pi4'
     )
 
     fixtures.mock_settings = patch_settings.start()
@@ -361,7 +389,7 @@ def test_get_instance_returns_vlc_for_pi_devices(
     MediaPlayerProxy.INSTANCE = None
     with (
         patch(
-            'viewer.media_player.get_device_type',
+            'anthias_viewer.media_player.get_device_type',
             return_value=device_type,
         ),
         patch.dict('os.environ', {'DEVICE_TYPE': device_type}),
@@ -377,7 +405,7 @@ def test_get_instance_returns_mpv_for_pi5_and_x86(
 ) -> None:
     MediaPlayerProxy.INSTANCE = None
     with patch(
-        'viewer.media_player.get_device_type',
+        'anthias_viewer.media_player.get_device_type',
         return_value=device_type,
     ):
         instance = MediaPlayerProxy.get_instance()
@@ -387,14 +415,16 @@ def test_get_instance_returns_mpv_for_pi5_and_x86(
 def test_get_instance_returns_mpv_for_pi4_64(reset_media_proxy: None) -> None:
     MediaPlayerProxy.INSTANCE = None
     with (
-        patch('viewer.media_player.get_device_type', return_value='pi4'),
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='pi4'
+        ),
         patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
     ):
         instance = MediaPlayerProxy.get_instance()
     assert isinstance(instance, MPVMediaPlayer)
 
 
-@patch('viewer.media_player.get_device_type', return_value='pi5')
+@patch('anthias_viewer.media_player.get_device_type', return_value='pi5')
 def test_get_instance_returns_same_instance(
     _: Any, reset_media_proxy: None
 ) -> None:

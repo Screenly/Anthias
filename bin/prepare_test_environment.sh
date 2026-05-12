@@ -32,7 +32,7 @@ while getopts "sh" arg; do
 done
 
 cp tests/assets/asset.mov /tmp/asset.mov
-cp static/img/standby.png /tmp/image.png
+cp src/anthias_server/app/static/img/standby.png /tmp/image.png
 cp tests/config/ffserver.conf /etc/ffserver.conf
 
 cat << 'EOF' > $HOME/.bashrc
@@ -50,9 +50,9 @@ if [ "$START_SERVER" = true ]; then
 
     bun install && bun run build
 
-    ./manage.py makemigrations
-    ./manage.py migrate --fake-initial
-    uvicorn anthias_django.asgi:application \
+    python -m anthias_server.manage makemigrations
+    python -m anthias_server.manage migrate --fake-initial
+    uvicorn anthias_server.django_project.asgi:application \
         --host 127.0.0.1 --port 8080 &
 
     sleep 3

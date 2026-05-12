@@ -64,13 +64,23 @@ def fake_settings(raw: str) -> Iterator[tuple[Any, Any]]:
     # `settings` cleanly would leave the module cached, and `import
     # settings` here would skip __init__ entirely — silently accepting
     # any config (including the broken-by-design fixture).
-    sys.modules.pop('settings', None)
+    # Force a fresh import: pop the submodule from sys.modules AND
+    # delete the cached attribute on the parent package, otherwise
+    # `from anthias_server import settings` returns the stale module
+    # object via the parent's namespace and __init__ never re-runs.
+    sys.modules.pop('anthias_server.settings', None)
+    import anthias_server as _anthias_server
+
+    if hasattr(_anthias_server, 'settings'):
+        del _anthias_server.settings
     try:
-        import settings
+        from anthias_server import settings
 
         yield (settings, settings.settings)
     finally:
-        sys.modules.pop('settings', None)
+        sys.modules.pop('anthias_server.settings', None)
+        if hasattr(_anthias_server, 'settings'):
+            del _anthias_server.settings
         os.remove(CONFIG_FILE)
 
 

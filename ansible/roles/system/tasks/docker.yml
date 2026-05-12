@@ -20,29 +20,38 @@
 
 - name: Set system_architecture
   ansible.builtin.set_fact:
-    system_architecture: >-
-      {{
-        'amd64' if ansible_architecture == 'x86_64'
-        else ('arm64' if device_type in ['pi4', 'pi5']
-                          and ansible_userspace_bits == '64'
-        else 'armhf')
-      }}
+    # Map every validated device_type (see site.yml) to a dpkg
+    # architecture. Exhaustive by design: an unmapped device_type
+    # raises rather than falling through to a default. The previous
+    # form used `device_type in ['pi4', 'pi5']`, which silently
+    # missed `pi4-64` after #2779 renamed the value, and every Pi 4
+    # ran an upgrade resolving to armhf as a result.
+    system_architecture: "{{ docker_arch_by_device_type[device_type] }}"
+  vars:
+    docker_arch_by_device_type:
+      x86: amd64
+      pi5: arm64
+      pi4-64: arm64
+      pi3: armhf
+      pi2: armhf
 
 - name: Add Docker repo
-  ansible.builtin.lineinfile:
-    path: /etc/apt/sources.list.d/docker.list
-    create: true
-    line: >-
-      deb [arch={{ system_architecture }}
-      signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/debian
-      {{ ansible_distribution_release }} stable
-    state: present
+  # copy, not lineinfile, so a stale `[arch=...]` entry from an earlier
+  # run is rewritten rather than left sitting alongside the correct one.
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: >
+      deb [arch={{ system_architecture }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable
     owner: root
     group: root
-    mode: "0644"
+    # World-readable required so the `_apt` user can read the source list.
+    mode: "0644"  # NOSONAR
 
 - name: Install Docker
+  # On hosts already running the wrong arch, apt swaps automatically:
+  # docker-ce is Multi-Arch: foreign so requesting `:arm64` removes
+  # the `:armhf` install (and pulls dependencies in the new arch).
   ansible.builtin.apt:
     name:
       - docker-ce:{{ system_architecture }}

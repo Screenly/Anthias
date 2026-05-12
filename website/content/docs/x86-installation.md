@@ -12,6 +12,12 @@ Anthias runs on any 64-bit PC (something like an Intel NUC works well) once you'
 >
 > Anthias supports **64-bit Debian 13 (Trixie)** and **64-bit Debian 12 (Bookworm)** on PCs.
 
+> **No desktop environment required (or wanted)**
+>
+> The host runs headless — no GNOME, no KDE, no Xorg, no display manager. The Anthias viewer container ships its own minimal Wayland compositor (`cage`, a wlroots-based kiosk compositor) which acquires DRM master directly from the kernel and renders straight to the HDMI output. A pre-installed desktop would compete with it for the display and break the boot-to-content experience.
+>
+> If you already installed Debian with a desktop, remove it (`sudo apt purge --auto-remove gnome\* xserver-xorg\* lightdm gdm3 sddm` and reboot) before continuing.
+
 ## What you'll need
 
 * A 64-bit PC (most NUCs, mini-PCs, and old laptops work).
@@ -40,7 +46,7 @@ Flash the ISO to a USB drive using one of:
 3. Power on the PC and follow the Debian installer prompts. When you reach these screens, choose:
    * **Root password:** leave it blank. Skipping the root password makes your regular user a `sudo` user automatically.
    * **Partitioning:** use the entire disk.
-   * **Software selection:** check only **SSH server** and **standard system utilities**. Uncheck everything else (no desktop environment).
+   * **Software selection:** check only **SSH server** and **standard system utilities**. **Uncheck every desktop environment** (GNOME, Xfce, KDE Plasma, …) — Anthias renders from inside a container and does not use any host-side graphical session.
 4. When the installer finishes, remove the USB drive **before** the system reboots into the freshly installed Debian.
 
 ## Step 4 — Prepare the system for Anthias

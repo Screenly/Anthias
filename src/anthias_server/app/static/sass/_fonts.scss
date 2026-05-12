@@ -1,0 +1,35 @@
+// Vendored Plus Jakarta Sans (was a Google Fonts CDN reference in
+// base.html). Files are copied from @fontsource/plus-jakarta-sans
+// into /static/dist/fonts/ by the build:fonts script.
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/static/dist/fonts/plus-jakarta-sans-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/static/dist/fonts/plus-jakarta-sans-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+// Tabler Icons webfont — 5,800+ modern line-art glyphs, MIT, ships
+// in @tabler/icons-webfont. The upstream stylesheet is loaded as a
+// separate <link> in base.html (build:icons copies the .css to
+// /static/dist/css/tabler-icons.css and the woff2 to
+// /static/dist/css/fonts/tabler-icons.woff2 so the relative font URL
+// inside the upstream CSS resolves). SASS @import of a .css file
+// emits a runtime @import url(...) instead of inlining, which then
+// fails to resolve against /static/dist/css/anthias.css's path —
+// hence the separate <link>.
+
+// Alpine sets [x-cloak] on elements that should stay hidden until
+// Alpine initialises; without this rule the cloaked markup flashes
+// visible during the initial paint.
+[x-cloak] {
+  display: none !important;
+}

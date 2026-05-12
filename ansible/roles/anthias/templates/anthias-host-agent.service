@@ -10,7 +10,8 @@ StartLimitBurst=3
 Type=simple
 User={{ anthias_user }}
 WorkingDirectory=/home/{{ anthias_user }}/anthias
-ExecStart=/home/{{ anthias_user }}/installer_venv/bin/python /home/{{ anthias_user }}/anthias/host_agent.py
+ExecStart=/home/{{ anthias_user }}/installer_venv/bin/python -m anthias_host_agent
+Environment=PYTHONPATH=/home/{{ anthias_user }}/anthias/src
 Restart=on-failure
 RestartSec=10s
 
@@ -19,7 +20,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=anthias-host-agent
 
-# Sandboxing — host_agent.py shells out to `sudo systemctl reboot|poweroff`,
+# Sandboxing — anthias_host_agent shells out to `sudo systemctl reboot|poweroff`,
 # so this profile must NOT set NoNewPrivileges. On systemd <= 252 (Debian
 # 11/12), most Protect*/Restrict* directives implicitly enable NNP and
 # would block sudo's setuid escalation, so we keep only the directives

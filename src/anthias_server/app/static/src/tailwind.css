@@ -1,0 +1,29 @@
+/* Tailwind v4 entry — utility classes + design tokens.
+ *
+ * The Anthias design system lives in SCSS (anthias.scss). Tailwind
+ * here is purely utility-class layer: spacing, flex/grid, typography
+ * helpers. Component classes (.app-btn, .surface, .modal-card, .stat-card,
+ * .schedule-chip, .schedule-window, .resource-pie, .loadavg-card,
+ * .app-toast …) stay hand-rolled so the named design surface survives
+ * the cutover from Bootstrap.
+ */
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+@theme {
+  --color-anthias-purple-1: #1f0029;
+  --color-anthias-purple-2: #3c1762;
+  --color-anthias-purple-3: #270035;
+  --color-anthias-purple-4: #5b2090;
+  --color-anthias-purple-5: #7c30cd;
+  --color-anthias-yellow-3: #FFE11A;
+  --color-anthias-yellow-4: #FFED75;
+
+  --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+}
+
+/* Tell Tailwind which files to scan for class strings. The default
+ * v4 detector covers Vue/Svelte/HTML/JSX globs but not Django's .html
+ * paths under our nested src/ tree, so we declare them explicitly. */
+@source "../../templates/**/*.html";
+@source "../src/**/*.ts";

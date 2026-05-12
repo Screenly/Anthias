@@ -20,6 +20,7 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+test-artifacts/
 
 #Translations
 *.mo
@@ -49,17 +50,22 @@ docker/Dockerfile.redis
 docker/Dockerfile.viewer
 docker/Dockerfile.test
 docker-compose.yml
+docker-compose.override.yml
 
 balena-deploy/
 db.sqlite3
 
-# Local pytest SQLite database (created by anthias_django/settings.py
-# when ENVIRONMENT=test and ANTHIAS_TEST_DB_PATH is not set). The
+# Local pytest SQLite database (created by
+# src/anthias_server/django_project/settings.py when ENVIRONMENT=test
+# and ANTHIAS_TEST_DB_PATH is not set. The
 # `-journal` / `-wal` / `-shm` siblings appear in WAL mode.
 .anthias-test.db
 .anthias-test.db-journal
 .anthias-test.db-wal
 .anthias-test.db-shm
+
+# Local agent state (Claude Code)
+.claude/
 
 # Django
 staticfiles/

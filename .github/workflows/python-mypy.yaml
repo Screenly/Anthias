@@ -44,7 +44,7 @@ jobs:
 
       - name: Prepare config directory
         run: |
-          # The django-stubs plugin imports anthias_django.settings, which
+          # The django-stubs plugin imports anthias_server.django_project.settings, which
           # transitively instantiates AnthiasSettings(). On first run that
           # tries to read ~/.anthias/anthias.conf — write a minimal valid
           # one with the section headers AnthiasSettings expects.

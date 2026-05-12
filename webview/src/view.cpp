@@ -78,6 +78,8 @@ View::View(QWidget* parent) : QWidget(parent)
     movie = nullptr;
     isAnimatedImage = false;
     loadGenerationId = 0;
+    reloadTimer = nullptr;
+    pendingReloadIntervalS = 0;
 }
 
 View::~View()
@@ -85,6 +87,7 @@ View::~View()
     if (pageLoadConnection) {
         QObject::disconnect(pageLoadConnection);
     }
+    stopReloadTimer();
     stopAnimation();
 }
 
@@ -115,6 +118,13 @@ void View::loadPage(const QString &uri)
     const quint64 requestId = ++loadGenerationId;
     currentImage = QImage();
     stopAnimation();
+    // Drop any per-asset reload timer left over from the previous
+    // webpage AND the prior asset's pending interval — the viewer
+    // calls setReloadInterval right after this with the new asset's
+    // value, so any old pending value would be wrong if it leaked
+    // into the swap that's about to happen.
+    stopReloadTimer();
+    pendingReloadIntervalS = 0;
     nextWebViewReady = false;
 
     // Drop any prior loadFinished handler before stop() — a synchronous
@@ -175,6 +185,12 @@ void View::loadImage(const QString &preUri)
         QObject::disconnect(pageLoadConnection);
         pageLoadConnection = QMetaObject::Connection{};
     }
+    // Webpage auto-refresh only applies while a webpage is on screen;
+    // killing the timer (and clearing the pending interval) here keeps
+    // a stale reload from firing into the (now hidden) QWebEngineView
+    // after the viewer rotates to an image.
+    stopReloadTimer();
+    pendingReloadIntervalS = 0;
     webView1->stop();
     webView2->stop();
 
@@ -358,6 +374,78 @@ void View::setupAnimation()
     update();
 }
 
+// Mirrors the v2 serializer's REFRESH_INTERVAL_S_MAX. Caps a hostile
+// or buggy D-Bus caller — the multiplication ``seconds * 1000`` later
+// in armReloadTimer would otherwise overflow ``int`` for values north
+// of ~2.1M and produce a wraparound cadence (small or negative). The
+// server side validates the range on write but the D-Bus contract is
+// trust-no-one (anything on the session bus could call this).
+static constexpr int kMaxReloadIntervalS = 86400;
+
+void View::setReloadInterval(int seconds)
+{
+    // Per-asset auto-refresh. The viewer calls this right after each
+    // loadPage() with the asset's metadata.refresh_interval_s value
+    // (0 when the field is absent or explicitly disabled). Stash the
+    // requested cadence and only arm the QTimer once the new page is
+    // actually visible — a load is in flight when ``pageLoadConnection``
+    // is set, in which case currentWebView is still the *previous*
+    // page and arming now would race the swap and reload the wrong
+    // page. When no load is pending — the common
+    // URL-unchanged-since-last-tick case where the viewer skips
+    // loadPage() — arm immediately. ``seconds`` is clamped to
+    // [0, kMaxReloadIntervalS] to defend against int-overflow on the
+    // millisecond multiplication done at arm time.
+    if (seconds <= 0) {
+        pendingReloadIntervalS = 0;
+    } else if (seconds > kMaxReloadIntervalS) {
+        pendingReloadIntervalS = kMaxReloadIntervalS;
+    } else {
+        pendingReloadIntervalS = seconds;
+    }
+    stopReloadTimer();
+
+    if (!pageLoadConnection) {
+        armReloadTimer();
+    }
+}
+
+void View::armReloadTimer()
+{
+    // Idempotent: callers may invoke this multiple times around a
+    // single load (setReloadInterval, then switchToNextWebView), and
+    // we always want a single live timer attached to the now-visible
+    // currentWebView.
+    stopReloadTimer();
+
+    if (pendingReloadIntervalS <= 0 || !currentWebView) {
+        return;
+    }
+
+    reloadTimer = new QTimer(this);
+    reloadTimer->setInterval(pendingReloadIntervalS * 1000);
+    // Don't qDebug() the reload itself — short intervals (5–10s) would
+    // flood journald to the point of unusability for very little
+    // diagnostic value. A failure to load shows up via the existing
+    // pageLoadConnection / loadFinished path; reload() succeeding is
+    // the boring case.
+    connect(reloadTimer, &QTimer::timeout, this, [this]() {
+        if (currentWebView) {
+            currentWebView->reload();
+        }
+    });
+    reloadTimer->start();
+}
+
+void View::stopReloadTimer()
+{
+    if (reloadTimer) {
+        reloadTimer->stop();
+        reloadTimer->deleteLater();
+        reloadTimer = nullptr;
+    }
+}
+
 void View::switchToNextWebView()
 {
     if (!nextWebViewReady) {
@@ -378,4 +466,11 @@ void View::switchToNextWebView()
     nextWebViewReady = false;
 
     qDebug() << "Successfully switched to next web view";
+
+    // The new page is now visible — safe to arm the auto-refresh
+    // timer against it. setReloadInterval may have been called while
+    // the load was in flight; it stashed the cadence in
+    // pendingReloadIntervalS and deferred to here. No-op if the asset
+    // didn't request auto-refresh.
+    armReloadTimer();
 }

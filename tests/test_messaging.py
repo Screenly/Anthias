@@ -7,15 +7,15 @@ from unittest.mock import MagicMock
 import pytest
 import redis
 
-import settings as settings_module
-from lib.errors import ReplyTimeoutError
-from settings import (
+from anthias_common.errors import ReplyTimeoutError
+from anthias_server import settings as settings_module
+from anthias_server.settings import (
     REPLY_KEY_PREFIX,
     ReplyCollector,
     ReplySender,
     ViewerPublisher,
 )
-from viewer.messaging import ViewerSubscriber
+from anthias_viewer.messaging import ViewerSubscriber
 
 logging.disable(logging.CRITICAL)
 
@@ -53,13 +53,13 @@ def test_viewer_publisher_get_instance_creates_once() -> None:
     try:
         # connect_to_redis is called inside __init__; mock it.
         with mock.patch(
-            'lib.utils.connect_to_redis', return_value=MagicMock()
+            'anthias_common.utils.connect_to_redis', return_value=MagicMock()
         ):
             inst = ViewerPublisher.get_instance()
         assert inst is ViewerPublisher.INSTANCE
         # Calling get_instance again returns the cached instance.
         with mock.patch(
-            'lib.utils.connect_to_redis', return_value=MagicMock()
+            'anthias_common.utils.connect_to_redis', return_value=MagicMock()
         ):
             assert ViewerPublisher.get_instance() is inst
     finally:
@@ -164,12 +164,12 @@ def test_reply_collector_get_instance_creates_once() -> None:
     ReplyCollector.INSTANCE = None
     try:
         with mock.patch(
-            'lib.utils.connect_to_redis', return_value=MagicMock()
+            'anthias_common.utils.connect_to_redis', return_value=MagicMock()
         ):
             inst = ReplyCollector.get_instance()
         assert inst is ReplyCollector.INSTANCE
         with mock.patch(
-            'lib.utils.connect_to_redis', return_value=MagicMock()
+            'anthias_common.utils.connect_to_redis', return_value=MagicMock()
         ):
             assert ReplyCollector.get_instance() is inst
     finally:
@@ -285,7 +285,7 @@ def test_subscriber_run_signals_ready_then_exits_on_loop_break(
         sleep_calls.append(delay)
         raise SystemExit  # break out of while True
 
-    with mock.patch('viewer.messaging.sleep', side_effect=fake_sleep):
+    with mock.patch('anthias_viewer.messaging.sleep', side_effect=fake_sleep):
         with pytest.raises(SystemExit):
             sub.run()
 

@@ -6,7 +6,7 @@ print_help() {
     echo "Usage: deploy_to_balena.sh [options]"
     echo "Options:"
     echo "  -h, --help            show this help message and exit"
-    echo "  -b, --board BOARD     specify the board to build for (pi2, pi3, pi4-64, pi5)"
+    echo "  -b, --board BOARD     specify the board to build for (pi2, pi3, pi4-64, pi5, x86)"
     echo "  -f, --fleet FLEET     specify the fleet name to deploy to"
     echo "  -s, --short-hash HASH specify the short hash to use for the image tag"
     echo "  -d, --dev             run in dev mode"
@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
         -b|--board)
             export BOARD="$2"
 
-            if [[ $BOARD =~ ^(pi2|pi3|pi4-64|pi5)$ ]]; then
+            if [[ $BOARD =~ ^(pi2|pi3|pi4-64|pi5|x86)$ ]]; then
                 echo "Building for $BOARD"
             else
                 echo "Invalid board $BOARD"
@@ -87,7 +87,8 @@ function prepare_balena_file() {
     cat docker-compose.balena.yml.tmpl | \
     envsubst > balena-deploy/docker-compose.yml
 
-    if [[ "$BOARD" == "pi5" ]]; then
+    # Pi 5 and x86 don't expose /dev/vchiq; strip the bind mount.
+    if [[ $BOARD =~ ^(pi5|x86)$ ]]; then
         sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
             balena-deploy/docker-compose.yml
     fi
@@ -114,7 +115,7 @@ else
     cat docker-compose.balena.dev.yml.tmpl | \
         envsubst > docker-compose.yml
 
-    if [[ "$BOARD" == "pi5" ]]; then
+    if [[ $BOARD =~ ^(pi5|x86)$ ]]; then
         sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
             docker-compose.yml
     fi

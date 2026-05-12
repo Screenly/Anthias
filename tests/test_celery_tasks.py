@@ -7,21 +7,23 @@ from unittest import mock
 
 import pytest
 
-import celery_tasks as celery_tasks_module
-from anthias_app.models import Asset
-from celery_tasks import celery as celeryapp
-from celery_tasks import (
+import anthias_server.celery_tasks as celery_tasks_module
+from anthias_server.app.models import Asset
+from anthias_server.celery_tasks import celery as celeryapp
+from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     asset_recheck_lock_key,
     cleanup,
+    download_youtube_asset,
     get_display_power,
+    probe_video_duration,
     reboot_anthias,
     revalidate_asset_url,
     revalidate_asset_urls,
     send_telemetry_task,
     shutdown_anthias,
 )
-from settings import settings
+from anthias_server.settings import settings
 
 
 def _set_mtime(file_path: str, age_seconds: int) -> None:
@@ -168,7 +170,7 @@ def test_get_display_power_writes_redis() -> None:
     with (
         mock.patch.object(celery_tasks_module, 'r', fake_redis),
         mock.patch(
-            'celery_tasks.diagnostics.get_display_power',
+            'anthias_server.celery_tasks.diagnostics.get_display_power',
             return_value=True,
         ),
     ):
@@ -179,7 +181,7 @@ def test_get_display_power_writes_redis() -> None:
 
 
 def test_send_telemetry_task_dispatches() -> None:
-    """The hourly Celery task is a thin wrapper over lib.telemetry."""
+    """The hourly Celery task is a thin wrapper over anthias_server.lib.telemetry."""
     with mock.patch.object(celery_tasks_module, 'send_telemetry') as mock_send:
         send_telemetry_task.apply()
     mock_send.assert_called_once_with()
@@ -282,7 +284,9 @@ def eager_celery() -> None:
 @pytest.mark.django_db
 def test_sweep_marks_unreachable_when_url_fails(eager_celery: None) -> None:
     _make_revalidation_asset()
-    with mock.patch('celery_tasks.url_fails', return_value=True):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ):
         revalidate_asset_urls.apply()
     assert not Asset.objects.get(asset_id='a1').is_reachable
 
@@ -290,7 +294,9 @@ def test_sweep_marks_unreachable_when_url_fails(eager_celery: None) -> None:
 @pytest.mark.django_db
 def test_sweep_marks_reachable_when_url_succeeds(eager_celery: None) -> None:
     _make_revalidation_asset(is_reachable=False)
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_urls.apply()
     assert Asset.objects.get(asset_id='a1').is_reachable
 
@@ -301,7 +307,9 @@ def test_sweep_updates_last_reachability_check(eager_celery: None) -> None:
 
     _make_revalidation_asset()
     before = timezone.now()
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_urls.apply()
     last = Asset.objects.get(asset_id='a1').last_reachability_check
     assert last is not None
@@ -311,7 +319,9 @@ def test_sweep_updates_last_reachability_check(eager_celery: None) -> None:
 @pytest.mark.django_db
 def test_sweep_skips_disabled_assets(eager_celery: None) -> None:
     _make_revalidation_asset(is_enabled=False, is_reachable=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_urls.apply()
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -320,7 +330,9 @@ def test_sweep_skips_disabled_assets(eager_celery: None) -> None:
 @pytest.mark.django_db
 def test_sweep_skips_processing_assets(eager_celery: None) -> None:
     _make_revalidation_asset(is_processing=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_urls.apply()
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -335,7 +347,7 @@ def test_sweep_skips_skip_asset_check_assets_entirely(
     exposes that field as 'last check' and writing it without an
     actual probe would advertise a check that never happened."""
     _make_revalidation_asset(skip_asset_check=True)
-    with mock.patch('celery_tasks.url_fails') as m:
+    with mock.patch('anthias_server.celery_tasks.url_fails') as m:
         revalidate_asset_urls.apply()
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -349,7 +361,7 @@ def test_sweep_local_file_existence_check(eager_celery: None) -> None:
         local = fh.name
     try:
         _make_revalidation_asset(uri=local)
-        with mock.patch('celery_tasks.url_fails') as m:
+        with mock.patch('anthias_server.celery_tasks.url_fails') as m:
             revalidate_asset_urls.apply()
         m.assert_not_called()
         assert Asset.objects.get(asset_id='a1').is_reachable
@@ -374,7 +386,9 @@ def test_sweep_probe_exception_does_not_kill_sweep(
             raise RuntimeError('synthetic')
         return False
 
-    with mock.patch('celery_tasks.url_fails', side_effect=fake_url_fails):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', side_effect=fake_url_fails
+    ):
         revalidate_asset_urls.apply()
 
     # 'boom' is left as-is (we don't have a probe result to write),
@@ -392,7 +406,9 @@ def test_sweep_lock_prevents_overlap(eager_celery: None) -> None:
     _make_revalidation_asset()
     # Pre-acquire the lock to simulate a sweep already in flight.
     celery_tasks_module.r.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else')
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_urls.apply()
     # The sweep saw the lock and exited without probing.
     m.assert_not_called()
@@ -415,7 +431,9 @@ def test_sweep_lock_release_does_not_clobber_different_holder(
         celery_tasks_module.r.set(ASSET_REVALIDATION_LOCK_KEY, 'someone-else')
         return False  # url_fails return — asset is reachable
 
-    with mock.patch('celery_tasks.url_fails', side_effect=steal_during_sweep):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', side_effect=steal_during_sweep
+    ):
         revalidate_asset_urls.apply()
 
     # Compare-and-delete saw a token mismatch and left the lock alone.
@@ -430,7 +448,9 @@ def test_sweep_lock_released_after_clean_run(eager_celery: None) -> None:
     """The finally clause must release the lock so the next beat tick
     can run."""
     _make_revalidation_asset()
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_urls.apply()
     assert celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY) is None
 
@@ -471,7 +491,7 @@ def _make_recheck_asset(**kwargs: object) -> Asset:
 def test_recheck_no_op_when_asset_does_not_exist(
     eager_celery_recheck: None,
 ) -> None:
-    with mock.patch('celery_tasks.url_fails') as m:
+    with mock.patch('anthias_server.celery_tasks.url_fails') as m:
         revalidate_asset_url.apply(args=('nope',))
     m.assert_not_called()
     assert celery_tasks_module.r.get(asset_recheck_lock_key('nope')) is None
@@ -480,7 +500,9 @@ def test_recheck_no_op_when_asset_does_not_exist(
 @pytest.mark.django_db
 def test_recheck_flips_is_reachable(eager_celery_recheck: None) -> None:
     _make_recheck_asset(is_reachable=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ):
         revalidate_asset_url.apply(args=('a1',))
     assert not Asset.objects.get(asset_id='a1').is_reachable
 
@@ -495,7 +517,9 @@ def test_recheck_lock_prevents_back_to_back_probes(
     _make_recheck_asset(is_reachable=False)
     # Pre-acquire the cooldown lock to simulate a recent probe.
     celery_tasks_module.r.set(asset_recheck_lock_key('a1'), '1')
-    with mock.patch('celery_tasks.url_fails', return_value=False) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ) as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert not Asset.objects.get(asset_id='a1').is_reachable
@@ -509,7 +533,9 @@ def test_recheck_acquires_lock_when_running(
     gate is what prevents concurrent ffprobe calls for the same asset
     across workers."""
     _make_recheck_asset()
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_url.apply(args=('a1',))
     assert celery_tasks_module.r.get(asset_recheck_lock_key('a1')) == '1'
 
@@ -519,7 +545,9 @@ def test_recheck_skips_disabled_asset(
     eager_celery_recheck: None,
 ) -> None:
     _make_recheck_asset(is_enabled=False, is_reachable=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -531,7 +559,9 @@ def test_recheck_skips_processing_asset(
     eager_celery_recheck: None,
 ) -> None:
     _make_recheck_asset(is_processing=True)
-    with mock.patch('celery_tasks.url_fails', return_value=True) as m:
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=True
+    ) as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').is_reachable
@@ -545,7 +575,7 @@ def test_recheck_skips_skip_asset_check_asset(
     """Operator opted out of validation; matches sweep behavior of not
     touching is_reachable / last_reachability_check."""
     _make_recheck_asset(skip_asset_check=True, is_reachable=True)
-    with mock.patch('celery_tasks.url_fails') as m:
+    with mock.patch('anthias_server.celery_tasks.url_fails') as m:
         revalidate_asset_url.apply(args=('a1',))
     m.assert_not_called()
     assert Asset.objects.get(asset_id='a1').last_reachability_check is None
@@ -558,6 +588,376 @@ def test_recheck_runs_when_no_lock_held(
 ) -> None:
     """No lock held → SETNX succeeds → probe runs."""
     _make_recheck_asset(is_reachable=False)
-    with mock.patch('celery_tasks.url_fails', return_value=False):
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails', return_value=False
+    ):
         revalidate_asset_url.apply(args=('a1',))
     assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+# ---------------------------------------------------------------------------
+# probe_video_duration — async ffprobe path used by the HTML upload view
+
+
+@pytest.mark.django_db
+def test_probe_video_duration_writes_back_real_duration() -> None:
+    """Happy path: ffprobe returns a length, the row gets it and is
+    flipped out of is_processing."""
+    from datetime import timedelta
+
+    Asset.objects.create(
+        asset_id='vid-1',
+        name='clip.mp4',
+        uri='/data/anthias_assets/probe-fixture.mp4',
+        mimetype='video',
+        duration=10,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    with mock.patch(
+        'anthias_server.celery_tasks.get_video_duration',
+        return_value=timedelta(seconds=42),
+    ):
+        probe_video_duration('vid-1')
+    a = Asset.objects.get(asset_id='vid-1')
+    assert a.duration == 42
+    assert a.is_processing is False
+
+
+@pytest.mark.django_db
+def test_probe_video_duration_clears_processing_when_ffprobe_unavailable() -> (
+    None
+):
+    """ffprobe missing → keep the seeded duration, still clear the
+    processing flag so the row leaves the placeholder state."""
+    Asset.objects.create(
+        asset_id='vid-2',
+        name='clip.mp4',
+        uri='/data/anthias_assets/probe-fixture.mp4',
+        mimetype='video',
+        duration=10,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    with mock.patch(
+        'anthias_server.celery_tasks.get_video_duration', return_value=None
+    ):
+        probe_video_duration('vid-2')
+    a = Asset.objects.get(asset_id='vid-2')
+    assert a.duration == 10
+    assert a.is_processing is False
+
+
+@pytest.mark.django_db
+def test_probe_video_duration_no_op_for_unknown_asset() -> None:
+    """Stale asset_id (deleted between enqueue and run) — task must not
+    crash. Nothing to assert beyond a clean return."""
+    probe_video_duration('does-not-exist')
+
+
+# ---------------------------------------------------------------------------
+# download_youtube_asset
+# ---------------------------------------------------------------------------
+
+
+def _make_youtube_asset(asset_id: str = 'yt-1') -> Asset:
+    """A row in the state the serializer / frontend create leaves
+    behind: mimetype=video, is_processing=True, uri pointing at the
+    local destination path, duration=0 placeholder."""
+    return Asset.objects.create(
+        asset_id=asset_id,
+        name='https://www.youtube.com/watch?v=abc',
+        uri=path.join(settings['assetdir'], f'{asset_id}.mp4'),
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+
+
+@pytest.fixture
+def fake_youtube_dl() -> Iterator[mock.MagicMock]:
+    """Patch ``yt_dlp.YoutubeDL`` with a context-manager-shaped mock.
+
+    The task does ``with YoutubeDL(opts) as ydl: ydl.extract_info(...)``,
+    so the fake has to support both __enter__ / __exit__ and
+    extract_info. Tests configure the return value (or side_effect) of
+    extract_info per case.
+    """
+    fake_cls = mock.MagicMock(name='YoutubeDL')
+    fake_inst = mock.MagicMock(name='YoutubeDL_inst')
+    fake_cls.return_value.__enter__.return_value = fake_inst
+    fake_cls.return_value.__exit__.return_value = False
+    with mock.patch.dict('sys.modules'):
+        # yt_dlp is lazy-imported inside the task; mock at module load.
+        import sys
+        import types
+
+        fake_module = types.ModuleType('yt_dlp')
+        # setattr keeps mypy happy on a dynamically-created ModuleType
+        # (a static `module.attr = ...` assignment is `attr-defined`
+        # under --strict).
+        setattr(fake_module, 'YoutubeDL', fake_cls)
+        utils_mod = types.ModuleType('yt_dlp.utils')
+
+        class FakeDownloadError(Exception):
+            pass
+
+        setattr(utils_mod, 'DownloadError', FakeDownloadError)
+        sys.modules['yt_dlp'] = fake_module
+        sys.modules['yt_dlp.utils'] = utils_mod
+        # Exposing the inst lets the test reach `.extract_info` to set
+        # return_value / side_effect; the class itself is also handy
+        # for assertions about ydl_opts.
+        fake_inst._download_error = FakeDownloadError
+        fake_inst._cls = fake_cls
+        yield fake_inst
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_success_chains_into_normalize_video(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Happy path: extract_info returns populated info; the YouTube
+    task writes title + duration + ``metadata['source']`` /
+    ``metadata['source_url']``, fires the browser-side notify hop,
+    and dispatches ``normalize_video_asset`` so the per-board codec
+    grid runs on the downloaded file. ``is_processing`` deliberately
+    stays True — normalize clears it once its probe + (optional)
+    transcode finishes, giving the operator a single Processing →
+    Done state transition rather than the previous flicker."""
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {
+        'title': 'Never Gonna Give You Up',
+        'duration': 213,
+    }
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch(
+            'anthias_common.utils.connect_to_redis', return_value=fake_redis
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as mock_notify,
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_dispatch_normalize,
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    a = Asset.objects.get(asset_id='yt-1')
+    assert a.name == 'Never Gonna Give You Up'
+    assert a.duration == 213
+    # Row stays in-flight until normalize finishes.
+    assert a.is_processing is True
+    # YouTube origin recorded so an operator can tell at a glance
+    # where the row came from, and the original URL is recoverable
+    # after ``name`` is overwritten with the resolved title.
+    assert a.metadata['source'] == 'youtube'
+    assert a.metadata['source_url'] == 'https://www.youtube.com/watch?v=abc'
+
+    # Browser-side notify fires so the dashboard picks up the title.
+    mock_notify.assert_called_once_with('yt-1')
+    # Viewer reload publish does NOT — the row is still
+    # is_processing=True, so the on-device viewer would just reload
+    # to a row it can't display anyway. The chained
+    # normalize_video_asset publishes the reload once is_processing
+    # clears.
+    fake_redis.publish.assert_not_called()
+    mock_dispatch_normalize.assert_called_once_with('yt-1')
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_writes_to_persisted_uri(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """The output path passed to yt-dlp must be the row's persisted
+    uri, not a fresh recomputation from settings['assetdir']. If
+    assetdir was changed between the create call and task pickup
+    (operator edited ~/.anthias/anthias.conf), recomputing here
+    would write the file to the new path while the row still
+    points at the old, and the viewer would see a missing file."""
+    Asset.objects.create(
+        asset_id='yt-uri',
+        name='https://youtu.be/abc',
+        # Pin the row to a non-default path: the task must trust this
+        # value rather than rebuilding it from settings.
+        uri='/custom/assetdir/yt-uri.mp4',
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 5}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-uri', 'https://youtu.be/abc')
+    # ydl_opts is the first positional arg to the YoutubeDL ctor.
+    fake_cls = fake_youtube_dl._cls
+    fake_cls.assert_called_once()
+    ydl_opts = fake_cls.call_args.args[0]
+    assert ydl_opts['outtmpl'] == '/custom/assetdir/yt-uri.mp4'
+    # The row already had a uri; the task must not stomp on it.
+    assert Asset.objects.get(asset_id='yt-uri').uri == (
+        '/custom/assetdir/yt-uri.mp4'
+    )
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_backfills_uri_when_row_uri_missing(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Defensive: if the row landed without a uri (e.g. a custom
+    caller skipped the serializer's path-stamping), the task uses
+    the recomputed destination to download AND backfills the row
+    so the viewer + API can find the file. Without the backfill
+    the file would land at the fallback path while Asset.uri stays
+    empty, leaving the asset orphaned from the operator's view."""
+    Asset.objects.create(
+        asset_id='yt-empty',
+        name='https://youtu.be/abc',
+        uri='',
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 5}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-empty', 'https://youtu.be/abc')
+
+    a = Asset.objects.get(asset_id='yt-empty')
+    expected = path.join(settings['assetdir'], 'yt-empty.mp4')
+    assert a.uri == expected
+    # And the actual yt-dlp invocation matched that same path.
+    fake_cls = fake_youtube_dl._cls
+    assert fake_cls.call_args.args[0]['outtmpl'] == expected
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_floors_subsecond_duration_to_one(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """A sub-second clip must not slot a 0s rotation entry."""
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {
+        'title': 't',
+        'duration': 0.4,
+    }
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://youtu.be/abc')
+    assert Asset.objects.get(asset_id='yt-1').duration == 1
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_handles_missing_duration(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Live streams / radio uploads omit duration. Persist what we
+    have (title) without overwriting the placeholder duration. Row
+    stays ``is_processing=True`` so normalize_video can finalise."""
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {
+        'title': 'Live now',
+        'duration': None,
+    }
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+    a = Asset.objects.get(asset_id='yt-1')
+    assert a.name == 'Live now'
+    # Placeholder seeded by the serializer; not overwritten.
+    assert a.duration == 0
+    # is_processing left True for the chained normalize_video pass.
+    assert a.is_processing is True
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_no_op_for_missing_row(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """Row deleted between dispatch and pickup — task returns cleanly
+    without invoking yt-dlp at all."""
+    download_youtube_asset(
+        'does-not-exist', 'https://www.youtube.com/watch?v=abc'
+    )
+    fake_youtube_dl.extract_info.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_no_op_when_row_already_finalized(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """A duplicate task firing for a row whose first invocation
+    already cleared is_processing must not re-download or stomp on
+    operator-edited state."""
+    Asset.objects.create(
+        asset_id='yt-2',
+        name='Some title',
+        uri=path.join(settings['assetdir'], 'yt-2.mp4'),
+        mimetype='video',
+        duration=120,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+    )
+    download_youtube_asset('yt-2', 'https://youtu.be/abc')
+    fake_youtube_dl.extract_info.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_failure_propagates_for_on_failure(
+    fake_youtube_dl: mock.MagicMock,
+) -> None:
+    """yt-dlp DownloadError is permanent — the task re-raises so
+    Celery's on_failure path runs (which clears is_processing)."""
+    _make_youtube_asset()
+    DownloadError = fake_youtube_dl._download_error  # noqa: N806
+    fake_youtube_dl.extract_info.side_effect = DownloadError('404')
+    with pytest.raises(DownloadError):
+        download_youtube_asset('yt-1', 'https://youtu.be/dead')
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_on_failure_writes_error_metadata() -> None:
+    """When Celery declares the task failed, is_processing must
+    flip back to False AND ``metadata.error_message`` must carry the
+    exception type + message so the asset table renders the "Failed"
+    pill (with the message on hover) — same operator-visible
+    contract as a HEIC/video normalisation failure. Without this
+    unification, a yt-dlp DownloadError would clear the Processing
+    pill but leave no on-row diagnostic."""
+    _make_youtube_asset()
+    with (
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as mock_notify,
+    ):
+        download_youtube_asset.on_failure(
+            RuntimeError('404 Not Found'),
+            task_id='t-1',
+            args=('yt-1',),
+            kwargs={},
+            einfo=None,
+        )
+    a = Asset.objects.get(asset_id='yt-1')
+    assert a.is_processing is False
+    # Same shape as _NormalizeAssetTask.on_failure: ExceptionType: msg.
+    assert 'RuntimeError' in a.metadata['error_message']
+    assert '404 Not Found' in a.metadata['error_message']
+    mock_notify.assert_called_once_with('yt-1')

@@ -7,7 +7,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock /app/
 
-RUN uv sync --group docker-image-builder
+RUN uv sync --group docker-image-builder --no-install-project
 
 RUN git config --global --add safe.directory /app
 

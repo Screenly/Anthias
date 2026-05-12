@@ -1,0 +1,73 @@
+{% load asset_filters %}
+{% comment %} Asset table partial. The wrapper carries id="asset-table"
+   and the hx-get / hx-trigger pair that drive both the 5 s background
+   poll and the refresh-assets event triggered after every write —
+   every endpoint that returns this partial uses hx-swap="outerHTML",
+   so the swap replaces the wrapper with itself and polling survives.
+{% endcomment %}
+<div
+  id="asset-table"
+  hx-get="{% url 'anthias_app:assets_table' %}"
+  hx-trigger="every 5s, refresh-assets from:body"
+  hx-swap="outerHTML"
+  data-order-url="{% url 'anthias_app:assets_order' %}"
+  class="flex flex-col gap-4"
+>
+  <section id="active-assets-section" class="surface surface--active">
+    <header class="surface__header">
+      <h2><i class="ti ti-toggle-right mr-2"></i>Enabled</h2>
+      <span class="surface__count">{{ active_assets|length }} item{{ active_assets|length|pluralize }}</span>
+    </header>
+
+    {% if active_assets %}
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col" style="width: 28%">Schedule window</th>
+          <th scope="col" style="width: 10%">Duration</th>
+          <th scope="col" style="width: 8%">Enabled</th>
+          <th scope="col" style="width: 14%" class="text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="active-rows">
+        {% for asset in active_assets %}
+        {% include "_asset_row.html" with asset=asset is_active=True %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {% include "_empty_assets.html" with is_active=True %}
+    {% endif %}
+  </section>
+
+  <section id="inactive-assets-section" class="surface">
+    <header class="surface__header">
+      <h2><i class="ti ti-player-pause mr-2"></i>Inactive</h2>
+      <span class="surface__count">{{ inactive_assets|length }} item{{ inactive_assets|length|pluralize }}</span>
+    </header>
+
+    {% if inactive_assets %}
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col" style="width: 28%">Schedule window</th>
+          <th scope="col" style="width: 10%">Duration</th>
+          <th scope="col" style="width: 8%">Enabled</th>
+          <th scope="col" style="width: 14%" class="text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asset in inactive_assets %}
+        {% include "_asset_row.html" with asset=asset is_active=False %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {% include "_empty_assets.html" with is_active=False %}
+    {% endif %}
+  </section>
+</div>
+
+{% comment %}initAssetTableSortable now reads the order URL from the data-order-url attribute on #asset-table and binds itself on DOMContentLoaded + on every htmx:afterSwap. The previous inline-script approach raced with home.js: at initial page parse the script ran before window.initAssetTableSortable was defined (defer), so Sortable never bound until the first htmx swap.{% endcomment %}

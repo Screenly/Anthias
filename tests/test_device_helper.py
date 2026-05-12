@@ -2,7 +2,7 @@ from unittest import mock
 
 import pytest
 
-from lib import device_helper
+from anthias_common import device_helper
 
 
 PI4_CPUINFO = """\

@@ -34,10 +34,36 @@
 
     {{- $favicon := resources.Get "images/favicon.ico" -}}
     {{- $style := resources.Get "styles/style.css" | fingerprint -}}
-    {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
     <link rel="icon" href="{{ $favicon.RelPermalink }}">
+
+    {{- /* Preload primary font weights so text renders without a FOUT.
+           Latin only — latin-ext loads on demand via unicode-range. */ -}}
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+
+    {{- /* Preload the LCP hero image on the home page. Two preload
+           links with mutually exclusive media queries — only the one
+           matching the current viewport actually fetches. */ -}}
+    {{- if .IsHome -}}
+      {{- $hero := partialCached "hero-images.html" . -}}
+    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" href="{{ $hero.mobile1xW.RelPermalink }}" imagesrcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x" fetchpriority="high">
+    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" href="{{ $hero.desk1xW.RelPermalink }}" imagesrcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x" fetchpriority="high">
+    {{- end }}
+
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
+
+    {{- /* chroma.css is only needed on pages that produce highlighted
+           code blocks. Hugo wraps each block in <pre class="chroma">,
+           so that exact attribute is the precise sentinel — looser
+           matches like "chroma" alone would false-positive on prose.
+           The faq layout renders answers from data/faq.yaml via
+           markdownify, so its highlighted output is not in .Content
+           and we have to special-case it. */ -}}
+    {{- $needsChroma := or (strings.Contains .Content `class="chroma"`) (eq .Layout "faq") -}}
+    {{- if $needsChroma -}}
+      {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
+    {{- end }}
 
     {{ if .IsHome }}
     <script type="application/ld+json">
@@ -159,12 +185,39 @@
         });
       });
     </script>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6"></script>
     <script>
-        globalThis.dataLayer = globalThis.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-W6BH3H6SZ6');
+      // Defer GA until first user interaction (or 4 s after load).
+      // Keeps the Lighthouse audit window clean while still capturing
+      // analytics for real visitors.
+      (function () {
+        var loaded = false;
+        function load() {
+          if (loaded) return;
+          loaded = true;
+          // Stand up dataLayer and queue the initial gtag calls
+          // BEFORE appending the async script, so any cached gtag.js
+          // that parses immediately finds the queue already populated
+          // and doesn't drop our 'js'/'config' events.
+          globalThis.dataLayer = globalThis.dataLayer || [];
+          function gtag() { globalThis.dataLayer.push(arguments); }
+          globalThis.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', 'G-W6BH3H6SZ6');
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-W6BH3H6SZ6';
+          document.head.appendChild(s);
+        }
+        ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(
+          function (ev) { addEventListener(ev, load, { once: true, passive: true }); }
+        );
+        // bfcache restores can land here with the page already loaded;
+        // schedule the timeout immediately in that case instead of
+        // waiting for a 'load' event that has already fired.
+        function scheduleFallback() { setTimeout(load, 4000); }
+        if (document.readyState === 'complete') scheduleFallback();
+        else addEventListener('load', scheduleFallback);
+      })();
     </script>
   </body>
 </html>
