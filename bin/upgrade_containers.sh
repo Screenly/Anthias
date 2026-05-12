@@ -93,6 +93,20 @@ docker rm -f \
     >/dev/null 2>&1
 set -e
 
+# Pull the host's configured locale into our shell env so envsubst can
+# substitute LANG/LANGUAGE into the viewer service block (issue #480 —
+# AnthiasWebview reads QLocale::system() to set Accept-Language). The
+# `locales` package writes LANG=... into /etc/default/locale when the
+# operator runs `raspi-config` or `update-locale`; sourcing it here is
+# how those settings reach the viewer container. No-op if the file is
+# missing — the compose substitutions then resolve to empty strings,
+# and the webview falls back to QtWebEngine's built-in default.
+if [ -f /etc/default/locale ]; then
+    set -a
+    . /etc/default/locale
+    set +a
+fi
+
 cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml
@@ -114,4 +128,9 @@ if [ -f /var/run/reboot-required ]; then
     exit 0
 fi
 
-sudo -E docker compose "${COMPOSE_FILES[@]}" up -d
+# --remove-orphans sweeps containers that linger after a service is
+# renamed or removed from the compose file (e.g. legacy run-NNN sidecar
+# instances left over from earlier `docker compose run` invocations).
+# Without it `up -d` only logs a warning and leaves the orphans running,
+# which is confusing on a `docker ps` audit later.
+sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans

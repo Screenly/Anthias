@@ -7,6 +7,7 @@ from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
 from typing import Any
 
+from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import filesizeformat
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -40,7 +41,7 @@ class DeleteAssetViewMixin:
     @extend_schema(summary='Delete asset')
     @authorized
     def delete(self, request: Request, asset_id: str) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
 
         try:
             if asset.uri and asset.uri.startswith(settings['assetdir']):
@@ -263,7 +264,7 @@ class AssetContentViewMixin(APIView):
         asset_id: str,
         format: str | None = None,
     ) -> Response:
-        asset = Asset.objects.get(asset_id=asset_id)
+        asset = get_object_or_404(Asset, asset_id=asset_id)
         if asset.uri is None:
             raise NotFound('Asset has no content URI.')
 

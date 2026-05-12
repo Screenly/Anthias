@@ -40,7 +40,7 @@ services:
     build: *test_build
     command: >
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
-      --loglevel=info --schedule /tmp/celerybeat-schedule
+      --loglevel=info --scheduler celery.beat.Scheduler
     depends_on:
       anthias-test:
         condition: service_started
