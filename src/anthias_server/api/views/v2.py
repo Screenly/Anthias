@@ -580,6 +580,7 @@ class DeviceSettingsViewV2(APIView):
                 'shuffle_playlist': settings['shuffle_playlist'],
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
+                'screen_rotation': int(settings['screen_rotation']),
                 'username': (
                     operator_username()
                     if settings['auth_backend'] == 'auth_basic'
@@ -654,6 +655,8 @@ class DeviceSettingsViewV2(APIView):
                 settings['use_24_hour_clock'] = data['use_24_hour_clock']
             if 'debug_logging' in data:
                 settings['debug_logging'] = data['debug_logging']
+            if 'screen_rotation' in data:
+                settings['screen_rotation'] = int(data['screen_rotation'])
 
             settings.save()
             publisher = ViewerPublisher.get_instance()

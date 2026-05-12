@@ -652,3 +652,227 @@ def test_skip_swallows_db_errors() -> None:
         # Must not raise.
         viewer._skip_if_current_asset_inactive()
     skip_event.set.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Screen rotation (issue #2856)
+
+
+@pytest.fixture
+def reset_rotation_state() -> Iterator[None]:
+    """_last_applied_rotation is module state — snapshot and restore so
+    rotation tests don't bleed into each other (or into the prior
+    reload tests that don't mock _apply_wlr_transform)."""
+    prior_rot = viewer._last_applied_rotation
+    prior_url = viewer.current_browser_url
+    try:
+        viewer._last_applied_rotation = 0
+        yield
+    finally:
+        viewer._last_applied_rotation = prior_rot
+        viewer.current_browser_url = prior_url
+
+
+@pytest.mark.parametrize(
+    'raw, expected',
+    [
+        (0, 0),
+        (90, 90),
+        (180, 180),
+        (270, 270),
+        ('90', 90),
+        # Anything outside the cardinal set collapses to 0 — the v2
+        # serializer and form handler already filter on write, but the
+        # viewer reads an arbitrary file off disk and must not propagate
+        # garbage values (CLI argv for mpv/VLC, env value for Qt) into
+        # the playback layer.
+        (45, 0),
+        (-1, 0),
+        ('garbage', 0),
+        (None, 0),
+    ],
+)
+def test_rotation_value_clamps(raw: Any, expected: int) -> None:
+    with mock.patch.dict(viewer.settings, {'screen_rotation': raw}):
+        assert viewer._rotation_value() == expected
+
+
+def test_build_webview_env_appends_rotation_on_linuxfb() -> None:
+    """Pi boards (linuxfb) get the rotation baked into QT_QPA_PLATFORM
+    so the Qt plugin rotates the framebuffer for free."""
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'linuxfb'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_PLATFORM'] == 'linuxfb:rotation=90'
+
+
+def test_build_webview_env_strips_existing_rotation_suffix() -> None:
+    """If a prior launch (or the Dockerfile) baked in a rotation, the
+    helper must not double-append."""
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 180}),
+        mock.patch.dict(
+            os.environ,
+            {
+                'DEVICE_TYPE': 'pi5',
+                'QT_QPA_PLATFORM': 'linuxfb:rotation=90',
+            },
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_PLATFORM'] == 'linuxfb:rotation=180'
+
+
+def test_build_webview_env_no_op_on_wayland() -> None:
+    """x86 runs Qt wayland under cage; rotation goes through wlr-randr,
+    NOT through the QPA plugin which has no rotation= option."""
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_PLATFORM'] == 'wayland'
+
+
+def test_build_webview_env_no_suffix_at_zero_rotation() -> None:
+    """Default-orientation displays should stay on the existing
+    QT_QPA_PLATFORM string so we don't change behavior for the 99%
+    case who never touches the Settings dropdown."""
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 0}),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'linuxfb'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_PLATFORM'] == 'linuxfb'
+
+
+def test_apply_wlr_transform_skipped_on_linuxfb() -> None:
+    """The wlr-randr binary isn't even shipped on Pi boards — make
+    sure we never call it from a non-wayland viewer."""
+    with (
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch('anthias_viewer.subprocess.run') as run,
+    ):
+        viewer._apply_wlr_transform(90)
+    run.assert_not_called()
+
+
+def test_apply_wlr_transform_invokes_wlr_randr_per_output() -> None:
+    """On x86, list outputs then push the transform to each one."""
+
+    def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
+        result = mock.Mock()
+        result.returncode = 0
+        # The first call lists outputs; subsequent calls apply.
+        if argv == ['wlr-randr']:
+            result.stdout = (
+                'HDMI-A-1 "Foo Display"\n'
+                '  Enabled: yes\n'
+                '  Modes:\n'
+                'HDMI-A-2 "Bar"\n'
+                '  Enabled: no\n'
+            )
+        else:
+            result.stdout = ''
+        result.stderr = ''
+        return result
+
+    with (
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch(
+            'anthias_viewer.subprocess.run', side_effect=_fake_run
+        ) as run,
+    ):
+        viewer._apply_wlr_transform(180)
+
+    transform_calls = [
+        c
+        for c in run.call_args_list
+        if c.args
+        and c.args[0][:1] == ['wlr-randr']
+        and '--transform' in c.args[0]
+    ]
+    assert len(transform_calls) == 2
+    for call in transform_calls:
+        assert '--transform' in call.args[0]
+        assert call.args[0][call.args[0].index('--transform') + 1] == '180'
+
+
+def test_handle_reload_reapplies_rotation_when_changed(
+    reset_rotation_state: None,
+) -> None:
+    """The reload pub/sub message must re-push wlr-randr when the
+    operator changes rotation in Settings — that's the whole point of
+    issue #2856's UI-driven knob."""
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch('anthias_viewer.MediaPlayerProxy.reset') as reset,
+        mock.patch.object(viewer, '_apply_wlr_transform') as apply,
+    ):
+        viewer._handle_reload()
+    apply.assert_called_once_with(90)
+    reset.assert_called_once()
+    assert viewer._last_applied_rotation == 90
+
+
+def test_handle_reload_no_rotation_change_is_no_op(
+    reset_rotation_state: None,
+) -> None:
+    """Most reload traffic (asset edits, etc.) must NOT blank the
+    screen — the rotation-change path is keyed on a genuine delta."""
+    viewer._last_applied_rotation = 90
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch('anthias_viewer.MediaPlayerProxy.reset') as reset,
+        mock.patch.object(viewer, '_apply_wlr_transform') as apply,
+    ):
+        viewer._handle_reload()
+    apply.assert_not_called()
+    reset.assert_not_called()
+
+
+def test_handle_reload_terminates_webview_on_linuxfb_rotation_change(
+    reset_rotation_state: None,
+) -> None:
+    """linuxfb only reads :rotation=N at QPA init, so the live-rotation
+    path has to bounce AnthiasWebview. asset_loop's existing
+    ``browser.is_alive()`` check restarts it on the next tick."""
+    fake_browser = mock.Mock()
+    skip = mock.Mock()
+    with (
+        mock.patch.dict(viewer.settings, {'screen_rotation': 270}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch.object(viewer, 'MediaPlayerProxy'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+    fake_browser.terminate.assert_called_once()
+    # current_browser_url must be reset so the next loadPage doesn't
+    # short-circuit on the value comparison against the freshly-spawned
+    # webview (which knows nothing about the old URL).
+    assert viewer.current_browser_url is None
+    skip.set.assert_called_once()

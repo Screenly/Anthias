@@ -8,6 +8,20 @@ from anthias_server.settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
 
+
+def _screen_rotation() -> int:
+    """Cardinal angle the operator selected on the Settings page.
+
+    Returns 0 for any unexpected value so a hand-edited conf can't
+    push a hostile string into mpv/VLC's CLI parser.
+    """
+    try:
+        value = int(settings['screen_rotation'])
+    except (KeyError, TypeError, ValueError):
+        return 0
+    return value if value in (0, 90, 180, 270) else 0
+
+
 # Last device that `_detect_hdmi_audio_device()` resolved to in this
 # process. `get_alsa_audio_device()` runs on every play()/set_asset(),
 # so we only emit INFO/WARNING when the result changes (transitions
@@ -187,6 +201,17 @@ class MPVMediaPlayer(MediaPlayer):
         else:
             vo_args = ['--vo=drm']
 
+        # Issue #2856. On x86, cage/wlroots is rotated via wlr-randr and
+        # mpv's wayland VO inherits the compositor transform — passing
+        # --video-rotate here too would double-rotate. On Pi --vo=drm
+        # writes straight to the framebuffer with no compositor in the
+        # path, so the rotation has to happen inside mpv. Skip the arg
+        # at 0° so unrotated displays stay on the existing CLI.
+        rotation = _screen_rotation()
+        rotate_args: list[str] = []
+        if rotation and device_type != 'x86':
+            rotate_args = [f'--video-rotate={rotation}']
+
         self.process = subprocess.Popen(
             [
                 'mpv',
@@ -194,6 +219,7 @@ class MPVMediaPlayer(MediaPlayer):
                 *vo_args,
                 '--hwdec=auto-safe',
                 *extra_args,
+                *rotate_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,
@@ -227,6 +253,23 @@ class VLCMediaPlayer(MediaPlayer):
 
         self._vlc = vlc
         options = [f'--alsa-audio-device={get_alsa_audio_device()}']
+        # Issue #2856. Pi 1/2/3 fall through to VLC and write directly
+        # to the framebuffer — no compositor or KMS transform in the
+        # path — so any screen rotation has to be applied inside the
+        # pipeline. The transform filter is software-rotation but the
+        # SD-class boards on this branch only play SD-class assets, so
+        # the cost is bearable. VLC requires the filter to be in the
+        # chain at instance-init time; if the operator changes rotation
+        # from the UI, MediaPlayerProxy.reset() drops the singleton so
+        # we re-init with the new option list on the next play.
+        self._rotation = _screen_rotation()
+        if self._rotation:
+            options.extend(
+                [
+                    '--video-filter=transform',
+                    f'--transform-type={self._rotation}',
+                ]
+            )
         self.instance = vlc.Instance(options)
         self.player = self.instance.media_player_new()
 
@@ -275,3 +318,20 @@ class MediaPlayerProxy:
                 cls.INSTANCE = MPVMediaPlayer()
 
         return cls.INSTANCE
+
+    @classmethod
+    def reset(cls) -> None:
+        """Drop the cached player so the next ``get_instance`` rebuilds it.
+
+        VLC bakes the transform filter into ``vlc.Instance(options)``
+        at init time, so a rotation change from the Settings page only
+        takes effect on the next play after we re-init. mpv re-reads
+        rotation per play and is unaffected, but calling reset() is
+        cheap and harmless either way.
+        """
+        if cls.INSTANCE is not None:
+            try:
+                cls.INSTANCE.stop()
+            except Exception as exc:
+                logging.debug('reset(): stop() raised: %s', exc)
+        cls.INSTANCE = None

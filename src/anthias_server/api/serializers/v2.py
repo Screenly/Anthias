@@ -289,6 +289,9 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
         return super().update(instance, validated_data)
 
 
+SCREEN_ROTATION_CHOICES = (0, 90, 180, 270)
+
+
 class DeviceSettingsSerializerV2(Serializer[Any]):
     player_name = CharField()
     audio_output = CharField()
@@ -301,6 +304,7 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
+    screen_rotation = IntegerField()
     username = CharField()
 
 
@@ -315,6 +319,9 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     shuffle_playlist = BooleanField(required=False)
     use_24_hour_clock = BooleanField(required=False)
     debug_logging = BooleanField(required=False)
+    screen_rotation = ChoiceField(
+        required=False, choices=SCREEN_ROTATION_CHOICES
+    )
     username = CharField(required=False, allow_blank=True)
     password = CharField(required=False, allow_blank=True)
     password_2 = CharField(required=False, allow_blank=True)

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import os
+import subprocess
 import sys
 from os import getenv, path
 from signal import SIGALRM, signal
@@ -74,6 +76,120 @@ HOME: str | None = None
 
 scheduler: Any = None
 
+# Rotation last applied to the display, in degrees (0/90/180/270). On
+# linuxfb boards this is what we baked into QT_QPA_PLATFORM the last
+# time AnthiasWebview launched; on Wayland boards it's the wlr-randr
+# transform we last pushed. ``_handle_reload`` compares this to the
+# freshly-loaded ``settings['screen_rotation']`` to decide whether the
+# operator changed rotation from the UI and we need to re-apply.
+_last_applied_rotation: int = 0
+
+
+def _rotation_value() -> int:
+    """Coerce settings['screen_rotation'] to a known cardinal angle.
+
+    Defends against a hand-edited conf with a bogus value — the v2
+    serializer + page-form handler already clamp on write, but the
+    viewer is on the read side of an arbitrary on-disk file.
+    """
+    try:
+        value = int(settings['screen_rotation'])
+    except (KeyError, TypeError, ValueError):
+        return 0
+    return value if value in (0, 90, 180, 270) else 0
+
+
+def _is_wayland_board() -> bool:
+    """The x86 viewer runs under cage + wayland; everything else uses
+    linuxfb. Mirrors the docker/Dockerfile.viewer.j2 split."""
+    return os.environ.get('DEVICE_TYPE') == 'x86'
+
+
+def _build_webview_env() -> dict[str, str]:
+    """Compose the env to pass when spawning AnthiasWebview.
+
+    Appends ``:rotation=N`` to QT_QPA_PLATFORM on linuxfb boards so the
+    Qt linuxfb plugin rotates the framebuffer for us at no perf cost.
+    On Wayland (x86) the QPA has no rotation= option — the compositor
+    owns transforms — so the env is unchanged and ``_apply_wlr_transform``
+    handles rotation separately.
+    """
+    env = dict(os.environ)
+    rotation = _rotation_value()
+    qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')
+    if not _is_wayland_board() and rotation:
+        # Strip any preexisting ``:rotation=`` suffix from a prior
+        # launch so we don't double-up if the Dockerfile env ever
+        # carries one.
+        base = qpa.split(':', 1)[0]
+        env['QT_QPA_PLATFORM'] = f'{base}:rotation={rotation}'
+    return env
+
+
+def _wlr_transform_value(rotation_deg: int) -> str:
+    return {0: 'normal', 90: '90', 180: '180', 270: '270'}.get(
+        rotation_deg, 'normal'
+    )
+
+
+def _wlr_output_names() -> list[str]:
+    """List connector names known to the wlroots compositor.
+
+    ``wlr-randr`` with no args prints one block per output, with the
+    name as the first non-whitespace token on the block's first line.
+    Empty list means nothing connected (or cage isn't running yet) —
+    callers treat that as "no rotation to apply" rather than an error.
+    """
+    try:
+        result = subprocess.run(
+            ['wlr-randr'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        logging.debug('wlr-randr unavailable: %s', exc)
+        return []
+    if result.returncode != 0:
+        logging.debug(
+            'wlr-randr exit %d: %s', result.returncode, result.stderr
+        )
+        return []
+    names: list[str] = []
+    for line in result.stdout.splitlines():
+        if line and not line[0].isspace():
+            names.append(line.split()[0])
+    return names
+
+
+def _apply_wlr_transform(rotation_deg: int) -> None:
+    """Push the requested transform to every wlroots output.
+
+    No-op (and no error) on non-Wayland boards or when cage isn't up
+    yet — the linuxfb path handles rotation through QT_QPA_PLATFORM
+    instead, so the early-startup window before cage's socket exists
+    isn't a problem for Pi.
+    """
+    if not _is_wayland_board():
+        return
+    transform = _wlr_transform_value(rotation_deg)
+    for name in _wlr_output_names():
+        try:
+            subprocess.run(
+                ['wlr-randr', '--output', name, '--transform', transform],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            logging.info(
+                'Applied wlroots transform %s to output %s', transform, name
+            )
+        except (FileNotFoundError, subprocess.SubprocessError) as exc:
+            logging.warning(
+                'wlr-randr --transform failed for %s: %s', name, exc
+            )
+
 
 def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     if not correlation_id:
@@ -124,6 +240,7 @@ BROWSER_HANDSHAKE_LINE = 'Anthias service start'
 
 def load_browser() -> None:
     global browser, _webview_supports_set_reload_interval
+    global _last_applied_rotation
     logging.info('Loading browser...')
 
     # Re-probe the setReloadInterval capability against the freshly
@@ -135,7 +252,17 @@ def load_browser() -> None:
     # actual running process, not the viewer's lifetime.
     _webview_supports_set_reload_interval = True
 
-    browser = sh.Command('AnthiasWebview')(_bg=True, _err_to_out=True)
+    # Apply screen rotation *before* the webview starts so it picks up
+    # the rotated geometry on first frame: the wlroots compositor
+    # needs the transform set before Qt queries the output size, and
+    # the linuxfb plugin reads ``:rotation=N`` once at QPA init.
+    rotation = _rotation_value()
+    _apply_wlr_transform(rotation)
+    _last_applied_rotation = rotation
+
+    browser = sh.Command('AnthiasWebview')(
+        _bg=True, _err_to_out=True, _env=_build_webview_env()
+    )
 
     # Bound the wait so we don't hang the viewer indefinitely if
     # AnthiasWebview fails to register on D-Bus (missing binary, broken
@@ -281,11 +408,78 @@ def _handle_reload() -> None:
     """Process a ``reload`` message from the server.
 
     Reloads settings (so a settings.patch() change takes effect
-    immediately) and then signals a skip when the currently-displayed
+    immediately), re-applies the screen rotation if it changed
+    (issue #2856), and then signals a skip when the currently-displayed
     asset has been deleted or deactivated — issue #2430.
     """
     load_settings()
+    _maybe_reapply_rotation()
     _skip_if_current_asset_inactive()
+
+
+def _maybe_reapply_rotation() -> None:
+    """Re-apply ``screen_rotation`` when the operator changed it in the UI.
+
+    Two distinct paths because the rotation primitive is platform-
+    specific (see issue #2856):
+
+    * Wayland (x86 under cage): push the new transform with
+      ``wlr-randr``. The compositor sends a resize event to its
+      surfaces; Qt's wayland QPA picks it up and re-lays out the
+      webview in-place. No process restart needed.
+
+    * linuxfb (every Pi board): the Qt linuxfb plugin only reads
+      ``QT_QPA_PLATFORM=linuxfb:rotation=N`` at QPA init, so a live
+      angle change requires a fresh AnthiasWebview process. Terminate
+      it; the next ``asset_loop`` tick sees ``browser.is_alive()`` as
+      false and calls ``load_browser()``, which spawns it with the
+      updated env.
+
+    No-op when the on-disk angle matches what we last applied, so
+    unrelated ``reload`` traffic (asset edits, etc.) doesn't blank
+    the screen.
+    """
+    global _last_applied_rotation
+    rotation = _rotation_value()
+    if rotation == _last_applied_rotation:
+        return
+
+    logging.info(
+        'Screen rotation changed: %d -> %d',
+        _last_applied_rotation,
+        rotation,
+    )
+
+    # Drop the cached media player either way — VLC bakes the
+    # transform filter into the instance at construction, so the new
+    # angle only takes effect after we re-init. mpv is unaffected
+    # (rotation is computed per play) but reset() is cheap.
+    MediaPlayerProxy.reset()
+
+    if _is_wayland_board():
+        _apply_wlr_transform(rotation)
+        _last_applied_rotation = rotation
+        return
+
+    # linuxfb path — kill the webview so asset_loop respawns it.
+    global browser
+    if browser is not None:
+        try:
+            browser.terminate()
+        except Exception as exc:
+            logging.warning(
+                'Could not terminate AnthiasWebview for rotation change: %s',
+                exc,
+            )
+    # Force the next view_image/view_webpage call to re-issue loadPage
+    # against the freshly spawned webview — without this, the URL
+    # short-circuit ``current_browser_url != uri`` would skip the
+    # reload and the new process would sit on a blank page.
+    global current_browser_url
+    current_browser_url = None
+    # Bump the skip event so the loop wakes immediately rather than
+    # sleeping out the current asset's full duration before noticing.
+    get_skip_event().set()
 
 
 def _skip_if_current_asset_inactive() -> None:

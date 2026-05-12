@@ -218,6 +218,7 @@ def device_settings() -> dict[str, Any]:
         'shuffle_playlist': settings['shuffle_playlist'],
         'use_24_hour_clock': settings['use_24_hour_clock'],
         'debug_logging': settings['debug_logging'],
+        'screen_rotation': int(settings['screen_rotation']),
         # Auth-form chrome
         'has_saved_basic_auth': has_persisted_operator
         or settings['auth_backend'] == 'auth_basic',
