@@ -39,14 +39,18 @@ def _detect_hdmi_audio_device() -> str:
         entries = []
 
     hdmi_to_alsa = {'HDMI-A-1': 'vc4hdmi0', 'HDMI-A-2': 'vc4hdmi1'}
-    # Prefer HDMI-A-1 over HDMI-A-2 when both are connected.
-    ports = sorted(
-        (e for e in entries if any(e.name.endswith(s) for s in hdmi_to_alsa)),
-        key=lambda e: e.name,
-    )
+    ports: list[tuple[str, os.DirEntry[str]]] = []
+    for entry in entries:
+        for suffix in hdmi_to_alsa:
+            if entry.name.endswith(suffix):
+                ports.append((suffix, entry))
+                break
+    # Sort on the HDMI-A-N suffix (not the full entry name) so
+    # HDMI-A-1 always wins over HDMI-A-2 when both are connected,
+    # even if a non-vc4 DRM card lex-sorts ahead (e.g. card0-...).
+    ports.sort(key=lambda pair: pair[0])
 
-    for entry in ports:
-        suffix = next(s for s in hdmi_to_alsa if entry.name.endswith(s))
+    for suffix, entry in ports:
         card_name = hdmi_to_alsa[suffix]
         status_path = os.path.join(entry.path, 'status')
         try:

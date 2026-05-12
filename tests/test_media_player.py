@@ -307,6 +307,39 @@ def test_detect_hdmi_returns_first_connected_port() -> None:
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
+def test_detect_hdmi_prefers_first_port_when_both_connected() -> None:
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
+
+    scandir_patch, open_patch = _patch_drm(
+        entries=['card1-HDMI-A-1', 'card1-HDMI-A-2'],
+        statuses={
+            '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
+            '/sys/class/drm/card1-HDMI-A-2/status': 'connected\n',
+        },
+    )
+    with scandir_patch, open_patch:
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+
+
+def test_detect_hdmi_prefers_hdmi_a_1_across_mixed_card_indices() -> None:
+    """If card0 hosts HDMI-A-2 and card1 hosts HDMI-A-1, HDMI-A-1 still wins.
+
+    Guards against accidentally sorting on the full entry name
+    (card0-... < card1-...) instead of the HDMI-A-N suffix.
+    """
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
+
+    scandir_patch, open_patch = _patch_drm(
+        entries=['card0-HDMI-A-2', 'card1-HDMI-A-1'],
+        statuses={
+            '/sys/class/drm/card0-HDMI-A-2/status': 'connected\n',
+            '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
+        },
+    )
+    with scandir_patch, open_patch:
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+
+
 def test_detect_hdmi_returns_second_port_when_only_it_is_connected() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
