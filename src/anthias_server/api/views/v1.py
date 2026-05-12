@@ -233,5 +233,5 @@ class ViewerCurrentAssetViewV1(APIView):
         if not current_asset_id:
             return Response([])
 
-        queryset = get_object_or_404(Asset, asset_id=current_asset_id)
-        return Response(AssetSerializer(queryset).data)
+        asset = get_object_or_404(Asset, asset_id=current_asset_id)
+        return Response(AssetSerializer(asset).data)
