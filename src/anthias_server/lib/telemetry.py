@@ -19,8 +19,8 @@ ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
 ANALYTICS_URL = 'https://www.google-analytics.com/mp/collect'
 ANALYTICS_TIMEOUT = 5
 
-# Anthias's celerybeat schedule lives in /tmp (`--schedule
-# /tmp/celerybeat-schedule` in docker-compose.yml.tmpl), so the daily
+# celery-beat runs with the in-memory scheduler (--scheduler
+# celery.beat.Scheduler in docker-compose.yml.tmpl), so the daily
 # interval resets on every container restart. The cooldown lives in
 # the persisted Redis volume so devices that reboot frequently still
 # emit at most one telemetry event per 24h.
