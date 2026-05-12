@@ -49,20 +49,16 @@ INTRO_MESSAGE=(
     "for anything else."
     ""
     "When prompted for the version, you can choose between the following:"
-    "  - **latest:** Installs the latest version from the \`master\` branch."
-    "  - **tag:** Installs a pinned version based on the tag name."
+    "  - latest: Installs the latest version from the master branch."
+    "  - tag: Installs a pinned version based on the tag name."
     ""
-    "Take note that \`latest\` is a rolling release."
+    "Take note that 'latest' is a rolling release."
 )
 MANAGE_NETWORK_PROMPT=(
     "Would you like Anthias to manage the network for you?"
 )
 VERSION_PROMPT=(
     "Which version of Anthias would you like to install?"
-)
-VERSION_PROMPT_CHOICES=(
-    "latest"
-    "tag"
 )
 SYSTEM_UPGRADE_PROMPT=(
     "Would you like to perform a full system upgrade as well?"
@@ -82,50 +78,74 @@ TITLE_TEXT=$(cat <<EOF
 EOF
 )
 
-# Install gum from Charm.sh.
-# Gum helps you write shell scripts more efficiently.
+# Anthias brand styling. The CSS palette (sass/_variables.scss) is built
+# from purples (#270035–#8819C7) and yellows (#FFD800–#FFF963); whiptail's
+# NEWT_COLORS only accepts the 16 named ANSI colors, so we map purple to
+# magenta/brightmagenta and the accent to yellow. The ANSI escapes below
+# are used for the plain-text banner/section headers that print between
+# long-running install steps, kept off when stdout is not a TTY.
+export NEWT_COLORS='
+root=,magenta
+border=brightmagenta,white
+window=black,white
+shadow=black,gray
+title=white,magenta
+button=black,yellow
+actbutton=white,brightmagenta
+compactbutton=black,white
+checkbox=black,white
+actcheckbox=yellow,brightmagenta
+entry=black,white
+disentry=gray,white
+label=black,white
+listbox=black,white
+actlistbox=white,brightmagenta
+sellistbox=black,yellow
+actsellistbox=white,brightmagenta
+textbox=black,white
+acttextbox=white,brightmagenta
+emptyscale=,white
+fullscale=,brightmagenta
+helpline=yellow,magenta
+roottext=yellow,magenta
+'
+
+if [ -t 1 ]; then
+    ANSI_PURPLE=$'\033[1;35m'
+    ANSI_YELLOW=$'\033[1;33m'
+    ANSI_RESET=$'\033[0m'
+else
+    ANSI_PURPLE=''
+    ANSI_YELLOW=''
+    ANSI_RESET=''
+fi
+
+# whiptail ships with Debian/Raspbian by default; the apt install is a
+# safety net for minimal images. jq is consumed elsewhere in the install
+# pipeline.
 function install_prerequisites() {
-    if [ -f /usr/bin/gum ] && [ -f /usr/bin/jq ]; then
+    if [ -f /usr/bin/whiptail ] && [ -f /usr/bin/jq ]; then
         return
     fi
 
-    sudo apt -y update && sudo apt -y install gnupg
-
-    sudo mkdir -p /etc/apt/keyrings
-    curl -fsSL https://repo.charm.sh/apt/gpg.key | \
-        sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
-        | sudo tee /etc/apt/sources.list.d/charm.list
-
-    sudo apt -y update && sudo apt -y install gum jq
+    sudo apt -y update && sudo apt -y install whiptail jq
 }
 
 function display_banner() {
     local TITLE="${1:-Anthias Installer}"
-    local COLOR="212"
-
-    gum style \
-        --foreground "${COLOR}" \
-        --border-foreground "${COLOR}" \
-        --border "thick" \
-        --margin "1 1" \
-        --padding "2 6" \
-        "${TITLE}"
+    echo
+    echo "${ANSI_PURPLE}${TITLE}${ANSI_RESET}"
+    echo
 }
 
 function display_section() {
     local TITLE="${1:-Section}"
-    local COLOR="#00FFFF"
-
-    gum style \
-        --foreground "${COLOR}" \
-        --border-foreground "${COLOR}" \
-        --border "thick" \
-        --align center \
-        --width 95 \
-        --margin "1 1" \
-        --padding "1 4" \
-        "${TITLE}"
+    local LINE="======================================================================"
+    echo
+    echo "${ANSI_YELLOW}${LINE}${ANSI_RESET}"
+    echo "${ANSI_PURPLE}  ${TITLE}${ANSI_RESET}"
+    echo "${ANSI_YELLOW}${LINE}${ANSI_RESET}"
+    echo
 }
 
 function initialize_ansible() {
@@ -283,8 +303,7 @@ function run_ansible_playbook() {
     # written by modify_permissions later in this script.
     if [ ! -f "/etc/sudoers.d/010_${USER}-nopasswd" ]; then
         ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
-        gum format \
-            "**Note:** Ansible may prompt for your sudo password below."
+        echo "Note: Ansible may prompt for your sudo password below."
         echo
     fi
 
@@ -391,30 +410,27 @@ function write_anthias_version() {
 function post_installation() {
     display_section "Installation Complete"
 
-    echo
-
-    gum style --foreground "#00FFFF" \
-        "A reboot is required to complete the installation." \
-        | gum format
-
+    local PROMPT="A reboot is required to complete the installation."
     if [ -n "${SSH_CONNECTION:-}" ]; then
-        echo
-        gum style --foreground "#FFAA00" \
-            "**Heads up:** you appear to be connected over SSH; rebooting will drop your session." \
-            | gum format
+        PROMPT+=$'\n\nHeads up: you appear to be connected over SSH; rebooting will drop your session.'
     fi
+    PROMPT+=$'\n\nDo you want to reboot now?'
 
-    echo
-
-    gum confirm "Do you want to reboot now?" && \
-        gum style --foreground "#FF00FF" "Rebooting..." | gum format && \
+    if whiptail \
+        --title "Anthias Installer" \
+        --yesno "${PROMPT}" 14 70; then
+        echo "Rebooting..."
         sudo reboot
+    fi
 }
 
 function set_custom_version() {
     BRANCH=$(
-        gum input \
-            --header "Enter the tag name you want to install" \
+        whiptail \
+            --title "Anthias Installer" \
+            --inputbox "Enter the tag name you want to install:" \
+            10 70 \
+            3>&1 1>&2 2>&3
     )
 
     local STATUS_CODE
@@ -422,9 +438,9 @@ function set_custom_version() {
         "${GITHUB_API_REPO_URL}/git/refs/tags/${BRANCH}")
 
     if [ "$STATUS_CODE" -ne 200 ]; then
-        gum style "Invalid tag name." \
-            | gum format
-        echo
+        whiptail \
+            --title "Anthias Installer" \
+            --msgbox "Invalid tag name." 8 60
         exit 1
     fi
 
@@ -433,9 +449,9 @@ function set_custom_version() {
         "$DOCKER_TAG_FILE_URL")
 
     if [ "$STATUS_CODE" -ne 200 ]; then
-        gum style "This version doesn't have a \`docker-tag\` file." \
-            | gum format
-        echo
+        whiptail \
+            --title "Anthias Installer" \
+            --msgbox "This version doesn't have a docker-tag file." 8 60
         exit 1
     fi
 
@@ -447,20 +463,29 @@ function main() {
 
     display_banner "${TITLE_TEXT}"
 
-    gum format "${INTRO_MESSAGE[@]}"
-    echo
-    gum confirm "Do you still want to continue?" || exit 0
+    local INTRO
+    INTRO=$(printf '%s\n' "${INTRO_MESSAGE[@]}")
+    whiptail \
+        --title "Anthias Installer" \
+        --yesno "${INTRO}"$'\n\nDo you still want to continue?' \
+        20 76 \
+        || exit 0
 
-    if gum confirm "${MANAGE_NETWORK_PROMPT[@]}"; then
+    if whiptail \
+        --title "Anthias Installer" \
+        --yesno "${MANAGE_NETWORK_PROMPT[*]}" 10 70; then
         export MANAGE_NETWORK="Yes"
     else
         export MANAGE_NETWORK="No"
     fi
 
     VERSION=$(
-        gum choose \
-            --header "${VERSION_PROMPT[*]}" \
-            -- "${VERSION_PROMPT_CHOICES[@]}"
+        whiptail \
+            --title "Anthias Installer" \
+            --menu "${VERSION_PROMPT[*]}" 15 70 4 \
+            "latest" "Latest version from the master branch (rolling)" \
+            "tag"    "Pinned version selected by tag name" \
+            3>&1 1>&2 2>&3
     )
 
     if [ "${VERSION}" == "latest" ]; then
@@ -469,7 +494,9 @@ function main() {
         set_custom_version
     fi
 
-    if gum confirm "${SYSTEM_UPGRADE_PROMPT[@]}"; then
+    if whiptail \
+        --title "Anthias Installer" \
+        --yesno "${SYSTEM_UPGRADE_PROMPT[*]}" 10 70; then
         SYSTEM_UPGRADE="Yes"
     else
         SYSTEM_UPGRADE="No"
@@ -477,10 +504,10 @@ function main() {
     fi
 
     display_section "User Input Summary"
-    gum format "**Manage Network:**     ${MANAGE_NETWORK}"
-    gum format "**Branch/Tag:**         \`${BRANCH}\`"
-    gum format "**System Upgrade:**     ${SYSTEM_UPGRADE}"
-    gum format "**Docker Tag Prefix:**  \`${DOCKER_TAG}\`"
+    echo "Manage Network:     ${MANAGE_NETWORK}"
+    echo "Branch/Tag:         ${BRANCH}"
+    echo "System Upgrade:     ${SYSTEM_UPGRADE}"
+    echo "Docker Tag Prefix:  ${DOCKER_TAG}"
 
     initialize_ansible
     initialize_locales
