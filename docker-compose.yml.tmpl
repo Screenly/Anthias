@@ -47,15 +47,18 @@ services:
       - NOREFRESH=1
       - LISTEN=anthias-server
       # Forward the host's system locale into the viewer container so
-      # AnthiasWebview can send a matching Accept-Language header (issue
-      # #480 — multi-language URL assets used to render in English
-      # regardless of the Pi's locale). upgrade_containers.sh sources
-      # /etc/default/locale before running envsubst, so these substitute
-      # to whatever update-locale wrote (empty when the host has no
-      # locale configured — the webview then falls back to QtWebEngine's
-      # default rather than to "C").
+      # AnthiasWebview can send a matching Accept-Language header
+      # (issue 480 — multi-language URL assets used to render in
+      # English regardless of the Pi's locale). upgrade_containers.sh
+      # sources /etc/default/locale before running envsubst, so these
+      # substitute to whatever `update-locale` wrote. When the host has
+      # no locale configured these substitute to empty strings; the
+      # viewer's start_viewer.sh treats an empty value as "unset" so
+      # downstream consumers see the container image's defaults rather
+      # than an empty LANG.
       - LANG=${LANG}
       - LANGUAGE=${LANGUAGE}
+      - LC_ALL=${LC_ALL}
     privileged: true
     restart: always
     shm_size: ${SHM_SIZE_KB}kb
