@@ -1,7 +1,9 @@
 #include <QDebug>
 #include <QFileInfo>
+#include <QLocale>
 #include <QUrl>
 #include <QStandardPaths>
+#include <QStringList>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
@@ -41,6 +43,56 @@ int getServerPort()
 
     return value;
 }
+
+// Build an Accept-Language header value from the system locale so
+// multi-language URL assets serve content in the operator's configured
+// language (issue #480). QLocale::system().uiLanguages() reads LANGUAGE
+// (colon-separated) then LC_ALL/LANG on Linux and returns BCP47 tags
+// like "nl-NL", "nl", "en-US", "en" in preference order — exactly what
+// Accept-Language wants. Returns an empty string when the system is on
+// the C/POSIX locale so we leave QtWebEngine's default in place rather
+// than poisoning the header with "C".
+QString detectAcceptLanguage()
+{
+    QStringList tags;
+    const auto append = [&tags](const QString& tag) {
+        if (tag.isEmpty()
+            || tag == QLatin1String("C")
+            || tag == QLatin1String("POSIX")) {
+            return;
+        }
+        if (!tags.contains(tag, Qt::CaseInsensitive)) {
+            tags.append(tag);
+        }
+    };
+
+    for (const QString& lang : QLocale::system().uiLanguages()) {
+        append(lang);
+        // Qt 5.15 sometimes returns only the region-qualified form
+        // (e.g. "nl-NL"); RFC 7231 servers will then miss a "nl"-only
+        // catalog. Append the base language as a softer fallback so a
+        // site that only ships generic Dutch still matches.
+        const int dash = lang.indexOf(QLatin1Char('-'));
+        if (dash > 0) {
+            append(lang.left(dash));
+        }
+    }
+
+    if (tags.isEmpty()) {
+        return QString();
+    }
+
+    QString header = tags.first();
+    for (int i = 1; i < tags.size(); ++i) {
+        double q = 1.0 - i * 0.1;
+        if (q < 0.1) {
+            q = 0.1;
+        }
+        header += QStringLiteral(",") + tags.at(i)
+                + QStringLiteral(";q=") + QString::number(q, 'f', 1);
+    }
+    return header;
+}
 }
 
 
@@ -64,6 +116,12 @@ View::View(QWidget* parent) : QWidget(parent)
     QWebEngineProfile* profile = QWebEngineProfile::defaultProfile();
     profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
     profile->clearHttpCache();
+
+    const QString acceptLanguage = detectAcceptLanguage();
+    if (!acceptLanguage.isEmpty()) {
+        profile->setHttpAcceptLanguage(acceptLanguage);
+        qDebug() << "Accept-Language:" << acceptLanguage;
+    }
 
     currentWebView = webView1;
     nextWebView = webView2;

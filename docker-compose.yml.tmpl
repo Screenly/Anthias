@@ -56,6 +56,12 @@ services:
       - /home/${USER}/anthias_assets:/data/anthias_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      # Surface the host's system locale (LANG, LANGUAGE) to the viewer
+      # so AnthiasWebview can send an Accept-Language header derived
+      # from it — fixes issue #480 where multi-language URL assets
+      # always rendered in English regardless of the Pi's locale config.
+      # start_viewer.sh sources this file at boot.
+      - /etc/default/locale:/etc/default/locale:ro
     labels:
       io.balena.features.supervisor-api: '1'
     logging:
