@@ -10,26 +10,17 @@ scale_y = image_height / screen_height;
 
 flag = 1;
 
-if (scale_x > 1 || scale_y > 1)
+if (scale_x > scale_y)
 {
-	if (scale_x > scale_y)
-	{
-		resized_image = theme_image.Scale (screen_width, image_height / scale_x);
-		image_x = 0;
-		image_y = (screen_height - ((image_height  * screen_width) / image_width)) / 2;
-	}
-	else
-	{
-		resized_image = theme_image.Scale (image_width / scale_y, screen_height);
-		image_x = (screen_width - ((image_width  * screen_height) / image_height)) / 2;
-		image_y = 0;
-	}
+	resized_image = theme_image.Scale (screen_width, image_height / scale_x);
+	image_x = 0;
+	image_y = (screen_height - ((image_height  * screen_width) / image_width)) / 2;
 }
 else
 {
-	resized_image = theme_image.Scale (image_width, image_height);
-	image_x = (screen_width - image_width) / 2;
-	image_y = (screen_height - image_height) / 2;
+	resized_image = theme_image.Scale (image_width / scale_y, screen_height);
+	image_x = (screen_width - ((image_width  * screen_height) / image_height)) / 2;
+	image_y = 0;
 }
 
 if (Plymouth.GetMode() != "shutdown")
