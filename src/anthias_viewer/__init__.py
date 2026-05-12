@@ -42,6 +42,7 @@ django.setup()
 from anthias_common.internal_auth import INTERNAL_AUTH_HEADER  # noqa: E402
 from anthias_common.internal_auth import internal_auth_token  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
+    clamp_screen_rotation,
     connect_to_redis,
     detect_screen_resolution,
     string_to_bool,
@@ -98,15 +99,15 @@ _rotation_bounce_pending: bool = False
 def _rotation_value() -> int:
     """Coerce settings['screen_rotation'] to a known cardinal angle.
 
-    Defends against a hand-edited conf with a bogus value — the v2
-    serializer + page-form handler already clamp on write, but the
-    viewer is on the read side of an arbitrary on-disk file.
+    Thin wrapper around the shared clamp_screen_rotation() helper —
+    keeps the viewer's call sites short while ensuring the allowed
+    set (0/90/180/270) lives in exactly one place.
     """
     try:
-        value = int(settings['screen_rotation'])
-    except (KeyError, TypeError, ValueError):
+        raw = settings['screen_rotation']
+    except KeyError:
         return 0
-    return value if value in (0, 90, 180, 270) else 0
+    return clamp_screen_rotation(raw)
 
 
 def _is_wayland_board() -> bool:

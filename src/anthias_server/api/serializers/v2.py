@@ -17,6 +17,7 @@ from rest_framework.serializers import (
     TimeField,
 )
 
+from anthias_common.utils import SCREEN_ROTATION_CHOICES
 from anthias_server.app.models import (
     Asset,
     REFRESH_INTERVAL_S_MAX,
@@ -287,9 +288,6 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
             )
             instance.metadata = metadata
         return super().update(instance, validated_data)
-
-
-SCREEN_ROTATION_CHOICES = (0, 90, 180, 270)
 
 
 class DeviceSettingsSerializerV2(Serializer[Any]):

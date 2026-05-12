@@ -26,6 +26,7 @@ from anthias_server.lib.auth import (
     authorized,
 )
 from anthias_common.utils import (
+    clamp_screen_rotation,
     connect_to_redis,
 )
 from anthias_server.settings import ViewerPublisher, settings
@@ -861,18 +862,16 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['use_24_hour_clock'] = _checkbox(request, 'use_24_hour_clock')
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
 
-        # Restrict to the four cardinal angles. The Qt linuxfb plugin
-        # only honors 0/90/180/270 (anything else is silently treated
-        # as 0); wlr-randr rejects non-cardinal --transform values
-        # outright. Mirror the v2 serializer's choice list so a hand-
-        # crafted form POST can't slip a 45 through.
-        try:
-            rotation = int(request.POST.get('screen_rotation') or 0)
-        except ValueError:
-            rotation = 0
-        if rotation not in (0, 90, 180, 270):
-            rotation = 0
-        settings['screen_rotation'] = rotation
+        # Restrict to the four cardinal angles via the shared
+        # clamp_screen_rotation() helper. The Qt linuxfb plugin only
+        # honors 0/90/180/270 (anything else is silently treated as
+        # 0); wlr-randr rejects non-cardinal --transform values
+        # outright. Going through the helper keeps the HTML form
+        # path, the v2 serializer, and the viewer-side read sites on
+        # exactly the same allowed set.
+        settings['screen_rotation'] = clamp_screen_rotation(
+            request.POST.get('screen_rotation')
+        )
 
         settings.save()
         ViewerPublisher.get_instance().send_to_viewer('reload')

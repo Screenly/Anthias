@@ -4,6 +4,7 @@ import subprocess
 from typing import ClassVar
 
 from anthias_common.device_helper import get_device_type
+from anthias_common.utils import clamp_screen_rotation
 from anthias_server.settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
@@ -12,14 +13,15 @@ VIDEO_TIMEOUT = 20  # secs
 def _screen_rotation() -> int:
     """Cardinal angle the operator selected on the Settings page.
 
-    Returns 0 for any unexpected value so a hand-edited conf can't
-    push a hostile string into mpv/VLC's CLI parser.
+    Thin wrapper around the shared clamp_screen_rotation() helper so
+    both the viewer's QPA env composition and the video-player CLI
+    flags read from a single coercion path.
     """
     try:
-        value = int(settings['screen_rotation'])
-    except (KeyError, TypeError, ValueError):
+        raw = settings['screen_rotation']
+    except KeyError:
         return 0
-    return value if value in (0, 90, 180, 270) else 0
+    return clamp_screen_rotation(raw)
 
 
 # Last device that `_detect_hdmi_audio_device()` resolved to in this
