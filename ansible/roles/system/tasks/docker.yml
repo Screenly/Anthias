@@ -100,8 +100,14 @@
       - dialout
     anthias_pi_groups: &pi_groups
       - gpio
+    # Derive Pi-ness from device_type, not CPU architecture. Both are
+    # available here, but architecture also matches `generic-arm64`
+    # (and any other future non-Pi aarch64 host), which would silently
+    # apply Pi-specific group/user logic to it. device_type is the
+    # authoritative discriminator and is validated upstream in
+    # ansible/site.yml's pre_tasks.
     is_raspberry_pi: &is_pi >-
-      {{ ansible_architecture in ['aarch64', 'armv7l', 'armv6l'] }}
+      {{ device_type in ['pi2', 'pi3', 'pi4-64', 'pi5'] }}
 
 - name: Ensure Anthias user is in required groups
   ansible.builtin.user:
