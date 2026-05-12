@@ -427,10 +427,15 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         start_date=now,
         end_date=now + timedelta(days=30),
     )
+    # Route through the shared ``dispatch_normalize_*`` helpers rather
+    # than ``.delay()`` directly so the
+    # ``metadata.processing_started_at`` stamp the periodic reconciler
+    # depends on (see celery_tasks.reconcile_stuck_processing) is
+    # applied on every entry into the pipeline — UI, API, and YouTube.
     if is_video:
-        from anthias_server.celery_tasks import normalize_video_asset
+        from anthias_server.processing import dispatch_normalize_video
 
-        normalize_video_asset.delay(asset.asset_id)
+        dispatch_normalize_video(asset.asset_id)
         return _asset_table_response(
             request,
             toast=(
@@ -439,9 +444,9 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             ),
         )
     if needs_image_normalize:
-        from anthias_server.celery_tasks import normalize_image_asset
+        from anthias_server.processing import dispatch_normalize_image
 
-        normalize_image_asset.delay(asset.asset_id)
+        dispatch_normalize_image(asset.asset_id)
         return _asset_table_response(
             request,
             toast=(

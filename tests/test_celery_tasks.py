@@ -961,3 +961,319 @@ def test_download_youtube_asset_on_failure_writes_error_metadata() -> None:
     assert 'RuntimeError' in a.metadata['error_message']
     assert '404 Not Found' in a.metadata['error_message']
     mock_notify.assert_called_once_with('yt-1')
+
+
+# ---------------------------------------------------------------------------
+# reconcile_stuck_processing (periodic recovery for is_processing=True
+# rows that never finished — GH #2870 second-line defence)
+# ---------------------------------------------------------------------------
+
+
+from datetime import timedelta  # noqa: E402
+
+from django.utils import timezone  # noqa: E402
+
+from anthias_server.celery_tasks import (  # noqa: E402
+    RECONCILE_STUCK_LOCK_KEY,
+    RECONCILE_STUCK_THRESHOLD_S,
+    reconcile_stuck_processing,
+)
+
+
+def _make_stuck_asset(
+    *,
+    asset_id: str = 'stuck-1',
+    mimetype: str = 'video',
+    is_processing: bool = True,
+    processing_started_at: object = None,
+    extra_metadata: dict[str, object] | None = None,
+) -> Asset:
+    """Build a row in the state the reconciler is meant to find.
+
+    The metadata key is the load-bearing field — every age-based
+    decision the reconciler makes is driven by it.
+    """
+    metadata: dict[str, object] = {}
+    if extra_metadata:
+        metadata.update(extra_metadata)
+    if processing_started_at is not None:
+        metadata['processing_started_at'] = processing_started_at
+    return Asset.objects.create(
+        asset_id=asset_id,
+        name=asset_id,
+        uri=f'/data/anthias_assets/{asset_id}.mp4',
+        mimetype=mimetype,
+        duration=10,
+        is_enabled=True,
+        is_processing=is_processing,
+        metadata=metadata,
+    )
+
+
+@pytest.fixture
+def eager_celery_reconcile() -> None:
+    celeryapp.conf.update(
+        CELERY_ALWAYS_EAGER=True,
+        CELERY_RESULT_BACKEND='',
+        CELERY_BROKER_URL='',
+    )
+    Asset.objects.all().delete()
+
+
+@pytest.mark.django_db
+def test_reconcile_skips_rows_within_grace_window(
+    eager_celery_reconcile: None,
+) -> None:
+    """A row whose ``processing_started_at`` is younger than the
+    threshold belongs to an in-flight task — leave it alone."""
+    young = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S - 60)
+    ).isoformat()
+    _make_stuck_asset(processing_started_at=young, mimetype='video')
+
+    with (
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_video,
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_image'
+        ) as mock_image,
+    ):
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+    mock_image.assert_not_called()
+    # Row left as-is — still flagged so the actual task can finish.
+    assert Asset.objects.get(asset_id='stuck-1').is_processing is True
+
+
+@pytest.mark.django_db
+def test_reconcile_redispatches_stuck_video(
+    eager_celery_reconcile: None,
+) -> None:
+    """An ``is_processing=True`` video row older than the threshold
+    is re-dispatched through ``dispatch_normalize_video`` — recovers
+    rows whose worker crashed between enqueue and pickup."""
+    old = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+    ).isoformat()
+    _make_stuck_asset(processing_started_at=old, mimetype='video')
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_called_once_with('stuck-1')
+
+
+@pytest.mark.django_db
+def test_reconcile_redispatches_stuck_image(
+    eager_celery_reconcile: None,
+) -> None:
+    """Same recovery path applies to image-mimetype rows."""
+    old = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+    ).isoformat()
+    _make_stuck_asset(
+        asset_id='stuck-img',
+        processing_started_at=old,
+        mimetype='image',
+    )
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_image'
+    ) as mock_image:
+        reconcile_stuck_processing.apply()
+
+    mock_image.assert_called_once_with('stuck-img')
+
+
+@pytest.mark.django_db
+def test_reconcile_stamps_unstamped_row_on_first_sweep(
+    eager_celery_reconcile: None,
+) -> None:
+    """Legacy / backup-restored rows have no
+    ``metadata.processing_started_at``. The first sweep stamps it so
+    the next sweep can apply the age threshold uniformly — gives the
+    full grace window in case a task is actually still running.
+    Crucially the first sweep must NOT re-dispatch (otherwise a
+    still-in-flight task gets a duplicate)."""
+    _make_stuck_asset(
+        asset_id='unstamped',
+        processing_started_at=None,
+        mimetype='video',
+    )
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+    a = Asset.objects.get(asset_id='unstamped')
+    assert a.is_processing is True
+    assert 'processing_started_at' in a.metadata
+
+
+@pytest.mark.django_db
+def test_reconcile_clears_flag_on_unknown_mimetype(
+    eager_celery_reconcile: None,
+) -> None:
+    """A row with a mimetype neither image nor video that's stuck
+    past the threshold has no clear re-dispatch path. Clear the
+    flag and surface an error so the operator can interact with it."""
+    old = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+    ).isoformat()
+    _make_stuck_asset(
+        asset_id='weird',
+        processing_started_at=old,
+        mimetype='webpage',
+    )
+
+    with (
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_video,
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_image'
+        ) as mock_image,
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+    mock_image.assert_not_called()
+    a = Asset.objects.get(asset_id='weird')
+    assert a.is_processing is False
+    assert 'reconciler' in a.metadata.get('error_message', '').lower()
+
+
+@pytest.mark.django_db
+def test_reconcile_treats_malformed_timestamp_as_unstamped(
+    eager_celery_reconcile: None,
+) -> None:
+    """A non-parseable ``processing_started_at`` (e.g. from a
+    hand-edited backup) must follow the same "stamp on first sight"
+    recovery path — never raise during sweep."""
+    _make_stuck_asset(
+        asset_id='bad-ts',
+        processing_started_at='not a timestamp',
+        mimetype='video',
+    )
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+    a = Asset.objects.get(asset_id='bad-ts')
+    # Fresh stamp written; existing extra metadata preserved.
+    parsed = a.metadata['processing_started_at']
+    assert parsed != 'not a timestamp'
+    # The new value is a valid ISO-8601 string.
+    from datetime import datetime
+
+    datetime.fromisoformat(parsed)
+
+
+@pytest.mark.django_db
+def test_reconcile_skips_rows_not_processing(
+    eager_celery_reconcile: None,
+) -> None:
+    """``is_processing=False`` rows aren't the reconciler's business,
+    regardless of any stale ``processing_started_at`` left in metadata
+    from a previous run."""
+    old = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+    ).isoformat()
+    _make_stuck_asset(
+        asset_id='not-processing',
+        is_processing=False,
+        processing_started_at=old,
+    )
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_reconcile_treats_naive_timestamp_as_unstamped(
+    eager_celery_reconcile: None,
+) -> None:
+    """A naive (no tzinfo) ISO-8601 string in
+    ``metadata.processing_started_at`` could come from a hand-edited
+    backup. Comparing it against the tz-aware ``cutoff`` would raise
+    ``TypeError`` and abort the sweep — handle it the same way as a
+    malformed string: stamp on first sight, re-evaluate on the next
+    sweep. Guards against a single bad row breaking the whole sweep
+    for everyone else."""
+    naive = '2020-01-01T00:00:00'  # well past threshold, but no tz
+    _make_stuck_asset(
+        asset_id='naive-ts',
+        processing_started_at=naive,
+        mimetype='video',
+    )
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    mock_video.assert_not_called()
+    a = Asset.objects.get(asset_id='naive-ts')
+    # The naive value was overwritten with a fresh tz-aware stamp.
+    new_stamp = a.metadata['processing_started_at']
+    assert new_stamp != naive
+    from datetime import datetime
+
+    assert datetime.fromisoformat(new_stamp).tzinfo is not None
+
+
+@pytest.mark.django_db
+def test_reconcile_lock_prevents_overlap(
+    eager_celery_reconcile: None,
+) -> None:
+    """A second beat tick that fires while the reconciler is running
+    must be a no-op. Mirrors ``revalidate_asset_urls`` behaviour: only
+    one sweep at a time re-dispatches a given stuck row, regardless of
+    how many workers run embedded beat."""
+    old = (
+        timezone.now() - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+    ).isoformat()
+    _make_stuck_asset(processing_started_at=old, mimetype='video')
+
+    # Pre-acquire the lock to simulate a sweep already in flight.
+    celery_tasks_module.r.set(RECONCILE_STUCK_LOCK_KEY, 'someone-else')
+
+    with mock.patch(
+        'anthias_server.processing.dispatch_normalize_video'
+    ) as mock_video:
+        reconcile_stuck_processing.apply()
+
+    # Saw the lock and exited without re-dispatching.
+    mock_video.assert_not_called()
+    # Critically did NOT clobber the existing holder's token.
+    assert (
+        celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) == 'someone-else'
+    )
+
+
+@pytest.mark.django_db
+def test_reconcile_lock_released_after_clean_run(
+    eager_celery_reconcile: None,
+) -> None:
+    """The ``finally`` block must release our token so the next beat
+    tick can run."""
+    _make_stuck_asset(processing_started_at=None, mimetype='video')
+
+    with mock.patch('anthias_server.processing.dispatch_normalize_video'):
+        reconcile_stuck_processing.apply()
+
+    assert celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) is None
