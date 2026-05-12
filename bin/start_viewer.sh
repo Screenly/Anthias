@@ -33,6 +33,21 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 chown viewer:video "${XDG_RUNTIME_DIR}"
 chmod 700 "${XDG_RUNTIME_DIR}"
 
+# Drop empty locale env vars so they don't override defaults that the
+# container image (or downstream consumers like Python's `locale`
+# module) would otherwise inherit. docker-compose.yml.tmpl wires
+# LANG/LANGUAGE/LC_ALL through envsubst, which produces an empty string
+# (`LANG=`) when the host has no locale configured; an empty value is
+# semantically different from "unset" — it explicitly clobbers anything
+# the image set. Unsetting here means QLocale::system() falls back to
+# its built-in default and the C++ webview leaves Accept-Language
+# unsent (rather than sending an empty / "C" header).
+for var in LANG LANGUAGE LC_ALL; do
+    if [ -z "${!var-}" ]; then
+        unset "$var"
+    fi
+done
+
 # Temporary workaround for watchdog
 touch /tmp/anthias.watchdog
 chown viewer /tmp/anthias.watchdog
@@ -149,12 +164,12 @@ if [ "$DEVICE_TYPE" = "x86" ]; then
     cage -- bash -c '
         chown viewer "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" 2>/dev/null || true
         exec sudo \
-            --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY \
+            --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY,LANG,LANGUAGE,LC_ALL \
             -E -u viewer \
             dbus-run-session /venv/bin/python -m anthias_viewer
     ' &
 else
-    sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH -E -u viewer \
+    sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,LANG,LANGUAGE,LC_ALL -E -u viewer \
         dbus-run-session /venv/bin/python -m anthias_viewer &
 fi
 

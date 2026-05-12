@@ -25,6 +25,13 @@ services:
     image: ghcr.io/screenly/anthias-viewer:${GIT_SHORT_HASH}-${BOARD}
     depends_on:
       - anthias-server
+    # Issue #480 — to localise URL-asset rendering, set LANG (and
+    # optionally LANGUAGE) as a balena Device or Service Variable in the
+    # dashboard, e.g. LANG=nl_NL.UTF-8. balena's supervisor injects
+    # dashboard variables as env vars into the running container at
+    # boot, so no entry is needed in this `environment:` block —
+    # AnthiasWebview reads QLocale::system() and builds Accept-Language
+    # from whatever LANG/LANGUAGE the supervisor passed in.
     environment:
       - HOME=/data
       - PORT=8080

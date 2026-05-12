@@ -31,6 +31,10 @@ services:
       dockerfile: ./docker/Dockerfile.viewer
     depends_on:
       - anthias-server
+    # Issue #480 — see docker-compose.balena.yml.tmpl. balena Device or
+    # Service Variables (e.g. LANG=nl_NL.UTF-8) are injected by the
+    # supervisor at runtime; no compose entry needed for AnthiasWebview
+    # to pick them up.
     environment:
       - HOME=/data
       - PORT=8080
