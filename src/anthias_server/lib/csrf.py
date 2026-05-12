@@ -105,10 +105,9 @@ class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
 
     # ``_origin_verified`` is a private hook on ``CsrfViewMiddleware``
     # that django-stubs doesn't model, so the ``super()`` call needs a
-    # ``type: ignore`` and the final comparison needs ``bool(...)`` to
-    # satisfy ``--strict``'s ``no-any-return``. The runtime override
-    # itself is well-defined — Django's CSRF middleware has called
-    # this hook since 4.0.
+    # ``type: ignore`` at the call site. The runtime override itself
+    # is well-defined — Django's CSRF middleware has called this hook
+    # since 4.0.
     def _origin_verified(self, request: 'HttpRequest') -> bool:
         if super()._origin_verified(request):  # type: ignore[misc]
             return True
