@@ -11,6 +11,7 @@ from unittest import mock
 import pytest
 
 import anthias_viewer as viewer
+from anthias_server.settings import settings
 from anthias_viewer.scheduling import Scheduler
 
 logging.disable(logging.CRITICAL)
@@ -693,7 +694,7 @@ def reset_rotation_state() -> Iterator[None]:
     ],
 )
 def test_rotation_value_clamps(raw: Any, expected: int) -> None:
-    with mock.patch.dict(viewer.settings, {'screen_rotation': raw}):
+    with mock.patch.dict(settings, {'screen_rotation': raw}):
         assert viewer._rotation_value() == expected
 
 
@@ -701,7 +702,7 @@ def test_build_webview_env_appends_rotation_on_linuxfb() -> None:
     """Pi boards (linuxfb) get the rotation baked into QT_QPA_PLATFORM
     so the Qt plugin rotates the framebuffer for free."""
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(
             os.environ,
             {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'linuxfb'},
@@ -716,7 +717,7 @@ def test_build_webview_env_strips_existing_rotation_suffix() -> None:
     """If a prior launch (or the Dockerfile) baked in a rotation, the
     helper must not double-append."""
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 180}),
+        mock.patch.dict(settings, {'screen_rotation': 180}),
         mock.patch.dict(
             os.environ,
             {
@@ -734,7 +735,7 @@ def test_build_webview_env_no_op_on_wayland() -> None:
     """x86 runs Qt wayland under cage; rotation goes through wlr-randr,
     NOT through the QPA plugin which has no rotation= option."""
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(
             os.environ,
             {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
@@ -750,7 +751,7 @@ def test_build_webview_env_no_suffix_at_zero_rotation() -> None:
     QT_QPA_PLATFORM string so we don't change behavior for the 99%
     case who never touches the Settings dropdown."""
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 0}),
+        mock.patch.dict(settings, {'screen_rotation': 0}),
         mock.patch.dict(
             os.environ,
             {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'linuxfb'},
@@ -820,7 +821,7 @@ def test_handle_reload_reapplies_rotation_when_changed(
     operator changes rotation in Settings — that's the whole point of
     issue #2856's UI-driven knob."""
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
@@ -840,7 +841,7 @@ def test_handle_reload_no_rotation_change_is_no_op(
     screen — the rotation-change path is keyed on a genuine delta."""
     viewer._last_applied_rotation = 90
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 90}),
+        mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
@@ -861,7 +862,7 @@ def test_handle_reload_terminates_webview_on_linuxfb_rotation_change(
     fake_browser = mock.Mock()
     skip = mock.Mock()
     with (
-        mock.patch.dict(viewer.settings, {'screen_rotation': 270}),
+        mock.patch.dict(settings, {'screen_rotation': 270}),
         mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
