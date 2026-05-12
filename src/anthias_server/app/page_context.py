@@ -12,7 +12,7 @@ from os import getenv, statvfs
 from typing import Any
 
 import psutil
-from hurry.filesize import size
+from django.template.defaultfilters import filesizeformat
 
 from anthias_common import device_helper
 from anthias_common.utils import (
@@ -125,11 +125,11 @@ def system_info() -> dict[str, Any]:
                 (_load_bar(load_15m), '15 min'),
             ],
         },
-        'free_space': size(disk_free),
+        'free_space': filesizeformat(disk_free),
         'disk': {
-            'total_human': size(disk_total),
-            'used_human': size(disk_used),
-            'free_human': size(disk_free),
+            'total_human': filesizeformat(disk_total),
+            'used_human': filesizeformat(disk_used),
+            'free_human': filesizeformat(disk_free),
             'used_pct': _pct(disk_used, disk_total),
             'free_pct': _pct(disk_free, disk_total),
         },

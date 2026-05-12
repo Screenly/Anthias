@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from anthias_server.app.models import Asset
 from anthias_common.youtube import dispatch_download
+from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.helpers import (
     AssetCreationError,
     parse_request,
@@ -165,6 +166,14 @@ class AssetListViewV1(APIView):
         # title + duration once yt-dlp finishes.
         if serializer._pending_youtube_uri:
             dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+
+        # Same hand-off as v1.2 / v2: ``CreateAssetSerializerV1_1``
+        # stamps ``_pending_normalize='video'`` (and is_processing=1)
+        # for local video uploads — without this call the row would
+        # land in whatever codec the operator uploaded (e.g. MPEG-1)
+        # and the on-device player would silently drop it from
+        # rotation forever (GH #2870).
+        dispatch_pending_normalize(serializer, asset.asset_id)
 
         return Response(
             AssetSerializer(asset).data, status=status.HTTP_201_CREATED

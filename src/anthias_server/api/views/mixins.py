@@ -7,9 +7,9 @@ from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
 from typing import Any
 
+from django.template.defaultfilters import filesizeformat
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from hurry.filesize import size
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
@@ -351,7 +351,11 @@ class InfoViewMixin(APIView):
                 'example': {
                     'viewlog': 'Not yet implemented',
                     'loadavg': 0.1,
-                    'free_space': '10G',
+                    # Shape matches ``django.template.defaultfilters.filesizeformat``:
+                    # number with one decimal, non-breaking space ( ),
+                    # full unit label (KB / MB / GB / TB). Old hurry.filesize
+                    # output ("10G") was removed in the 2026.05.1 release.
+                    'free_space': '10.0 GB',
                     'display_power': 'on',
                     'up_to_date': True,
                 },
@@ -364,7 +368,7 @@ class InfoViewMixin(APIView):
 
         # Calculate disk space
         slash = statvfs('/')
-        free_space = size(slash.f_bavail * slash.f_frsize)
+        free_space = filesizeformat(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
         return Response(
