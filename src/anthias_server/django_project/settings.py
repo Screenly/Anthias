@@ -74,8 +74,10 @@ ALLOWED_HOSTS = [
 # CSRF_TRUSTED_ORIGINS is intentionally not set. Django only honours
 # subdomain wildcards there (e.g. https://*.example.com), so a leading
 # 'http://*' / 'https://*' would be a no-op rather than the broad
-# allowlist it appears to be. Same-origin POSTs pass without it via
-# Django's built-in Host/Origin equality check.
+# allowlist it appears to be. Same-host POSTs still pass through the
+# custom SameHostOriginCsrfMiddleware below, which also tolerates
+# scheme drift caused by a TLS-terminating proxy in front of
+# anthias-server (issue #2867).
 
 
 # Application definition
@@ -109,16 +111,23 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'dbbackup',
     ]
 
+# Sonar's S4502 ("disabling CSRF protection") fires on the MIDDLEWARE
+# list because it pattern-matches the literal ``CsrfViewMiddleware``
+# class name and doesn't see one. SameHostOriginCsrfMiddleware (see
+# src/anthias_server/lib/csrf.py) is a subclass of
+# ``django.middleware.csrf.CsrfViewMiddleware``, so CSRF protection
+# is still wired in — the rule's a false positive. NOSONAR on the
+# closing bracket where S4502 actually raises its issue.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+]  # NOSONAR
 
 ROOT_URLCONF = 'anthias_server.django_project.urls'
 
