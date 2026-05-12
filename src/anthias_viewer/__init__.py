@@ -115,24 +115,48 @@ def _is_wayland_board() -> bool:
     return os.environ.get('DEVICE_TYPE') == 'x86'
 
 
+def _set_qpa_rotation(qpa: str, rotation: int) -> str:
+    """Return ``qpa`` with its ``rotation=`` option set to ``rotation``
+    (or removed entirely when ``rotation`` is 0).
+
+    The Qt QPA syntax is ``<plugin>[:opt1=val1,opt2=val2,...]`` — the
+    options are comma-separated *after* a single colon. A naive
+    ``split(':', 1)[0]`` would discard every other option an operator
+    might have set (e.g. ``linuxfb:fb=/dev/fb1,tty=/dev/tty1``), so
+    parse the option list and only touch the ``rotation`` entry.
+
+    Doing this unconditionally (even when ``rotation`` is 0) lets the
+    operator dial rotation back to 0 from a non-zero setting without
+    a leftover ``rotation=N`` suffix from a prior launch sticking
+    around — Copilot review of #2882.
+    """
+    plugin, _, options_str = qpa.partition(':')
+    options = [
+        opt.strip()
+        for opt in options_str.split(',')
+        if opt.strip() and not opt.strip().startswith('rotation=')
+    ]
+    if rotation:
+        options.append(f'rotation={rotation}')
+    if not options:
+        return plugin
+    return f'{plugin}:{",".join(options)}'
+
+
 def _build_webview_env() -> dict[str, str]:
     """Compose the env to pass when spawning AnthiasWebview.
 
-    Appends ``:rotation=N`` to QT_QPA_PLATFORM on linuxfb boards so the
-    Qt linuxfb plugin rotates the framebuffer for us at no perf cost.
-    On Wayland (x86) the QPA has no rotation= option — the compositor
-    owns transforms — so the env is unchanged and ``_apply_wlr_transform``
-    handles rotation separately.
+    Sets ``rotation=N`` inside QT_QPA_PLATFORM on linuxfb boards so
+    the Qt linuxfb plugin rotates the framebuffer for us at no perf
+    cost. On Wayland (x86) the QPA has no rotation= option — the
+    compositor owns transforms — so the env is left alone and
+    ``_apply_wlr_transform`` handles rotation separately.
     """
     env = dict(os.environ)
     rotation = _rotation_value()
     qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')
-    if not _is_wayland_board() and rotation:
-        # Strip any preexisting ``:rotation=`` suffix from a prior
-        # launch so we don't double-up if the Dockerfile env ever
-        # carries one.
-        base = qpa.split(':', 1)[0]
-        env['QT_QPA_PLATFORM'] = f'{base}:rotation={rotation}'
+    if not _is_wayland_board():
+        env['QT_QPA_PLATFORM'] = _set_qpa_rotation(qpa, rotation)
     return env
 
 
@@ -175,18 +199,20 @@ def _wlr_output_names() -> list[str]:
 def _apply_wlr_transform(rotation_deg: int) -> bool:
     """Push the requested transform to every wlroots output.
 
-    Returns True when at least one output was successfully rotated,
-    False on a non-Wayland board (no-op success — the linuxfb path
-    handles rotation through QT_QPA_PLATFORM instead) cannot happen
-    here, because callers gate on ``_is_wayland_board()``. Callers
-    use the boolean to decide whether to latch
-    ``_last_applied_rotation`` — a transient startup failure (cage
-    not ready yet, wayland socket missing) should leave the latch
-    untouched so the next ``reload`` retries.
+    Returns:
+        * True on non-Wayland boards (no-op — the linuxfb path handles
+          rotation through QT_QPA_PLATFORM instead, so the caller is
+          safe to latch ``_last_applied_rotation``).
+        * True on Wayland when at least one output was successfully
+          rotated (a partial success — e.g. one output rotated, one
+          rejected — still counts so we don't loop forever on a
+          malfunctioning secondary connector).
+        * False on Wayland when no outputs were listed (cage / the
+          wayland socket not ready yet) or every wlr-randr invocation
+          failed. Callers must NOT latch ``_last_applied_rotation``
+          in that case so the next ``reload`` retries.
     """
     if not _is_wayland_board():
-        # Treat as success: nothing to do on linuxfb, so the caller
-        # latching is correct.
         return True
     transform = _wlr_transform_value(rotation_deg)
     names = _wlr_output_names()

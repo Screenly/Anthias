@@ -766,6 +766,51 @@ def test_build_webview_env_no_suffix_at_zero_rotation() -> None:
     assert env['QT_QPA_PLATFORM'] == 'linuxfb'
 
 
+def test_build_webview_env_preserves_other_qpa_options() -> None:
+    """An operator who set QT_QPA_PLATFORM=linuxfb:fb=/dev/fb1 must
+    keep that option through a rotation change — Copilot review of
+    #2882 flagged that the previous naive split dropped it."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(
+            os.environ,
+            {
+                'DEVICE_TYPE': 'pi5',
+                'QT_QPA_PLATFORM': 'linuxfb:fb=/dev/fb1,tty=/dev/tty1',
+            },
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    qpa = env['QT_QPA_PLATFORM']
+    plugin, _, opts = qpa.partition(':')
+    options = set(opts.split(','))
+    assert plugin == 'linuxfb'
+    assert options == {'fb=/dev/fb1', 'tty=/dev/tty1', 'rotation=90'}
+
+
+def test_build_webview_env_removes_stale_rotation_when_dialed_to_zero() -> (
+    None
+):
+    """If a previous launch set rotation=90 in QT_QPA_PLATFORM and the
+    operator now picks 0° from the dropdown, the rotation= option
+    must come back out — otherwise the screen stays rotated after a
+    webview respawn. Copilot review of #2882."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 0}),
+        mock.patch.dict(
+            os.environ,
+            {
+                'DEVICE_TYPE': 'pi5',
+                'QT_QPA_PLATFORM': 'linuxfb:fb=/dev/fb1,rotation=90',
+            },
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_PLATFORM'] == 'linuxfb:fb=/dev/fb1'
+
+
 def test_apply_wlr_transform_skipped_on_linuxfb() -> None:
     """The wlr-randr binary isn't even shipped on Pi boards — make
     sure we never call it from a non-wayland viewer."""
