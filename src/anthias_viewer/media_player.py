@@ -116,7 +116,7 @@ def get_alsa_audio_device() -> str:
     # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
     # those boards, so route via DEVICE_TYPE env first and only fall
     # through to the Pi-name dispatch when we're actually on a Pi.
-    if os.environ.get('DEVICE_TYPE') == 'generic-arm64':
+    if os.environ.get('DEVICE_TYPE') == 'arm64':
         # No portable per-SoC HDMI card name across Rockchip /
         # Allwinner / Amlogic, so defer to ALSA's `default` device.
         # Operators with a non-standard HDMI sink can override via
@@ -196,10 +196,10 @@ class MPVMediaPlayer(MediaPlayer):
         # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
         # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
         # they own the framebuffer directly with no compositor.
-        # generic-arm64 (non-Pi ARM SBCs on Armbian) goes the same
+        # arm64 (non-Pi ARM SBCs on Armbian) goes the same
         # route as x86 because the viewer container is wrapped in
         # cage there too; hwdec is best-effort per SoC.
-        if device_type in ('x86', 'generic-arm64'):
+        if device_type in ('x86', 'arm64'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         else:
             vo_args = ['--vo=drm']
@@ -282,12 +282,12 @@ class MediaPlayerProxy:
             # pi4-64 runs Qt6 + linuxfb like pi5/x86, so VLC's GL/GLES2/XCB
             # outputs have no parent window to draw into. Route it to mpv,
             # which renders straight to KMS via --vo=drm. The same MPV
-            # path covers generic-arm64 (non-Pi 64-bit ARM SBCs running
+            # path covers arm64 (non-Pi 64-bit ARM SBCs running
             # Armbian), which the device_helper falls back to 'pi1' for
             # since /proc/device-tree/model doesn't match any Pi regex
             # — without this override they'd silently route to VLC.
             device_env = os.environ.get('DEVICE_TYPE')
-            force_mpv = device_env in ('pi4-64', 'generic-arm64')
+            force_mpv = device_env in ('pi4-64', 'arm64')
             if (
                 get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
                 and not force_mpv

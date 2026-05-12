@@ -1,5 +1,5 @@
 SHORT_HASH_LENGTH = 7
-BUILD_TARGET_OPTIONS = ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86', 'generic-arm64']
+BUILD_TARGET_OPTIONS = ['pi2', 'pi3', 'pi4-64', 'pi5', 'x86', 'arm64']
 SERVICES = (
     'server',
     'redis',

@@ -273,7 +273,7 @@ function set_device_type() {
         # Generic 64-bit ARM SBC fallback (Orange Pi, Rock Pi, Banana Pi, …).
         # Best-effort: stack runs on any board with mainline Mesa DRM/KMS;
         # video decode falls back to software since hwdec varies per SoC.
-        export DEVICE_TYPE="generic-arm64"
+        export DEVICE_TYPE="arm64"
     else
         echo "Unsupported device. Anthias supports Pi 2/3/4 (64-bit)/5, x86, and 64-bit ARM SBCs (best-effort)." >&2
         exit 1
@@ -302,8 +302,8 @@ function run_ansible_playbook() {
 
     # Pi-specific boot tweaks (config.txt/cmdline.txt, gpu_mem, vc4 dtoverlays)
     # only apply on actual Raspberry Pi hardware. Skip on x86 and on the
-    # generic-arm64 fallback (non-Pi 64-bit ARM SBCs).
-    if [ "$ARCHITECTURE" == "x86_64" ] || [ "$DEVICE_TYPE" == "generic-arm64" ]; then
+    # arm64 fallback (non-Pi 64-bit ARM SBCs).
+    if [ "$ARCHITECTURE" == "x86_64" ] || [ "$DEVICE_TYPE" == "arm64" ]; then
         ANSIBLE_PLAYBOOK_ARGS+=("--skip-tags" "raspberry-pi")
     fi
 

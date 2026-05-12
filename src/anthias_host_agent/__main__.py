@@ -39,7 +39,7 @@ SUPPORTED_INTERFACES = (
     # device-tree node doesn't expose ACPI/PCI numbering — what
     # Rockchip / Allwinner / Amlogic SBCs typically report (e.g. the
     # Rock Pi 4's GMAC comes up as `end0`). Without this prefix, the
-    # splash page on every generic-arm64 install would sit on
+    # splash page on every arm64 install would sit on
     # "Detecting network…" indefinitely.
     'end',
 )

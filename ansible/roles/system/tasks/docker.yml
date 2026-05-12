@@ -34,7 +34,7 @@
       pi4-64: arm64
       pi3: armhf
       pi2: armhf
-      generic-arm64: arm64
+      arm64: arm64
 
 - name: Add Docker repo
   # copy, not lineinfile, so a stale `[arch=...]` entry from an earlier
@@ -101,7 +101,7 @@
     anthias_pi_groups: &pi_groups
       - gpio
     # Derive Pi-ness from device_type, not CPU architecture. Both are
-    # available here, but architecture also matches `generic-arm64`
+    # available here, but architecture also matches `arm64`
     # (and any other future non-Pi aarch64 host), which would silently
     # apply Pi-specific group/user logic to it. device_type is the
     # authoritative discriminator and is validated upstream in

@@ -60,7 +60,7 @@ elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
 elif [ "$(uname -m)" = "aarch64" ]; then
     # Generic 64-bit ARM SBC fallback — matches the install.sh branch.
     # See bin/install.sh::set_device_type for the rationale.
-    export DEVICE_TYPE="generic-arm64"
+    export DEVICE_TYPE="arm64"
 else
     echo "Unsupported device. Anthias supports Pi 2/3/4/5, x86, and 64-bit ARM SBCs." >&2
     exit 1
@@ -97,7 +97,7 @@ cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml
 
-if [[ "$DEVICE_TYPE" =~ ^(x86|pi5|generic-arm64)$ ]]; then
+if [[ "$DEVICE_TYPE" =~ ^(x86|pi5|arm64)$ ]]; then
     sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
         /home/${USER}/anthias/docker-compose.yml
 fi

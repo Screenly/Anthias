@@ -44,7 +44,7 @@ See the [supported hardware](https://anthias.screenly.io/get-started/#supported-
 
 ### Generic 64-bit ARM SBCs (best-effort)
 
-The installer recognizes any 64-bit ARM host that isn't a Raspberry Pi as `generic-arm64` and runs the same Anthias stack on it — [Armbian](https://www.armbian.com) on Rock Pi, Orange Pi, Banana Pi and similar boards. The dashboard, scheduler, and asset library all work as on a Pi.
+The installer recognizes any 64-bit ARM host that isn't a Raspberry Pi as `arm64` and runs the same Anthias stack on it — [Armbian](https://www.armbian.com) on Rock Pi, Orange Pi, Banana Pi and similar boards. The dashboard, scheduler, and asset library all work as on a Pi.
 
 Things to know before you pick a board:
 
