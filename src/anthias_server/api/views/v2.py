@@ -134,10 +134,9 @@ def _resolve_node_ip() -> str:
         raw = r.get('ip_addresses')
     except redis.RedisError:
         # Redis is the cache backing this whole codepath; if it's
-        # flaking (early boot, transient broker hiccup), fall through
-        # to the MY_IP fallback below instead of 500-ing the splash
-        # poll. The JS keeps polling and recovers as soon as Redis
-        # comes back.
+        # flaking (early boot, transient broker hiccup), return ''
+        # instead of 500-ing the splash poll. The JS keeps polling
+        # and recovers as soon as Redis comes back.
         raw = None
     if raw:
         try:
@@ -174,17 +173,11 @@ def _resolve_node_ip() -> str:
 
     # Cache miss / empty list / malformed / Redis flake: ask
     # host_agent to populate. The next poll picks it up — we don't
-    # block waiting for completion.
+    # block waiting for completion. The JS keeps polling and the
+    # splash shows "Detecting network…" until host_agent fills the
+    # cache.
     _publish_refresh()
-
-    # Mirror ``anthias_common.utils.get_node_ip()``'s ``MY_IP`` fallback.
-    # ``bin/upgrade_containers.sh`` exports the host's outbound IP
-    # into the server container via ``docker-compose.yml.tmpl``, so
-    # the splash can show *something* useful even when host_agent
-    # isn't running (custom deploys, late host_agent start, crashed
-    # host_agent). Without this fallback, those installs would be
-    # stuck on "Detecting network…" forever.
-    return getenv('MY_IP', '') or ''
+    return ''
 
 
 def _publish_refresh() -> None:
