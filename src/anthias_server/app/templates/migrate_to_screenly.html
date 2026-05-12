@@ -67,19 +67,36 @@
       <p class="muted-label m-0">
         Token format looks like <code>abcdef.123456…</code>. It is not stored on the device.
       </p>
-      <div class="app-floating">
+      <div class="app-floating" style="position: relative;">
         <input
-          type="password"
+          :type="showToken ? 'text' : 'password'"
           class="app-input"
           id="screenly_token"
           x-model="token"
           @keydown.enter.prevent="validate()"
           autocomplete="off"
           placeholder=" "
+          style="padding-right: 3rem;"
         >
         <label for="screenly_token">API token</label>
+        <button
+          type="button"
+          class="app-btn-icon"
+          @click="showToken = !showToken"
+          :aria-label="showToken ? 'Hide token' : 'Show token'"
+          :aria-pressed="showToken"
+          style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);"
+        >
+          <i class="ti" :class="showToken ? 'ti-eye-off' : 'ti-eye'"></i>
+        </button>
       </div>
-      <div x-show="tokenError" x-cloak class="text-red-600">
+      <div
+        x-show="tokenError"
+        x-cloak
+        class="text-red-600"
+        role="alert"
+        aria-live="assertive"
+      >
         <i class="ti ti-alert-triangle"></i>
         <span x-text="tokenError"></span>
       </div>
@@ -120,6 +137,11 @@
         <div class="empty-state__icon"><i class="ti ti-photo-off"></i></div>
         <p class="empty-state__title">No assets to migrate</p>
         <p class="empty-state__description">This player has no assets yet.</p>
+      </div>
+      <div class="flex justify-start">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
       </div>
     </div>
 
@@ -177,12 +199,20 @@
   <section class="surface" x-show="step === 'running' || step === 'done'" x-cloak>
     <header class="surface__header">
       <h2 x-show="step === 'running'"><i class="ti ti-cloud-upload mr-2"></i>Migrating…</h2>
-      <h2 x-show="step === 'done'"><i class="ti ti-check mr-2"></i>Migration finished</h2>
+      <h2 x-show="step === 'done' && failureCount() === 0">
+        <i class="ti ti-circle-check mr-2" style="color:#16a34a"></i>All assets migrated
+      </h2>
+      <h2 x-show="step === 'done' && failureCount() > 0">
+        <i class="ti ti-alert-triangle mr-2" style="color:#d97706"></i>Migration finished with errors
+      </h2>
       <p class="muted-label m-0">
         <span x-text="completedCount()"></span> of <span x-text="results.length"></span> done
         &middot; <span x-text="successCount()"></span> succeeded
         <template x-if="failureCount()">
           <span>&middot; <span class="text-red-600" x-text="failureCount() + ' failed'"></span></span>
+        </template>
+        <template x-if="assetGroupTitle">
+          <span>&middot; group: <strong x-text="assetGroupTitle"></strong></span>
         </template>
       </p>
     </header>
@@ -230,7 +260,7 @@
               <td x-text="row.name || row.asset_id"></td>
               <td>
                 <template x-if="row.status === 'success'">
-                  <span class="muted-label" x-text="row.screenly_asset_id || ''"></span>
+                  <span class="muted-label">Uploaded to Screenly</span>
                 </template>
                 <template x-if="row.status === 'failed'">
                   <span class="text-red-600" x-text="row.error"></span>
@@ -251,7 +281,8 @@
           x-show="failureCount() > 0"
           @click="retryFailed()"
         >
-          <i class="ti ti-refresh"></i><span>Retry failed</span>
+          <i class="ti ti-refresh"></i>
+          <span>Retry <span x-text="failureCount()"></span> failed</span>
         </button>
       </div>
     </div>
@@ -291,6 +322,7 @@ function migrateToScreenly() {
   return {
     step: 'intro',
     token: '',
+    showToken: false,
     tokenError: '',
     validating: false,
     loadingAssets: false,

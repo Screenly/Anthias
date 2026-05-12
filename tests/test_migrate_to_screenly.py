@@ -303,8 +303,8 @@ def test_full_migration_flow_with_mixed_results(
     seeded_assets: list[Asset], page: Page
 ) -> None:
     """End-to-end run: 3 assets, middle one fails. After the queue
-    drains, the summary shows 2 succeeded / 1 failed and the Retry
-    failed button appears."""
+    drains, the header reads "Migration finished with errors" (not
+    the all-clear copy) and the Retry button surfaces the count."""
     _mock_validate_valid(page)
     _mock_migrate_per_asset(
         page,
@@ -326,20 +326,24 @@ def test_full_migration_flow_with_mixed_results(
 
     page.locator('button:has-text("Migrate")').first.click()
 
-    # Wait for the final state to settle (Retry button only shows on done).
-    expect(page.get_by_role('button', name='Retry failed')).to_be_visible(
-        timeout=DEFAULT_TIMEOUT_MS
-    )
-    expect(page.get_by_role('heading', name='Migration finished')).to_be_visible()
+    # The errors-present header is the canonical signal that the
+    # queue settled — wait on that rather than a generic spinner-
+    # gone check.
+    expect(
+        page.get_by_role('heading', name='Migration finished with errors')
+    ).to_be_visible(timeout=DEFAULT_TIMEOUT_MS)
+    # Retry button must carry the failure count so the operator
+    # knows what they're re-running.
+    expect(page.get_by_role('button', name='Retry 1 failed')).to_be_visible()
 
-    # Per-row outcomes — failed row must surface the error from the
-    # mocked backend so the operator can act on it.
+    # Failed row must surface the backend's error verbatim.
     expect(
         page.get_by_text('File not found on device: abc1.mp4')
     ).to_be_visible()
-    # Successful rows should show the Screenly id we returned in the mock.
-    expect(page.get_by_text('01OUT-a1')).to_be_visible()
-    expect(page.get_by_text('01OUT-a3')).to_be_visible()
+    # Two success rows — we count occurrences of the "Uploaded to
+    # Screenly" label instead of asserting on the ULID, which the
+    # done state intentionally suppresses (operators can't act on it).
+    expect(page.get_by_text('Uploaded to Screenly')).to_have_count(2)
 
 
 @pytest.mark.integration
@@ -382,21 +386,25 @@ def test_retry_failed_replays_only_failed_rows(
     page.get_by_role('button', name='Continue').click()
     page.locator('button:has-text("Migrate")').first.click()
 
-    expect(page.get_by_role('button', name='Retry failed')).to_be_visible()
+    expect(page.get_by_role('button', name='Retry 1 failed')).to_be_visible()
     # First-pass call counts: every asset exactly once.
     assert call_log == {'a1': 1, 'a2': 1, 'a3': 1}, call_log
 
-    page.get_by_role('button', name='Retry failed').click()
+    page.get_by_role('button', name='Retry 1 failed').click()
     # Retry advances back into the running state and then settles
-    # again on done. Wait for that final settle by the disappearance
-    # of the in-flight spinner on the failed row.
-    expect(page.get_by_role('heading', name='Migration finished')).to_be_visible()
+    # again on done. The all-clear copy is the canonical settle
+    # signal — distinct from the errors-present header so we know
+    # the retry actually fixed it.
+    expect(
+        page.get_by_role('heading', name='All assets migrated')
+    ).to_be_visible()
     # Successful rows must NOT have been re-queued — only a2 should
     # have a second call.
     assert call_log == {'a1': 1, 'a2': 2, 'a3': 1}, call_log
-    # And the second pass succeeded.
+    # And the second pass succeeded — error text gone, success
+    # label now present for all three rows.
     expect(page.get_by_text('transient')).not_to_be_visible()
-    expect(page.get_by_text('01OUT-a2')).to_be_visible()
+    expect(page.get_by_text('Uploaded to Screenly')).to_have_count(3)
 
 
 @pytest.mark.integration
@@ -416,6 +424,48 @@ def test_empty_library_shows_empty_state(
     expect(page.get_by_text('No assets to migrate')).to_be_visible()
     expect(
         page.get_by_text('This player has no assets yet.')
+    ).to_be_visible()
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_show_hide_token_toggle(reset_assets: None, page: Page) -> None:
+    """The token input defaults to ``type=password`` so the value
+    doesn't sit on screen for a passerby, but the operator must be
+    able to reveal it once to verify a long copy-paste."""
+    page.goto(MIGRATE_URL)
+    page.get_by_role('button', name='I have a token').click()
+
+    token_input = page.locator('#screenly_token')
+    expect(token_input).to_have_attribute('type', 'password')
+
+    page.get_by_role('button', name='Show token').click()
+    expect(token_input).to_have_attribute('type', 'text')
+
+    page.get_by_role('button', name='Hide token').click()
+    expect(token_input).to_have_attribute('type', 'password')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_empty_state_has_back_button(
+    reset_assets: None, page: Page
+) -> None:
+    """A device with no assets should still offer a way back to the
+    token step — without it the operator is stranded on the picker."""
+    _mock_validate_valid(page)
+
+    page.goto(MIGRATE_URL)
+    page.get_by_role('button', name='I have a token').click()
+    page.locator('#screenly_token').fill('tok')
+    page.get_by_role('button', name='Continue').click()
+    expect(page.get_by_text('No assets to migrate')).to_be_visible()
+
+    # The Back button must be inside the same surface card so the
+    # operator can't miss it; clicking it returns to the token step.
+    page.locator('button:visible:has-text("Back")').click()
+    expect(
+        page.get_by_role('heading', name='Screenly API token')
     ).to_be_visible()
 
 
