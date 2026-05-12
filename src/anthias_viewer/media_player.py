@@ -8,6 +8,13 @@ from anthias_server.settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
 
+# Track whether the no-connected-HDMI fallback has already been
+# logged at WARNING in this process. `get_alsa_audio_device()` runs
+# on every play()/set_asset(), so repeated WARNINGs would spam the
+# viewer log when no display is connected. The first miss is still
+# loud; subsequent ones drop to DEBUG.
+_hdmi_fallback_warned = False
+
 
 def _detect_hdmi_audio_device() -> str:
     """Auto-detect which HDMI port is connected on Pi4/Pi5.
@@ -67,9 +74,15 @@ def _detect_hdmi_audio_device() -> str:
                 'HDMI status read failed for %s: %s', status_path, exc
             )
 
-    logging.warning(
-        'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0',
+    global _hdmi_fallback_warned
+    msg = (
+        'No connected HDMI detected, falling back to sysdefault:CARD=vc4hdmi0'
     )
+    if _hdmi_fallback_warned:
+        logging.debug(msg)
+    else:
+        logging.warning(msg)
+        _hdmi_fallback_warned = True
     return 'sysdefault:CARD=vc4hdmi0'
 
 

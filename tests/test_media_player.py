@@ -376,6 +376,38 @@ def test_detect_hdmi_falls_back_when_no_status_files() -> None:
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
+def test_detect_hdmi_fallback_warns_only_once() -> None:
+    """Repeated fallback hits log at DEBUG; only the first hit is WARNING.
+
+    Guards against log spam since the helper runs on every play()/
+    set_asset(). Manipulates the module-level flag directly so the
+    test is independent of any earlier test that triggered fallback.
+    """
+    import anthias_viewer.media_player as mp
+
+    saved = mp._hdmi_fallback_warned
+    mp._hdmi_fallback_warned = False
+    try:
+        with (
+            patch('anthias_viewer.media_player.os.scandir', return_value=[]),
+            patch.object(mp.logging, 'warning') as mock_warn,
+            patch.object(mp.logging, 'debug') as mock_debug,
+        ):
+            assert mp._detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+            assert mp._detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+            assert mp._detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+
+            assert mock_warn.call_count == 1
+            fallback_debugs = [
+                c
+                for c in mock_debug.call_args_list
+                if 'falling back' in (c.args[0] if c.args else '')
+            ]
+            assert len(fallback_debugs) == 2
+    finally:
+        mp._hdmi_fallback_warned = saved
+
+
 def test_detect_hdmi_falls_back_on_oserror() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
