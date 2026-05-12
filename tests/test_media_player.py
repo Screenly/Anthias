@@ -200,12 +200,19 @@ def alsa_settings() -> Iterator[Any]:
         patch_settings.stop()
 
 
-def test_local_on_pi5_uses_hdmi_card(alsa_settings: Any) -> None:
+def test_local_on_pi5_uses_detected_hdmi_device(alsa_settings: Any) -> None:
     alsa_settings.__getitem__.return_value = 'local'
-    with patch(
-        'anthias_viewer.media_player.get_device_type', return_value='pi5'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='pi5'
+        ),
+        patch(
+            'anthias_viewer.media_player._detect_hdmi_audio_device',
+            return_value='sysdefault:CARD=vc4hdmi1',
+        ) as mock_detect,
     ):
-        assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi0'
+        assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi1'
+        mock_detect.assert_called_once()
 
 
 @pytest.mark.parametrize('device_type', ['pi1', 'pi2', 'pi3', 'pi4'])

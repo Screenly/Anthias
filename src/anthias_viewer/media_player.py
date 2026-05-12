@@ -59,7 +59,7 @@ def _detect_hdmi_audio_device() -> str:
 def get_alsa_audio_device() -> str:
     if settings['audio_output'] == 'local':
         if get_device_type() == 'pi5':
-            return 'sysdefault:CARD=vc4hdmi0'
+            return _detect_hdmi_audio_device()
 
         return 'plughw:CARD=Headphones'
     else:
