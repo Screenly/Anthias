@@ -50,6 +50,12 @@ class DeleteAssetViewMixin:
 
         asset.delete()
 
+        # Wake the viewer so it can advance past the just-deleted asset
+        # instead of finishing its remaining ``duration`` on screen
+        # (issue #2430). The viewer's reload handler checks whether the
+        # currently-displayed asset is still active and skips if not.
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

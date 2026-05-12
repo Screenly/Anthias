@@ -9,6 +9,7 @@ from anthias_common.youtube import dispatch_download
 from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.helpers import (
     AssetCreationError,
+    finalize_asset_update,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
@@ -109,20 +110,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
                 serializer.errors, status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_asset_ids = get_active_asset_ids()
-
-        asset.refresh_from_db()
-
-        try:
-            active_asset_ids.remove(asset.asset_id)
-        except ValueError:
-            pass
-
-        if asset.is_active():
-            active_asset_ids.insert(asset.play_order, asset.asset_id)
-
-        save_active_assets_ordering(active_asset_ids)
-        asset.refresh_from_db()
+        finalize_asset_update(asset)
 
         return Response(AssetSerializer(asset).data)
 

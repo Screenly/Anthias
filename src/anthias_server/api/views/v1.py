@@ -117,6 +117,12 @@ class AssetViewV1(APIView, DeleteAssetViewMixin):
             )
 
         asset.refresh_from_db()
+
+        # See AssetViewV2.update — wake the viewer so a just-edited
+        # asset that's still on screen but no longer active gets
+        # skipped (issue #2430).
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+
         return Response(AssetSerializer(asset).data)
 
 

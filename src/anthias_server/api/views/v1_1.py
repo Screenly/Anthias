@@ -16,6 +16,7 @@ from anthias_server.api.serializers.v1_1 import CreateAssetSerializerV1_1
 from anthias_server.api.views.mixins import DeleteAssetViewMixin
 from anthias_server.api.views.v1 import V1_ASSET_REQUEST
 from anthias_server.lib.auth import authorized
+from anthias_server.settings import ViewerPublisher
 
 
 class AssetListViewV1_1(APIView):
@@ -95,4 +96,10 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
             )
 
         asset.refresh_from_db()
+
+        # See AssetViewV2.update — wake the viewer so a just-edited
+        # asset that's still on screen but no longer active gets
+        # skipped (issue #2430).
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+
         return Response(AssetSerializer(asset).data)
