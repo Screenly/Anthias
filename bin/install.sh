@@ -334,7 +334,12 @@ function install_ansible() {
     # every subsequent `uv sync` (Fixes #2842). Letting `.python-version`
     # be the single source of truth keeps both invocations aligned.
     INSTALLER_VENV=$(mktemp -d -t anthias-installer-venv.XXXXXX)
+    # UV_LINK_MODE=copy: ~/.cache/uv and /tmp are on different
+    # filesystems on most Pi/Debian installs (tmpfs vs the SD card),
+    # so uv's default hardlink fails and falls back to copy with a
+    # warning. Force copy mode to match what we actually want.
     UV_PROJECT_ENVIRONMENT="${INSTALLER_VENV}" \
+    UV_LINK_MODE=copy \
         uv sync \
             --project "${ANTHIAS_REPO_DIR}" \
             --no-default-groups \
