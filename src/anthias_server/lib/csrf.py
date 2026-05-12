@@ -136,11 +136,10 @@ class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
         if origin_port == target_port:
             return True
 
-        # Different ports are accepted only when at least one side is
-        # already at the scheme's default — that's the proxy/HSTS
-        # shape (``Host: device:443`` + ``Origin: https://device``)
-        # the fallback exists for. Two explicit non-default ports
-        # mean genuinely different web origins and stay rejected.
-        return origin_port in _DEFAULT_PORTS.values() or (
-            target_port in _DEFAULT_PORTS.values()
-        )
+        # Port mismatch is accepted only for the specific 80↔443
+        # scheme-drift pair (``Host: device`` + ``Origin: https://device``,
+        # or vice versa) — that's the proxy/HSTS shape the fallback
+        # exists for. Anything else (e.g. ``Origin: https://device``
+        # → 443 vs ``Host: device:8000``) is a genuinely different
+        # web origin and must stay rejected.
+        return {origin_port, target_port} == set(_DEFAULT_PORTS.values())

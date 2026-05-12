@@ -102,6 +102,24 @@ def test_same_host_distinct_non_default_ports_rejected() -> None:
 
 
 @pytest.mark.django_db
+def test_default_port_origin_vs_non_default_host_port_rejected() -> None:
+    """``Origin: https://anthias.local`` (port 443) posting to a
+    server on ``Host: anthias.local:8000`` is a cross-origin request
+    even though one side is on a scheme default — 443 and 8000 are
+    distinct web origins. The fallback must reject anything outside
+    the 80↔443 scheme-drift pair."""
+    client = Client(enforce_csrf_checks=True)
+    token = _seed_csrf_cookie(client, 'anthias.local:8000')
+    response = client.post(
+        reverse('anthias_app:assets_control', args=['next']),
+        data={'csrfmiddlewaretoken': token},
+        HTTP_HOST='anthias.local:8000',
+        HTTP_ORIGIN=_HTTPS_SAME_HOST_ORIGIN,
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
 def test_cross_host_origin_still_rejected() -> None:
     client = Client(enforce_csrf_checks=True)
     token = _seed_csrf_cookie(client, 'anthias.local')
