@@ -32,13 +32,32 @@ secret, which only a page Anthias actually rendered can produce.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 from django.core.exceptions import DisallowedHost
 from django.middleware.csrf import CsrfViewMiddleware
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
+
+
+def _hostname(value: str) -> str | None:
+    """Lowercased hostname from either a full URL or a bare ``Host``
+    header value, ignoring port and IPv6 brackets. Returns ``None``
+    when the input doesn't parse to a hostname.
+
+    The comparison this is feeding is intentionally port-agnostic — a
+    common proxy shape sends ``Host: device.example:443`` upstream
+    while the browser's ``Origin`` is ``https://device.example`` with
+    no port; same site from the user's perspective, but the raw
+    netloc/get_host() strings disagree.
+    """
+    candidate = value if '://' in value else f'http://{value}'
+    try:
+        host = urlsplit(candidate).hostname
+    except ValueError:
+        return None
+    return host.lower() if host else None
 
 
 class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
@@ -66,15 +85,13 @@ class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
             return False
 
         try:
-            origin_netloc = urlparse(request_origin).netloc
-        except ValueError:
-            return False
-        if not origin_netloc:
-            return False
-
-        try:
             request_host = request.get_host()
         except DisallowedHost:
             return False
 
-        return bool(origin_netloc.lower() == request_host.lower())
+        origin_hostname = _hostname(request_origin)
+        request_hostname = _hostname(request_host)
+        if not origin_hostname or not request_hostname:
+            return False
+
+        return bool(origin_hostname == request_hostname)

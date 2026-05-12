@@ -70,6 +70,24 @@ def test_same_host_https_origin_on_http_passes() -> None:
 
 
 @pytest.mark.django_db
+def test_host_with_port_origin_without_port_passes() -> None:
+    """Common reverse-proxy shape: the upstream ``Host`` carries an
+    explicit (often default) port — e.g. ``Host: anthias.local:443``
+    — while the browser's ``Origin`` is ``https://anthias.local``
+    with the default port elided. Same site from the user's view;
+    the fallback must compare hostnames and ignore the port drift."""
+    client = Client(enforce_csrf_checks=True)
+    token = _seed_form_token(client, 'anthias.local:443')
+    response = client.post(
+        reverse('anthias_app:assets_control', args=['next']),
+        data={'csrfmiddlewaretoken': token},
+        HTTP_HOST='anthias.local:443',
+        HTTP_ORIGIN=_HTTPS_SAME_HOST_ORIGIN,
+    )
+    assert response.status_code == 302
+
+
+@pytest.mark.django_db
 def test_cross_host_origin_still_rejected() -> None:
     client = Client(enforce_csrf_checks=True)
     token = _seed_form_token(client, 'anthias.local')
