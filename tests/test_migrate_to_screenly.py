@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 from django.utils import timezone
-from playwright.sync_api import Page, Route, expect
+from playwright.sync_api import Page, Request, Route, expect
 
 from anthias_server.app.models import Asset
 
@@ -116,16 +116,25 @@ def seeded_assets(reset_assets: None) -> list[Asset]:
 # ---------------------------------------------------------------------------
 
 
+# Playwright's RouteHandler invokes callbacks with ``(route, request)``
+# — confirmed in playwright._impl._helper.RouteHandler._handle_internal,
+# which does ``self.handler(route, route.request)``. A single-arg
+# ``def handler(route)`` raises TypeError at routing time. All mock
+# handlers below accept the unused ``request`` argument for that
+# reason.
+
+
 def _mock_validate_invalid(page: Page) -> None:
     """Token validation that says "Screenly rejected this token."."""
-    page.route(
-        '**/api/v2/integrations/screenly/validate',
-        lambda route: route.fulfill(
+
+    def handler(route: Route, request: Request) -> None:
+        route.fulfill(
             status=200,
             content_type='application/json',
             body=json.dumps({'valid': False}),
-        ),
-    )
+        )
+
+    page.route('**/api/v2/integrations/screenly/validate', handler)
 
 
 def _mock_validate_valid(
@@ -133,9 +142,8 @@ def _mock_validate_valid(
     group_id: str = 'GROUP01',
     group_title: str = 'Migrated from Anthias',
 ) -> None:
-    page.route(
-        '**/api/v2/integrations/screenly/validate',
-        lambda route: route.fulfill(
+    def handler(route: Route, request: Request) -> None:
+        route.fulfill(
             status=200,
             content_type='application/json',
             body=json.dumps(
@@ -145,8 +153,9 @@ def _mock_validate_valid(
                     'asset_group_title': group_title,
                 }
             ),
-        ),
-    )
+        )
+
+    page.route('**/api/v2/integrations/screenly/validate', handler)
 
 
 def _mock_migrate_per_asset(
@@ -161,7 +170,7 @@ def _mock_migrate_per_asset(
     tests that only care about one failure.
     """
 
-    def handler(route: Route) -> None:
+    def handler(route: Route, request: Request) -> None:
         body = route.request.post_data_json or {}
         asset_id = body.get('asset_id', '')
         result = outcomes.get(
@@ -370,7 +379,7 @@ def test_retry_failed_replays_only_failed_rows(
 
     call_log: dict[str, int] = {}
 
-    def counting_handler(route: Route) -> None:
+    def counting_handler(route: Route, request: Request) -> None:
         body = route.request.post_data_json or {}
         asset_id = body.get('asset_id', '')
         call_log[asset_id] = call_log.get(asset_id, 0) + 1

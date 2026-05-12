@@ -362,9 +362,28 @@ function migrateToScreenly() {
 
     async validate() {
       this.tokenError = ''
+      // The Continue button is disabled when the token is empty,
+      // but Enter still triggers @keydown.enter.prevent. Guard
+      // here so an Enter-press on an empty field surfaces a clear
+      // "paste the token" message instead of round-tripping a
+      // 400 (serializer "this field may not be blank") that the
+      // backend response handler below would misread as "Screenly
+      // rejected this token".
+      const token = (this.token || '').trim()
+      if (!token) {
+        this.tokenError = 'Paste your Screenly API token first.'
+        return
+      }
       this.validating = true
       try {
-        const { ok, payload } = await postJson(ENDPOINTS.validate, { token: this.token })
+        const { ok, status, payload } = await postJson(ENDPOINTS.validate, { token })
+        if (status === 400) {
+          // Serializer rejected the body — surface a generic
+          // "token looks malformed" rather than the token-rejected
+          // copy (which implies Screenly itself said no).
+          this.tokenError = 'That token looks malformed. Double-check the value you pasted.'
+          return
+        }
         if (!payload.valid) {
           this.tokenError = payload.error
             || 'Screenly rejected this token. Double-check it in your dashboard.'
