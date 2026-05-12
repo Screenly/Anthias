@@ -823,7 +823,7 @@ def test_apply_wlr_transform_skipped_on_linuxfb() -> None:
 
 
 def test_apply_wlr_transform_invokes_wlr_randr_per_output() -> None:
-    """On x86, list outputs then push the transform to each one."""
+    """On x86, list enabled outputs then push the transform to each."""
 
     def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
         result = mock.Mock()
@@ -835,7 +835,7 @@ def test_apply_wlr_transform_invokes_wlr_randr_per_output() -> None:
                 '  Enabled: yes\n'
                 '  Modes:\n'
                 'HDMI-A-2 "Bar"\n'
-                '  Enabled: no\n'
+                '  Enabled: yes\n'
             )
         else:
             result.stdout = ''
@@ -861,6 +861,35 @@ def test_apply_wlr_transform_invokes_wlr_randr_per_output() -> None:
     for call in transform_calls:
         assert '--transform' in call.args[0]
         assert call.args[0][call.args[0].index('--transform') + 1] == '180'
+
+
+def test_wlr_output_names_skips_disabled_outputs() -> None:
+    """``wlr-randr --output X --transform ...`` on a disabled
+    connector fails noisily and changes nothing — Copilot review of
+    #2882 flagged that we were trying anyway. Parser must drop
+    blocks whose ``Enabled:`` line reads ``no``."""
+
+    def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
+        result = mock.Mock()
+        result.returncode = 0
+        result.stdout = (
+            'HDMI-A-1 "Foo"\n'
+            '  Enabled: yes\n'
+            '  Modes:\n'
+            'HDMI-A-2 "Bar"\n'
+            '  Enabled: no\n'
+            'DP-1 "Baz"\n'
+            '  Enabled: yes\n'
+        )
+        result.stderr = ''
+        return result
+
+    with (
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch('anthias_viewer.subprocess.run', side_effect=_fake_run),
+    ):
+        names = viewer._wlr_output_names()
+    assert names == ['HDMI-A-1', 'DP-1']
 
 
 def test_apply_wlr_transform_logs_warning_on_nonzero_exit(
@@ -1041,11 +1070,98 @@ def test_asset_loop_consumes_pending_rotation_bounce(
         mock.patch.object(
             viewer, '_consume_pending_rotation_bounce'
         ) as consume,
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending'),
         mock.patch.object(viewer, 'view_image'),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip),
     ):
         viewer.asset_loop(fake_scheduler)
     consume.assert_called_once()
+
+
+def test_asset_loop_retries_wayland_rotation(
+    reset_rotation_state: None,
+) -> None:
+    """asset_loop must drive the Wayland startup-failure retry —
+    Copilot review of #2882 flagged that without it, an early-boot
+    wlr-randr failure (cage's wayland socket not yet up) leaves the
+    display unrotated forever, since no reload arrives unattended."""
+    fake_scheduler = mock.Mock()
+    fake_scheduler.get_next_asset.return_value = None
+    skip = mock.Mock()
+    skip.wait.return_value = False
+    with (
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending') as r,
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer.asset_loop(fake_scheduler)
+    r.assert_called_once()
+
+
+def test_retry_wayland_rotation_skips_when_already_applied(
+    reset_rotation_state: None,
+) -> None:
+    """Cheap early-return when rotation is already where it should
+    be — otherwise asset_loop would push wlr-randr on every tick."""
+    viewer._last_applied_rotation = 90
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.object(viewer, '_apply_wlr_transform') as apply,
+    ):
+        viewer._retry_wayland_rotation_if_pending()
+    apply.assert_not_called()
+
+
+def test_retry_wayland_rotation_recovers_from_startup_failure(
+    reset_rotation_state: None,
+) -> None:
+    """Sentinel -1 (set by load_browser when the boot apply failed)
+    must trigger a retry. On success the latch advances to the real
+    angle so subsequent ticks early-return."""
+    viewer._last_applied_rotation = -1
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 270}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.object(
+            viewer, '_apply_wlr_transform', return_value=True
+        ) as apply,
+    ):
+        viewer._retry_wayland_rotation_if_pending()
+    apply.assert_called_once_with(270)
+    assert viewer._last_applied_rotation == 270
+
+
+def test_retry_wayland_rotation_keeps_sentinel_on_failure(
+    reset_rotation_state: None,
+) -> None:
+    """A second-attempt failure must NOT latch the new angle —
+    otherwise we'd silently give up on rotation."""
+    viewer._last_applied_rotation = -1
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 270}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.object(viewer, '_apply_wlr_transform', return_value=False),
+    ):
+        viewer._retry_wayland_rotation_if_pending()
+    assert viewer._last_applied_rotation == -1
+
+
+def test_retry_wayland_rotation_skipped_on_linuxfb(
+    reset_rotation_state: None,
+) -> None:
+    """Linuxfb rotation is applied synchronously at QPA init via
+    QT_QPA_PLATFORM, so there's no analogous failure mode — the
+    retry helper must short-circuit on Pi boards."""
+    viewer._last_applied_rotation = -1
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.object(viewer, '_apply_wlr_transform') as apply,
+    ):
+        viewer._retry_wayland_rotation_if_pending()
+    apply.assert_not_called()
 
 
 def test_handle_reload_linuxfb_idempotent_under_repeat(

@@ -167,12 +167,28 @@ def _wlr_transform_value(rotation_deg: int) -> str:
 
 
 def _wlr_output_names() -> list[str]:
-    """List connector names known to the wlroots compositor.
+    """List *enabled* connector names known to the wlroots compositor.
 
-    ``wlr-randr`` with no args prints one block per output, with the
-    name as the first non-whitespace token on the block's first line.
-    Empty list means nothing connected (or cage isn't running yet) —
-    callers treat that as "no rotation to apply" rather than an error.
+    ``wlr-randr`` with no args prints one block per output. Each block
+    looks like::
+
+        HDMI-A-1 "Foo Display"
+          Enabled: yes
+          Modes:
+            ...
+        HDMI-A-2 "Bar"
+          Enabled: no
+          ...
+
+    The connector name is the first non-whitespace token on the
+    block's first line; whether the output is currently active is
+    indicated by an indented ``Enabled: yes|no`` line within the
+    block. We skip ``Enabled: no`` outputs because ``wlr-randr
+    --output X --transform ...`` on a disabled connector fails with a
+    warning that adds noise to the journal without changing behaviour
+    (Copilot review of #2882). Empty list means nothing connected and
+    enabled (or cage isn't running yet) — callers treat that as "no
+    rotation to apply" rather than an error.
     """
     try:
         result = subprocess.run(
@@ -190,9 +206,28 @@ def _wlr_output_names() -> list[str]:
         )
         return []
     names: list[str] = []
+    current: str | None = None
+    current_enabled: bool | None = None
     for line in result.stdout.splitlines():
-        if line and not line[0].isspace():
-            names.append(line.split()[0])
+        if not line:
+            continue
+        if not line[0].isspace():
+            # New output block. Commit the previous one (if it was
+            # enabled — None means we never saw an explicit Enabled:
+            # line, which on modern wlr-randr versions means the
+            # output is implicitly enabled, so include it as a
+            # conservative default).
+            if current is not None and current_enabled is not False:
+                names.append(current)
+            current = line.split()[0]
+            current_enabled = None
+        else:
+            stripped = line.strip()
+            if stripped.startswith('Enabled:'):
+                _, _, value = stripped.partition(':')
+                current_enabled = value.strip().lower() == 'yes'
+    if current is not None and current_enabled is not False:
+        names.append(current)
     return names
 
 
@@ -571,6 +606,33 @@ def _maybe_reapply_rotation() -> None:
     get_skip_event().set()
 
 
+def _retry_wayland_rotation_if_pending() -> None:
+    """Main-thread retry for an unsuccessful Wayland rotation apply.
+
+    load_browser() at viewer startup tries to push the wlr-randr
+    transform before AnthiasWebview spawns, but cage may not have
+    fully come up at that point — its wayland socket can be missing
+    or its compositor not yet listing outputs. The first apply
+    returns False, load_browser() latches ``_last_applied_rotation
+    = -1`` (sentinel for "needs retry"), and without this helper the
+    display would stay unrotated until the operator next changed the
+    setting and triggered a `reload` (Copilot review of #2882).
+
+    Called from asset_loop on every tick. The early-return guard
+    means once the rotation has actually taken effect we drop back
+    to zero overhead. Linuxfb is unaffected (env-var path is
+    synchronous at QPA init, so it can't fail half-applied).
+    """
+    if not _is_wayland_board():
+        return
+    global _last_applied_rotation
+    rotation = _rotation_value()
+    if rotation == _last_applied_rotation:
+        return
+    if _apply_wlr_transform(rotation):
+        _last_applied_rotation = rotation
+
+
 def _consume_pending_rotation_bounce() -> None:
     """Main-thread half of the linuxfb rotation handoff.
 
@@ -725,6 +787,11 @@ def asset_loop(scheduler: Any) -> None:
     # invocation below will see browser.is_alive()==False and
     # respawn via load_browser() with the updated rotation env.
     _consume_pending_rotation_bounce()
+
+    # Issue #2856 — and retry the Wayland rotation if the boot-time
+    # attempt in load_browser() raced cage's wayland-socket setup.
+    # Cheap early-return when nothing's pending.
+    _retry_wayland_rotation_if_pending()
 
     asset = scheduler.get_next_asset()
 
