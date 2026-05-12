@@ -366,7 +366,9 @@ def load_browser() -> None:
             _last_applied_rotation = rotation
         else:
             # Reset to a sentinel that doesn't match any valid angle
-            # so the next reload retries the apply. -1 is safe because
+            # so the next asset_loop tick (via
+            # _retry_wayland_rotation_if_pending) or the next server
+            # `reload` retries the apply. -1 is safe because
             # _rotation_value() only returns cardinals.
             _last_applied_rotation = -1
     else:
@@ -577,16 +579,18 @@ def _maybe_reapply_rotation() -> None:
         # any state shared with the main thread. Only latch on
         # success so a transient failure (cage not ready, transient
         # wayland-socket hiccup) leaves us in "still needs to retry"
-        # state — the next ``reload`` (asset edit, recheck, etc.) will
-        # see the mismatch and retry. Without this guard a startup
-        # race could latch the unrotated state permanently and only
-        # a user re-toggle would recover.
+        # state — the next asset_loop tick (via
+        # _retry_wayland_rotation_if_pending) or the next ``reload``
+        # (asset edit, recheck, etc.) will see the mismatch and
+        # retry. Without this guard a startup race could latch the
+        # unrotated state permanently and only a user re-toggle
+        # would recover.
         if _apply_wlr_transform(rotation):
             _last_applied_rotation = rotation
         else:
             logging.warning(
                 'wlr-randr could not apply rotation %d on any output; '
-                'will retry on the next reload.',
+                'will retry on the next asset_loop tick.',
                 rotation,
             )
         return
