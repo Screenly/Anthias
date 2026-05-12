@@ -1848,11 +1848,10 @@ class _FakeSerializer:
 
 
 def test_dispatch_pending_normalize_routes_video() -> None:
-    with mock.patch(
-        'anthias_server.processing.dispatch_normalize_video'
-    ) as v, mock.patch(
-        'anthias_server.processing.dispatch_normalize_image'
-    ) as i:
+    with (
+        mock.patch('anthias_server.processing.dispatch_normalize_video') as v,
+        mock.patch('anthias_server.processing.dispatch_normalize_image') as i,
+    ):
         processing.dispatch_pending_normalize(
             _FakeSerializer('video'), 'asset-vid'
         )
@@ -1861,11 +1860,10 @@ def test_dispatch_pending_normalize_routes_video() -> None:
 
 
 def test_dispatch_pending_normalize_routes_image() -> None:
-    with mock.patch(
-        'anthias_server.processing.dispatch_normalize_video'
-    ) as v, mock.patch(
-        'anthias_server.processing.dispatch_normalize_image'
-    ) as i:
+    with (
+        mock.patch('anthias_server.processing.dispatch_normalize_video') as v,
+        mock.patch('anthias_server.processing.dispatch_normalize_image') as i,
+    ):
         processing.dispatch_pending_normalize(
             _FakeSerializer('image'), 'asset-img'
         )
@@ -1877,11 +1875,10 @@ def test_dispatch_pending_normalize_noop_when_unset() -> None:
     """A serializer that didn't flag normalisation (most uploads:
     JPEG/PNG/H.264) leaves the helper as a no-op — no spurious
     Celery dispatch."""
-    with mock.patch(
-        'anthias_server.processing.dispatch_normalize_video'
-    ) as v, mock.patch(
-        'anthias_server.processing.dispatch_normalize_image'
-    ) as i:
+    with (
+        mock.patch('anthias_server.processing.dispatch_normalize_video') as v,
+        mock.patch('anthias_server.processing.dispatch_normalize_image') as i,
+    ):
         processing.dispatch_pending_normalize(
             _FakeSerializer(None), 'asset-plain'
         )
@@ -1897,11 +1894,10 @@ def test_dispatch_pending_normalize_handles_missing_attribute() -> None:
     class _Bare:
         pass
 
-    with mock.patch(
-        'anthias_server.processing.dispatch_normalize_video'
-    ) as v, mock.patch(
-        'anthias_server.processing.dispatch_normalize_image'
-    ) as i:
+    with (
+        mock.patch('anthias_server.processing.dispatch_normalize_video') as v,
+        mock.patch('anthias_server.processing.dispatch_normalize_image') as i,
+    ):
         processing.dispatch_pending_normalize(_Bare(), 'asset-bare')
     v.assert_not_called()
     i.assert_not_called()

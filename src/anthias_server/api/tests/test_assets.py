@@ -586,6 +586,10 @@ def test_create_video_asset_dispatches_normalize_task(
         # 0; we mock get_video_duration so its synchronous probe
         # doesn't try to ffprobe a non-existent path.
         'duration': 0,
+        # v1.2 / v2 mixin's rename preserves ``ext`` on the destination
+        # filename — v1 / v1.1 ignore it. Including it keeps both
+        # branches happy.
+        'ext': '.mp4',
     }
     asset_list_url = reverse(f'api:asset_list_{version}')
 
@@ -596,8 +600,16 @@ def test_create_video_asset_dispatches_normalize_task(
         mock.patch('anthias_server.processing._stamp_processing_start'),
         mock.patch('anthias_server.api.serializers.mixins.rename'),
         mock.patch('anthias_server.api.serializers.v1_1.rename'),
+        # ``validate_uri`` raises ``Exception('Invalid file path…')``
+        # when its target doesn't exist on disk. v1 / v1.1 imports it
+        # from ``serializers.v1_1``; v1.2 / v2 import it via the mixin
+        # — patch both binding sites.
         mock.patch(
             'anthias_server.api.serializers.mixins.validate_uri',
+            return_value=True,
+        ),
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.validate_uri',
             return_value=True,
         ),
         mock.patch(
@@ -642,6 +654,10 @@ def test_create_heic_image_dispatches_normalize_task_on_v1_2_and_v2(
         **ASSET_CREATION_DATA,
         'uri': local_heic_uri,
         'mimetype': 'image',
+        # The mixin's rename uses ``ext`` on the destination filename;
+        # without it, the file lands extensionless and
+        # ``needs_image_normalisation`` returns False → no dispatch.
+        'ext': '.heic',
     }
     asset_list_url = reverse(f'api:asset_list_{version}')
 
@@ -699,6 +715,13 @@ def test_create_heic_image_does_not_dispatch_on_legacy_endpoints(
             'anthias_server.processing.dispatch_normalize_image'
         ) as mock_dispatch,
         mock.patch('anthias_server.api.serializers.v1_1.rename'),
+        # ``validate_uri`` rejects non-existent local paths; this
+        # short-circuits the disk-existence check the same way the
+        # video test above does.
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.validate_uri',
+            return_value=True,
+        ),
         mock.patch(
             'anthias_server.api.serializers.v1_1.url_fails',
             return_value=False,
