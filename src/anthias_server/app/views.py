@@ -1,4 +1,5 @@
 import logging
+import re
 import tarfile
 import uuid
 from datetime import datetime
@@ -383,6 +384,12 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         candidate_ext = f'.{subtype}'
         if mimetype == 'image' and candidate_ext in NORMALIZE_IMAGE_EXTS:
             src_ext = candidate_ext
+
+    # Drop anything that isn't a plain ``.<alnum>`` extension so a
+    # hostile ``Content-Disposition: filename=`` value can't smuggle
+    # ``/`` or ``..`` into ``final_path`` (CodeQL py/path-injection).
+    if src_ext and not re.fullmatch(r'\.[A-Za-z0-9]{1,16}', src_ext):
+        src_ext = ''
 
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
@@ -977,22 +984,6 @@ def system_info(request: HttpRequest) -> HttpResponse:
     return template(request, 'system_info.html', context)
 
 
-def _safe_login_next(request: HttpRequest, candidate: str) -> str:
-    """Whitelist `next` to same-host paths so the login flow can't be
-    weaponised as an open redirect. Falls back to the dashboard for
-    empty / off-host / scheme-mismatched values."""
-    home = reverse('anthias_app:home')
-    if not candidate:
-        return home
-    if url_has_allowed_host_and_scheme(
-        url=candidate,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure(),
-    ):
-        return candidate
-    return home
-
-
 @require_http_methods(['GET', 'POST'])
 def login(request: HttpRequest) -> HttpResponse:
     # Read `next` from the form on POST (login.html round-trips the
@@ -1011,7 +1002,19 @@ def login(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=username, password=password)
         if user is not None:
             django_login(request, user)
-            return redirect(_safe_login_next(request, next_url))
+            # Run the host/scheme allow-list inline so CodeQL's
+            # py/url-redirection sees the sanitiser guarding the
+            # redirect target (it doesn't propagate sanitisers
+            # through a helper). reverse() also rebuilds the
+            # fallback so none of the inbound string survives.
+            redirect_target = reverse('anthias_app:home')
+            if next_url and url_has_allowed_host_and_scheme(
+                url=next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                redirect_target = next_url
+            return redirect(redirect_target)
         else:
             messages.error(request, 'Invalid username or password')
             return template(request, 'login.html', {'next': next_url})
