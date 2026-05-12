@@ -12,6 +12,7 @@ from anthias_server.processing import (
 )
 from anthias_server.api.helpers import (
     AssetCreationError,
+    finalize_asset_update,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
@@ -22,7 +23,6 @@ from anthias_server.api.serializers import (
 from anthias_server.api.serializers.v1_2 import CreateAssetSerializerV1_2
 from anthias_server.api.views.mixins import DeleteAssetViewMixin
 from anthias_server.lib.auth import authorized
-from anthias_server.settings import ViewerPublisher
 
 
 class AssetListViewV1_2(APIView):
@@ -114,25 +114,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
                 serializer.errors, status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_asset_ids = get_active_asset_ids()
-
-        asset.refresh_from_db()
-
-        try:
-            active_asset_ids.remove(asset.asset_id)
-        except ValueError:
-            pass
-
-        if asset.is_active():
-            active_asset_ids.insert(asset.play_order, asset.asset_id)
-
-        save_active_assets_ordering(active_asset_ids)
-        asset.refresh_from_db()
-
-        # See AssetViewV2.update — wake the viewer so a just-edited
-        # asset that's still on screen but no longer active gets
-        # skipped (issue #2430).
-        ViewerPublisher.get_instance().send_to_viewer('reload')
+        finalize_asset_update(asset)
 
         return Response(AssetSerializer(asset).data)
 

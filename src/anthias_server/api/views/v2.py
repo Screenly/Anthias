@@ -23,6 +23,7 @@ from anthias_server.app.helpers import (
 from anthias_server.app.models import Asset
 from anthias_server.api.helpers import (
     AssetCreationError,
+    finalize_asset_update,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
@@ -416,27 +417,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
                 serializer.errors, status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_asset_ids = get_active_asset_ids()
-
-        asset.refresh_from_db()
-
-        try:
-            active_asset_ids.remove(asset.asset_id)
-        except ValueError:
-            pass
-
-        if asset.is_active():
-            active_asset_ids.insert(asset.play_order, asset.asset_id)
-
-        save_active_assets_ordering(active_asset_ids)
-        asset.refresh_from_db()
-
-        # An edit can flip is_enabled or push the asset out of its
-        # date / play_days / play_time window — both effectively
-        # deactivate it. Tell the viewer so it can skip past the row
-        # immediately instead of finishing the originally scheduled
-        # duration (issue #2430).
-        ViewerPublisher.get_instance().send_to_viewer('reload')
+        finalize_asset_update(asset)
 
         return Response(AssetSerializerV2(asset).data)
 

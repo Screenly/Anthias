@@ -564,7 +564,7 @@ def test_skip_when_current_asset_deleted() -> None:
     with (
         mock.patch.object(viewer, 'scheduler', scheduler),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
-        mock.patch.object(viewer.Asset.objects, 'filter') as objects_filter,
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
     ):
         # ``filter().first()`` returns None for a deleted row.
         objects_filter.return_value.first.return_value = None
@@ -582,7 +582,7 @@ def test_skip_when_current_asset_deactivated() -> None:
     with (
         mock.patch.object(viewer, 'scheduler', scheduler),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
-        mock.patch.object(viewer.Asset.objects, 'filter') as objects_filter,
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
     ):
         objects_filter.return_value.first.return_value = inactive_asset
         viewer._skip_if_current_asset_inactive()
@@ -600,7 +600,7 @@ def test_no_skip_when_current_asset_still_active() -> None:
     with (
         mock.patch.object(viewer, 'scheduler', scheduler),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
-        mock.patch.object(viewer.Asset.objects, 'filter') as objects_filter,
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
     ):
         objects_filter.return_value.first.return_value = active_asset
         viewer._skip_if_current_asset_inactive()
@@ -615,7 +615,7 @@ def test_skip_noop_when_no_current_asset() -> None:
     with (
         mock.patch.object(viewer, 'scheduler', scheduler),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
-        mock.patch.object(viewer.Asset.objects, 'filter') as objects_filter,
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
     ):
         viewer._skip_if_current_asset_inactive()
     objects_filter.assert_not_called()
@@ -644,8 +644,9 @@ def test_skip_swallows_db_errors() -> None:
     with (
         mock.patch.object(viewer, 'scheduler', scheduler),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
-        mock.patch.object(
-            viewer.Asset.objects, 'filter', side_effect=RuntimeError('boom')
+        mock.patch(
+            'anthias_viewer.Asset.objects.filter',
+            side_effect=RuntimeError('boom'),
         ),
     ):
         # Must not raise.

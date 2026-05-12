@@ -582,50 +582,30 @@ def test_delete_asset_publishes_reload(
 
 
 @pytest.mark.django_db
-@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
-def test_v2_update_asset_publishes_reload(
-    publisher_mock: Any, api_client: APIClient
+@pytest.mark.parametrize(
+    'version,publisher_target',
+    [
+        ('v1', 'anthias_server.api.views.v1.ViewerPublisher'),
+        ('v1_2', 'anthias_server.api.helpers.ViewerPublisher'),
+        ('v2', 'anthias_server.api.helpers.ViewerPublisher'),
+    ],
+)
+def test_update_asset_publishes_reload(
+    api_client: APIClient, version: str, publisher_target: str
 ) -> None:
-    publisher_instance = mock.MagicMock()
-    publisher_mock.get_instance.return_value = publisher_instance
+    """v1.put writes its own publish; v1_2/v2 share the helper."""
+    with mock.patch(publisher_target) as publisher_mock:
+        publisher_instance = mock.MagicMock()
+        publisher_mock.get_instance.return_value = publisher_instance
 
-    asset = _create_asset(api_client, ASSET_CREATION_DATA, 'v2')
+        asset = _create_asset(api_client, ASSET_CREATION_DATA, version)
+        data = (
+            ASSET_UPDATE_DATA_V2 if version == 'v2' else ASSET_UPDATE_DATA_V1_2
+        )
 
-    _update_asset(api_client, asset['asset_id'], ASSET_UPDATE_DATA_V2, 'v2')
+        _update_asset(api_client, asset['asset_id'], data, version)
 
-    publisher_instance.send_to_viewer.assert_called_once_with('reload')
-
-
-@pytest.mark.django_db
-@mock.patch('anthias_server.api.views.v1.ViewerPublisher')
-def test_v1_update_asset_publishes_reload(
-    publisher_mock: Any, api_client: APIClient
-) -> None:
-    publisher_instance = mock.MagicMock()
-    publisher_mock.get_instance.return_value = publisher_instance
-
-    asset = _create_asset(api_client, ASSET_CREATION_DATA, 'v1')
-
-    _update_asset(api_client, asset['asset_id'], ASSET_UPDATE_DATA_V1_2, 'v1')
-
-    publisher_instance.send_to_viewer.assert_called_once_with('reload')
-
-
-@pytest.mark.django_db
-@mock.patch('anthias_server.api.views.v1_2.ViewerPublisher')
-def test_v1_2_update_asset_publishes_reload(
-    publisher_mock: Any, api_client: APIClient
-) -> None:
-    publisher_instance = mock.MagicMock()
-    publisher_mock.get_instance.return_value = publisher_instance
-
-    asset = _create_asset(api_client, ASSET_CREATION_DATA, 'v1_2')
-
-    _update_asset(
-        api_client, asset['asset_id'], ASSET_UPDATE_DATA_V1_2, 'v1_2'
-    )
-
-    publisher_instance.send_to_viewer.assert_called_once_with('reload')
+        publisher_instance.send_to_viewer.assert_called_once_with('reload')
 
 
 @pytest.mark.django_db
