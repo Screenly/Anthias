@@ -21,12 +21,17 @@ same reason — Anthias is a LAN signage device reached by IP, mDNS,
 or whatever DNS entry the operator wires up.
 
 So: accept an Origin whose **host** matches ``request.get_host()``
-even when the schemes disagree. A real cross-site forgery still
-fails — the browser sets ``Origin`` from the attacker's page, and
-attacker.example doesn't match the device's host. The masked-token
-check still runs on top, so a same-host Origin alone isn't enough;
-the POST must also carry a token that hashes against the cookie
-secret, which only a page Anthias actually rendered can produce.
+even when the schemes disagree, and tolerate port drift *only* when
+at least one side's port is the default for its scheme (so
+``Host: device.example:443`` + ``Origin: https://device.example``
+passes, but ``Origin: http://device:8080`` posting to
+``Host: device:8000`` — two distinct web origins — still 403s). A
+real cross-site forgery still fails: the browser sets ``Origin``
+from the attacker's page, and attacker.example doesn't match the
+device's host. The masked-token check still runs on top, so a
+same-host Origin alone isn't enough; the POST must also carry a
+token that hashes against the cookie secret, which only a page
+Anthias actually rendered can produce.
 """
 
 from __future__ import annotations
@@ -41,26 +46,51 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-def _hostname(value: str) -> str | None:
-    """Lowercased hostname from either a full URL or a bare ``Host``
-    header value, ignoring port and IPv6 brackets. Returns ``None``
-    when the input doesn't parse to a hostname.
+_DEFAULT_PORTS = {'http': 80, 'https': 443}
 
-    The comparison this is feeding is intentionally port-agnostic — a
-    common proxy shape sends ``Host: device.example:443`` upstream
-    while the browser's ``Origin`` is ``https://device.example`` with
-    no port; same site from the user's perspective, but the raw
-    netloc/get_host() strings disagree.
+
+def _split_origin(
+    value: str, *, default_scheme: str
+) -> tuple[str, int] | None:
+    """Return ``(hostname, port)`` for a URL or bare ``Host`` value.
+
+    ``default_scheme`` is the scheme to fall back to when ``value`` is
+    a bare ``Host`` header (no scheme of its own) — typically
+    ``request.scheme``. Port is resolved to the scheme's default when
+    the value omits it, so ``Origin: https://device.example`` and
+    ``Origin: https://device.example:443`` collapse to the same
+    ``(host, 443)`` pair. ``None`` means the input didn't parse.
     """
-    # Protocol-relative prefix (``//host[:port]``) is enough for
-    # ``urlsplit`` to recognise a bare ``Host`` value as a netloc
-    # without baking a literal scheme into this file.
-    candidate = value if '://' in value else f'//{value}'
+    scheme: str
+    if '://' in value:
+        try:
+            parts = urlsplit(value)
+        except ValueError:
+            return None
+        scheme = parts.scheme.lower() or default_scheme
+        netloc = parts
+    else:
+        scheme = default_scheme
+        try:
+            netloc = urlsplit(f'//{value}')
+        except ValueError:
+            return None
+
+    hostname = netloc.hostname
+    if not hostname:
+        return None
     try:
-        host = urlsplit(candidate).hostname
+        explicit_port = netloc.port
     except ValueError:
         return None
-    return host.lower() if host else None
+    port = (
+        explicit_port
+        if explicit_port is not None
+        else _DEFAULT_PORTS.get(scheme)
+    )
+    if port is None:
+        return None
+    return hostname.lower(), port
 
 
 class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
@@ -92,9 +122,25 @@ class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
         except DisallowedHost:
             return False
 
-        origin_hostname = _hostname(request_origin)
-        request_hostname = _hostname(request_host)
-        if not origin_hostname or not request_hostname:
+        request_scheme = (request.scheme or 'http').lower()
+        origin = _split_origin(request_origin, default_scheme=request_scheme)
+        target = _split_origin(request_host, default_scheme=request_scheme)
+        if origin is None or target is None:
             return False
 
-        return bool(origin_hostname == request_hostname)
+        origin_host, origin_port = origin
+        target_host, target_port = target
+        if origin_host != target_host:
+            return False
+
+        if origin_port == target_port:
+            return True
+
+        # Different ports are accepted only when at least one side is
+        # already at the scheme's default — that's the proxy/HSTS
+        # shape (``Host: device:443`` + ``Origin: https://device``)
+        # the fallback exists for. Two explicit non-default ports
+        # mean genuinely different web origins and stay rejected.
+        return origin_port in _DEFAULT_PORTS.values() or (
+            target_port in _DEFAULT_PORTS.values()
+        )
