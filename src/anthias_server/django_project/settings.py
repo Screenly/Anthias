@@ -111,20 +111,23 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'dbbackup',
     ]
 
+# Sonar's S4502 ("disabling CSRF protection") fires on the MIDDLEWARE
+# list because it pattern-matches the literal ``CsrfViewMiddleware``
+# class name and doesn't see one. SameHostOriginCsrfMiddleware (see
+# src/anthias_server/lib/csrf.py) is a subclass of
+# ``django.middleware.csrf.CsrfViewMiddleware``, so CSRF protection
+# is still wired in — the rule's a false positive. NOSONAR on the
+# closing bracket where S4502 actually raises its issue.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # SameHostOriginCsrfMiddleware subclasses Django's
-    # ``CsrfViewMiddleware`` (see src/anthias_server/lib/csrf.py) — CSRF
-    # protection is still in place. Sonar's S4502 pattern-matches the
-    # bare class name though, so flag this site as reviewed.
-    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',  # NOSONAR
+    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+]  # NOSONAR
 
 ROOT_URLCONF = 'anthias_server.django_project.urls'
 
