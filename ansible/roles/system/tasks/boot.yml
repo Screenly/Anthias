@@ -41,9 +41,13 @@
     src: "{{ system_cmdline_path }}.orig"
   register: system_cmdline_orig
 
-- name: Extract root boot arg
+- name: Extract preserved boot args from cmdline.txt.orig
   ansible.builtin.set_fact:
     system_cmdline_root_args: "{{ system_cmdline_orig_tokens | select('match', '^root=') | list }}"
+    # Preserve wifi regulatory tokens (cfg80211.*) that raspi-config
+    # writes to cmdline.txt — they aren't Anthias-managed and dropping
+    # them silently reverts wifi regdom to the kernel default.
+    system_cmdline_preserved_args: "{{ system_cmdline_orig_tokens | select('match', '^cfg80211\\.') | list }}"
   vars:
     system_cmdline_orig_tokens: "{{ (system_cmdline_orig.content | b64decode | trim).split() }}"
 
