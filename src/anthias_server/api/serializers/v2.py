@@ -341,3 +341,13 @@ class IntegrationsSerializerV2(Serializer[Any]):
         allow_null=True,
         allow_blank=True,
     )
+
+
+class ScreenlyTokenSerializerV2(Serializer[Any]):
+    token = CharField(write_only=True)
+
+
+class ScreenlyMigrateAssetSerializerV2(Serializer[Any]):
+    token = CharField(write_only=True)
+    asset_id = CharField()
+    asset_group_id = CharField(required=False, allow_blank=True)

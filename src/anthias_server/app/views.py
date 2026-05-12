@@ -117,6 +117,18 @@ def integrations(request: HttpRequest) -> HttpResponse:
     return template(request, 'integrations.html', context)
 
 
+@authorized
+@require_http_methods(['GET'])
+def migrate_to_screenly(request: HttpRequest) -> HttpResponse:
+    # Highlight the Settings tab — the migration wizard is reached
+    # from the Settings page; it shouldn't visually orphan the user.
+    return template(
+        request,
+        'migrate_to_screenly.html',
+        {'active_nav': 'settings'},
+    )
+
+
 # --- /home (Schedule Overview) ----------------------------------------------
 
 

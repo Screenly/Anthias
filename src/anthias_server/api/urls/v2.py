@@ -15,6 +15,8 @@ from anthias_server.api.views.v2 import (
     PlaylistOrderViewV2,
     RebootViewV2,
     RecoverViewV2,
+    ScreenlyMigrateAssetViewV2,
+    ScreenlyValidateTokenViewV2,
     ShutdownViewV2,
 )
 
@@ -66,6 +68,16 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
             'v2/integrations',
             IntegrationsViewV2.as_view(),
             name='integrations_v2',
+        ),
+        path(
+            'v2/integrations/screenly/validate',
+            ScreenlyValidateTokenViewV2.as_view(),
+            name='screenly_validate_token_v2',
+        ),
+        path(
+            'v2/integrations/screenly/migrate',
+            ScreenlyMigrateAssetViewV2.as_view(),
+            name='screenly_migrate_asset_v2',
         ),
         path(
             'v2/network/ip-addresses',

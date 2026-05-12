@@ -30,6 +30,11 @@ urlpatterns = [
         name='settings_shutdown',
     ),
     path(
+        'settings/migrate-to-screenly/',
+        views.migrate_to_screenly,
+        name='migrate_to_screenly',
+    ),
+    path(
         '_partials/asset-table/',
         views.assets_table_partial,
         name='assets_table',

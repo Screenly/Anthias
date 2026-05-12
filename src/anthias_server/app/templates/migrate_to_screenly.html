@@ -1,0 +1,603 @@
+{% extends "_layout.html" %}
+{% load static %}
+
+{% block title %}{% if player_name %}{{ player_name }} · {% endif %}Migrate to Screenly{% endblock %}
+
+{% block main %}
+<style>
+  /*
+    Native <progress> styled to match the rest of the surface. We use
+    the element (rather than a div with role="progressbar") so the
+    completion state is announced consistently by AT — the role
+    attribute doesn't get keyboard/AT semantics on every device.
+
+    Pseudoelement names are vendor-prefixed and can't be set via inline
+    style attributes, hence the rule block.
+  */
+  .screenly-migration-progress {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    display: block;
+    width: 100%;
+    height: 0.5rem;
+    border: none;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    background: #e5e7eb;
+  }
+  .screenly-migration-progress::-webkit-progress-bar {
+    background: #e5e7eb;
+    border-radius: 0.25rem;
+  }
+  .screenly-migration-progress::-webkit-progress-value {
+    background: #2563eb;
+    border-radius: 0.25rem;
+    transition: width 0.2s linear;
+  }
+  .screenly-migration-progress::-moz-progress-bar {
+    background: #2563eb;
+    border-radius: 0.25rem;
+  }
+</style>
+<div class="app-container" x-data="migrateToScreenly()" x-init="init()">
+  {# Hidden form just for the CSRF token — the wizard does everything in JS. #}
+  <form style="display:none">{% csrf_token %}</form>
+
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">Migrate to Screenly</h1>
+      <p class="page-header-bar__lede">
+        Copy this player's assets into a Screenly account. Existing assets on Screenly are left alone.
+      </p>
+    </div>
+    {% comment %}
+      The per-step Back buttons cover navigation within the wizard;
+      the navbar's Settings link covers exiting. A dedicated header
+      "Back to Settings" button was redundant and rendered invisible
+      against the dark page chrome (app-btn-outline-dark is designed
+      for placement on white surfaces).
+    {% endcomment %}
+  </div>
+
+  {# ===== Step 1: Intro / sign up ===== #}
+  <section class="surface" x-show="step === 'intro'" x-cloak>
+    <header class="surface__header">
+      <h2><i class="ti ti-cloud-upload mr-2"></i>Get started</h2>
+    </header>
+    <div class="settings-stack">
+      <p>
+        Screenly is the commercial cloud-managed sibling of Anthias. This wizard uploads each of your
+        local assets to a Screenly account using their API.
+      </p>
+      <ol class="ml-4" style="list-style: decimal;">
+        <li class="mb-2">
+          <strong>Sign up or sign in to Screenly</strong> &mdash;
+          <a href="https://login.screenlyapp.com/login" target="_blank" rel="noopener noreferrer">
+            login.screenlyapp.com
+          </a>
+        </li>
+        <li class="mb-2">
+          <strong>Generate an API token</strong> &mdash; in the Screenly dashboard, go to
+          <em>Settings &rarr; Security &rarr; API Tokens</em> and create a new token.
+        </li>
+        <li class="mb-2">
+          <strong>Paste the token below</strong> &mdash; it stays on this device and is only used to talk
+          to Screenly's API while the migration runs.
+        </li>
+      </ol>
+      <div class="flex justify-end">
+        <button type="button" class="app-btn app-btn-primary" @click="step = 'token'">
+          <i class="ti ti-key"></i><span>I have a token</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Step 2: Token paste + validate ===== #}
+  <section class="surface" x-show="step === 'token'" x-cloak>
+    <header class="surface__header">
+      <h2><i class="ti ti-key mr-2"></i>Screenly API token</h2>
+    </header>
+    <div class="settings-stack">
+      <p class="muted-label m-0">
+        Token format looks like <code>abcdef.123456…</code>. It is not stored on the device.
+      </p>
+      <div class="app-floating" style="position: relative;">
+        <input
+          :type="showToken ? 'text' : 'password'"
+          class="app-input"
+          id="screenly_token"
+          x-model="token"
+          @keydown.enter.prevent="validate()"
+          autocomplete="off"
+          placeholder=" "
+          style="padding-right: 3rem;"
+        >
+        <label for="screenly_token">API token</label>
+        <button
+          type="button"
+          class="app-btn-icon"
+          @click="showToken = !showToken"
+          :aria-label="showToken ? 'Hide token' : 'Show token'"
+          :aria-pressed="showToken"
+          style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);"
+        >
+          <i class="ti" :class="showToken ? 'ti-eye-off' : 'ti-eye'"></i>
+        </button>
+      </div>
+      <div
+        x-show="tokenError"
+        x-cloak
+        class="text-red-600"
+        role="alert"
+        aria-live="assertive"
+      >
+        <i class="ti ti-alert-triangle"></i>
+        <span x-text="tokenError"></span>
+      </div>
+      <div class="flex justify-between">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'intro'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+        <button
+          type="button"
+          class="app-btn app-btn-primary"
+          :disabled="!token || validating"
+          @click="validate()"
+        >
+          <i class="ti" :class="validating ? 'ti-loader animate-spin' : 'ti-check'"></i>
+          <span x-text="validating ? 'Checking…' : 'Continue'"></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Step 3: Asset selection ===== #}
+  <section class="surface" x-show="step === 'select'" x-cloak>
+    <header class="surface__header">
+      <h2><i class="ti ti-list mr-2"></i>Choose assets to migrate</h2>
+      <p class="muted-label m-0" x-show="assets.length">
+        <span x-text="selectedCount()"></span> of <span x-text="assets.length"></span> selected
+        &middot; destination group:
+        <strong x-text="assetGroupTitle || '—'"></strong>
+      </p>
+    </header>
+
+    <div class="settings-stack" x-show="loadingAssets" x-cloak>
+      <p class="muted-label"><i class="ti ti-loader animate-spin"></i> Loading assets…</p>
+    </div>
+
+    <div
+      class="settings-stack"
+      x-show="!loadingAssets && assetsError"
+      x-cloak
+      role="alert"
+      aria-live="assertive"
+    >
+      <div class="empty-state">
+        <div class="empty-state__icon"><i class="ti ti-alert-triangle"></i></div>
+        <p class="empty-state__title">Couldn't load assets</p>
+        <p class="empty-state__description" x-text="assetsError"></p>
+      </div>
+      <div class="flex justify-start">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+      </div>
+    </div>
+
+    <div
+      class="settings-stack"
+      x-show="!loadingAssets && !assetsError && !assets.length"
+      x-cloak
+    >
+      <div class="empty-state">
+        <div class="empty-state__icon"><i class="ti ti-photo-off"></i></div>
+        <p class="empty-state__title">No assets to migrate</p>
+        <p class="empty-state__description">This player has no assets yet.</p>
+      </div>
+      <div class="flex justify-start">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+      </div>
+    </div>
+
+    <div x-show="!loadingAssets && assets.length" x-cloak>
+      <div class="settings-section__actions mb-3">
+        <button type="button" class="app-btn app-btn-link" @click="selectAll(true)">Select all</button>
+        <button type="button" class="app-btn app-btn-link" @click="selectAll(false)">Select none</button>
+      </div>
+
+      <table class="asset-table">
+        <thead>
+          <tr>
+            <th scope="col" style="width: 3rem"></th>
+            <th scope="col">Name</th>
+            <th scope="col" style="width: 8rem">Type</th>
+            <th scope="col">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="asset in assets" :key="asset.asset_id">
+            <tr>
+              <td>
+                <input type="checkbox" :id="`a-${asset.asset_id}`" x-model="selected[asset.asset_id]">
+              </td>
+              <td>
+                <label :for="`a-${asset.asset_id}`" x-text="asset.name || asset.asset_id"></label>
+              </td>
+              <td><span class="muted-label" x-text="asset.mimetype || '—'"></span></td>
+              <td>
+                <span class="muted-label" style="word-break: break-all;" x-text="displayUri(asset.uri)"></span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <div class="flex justify-between mt-3">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+        <button
+          type="button"
+          class="app-btn app-btn-primary"
+          :disabled="!selectedCount()"
+          @click="startMigration()"
+        >
+          <i class="ti ti-cloud-upload"></i>
+          <span>Migrate <span x-text="selectedCount()"></span> asset<span x-show="selectedCount() !== 1">s</span></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Step 4 + 5: Progress and summary share the same surface ===== #}
+  <section class="surface" x-show="step === 'running' || step === 'done'" x-cloak>
+    <header class="surface__header">
+      <h2 x-show="step === 'running'"><i class="ti ti-cloud-upload mr-2"></i>Migrating…</h2>
+      <h2 x-show="step === 'done' && failureCount() === 0">
+        <i class="ti ti-circle-check mr-2" style="color:#16a34a"></i>All assets migrated
+      </h2>
+      <h2 x-show="step === 'done' && failureCount() > 0">
+        <i class="ti ti-alert-triangle mr-2" style="color:#d97706"></i>Migration finished with errors
+      </h2>
+      <p class="muted-label m-0">
+        <span x-text="completedCount()"></span> of <span x-text="results.length"></span> done
+        &middot; <span x-text="successCount()"></span> succeeded
+        <template x-if="failureCount()">
+          <span>&middot; <span class="text-red-600" x-text="failureCount() + ' failed'"></span></span>
+        </template>
+        <template x-if="assetGroupTitle">
+          <span>&middot; group: <strong x-text="assetGroupTitle"></strong></span>
+        </template>
+      </p>
+    </header>
+
+    <div class="settings-stack">
+      <progress
+        class="screenly-migration-progress"
+        :value="progressPercent()"
+        max="100"
+      ></progress>
+
+      <table class="asset-table">
+        <thead>
+          <tr>
+            <th scope="col" style="width: 8rem">Status</th>
+            <th scope="col">Asset</th>
+            <th scope="col">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in results" :key="row.asset_id">
+            <tr>
+              <td>
+                <template x-if="row.status === 'pending'">
+                  <span class="muted-label">Queued</span>
+                </template>
+                <template x-if="row.status === 'running'">
+                  <span><i class="ti ti-loader animate-spin"></i> Uploading…</span>
+                </template>
+                <template x-if="row.status === 'success'">
+                  <span style="color:#16a34a"><i class="ti ti-check"></i> Done</span>
+                </template>
+                <template x-if="row.status === 'failed'">
+                  <span class="text-red-600"><i class="ti ti-x"></i> Failed</span>
+                </template>
+              </td>
+              <td x-text="row.name || row.asset_id"></td>
+              <td>
+                <template x-if="row.status === 'success'">
+                  <span class="muted-label">Uploaded to Screenly</span>
+                </template>
+                <template x-if="row.status === 'failed'">
+                  <span class="text-red-600" x-text="row.error"></span>
+                </template>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <div class="flex justify-end" x-show="step === 'done'" x-cloak>
+        <a href="{% url 'anthias_app:settings' %}" class="app-btn app-btn-outline-dark mr-2">
+          <i class="ti ti-arrow-left"></i><span>Back to Settings</span>
+        </a>
+        <button
+          type="button"
+          class="app-btn app-btn-primary"
+          x-show="failureCount() > 0"
+          @click="retryFailed()"
+        >
+          <i class="ti ti-refresh"></i>
+          <span>Retry <span x-text="failureCount()"></span> failed</span>
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const SCREENLY_MIGRATION_ENDPOINTS = {
+  assets: '/api/v2/assets',
+  validate: '/api/v2/integrations/screenly/validate',
+  migrate: '/api/v2/integrations/screenly/migrate',
+}
+
+function screenlyMigrationCsrfToken() {
+  const el = document.querySelector('input[name=csrfmiddlewaretoken]')
+  if (el) return el.value
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)
+  return m ? decodeURIComponent(m[1]) : ''
+}
+
+async function screenlyMigrationPostJson(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': screenlyMigrationCsrfToken(),
+    },
+    body: JSON.stringify(body),
+  })
+  // Optional catch binding: a non-JSON body (empty 204, proxy HTML)
+  // is expected for some paths, and the empty payload is the signal
+  // we want — no need to bind or rethrow.
+  let payload = {}
+  try { payload = await response.json() } catch { /* empty body */ }
+  return { ok: response.ok, status: response.status, payload }
+}
+
+function migrateToScreenly() {
+  const ENDPOINTS = SCREENLY_MIGRATION_ENDPOINTS
+  const postJson = screenlyMigrationPostJson
+
+  return {
+    step: 'intro',
+    token: '',
+    showToken: false,
+    tokenError: '',
+    validating: false,
+    loadingAssets: false,
+    assetsError: '',
+    assets: [],
+    selected: {},
+    results: [],
+    assetGroupId: '',
+    assetGroupTitle: '',
+
+    init() {
+      // No-op; data is fetched on demand at step transitions.
+    },
+
+    async validate() {
+      // Re-entrancy guard. The Continue button is disabled while
+      // ``validating`` is true, but ``@keydown.enter.prevent``
+      // fires on every Enter-press regardless — a user holding
+      // Enter (or hammering it impatiently) would otherwise queue
+      // duplicate validate requests and race the ``assetGroupId``
+      // assignment + step transition at the end. First call wins;
+      // subsequent calls no-op until it returns.
+      if (this.validating) return
+      this.tokenError = ''
+      // The Continue button is disabled when the token is empty,
+      // but Enter still triggers @keydown.enter.prevent. Guard
+      // here so an Enter-press on an empty field surfaces a clear
+      // "paste the token" message instead of round-tripping a
+      // 400 (serializer "this field may not be blank") that the
+      // backend response handler below would misread as "Screenly
+      // rejected this token".
+      const token = (this.token || '').trim()
+      if (!token) {
+        this.tokenError = 'Paste your Screenly API token first.'
+        return
+      }
+      // Persist the trimmed value back to state so subsequent
+      // migrate calls send the same string we just validated. A
+      // copy-paste with trailing whitespace would otherwise validate
+      // successfully and then 401 on the per-asset POSTs.
+      this.token = token
+      this.validating = true
+      try {
+        const { ok, status, payload } = await postJson(ENDPOINTS.validate, { token })
+
+        // Handle transport / server failures BEFORE interpreting
+        // payload.valid. postJson() falls back to {} on a non-JSON
+        // body, and {}.valid is undefined → falsy, which would
+        // otherwise trip the "Screenly rejected this token" branch
+        // for an unhandled 500 / proxy HTML / network glitch and
+        // mask the real failure.
+
+        if (status >= 500) {
+          // The validate endpoint emits a structured 502 from the
+          // Django view on upstream errors; surface ``payload.error``
+          // when present, otherwise a generic upstream-failure copy.
+          this.tokenError = payload.error
+            || 'Anthias couldn\'t reach Screenly. Check the device\'s internet connection and try again.'
+          return
+        }
+
+        if (status === 400) {
+          // Serializer rejected the body — request never reached
+          // Screenly, so don't blame Screenly.
+          this.tokenError = 'That token looks malformed. Double-check the value you pasted.'
+          return
+        }
+
+        if (!ok) {
+          // Any other non-2xx — auth misconfig, CSRF, proxy bug.
+          // Surface the backend's error string if it gave one;
+          // otherwise spell out the HTTP code so the operator can
+          // search for it.
+          this.tokenError = payload.error
+            || `Anthias returned HTTP ${status} from the validate endpoint.`
+          return
+        }
+
+        // From here ``ok`` is true and ``payload`` follows the
+        // documented contract — ``{valid, asset_group_id?, ...}``.
+        if (!payload.valid) {
+          this.tokenError = payload.error
+            || 'Screenly rejected this token. Double-check it in your dashboard.'
+          return
+        }
+        if (!payload.asset_group_id) {
+          this.tokenError = payload.error
+            || 'Token is valid but Screenly did not return an asset-group id. Try again.'
+          return
+        }
+        this.assetGroupId = payload.asset_group_id
+        this.assetGroupTitle = payload.asset_group_title || ''
+        await this.loadAssets()
+        this.step = 'select'
+      } catch (e) {
+        this.tokenError = String(e)
+      } finally {
+        this.validating = false
+      }
+    },
+
+    async loadAssets() {
+      this.loadingAssets = true
+      this.assetsError = ''
+      this.assets = []
+      this.selected = {}
+      try {
+        const response = await fetch(ENDPOINTS.assets, { credentials: 'same-origin' })
+        if (!response.ok) {
+          // Surface a real error rather than treating it as "no
+          // assets" — operators acted on the misleading empty-state
+          // copy when /api/v2/assets returned a 500 (auth-misconfig
+          // or DB lock), thinking they had nothing to migrate.
+          this.assetsError = `Couldn't load assets (HTTP ${response.status}). Try reloading the page.`
+          return
+        }
+        const data = await response.json()
+        if (!Array.isArray(data)) {
+          this.assetsError = 'Couldn\'t parse the asset list response. Try reloading the page.'
+          return
+        }
+        this.assets = data
+        for (const a of this.assets) {
+          this.selected[a.asset_id] = true
+        }
+      } catch (e) {
+        this.assetsError = String(e)
+      } finally {
+        this.loadingAssets = false
+      }
+    },
+
+    selectedCount() {
+      return Object.values(this.selected).filter(Boolean).length
+    },
+
+    selectAll(value) {
+      for (const a of this.assets) {
+        this.selected[a.asset_id] = value
+      }
+    },
+
+    displayUri(uri) {
+      if (!uri) return ''
+      if (uri.startsWith('/data/anthias_assets/')) {
+        return uri.split('/').pop()
+      }
+      return uri
+    },
+
+    async startMigration() {
+      const queue = this.assets.filter(a => this.selected[a.asset_id])
+      this.results = queue.map(a => ({
+        asset_id: a.asset_id,
+        name: a.name || a.asset_id,
+        status: 'pending',
+        error: '',
+        screenly_asset_id: null,
+      }))
+      this.step = 'running'
+      await this.runQueue()
+      this.step = 'done'
+    },
+
+    async runQueue() {
+      // Sequential on purpose: an Anthias device on a slow connection
+      // shouldn't fire N parallel multipart uploads. Per-asset progress
+      // is also clearer this way.
+      for (const row of this.results) {
+        if (row.status === 'success') continue
+        row.status = 'running'
+        try {
+          const { ok, payload } = await postJson(ENDPOINTS.migrate, {
+            token: this.token,
+            asset_id: row.asset_id,
+            asset_group_id: this.assetGroupId,
+          })
+          if (ok && payload.success) {
+            row.status = 'success'
+            row.screenly_asset_id = payload.screenly_asset_id || ''
+          } else {
+            row.status = 'failed'
+            row.error = payload.error || `HTTP error (${ok ? 'app-level' : 'transport'})`
+          }
+        } catch (e) {
+          row.status = 'failed'
+          row.error = String(e)
+        }
+      }
+    },
+
+    async retryFailed() {
+      // Reset failed rows so the progress bar reflects the retry pass.
+      for (const row of this.results) {
+        if (row.status === 'failed') {
+          row.status = 'pending'
+          row.error = ''
+        }
+      }
+      this.step = 'running'
+      await this.runQueue()
+      this.step = 'done'
+    },
+
+    completedCount() {
+      return this.results.filter(r => r.status === 'success' || r.status === 'failed').length
+    },
+    successCount() {
+      return this.results.filter(r => r.status === 'success').length
+    },
+    failureCount() {
+      return this.results.filter(r => r.status === 'failed').length
+    },
+    progressPercent() {
+      if (!this.results.length) return 0
+      return Math.round((this.completedCount() / this.results.length) * 100)
+    },
+  }
+}
+</script>
+{% endblock %}
