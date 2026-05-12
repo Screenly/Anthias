@@ -67,10 +67,15 @@ class AssetSerializer(ModelSerializer[Asset]):
             'is_processing',
             'is_reachable',
             'last_reachability_check',
+            'metadata',
         ]
         read_only_fields = [
             'is_reachable',
             'last_reachability_check',
+            # Owned by the upload-pipeline tasks; v1 exposes it read-only
+            # for back-compat clients that want the original_ext /
+            # transcoded / error bookkeeping. Mirrors v2.
+            'metadata',
         ]
 
 

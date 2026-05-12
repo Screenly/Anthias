@@ -19,7 +19,7 @@
    requirement we'd need to either drop bun (e.g. back to Node, which
    still ships armv7 binaries) or check `static/dist/` into the
    image / a cache and skip this stage entirely. #}
-FROM --platform=$BUILDPLATFORM oven/bun:1.3.13-slim AS bun-builder
+FROM --platform=$BUILDPLATFORM ghcr.io/screenly/bun:1.3.13-slim AS bun-builder
 
 RUN mkdir -p /app
 WORKDIR /app
@@ -30,8 +30,18 @@ COPY package.json \
     /app/
 RUN bun install --frozen-lockfile
 
-COPY ./static/sass/*.scss /app/static/sass/
-COPY ./static/src/ /app/static/src/
+COPY ./src/anthias_server/app/static/sass/*.scss \
+    /app/src/anthias_server/app/static/sass/
+COPY ./src/anthias_server/app/static/src/ \
+    /app/src/anthias_server/app/static/src/
+# Tailwind v4 reads `@source` directives from tailwind.css, which
+# point at ../../templates/**/*.html. Without the template tree in
+# the builder context the JIT scan finds zero class strings and emits
+# an almost-empty utility CSS — dev/test work because they share the
+# host bind-mount, but the production image would ship unstyled.
+# Copy the templates in before running the build.
+COPY ./src/anthias_server/app/templates/ \
+    /app/src/anthias_server/app/templates/
 RUN bun run build
 
 {% endif %}
@@ -49,10 +59,10 @@ WORKDIR /usr/src/app
 
 {% if environment == 'production' %}
 COPY --from=bun-builder \
-    /app/static/dist/ \
-    /usr/src/app/static/dist/
+    /app/src/anthias_server/app/static/dist/ \
+    /usr/src/app/src/anthias_server/app/static/dist/
 {% else %}
-COPY --from=oven/bun:1.3.13-slim /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=ghcr.io/screenly/bun:1.3.13-slim /usr/local/bin/bun /usr/local/bin/bun
 RUN ln -sf bun /usr/local/bin/bunx
 {% endif %}
 
@@ -62,5 +72,26 @@ ENV GIT_BRANCH={{ git_branch }}
 ENV DEVICE_TYPE={{ device_type }}
 ENV DJANGO_SETTINGS_MODULE="anthias_server.django_project.settings"
 ENV PYTHONPATH="/usr/src/app/src"
+
+{% if environment == 'production' %}
+# collectstatic at image build time. Source files (admin static + the
+# bun-built dist/ copied in above) are immutable from this point on, so
+# there's no reason to repeat the work on every container start. The
+# previous setup ran `collectstatic --clear` from start_server.sh into
+# a host bind-mount on /data/anthias/staticfiles — same data, every
+# restart, into a writable host scratch dir. Baking the result into the
+# image lets us drop the bind-mount, the runtime invocation, and one
+# of the reasons /home/<user>/anthias has to persist after install.
+#
+# `HOME=/tmp/anthias-build` is throwaway: importing the Django settings
+# module instantiates AnthiasSettings(), which writes a default
+# anthias.conf into $HOME/.anthias/ if one isn't there yet. At runtime
+# start_server.sh seeds /data/.anthias from ansible/roles/anthias/files/
+# before this same import happens; at build time we just give it a
+# scratch dir and remove it after collectstatic finishes.
+RUN mkdir -p /tmp/anthias-build/.anthias && \
+    HOME=/tmp/anthias-build python -m anthias_server.manage collectstatic --noinput --clear && \
+    rm -rf /tmp/anthias-build
+{% endif %}
 
 CMD ["bash", "bin/start_server.sh"]

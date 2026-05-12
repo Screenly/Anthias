@@ -1,0 +1,32 @@
+---
+# x86 equivalent of boot.yml's cmdline.txt edits. Pi boards write
+# kernel args directly to /boot/firmware/cmdline.txt, x86 boards go
+# through GRUB instead — boot.yml is tagged `raspberry-pi` and gets
+# skipped on x86 in bin/install.sh, so without this file there's no
+# task that adds `splash` and friends to the cmdline. Plymouth still
+# starts as a systemd service but never gets the kernel-side hook
+# that makes it draw the splash, so the boot remains a wall of text.
+#
+# Only the Plymouth-visual subset of boot.yml's flags applies here:
+#   * `init=/lib/systemd/systemd` is Debian's default init anyway.
+#   * `cgroup_enable=memory` / `cgroup_memory=1` are a Pi kernel
+#     workaround (memory cgroup off by default there); cgroup v2 on
+#     Debian x86 has the memory controller enabled out of the box.
+#   * `net.ifnames=0` swaps to legacy eth0/wlan0 names. Anthias keys
+#     off the MAC for device identity, so we keep Debian's predictable
+#     names and don't force this on x86.
+
+- name: Ensure Plymouth-related flags in GRUB_CMDLINE_LINUX_DEFAULT
+  ansible.builtin.replace:
+    path: /etc/default/grub
+    # Append `{{ item }}` inside the GRUB_CMDLINE_LINUX_DEFAULT quotes
+    # only when it isn't already there. The negative lookahead makes
+    # the task idempotent — re-running just leaves the line untouched.
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="(?:(?!\b{{ item | regex_escape }}\b).)*)"\s*$'
+    replace: '\1 {{ item }}"'
+  loop:
+    - quiet
+    - splash
+    - plymouth.ignore-serial-consoles
+    - vt.global_cursor_default=0
+  notify: Update GRUB

@@ -185,6 +185,150 @@ def test_load_browser_times_out_when_handshake_never_arrives(
         viewer_fixtures.p_cmd.stop()
 
 
+def test_view_webpage_arms_reload_interval(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """``view_webpage`` must always call ``setReloadInterval`` after
+    ``loadPage`` — even when the URI is unchanged from the previous
+    tick, since an asset edit that flips only the interval (no URI
+    change) needs the new value to take effect on the next rotation.
+    Feature #2813."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com', 30)
+
+    fake_bus.loadPage.assert_called_once_with('https://example.com')
+    fake_bus.setReloadInterval.assert_called_once_with(30)
+
+
+def test_view_webpage_default_zero_interval(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Splash / fallback callers pass no interval, which becomes 0 —
+    the C++ side treats that as "disable the timer", so this is the
+    no-auto-refresh contract for legacy code paths."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com')
+
+    fake_bus.setReloadInterval.assert_called_once_with(0)
+
+
+@pytest.mark.parametrize(
+    'error_message,expected_call_count',
+    [
+        # An older AnthiasWebview without setReloadInterval raises
+        # UnknownMethod — viewer must latch the capability flag off
+        # so the next rotation skips the D-Bus hop instead of
+        # refilling journald.
+        (
+            'GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: '
+            "No such method 'setReloadInterval'",
+            1,
+        ),
+        # Transient D-Bus error (bus disconnect, timeout, race during
+        # webview restart) must NOT permanently disable auto-refresh:
+        # the method exists, the call just failed once. Next rotation
+        # retries and the warning is debug-level so journald isn't
+        # flooded.
+        ('Connection closed by peer', 2),
+    ],
+    ids=['unknown-method-latches', 'transient-error-retries'],
+)
+def test_view_webpage_setreloadinterval_failure_modes(
+    viewer_fixtures: _ViewerFixtures,
+    error_message: str,
+    expected_call_count: int,
+) -> None:
+    fake_bus = mock.Mock()
+    fake_bus.setReloadInterval.side_effect = RuntimeError(error_message)
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u,
+            '_webview_supports_set_reload_interval',
+            True,
+        ),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com', 30)
+        viewer_fixtures.u.view_webpage('https://example.com', 60)
+
+    assert fake_bus.setReloadInterval.call_count == expected_call_count
+
+
+def test_load_browser_resets_set_reload_interval_capability(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """If the webview process crashed and we latched off, the next
+    ``load_browser()`` should re-enable capability detection — the
+    fresh process might be a newer build that supports the slot,
+    and we shouldn't leave auto-refresh permanently disabled because
+    the *old* process didn't have it."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    _stub_browser_stdout_chunks(
+        browser_proc,
+        [b'Anthias service start\n'],
+    )
+    browser_proc.is_alive.return_value = True
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with mock.patch.object(
+            viewer_fixtures.u,
+            '_webview_supports_set_reload_interval',
+            False,
+        ):
+            viewer_fixtures.u.load_browser()
+            assert (
+                viewer_fixtures.u._webview_supports_set_reload_interval is True
+            )
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
+def test_view_webpage_resets_interval_on_unchanged_url(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """When the URI matches ``current_browser_url`` we skip the
+    ``loadPage`` D-Bus call (cheap no-op), but ``setReloadInterval``
+    still has to fire so an interval-only edit takes effect without
+    a URI change."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    uri = 'https://example.com'
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', uri),
+    ):
+        viewer_fixtures.u.view_webpage(uri, 90)
+
+    fake_bus.loadPage.assert_not_called()
+    fake_bus.setReloadInterval.assert_called_once_with(90)
+
+
 def test_watchdog_should_create_file_if_not_exists(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:

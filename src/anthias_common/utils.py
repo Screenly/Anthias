@@ -1,14 +1,14 @@
+import ipaddress
 import json
 import logging
 import os
 import random
 import re
+import socket
 import string
 from datetime import datetime, timedelta
-from os import getenv, path, utime
+from os import getenv, utime
 from platform import machine
-from subprocess import call, check_output
-from threading import Thread
 from time import sleep
 from typing import Any
 from urllib.parse import urlparse
@@ -25,7 +25,6 @@ from tenacity import (
     wait_fixed,
 )
 
-from anthias_server.app.models import Asset
 from anthias_server.settings import settings
 
 arch = machine()
@@ -137,11 +136,19 @@ def get_balena_supervisor_version() -> str:
 
 def get_node_ip() -> str:
     """
-    Returns the node's IP address.
-    We're using an API call to the supervisor for this on Balena
-    and an environment variable set by `install.sh` for other environments.
-    The reason for this is because we can't retrieve the host IP from
-    within Docker.
+    Returns the node's IP address(es) as a whitespace-separated string,
+    or ``'Unable to retrieve IP.'`` / ``'Unknown'`` on failure.
+
+    The container can't see the host's real interfaces (just its veth on
+    the docker bridge), so the actual IP lookup happens out-of-process:
+
+    * **Balena:** one API call to the local supervisor.
+    * **Bare metal:** the ``anthias-host-agent`` systemd unit runs on the
+      host, enumerates real interfaces with netifaces, and writes the
+      results to Redis. This function publishes ``hostcmd:
+      set_ip_addresses`` to trigger a refresh, waits up to ~80s
+      (60s ``host_agent_ready`` + 20s ``ip_addresses_ready``) for
+      host_agent to populate the cache, then reads ``ip_addresses``.
     """
 
     if is_balena_app():
@@ -200,10 +207,69 @@ def get_node_ip() -> str:
 
         if ip_addresses:
             return ' '.join(json.loads(ip_addresses))
-        elif os.getenv('MY_IP'):
-            return os.getenv('MY_IP') or 'Unable to retrieve IP.'
 
     return 'Unable to retrieve IP.'
+
+
+_DRM_RES_RE = re.compile(r'^(\d+)x(\d+)')
+
+
+def _drm_card_resolution(entry_path: str) -> str | None:
+    """First active mode on a /sys/class/drm/<card-port> entry, or None."""
+    try:
+        with open(os.path.join(entry_path, 'status')) as f:
+            if f.read().strip() != 'connected':
+                return None
+        with open(os.path.join(entry_path, 'modes')) as f:
+            modes = f.read().strip().splitlines()
+    except OSError:
+        return None
+    if not modes:
+        return None
+    m = _DRM_RES_RE.match(modes[0])
+    return f'{m.group(1)}x{m.group(2)}' if m else None
+
+
+def _drm_resolution() -> str | None:
+    """Walk /sys/class/drm/ for the first connected output's mode."""
+    try:
+        entries = list(os.scandir('/sys/class/drm'))
+    except OSError:
+        return None
+    for entry in entries:
+        if 'card' not in entry.name or '-' not in entry.name:
+            continue
+        result = _drm_card_resolution(entry.path)
+        if result:
+            return result
+    return None
+
+
+def _fb_resolution() -> str | None:
+    """Plain framebuffer fallback (Pi 1-4 legacy KMS, some embedded)."""
+    try:
+        with open('/sys/class/graphics/fb0/virtual_size') as f:
+            raw = f.read().strip()
+    except OSError:
+        return None
+    if ',' not in raw:
+        return None
+    try:
+        w, h = raw.split(',', 1)
+        return f'{int(w)}x{int(h)}'
+    except ValueError:
+        return None
+
+
+def detect_screen_resolution() -> str | None:
+    """Probe the active display's resolution as 'WIDTHxHEIGHT'.
+
+    Tries Linux KMS first, then the legacy framebuffer interface. Both
+    work without an X server, which matches the viewer's Qt direct-
+    render setup. Returns None when nothing is reachable so the caller
+    can fall back to the operator-configured resolution from settings.
+    """
+    return _drm_resolution() or _fb_resolution()
 
 
 def get_node_mac_address() -> str:
@@ -226,7 +292,89 @@ def get_node_mac_address() -> str:
             return str(r.json()['mac_address'])
         return 'Unknown'
 
-    return os.getenv('MAC_ADDRESS', 'Unable to retrieve MAC address.')
+    # MAC_ADDRESS is injected by bin/upgrade_containers.sh on production
+    # installs (host MAC of the default-route iface, read from
+    # /sys/class/net on the host — the container only sees its own
+    # veth on the docker bridge). When that env var isn't set — dev
+    # `docker-compose.dev.yml` doesn't define it, and operators running
+    # the prebuilt images standalone may miss it too — fall back to
+    # detecting whatever MAC is reachable from inside the container.
+    # That's the best signal we have without --net=host, and it beats
+    # showing 'Unable to retrieve'.
+    env_value = os.getenv('MAC_ADDRESS')
+    if env_value:
+        return env_value
+    detected = _detect_local_mac()
+    if detected:
+        return detected
+    return 'Unable to retrieve MAC address.'
+
+
+_NET_SKIP_PREFIXES = ('lo', 'docker', 'br-', 'veth')
+_SYSNET_DIR = '/sys/class/net'
+
+
+def _read_iface_mac(iface: str) -> str | None:
+    """Read /sys/class/net/<iface>/address; skip placeholder zeros."""
+    try:
+        with open(os.path.join(_SYSNET_DIR, iface, 'address')) as f:
+            mac = f.read().strip()
+    except OSError:
+        return None
+    if mac and mac != '00:00:00:00:00:00':
+        return mac
+    return None
+
+
+def _default_route_iface() -> str | None:
+    """Interface name carrying the default route, or None."""
+    try:
+        with open('/proc/net/route') as f:
+            next(f, None)  # header row
+            for line in f:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                iface, destination, _gw, flags_hex = parts[:4]
+                # Default route: destination 0.0.0.0 + RTF_UP flag set.
+                if destination == '00000000' and (int(flags_hex, 16) & 0x1):
+                    return iface
+    except OSError:
+        pass
+    return None
+
+
+def _first_non_loopback_mac() -> str | None:
+    """Fallback when no default route is published — scan ifaces."""
+    try:
+        candidates = sorted(os.listdir(_SYSNET_DIR))
+    except OSError:
+        return None
+    for iface in candidates:
+        if any(iface.startswith(p) for p in _NET_SKIP_PREFIXES):
+            continue
+        mac = _read_iface_mac(iface)
+        if mac:
+            return mac
+    return None
+
+
+def _detect_local_mac() -> str | None:
+    """Return the MAC of the interface carrying the default route.
+
+    Picking the 'active' interface matches what an operator expects to
+    see — the NIC the player reaches the network through — rather than
+    the alphabetical first-non-loopback. Falls back to scanning ifaces
+    when no default route is published.
+    """
+    if not os.path.isdir(_SYSNET_DIR):
+        return None
+    primary = _default_route_iface()
+    if primary:
+        mac = _read_iface_mac(primary)
+        if mac:
+            return mac
+    return _first_non_loopback_mac()
 
 
 def get_active_connections(
@@ -370,10 +518,63 @@ def json_dump(obj: Any) -> str:
     return json.dumps(obj, default=handler)
 
 
+def _is_private_address(host: str) -> bool:
+    """True when the resolved host points at a private/loopback range.
+
+    SSRF defence — the asset-revalidation sweep is a celery task that
+    fetches operator-supplied URIs. Without this guard, an authenticated
+    operator could store http://192.168.x.x/internal-admin and use the
+    sweep as a probe of the host's LAN, leaking reachable services.
+
+    Operators on a trusted intranet (signage running entirely against
+    LAN content) can opt back in with the ANTHIAS_ALLOW_PRIVATE_FETCH
+    env var; defaults to off.
+    """
+    if os.getenv('ANTHIAS_ALLOW_PRIVATE_FETCH', '').lower() in (
+        '1',
+        'true',
+        'yes',
+    ):
+        return False
+    if not host:
+        return False
+    try:
+        # AF_UNSPEC so we cover both IPv4 and IPv6 results from DNS.
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return False
+    for info in infos:
+        try:
+            addr = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+        ):
+            return True
+    return False
+
+
 def url_fails(url: str) -> bool:
     """
     If it is streaming
     """
+    parsed = urlparse(url)
+    # Reject URLs whose host resolves into a private / loopback /
+    # link-local / multicast / reserved range. Treats failure-to-fetch
+    # as `True` (the sweep marks the asset un-reachable) — safe-failing
+    # behaviour: a URL we won't fetch shouldn't be flagged 'reachable'.
+    if parsed.scheme in (
+        'http',
+        'https',
+        'rtsp',
+        'rtmp',
+    ) and _is_private_address(parsed.hostname or ''):
+        return True
     if urlparse(url).scheme in ('rtsp', 'rtmp'):
         # ffprobe ships with ffmpeg, which is already in the base
         # image. Exit code 0 means libavformat could open the stream
@@ -441,68 +642,6 @@ def url_fails(url: str) -> bool:
         pass
 
     return True
-
-
-def download_video_from_youtube(
-    uri: str,
-    asset_id: str,
-) -> tuple[str, str, int]:
-    name = check_output(['yt-dlp', '-O', 'title', uri])
-    info = json.loads(check_output(['yt-dlp', '-j', uri]))
-    duration = info['duration']
-
-    # Write into settings['assetdir'] so cleanup() (which sweeps the same
-    # path) sees these files; otherwise a custom assetdir would leak
-    # orphaned YouTube downloads in $HOME/anthias_assets.
-    location = path.join(settings['assetdir'], f'{asset_id}.mp4')
-    thread = YoutubeDownloadThread(location, uri, asset_id)
-    thread.daemon = True
-    thread.start()
-
-    return location, str(name.decode('utf-8')), duration
-
-
-class YoutubeDownloadThread(Thread):
-    def __init__(
-        self,
-        location: str,
-        uri: str,
-        asset_id: str,
-    ) -> None:
-        Thread.__init__(self)
-        self.location = location
-        self.uri = uri
-        self.asset_id = asset_id
-
-    def run(self) -> None:
-        call(
-            [
-                'yt-dlp',
-                '-S',
-                'vcodec:h264,fps,res:1080,acodec:m4a',
-                '-o',
-                self.location,
-                self.uri,
-            ]
-        )
-
-        try:
-            asset = Asset.objects.get(asset_id=self.asset_id)
-            asset.is_processing = False
-            asset.save()
-        except Asset.DoesNotExist:
-            logging.warning('Asset %s not found', self.asset_id)
-            return
-
-        # Imported lazily so the viewer container (which does not
-        # ship channels/channels-redis) can still import anthias_common.utils.
-        from asgiref.sync import async_to_sync
-        from channels.layers import get_channel_layer
-
-        async_to_sync(get_channel_layer().group_send)(
-            'ws_server',
-            {'type': 'asset.update', 'asset_id': self.asset_id},
-        )
 
 
 def template_handle_unicode(value: Any) -> str:

@@ -67,11 +67,30 @@ class MPVMediaPlayer(MediaPlayer):
                 '--vd-lavc-threads=4',
             ]
 
+        # x86 runs under `cage` (a wlroots kiosk compositor — see
+        # bin/start_viewer.sh); cage holds DRM master, so --vo=drm is
+        # denied. Route mpv through the GL VO over a Wayland EGL
+        # context, which is the generic path mpv supports on every x86
+        # GPU with Mesa or vendor GL drivers. Paired with
+        # --hwdec=auto-safe, VAAPI-capable iGPUs (Intel iHD/i965, AMD
+        # radeonsi, …) decode in hardware and hand frames to the GL
+        # context as DMA-BUFs via dmabuf-interop-gl; software decode
+        # still works via the same VO for codecs without HW support.
+        # --vo=dmabuf-wayland would skip the GL upload entirely but
+        # segfaults under cage in the viewer's background-spawn path
+        # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
+        # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
+        # they own the framebuffer directly with no compositor.
+        if device_type == 'x86':
+            vo_args = ['--vo=gpu', '--gpu-context=wayland']
+        else:
+            vo_args = ['--vo=drm']
+
         self.process = subprocess.Popen(
             [
                 'mpv',
                 '--no-terminal',
-                '--vo=drm',
+                *vo_args,
                 '--hwdec=auto-safe',
                 *extra_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',

@@ -26,8 +26,16 @@ from anthias_server.api.helpers import (
     get_active_asset_ids,
     save_active_assets_ordering,
 )
-from anthias_server.lib.auth import hash_password
+from anthias_server.lib.auth import (
+    apply_auth_settings,
+    operator_username,
+)
 from anthias_common.internal_auth import is_internal_request
+from anthias_common.youtube import dispatch_download
+from anthias_server.processing import (
+    dispatch_normalize_image,
+    dispatch_normalize_video,
+)
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -126,10 +134,9 @@ def _resolve_node_ip() -> str:
         raw = r.get('ip_addresses')
     except redis.RedisError:
         # Redis is the cache backing this whole codepath; if it's
-        # flaking (early boot, transient broker hiccup), fall through
-        # to the MY_IP fallback below instead of 500-ing the splash
-        # poll. The JS keeps polling and recovers as soon as Redis
-        # comes back.
+        # flaking (early boot, transient broker hiccup), return ''
+        # instead of 500-ing the splash poll. The JS keeps polling
+        # and recovers as soon as Redis comes back.
         raw = None
     if raw:
         try:
@@ -166,17 +173,11 @@ def _resolve_node_ip() -> str:
 
     # Cache miss / empty list / malformed / Redis flake: ask
     # host_agent to populate. The next poll picks it up — we don't
-    # block waiting for completion.
+    # block waiting for completion. The JS keeps polling and the
+    # splash shows "Detecting network…" until host_agent fills the
+    # cache.
     _publish_refresh()
-
-    # Mirror ``anthias_common.utils.get_node_ip()``'s ``MY_IP`` fallback.
-    # ``bin/upgrade_containers.sh`` exports the host's outbound IP
-    # into the server container via ``docker-compose.yml.tmpl``, so
-    # the splash can show *something* useful even when host_agent
-    # isn't running (custom deploys, late host_agent start, crashed
-    # host_agent). Without this fallback, those installs would be
-    # stuck on "Detecting network…" forever.
-    return getenv('MY_IP', '') or ''
+    return ''
 
 
 def _publish_refresh() -> None:
@@ -339,7 +340,41 @@ class AssetListViewV2(APIView):
 
         active_asset_ids = get_active_asset_ids()
         asset = Asset.objects.create(**serializer.data)
+        # Apply ``metadata`` (set by CreateAssetSerializerV2.validate()
+        # when the operator passes ``refresh_interval_s``). It lives in
+        # ``validated_data`` rather than ``serializer.data`` because
+        # ``metadata`` isn't a declared field on the create serializer
+        # — surfacing it as one would open the upload-pipeline-owned
+        # bag (original_ext, transcoded, error_message) for arbitrary
+        # client writes. Pulling it from validated_data and applying
+        # post-create keeps the read-only stance on metadata while
+        # still letting the dedicated refresh_interval_s knob round-
+        # trip on POST.
+        post_create_metadata = serializer.validated_data.get('metadata')
+        if post_create_metadata:
+            existing = dict(asset.metadata or {})
+            existing.update(post_create_metadata)
+            asset.metadata = existing
+            asset.save(update_fields=['metadata'])
         asset.refresh_from_db()
+
+        # Kick off the YouTube download out of band when the
+        # serializer flagged a youtube_asset. The row is already
+        # persisted with is_processing=True; the task fills in the
+        # title + duration once yt-dlp finishes.
+        if serializer._pending_youtube_uri:
+            dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+
+        # Normalisation pipeline: HEIC/HEIF/TIFF → WebP, exotic video
+        # → H.264 MP4. Dispatched after persistence (same pattern as
+        # the YouTube hop above) so the row's ``asset_id`` is already
+        # written to the DB by the time the worker picks it up. The
+        # row was set ``is_processing=True`` by ``prepare_asset``;
+        # the task clears it once the file lands.
+        if serializer._pending_normalize == 'image':
+            dispatch_normalize_image(asset.asset_id)
+        elif serializer._pending_normalize == 'video':
+            dispatch_normalize_video(asset.asset_id)
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)
@@ -540,63 +575,12 @@ class DeviceSettingsViewV2(APIView):
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
                 'username': (
-                    settings['user']
+                    operator_username()
                     if settings['auth_backend'] == 'auth_basic'
                     else ''
                 ),
             }
         )
-
-    def update_auth_settings(
-        self,
-        data: dict[str, Any],
-        auth_backend: str,
-        current_pass_correct: bool | None,
-    ) -> None:
-        if auth_backend == '':
-            return
-
-        if auth_backend != 'auth_basic':
-            return
-
-        new_user = data.get('username', '')
-        new_pass = data.get('password', '')
-        new_pass2 = data.get('password_2', '')
-
-        if settings['password']:
-            if new_user != settings['user']:
-                if current_pass_correct is None:
-                    raise ValueError(
-                        'Must supply current password to change username'
-                    )
-                if not current_pass_correct:
-                    raise ValueError('Incorrect current password.')
-
-                settings['user'] = new_user
-
-            if new_pass:
-                if current_pass_correct is None:
-                    raise ValueError(
-                        'Must supply current password to change password'
-                    )
-                if not current_pass_correct:
-                    raise ValueError('Incorrect current password.')
-
-                if new_pass2 != new_pass:
-                    raise ValueError('New passwords do not match!')
-
-                settings['password'] = hash_password(new_pass)
-
-        else:
-            if new_user:
-                if new_pass and new_pass != new_pass2:
-                    raise ValueError('New passwords do not match!')
-                if not new_pass:
-                    raise ValueError('Must provide password')
-                settings['user'] = new_user
-                settings['password'] = hash_password(new_pass)
-            else:
-                raise ValueError('Must provide username')
 
     @extend_schema(
         summary='Update device settings',
@@ -623,33 +607,17 @@ class DeviceSettingsViewV2(APIView):
             settings.load()
 
             current_password = data.get('current_password', '')
-            auth_backend = data.get('auth_backend', '')
-
-            if (
-                auth_backend != settings['auth_backend']
-                and settings['auth_backend']
-            ):
-                if not current_password:
-                    raise ValueError(
-                        'Must supply current password to change '
-                        'authentication method'
-                    )
-                if settings.auth is None or not settings.auth.check_password(
-                    current_password
-                ):
-                    raise ValueError('Incorrect current password.')
-
+            auth_backend = data.get('auth_backend', settings['auth_backend'])
             prev_auth_backend = settings['auth_backend']
-            if not current_password and prev_auth_backend:
-                current_pass_correct = None
-            else:
-                current_pass_correct = settings.auth_backends[
-                    prev_auth_backend
-                ].check_password(current_password)
-            next_auth_backend = settings.auth_backends[auth_backend]
 
-            self.update_auth_settings(
-                data, next_auth_backend.name, current_pass_correct
+            apply_auth_settings(
+                request,
+                new_auth_backend=auth_backend,
+                current_pwd=current_password,
+                new_username=data.get('username', ''),
+                new_pwd=data.get('password', ''),
+                new_pwd_confirm=data.get('password_2', ''),
+                prev_auth_backend=prev_auth_backend,
             )
             settings['auth_backend'] = auth_backend
 
@@ -695,13 +663,9 @@ class DeviceSettingsViewV2(APIView):
 
 class InfoViewV2(InfoViewMixin):
     def get_anthias_version(self) -> str:
-        git_branch = diagnostics.get_git_branch()
-        git_short_hash = diagnostics.get_git_short_hash()
-
-        return '{}@{}'.format(
-            git_branch,
-            git_short_hash,
-        )
+        # Composed in lib.diagnostics so HTML and API ship the same
+        # label string. See get_anthias_version() for the format.
+        return diagnostics.get_anthias_version()
 
     def get_device_model(self) -> str | int | None:
         device_model = device_helper.parse_cpu_info().get('model')

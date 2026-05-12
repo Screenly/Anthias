@@ -12,9 +12,27 @@ and `raspberrypi` for the hostname, then run:
 $ ssh pi@raspberrypi
 ```
 
-Anthias makes use of Docker for containerization. To get the logs from the
-containers, you can either make use of the `docker logs` command or you can
-use the `docker compose logs` command.
+Anthias ships its container logs through the host's `systemd-journald`,
+so the system handles rotation and retention for you. The four core
+services (`anthias-server`, `anthias-viewer`, `anthias-celery`, `redis`)
+plus the optional `anthias-caddy` TLS sidecar all use the journald
+driver, so they don't write the unbounded `*-json.log` files under
+`/var/lib/docker/containers/` that can fill an SD card on long-running
+installs. You can read the logs three ways: `docker logs`,
+`docker compose logs`, or `journalctl` directly.
+
+> **Note**
+>
+> Switching the driver only affects future writes. Devices that were
+> on the old `json-file` driver will still have the existing log files
+> on disk after upgrading. To reclaim that space, truncate the leftover
+> files in place (Docker keeps them open, so deleting can confuse the
+> daemon — `truncate -s 0` is safe):
+>
+> ```bash
+> $ sudo find /var/lib/docker/containers/ -name "*-json.log" \
+>     -exec truncate -s 0 {} +
+> ```
 
 ### Using `docker logs`
 
@@ -58,6 +76,39 @@ $ docker compose logs -f ${SERVICE_NAME}
 ```
 
 Check out [this section](/docs/development/#understanding-the-components-that-make-up-anthias) of the Developer documentation page for the list of available services.
+
+### Using `journalctl`
+
+Each service is tagged in the journal so you can pull logs without
+docker. Useful when you want to grep across a long time range or
+combine container logs with system logs:
+
+```bash
+$ sudo journalctl -f CONTAINER_TAG=anthias-server
+$ sudo journalctl --since "1 hour ago" CONTAINER_TAG=anthias-viewer
+```
+
+The available tags are `anthias-server`, `anthias-viewer`,
+`anthias-celery`, `anthias-redis`, and (when TLS is enabled)
+`anthias-caddy`.
+
+> **Note**
+>
+> The Anthias installer adds your user to the `adm` group, which on
+> Debian/Raspberry Pi OS grants read access to the journal once you've
+> logged out and back in (and provided the journal is persistent —
+> i.e. `/var/log/journal/` exists). On systems where that's set up you
+> can drop the `sudo` from the commands above.
+
+Journal retention is controlled by `systemd-journald` (see
+`/etc/systemd/journald.conf` — `SystemMaxUse` caps total disk usage,
+defaulting to 10% of the filesystem). If you want to free space
+immediately:
+
+```bash
+$ sudo journalctl --vacuum-time=2d   # drop entries older than 2 days
+$ sudo journalctl --vacuum-size=200M # cap journal at 200 MB
+```
 
 ## Enabling SSH
 

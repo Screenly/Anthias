@@ -8,12 +8,6 @@ from collections import UserDict
 from os import getenv, path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from anthias_server.lib.auth import (
-    Auth,
-    BasicAuth,
-    NoAuth,
-    _is_legacy_sha256,
-)
 from anthias_common.errors import ReplyTimeoutError
 
 if TYPE_CHECKING:
@@ -86,15 +80,6 @@ class AnthiasSettings(UserDict[str, Any]):
             )
         self.home = home
         self.conf_file = self.get_configfile()
-        self.auth_backends_list: list[Auth] = [NoAuth(), BasicAuth(self)]
-        self.auth_backends: dict[str, Auth] = {}
-        # Set by _get() when an insecure password was wiped during load();
-        # __init__ persists the cleaned state to disk so the warning isn't
-        # repeated on every subsequent load.
-        self._needs_save_after_load = False
-        for backend in self.auth_backends_list:
-            DEFAULTS.update(backend.config)
-            self.auth_backends[backend.name] = backend
 
         if not path.isfile(self.conf_file):
             logging.error(
@@ -104,9 +89,6 @@ class AnthiasSettings(UserDict[str, Any]):
             self.save()
         else:
             self.load()
-            if self._needs_save_after_load:
-                self._needs_save_after_load = False
-                self.save()
 
     def _get(
         self,
@@ -122,39 +104,6 @@ class AnthiasSettings(UserDict[str, Any]):
                 self[field] = config.getint(section, field)
             else:
                 self[field] = config.get(section, field)
-                if field == 'password' and self[field] != '':
-                    # Both legacy SHA256 hashes and any non-Django-format
-                    # value (incl. plaintext) are unsafe to keep — they
-                    # cannot be verified by the new PBKDF2-based path. Clear
-                    # the password and disable basic auth so the device
-                    # stays reachable; the operator must re-set credentials
-                    # via the UI.
-                    #
-                    # Note: we deliberately do NOT call hash_password() here.
-                    # `settings.py` is imported (and AnthiasSettings()
-                    # instantiated) before django.setup() runs in the viewer
-                    # process, so calling Django's password hashers would
-                    # raise ImproperlyConfigured at startup.
-                    if (
-                        _is_legacy_sha256(self[field])
-                        or '$' not in self[field]
-                    ):
-                        reason = (
-                            'legacy SHA256 hash'
-                            if _is_legacy_sha256(self[field])
-                            else 'unrecognized format (possibly plaintext)'
-                        )
-                        logging.error(
-                            'Insecure password (%s) detected in %s; '
-                            'clearing it and disabling basic auth. The '
-                            'device will accept unauthenticated requests '
-                            'until you re-set the password via the web UI.',
-                            reason,
-                            self.conf_file,
-                        )
-                        self[field] = ''
-                        self['auth_backend'] = ''
-                        self._needs_save_after_load = True
         except configparser.Error as e:
             logging.debug(
                 "Could not parse setting '%s.%s': %s. "
@@ -213,13 +162,6 @@ class AnthiasSettings(UserDict[str, Any]):
 
     def get_configfile(self) -> str:
         return path.join(self.home, CONFIG_DIR, CONFIG_FILE)
-
-    @property
-    def auth(self) -> Auth | None:
-        backend_name = self['auth_backend']
-        if backend_name in self.auth_backends:
-            return self.auth_backends[self['auth_backend']]
-        return None
 
 
 settings = AnthiasSettings()

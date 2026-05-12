@@ -85,6 +85,117 @@ def get_git_hash() -> str | None:
     return os.getenv('GIT_HASH')
 
 
+# Treat both as the project's release line — `master` is upstream's
+# convention; `main` is the GitHub default for forks. Either resolves
+# to "no branch suffix on the version label".
+_RELEASE_BRANCHES = frozenset({'master', 'main'})
+
+
+def get_anthias_release() -> str:
+    """Read the project version, sourced from pyproject.toml's
+    [project].version (currently CalVer ``YYYY.M.MICRO``).
+
+    Resolution order:
+      1. ``importlib.metadata.version('anthias')`` — works for
+         editable installs (``pip install -e .``) and any path where
+         the project ships as a wheel.
+      2. Fallback: parse ``pyproject.toml`` directly with ``tomllib``.
+         Required because every production / test / host environment
+         runs ``uv sync --no-install-project`` (see
+         docker/uv-builder.j2, docker/Dockerfile.{server,test,viewer},
+         bin/install.sh) — that flag installs the project's deps but
+         NOT the project itself, so importlib.metadata has no record
+         of an ``anthias`` distribution to read.
+
+    Cached after first successful read so the System Info HTML render
+    (called per request) and the v2 info API don't re-open the file.
+    Returns the empty string only when both sources fail.
+    """
+    cached: str | None = getattr(get_anthias_release, '_cached', None)
+    if cached is not None:
+        return cached
+    value: str
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            value = version('anthias')
+        except PackageNotFoundError:
+            value = _read_version_from_pyproject()
+    except Exception:
+        value = ''
+    setattr(get_anthias_release, '_cached', value)
+    return value
+
+
+def _read_version_from_pyproject() -> str:
+    """Last-ditch source for the project version when the package
+    isn't installed in the active venv. Walks up from this file to
+    find the repo-root pyproject.toml — `__file__` lives at
+    ``src/anthias_server/lib/diagnostics.py``, so parents[3] is the
+    checkout root in both editable installs and the
+    ``uv sync --no-install-project`` Docker layout."""
+    try:
+        import tomllib
+        from pathlib import Path
+
+        pyproject = Path(__file__).resolve().parents[3] / 'pyproject.toml'
+        with pyproject.open('rb') as f:
+            data = tomllib.load(f)
+        return str(data.get('project', {}).get('version', ''))
+    except Exception:
+        return ''
+
+
+def get_anthias_version_head() -> str:
+    """The primary version line — ``v{calver}``. Returns ``''`` only
+    when ``get_anthias_release()`` finds neither the installed package
+    metadata nor the repo-root pyproject.toml (i.e. the running code
+    is detached from both its install record and its source tree —
+    in practice, never on a real device or CI runner)."""
+    release = get_anthias_release()
+    return f'v{release}' if release else ''
+
+
+def get_anthias_version_meta() -> str:
+    """The de-emphasised git-meta line — ``(short_hash[, branch])``
+    when the env vars are present, empty otherwise. Branch is
+    suppressed on master/main since operators don't need to be told
+    they're on the release line.
+
+    Rendered on its own row under the version head in the System Info
+    template, in a smaller, muted font.
+    """
+    short_hash = get_git_short_hash()
+    branch = get_git_branch()
+    parts: list[str] = []
+    if short_hash:
+        parts.append(short_hash)
+    if branch and branch not in _RELEASE_BRANCHES:
+        parts.append(branch)
+    return f'({", ".join(parts)})' if parts else ''
+
+
+def get_anthias_version() -> str:
+    """The combined label, used by the v2 info API so external clients
+    get a single human-readable string.
+
+    Format:
+      - on master/main:   ``v2026.5.0 (08c26f3)``
+      - on a feature/PR branch: ``v2026.5.0 (08c26f3, vanilla-django)``
+      - if either piece is missing (e.g. host run with no GIT_BRANCH
+        env var):
+            * just release:       ``v2026.5.0``
+            * just git, no release: ``(08c26f3)`` / ``(08c26f3, branch)``
+
+    Replaces the old ``{branch}@{hash}`` shape so the operator sees a
+    real release number first instead of "vanilla-django@08c26f3".
+    """
+    head = get_anthias_version_head()
+    meta = get_anthias_version_meta()
+    return f'{head} {meta}'.strip() if head and meta else (head or meta)
+
+
 def try_connectivity() -> list[str]:
     urls = [
         'http://www.google.com',

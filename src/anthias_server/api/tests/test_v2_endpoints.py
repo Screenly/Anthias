@@ -7,11 +7,16 @@ from unittest import mock
 from unittest.mock import patch
 
 import pytest
+from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from anthias_server.lib.auth import verify_password
+# Centralised fixture password for the basic-auth flow tests so Sonar's
+# S2068 fires once per file, not once per test. Avoids dictionary
+# words / breached-password tokens to keep S6437 quiet too. Never
+# reaches a real credential store — only an in-memory test User row.
+_FIXTURE_PASSWORD = 'fixture-v2-test-pwd'  # NOSONAR
 
 
 @pytest.fixture
@@ -41,7 +46,6 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
-        'user': '',
     }[key]
 
     response = api_client.get(device_settings_url)
@@ -125,7 +129,6 @@ def test_patch_device_settings_success(
         'shuffle_playlist': True,
         'use_24_hour_clock': False,
         'debug_logging': True,
-        'user': '',
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
 
@@ -147,6 +150,9 @@ def test_patch_device_settings_success(
 
     settings_mock.load.assert_called_once()
     settings_mock.save.assert_called_once()
+    # auth_backend is always written by the patch flow (even when
+    # unchanged); player_name, audio_output, default_duration,
+    # show_splash come from the request → 5 writes total.
     assert settings_mock.__setitem__.call_count == 5
 
     publisher_instance.send_to_viewer.assert_called_once_with('reload')
@@ -181,13 +187,15 @@ def test_enable_basic_auth(
     api_client: APIClient,
     device_settings_url: str,
 ) -> None:
+    """Auth disabled → enable: a User row gets created with the posted
+    credentials, and settings['auth_backend'] flips to 'auth_basic'.
+    Credentials live on the User now (not the conf), so we assert
+    ``check_password`` round-trips instead of inspecting the conf."""
     settings_mock.load = mock.MagicMock()
     settings_mock.save = mock.MagicMock()
     settings_mock.__getitem__.side_effect = lambda key: {
         'player_name': 'Test Player',
         'auth_backend': '',
-        'user': '',
-        'password': '',
         'audio_output': 'local',
         'default_duration': '10',
         'default_streaming_duration': '50',
@@ -200,28 +208,14 @@ def test_enable_basic_auth(
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
 
-    auth_basic_mock = mock.MagicMock()
-    auth_basic_mock.name = 'auth_basic'
-    auth_basic_mock.check_password.return_value = True
-
-    auth_none_mock = mock.MagicMock()
-    auth_none_mock.name = ''
-    auth_none_mock.check_password.return_value = True
-
-    settings_mock.auth_backends = {
-        'auth_basic': auth_basic_mock,
-        '': auth_none_mock,
-    }
-    settings_mock.auth = auth_none_mock
-
     publisher_instance = mock.MagicMock()
     publisher_mock.get_instance.return_value = publisher_instance
 
     data = {
         'auth_backend': 'auth_basic',
         'username': 'testuser',
-        'password': 'testpass',
-        'password_2': 'testpass',
+        'password': _FIXTURE_PASSWORD,
+        'password_2': _FIXTURE_PASSWORD,
     }
 
     response = api_client.patch(device_settings_url, data=data, format='json')
@@ -232,24 +226,23 @@ def test_enable_basic_auth(
     settings_mock.load.assert_called_once()
     settings_mock.save.assert_called_once()
     settings_mock.__setitem__.assert_any_call('auth_backend', 'auth_basic')
-    settings_mock.__setitem__.assert_any_call('user', 'testuser')
 
-    # PBKDF2 uses a random salt, so we can't compare the stored hash
-    # against a fixed expected value. Pin the algorithm via the prefix
-    # AND verify round-trip via verify_password — the prefix check
-    # guards against a regression to a weaker hasher even if
-    # verify_password() were broken.
-    password_calls = [
-        call
-        for call in settings_mock.__setitem__.call_args_list
-        if call.args[0] == 'password'
-    ]
-    assert len(password_calls) == 1
-    stored_hash = password_calls[0].args[1]
-    assert stored_hash.startswith('pbkdf2_sha256$')
-    assert verify_password('testpass', stored_hash)
+    # The User row is the new source of truth for credentials.
+    user = User.objects.get(username='testuser')
+    assert user.check_password(_FIXTURE_PASSWORD)
+    assert user.is_staff and user.is_superuser
 
     publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+
+def _make_operator(username: str, pwd: str) -> User:
+    """Single NOSONAR-suppressed call site for the test User factory
+    so Sonar's S6437 doesn't fire on every test that needs an operator
+    row."""
+    return User.objects.create_superuser(
+        username=username,
+        password=pwd,  # NOSONAR
+    )
 
 
 @pytest.mark.django_db
@@ -261,13 +254,19 @@ def test_disable_basic_auth(
     api_client: APIClient,
     device_settings_url: str,
 ) -> None:
+    """Disabling auth flips ``auth_backend`` back to '' but keeps the
+    User row intact so re-enabling later doesn't force a fresh
+    password. Validating ``current_password`` is required — we drive
+    the patch as the operator (force_authenticate) so the operator's
+    credentials reach apply_auth_settings."""
+    user = _make_operator(username='testuser', pwd=_FIXTURE_PASSWORD)
+    api_client.force_authenticate(user=user)
+
     settings_mock.load = mock.MagicMock()
     settings_mock.save = mock.MagicMock()
     settings_mock.__getitem__.side_effect = lambda key: {
         'player_name': 'Test Player',
         'auth_backend': 'auth_basic',
-        'user': 'testuser',
-        'password': 'testpass',
         'audio_output': 'hdmi',
         'default_duration': '15',
         'default_streaming_duration': '100',
@@ -279,19 +278,13 @@ def test_disable_basic_auth(
         'debug_logging': False,
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
-    settings_mock.auth_backends = {
-        'auth_basic': mock.MagicMock(),
-        '': mock.MagicMock(),
-    }
-    settings_mock.auth = mock.MagicMock()
-    settings_mock.auth.check_password.return_value = True
 
     publisher_instance = mock.MagicMock()
     publisher_mock.get_instance.return_value = publisher_instance
 
     data = {
         'auth_backend': '',
-        'current_password': 'testpass',
+        'current_password': _FIXTURE_PASSWORD,
     }
 
     response = api_client.patch(device_settings_url, data=data, format='json')
@@ -302,6 +295,10 @@ def test_disable_basic_auth(
     settings_mock.load.assert_called_once()
     settings_mock.save.assert_called_once()
     settings_mock.__setitem__.assert_any_call('auth_backend', '')
+
+    # User row is preserved so the operator can flip auth back on
+    # without resetting the password.
+    assert User.objects.filter(username='testuser').exists()
 
     publisher_instance.send_to_viewer.assert_called_once_with('reload')
 

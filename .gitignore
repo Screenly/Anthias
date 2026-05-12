@@ -20,6 +20,7 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+test-artifacts/
 
 #Translations
 *.mo
@@ -49,6 +50,7 @@ docker/Dockerfile.redis
 docker/Dockerfile.viewer
 docker/Dockerfile.test
 docker-compose.yml
+docker-compose.override.yml
 
 balena-deploy/
 db.sqlite3

@@ -15,7 +15,7 @@
 
 <br>
 
-![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/static/img/color.svg?raw=true  "Anthias Logo")
+![Anthias Logo](https://github.com/Screenly/Anthias/blob/master/website/assets/images/color.svg?raw=true "Anthias Logo")
 
 <br>
 
@@ -40,20 +40,7 @@ See [this](https://anthias.screenly.io/docs/install/) page for options on how to
 
 ### Raspberry Pi OS
 
-* Raspberry Pi 5 Model B - 64-bit Trixie, 64-bit Bookworm
-* Raspberry Pi 4 Model B - 64-bit Trixie, 64-bit Bookworm
-* Raspberry Pi 3 Model B+ - 64-bit Trixie, 64-bit Bookworm
-* Raspberry Pi 3 Model B - 64-bit Trixie, 64-bit Bookworm
-* Raspberry Pi 2 Model B - 32-bit Trixie, 32-bit Bookworm
-* PC (x86) - 64-bit Trixie, 64-bit Bookworm
-  * Any 64-bit PC works (Intel NUCs, mini-PCs, old laptops).
-  * See the [PC installation guide](https://anthias.screenly.io/docs/pc/) for the Debian setup steps,
-    then run the standard [installation script](https://anthias.screenly.io/docs/install/#installing-on-raspberry-pi-os-lite-or-debian).
-
-> [!NOTE]
-> We're still fixing the Raspberry Pi OS installer so that it'll work with Raspberry Pi Zero and Raspberry Pi 1.
-> Should you encounter any issues, please file an issue either in this repository or in the
-[forums](https://forums.screenly.io).
+See the [supported hardware](https://anthias.screenly.io/get-started/#supported-hardware) section on the website for the full list of supported devices.
 
 ## :star: Star History
 

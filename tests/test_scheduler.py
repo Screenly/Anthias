@@ -39,6 +39,7 @@ ASSET_X = {
     'play_time_to': None,
     'is_reachable': True,
     'last_reachability_check': None,
+    'metadata': {},
 }
 
 ASSET_X_DIFF = {'duration': 10}
@@ -61,6 +62,7 @@ ASSET_Y = {
     'play_time_to': None,
     'is_reachable': True,
     'last_reachability_check': None,
+    'metadata': {},
 }
 
 ASSET_Z = {
@@ -81,6 +83,7 @@ ASSET_Z = {
     'play_time_to': None,
     'is_reachable': True,
     'last_reachability_check': None,
+    'metadata': {},
 }
 
 ASSET_TOMORROW = {
@@ -101,6 +104,7 @@ ASSET_TOMORROW = {
     'play_time_to': None,
     'is_reachable': True,
     'last_reachability_check': None,
+    'metadata': {},
 }
 
 FAKE_DB_PATH = '/tmp/fakedb'

@@ -10,6 +10,15 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from anthias_server.lib.diagnostics import get_anthias_release
+
+# Pulled from pyproject.toml's [project].version via the diagnostics
+# helper so the test moves in lockstep with the release bumper, and
+# also works in environments built with `uv sync --no-install-project`
+# (production, host install) where importlib.metadata wouldn't find
+# the package — the helper falls back to a tomllib read.
+_ANTHIAS_RELEASE = get_anthias_release()
+
 
 @pytest.fixture
 def api_client() -> APIClient:
@@ -163,7 +172,12 @@ def test_info_v2_endpoint(
         'free_space': '20G',
         'display_power': 'on',
         'up_to_date': True,
-        'anthias_version': 'main@a1b2c3d',
+        # Version label format is `v{calver} ({short_hash})` on a
+        # release branch (`main`/`master`); the branch is suppressed
+        # in that case because operators don't need to see "you are on
+        # the release branch". lib.diagnostics composes the label from
+        # importlib.metadata.version('anthias') + GIT_SHORT_HASH.
+        'anthias_version': f'v{_ANTHIAS_RELEASE} (a1b2c3d)',
         'device_model': 'Raspberry Pi 4',
         'uptime': {'days': 1, 'hours': 0.0},
         'memory': {

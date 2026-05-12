@@ -228,6 +228,41 @@ def _ensure_assetdir() -> None:
         os.makedirs(asset_dir, exist_ok=True)
 
 
+# Browser-test failure artifacts are owned by pytest-playwright. The
+# `--tracing retain-on-failure --screenshot only-on-failure
+# --output test-artifacts` flags in pyproject.toml's addopts make it
+# write `<output>/<test-id>/{trace.zip,test-failed-1.png}` for failed
+# tests and nothing for passing ones. The GH Actions
+# upload-artifact@v7 step in test-runner.yml uploads the directory on
+# job failure, where the trace replays via `playwright show-trace`.
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Set ``DJANGO_ALLOW_ASYNC_UNSAFE=1`` only when the run actually
+    contains integration tests.
+
+    Playwright's sync API spins up an internal asyncio loop to talk
+    to the browser over the CDP socket; Django's ORM detects that
+    loop and refuses sync calls (``SynchronousOnlyOperation``) unless
+    this flag is set. The single-threaded test process never invokes
+    ORM and Playwright concurrently, so the safety net Django enforces
+    isn't doing useful work for this suite.
+
+    Setting it process-wide unconditionally would also disable the
+    safety net for unit tests, where an accidental ORM call from
+    inside an event loop is a real bug we want Django to flag. Hooking
+    at collection time means a unit-only run (``pytest -m "not
+    integration"``) leaves the variable unset and the check active;
+    a run that includes integration tests sets it once before
+    pytest-django's DB setup (which would otherwise hit the same
+    check itself).
+    """
+    if any('integration' in item.keywords for item in items):
+        os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = '1'
+
+
 @pytest.fixture(autouse=True)
 def _mock_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     """

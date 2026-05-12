@@ -201,6 +201,10 @@ EOF
     cat <<'EOF'
       - anthias-caddy-data:/data
       - anthias-caddy-config:/config
+    logging:
+      driver: journald
+      options:
+        tag: anthias-caddy
 
 volumes:
   anthias-caddy-data:

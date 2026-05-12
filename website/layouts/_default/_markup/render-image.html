@@ -1,6 +1,8 @@
 {{- /* Render markdown image references through Hugo Pipes when the
-       image lives under assets/. Falls back to a plain image tag for
-       external/absolute URLs the renderer doesn't own. */ -}}
+       image lives under assets/. PNG/JPEG resources are auto-converted
+       to WebP at build time and served via <picture> with the original
+       as fallback. GIFs (animation), SVGs (vector), and external URLs
+       pass through unchanged. */ -}}
 {{- $src := .Destination -}}
 {{- $alt := .Text -}}
 {{- $title := .Title -}}
@@ -10,7 +12,13 @@
   {{- $resource = resources.Get $resourcePath -}}
 {{- end -}}
 {{- if $resource -}}
+  {{- $sub := $resource.MediaType.SubType -}}
+  {{- if or (eq $sub "png") (eq $sub "jpeg") -}}
+    {{- $webp := $resource.Process "webp" -}}
+<picture><source type="image/webp" srcset="{{ $webp.RelPermalink }}"><img src="{{ $resource.RelPermalink }}" alt="{{ $alt }}"{{ with $title }} title="{{ . }}"{{ end }} width="{{ $resource.Width }}" height="{{ $resource.Height }}" loading="lazy" decoding="async" /></picture>
+  {{- else -}}
 <img src="{{ $resource.RelPermalink }}" alt="{{ $alt }}"{{ with $title }} title="{{ . }}"{{ end }} loading="lazy" decoding="async" />
+  {{- end -}}
 {{- else -}}
 <img src="{{ $src }}" alt="{{ $alt }}"{{ with $title }} title="{{ . }}"{{ end }} loading="lazy" decoding="async" />
 {{- end -}}

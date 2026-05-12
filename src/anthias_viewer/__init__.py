@@ -41,8 +41,10 @@ from anthias_common.internal_auth import INTERNAL_AUTH_HEADER  # noqa: E402
 from anthias_common.internal_auth import internal_auth_token  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
     connect_to_redis,
+    detect_screen_resolution,
     string_to_bool,
 )
+from anthias_server.app.models import clamp_refresh_interval  # noqa: E402
 from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
 from anthias_viewer.scheduling import Scheduler  # noqa: E402
 
@@ -53,6 +55,14 @@ __license__ = 'Dual License: GPLv2 and Commercial License'
 
 
 current_browser_url: str | None = None
+# Latched True->False on the first failure of ``setReloadInterval`` —
+# version skew between the running viewer and the AnthiasWebview
+# binary persists for the lifetime of the viewer process, so once we
+# know the slot isn't there we don't need to keep paying the D-Bus
+# round-trip or flooding journald with warnings every rotation.
+# An operator who upgrades the webview package should restart the
+# viewer anyway; that resets the cache.
+_webview_supports_set_reload_interval: bool = True
 browser: Any = None
 loop_is_stopped: bool = False
 browser_bus: Any = None
@@ -112,8 +122,17 @@ BROWSER_HANDSHAKE_LINE = 'Anthias service start'
 
 
 def load_browser() -> None:
-    global browser
+    global browser, _webview_supports_set_reload_interval
     logging.info('Loading browser...')
+
+    # Re-probe the setReloadInterval capability against the freshly
+    # launched binary. The flag latches OFF on UnknownMethod, but a
+    # webview crash + restart (or an in-place upgrade then process
+    # bounce) might bring up a binary that *does* support the slot —
+    # we don't want to leave auto-refresh disabled forever in that
+    # case. Resetting on every launch keeps the latch tied to the
+    # actual running process, not the viewer's lifetime.
+    _webview_supports_set_reload_interval = True
 
     browser = sh.Command('AnthiasWebview')(_bg=True, _err_to_out=True)
 
@@ -139,14 +158,67 @@ def load_browser() -> None:
     )
 
 
-def view_webpage(uri: str) -> None:
+def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
+    """Display a webpage and arm its per-asset auto-refresh timer.
+
+    ``reload_interval_s`` mirrors ``Asset.metadata['refresh_interval_s']``:
+    0 (the default, and the value used for splash / fallback URLs)
+    leaves the existing webview without a reload timer; a positive value
+    reloads the visible page on that cadence so dashboards / status
+    pages stay current. We always re-send setReloadInterval — even
+    when the URL is unchanged from the previous tick — so an edit that
+    only flips the interval (no URI change) takes effect on the next
+    asset_loop iteration.
+    """
     global current_browser_url
 
     if browser is None or not browser.is_alive():
         load_browser()
-    if current_browser_url is not uri:
+    # ``!=`` (value comparison): an ``is not`` identity check would
+    # only short-circuit when the asset_loop happens to pass the same
+    # str object on consecutive ticks, which a JSON-reconstructed URL
+    # would defeat.
+    if current_browser_url != uri:
         browser_bus.loadPage(uri)
         current_browser_url = uri
+    # ``setReloadInterval`` is a new D-Bus method. A viewer running
+    # against an older AnthiasWebview (version skew across a fleet
+    # rollout, where the viewer container has rotated to a newer image
+    # but the webview process hasn't been restarted yet) would raise
+    # here and abort the asset loop, taking the screen down.
+    # Latch the capability flag *only* for "the method doesn't exist"
+    # — transient D-Bus failures (bus disconnect, timeout, race during
+    # a webview restart) are logged at debug and retried next rotation
+    # so they don't permanently disable auto-refresh on a webview
+    # that actually supports it.
+    global _webview_supports_set_reload_interval
+    if _webview_supports_set_reload_interval:
+        try:
+            browser_bus.setReloadInterval(int(reload_interval_s))
+        except Exception as exc:
+            message = str(exc)
+            # pydbus surfaces missing-slot errors with the D-Bus error
+            # code 'org.freedesktop.DBus.Error.UnknownMethod' in the
+            # exception message. Match either the code or the human
+            # phrasing so we don't miss it across pydbus versions.
+            method_missing = (
+                'UnknownMethod' in message
+                or 'no such method' in message.lower()
+            )
+            if method_missing:
+                _webview_supports_set_reload_interval = False
+                logging.warning(
+                    'setReloadInterval not supported by webview '
+                    '(version skew?); auto-refresh disabled until '
+                    'viewer restart: %s',
+                    exc,
+                )
+            else:
+                logging.debug(
+                    'Transient setReloadInterval failure (will retry '
+                    'next rotation): %s',
+                    exc,
+                )
     logging.info('Current url is {0}'.format(current_browser_url))
 
 
@@ -155,7 +227,11 @@ def view_image(uri: str) -> None:
 
     if browser is None or not browser.is_alive():
         load_browser()
-    if current_browser_url is not uri:
+    # Value comparison (matches view_webpage): an ``is not`` identity
+    # check would only short-circuit when the asset_loop happens to
+    # pass the same str object on consecutive ticks, which a JSON-
+    # reconstructed URL would defeat.
+    if current_browser_url != uri:
         browser_bus.loadImage(uri)
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
@@ -310,8 +386,25 @@ def asset_loop(scheduler: Any) -> None:
         if 'image' in mime:
             view_image(uri)
         elif 'web' in mime:
-            view_webpage(uri)
-        elif 'video' or 'streaming' in mime:
+            # Per-asset auto-refresh — feature #2813. ``metadata`` is a
+            # JSONField (defaults to {}); the column was historically
+            # nullable so be defensive. Anything non-int / out-of-range
+            # is rejected on write by the v2 serializer + the page-form
+            # handler, but a hand-crafted DB row could still slip a
+            # garbage value through, so clamp on read here too via the
+            # shared helper. The C++ webview's setReloadInterval also
+            # clamps, but doing it here means we don't pay the D-Bus
+            # round-trip for an obviously bogus value.
+            metadata = asset.get('metadata') or {}
+            interval = clamp_refresh_interval(
+                metadata.get('refresh_interval_s')
+            )
+            view_webpage(uri, reload_interval_s=interval)
+        elif 'video' in mime or 'streaming' in mime:
+            # ``'video' or 'streaming' in mime`` parses as ``'video'
+            # or ('streaming' in mime)`` — the truthy literal short-
+            # circuits and the branch runs for every mimetype, making
+            # the ``else: Unknown MimeType`` arm below unreachable.
             view_video(uri, asset['duration'])
         else:
             logging.error('Unknown MimeType %s', mime)
@@ -380,6 +473,42 @@ def start_loop() -> None:
         asset_loop(scheduler)
 
 
+DISPLAY_RESOLUTION_KEY = 'viewer:display_resolution'
+DISPLAY_RESOLUTION_INTERVAL_S = 60
+DISPLAY_RESOLUTION_TTL_S = 180
+
+
+def _publish_display_resolution_loop() -> None:
+    """Background reporter — write the active display resolution to
+    Redis on a 1-minute cadence with a 3-minute TTL.
+
+    The TTL serves as a liveness signal: if the viewer crashes or the
+    HDMI output goes away, the key expires and the System Info card
+    automatically falls back to the operator-configured resolution
+    from anthias.conf rather than showing stale data.
+    """
+    import threading
+
+    def tick() -> None:
+        while True:
+            try:
+                value = detect_screen_resolution()
+                if value:
+                    r.set(
+                        DISPLAY_RESOLUTION_KEY,
+                        value,
+                        ex=DISPLAY_RESOLUTION_TTL_S,
+                    )
+            except Exception:
+                logging.exception('publish_display_resolution failed')
+            sleep(DISPLAY_RESOLUTION_INTERVAL_S)
+
+    t = threading.Thread(
+        target=tick, name='display-resolution-reporter', daemon=True
+    )
+    t.start()
+
+
 def main() -> None:
     global scheduler
 
@@ -388,6 +517,8 @@ def main() -> None:
     subscriber = ViewerSubscriber(r, commands)
     subscriber.daemon = True
     subscriber.start()
+
+    _publish_display_resolution_loop()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

@@ -1,12 +1,42 @@
 import json
 import uuid
 from datetime import datetime
+from typing import Any
 
 from django.db import models
 from django.utils import timezone
 
 
 ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
+
+# Upper bound for ``Asset.metadata['refresh_interval_s']`` (seconds).
+# 24h cap acts as a typo guard — anything beyond is almost certainly
+# a units mistake — and is a hostile-input guard for the int math
+# in the C++ webview's setReloadInterval (``seconds * 1000`` would
+# otherwise overflow). Imported by the v2 serializer (write
+# validation), the form handler (clamping), and mirrored by
+# kMaxReloadIntervalS in webview/src/view.cpp.
+REFRESH_INTERVAL_S_MAX = 86400
+
+
+def clamp_refresh_interval(value: Any) -> int:
+    """Coerce an arbitrary ``metadata['refresh_interval_s']`` value to
+    a safe int in ``[0, REFRESH_INTERVAL_S_MAX]``.
+
+    The serializer's write path rejects out-of-range values, but a
+    hand-edited row, a legacy import, or a non-int JSON value could
+    leave junk in the column. Every read site (v2 serializer, edit-
+    modal ``to_json`` filter, viewer ``asset_loop``, page-form
+    handler) funnels through this so the clamp can't drift between
+    them. ``Any`` rather than ``object`` because callers pass dict /
+    list / unknown JSON values and we want ``int(value)`` to attempt
+    coercion regardless — TypeError / ValueError gets caught.
+    """
+    try:
+        interval = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(interval, REFRESH_INTERVAL_S_MAX))
 
 
 def generate_asset_id() -> str:
@@ -38,6 +68,15 @@ class Asset(models.Model):
     play_time_to = models.TimeField(blank=True, null=True)
     is_reachable = models.BooleanField(default=True)
     last_reachability_check = models.DateTimeField(blank=True, null=True)
+    # Per-asset bag of processing-pipeline state. Carries flags written
+    # by the upload-time normalisation tasks (normalize_image_asset,
+    # normalize_video_asset) — original file extension, whether a
+    # transcode happened, the last processing error if any — without
+    # widening the schema for each new field. The pipeline writes; the
+    # model itself never reads/branches on it. Default ``dict`` (not
+    # None) so callers can ``asset.metadata['k'] = v`` without an
+    # ``or {}`` guard.
+    metadata = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = 'assets'

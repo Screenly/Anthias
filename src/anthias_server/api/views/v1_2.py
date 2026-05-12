@@ -5,6 +5,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from anthias_server.app.models import Asset
+from anthias_common.youtube import dispatch_download
+from anthias_server.processing import (
+    dispatch_normalize_image,
+    dispatch_normalize_video,
+)
 from anthias_server.api.helpers import (
     AssetCreationError,
     get_active_asset_ids,
@@ -50,6 +55,23 @@ class AssetListViewV1_2(APIView):
 
         active_asset_ids = get_active_asset_ids()
         asset = Asset.objects.create(**serializer.data)
+
+        # Kick off the YouTube download out of band when the
+        # serializer flagged a youtube_asset. Without this dispatch
+        # a v1.2 youtube_asset create would leave the row stuck at
+        # is_processing=1 forever — the prior serializer just
+        # blocked the request on yt-dlp shellouts, so the dispatch
+        # site didn't exist.
+        if serializer._pending_youtube_uri:
+            dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+
+        # Same hand-off as v2: the serializer's prepare_asset stamps
+        # is_processing on rows that need normalisation; we dispatch
+        # the matching Celery task after persistence.
+        if serializer._pending_normalize == 'image':
+            dispatch_normalize_image(asset.asset_id)
+        elif serializer._pending_normalize == 'video':
+            dispatch_normalize_video(asset.asset_id)
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)

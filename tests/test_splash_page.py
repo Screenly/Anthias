@@ -96,21 +96,9 @@ def test_format_drops_garbage_tokens() -> None:
 
 
 @pytest.fixture
-def bare_metal_no_pending(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Each test starts with a clean Redis fake (no debounce key set)
-    and an unset ``MY_IP`` env var.
-
-    ``_resolve_node_ip()`` falls back to ``MY_IP`` on the cache-miss
-    path (mirroring ``anthias_common.utils.get_node_ip()``); leaving the env var
-    in whatever state the dev shell or CI runner picked up would let
-    that fallback bleed into tests that mean to assert on the
-    no-cache-no-fallback case. Tests that exercise the MY_IP
-    fallback set the env var explicitly via ``monkeypatch.setenv``.
-    """
+def bare_metal_no_pending() -> None:
+    """Each test starts with a clean Redis fake (no debounce key set)."""
     v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
-    monkeypatch.delenv('MY_IP', raising=False)
 
 
 def test_resolve_reads_from_redis_cache(bare_metal_no_pending: None) -> None:
@@ -303,65 +291,6 @@ def test_resolve_setnx_failure_returns_empty(
         assert v2_views._resolve_node_ip() == ''
 
 
-def test_resolve_cache_miss_falls_back_to_my_ip(
-    bare_metal_no_pending: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``bin/upgrade_containers.sh`` exports the host's outbound IP
-    into the server container as ``MY_IP``. ``anthias_common.utils.get_node_ip()``
-    falls back to it when ``ip_addresses`` is empty in Redis. The
-    polling resolver mirrors that — without the fallback, any setup
-    where host_agent isn't running (custom deploys, late-starting
-    host_agent, crashed host_agent) would freeze the splash on
-    'Detecting network…' forever."""
-    monkeypatch.setenv('MY_IP', _FIXTURE_IPV4)
-    with (
-        mock.patch(
-            'anthias_server.api.views.v2.is_balena_app', return_value=False
-        ),
-        mock.patch.object(v2_views.r, 'get', return_value=None),
-        mock.patch.object(v2_views.r, 'publish'),
-    ):
-        assert v2_views._resolve_node_ip() == _FIXTURE_IPV4
-
-
-def test_resolve_redis_get_failure_falls_back_to_my_ip(
-    bare_metal_no_pending: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """If Redis is fully down (early boot, broker crash), the cache
-    read raises before we can decide cache miss vs hit. The MY_IP
-    fallback must still apply — that's exactly the scenario it's
-    there to cover."""
-    monkeypatch.setenv('MY_IP', _FIXTURE_IPV4)
-    with (
-        mock.patch(
-            'anthias_server.api.views.v2.is_balena_app', return_value=False
-        ),
-        mock.patch.object(
-            v2_views.r, 'get', side_effect=redis.RedisError('synthetic')
-        ),
-    ):
-        assert v2_views._resolve_node_ip() == _FIXTURE_IPV4
-
-
-def test_resolve_cache_miss_with_unset_my_ip_returns_empty(
-    bare_metal_no_pending: None,
-) -> None:
-    """The fixture clears MY_IP. With no cache and no env fallback,
-    we return '' so the JS keeps polling (and the splash continues
-    to show 'Detecting network…' until something populates either
-    side)."""
-    with (
-        mock.patch(
-            'anthias_server.api.views.v2.is_balena_app', return_value=False
-        ),
-        mock.patch.object(v2_views.r, 'get', return_value=None),
-        mock.patch.object(v2_views.r, 'publish'),
-    ):
-        assert v2_views._resolve_node_ip() == ''
-
-
 # ---------------------------------------------------------------------------
 # _resolve_node_ip on Balena (bounded-timeout supervisor lookup)
 # ---------------------------------------------------------------------------
@@ -488,7 +417,7 @@ def test_splash_renders_200_without_mocking_anything() -> None:
     ``ipaddress.ip_address(get_node_ip())`` and 500'd on 'Unknown'.
     The view now does no IP work at all — render must succeed with no
     fixtures, no mocks, no Redis state."""
-    response = Client().get('/splash-page')
+    response = Client().get('/splash-page/')
     assert response.status_code == 200
 
 
@@ -513,7 +442,39 @@ def test_splash_renders_with_polling_script() -> None:
     script tag goes missing (template refactor, CSP, etc.), the
     page would forever show 'Detecting network…' even when IPs
     are available — catch that here."""
-    response = Client().get('/splash-page')
+    response = Client().get('/splash-page/')
     body = response.content.decode()
     assert '/api/v2/network/ip-addresses' in body
     assert 'Detecting network' in body
+
+
+@pytest.mark.django_db
+def test_splash_template_references_built_bundle() -> None:
+    """Template-only check: the splash points at dist/js/splash.js
+    rather than carrying its old inline IIFE. A template refactor
+    that dropped the <script> tag would leave operators stuck on
+    'Detecting network…' — all other splash tests would still pass
+    because this is the only path that exercises the bundle wiring.
+    The companion integration test below also asserts the file
+    actually exists on the build path."""
+    response = Client().get('/splash-page/')
+    body = response.content.decode()
+    assert 'dist/js/splash.js' in body, (
+        'splash-page.html no longer references the built splash.js — '
+        'check the template and the package.json build:splash step'
+    )
+
+
+@pytest.mark.integration
+def test_splash_built_bundle_resolves_on_static_path() -> None:
+    """Build-artifact check, integration-only because the unit job
+    runs before bin/prepare_test_environment.sh (which is what
+    invokes `bun run build`). `finders.find` walks STATICFILES_FINDERS
+    the same way collectstatic would — None here means WhiteNoise
+    would 404 the script in prod and the page would never poll."""
+    from django.contrib.staticfiles import finders
+
+    assert finders.find('dist/js/splash.js') is not None, (
+        'dist/js/splash.js is not resolvable — run `bun run build:splash` '
+        'or wire it into the build pipeline'
+    )

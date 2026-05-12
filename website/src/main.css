@@ -28,6 +28,19 @@ html {
   outline-offset: 2px;
 }
 
+/* Switch the <img>'s aspect-ratio per breakpoint so the layout box
+   matches whichever <picture> <source> the browser picked, keeping
+   CLS at zero across the mobile/desktop split. */
+.hero-img {
+  aspect-ratio: 509 / 301;
+  height: auto;
+}
+@media (min-width: 768px) {
+  .hero-img {
+    aspect-ratio: 1112 / 1044;
+  }
+}
+
 @utility btn-primary {
   background: linear-gradient(133.73deg, #fff963 14.42%, #ffd800 108.14%);
   border: 1px solid #fff963;

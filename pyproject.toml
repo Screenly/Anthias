@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anthias"
-version = "0.20.4"
+version = "2026.05.0"
 description = "The world's most popular open source digital signage project."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -26,7 +26,7 @@ dev-host = [
     "djangorestframework-stubs==3.16.9",
     "mypy==1.18.2",
     "ruff==0.14.10",
-    "tenacity==9.1.2",
+    "tenacity==9.1.4",
     "types-gunicorn==25.3.0.20260408",
     "types-netifaces==0.11.0.20260408",
     "types-python-dateutil==2.9.0.20260408",
@@ -44,7 +44,7 @@ docker-image-builder = [
 server = [
     "cec==0.2.8",
     "celery==5.6.3",
-    "certifi==2025.10.5",
+    "certifi==2026.4.22",
     "channels==4.3.1",
     "channels-redis==4.3.0",
     "Django==5.2.13",
@@ -55,6 +55,16 @@ server = [
     "hurry.filesize==0.9",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
+    "packaging==26.1",
+    # Pillow + pillow-heif power the upload-time image normalisation
+    # pipeline (HEIC / HEIF / TIFF → lossless WebP). pillow-heif
+    # registers a libheif-backed Pillow plugin at import time; the
+    # libheif1 system package is supplied by the base image (see
+    # docker/Dockerfile.server.j2). Pillow itself is otherwise unused
+    # — adding it here instead of relying on a transitive import keeps
+    # the dependency explicit.
+    "Pillow==12.1.0",
+    "pillow-heif==1.2.1",
     "psutil==7.2.1",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
@@ -62,16 +72,16 @@ server = [
     "PyYAML==6.0.2",
     "redis==7.4.0",
     "requests==2.33.1",
-    "tenacity==9.1.2",
+    "tenacity==9.1.4",
     "sh==2.2.2",
-    "urllib3==2.6.3",
+    "urllib3==2.7.0",
     "uvicorn[standard]==0.32.1",
     "whitenoise==6.12.0",
     "yt-dlp>=2026.3.17",
 ]
 viewer = [
     "cec==0.2.8",
-    "certifi==2025.10.5",
+    "certifi==2026.4.22",
     "Django==5.2.13",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
@@ -81,32 +91,31 @@ viewer = [
     "pytz==2025.2",
     "redis==7.4.0",
     "requests==2.33.1",
-    "tenacity==9.1.2",
+    "tenacity==9.1.4",
     "sh==2.2.2",
-    "urllib3==2.6.3",
+    "urllib3==2.7.0",
 ]
 dev = [
     "pytest==9.0.3",
     "pytest-cov==6.0.0",
-    "pytest-django==4.10.0",
-    "pytest-mock==3.14.0",
+    "pytest-django==4.12.0",
+    "pytest-mock==3.15.1",
     "pytest-xdist==3.6.1",
-    "selenium==4.36.0",
-    "splinter==0.21.0",
+    "playwright==1.59.0",
+    "pytest-playwright==0.7.2",
     "time-machine==2.15.0",
 ]
 host = [
     "ansible-core==2.19.9",
-    "getmac==0.9.5",
     "netifaces2==0.0.22",
     "redis==7.4.0",
     "requests==2.33.1",
-    "tenacity==9.1.2",
+    "tenacity==9.1.4",
 ]
 local = [
     "click==8.1.7",
     "requests==2.33.1",
-    "tenacity==9.1.2",
+    "tenacity==9.1.4",
 ]
 website = [
     "pytest==9.0.3",
@@ -132,6 +141,13 @@ mypy = [
     "django-stubs-ext==6.0.3",
     "djangorestframework==3.16.1",
     "drf-spectacular==0.29.0",
+    # Pillow ships PEP 561 stubs (py.typed). The processing module
+    # imports PIL at top level, so mypy needs the package resolvable
+    # to type-check the upload-time normalisation pipeline.
+    # pillow-heif is intentionally not pinned here — it's listed in
+    # tool.mypy.overrides above so its missing-import error is
+    # ignored, mirroring the cec / pydbus / sh / vlc pattern.
+    "Pillow==12.1.0",
     "pytz==2025.2",
     "whitenoise==6.12.0",
 ]
@@ -143,7 +159,19 @@ python_files = ["test_*.py"]
 markers = [
     "integration: marks tests as integration (deselect with '-m \"not integration\"')",
 ]
-addopts = "--strict-markers"
+# pytest-playwright config:
+#   --browser chromium       - skip firefox/webkit (only chromium is
+#                              installed in docker/Dockerfile.test).
+#   --tracing retain-on-failure
+#                            - per-test trace; dropped for green tests,
+#                              drained to test-artifacts/<id>/trace.zip
+#                              on failure. `playwright show-trace
+#                              trace.zip` replays.
+#   --screenshot only-on-failure
+#                            - full-page PNG into the same per-test dir.
+#   --output test-artifacts  - directory the GH Actions upload-artifact
+#                              step picks up (.gitignored).
+addopts = "--strict-markers --browser chromium --tracing retain-on-failure --screenshot only-on-failure --output test-artifacts"
 
 [tool.coverage.run]
 branch = true
@@ -193,9 +221,13 @@ exclude = [
     "^\\.venv/",
     "^node_modules/",
     "/migrations/",
-    "^static/",
+    "/static/",
     "^build/",
     "^dist/",
+    # Vendored verbatim from a pinned Yocto/poky upstream commit; see
+    # the file header. Adding type annotations would put the file
+    # off-pin and silently break the provenance comment.
+    "^webview/sysroot-relativelinks\\.py$",
 ]
 
 [[tool.mypy.overrides]]
@@ -207,10 +239,12 @@ module = [
     "cec",
     "channels_redis.*",
     "hurry.filesize",
+    "pillow_heif",
     "pydbus",
     "sh",
-    "splinter",
     "vlc",
+    "yt_dlp",
+    "yt_dlp.*",
 ]
 ignore_missing_imports = true
 

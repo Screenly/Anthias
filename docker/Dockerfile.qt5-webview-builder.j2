@@ -1,0 +1,232 @@
+{# Qt 5 cross-compile webview-builder. Mirrors the historical
+   webview/Dockerfile pipeline (which is now reserved for offline
+   Qt 5 toolchain rebuilds via bin/rebuild_qt5_toolchain.sh).
+
+   Stage layout:
+     1. qt5-sysroot  — armhf Debian + Raspbian/Pi userland; provides
+        the link-time sysroot the Qt 5 toolchain's qmake.conf points
+        at via `-sysroot /sysroot`.
+     2. webview-builder  — host x86 (`$BUILDPLATFORM`); installs the
+        Linaro gcc-7.4.1 cross-compiler plus the pre-built Qt 5
+        toolchain pinned to WebView-v2026.04.1, then compiles the
+        in-tree webview/ source.
+
+   Qt 5 is frozen for pi2/pi3 boards, so the toolchain artifact at
+   WebView-v2026.04.1 never changes. To CVE-patch the toolchain run
+   bin/rebuild_qt5_toolchain.sh and re-upload to that tag.
+#}
+FROM --platform=linux/arm/v7 {{ base_image }}:{{ base_image_tag }} AS qt5-sysroot
+
+USER root
+
+# raspberrypi.org + raspbian.org apt sources, gated on dpkg-deb-extracted
+# keyrings. SHA256-pinned downloads root the trust chain for everything
+# fetched after them.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    mkdir -p /tmp/keyrings && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspberrypi-archive-keyring.deb \
+        https://archive.raspberrypi.org/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/keyrings/raspbian-archive-keyring.deb \
+        https://archive.raspbian.org/raspbian/pool/main/r/raspbian-archive-keyring/raspbian-archive-keyring_20120528.4_all.deb && \
+    echo '2e727149d7acb8cc7f604e66d0049161039c8aa1eaf1175e54f9e69d963d60e4  /tmp/keyrings/raspberrypi-archive-keyring.deb' | sha256sum -c - && \
+    echo 'eb2bc175ecfad128ece8222b42eefabd0a2846afd14f3af04364f4a047cbc88f  /tmp/keyrings/raspbian-archive-keyring.deb' | sha256sum -c - && \
+    dpkg-deb -x /tmp/keyrings/raspberrypi-archive-keyring.deb / && \
+    dpkg-deb -x /tmp/keyrings/raspbian-archive-keyring.deb / && \
+    rm -rf /tmp/keyrings && \
+    printf 'Types: deb\nURIs: https://archive.raspberrypi.org/debian\nSuites: trixie\nComponents: main\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspi.sources && \
+    printf 'Types: deb\nURIs: https://archive.raspbian.org/raspbian\nSuites: trixie\nComponents: firmware\nArchitectures: armhf\nSigned-By: /usr/share/keyrings/raspbian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/raspbian-firmware.sources
+
+# Cross-build sysroot deps: every -dev whose .so the WebView app's
+# linker dereferences through Qt 5's qmake. Set matches what Qt 5 was
+# originally cross-built against (webview/Dockerfile builder stage),
+# so the link surface is identical to the toolchain's expectations.
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,id=qt5-sysroot-apt-{{ artifact_board }},sharing=locked \
+{% endif %}
+    apt-get update && \
+    apt-get install -y \
+        apt-utils \
+        firebird-dev \
+        freetds-dev \
+        gstreamer1.0-tools \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-x \
+        libasound2-dev \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libbz2-dev \
+        libcap-dev \
+        libdbus-1-dev \
+        libdbus-glib-1-dev \
+        libdrm-dev \
+        libegl1-mesa-dev \
+        libevent-dev \
+        libfontconfig1-dev \
+        libfreetype6-dev \
+        libgbm-dev \
+        libgcrypt20-dev \
+        libgles2-mesa-dev \
+        libglib2.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer1.0-dev \
+        libharfbuzz-dev \
+        libicu-dev \
+        libinput-dev \
+        libiodbc2-dev \
+        libjpeg62-turbo-dev \
+        libjsoncpp-dev \
+        liblcms2-dev \
+        libminizip-dev \
+        libnss3-dev \
+        libopus-dev \
+        libpci-dev \
+        libpng-dev \
+        libpng16-16t64 \
+        libpq-dev \
+        libpulse-dev \
+        libraspberrypi-bin \
+        libraspberrypi0 \
+        libre2-dev \
+        librsvg2-common \
+        libsnappy-dev \
+        libsqlite3-dev \
+        libsrtp2-dev \
+        libssl-dev \
+        libswscale-dev \
+        libsystemd-dev \
+        libts-dev \
+        libudev-dev \
+        libvpx-dev \
+        libwayland-dev \
+        libwebp-dev \
+        libx11-dev \
+        libx11-xcb-dev \
+        libx11-xcb1 \
+        libxcb-glx0-dev \
+        libxcb-icccm4 \
+        libxcb-icccm4-dev \
+        libxcb-image0 \
+        libxcb-image0-dev \
+        libxcb-keysyms1 \
+        libxcb-keysyms1-dev \
+        libxcb-randr0-dev \
+        libxcb-render-util0 \
+        libxcb-render-util0-dev \
+        libxcb-shape0-dev \
+        libxcb-shm0 \
+        libxcb-shm0-dev \
+        libxcb-sync-dev \
+        libxcb-sync1 \
+        libxcb-xfixes0-dev \
+        libxcb-xinerama0 \
+        libxcb-xinerama0-dev \
+        libxcb1 \
+        libxcb1-dev \
+        libxext-dev \
+        libxi-dev \
+        libxkbcommon-dev \
+        libxml2-dev \
+        libxrender-dev \
+        libxslt1-dev \
+        libxss-dev \
+        libxtst-dev && \
+    dpkg --purge libraspberrypi-dev
+
+
+FROM --platform=linux/amd64 {{ base_image }}:{{ base_image_tag }} AS webview-builder
+
+USER root
+
+# Pinned to linux/amd64 (not $BUILDPLATFORM): the Linaro 7.4.1
+# cross-compiler downloaded below is the x86_64 host tarball, so this
+# stage must run on x86_64. CI is amd64; arm64 build hosts (e.g. Apple
+# Silicon) will execute this stage under QEMU.
+#
+# Host build tools only. The webview app builds against the pre-built
+# Qt 5 toolchain, so we don't need the Qt 5 / QtWebEngine source-build
+# stack (chromium's bison/flex/gperf/ninja/gyp/python2.7). python3 is
+# required for sysroot-relativelinks.py.
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,id=qt5-host-apt,sharing=locked \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        python3 \
+        xz-utils
+
+WORKDIR /build
+
+# sysroot-relativelinks.py is vendored at webview/ so the Qt 5 build
+# isn't gated on an unpinned curl from raw.githubusercontent.com.
+# Rewrites absolute symlinks under /sysroot to relative so cross-gcc
+# resolves them inside the sysroot, not the build host's filesystem.
+COPY webview/sysroot-relativelinks.py /usr/local/bin/sysroot-relativelinks.py
+
+RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
+COPY --from=qt5-sysroot /lib/ /sysroot/lib/
+COPY --from=qt5-sysroot /usr/include/ /sysroot/usr/include/
+COPY --from=qt5-sysroot /usr/lib/ /sysroot/usr/lib/
+# /usr/share/pkgconfig holds arch-independent .pc files (notably
+# bzip2.pc on trixie's libbz2-dev). Without it freetype2.pc's
+# `Requires.private: bzip2` fails to resolve, cascading into Qt's
+# fontconfig probe failing silently.
+COPY --from=qt5-sysroot /usr/share/pkgconfig/ /sysroot/usr/share/pkgconfig/
+
+RUN python3 /usr/local/bin/sysroot-relativelinks.py /sysroot
+
+# Linaro gcc-7.4.1 — hardcoded path matches the CROSS_COMPILE setting
+# baked into the Qt 5 toolchain's qmake.conf at original toolchain
+# build time (webview/build_qt5.sh `-device-option CROSS_COMPILE=`).
+# SHA256-pinned: Linaro doesn't publish signed manifests for these
+# legacy 7.4 binaries, so the hash is the trust anchor.
+RUN mkdir -p /src && \
+    cd /src && \
+    curl --proto '=https' --tlsv1.2 -fsSL -o gcc-linaro.tar.xz \
+        https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz && \
+    echo '3c951cf1941d0fa06d64cc0d5e88612b209d8123b273fa26c16d70bd7bc6b163  gcc-linaro.tar.xz' | sha256sum -c - && \
+    tar xf gcc-linaro.tar.xz && \
+    rm gcc-linaro.tar.xz
+
+# Pre-built Qt 5 toolchain — pinned permanently to WebView-v2026.04.1
+# (Qt 5 is frozen for pi2/pi3). The qt5pi/ tree contains both host
+# qmake (x86) and armhf libs the webview app links against.
+RUN mkdir -p /src/{{ artifact_board }} && \
+    cd /tmp && \
+    QT5_TARBALL="qt{{ qt_major_version }}-{{ qt_version }}-{{ debian_version }}-{{ artifact_board }}.tar.gz" && \
+    curl --proto '=https' --tlsv1.2 -fsSL "{{ qt5_toolchain_url }}/${QT5_TARBALL}" -o "${QT5_TARBALL}" && \
+    curl --proto '=https' --tlsv1.2 -fsSL "{{ qt5_toolchain_url }}/${QT5_TARBALL}.sha256" -o "${QT5_TARBALL}.sha256" && \
+    sha256sum -c "${QT5_TARBALL}.sha256" && \
+    tar -xzf "${QT5_TARBALL}" -C /src/{{ artifact_board }} && \
+    rm "${QT5_TARBALL}" "${QT5_TARBALL}.sha256"
+
+COPY webview/AnthiasWebview.pro /src/{{ artifact_board }}/webview/AnthiasWebview.pro
+COPY webview/src /src/{{ artifact_board }}/webview/src
+COPY webview/res /src/{{ artifact_board }}/webview/res
+WORKDIR /src/{{ artifact_board }}/webview
+
+# webview is 3 .cpp files; ccache wiring through Linaro's cross-gcc
+# would save seconds at most, so plain make.
+RUN /src/{{ artifact_board }}/qt5pi/bin/qmake && \
+    make -j"$(nproc)" && \
+    make install
+
+# Stage outputs for the runtime COPY --from=webview-builder. The
+# qt5pi tree lands at /usr/local/qt5pi in the final image — the
+# install prefix Qt 5 was originally configured against.
+RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
+    mv AnthiasWebview /out/bin/ && \
+    cp -r /src/{{ artifact_board }}/webview/res /out/share/AnthiasWebview/ && \
+    cp -r /src/{{ artifact_board }}/qt5pi /out/qt5pi

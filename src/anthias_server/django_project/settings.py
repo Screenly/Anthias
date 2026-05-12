@@ -74,8 +74,10 @@ ALLOWED_HOSTS = [
 # CSRF_TRUSTED_ORIGINS is intentionally not set. Django only honours
 # subdomain wildcards there (e.g. https://*.example.com), so a leading
 # 'http://*' / 'https://*' would be a no-op rather than the broad
-# allowlist it appears to be. Same-origin POSTs pass without it via
-# Django's built-in Host/Origin equality check.
+# allowlist it appears to be. Same-host POSTs still pass through the
+# custom SameHostOriginCsrfMiddleware below, which also tolerates
+# scheme drift caused by a TLS-terminating proxy in front of
+# anthias-server (issue #2867).
 
 
 # Application definition
@@ -102,31 +104,37 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'rest_framework',
         'anthias_server.api.apps.ApiConfig',
         'django.contrib.admin',
+        'django.contrib.humanize',
         'django.contrib.sessions',
         'django.contrib.messages',
         'django.contrib.staticfiles',
         'dbbackup',
     ]
 
+# Sonar's S4502 ("disabling CSRF protection") fires on the MIDDLEWARE
+# list because it pattern-matches the literal ``CsrfViewMiddleware``
+# class name and doesn't see one. SameHostOriginCsrfMiddleware (see
+# src/anthias_server/lib/csrf.py) is a subclass of
+# ``django.middleware.csrf.CsrfViewMiddleware``, so CSRF protection
+# is still wired in — the rule's a false positive. NOSONAR on the
+# closing bracket where S4502 actually raises its issue.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+]  # NOSONAR
 
 ROOT_URLCONF = 'anthias_server.django_project.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            BASE_DIR / 'templates',
-        ],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -243,10 +251,14 @@ except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
-STATIC_ROOT = '/data/anthias/staticfiles'
+# Baked into the production server image at build time
+# (docker/Dockerfile.server.j2 runs `manage.py collectstatic` after
+# the bun-built dist/ is copied in). The runtime container treats
+# this path as read-only: admin assets and collected app static are
+# immutable per-image. Dev (DEBUG=True) bypasses STATIC_ROOT
+# entirely via WHITENOISE_USE_FINDERS below, so the path doesn't
+# need to exist in the dev image.
+STATIC_ROOT = '/usr/src/app/staticfiles'
 
 # Dev runs uvicorn (not runserver) and skips collectstatic, so files
 # only exist in STATICFILES_DIRS — let WhiteNoise fall back to the
@@ -277,9 +289,40 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
-    # The project uses custom authentication classes,
-    # so we need to disable the default ones.
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    # Two auth paths for the JSON API.
+    #
+    # Ordering matters: DRF tries authenticators in sequence and the
+    # first one that recognises the request short-circuits the rest.
+    # ``SessionAuthentication.authenticate`` enforces CSRF on unsafe
+    # methods whenever a session cookie is present, and a missing
+    # ``X-CSRFToken`` raises 403 — which would mask a perfectly valid
+    # ``Authorization: Basic …`` header on the same request (some CLI
+    # tooling shares a cookie jar with the operator's browser).
+    # Run BasicAuthentication first so an explicit Authorization
+    # header always wins over an incidental session cookie.
+    #
+    #   * DeprecatedBasicAuthentication — DRF's stock
+    #     ``BasicAuthentication`` plus a throttled warning log
+    #     (one line per (user, IP, path) per 1-hour TTL) so we can
+    #     identify the last callers without flooding the log when a
+    #     polling client hammers a single endpoint. Retained for
+    #     back-compat with pre-2826 Anthias-CLI builds and
+    #     third-party scripts written against the old auth.
+    #   * GatedSessionAuthentication — DRF's stock
+    #     ``SessionAuthentication`` plus the same ``auth_backend``
+    #     gate as DeprecatedBasicAuthentication: when auth is
+    #     disabled (``settings['auth_backend'] == ''``) both classes
+    #     no-op so the documented "auth disabled = API is fully
+    #     open" contract holds even for clients that happen to carry
+    #     a session cookie or a malformed Authorization header.
+    #
+    # New integrations should use the bearer-token path coming in a
+    # follow-up PR (UI-managed personal tokens, not
+    # username/password exchange).
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'anthias_server.lib.auth.DeprecatedBasicAuthentication',
+        'anthias_server.lib.auth.GatedSessionAuthentication',
+    ],
 }
 
 SPECTACULAR_SETTINGS = {
