@@ -124,4 +124,9 @@ if [ -f /var/run/reboot-required ]; then
     exit 0
 fi
 
-sudo -E docker compose "${COMPOSE_FILES[@]}" up -d
+# --remove-orphans sweeps containers that linger after a service is
+# renamed or removed from the compose file (e.g. legacy run-NNN sidecar
+# instances left over from earlier `docker compose run` invocations).
+# Without it `up -d` only logs a warning and leaves the orphans running,
+# which is confusing on a `docker ps` audit later.
+sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
