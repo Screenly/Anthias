@@ -126,6 +126,16 @@
       answer: |
         Not currently. Anthias plays one asset, then immediately switches to the next. Adding crossfades would require composited rendering on the viewer side, which the lightweight Pi WebView pipeline doesn't do. If this matters for your deployment, [Screenly](https://www.screenly.io) supports transitions.
 
+    - question: A multi-language website displays in English instead of my language — how do I fix it?
+      answer: |
+        Anthias sends an HTTP `Accept-Language` header derived from the device's system locale, and sites that ship multiple languages use that header to pick which version to serve. Out of the box the locale is whatever the OS image was built with (usually `en_GB.UTF-8` on the Anthias Raspberry Pi image), so multi-language URL assets default to English. Set the locale to the language you want and the site will follow.
+
+        * **Raspberry Pi OS / Debian:** SSH in and run `sudo raspi-config` → **Localisation Options** → **Locale**, tick the locales you need, then pick one as the default — or, non-interactively, `sudo update-locale LANG=nl_NL.UTF-8` (substitute your locale). Re-run `~/anthias/bin/upgrade_containers.sh` so the new `LANG` is baked into the viewer container.
+
+        * **balena:** open your fleet/device in the [balena dashboard](https://dashboard.balena-cloud.com/), add a **Device Variable** (or Service Variable scoped to `anthias-viewer`) with name `LANG` and value e.g. `nl_NL.UTF-8`. The balena supervisor restarts the viewer container with the new env var; no SSH needed.
+
+        Either way, the change takes effect after the viewer container restarts. Open a multi-language site in the dashboard's **Add Asset** preview to confirm it picks up the new language.
+
 - group: Operations
   items:
     - question: How do I get logs from Anthias?
