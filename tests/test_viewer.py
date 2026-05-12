@@ -661,17 +661,21 @@ def test_skip_swallows_db_errors() -> None:
 
 @pytest.fixture
 def reset_rotation_state() -> Iterator[None]:
-    """_last_applied_rotation is module state — snapshot and restore so
-    rotation tests don't bleed into each other (or into the prior
-    reload tests that don't mock _apply_wlr_transform)."""
+    """_last_applied_rotation + _rotation_bounce_pending are module
+    state — snapshot and restore so rotation tests don't bleed into
+    each other (or into the prior reload tests that don't mock
+    _apply_wlr_transform)."""
     prior_rot = viewer._last_applied_rotation
     prior_url = viewer.current_browser_url
+    prior_pending = viewer._rotation_bounce_pending
     try:
         viewer._last_applied_rotation = 0
+        viewer._rotation_bounce_pending = False
         yield
     finally:
         viewer._last_applied_rotation = prior_rot
         viewer.current_browser_url = prior_url
+        viewer._rotation_bounce_pending = prior_pending
 
 
 @pytest.mark.parametrize(
@@ -862,12 +866,36 @@ def test_handle_reload_reapplies_rotation_when_changed(
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
         mock.patch('anthias_viewer.MediaPlayerProxy.reset') as reset,
-        mock.patch.object(viewer, '_apply_wlr_transform') as apply,
+        mock.patch.object(
+            viewer, '_apply_wlr_transform', return_value=True
+        ) as apply,
     ):
         viewer._handle_reload()
     apply.assert_called_once_with(90)
     reset.assert_called_once()
     assert viewer._last_applied_rotation == 90
+
+
+def test_handle_reload_does_not_latch_when_wlr_transform_fails(
+    reset_rotation_state: None,
+) -> None:
+    """Issue #2856 (Copilot review #2): if wlr-randr can't apply the
+    transform (cage not ready, no outputs, every output failed), we
+    must NOT latch the new rotation as ``applied`` — the next reload
+    should retry rather than leaving the display stuck unrotated
+    until the user changes the setting again."""
+    viewer._last_applied_rotation = 0
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch('anthias_viewer.MediaPlayerProxy.reset'),
+        mock.patch.object(viewer, '_apply_wlr_transform', return_value=False),
+    ):
+        viewer._handle_reload()
+    # Latch unchanged — next reload retries.
+    assert viewer._last_applied_rotation == 0
 
 
 def test_handle_reload_no_rotation_change_is_no_op(
@@ -889,14 +917,18 @@ def test_handle_reload_no_rotation_change_is_no_op(
     reset.assert_not_called()
 
 
-def test_handle_reload_terminates_webview_on_linuxfb_rotation_change(
+def test_handle_reload_queues_bounce_on_linuxfb_rotation_change(
     reset_rotation_state: None,
 ) -> None:
     """linuxfb only reads :rotation=N at QPA init, so the live-rotation
-    path has to bounce AnthiasWebview. asset_loop's existing
-    ``browser.is_alive()`` check restarts it on the next tick."""
+    path has to bounce AnthiasWebview. _handle_reload runs on the
+    subscriber thread and MUST NOT terminate the browser directly —
+    that would race a concurrent view_*() call mid-D-Bus on the main
+    thread (Copilot review of #2882). It only sets a flag; the main
+    thread consumes it via _consume_pending_rotation_bounce()."""
     fake_browser = mock.Mock()
     skip = mock.Mock()
+    viewer._rotation_bounce_pending = False
     with (
         mock.patch.dict(settings, {'screen_rotation': 270}),
         mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
@@ -907,27 +939,81 @@ def test_handle_reload_terminates_webview_on_linuxfb_rotation_change(
         mock.patch('anthias_viewer.get_skip_event', return_value=skip),
     ):
         viewer._handle_reload()
-    fake_browser.terminate.assert_called_once()
-    # current_browser_url must be reset so the next loadPage doesn't
-    # short-circuit on the value comparison against the freshly-spawned
-    # webview (which knows nothing about the old URL).
-    assert viewer.current_browser_url is None
+    # NOT called from the subscriber thread.
+    fake_browser.terminate.assert_not_called()
+    # Flag set so the next asset_loop tick consumes it on the main
+    # thread.
+    assert viewer._rotation_bounce_pending is True
     skip.set.assert_called_once()
     # _last_applied_rotation is latched immediately, NOT only after
     # load_browser() respawns the webview. Otherwise a second `reload`
     # arriving in the gap would treat rotation as still-changed and
-    # terminate the already-dying process a second time.
+    # spam terminate() flags on an already-pending bounce.
     assert viewer._last_applied_rotation == 270
+
+
+def test_consume_pending_rotation_bounce_terminates_browser(
+    reset_rotation_state: None,
+) -> None:
+    """The main-thread half of the handoff: when the flag is set,
+    terminate the webview and clear current_browser_url so the next
+    view_*() call respawns it via load_browser()."""
+    fake_browser = mock.Mock()
+    viewer._rotation_bounce_pending = True
+    with mock.patch.object(viewer, 'browser', fake_browser):
+        viewer._consume_pending_rotation_bounce()
+    fake_browser.terminate.assert_called_once()
+    assert viewer.current_browser_url is None
+    # Flag cleared so a subsequent tick (with no new pending bounce)
+    # doesn't terminate the freshly-spawned process.
+    assert viewer._rotation_bounce_pending is False
+
+
+def test_consume_pending_rotation_bounce_no_op_when_flag_clear(
+    reset_rotation_state: None,
+) -> None:
+    """Most ticks have no pending bounce — must not touch the
+    browser; otherwise every asset_loop iteration would kill it."""
+    fake_browser = mock.Mock()
+    viewer._rotation_bounce_pending = False
+    with mock.patch.object(viewer, 'browser', fake_browser):
+        viewer._consume_pending_rotation_bounce()
+    fake_browser.terminate.assert_not_called()
+
+
+def test_asset_loop_consumes_pending_rotation_bounce(
+    reset_rotation_state: None,
+) -> None:
+    """asset_loop must consume the subscriber-set flag at the top of
+    each tick — that's the main-thread side of the cross-thread
+    handoff that keeps view_*() and rotation-change from racing on
+    ``browser``."""
+    fake_scheduler = mock.Mock()
+    fake_scheduler.get_next_asset.return_value = None
+    skip = mock.Mock()
+    skip.wait.return_value = False
+    with (
+        mock.patch.object(
+            viewer, '_consume_pending_rotation_bounce'
+        ) as consume,
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer.asset_loop(fake_scheduler)
+    consume.assert_called_once()
 
 
 def test_handle_reload_linuxfb_idempotent_under_repeat(
     reset_rotation_state: None,
 ) -> None:
     """Two ``reload`` messages back-to-back with the same rotation must
-    not double-terminate AnthiasWebview — issue raised by Copilot in
-    review of #2882."""
+    not flap the pending-bounce flag or set the skip_event twice on
+    an already-pending bounce — issue raised by Copilot in review of
+    #2882. After the first reload latches the new rotation, the
+    second sees it unchanged and short-circuits."""
     fake_browser = mock.Mock()
     skip = mock.Mock()
+    viewer._rotation_bounce_pending = False
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
@@ -939,5 +1025,6 @@ def test_handle_reload_linuxfb_idempotent_under_repeat(
     ):
         viewer._handle_reload()
         viewer._handle_reload()
-    fake_browser.terminate.assert_called_once()
+    fake_browser.terminate.assert_not_called()
     skip.set.assert_called_once()
+    assert viewer._rotation_bounce_pending is True

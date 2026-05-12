@@ -84,6 +84,16 @@ scheduler: Any = None
 # operator changed rotation from the UI and we need to re-apply.
 _last_applied_rotation: int = 0
 
+# Cross-thread handoff for the linuxfb rotation-change path. The
+# subscriber thread (ViewerSubscriber) runs _handle_reload when a
+# `reload` arrives on Redis pub/sub, but ``browser`` and
+# ``current_browser_url`` are owned by the main asset_loop thread —
+# touching them from the subscriber would race a concurrent
+# view_image()/view_webpage() mid-D-Bus call. Instead, the subscriber
+# sets this flag and the main thread consumes it at the top of
+# asset_loop via _consume_pending_rotation_bounce().
+_rotation_bounce_pending: bool = False
+
 
 def _rotation_value() -> int:
     """Coerce settings['screen_rotation'] to a known cardinal angle.
@@ -162,18 +172,28 @@ def _wlr_output_names() -> list[str]:
     return names
 
 
-def _apply_wlr_transform(rotation_deg: int) -> None:
+def _apply_wlr_transform(rotation_deg: int) -> bool:
     """Push the requested transform to every wlroots output.
 
-    No-op (and no error) on non-Wayland boards or when cage isn't up
-    yet — the linuxfb path handles rotation through QT_QPA_PLATFORM
-    instead, so the early-startup window before cage's socket exists
-    isn't a problem for Pi.
+    Returns True when at least one output was successfully rotated,
+    False on a non-Wayland board (no-op success — the linuxfb path
+    handles rotation through QT_QPA_PLATFORM instead) cannot happen
+    here, because callers gate on ``_is_wayland_board()``. Callers
+    use the boolean to decide whether to latch
+    ``_last_applied_rotation`` — a transient startup failure (cage
+    not ready yet, wayland socket missing) should leave the latch
+    untouched so the next ``reload`` retries.
     """
     if not _is_wayland_board():
-        return
+        # Treat as success: nothing to do on linuxfb, so the caller
+        # latching is correct.
+        return True
     transform = _wlr_transform_value(rotation_deg)
-    for name in _wlr_output_names():
+    names = _wlr_output_names()
+    if not names:
+        return False
+    any_success = False
+    for name in names:
         try:
             result = subprocess.run(
                 ['wlr-randr', '--output', name, '--transform', transform],
@@ -197,6 +217,7 @@ def _apply_wlr_transform(rotation_deg: int) -> None:
             logging.info(
                 'Applied wlroots transform %s to output %s', transform, name
             )
+            any_success = True
         else:
             logging.warning(
                 'wlr-randr --transform %s on %s exited %d: %s',
@@ -205,6 +226,7 @@ def _apply_wlr_transform(rotation_deg: int) -> None:
                 result.returncode,
                 (result.stderr or '').strip(),
             )
+    return any_success
 
 
 def send_current_asset_id_to_server(correlation_id: str | None) -> None:
@@ -271,10 +293,23 @@ def load_browser() -> None:
     # Apply screen rotation *before* the webview starts so it picks up
     # the rotated geometry on first frame: the wlroots compositor
     # needs the transform set before Qt queries the output size, and
-    # the linuxfb plugin reads ``:rotation=N`` once at QPA init.
+    # the linuxfb plugin reads ``:rotation=N`` once at QPA init. On
+    # linuxfb the env-var path is synchronous (the QPA reads it on
+    # construction) so we can latch unconditionally. On Wayland, only
+    # latch when at least one output rotation actually succeeded —
+    # otherwise an early-boot cage-not-ready failure would silently
+    # stick at the unrotated state until a setting change.
     rotation = _rotation_value()
-    _apply_wlr_transform(rotation)
-    _last_applied_rotation = rotation
+    if _is_wayland_board():
+        if _apply_wlr_transform(rotation):
+            _last_applied_rotation = rotation
+        else:
+            # Reset to a sentinel that doesn't match any valid angle
+            # so the next reload retries the apply. -1 is safe because
+            # _rotation_value() only returns cardinals.
+            _last_applied_rotation = -1
+    else:
+        _last_applied_rotation = rotation
 
     browser = sh.Command('AnthiasWebview')(
         _bg=True, _err_to_out=True, _env=_build_webview_env()
@@ -455,7 +490,7 @@ def _maybe_reapply_rotation() -> None:
     unrelated ``reload`` traffic (asset edits, etc.) doesn't blank
     the screen.
     """
-    global _last_applied_rotation
+    global _last_applied_rotation, _rotation_bounce_pending
     rotation = _rotation_value()
     if rotation == _last_applied_rotation:
         return
@@ -469,27 +504,64 @@ def _maybe_reapply_rotation() -> None:
     # Drop the cached media player either way — VLC bakes the
     # transform filter into the instance at construction, so the new
     # angle only takes effect after we re-init. mpv is unaffected
-    # (rotation is computed per play) but reset() is cheap.
+    # (rotation is computed per play) but reset() is cheap. Safe to
+    # call from the subscriber thread: ``MediaPlayerProxy.INSTANCE``
+    # is only ever read by the main thread at the top of view_video,
+    # and reset() just stops + nulls the cached instance.
     MediaPlayerProxy.reset()
 
     if _is_wayland_board():
-        _apply_wlr_transform(rotation)
-        _last_applied_rotation = rotation
+        # Apply via wlr-randr from the subscriber thread directly:
+        # wlr-randr is an out-of-process IPC call that doesn't touch
+        # any state shared with the main thread. Only latch on
+        # success so a transient failure (cage not ready, transient
+        # wayland-socket hiccup) leaves us in "still needs to retry"
+        # state — the next ``reload`` (asset edit, recheck, etc.) will
+        # see the mismatch and retry. Without this guard a startup
+        # race could latch the unrotated state permanently and only
+        # a user re-toggle would recover.
+        if _apply_wlr_transform(rotation):
+            _last_applied_rotation = rotation
+        else:
+            logging.warning(
+                'wlr-randr could not apply rotation %d on any output; '
+                'will retry on the next reload.',
+                rotation,
+            )
         return
 
-    # linuxfb path — kill the webview so asset_loop respawns it.
-    # Latch _last_applied_rotation NOW (rather than waiting for
-    # load_browser() to overwrite it after the respawn): a second
-    # ``reload`` arriving in the gap between terminate() and the next
-    # asset_loop tick would otherwise compare the unchanged settings
-    # value against the still-stale latch, decide rotation is "again"
-    # changing, and re-fire terminate() / skip_event on an already-
-    # dying webview process — which spams the warning log and could
-    # race the respawn. load_browser() unconditionally re-reads the
-    # setting and re-assigns this variable, so the latch is still
-    # accurate once the new process is up.
+    # linuxfb path — the webview needs to be respawned with the new
+    # QT_QPA_PLATFORM env. browser.terminate() and current_browser_url
+    # are owned by the main asset_loop thread (view_image/view_webpage
+    # mutate them mid-D-Bus call), so we MUST NOT touch them from this
+    # subscriber thread. Instead, latch the new rotation and raise a
+    # ``_rotation_bounce_pending`` flag that the main thread consumes
+    # via _consume_pending_rotation_bounce() at the top of asset_loop.
+    # The skip_event wakes the main thread out of its current sleep so
+    # the bounce happens promptly rather than after the current
+    # asset's full duration elapses.
     _last_applied_rotation = rotation
-    global browser
+    _rotation_bounce_pending = True
+    get_skip_event().set()
+
+
+def _consume_pending_rotation_bounce() -> None:
+    """Main-thread half of the linuxfb rotation handoff.
+
+    Called from ``asset_loop`` at the top of each tick. If the
+    subscriber set ``_rotation_bounce_pending``, terminate the
+    AnthiasWebview process here — on the same thread that owns it —
+    so the next view_image/view_webpage sees ``browser.is_alive()``
+    return false and respawns it via ``load_browser()`` with the
+    updated rotation env. Clearing ``current_browser_url`` defeats
+    the value-comparison short-circuit so the fresh webview actually
+    gets a loadPage/loadImage on its first asset.
+    """
+    global _rotation_bounce_pending, browser, current_browser_url
+    if not _rotation_bounce_pending:
+        return
+    _rotation_bounce_pending = False
+    logging.info('Consuming pending rotation bounce on main thread')
     if browser is not None:
         try:
             browser.terminate()
@@ -498,15 +570,7 @@ def _maybe_reapply_rotation() -> None:
                 'Could not terminate AnthiasWebview for rotation change: %s',
                 exc,
             )
-    # Force the next view_image/view_webpage call to re-issue loadPage
-    # against the freshly spawned webview — without this, the URL
-    # short-circuit ``current_browser_url != uri`` would skip the
-    # reload and the new process would sit on a blank page.
-    global current_browser_url
     current_browser_url = None
-    # Bump the skip event so the loop wakes immediately rather than
-    # sleeping out the current asset's full duration before noticing.
-    get_skip_event().set()
 
 
 def _skip_if_current_asset_inactive() -> None:
@@ -626,6 +690,16 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
 
 
 def asset_loop(scheduler: Any) -> None:
+    # Issue #2856 — consume any pending rotation bounce queued by the
+    # subscriber thread BEFORE we do anything else this tick. The
+    # subscriber can only set the flag (it doesn't own ``browser`` or
+    # ``current_browser_url``); the actual terminate + URL reset have
+    # to happen on this thread so they don't race a concurrent
+    # view_image / view_webpage mid-D-Bus call. The next view_*
+    # invocation below will see browser.is_alive()==False and
+    # respawn via load_browser() with the updated rotation env.
+    _consume_pending_rotation_bounce()
+
     asset = scheduler.get_next_asset()
 
     if asset is None:

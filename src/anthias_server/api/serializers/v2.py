@@ -304,7 +304,10 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
-    screen_rotation = IntegerField()
+    # Mirror the PATCH-side ChoiceField so the OpenAPI schema
+    # advertises the same enum on both directions — clients can rely
+    # on the value being one of {0, 90, 180, 270} when reading too.
+    screen_rotation = ChoiceField(choices=SCREEN_ROTATION_CHOICES)
     username = CharField()
 
 
