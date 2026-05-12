@@ -356,6 +356,37 @@ class TestMigrateAsset:
         post_mock.assert_not_called()
 
     @patch('anthias_server.lib.screenly_migration.requests.post')
+    def test_local_asset_open_oserror_surfaces_as_per_asset_error(
+        self,
+        post_mock: MagicMock,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # File passes is_file() but open() raises (PermissionError /
+        # transient IO). Must surface as ScreenlyMigrationError —
+        # otherwise it bubbles as a 500 from the API view and the
+        # operator gets a generic failure instead of a per-asset row.
+        monkeypatch.setattr(
+            screenly_migration, 'ANTHIAS_ASSETS_ROOT', tmp_path
+        )
+        target = tmp_path / 'locked.png'
+        target.write_bytes(b'\x89PNG\r\n')
+        asset = Asset(asset_id='locked', name='Locked', uri=str(target))
+
+        with patch(
+            'pathlib.Path.open',
+            side_effect=PermissionError(13, 'Permission denied'),
+        ):
+            with pytest.raises(
+                screenly_migration.ScreenlyMigrationError
+            ) as exc:
+                screenly_migration.migrate_asset('tok', asset)
+
+        assert 'Could not read locked.png' in str(exc.value)
+        assert 'Permission denied' in str(exc.value)
+        post_mock.assert_not_called()
+
+    @patch('anthias_server.lib.screenly_migration.requests.post')
     def test_screenly_rejection_surfaces_status_and_detail(
         self, post_mock: MagicMock
     ) -> None:
