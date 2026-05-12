@@ -199,8 +199,6 @@ def get_node_ip() -> str:
 
         if ip_addresses:
             return ' '.join(json.loads(ip_addresses))
-        elif os.getenv('MY_IP'):
-            return os.getenv('MY_IP') or 'Unable to retrieve IP.'
 
     return 'Unable to retrieve IP.'
 
