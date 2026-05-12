@@ -181,14 +181,14 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # from apt at runtime — except on Qt 6 boards where qt6-*-dev
     # below also provides the runtime libs.)
     #
-    # X11/XCB packages are intentionally absent: the WebView is
-    # configured with `-no-xcb -no-xcb-xlib -qpa eglfs` (see
-    # webview/build_qt5.sh) and runs under QT_QPA_PLATFORM=linuxfb
-    # straight on KMS/DRM, so Qt has no X code path to dlopen. mpv
-    # uses --vo=drm. Wayland is similarly absent on Pi for the same
-    # reason; the x86 board is the one exception (it has no /dev/fb0,
-    # so the qt6-wayland + cage pair is added to the per-board apt
-    # extension below).
+    # X11/XCB packages are intentionally absent. Qt5 boards (pi2/pi3)
+    # use a custom -no-xcb -no-xcb-xlib -qpa eglfs build of the WebView
+    # (see webview/build_qt5.sh) and run under QT_QPA_PLATFORM=linuxfb
+    # straight on KMS/DRM, with mpv on --vo=drm. Qt6 boards (pi4-64,
+    # pi5, x86, arm64) run the viewer under `cage` (a kiosk wlroots
+    # compositor) with QT_QPA_PLATFORM=wayland and mpv on --vo=gpu
+    # --gpu-context=wayland — no X code path on either track. The
+    # cage + qt6-wayland pair is added to the Qt6 apt extension below.
     viewer_extra_apt_dependencies = [
         'ca-certificates',
         'dbus-daemon',
@@ -252,35 +252,25 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     ]
 
     if is_qt6:
-        # pi4-64/pi5 use mpv --vo=drm; x86 uses mpv --vo=gpu
-        # --gpu-context=wayland under cage with VAAPI hwdec (see
-        # MPVMediaPlayer.play in src/anthias_viewer/media_player.py).
-        # VLC is deliberately *not* installed: MediaPlayerProxy routes
-        # Qt6 boards to MPVMediaPlayer, so VLC would just be ~80–100 MB
-        # of dead weight here.
+        # All Qt6 boards (pi4-64, pi5, x86, arm64) run the viewer
+        # under `cage`, a wlroots kiosk compositor, with mpv on
+        # --vo=gpu --gpu-context=wayland for video. See
+        # MPVMediaPlayer.play in src/anthias_viewer/media_player.py
+        # and bin/start_viewer.sh for the runtime wiring. VLC is
+        # deliberately *not* installed: MediaPlayerProxy routes Qt6
+        # boards to MPVMediaPlayer, so VLC would just be ~80–100 MB
+        # of dead weight here. qt6-wayland is the Qt platform plugin
+        # the viewer loads to render into cage's surface.
         viewer_extra_apt_dependencies.extend(
             [
+                'cage',
                 'mpv',
                 'qt6-base-dev',
+                'qt6-wayland',
                 'qt6-webengine-dev',
                 'qt6-image-formats-plugins',
             ]
         )
-
-        if board in ('x86', 'arm64'):
-            # balenaOS x86 has no /dev/fb0 for Qt's linuxfb plugin and
-            # no host display server. cage is a kiosk wlroots
-            # compositor that talks straight to KMS; qt6-wayland is
-            # the Qt platform plugin the viewer loads to render into
-            # cage's surface. The same wiring fits arm64
-            # (non-Pi 64-bit ARM SBCs running Armbian): no /dev/fb0
-            # by default, so cage is the portable kiosk path.
-            viewer_extra_apt_dependencies.extend(
-                [
-                    'cage',
-                    'qt6-wayland',
-                ]
-            )
 
         if board == 'x86':
             # va-driver-all is a Debian metapackage that pulls in

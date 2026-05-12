@@ -205,39 +205,37 @@ class MPVMediaPlayer(MediaPlayer):
         # effect without a viewer restart, matching VLCMediaPlayer.
         settings.load()
 
-        # Pin to 1080p on Pi4-64/Pi5: mpv's default --drm-mode=preferred
-        # reads the connector's EDID-preferred mode (4K on most modern
-        # TVs) and runs CPU zimg upscale, which drops below real-time
-        # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
+        # 4-thread software decode tuning for the Pi4-64 A72 / Pi5 A76:
+        # mpv's default --vd-lavc-threads=0 (auto) picks min(cores+1, 16)
+        # but caps under-utilization on small cores. Pinning to 4 fits
+        # 1080p H.264 with measurable headroom on both SoCs.
+        # --drm-mode=1920x1080@60 was previously paired with this on the
+        # --vo=drm path to dodge A72 CPU zimg upscale at 4K; under
+        # --vo=gpu --gpu-context=wayland the GPU does the scaling, so
+        # mpv can render at the connector's native mode and the
+        # --drm-mode pin is a no-op (cage holds DRM master).
         device_type = os.environ.get('DEVICE_TYPE', '')
         extra_args: list[str] = []
         if device_type in ('pi4-64', 'pi5'):
-            extra_args = [
-                '--drm-mode=1920x1080@60',
-                '--vd-lavc-threads=4',
-            ]
+            extra_args = ['--vd-lavc-threads=4']
 
-        # x86 runs under `cage` (a wlroots kiosk compositor — see
-        # bin/start_viewer.sh); cage holds DRM master, so --vo=drm is
-        # denied. Route mpv through the GL VO over a Wayland EGL
-        # context, which is the generic path mpv supports on every x86
-        # GPU with Mesa or vendor GL drivers. Paired with
-        # --hwdec=auto-safe, VAAPI-capable iGPUs (Intel iHD/i965, AMD
-        # radeonsi, …) decode in hardware and hand frames to the GL
-        # context as DMA-BUFs via dmabuf-interop-gl; software decode
-        # still works via the same VO for codecs without HW support.
-        # --vo=dmabuf-wayland would skip the GL upload entirely but
-        # segfaults under cage in the viewer's background-spawn path
-        # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
-        # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
-        # they own the framebuffer directly with no compositor.
-        # arm64 (non-Pi ARM SBCs on Armbian) goes the same
-        # route as x86 because the viewer container is wrapped in
-        # cage there too; hwdec is best-effort per SoC.
-        if device_type in ('x86', 'arm64'):
-            vo_args = ['--vo=gpu', '--gpu-context=wayland']
-        else:
-            vo_args = ['--vo=drm']
+        # All Qt6 boards run under `cage` (a wlroots kiosk compositor —
+        # see bin/start_viewer.sh); cage holds DRM master, so --vo=drm
+        # is denied. Route mpv through the GL VO over a Wayland EGL
+        # context, the generic path mpv supports on every x86 / Pi /
+        # Mesa-on-arm64 GPU. Paired with --hwdec=auto-safe, hardware
+        # decoders hand frames to the GL context as DMA-BUFs via
+        # dmabuf-interop-gl: VAAPI on x86 (Intel iHD/i965, AMD
+        # radeonsi, …), V4L2-request / V4L2-M2M on Pi4-64 (vc4) and
+        # Pi5 (hantro), and per-SoC best-effort on arm64 (rkvdec /
+        # cedrus / meson-vdec). Software decode still works via the
+        # same VO for codecs without HW support. --vo=dmabuf-wayland
+        # would skip the GL upload entirely but segfaults under cage
+        # in the viewer's background-spawn path (mpv 0.40.0 +
+        # wlroots-0.18 + libplacebo dies between hwdec init and file
+        # open). Qt5 boards (pi2/pi3) are routed through VLC by
+        # MediaPlayerProxy and never reach this code path.
+        vo_args = ['--vo=gpu', '--gpu-context=wayland']
 
         self.process = subprocess.Popen(
             [

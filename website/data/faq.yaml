@@ -73,7 +73,7 @@
   items:
     - question: How do I rotate the screen for portrait orientation?
       answer: |
-        Rotation happens at the kernel / firmware level. The Anthias viewer renders straight to the Linux framebuffer (Qt `linuxfb`) and to KMS (mpv `--vo=drm`) — there's no Wayland compositor in the stack — so the standard Raspberry Pi config knobs apply directly.
+        Rotation happens at the kernel / firmware level on the Pi. The viewer renders through `cage` (a kiosk Wayland compositor that talks straight to KMS) on Pi4/Pi5/x86/arm64, and through Qt `linuxfb` directly on legacy 32-bit Pi boards (Pi2/Pi3) — neither path goes through a desktop compositor, so the standard Raspberry Pi config knobs apply directly.
 
         Edit `/boot/firmware/config.txt` and add one of:
 
@@ -98,7 +98,7 @@
         1. SSH in and run `docker compose ps` from `~/anthias/` — all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
         2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
         3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
-        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders to the framebuffer (Qt `linuxfb`) and uses no X server, so `xset` won't help.
+        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders directly to KMS (via `cage` on Pi4/Pi5/x86/arm64, or Qt `linuxfb` on Pi2/Pi3) and uses no X server, so `xset` won't help.
 
         If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
 

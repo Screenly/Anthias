@@ -51,15 +51,17 @@ def test_play_invokes_popen_with_expected_args(
     mock_popen: Any, _mock_detect: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4'}):
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
     mock_popen.assert_called_once_with(
         [
             'mpv',
             '--no-terminal',
-            '--vo=drm',
+            '--vo=gpu',
+            '--gpu-context=wayland',
             '--hwdec=auto-safe',
+            '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
             '--',
             'file:///test/video.mp4',
@@ -70,7 +72,7 @@ def test_play_invokes_popen_with_expected_args(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_pins_1080p_mode_on_pi4_64(
+def test_play_tunes_decoder_threads_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
@@ -78,14 +80,15 @@ def test_play_pins_1080p_mode_on_pi4_64(
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
     assert '--hwdec=auto-safe' in args[0]
-    assert '--hwdec=v4l2m2m-copy' not in args[0]
+    # --drm-mode pinning is gone: under cage+Wayland the GPU does the
+    # scaling, so the A72 no longer runs CPU zimg upscale at 4K.
+    assert '--drm-mode=1920x1080@60' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_pins_1080p_mode_on_pi5(
+def test_play_tunes_decoder_threads_on_pi5(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
@@ -93,12 +96,12 @@ def test_play_pins_1080p_mode_on_pi5(
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
+    assert '--drm-mode=1920x1080@60' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_does_not_pin_mode_on_x86(
+def test_play_omits_pi_tuning_on_x86(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
@@ -110,29 +113,16 @@ def test_play_does_not_pin_mode_on_x86(
     assert '--vd-lavc-threads=4' not in args[0]
 
 
+@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi4-64', 'pi5'])
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_on_x86(
-    mock_popen: Any, mpv: _MPVFixtures
+def test_play_uses_wayland_vo_on_all_qt6_boards(
+    mock_popen: Any, mpv: _MPVFixtures, device_type: str
 ) -> None:
+    # All Qt6 boards run under cage (a wlroots kiosk compositor); cage
+    # holds DRM master, so --vo=drm would be denied. Every Qt6 board
+    # must route through --vo=gpu --gpu-context=wayland instead.
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
-        mpv.player.play()
-
-    args, _ = mock_popen.call_args
-    assert '--vo=gpu' in args[0]
-    assert '--gpu-context=wayland' in args[0]
-    assert '--vo=drm' not in args[0]
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_on_arm64(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    # arm64 runs under cage (same as x86), so mpv must go
-    # through --vo=gpu --gpu-context=wayland — cage holds DRM master
-    # and would deny --vo=drm.
-    mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
+    with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
