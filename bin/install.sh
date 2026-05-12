@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Bash-interpreter guard. `set -o pipefail` below is a bashism that
+# would abort with a cryptic message under dash/ash; surface a clear
+# error before we reach it so users running `sh install.sh` know what
+# went wrong.
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "error: install.sh must be run with bash, not sh/dash." >&2
+    exit 1
+fi
+
 set -euo pipefail
 
 BRANCH="master"
@@ -120,15 +129,20 @@ else
     ANSI_RESET=''
 fi
 
-# whiptail ships with Debian/Raspbian by default; the apt install is a
-# safety net for minimal images. jq is consumed elsewhere in the install
-# pipeline.
+# whiptail/jq/curl/ca-certificates ship with Debian/Raspbian by default;
+# the apt install is a safety net for minimal images. curl runs before
+# install_packages now (release menu fetch + connectivity probe), so it
+# must be present here rather than later in the pipeline.
 function install_prerequisites() {
-    if [ -f /usr/bin/whiptail ] && [ -f /usr/bin/jq ]; then
+    if [ -f /usr/bin/whiptail ] \
+        && [ -f /usr/bin/jq ] \
+        && [ -f /usr/bin/curl ] \
+        && [ -f /etc/ssl/certs/ca-certificates.crt ]; then
         return
     fi
 
-    sudo apt -y update && sudo apt -y install whiptail jq
+    sudo apt -y update && sudo apt -y install \
+        whiptail jq curl ca-certificates
 }
 
 function display_banner() {
@@ -146,6 +160,62 @@ function display_section() {
     echo "${ANSI_PURPLE}  ${TITLE}${ANSI_RESET}"
     echo "${ANSI_YELLOW}${LINE}${ANSI_RESET}"
     echo
+}
+
+# Preflight: refuse to run as root, require ${USER} to be set. The
+# script elevates with sudo where needed and writes user-owned state
+# under /home/${USER}; running the whole script as root would put
+# venvs and sudoers entries in the wrong place.
+function require_supported_environment() {
+    if [ "$(id -u)" -eq 0 ] || [ "${USER:-}" = "root" ]; then
+        echo "error: install.sh must not be run as root." >&2
+        echo "       Run it as the user that will own the Anthias install" >&2
+        echo "       (e.g. 'pi' or 'anthias'); the script elevates with sudo" >&2
+        echo "       only where required." >&2
+        exit 1
+    fi
+
+    if [ -z "${USER:-}" ]; then
+        echo "error: \$USER is unset; run install.sh from a login shell." >&2
+        exit 1
+    fi
+}
+
+# Preflight: confirm github.com is reachable before we burn an apt-get
+# update + start prompting the user. Saves a long, confusing failure
+# when the device has no network configured yet.
+function require_network() {
+    if ! curl -fsSL --max-time 10 -o /dev/null "${GITHUB_API_REPO_URL}"; then
+        echo "error: cannot reach ${GITHUB_API_REPO_URL}" >&2
+        echo "       install.sh needs network access to fetch releases and" >&2
+        echo "       clone the repo. Verify connectivity and retry." >&2
+        exit 1
+    fi
+}
+
+# Emit TAG<TAB>DESCRIPTION lines for the version menu. Filters to
+# non-draft, non-prerelease releases that have a `docker-tag` asset
+# attached (the only ones the installer can actually use); capped at
+# the 10 most recent so the menu fits on an 80×24 console.
+function fetch_release_menu_options() {
+    curl -fsSL --max-time 15 \
+        "${GITHUB_API_REPO_URL}/releases?per_page=30" 2>/dev/null \
+        | jq -r '
+            .[]
+            | select(.draft == false)
+            | select(.prerelease == false)
+            | select(.assets[]?.name == "docker-tag")
+            | "\(.tag_name)\tReleased \(.published_at[0:10])"
+        ' 2>/dev/null \
+        | head -n 10 \
+        || true
+}
+
+function fetch_docker_tag_for_release() {
+    local TAG="$1"
+    curl -fsSL --max-time 15 \
+        "${GITHUB_RELEASES_URL}/download/${TAG}/docker-tag" 2>/dev/null \
+        || true
 }
 
 function initialize_ansible() {
@@ -290,7 +360,10 @@ function set_device_type() {
 
 function run_ansible_playbook() {
     display_section "Run the Anthias Ansible Playbook"
-    set_device_type
+
+    # DEVICE_TYPE is already exported by main() via set_device_type as
+    # a preflight, so unsupported hardware fails before the long apt
+    # pipeline starts.
 
     # Forwarded to the playbook so the screenly role can pin
     # /usr/local/sbin/upgrade_anthias.sh to the same ref the user picked.
@@ -434,8 +507,8 @@ function set_custom_version() {
     )
 
     local STATUS_CODE
-    STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-        "${GITHUB_API_REPO_URL}/git/refs/tags/${BRANCH}")
+    STATUS_CODE=$(curl -fsS -o /dev/null -w "%{http_code}" \
+        "${GITHUB_API_REPO_URL}/git/refs/tags/${BRANCH}" || echo "000")
 
     if [ "$STATUS_CODE" -ne 200 ]; then
         whiptail \
@@ -444,22 +517,22 @@ function set_custom_version() {
         exit 1
     fi
 
-    local DOCKER_TAG_FILE_URL="${GITHUB_RELEASES_URL}/download/${BRANCH}/docker-tag"
-    STATUS_CODE=$(curl -sL -o /dev/null -w "%{http_code}" \
-        "$DOCKER_TAG_FILE_URL")
-
-    if [ "$STATUS_CODE" -ne 200 ]; then
+    DOCKER_TAG=$(fetch_docker_tag_for_release "${BRANCH}")
+    if [ -z "${DOCKER_TAG}" ]; then
         whiptail \
             --title "Anthias Installer" \
             --msgbox "This version doesn't have a docker-tag file." 8 60
         exit 1
     fi
-
-    DOCKER_TAG=$(curl -sL "$DOCKER_TAG_FILE_URL")
 }
 
 function main() {
+    require_supported_environment
+    set_device_type
+
     install_prerequisites && clear
+
+    require_network
 
     display_banner "${TITLE_TEXT}"
 
@@ -479,20 +552,45 @@ function main() {
         export MANAGE_NETWORK="No"
     fi
 
+    # Build the version menu from the live GitHub release list, with
+    # "latest" pinned at the top and "other" as an escape hatch for
+    # tags not in the recent window (or if the API call is empty).
+    local -a MENU_OPTS=(
+        "latest" "Tip of master branch (rolling release)"
+    )
+    local TAG DESC
+    while IFS=$'\t' read -r TAG DESC; do
+        [ -n "${TAG}" ] && MENU_OPTS+=("${TAG}" "${DESC}")
+    done < <(fetch_release_menu_options)
+    MENU_OPTS+=("other" "Enter a specific tag name manually")
+
     VERSION=$(
         whiptail \
             --title "Anthias Installer" \
-            --menu "${VERSION_PROMPT[*]}" 15 70 4 \
-            "latest" "Latest version from the master branch (rolling)" \
-            "tag"    "Pinned version selected by tag name" \
+            --menu "${VERSION_PROMPT[*]}" 22 76 12 \
+            "${MENU_OPTS[@]}" \
             3>&1 1>&2 2>&3
     )
 
-    if [ "${VERSION}" == "latest" ]; then
-        BRANCH="master"
-    else
-        set_custom_version
-    fi
+    case "${VERSION}" in
+        latest)
+            BRANCH="master"
+            ;;
+        other)
+            set_custom_version
+            ;;
+        *)
+            BRANCH="${VERSION}"
+            DOCKER_TAG=$(fetch_docker_tag_for_release "${BRANCH}")
+            if [ -z "${DOCKER_TAG}" ]; then
+                whiptail \
+                    --title "Anthias Installer" \
+                    --msgbox "Could not fetch docker-tag for ${BRANCH}." \
+                    8 60
+                exit 1
+            fi
+            ;;
+    esac
 
     if whiptail \
         --title "Anthias Installer" \
