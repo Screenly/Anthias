@@ -266,72 +266,92 @@ def test_hdmi_on_x86_falls_back_to_hid(alsa_settings: Any) -> None:
         assert get_alsa_audio_device() == 'sysdefault:CARD=HID'
 
 
+class _FakeDirEntry:
+    """Minimal os.DirEntry stand-in for scandir tests."""
+
+    def __init__(self, name: str, base: str = '/sys/class/drm') -> None:
+        self.name = name
+        self.path = f'{base}/{name}'
+
+
+def _patch_drm(entries: list[str], statuses: dict[str, str]) -> Any:
+    """Build patches that fake os.scandir() + open() for status reads."""
+    from io import StringIO
+
+    fake_entries = [_FakeDirEntry(n) for n in entries]
+
+    def fake_open(path: str, *args: Any, **kwargs: Any) -> Any:
+        if path in statuses:
+            return StringIO(statuses[path])
+        raise FileNotFoundError(path)
+
+    return (
+        patch(
+            'anthias_viewer.media_player.os.scandir', return_value=fake_entries
+        ),
+        patch('builtins.open', side_effect=fake_open),
+    )
+
+
 def test_detect_hdmi_returns_first_connected_port() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
-    statuses = {
-        '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
-        '/sys/class/drm/card1-HDMI-A-2/status': 'disconnected\n',
-    }
-
-    def fake_exists(path: str) -> bool:
-        return path in statuses
-
-    def fake_open(path: str, *args: Any, **kwargs: Any) -> Any:
-        from io import StringIO
-
-        return StringIO(statuses[path])
-
-    with (
-        patch(
-            'anthias_viewer.media_player.os.path.exists',
-            side_effect=fake_exists,
-        ),
-        patch('builtins.open', side_effect=fake_open),
-    ):
+    scandir_patch, open_patch = _patch_drm(
+        entries=['card0', 'card1', 'card1-HDMI-A-1', 'card1-HDMI-A-2'],
+        statuses={
+            '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
+            '/sys/class/drm/card1-HDMI-A-2/status': 'disconnected\n',
+        },
+    )
+    with scandir_patch, open_patch:
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
 def test_detect_hdmi_returns_second_port_when_only_it_is_connected() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
-    statuses = {
-        '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
-        '/sys/class/drm/card1-HDMI-A-2/status': 'connected\n',
-    }
+    scandir_patch, open_patch = _patch_drm(
+        entries=['card1-HDMI-A-1', 'card1-HDMI-A-2'],
+        statuses={
+            '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
+            '/sys/class/drm/card1-HDMI-A-2/status': 'connected\n',
+        },
+    )
+    with scandir_patch, open_patch:
+        assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi1'
 
-    def fake_exists(path: str) -> bool:
-        return path in statuses
 
-    def fake_open(path: str, *args: Any, **kwargs: Any) -> Any:
-        from io import StringIO
+def test_detect_hdmi_discovers_non_card1_layouts() -> None:
+    """DRM card index is probe-order-dependent; HDMI-A-N mapping is stable."""
+    from anthias_viewer.media_player import _detect_hdmi_audio_device
 
-        return StringIO(statuses[path])
-
-    with (
-        patch(
-            'anthias_viewer.media_player.os.path.exists',
-            side_effect=fake_exists,
-        ),
-        patch('builtins.open', side_effect=fake_open),
-    ):
+    scandir_patch, open_patch = _patch_drm(
+        entries=['card2-HDMI-A-1', 'card2-HDMI-A-2'],
+        statuses={
+            '/sys/class/drm/card2-HDMI-A-1/status': 'disconnected\n',
+            '/sys/class/drm/card2-HDMI-A-2/status': 'connected\n',
+        },
+    )
+    with scandir_patch, open_patch:
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi1'
 
 
 def test_detect_hdmi_falls_back_when_no_status_files() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
-    with patch(
-        'anthias_viewer.media_player.os.path.exists', return_value=False
-    ):
+    with patch('anthias_viewer.media_player.os.scandir', return_value=[]):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
 def test_detect_hdmi_falls_back_on_oserror() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
+    scandir_patch, _ = _patch_drm(
+        entries=['card1-HDMI-A-1', 'card1-HDMI-A-2'],
+        statuses={},
+    )
     with (
-        patch('anthias_viewer.media_player.os.path.exists', return_value=True),
+        scandir_patch,
         patch('builtins.open', side_effect=OSError('boom')),
     ):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
