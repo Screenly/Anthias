@@ -89,7 +89,7 @@ wheels = [
 
 [[package]]
 name = "anthias"
-version = "2026.5.0"
+version = "2026.5.1"
 source = { editable = "." }
 
 [package.dev-dependencies]
@@ -178,7 +178,6 @@ server = [
     { name = "django-stubs-ext" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
-    { name = "hurry-filesize" },
     { name = "jinja2" },
     { name = "netifaces" },
     { name = "packaging" },
@@ -209,7 +208,6 @@ test = [
     { name = "django-stubs-ext" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
-    { name = "hurry-filesize" },
     { name = "jinja2" },
     { name = "netifaces" },
     { name = "packaging" },
@@ -347,7 +345,6 @@ server = [
     { name = "django-stubs-ext", specifier = "==6.0.3" },
     { name = "djangorestframework", specifier = "==3.16.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
-    { name = "hurry-filesize", specifier = "==0.9" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "netifaces", specifier = "==0.11.0" },
     { name = "packaging", specifier = "==26.1" },
@@ -378,7 +375,6 @@ test = [
     { name = "django-stubs-ext", specifier = "==6.0.3" },
     { name = "djangorestframework", specifier = "==3.16.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
-    { name = "hurry-filesize", specifier = "==0.9" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "netifaces", specifier = "==0.11.0" },
     { name = "packaging", specifier = "==26.1" },
@@ -1035,15 +1031,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/22/d2/b7e131f7be8d854d48cb6d048113c30f9a46dca0c9a8b08fcb3fcd588cdc/httptools-0.7.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:7347714368fb2b335e9063bc2b96f2f87a9ceffcd9758ac295f8bbcd3ffbc0ca", size = 452910, upload-time = "2025-10-10T03:54:59.366Z" },
     { url = "https://files.pythonhosted.org/packages/53/cf/878f3b91e4e6e011eff6d1fa9ca39f7eb17d19c9d7971b04873734112f30/httptools-0.7.1-cp314-cp314-win_amd64.whl", hash = "sha256:cfabda2a5bb85aa2a904ce06d974a3f30fb36cc63d7feaddec05d2050acede96", size = 88205, upload-time = "2025-10-10T03:55:00.389Z" },
 ]
-
-[[package]]
-name = "hurry-filesize"
-version = "0.9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "setuptools" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/5e/16e17bedcf54d5b618dc0771690deda77178e5c310402881c3d2d6c5f27c/hurry.filesize-0.9.tar.gz", hash = "sha256:f5368329adbef86accd3bc9490522340bb79260455ae89b1a42c10f63801b9a6", size = 2810, upload-time = "2009-03-11T23:15:40.615Z" }
 
 [[package]]
 name = "idna"
@@ -1973,15 +1960,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/1c/d7b67ab43f30013b47c12b42d1acd354c195351a3f7a1d67f59e54227ede/ruff-0.14.10-py3-none-win32.whl", hash = "sha256:104c49fc7ab73f3f3a758039adea978869a918f31b73280db175b43a2d9b51d6", size = 13196187, upload-time = "2025-12-18T19:29:19.006Z" },
     { url = "https://files.pythonhosted.org/packages/fb/9c/896c862e13886fae2af961bef3e6312db9ebc6adc2b156fe95e615dee8c1/ruff-0.14.10-py3-none-win_amd64.whl", hash = "sha256:466297bd73638c6bdf06485683e812db1c00c7ac96d4ddd0294a338c62fdc154", size = 14661283, upload-time = "2025-12-18T19:29:30.16Z" },
     { url = "https://files.pythonhosted.org/packages/74/31/b0e29d572670dca3674eeee78e418f20bdf97fa8aa9ea71380885e175ca0/ruff-0.14.10-py3-none-win_arm64.whl", hash = "sha256:e51d046cf6dda98a4633b8a8a771451107413b0f07183b2bef03f075599e44e6", size = 13729839, upload-time = "2025-12-18T19:28:48.636Z" },
-]
-
-[[package]]
-name = "setuptools"
-version = "79.0.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bb/71/b6365e6325b3290e14957b2c3a804a529968c77a049b2ed40c095f749707/setuptools-79.0.1.tar.gz", hash = "sha256:128ce7b8f33c3079fd1b067ecbb4051a66e8526e7b65f6cec075dfc650ddfa88", size = 1367909, upload-time = "2025-04-23T22:20:59.241Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/6d/b4752b044bf94cb802d88a888dc7d288baaf77d7910b7dedda74b5ceea0c/setuptools-79.0.1-py3-none-any.whl", hash = "sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51", size = 1256281, upload-time = "2025-04-23T22:20:56.768Z" },
 ]
 
 [[package]]

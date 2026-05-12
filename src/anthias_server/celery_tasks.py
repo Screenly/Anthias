@@ -2,7 +2,7 @@ import logging
 import os
 import secrets
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from os import getenv, path
 from typing import Any
 
@@ -56,6 +56,40 @@ celery = Celery(
 # long enough that the sweep cost (one ffprobe per stream + one HEAD
 # per HTTP asset) doesn't compound on a large playlist.
 ASSET_REVALIDATION_INTERVAL_S = 60 * 15
+
+# Sweep cadence for the stuck-``is_processing`` reconciler. 10 min is
+# short enough that an operator sees a hung row recover within one
+# UI sit-down. The per-tick cost is bounded by the number of stuck
+# rows: one initial SELECT over ``is_processing=True``, then per row
+# either a stamp (SELECT + UPDATE inside ``stamp_processing_start``)
+# or a normalize re-dispatch (which itself stamps). On a healthy
+# fleet the filtered set is usually empty so the tick costs one
+# SELECT total; only a backlog of stuck rows scales the work up.
+RECONCILE_STUCK_INTERVAL_S = 60 * 10
+
+# Age threshold for considering a row stuck. Has to be *longer* than
+# the longest reasonable Celery task: ``NORMALIZE_VIDEO_TIME_LIMIT_S``
+# is 30 min and ``YOUTUBE_DOWNLOAD_TIME_LIMIT_S`` is 15 min, so 60 min
+# is a safe floor. A row past the threshold either had its worker
+# time-limit expire (in which case ``on_failure`` should already have
+# cleared the flag — and the reconciler only sees rows where it
+# didn't, e.g. SIGKILL before on_failure could run) OR was never
+# picked up at all (Redis flake during ``.delay()``, worker crashed
+# between enqueue and accept, container restart mid-dispatch). The
+# threshold doesn't distinguish the two cases — it just says "if a
+# row has carried ``is_processing=True`` for over an hour, something
+# went wrong, recover it".
+RECONCILE_STUCK_THRESHOLD_S = 60 * 60
+
+# Singleton lock for the stuck-row reconciler — same SETNX +
+# Lua-compare-and-delete pattern as ``revalidate_asset_urls``. The
+# embedded beat scheduler (``celery worker -B``) fires the periodic
+# task inside the same worker process; if a future deploy ever runs
+# two workers with embedded beat (or a separate ``celery beat``
+# instance) this lock keeps the sweep single-flighted across them and
+# prevents the same stuck row from being re-dispatched twice in a
+# tick.
+RECONCILE_STUCK_LOCK_KEY = 'celery:reconcile_stuck_processing:lock'
 
 # Floor on per-asset re-checks. Independent of the sweep interval —
 # this gates the on-demand recheck path so a viewer that keeps
@@ -130,6 +164,11 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
         ASSET_REVALIDATION_INTERVAL_S,
         revalidate_asset_urls.s(),
         name='revalidate_asset_urls',
+    )
+    sender.add_periodic_task(
+        RECONCILE_STUCK_INTERVAL_S,
+        reconcile_stuck_processing.s(),
+        name='reconcile_stuck_processing',
     )
 
 
@@ -707,6 +746,182 @@ def revalidate_asset_urls() -> None:
         # *our* token. If the TTL expired and someone else acquired
         # the lock with a different token, leave it alone.
         r.eval(_LOCK_RELEASE_LUA, 1, ASSET_REVALIDATION_LOCK_KEY, token)
+
+
+def _parse_processing_started_at(value: Any) -> datetime | None:
+    """Best-effort ISO-8601 parser for ``metadata.processing_started_at``.
+
+    Returns a tz-aware ``datetime`` on success, ``None`` on any failure.
+    Anthias never writes a non-string value to this key, but a backup
+    restored from a hand-edited JSON dump might. Treat unparseable
+    values as "missing" — the reconciler then stamps the row on first
+    sight, the same recovery path the legacy / pre-stamp branch takes.
+
+    Naive datetimes (no ``tzinfo``) are also treated as missing — the
+    dispatch helpers stamp via ``timezone.now()`` which is tz-aware
+    under Django's ``USE_TZ=True``, so a naive value is by definition
+    a hand-edit rather than something we wrote. Comparing a naive
+    ``datetime`` to the tz-aware ``cutoff`` below would raise
+    ``TypeError`` and abort the sweep — returning ``None`` here
+    routes the row through the stamp-on-first-sight branch instead,
+    which is the right behaviour for a malformed value (same as the
+    parse-error branch).
+    """
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
+
+
+@celery.task(time_limit=300)
+def reconcile_stuck_processing() -> None:
+    """Recover ``Asset`` rows stuck at ``is_processing=True``.
+
+    Causes (incomplete list):
+      * v1/v1.1 file uploads pre-GH #2870 fix: the create view never
+        dispatched ``normalize_video_asset`` / ``normalize_image_asset``,
+        so the row landed at ``is_processing=True`` and stayed there.
+      * Celery worker killed mid-task (SIGKILL, OOM, container
+        restart) before ``on_failure`` could clear the flag.
+      * Backup restore that re-created rows with ``is_processing=True``.
+      * Redis flake during ``.delay()`` that ate the enqueue.
+
+    Lookup: every ``is_processing=True`` row gets its
+    ``metadata.processing_started_at`` examined. The dispatch helpers
+    (``dispatch_normalize_image`` / ``dispatch_normalize_video`` /
+    ``dispatch_download``) stamp this field at dispatch time. Rows
+    without the stamp are legacy / backup-restored / pre-stamp; they
+    get stamped on first sweep with ``timezone.now()``, so the
+    *next* re-dispatch decision waits the full
+    ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) from that stamp — at
+    a 10-min sweep cadence that's six sweeps where the row stays
+    inside the grace window before becoming eligible. The grace is
+    deliberately long enough to cover the worst-case live transcode
+    (``NORMALIZE_VIDEO_TIME_LIMIT_S=30min``) plus margin, so a
+    still-in-flight task never gets yanked out from under itself.
+
+    Rows older than ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) get
+    re-dispatched via the normalisation path matching their mimetype.
+    A re-dispatch refreshes ``processing_started_at`` automatically
+    (the helper writes the field), so the next sweep won't ping-pong
+    on the same row. A mimetype the reconciler doesn't know how to
+    re-dispatch (e.g. a corrupted row with mimetype='webpage' marked
+    as processing) lands on ``_set_processing_error`` — the flag
+    clears and the operator sees an explicit "Failed" pill with a
+    reconciler-sourced error message.
+
+    Single-flighted via a Redis SETNX lock — mirrors
+    ``revalidate_asset_urls``. The default Anthias deploy runs one
+    celery worker with embedded beat, so this is a defence rather
+    than a correctness requirement today; it bounds blast radius if a
+    future deploy ever runs two workers with ``-B`` (or a separate
+    ``celery beat`` instance) by ensuring only one sweep re-dispatches
+    a given stuck row per tick.
+    """
+    from django.utils import timezone
+
+    from anthias_server.processing import (
+        _set_processing_error,
+        dispatch_normalize_image,
+        dispatch_normalize_video,
+        stamp_processing_start,
+    )
+
+    # SETNX with TTL and a unique per-sweep token, same pattern as
+    # revalidate_asset_urls. TTL matches the task time_limit so a
+    # hard-killed worker doesn't orphan the lock; the Lua release
+    # below is compare-and-delete so a stale-TTL → fresh-acquisition
+    # → original-finally ordering can't clobber the new holder.
+    token = secrets.token_hex(16)
+    if not r.set(
+        RECONCILE_STUCK_LOCK_KEY,
+        token,
+        nx=True,
+        ex=300,  # matches the task's time_limit
+    ):
+        logging.info(
+            'reconcile_stuck_processing: previous sweep still running, '
+            'skipping'
+        )
+        return
+
+    try:
+        now = timezone.now()
+        cutoff = now - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S)
+
+        for asset in Asset.objects.filter(is_processing=True):
+            metadata = asset.metadata or {}
+            started_at = _parse_processing_started_at(
+                metadata.get('processing_started_at')
+            )
+
+            if started_at is None:
+                # Legacy / backup-restored / pre-stamp row. Mark its
+                # start so the next sweep can apply the age threshold
+                # uniformly — a still-in-flight task gets the full
+                # grace window rather than being yanked out from
+                # under itself.
+                stamp_processing_start(asset.asset_id)
+                continue
+
+            if started_at > cutoff:
+                # Inside the grace window. Let the (presumed-running)
+                # task complete on its own.
+                continue
+
+            # Stuck past the threshold. Route by mimetype.
+            mimetype = (asset.mimetype or '').lower()
+            if mimetype == 'image':
+                logging.warning(
+                    'reconcile_stuck_processing: re-dispatching image '
+                    'normalize for %s (stuck since %s)',
+                    asset.asset_id,
+                    started_at.isoformat(),
+                )
+                dispatch_normalize_image(asset.asset_id)
+            elif mimetype == 'video':
+                logging.warning(
+                    'reconcile_stuck_processing: re-dispatching video '
+                    'normalize for %s (stuck since %s)',
+                    asset.asset_id,
+                    started_at.isoformat(),
+                )
+                dispatch_normalize_video(asset.asset_id)
+            else:
+                # No clear task to re-dispatch — clear the flag with
+                # a logged error so the operator can interact with
+                # the row. YouTube rows arrive here as
+                # mimetype='video' (the create path rewrites the row
+                # to video at the same time it enqueues
+                # download_youtube_asset), so the YouTube case is
+                # covered by the video branch above — we lose the
+                # original watch URL on a backup-restored YouTube
+                # row, but video-pipeline re-dispatch is the best we
+                # can do without re-querying yt-dlp.
+                logging.warning(
+                    'reconcile_stuck_processing: clearing flag on '
+                    'unknown-mimetype row %s '
+                    '(mimetype=%r, stuck since %s)',
+                    asset.asset_id,
+                    asset.mimetype,
+                    started_at.isoformat(),
+                )
+                _set_processing_error(
+                    asset.asset_id,
+                    'Processing stalled past threshold; flag cleared '
+                    'by reconciler. Re-upload the asset to retry.',
+                )
+    finally:
+        # Compare-and-delete via the shared Lua script: only release
+        # if the lock still holds *our* token. If our TTL expired and
+        # someone else acquired the lock with a fresh token, leave it
+        # alone.
+        r.eval(_LOCK_RELEASE_LUA, 1, RECONCILE_STUCK_LOCK_KEY, token)
 
 
 @celery.task(time_limit=30)

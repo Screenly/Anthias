@@ -531,3 +531,124 @@ def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
     ):
         viewer.asset_loop(scheduler)
     trigger.assert_called_once_with('remote')
+
+
+# ---------------------------------------------------------------------------
+# _handle_reload / _skip_if_current_asset_inactive — issue #2430
+# ---------------------------------------------------------------------------
+#
+# The viewer used to ignore playlist mutations while an asset was on
+# screen — a 1-hour image kept showing for the rest of the hour even
+# after delete/deactivate. The ``reload`` command now also signals a
+# skip when the displayed asset is no longer active.
+
+
+def test_handle_reload_runs_load_settings() -> None:
+    """``reload`` must still reload settings — that path is exercised
+    by the settings.patch() endpoint and predates the skip behaviour."""
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = None
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch.object(viewer, 'load_settings') as load,
+    ):
+        viewer._handle_reload()
+    load.assert_called_once()
+
+
+def test_skip_when_current_asset_deleted() -> None:
+    """Deleting the currently-displayed asset must set the skip event."""
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'gone'
+    skip_event = mock.Mock()
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        # ``filter().first()`` returns None for a deleted row.
+        objects_filter.return_value.first.return_value = None
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_called_once()
+
+
+def test_skip_when_current_asset_deactivated() -> None:
+    """Toggling is_enabled off on the displayed asset must skip."""
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'asset-1'
+    skip_event = mock.Mock()
+    inactive_asset = mock.Mock()
+    inactive_asset.is_active.return_value = False
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        objects_filter.return_value.first.return_value = inactive_asset
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_called_once()
+
+
+def test_no_skip_when_current_asset_still_active() -> None:
+    """Unrelated edits (e.g. duration on a different asset) shouldn't
+    interrupt the displayed asset."""
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'asset-1'
+    skip_event = mock.Mock()
+    active_asset = mock.Mock()
+    active_asset.is_active.return_value = True
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        objects_filter.return_value.first.return_value = active_asset
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_not_called()
+
+
+def test_skip_noop_when_no_current_asset() -> None:
+    """Empty playlist → no displayed asset → no DB hit, no skip."""
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = None
+    skip_event = mock.Mock()
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        viewer._skip_if_current_asset_inactive()
+    objects_filter.assert_not_called()
+    skip_event.set.assert_not_called()
+
+
+def test_skip_noop_before_scheduler_initialised() -> None:
+    """A ``reload`` can arrive during the pre-Scheduler wait window
+    (``wait_for_server`` etc.) — must not AttributeError."""
+    skip_event = mock.Mock()
+    with (
+        mock.patch.object(viewer, 'scheduler', None),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        # Must not raise.
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_not_called()
+
+
+def test_skip_swallows_db_errors() -> None:
+    """A transient DB failure must not interrupt the asset loop — we
+    just leave the rotation alone for this tick."""
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'asset-1'
+    skip_event = mock.Mock()
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch(
+            'anthias_viewer.Asset.objects.filter',
+            side_effect=RuntimeError('boom'),
+        ),
+    ):
+        # Must not raise.
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_not_called()

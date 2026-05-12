@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from anthias_server.app.models import Asset
 from anthias_common.youtube import dispatch_download
+from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.helpers import AssetCreationError, parse_request
 from anthias_server.api.serializers import (
     AssetSerializer,
@@ -15,6 +16,7 @@ from anthias_server.api.serializers.v1_1 import CreateAssetSerializerV1_1
 from anthias_server.api.views.mixins import DeleteAssetViewMixin
 from anthias_server.api.views.v1 import V1_ASSET_REQUEST
 from anthias_server.lib.auth import authorized
+from anthias_server.settings import ViewerPublisher
 
 
 class AssetListViewV1_1(APIView):
@@ -50,6 +52,12 @@ class AssetListViewV1_1(APIView):
         # the full rationale.
         if serializer._pending_youtube_uri:
             dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+
+        # Same hand-off as v1.2 / v2: ``CreateAssetSerializerV1_1``
+        # stamps ``_pending_normalize='video'`` for local video
+        # uploads. Missing this call was the v1/v1.1 half of
+        # GH #2870 — see the v1 view for the full rationale.
+        dispatch_pending_normalize(serializer, asset.asset_id)
 
         return Response(
             AssetSerializer(asset).data, status=status.HTTP_201_CREATED
@@ -88,4 +96,10 @@ class AssetViewV1_1(APIView, DeleteAssetViewMixin):
             )
 
         asset.refresh_from_db()
+
+        # See AssetViewV2.update — wake the viewer so a just-edited
+        # asset that's still on screen but no longer active gets
+        # skipped (issue #2430).
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+
         return Response(AssetSerializer(asset).data)

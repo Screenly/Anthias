@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 from anthias_server.app.models import Asset
+from anthias_server.settings import ViewerPublisher
 
 
 class AssetCreationError(Exception):
@@ -68,6 +69,32 @@ def get_active_asset_ids() -> list[str]:
 def save_active_assets_ordering(active_asset_ids: list[str]) -> None:
     for i, asset_id in enumerate(active_asset_ids):
         Asset.objects.filter(asset_id=asset_id).update(play_order=i)
+
+
+def finalize_asset_update(asset: Asset) -> None:
+    """Post-save housekeeping shared by v1_2/v2 ``AssetView.update``.
+
+    Reorders the active-asset list around the just-saved row's new
+    activeness (an edit can flip is_enabled, push the row out of its
+    date range, or trip its play_days / play_time window) and wakes
+    the viewer so it can skip past the asset if it's still on screen
+    but no longer active (issue #2430).
+    """
+    active_asset_ids = get_active_asset_ids()
+    asset.refresh_from_db()
+
+    try:
+        active_asset_ids.remove(asset.asset_id)
+    except ValueError:
+        pass
+
+    if asset.is_active():
+        active_asset_ids.insert(asset.play_order, asset.asset_id)
+
+    save_active_assets_ordering(active_asset_ids)
+    asset.refresh_from_db()
+
+    ViewerPublisher.get_instance().send_to_viewer('reload')
 
 
 def parse_request(request: Any) -> Any:

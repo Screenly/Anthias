@@ -6,12 +6,10 @@ from rest_framework.views import APIView
 
 from anthias_server.app.models import Asset
 from anthias_common.youtube import dispatch_download
-from anthias_server.processing import (
-    dispatch_normalize_image,
-    dispatch_normalize_video,
-)
+from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.helpers import (
     AssetCreationError,
+    finalize_asset_update,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
@@ -67,11 +65,10 @@ class AssetListViewV1_2(APIView):
 
         # Same hand-off as v2: the serializer's prepare_asset stamps
         # is_processing on rows that need normalisation; we dispatch
-        # the matching Celery task after persistence.
-        if serializer._pending_normalize == 'image':
-            dispatch_normalize_image(asset.asset_id)
-        elif serializer._pending_normalize == 'video':
-            dispatch_normalize_video(asset.asset_id)
+        # the matching Celery task after persistence. Shared with
+        # v1/v1.1/v2 via dispatch_pending_normalize so adding a new
+        # API version can't re-open GH #2870.
+        dispatch_pending_normalize(serializer, asset.asset_id)
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)
@@ -113,20 +110,7 @@ class AssetViewV1_2(APIView, DeleteAssetViewMixin):
                 serializer.errors, status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_asset_ids = get_active_asset_ids()
-
-        asset.refresh_from_db()
-
-        try:
-            active_asset_ids.remove(asset.asset_id)
-        except ValueError:
-            pass
-
-        if asset.is_active():
-            active_asset_ids.insert(asset.play_order, asset.asset_id)
-
-        save_active_assets_ordering(active_asset_ids)
-        asset.refresh_from_db()
+        finalize_asset_update(asset)
 
         return Response(AssetSerializer(asset).data)
 

@@ -9,8 +9,8 @@ from typing import Any
 import psutil
 import redis
 import requests
+from django.template.defaultfilters import filesizeformat
 from drf_spectacular.utils import extend_schema
-from hurry.filesize import size
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -23,6 +23,7 @@ from anthias_server.app.helpers import (
 from anthias_server.app.models import Asset
 from anthias_server.api.helpers import (
     AssetCreationError,
+    finalize_asset_update,
     get_active_asset_ids,
     save_active_assets_ordering,
 )
@@ -32,10 +33,7 @@ from anthias_server.lib.auth import (
 )
 from anthias_common.internal_auth import is_internal_request
 from anthias_common.youtube import dispatch_download
-from anthias_server.processing import (
-    dispatch_normalize_image,
-    dispatch_normalize_video,
-)
+from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -370,11 +368,10 @@ class AssetListViewV2(APIView):
         # the YouTube hop above) so the row's ``asset_id`` is already
         # written to the DB by the time the worker picks it up. The
         # row was set ``is_processing=True`` by ``prepare_asset``;
-        # the task clears it once the file lands.
-        if serializer._pending_normalize == 'image':
-            dispatch_normalize_image(asset.asset_id)
-        elif serializer._pending_normalize == 'video':
-            dispatch_normalize_video(asset.asset_id)
+        # the task clears it once the file lands. Shared with
+        # v1/v1.1/v1.2 via dispatch_pending_normalize so adding a
+        # new API version can't re-open GH #2870.
+        dispatch_pending_normalize(serializer, asset.asset_id)
 
         if asset.is_active():
             active_asset_ids.insert(asset.play_order, asset.asset_id)
@@ -416,20 +413,7 @@ class AssetViewV2(APIView, DeleteAssetViewMixin):
                 serializer.errors, status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_asset_ids = get_active_asset_ids()
-
-        asset.refresh_from_db()
-
-        try:
-            active_asset_ids.remove(asset.asset_id)
-        except ValueError:
-            pass
-
-        if asset.is_active():
-            active_asset_ids.insert(asset.play_order, asset.asset_id)
-
-        save_active_assets_ordering(active_asset_ids)
-        asset.refresh_from_db()
+        finalize_asset_update(asset)
 
         return Response(AssetSerializerV2(asset).data)
 
@@ -749,7 +733,7 @@ class InfoViewV2(InfoViewMixin):
 
         # Calculate disk space
         slash = statvfs('/')
-        free_space = size(slash.f_bavail * slash.f_frsize)
+        free_space = filesizeformat(slash.f_bavail * slash.f_frsize)
         display_power = r.get('display_power')
 
         return Response(

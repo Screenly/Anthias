@@ -48,12 +48,15 @@ def _assert_response_data(
     'anthias_server.lib.diagnostics.get_load_avg',
     return_value={'15 min': 0.11},
 )
-@mock.patch('anthias_server.api.views.mixins.size', return_value='15G')
+@mock.patch(
+    'anthias_server.api.views.mixins.filesizeformat',
+    return_value='15.0\xa0GB',
+)
 @mock.patch('anthias_server.api.views.mixins.statvfs', mock.MagicMock())
 @mock.patch('anthias_server.api.views.mixins.r.get', return_value='off')
 def test_info_v1_endpoint(
     redis_get_mock: Any,
-    size_mock: Any,
+    filesizeformat_mock: Any,
     get_load_avg_mock: Any,
     is_up_to_date_mock: Any,
     api_client: APIClient,
@@ -67,14 +70,22 @@ def test_info_v1_endpoint(
 
     # Assert mock calls
     _assert_mock_calls(
-        [redis_get_mock, size_mock, get_load_avg_mock, is_up_to_date_mock]
+        [
+            redis_get_mock,
+            filesizeformat_mock,
+            get_load_avg_mock,
+            is_up_to_date_mock,
+        ]
     )
 
-    # Assert response data
+    # Assert response data. ``free_space`` follows Django's
+    # ``filesizeformat`` shape: "15.0\xa0GB" — a non-breaking space
+    # between the number and unit. Replaces the previous "15G" emitted
+    # by hurry.filesize, which was dropped to drop the dep.
     expected_data = {
         'viewlog': 'Not yet implemented',
         'loadavg': 0.11,
-        'free_space': '15G',
+        'free_space': '15.0\xa0GB',
         'display_power': 'off',
         'up_to_date': False,
     }
@@ -87,7 +98,10 @@ def test_info_v1_endpoint(
     'anthias_server.lib.diagnostics.get_load_avg',
     return_value={'15 min': 0.25},
 )
-@mock.patch('anthias_server.api.views.v2.size', return_value='20G')
+@mock.patch(
+    'anthias_server.api.views.v2.filesizeformat',
+    return_value='20.0\xa0GB',
+)
 @mock.patch('anthias_server.api.views.v2.statvfs', mock.MagicMock())
 @mock.patch('anthias_server.api.views.v2.r.get', return_value='on')
 @mock.patch(
@@ -135,7 +149,7 @@ def test_info_v2_endpoint(
     get_git_short_hash_mock: Any,
     get_git_branch_mock: Any,
     redis_get_mock: Any,
-    size_mock: Any,
+    filesizeformat_mock: Any,
     get_load_avg_mock: Any,
     is_up_to_date_mock: Any,
     api_client: APIClient,
@@ -151,7 +165,7 @@ def test_info_v2_endpoint(
     _assert_mock_calls(
         [
             redis_get_mock,
-            size_mock,
+            filesizeformat_mock,
             get_load_avg_mock,
             is_up_to_date_mock,
             get_git_branch_mock,
@@ -169,7 +183,7 @@ def test_info_v2_endpoint(
     expected_data = {
         'viewlog': 'Not yet implemented',
         'loadavg': 0.25,
-        'free_space': '20G',
+        'free_space': '20.0\xa0GB',
         'display_power': 'on',
         'up_to_date': True,
         # Version label format is `v{calver} ({short_hash})` on a
