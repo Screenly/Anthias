@@ -8,20 +8,121 @@ from anthias_server.settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
 
+# Last device that `_detect_hdmi_audio_device()` resolved to in this
+# process. `get_alsa_audio_device()` runs on every play()/set_asset(),
+# so we only emit INFO/WARNING when the result changes (transitions
+# between "HDMI-A-1 connected", "HDMI-A-2 connected", and the fallback)
+# and drop to DEBUG otherwise. None means "haven't detected yet" — the
+# first call always logs at the higher level.
+_last_detected_device: str | None = None
+
+
+def _detect_hdmi_audio_device() -> str:
+    """Auto-detect which HDMI port is connected on Pi4/Pi5.
+
+    The vc4 DRM driver exposes both HDMI connectors as
+    /sys/class/drm/<card>-HDMI-A-{1,2}/. The <card> prefix
+    depends on probe order (typically card1 on Pi OS Bookworm/
+    Trixie, but kernels/images may differ), so the directories
+    are discovered by scanning /sys/class/drm rather than
+    assumed.
+
+    ALSA exposes the matching audio devices as vc4hdmi0
+    (HDMI-A-1) and vc4hdmi1 (HDMI-A-2). The ALSA card name
+    (vc4hdmiN) is independent of the DRM card index.
+
+    Returns sysdefault:CARD=<vc4hdmiN> for the first connector
+    whose status file reads "connected" (HDMI-A-1 preferred).
+    sysdefault is preferred over default to bypass PulseAudio/
+    dmix wrappers that can intercept the "default" device.
+
+    Falls back to sysdefault:CARD=vc4hdmi0 when neither
+    connector reports connected (display asleep, status files
+    unavailable, or unexpected DRM layout).
+    """
+    try:
+        entries = list(os.scandir('/sys/class/drm'))
+    except OSError as exc:
+        logging.debug('Could not scan /sys/class/drm: %s', exc)
+        entries = []
+
+    hdmi_to_alsa = {'HDMI-A-1': 'vc4hdmi0', 'HDMI-A-2': 'vc4hdmi1'}
+    # Annotation is a string so it is not evaluated at import time —
+    # `os.DirEntry[str]` is subscriptable on 3.9+, but quoting it keeps
+    # this module loadable on any interpreter without depending on
+    # PEP-585 runtime support.
+    ports: 'list[tuple[str, os.DirEntry[str]]]' = []
+    for entry in entries:
+        for suffix in hdmi_to_alsa:
+            if entry.name.endswith(suffix):
+                ports.append((suffix, entry))
+                break
+    # Sort on the HDMI-A-N suffix (not the full entry name) so
+    # HDMI-A-1 always wins over HDMI-A-2 when both are connected,
+    # even if a non-vc4 DRM card lex-sorts ahead (e.g. card0-...).
+    ports.sort(key=lambda pair: pair[0])
+
+    detected_entry_name: str | None = None
+    detected_card: str | None = None
+    for suffix, entry in ports:
+        card_name = hdmi_to_alsa[suffix]
+        status_path = os.path.join(entry.path, 'status')
+        try:
+            with open(status_path) as f:
+                if f.read().strip() == 'connected':
+                    detected_entry_name = entry.name
+                    detected_card = card_name
+                    break
+        except OSError as exc:
+            logging.debug(
+                'HDMI status read failed for %s: %s', status_path, exc
+            )
+
+    global _last_detected_device
+    if detected_card is not None:
+        device = f'sysdefault:CARD={detected_card}'
+        if device != _last_detected_device:
+            logging.info(
+                'Detected connected HDMI: %s -> %s',
+                detected_entry_name,
+                device,
+            )
+        else:
+            logging.debug(
+                'Detected connected HDMI: %s -> %s',
+                detected_entry_name,
+                device,
+            )
+        _last_detected_device = device
+        return device
+
+    device = 'sysdefault:CARD=vc4hdmi0'
+    if device != _last_detected_device:
+        # First call, or we just lost a previously detected
+        # connection — be loud so the cause is visible in logs.
+        logging.warning(
+            'No connected HDMI detected, falling back to %s', device
+        )
+    else:
+        logging.debug('No connected HDMI detected, falling back to %s', device)
+    _last_detected_device = device
+    return device
+
 
 def get_alsa_audio_device() -> str:
+    device_type = get_device_type()
     if settings['audio_output'] == 'local':
-        if get_device_type() == 'pi5':
-            return 'default:CARD=vc4hdmi0'
+        if device_type == 'pi5':
+            return _detect_hdmi_audio_device()
 
         return 'plughw:CARD=Headphones'
     else:
-        if get_device_type() in ['pi4', 'pi5']:
-            return 'default:CARD=vc4hdmi0'
-        elif get_device_type() in ['pi1', 'pi2', 'pi3']:
-            return 'default:CARD=vc4hdmi'
+        if device_type in ['pi4', 'pi5']:
+            return _detect_hdmi_audio_device()
+        elif device_type in ['pi1', 'pi2', 'pi3']:
+            return 'sysdefault:CARD=vc4hdmi'
         else:
-            return 'default:CARD=HID'
+            return 'sysdefault:CARD=HID'
 
 
 class MediaPlayer:
