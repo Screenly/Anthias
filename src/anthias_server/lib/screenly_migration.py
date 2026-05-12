@@ -251,7 +251,9 @@ def _open_local_upload(
     return {'file': (upload_filename, file_handle)}, file_handle
 
 
-def _parse_upload_response(response: requests.Response) -> dict[str, Any] | list[Any]:
+def _parse_upload_response(
+    response: requests.Response,
+) -> dict[str, Any] | list[Any]:
     """Best-effort parse of Screenly's per-asset create response.
 
     Screenly's create endpoint returns a single-row array under
