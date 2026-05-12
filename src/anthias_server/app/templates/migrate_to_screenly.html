@@ -4,6 +4,43 @@
 {% block title %}{% if player_name %}{{ player_name }} · {% endif %}Migrate to Screenly{% endblock %}
 
 {% block main %}
+<style>
+  /*
+    Native <progress> styled to match the rest of the surface. We use
+    the element (rather than a div with role="progressbar") so the
+    completion state is announced consistently by AT — the role
+    attribute doesn't get keyboard/AT semantics on every device.
+
+    Pseudoelement names are vendor-prefixed and can't be set via inline
+    style attributes, hence the rule block.
+  */
+  .screenly-migration-progress {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    display: block;
+    width: 100%;
+    height: 0.5rem;
+    border: none;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    background: #e5e7eb;
+    color: #2563eb;
+  }
+  .screenly-migration-progress::-webkit-progress-bar {
+    background: #e5e7eb;
+    border-radius: 0.25rem;
+  }
+  .screenly-migration-progress::-webkit-progress-value {
+    background: #2563eb;
+    border-radius: 0.25rem;
+    transition: width 0.2s linear;
+  }
+  .screenly-migration-progress::-moz-progress-bar {
+    background: #2563eb;
+    border-radius: 0.25rem;
+  }
+</style>
 <div class="app-container" x-data="migrateToScreenly()" x-init="init()">
   {# Hidden form just for the CSRF token — the wizard does everything in JS. #}
   <form style="display:none">{% csrf_token %}</form>
@@ -241,19 +278,11 @@
     </header>
 
     <div class="settings-stack">
-      <div
-        class="w-full"
-        style="background:#e5e7eb; border-radius:0.25rem; overflow:hidden; height:0.5rem;"
-        role="progressbar"
-        :aria-valuenow="progressPercent()"
-        aria-valuemin="0"
-        aria-valuemax="100"
-      >
-        <div
-          style="background:#2563eb; height:0.5rem; transition: width 0.2s linear;"
-          :style="{ width: progressPercent() + '%' }"
-        ></div>
-      </div>
+      <progress
+        class="screenly-migration-progress"
+        :value="progressPercent()"
+        max="100"
+      ></progress>
 
       <table class="asset-table">
         <thead>
@@ -313,34 +342,40 @@
 </div>
 
 <script>
+const SCREENLY_MIGRATION_ENDPOINTS = {
+  assets: '/api/v2/assets',
+  validate: '/api/v2/integrations/screenly/validate',
+  migrate: '/api/v2/integrations/screenly/migrate',
+}
+
+function screenlyMigrationCsrfToken() {
+  const el = document.querySelector('input[name=csrfmiddlewaretoken]')
+  if (el) return el.value
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)
+  return m ? decodeURIComponent(m[1]) : ''
+}
+
+async function screenlyMigrationPostJson(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': screenlyMigrationCsrfToken(),
+    },
+    body: JSON.stringify(body),
+  })
+  // Optional catch binding: a non-JSON body (empty 204, proxy HTML)
+  // is expected for some paths, and the empty payload is the signal
+  // we want — no need to bind or rethrow.
+  let payload = {}
+  try { payload = await response.json() } catch { /* empty body */ }
+  return { ok: response.ok, status: response.status, payload }
+}
+
 function migrateToScreenly() {
-  const ENDPOINTS = {
-    assets: '/api/v2/assets',
-    validate: '/api/v2/integrations/screenly/validate',
-    migrate: '/api/v2/integrations/screenly/migrate',
-  }
-
-  function csrfToken() {
-    const el = document.querySelector('input[name=csrfmiddlewaretoken]')
-    if (el) return el.value
-    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)
-    return m ? decodeURIComponent(m[1]) : ''
-  }
-
-  async function postJson(url, body) {
-    const response = await fetch(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrfToken(),
-      },
-      body: JSON.stringify(body),
-    })
-    let payload = {}
-    try { payload = await response.json() } catch (e) { /* empty body */ }
-    return { ok: response.ok, status: response.status, payload }
-  }
+  const ENDPOINTS = SCREENLY_MIGRATION_ENDPOINTS
+  const postJson = screenlyMigrationPostJson
 
   return {
     step: 'intro',
@@ -514,8 +549,7 @@ function migrateToScreenly() {
       // Sequential on purpose: an Anthias device on a slow connection
       // shouldn't fire N parallel multipart uploads. Per-asset progress
       // is also clearer this way.
-      for (let i = 0; i < this.results.length; i++) {
-        const row = this.results[i]
+      for (const row of this.results) {
         if (row.status === 'success') continue
         row.status = 'running'
         try {

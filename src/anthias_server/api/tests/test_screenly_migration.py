@@ -332,7 +332,7 @@ class TestMigrateAsset:
         assert kwargs['data']['asset_group_id'] == 'GID'
         # The multipart filename is what Screenly's UI shows the
         # operator — preserve "My Day 2.png", not the on-disk UUID.
-        filename, fileobj = kwargs['files']['file']
+        filename, _ = kwargs['files']['file']
         assert filename == 'My Day 2.png'
 
     @patch('anthias_server.lib.screenly_migration.requests.post')

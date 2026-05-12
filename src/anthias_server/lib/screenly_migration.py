@@ -99,6 +99,29 @@ def validate_token(token: str) -> bool:
     return False
 
 
+def _extract_group_id(response: requests.Response) -> str | None:
+    """Pull the first asset-group ``id`` out of a Screenly response.
+
+    Handles both shapes Screenly returns for asset-group endpoints:
+    a list of rows (postgREST-style lookup) or a single dict (create
+    response under ``Prefer: return=representation``). Returns ``None``
+    if the body is unparseable, the wrong shape, or missing ``id``.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    if isinstance(body, list):
+        if not body:
+            return None
+        body = body[0]
+    if isinstance(body, dict):
+        row_id = body.get('id')
+        if isinstance(row_id, str):
+            return row_id
+    return None
+
+
 def ensure_asset_group(token: str, title: str) -> str:
     """Return the ULID of the Screenly asset-group with this title.
 
@@ -123,16 +146,9 @@ def ensure_asset_group(token: str, title: str) -> str:
         timeout=_VALIDATE_TIMEOUT_S,
     )
     if lookup.ok:
-        try:
-            existing = lookup.json()
-        except ValueError:
-            existing = []
-        if isinstance(existing, list) and existing:
-            row = existing[0]
-            if isinstance(row, dict):
-                row_id = row.get('id')
-                if isinstance(row_id, str):
-                    return row_id
+        group_id = _extract_group_id(lookup)
+        if group_id is not None:
+            return group_id
 
     create = requests.post(
         f'{SCREENLY_API_BASE}/asset-groups',
@@ -148,19 +164,9 @@ def ensure_asset_group(token: str, title: str) -> str:
             f'Could not create Screenly asset group ({create.status_code}): '
             f'{_extract_screenly_error(create)}'
         )
-    try:
-        body = create.json()
-    except ValueError as error:
-        raise ScreenlyMigrationError(
-            'Screenly returned an unparseable response while creating '
-            'the asset group.'
-        ) from error
-    if isinstance(body, list) and body:
-        body = body[0]
-    if isinstance(body, dict):
-        body_id = body.get('id')
-        if isinstance(body_id, str):
-            return body_id
+    group_id = _extract_group_id(create)
+    if group_id is not None:
+        return group_id
     raise ScreenlyMigrationError(
         'Screenly asset-group create response was missing an id.'
     )
@@ -210,6 +216,61 @@ def _build_upload_filename(asset: Asset, on_disk: Path) -> str:
     return sanitised
 
 
+def _open_local_upload(
+    asset: Asset, uri: str
+) -> tuple[dict[str, Any] | None, Any]:
+    """Open a local asset file for multipart upload.
+
+    Returns ``(files_dict, file_handle)`` ready to pass into
+    ``requests.post(..., files=...)``, or ``(None, None)`` if the URI
+    isn't a local-asset path (the caller will fall back to ``source_url``).
+    Caller owns closing the file handle.
+
+    Raises ``ScreenlyMigrationError`` if the file is missing or
+    unreadable on the device side — both surface as per-asset errors
+    rather than 500s.
+    """
+    local_path = _resolve_local_path(uri)
+    if local_path is None:
+        return None, None
+    if not local_path.is_file():
+        raise ScreenlyMigrationError(
+            f'File not found on device: {local_path.name}'
+        )
+    # is_file() races with a concurrent delete and doesn't catch
+    # permission/IO problems on the read side; surface those as
+    # per-asset errors instead of letting them bubble as 500s.
+    try:
+        file_handle = local_path.open('rb')
+    except OSError as error:
+        raise ScreenlyMigrationError(
+            f'Could not read {local_path.name} on device: '
+            f'{error.strerror or type(error).__name__}'
+        ) from error
+    upload_filename = _build_upload_filename(asset, local_path)
+    return {'file': (upload_filename, file_handle)}, file_handle
+
+
+def _parse_upload_response(response: requests.Response) -> dict[str, Any] | list[Any]:
+    """Best-effort parse of Screenly's per-asset create response.
+
+    Screenly's create endpoint returns a single-row array under
+    ``Prefer: return=representation``, so list[Any] is the common
+    shape; dict is tolerated for forward-compat. A 2xx with no body
+    is uncommon but harmless — fall back to an empty dict so the
+    caller can still report success.
+    """
+    try:
+        parsed = response.json()
+    except ValueError:
+        return {}
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
+
+
 def migrate_asset(
     token: str,
     asset: Asset,
@@ -242,28 +303,8 @@ def migrate_asset(
     if asset_group_id:
         data['asset_group_id'] = asset_group_id
 
-    files: dict[str, Any] | None = None
-    file_handle: Any = None
-
-    local_path = _resolve_local_path(asset.uri)
-    if local_path is not None:
-        if not local_path.is_file():
-            raise ScreenlyMigrationError(
-                f'File not found on device: {local_path.name}'
-            )
-        # is_file() races with a concurrent delete and doesn't catch
-        # permission/IO problems on the read side; surface those as
-        # per-asset errors instead of letting them bubble as 500s.
-        try:
-            file_handle = local_path.open('rb')
-        except OSError as error:
-            raise ScreenlyMigrationError(
-                f'Could not read {local_path.name} on device: '
-                f'{error.strerror or type(error).__name__}'
-            ) from error
-        upload_filename = _build_upload_filename(asset, local_path)
-        files = {'file': (upload_filename, file_handle)}
-    else:
+    files, file_handle = _open_local_upload(asset, asset.uri)
+    if files is None:
         data['source_url'] = asset.uri
 
     try:
@@ -284,21 +325,7 @@ def migrate_asset(
             f'Screenly rejected upload ({response.status_code}): {detail}'
         )
 
-    try:
-        parsed = response.json()
-    except ValueError:
-        # Screenly returned 2xx with no body — uncommon but harmless;
-        # report success with a stub payload rather than failing the row.
-        return {}
-    # Narrow the json() Any return so the caller's downstream typing
-    # stays honest; Screenly's create endpoint returns a single-row
-    # array under Prefer: return=representation, so list[Any] is the
-    # common shape, with dict tolerated for forward-compat.
-    if isinstance(parsed, list):
-        return parsed
-    if isinstance(parsed, dict):
-        return parsed
-    return {}
+    return _parse_upload_response(response)
 
 
 def _extract_screenly_error(response: requests.Response) -> str:
