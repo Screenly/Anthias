@@ -36,14 +36,14 @@
       </p>
       <ol class="ml-4" style="list-style: decimal;">
         <li class="mb-2">
-          <strong>Sign up for Screenly</strong> &mdash;
-          <a href="https://screenly.io/signup" target="_blank" rel="noopener noreferrer">
-            screenly.io/signup
+          <strong>Sign up or sign in to Screenly</strong> &mdash;
+          <a href="https://login.screenlyapp.com/login" target="_blank" rel="noopener noreferrer">
+            login.screenlyapp.com
           </a>
         </li>
         <li class="mb-2">
           <strong>Generate an API token</strong> &mdash; in the Screenly dashboard, go to
-          <em>Settings &rarr; Team</em>, click your user, then <em>API tokens</em> &rarr; <em>New token</em>.
+          <em>Settings &rarr; Security &rarr; API Tokens</em> and create a new token.
         </li>
         <li class="mb-2">
           <strong>Paste the token below</strong> &mdash; it stays on this device and is only used to talk
@@ -377,19 +377,48 @@ function migrateToScreenly() {
       this.validating = true
       try {
         const { ok, status, payload } = await postJson(ENDPOINTS.validate, { token })
+
+        // Handle transport / server failures BEFORE interpreting
+        // payload.valid. postJson() falls back to {} on a non-JSON
+        // body, and {}.valid is undefined → falsy, which would
+        // otherwise trip the "Screenly rejected this token" branch
+        // for an unhandled 500 / proxy HTML / network glitch and
+        // mask the real failure.
+
+        if (status >= 500) {
+          // The validate endpoint emits a structured 502 from the
+          // Django view on upstream errors; surface ``payload.error``
+          // when present, otherwise a generic upstream-failure copy.
+          this.tokenError = payload.error
+            || 'Anthias couldn\'t reach Screenly. Check the device\'s internet connection and try again.'
+          return
+        }
+
         if (status === 400) {
-          // Serializer rejected the body — surface a generic
-          // "token looks malformed" rather than the token-rejected
-          // copy (which implies Screenly itself said no).
+          // Serializer rejected the body — request never reached
+          // Screenly, so don't blame Screenly.
           this.tokenError = 'That token looks malformed. Double-check the value you pasted.'
           return
         }
+
+        if (!ok) {
+          // Any other non-2xx — auth misconfig, CSRF, proxy bug.
+          // Surface the backend's error string if it gave one;
+          // otherwise spell out the HTTP code so the operator can
+          // search for it.
+          this.tokenError = payload.error
+            || `Anthias returned HTTP ${status} from the validate endpoint.`
+          return
+        }
+
+        // From here ``ok`` is true and ``payload`` follows the
+        // documented contract — ``{valid, asset_group_id?, ...}``.
         if (!payload.valid) {
           this.tokenError = payload.error
             || 'Screenly rejected this token. Double-check it in your dashboard.'
           return
         }
-        if (!ok || !payload.asset_group_id) {
+        if (!payload.asset_group_id) {
           this.tokenError = payload.error
             || 'Token is valid but Screenly did not return an asset-group id. Try again.'
           return
