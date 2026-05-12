@@ -330,25 +330,48 @@ def needs_image_normalisation(uri_or_filename: str) -> bool:
     return _ext(uri_or_filename) in NORMALIZE_IMAGE_EXTS
 
 
-def _stamp_processing_start(asset_id: str) -> None:
+def stamp_processing_start(asset_id: str) -> None:
     """Mark ``metadata['processing_started_at']`` to the current UTC.
 
     Read by the periodic reconciler (``reconcile_stuck_processing``)
     to age rows that have been ``is_processing=True`` longer than the
     longest reasonable transcode. Stored as an ISO-8601 string in the
-    existing JSON metadata bag (no schema migration). Best-effort: a
-    row that disappeared between dispatch enqueue and this update is
-    a no-op via the filter().update() pattern.
+    existing JSON metadata bag (no schema migration).
+
+    Public (no leading underscore): the dispatch entry points for
+    every upload path call this — including from outside this module
+    (``anthias_common.youtube.dispatch_download``,
+    ``anthias_server.celery_tasks.reconcile_stuck_processing``).
+    Treat the symbol as a stable internal API; the reconciler depends
+    on the field being written at every dispatch.
+
+    Concurrency: the read-modify-write below preserves the existing
+    metadata bag — wrapped in ``transaction.atomic()`` so a
+    near-simultaneous metadata write (an operator PATCH, a worker
+    landing ``error_message``) is serialised at the DB layer rather
+    than racing with this SELECT. On SQLite (Anthias's default) the
+    DB is single-writer at the file level anyway, so the wrap is
+    primarily documenting intent; on Postgres / MySQL the atomic
+    block produces an actual transaction boundary.
+
+    No-op for a row that doesn't exist: a row that disappeared
+    between dispatch enqueue and this update is silently dropped via
+    the ``filter().first() is None`` guard. The two-query
+    SELECT-then-UPDATE shape is deliberate — Django doesn't expose a
+    cross-backend "merge into JSONField" primitive, so we read the
+    existing bag, patch one key, and write it back.
     """
+    from django.db import transaction
     from django.utils import timezone
 
     now_iso = timezone.now().isoformat()
-    asset = Asset.objects.filter(asset_id=asset_id).first()
-    if asset is None:
-        return
-    metadata = dict(asset.metadata or {})
-    metadata['processing_started_at'] = now_iso
-    Asset.objects.filter(asset_id=asset_id).update(metadata=metadata)
+    with transaction.atomic():
+        asset = Asset.objects.filter(asset_id=asset_id).first()
+        if asset is None:
+            return
+        metadata = dict(asset.metadata or {})
+        metadata['processing_started_at'] = now_iso
+        Asset.objects.filter(asset_id=asset_id).update(metadata=metadata)
 
 
 def dispatch_normalize_image(asset_id: str) -> None:
@@ -365,7 +388,7 @@ def dispatch_normalize_image(asset_id: str) -> None:
     """
     from anthias_server.celery_tasks import normalize_image_asset
 
-    _stamp_processing_start(asset_id)
+    stamp_processing_start(asset_id)
     normalize_image_asset.delay(asset_id)
 
 
@@ -376,7 +399,7 @@ def dispatch_normalize_video(asset_id: str) -> None:
     """
     from anthias_server.celery_tasks import normalize_video_asset
 
-    _stamp_processing_start(asset_id)
+    stamp_processing_start(asset_id)
     normalize_video_asset.delay(asset_id)
 
 

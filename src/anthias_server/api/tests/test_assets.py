@@ -597,7 +597,7 @@ def test_create_video_asset_dispatches_normalize_task(
         mock.patch(
             'anthias_server.processing.dispatch_normalize_video'
         ) as mock_dispatch,
-        mock.patch('anthias_server.processing._stamp_processing_start'),
+        mock.patch('anthias_server.processing.stamp_processing_start'),
         mock.patch('anthias_server.api.serializers.mixins.rename'),
         mock.patch('anthias_server.api.serializers.v1_1.rename'),
         # ``validate_uri`` raises ``Exception('Invalid file path…')``
@@ -665,7 +665,7 @@ def test_create_heic_image_dispatches_normalize_task_on_v1_2_and_v2(
         mock.patch(
             'anthias_server.processing.dispatch_normalize_image'
         ) as mock_dispatch,
-        mock.patch('anthias_server.processing._stamp_processing_start'),
+        mock.patch('anthias_server.processing.stamp_processing_start'),
         mock.patch('anthias_server.api.serializers.mixins.rename'),
         mock.patch(
             'anthias_server.api.serializers.mixins.validate_uri',

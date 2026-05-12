@@ -100,7 +100,7 @@ def dispatch_download(asset_id: str, source_uri: str) -> None:
     that module loaded.
     """
     from anthias_server.celery_tasks import download_youtube_asset
-    from anthias_server.processing import _stamp_processing_start
+    from anthias_server.processing import stamp_processing_start
 
-    _stamp_processing_start(asset_id)
+    stamp_processing_start(asset_id)
     download_youtube_asset.delay(asset_id, source_uri)

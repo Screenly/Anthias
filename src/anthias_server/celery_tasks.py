@@ -2,7 +2,7 @@ import logging
 import os
 import secrets
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from os import getenv, path
 from typing import Any
 
@@ -737,10 +737,10 @@ def revalidate_asset_urls() -> None:
         r.eval(_LOCK_RELEASE_LUA, 1, ASSET_REVALIDATION_LOCK_KEY, token)
 
 
-def _parse_processing_started_at(value: Any) -> Any:
+def _parse_processing_started_at(value: Any) -> datetime | None:
     """Best-effort ISO-8601 parser for ``metadata.processing_started_at``.
 
-    Returns a ``datetime`` (tz-aware) on success, ``None`` on any failure.
+    Returns a tz-aware ``datetime`` on success, ``None`` on any failure.
     Anthias never writes a non-string value to this key, but a backup
     restored from a hand-edited JSON dump might. Treat unparseable
     values as "missing" — the reconciler then stamps the row on first
@@ -758,8 +758,6 @@ def _parse_processing_started_at(value: Any) -> Any:
     """
     if not value or not isinstance(value, str):
         return None
-    from datetime import datetime
-
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError:
@@ -787,9 +785,14 @@ def reconcile_stuck_processing() -> None:
     (``dispatch_normalize_image`` / ``dispatch_normalize_video`` /
     ``dispatch_download``) stamp this field at dispatch time. Rows
     without the stamp are legacy / backup-restored / pre-stamp; they
-    get stamped on first sweep so the *next* sweep can apply the same
-    age threshold uniformly — gives a 10-min grace window in case the
-    row is actively being worked.
+    get stamped on first sweep with ``timezone.now()``, so the
+    *next* re-dispatch decision waits the full
+    ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) from that stamp — at
+    a 10-min sweep cadence that's six sweeps where the row stays
+    inside the grace window before becoming eligible. The grace is
+    deliberately long enough to cover the worst-case live transcode
+    (``NORMALIZE_VIDEO_TIME_LIMIT_S=30min``) plus margin, so a
+    still-in-flight task never gets yanked out from under itself.
 
     Rows older than ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) get
     re-dispatched via the normalisation path matching their mimetype.
@@ -809,15 +812,13 @@ def reconcile_stuck_processing() -> None:
     ``celery beat`` instance) by ensuring only one sweep re-dispatches
     a given stuck row per tick.
     """
-    from datetime import timedelta
-
     from django.utils import timezone
 
     from anthias_server.processing import (
         _set_processing_error,
-        _stamp_processing_start,
         dispatch_normalize_image,
         dispatch_normalize_video,
+        stamp_processing_start,
     )
 
     # SETNX with TTL and a unique per-sweep token, same pattern as
@@ -854,7 +855,7 @@ def reconcile_stuck_processing() -> None:
                 # uniformly — a still-in-flight task gets the full
                 # grace window rather than being yanked out from
                 # under itself.
-                _stamp_processing_start(asset.asset_id)
+                stamp_processing_start(asset.asset_id)
                 continue
 
             if started_at > cutoff:

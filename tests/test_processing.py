@@ -1785,14 +1785,14 @@ def test_needs_image_normalisation(filename: str, expected: bool) -> None:
 
 
 def test_dispatch_normalize_image_invokes_celery_task() -> None:
-    # ``_stamp_processing_start`` writes ``metadata.processing_started_at``
+    # ``stamp_processing_start`` writes ``metadata.processing_started_at``
     # for the reconciler — irrelevant to this delay-was-called check, so
     # mocked out to keep the test off the DB.
     with (
         mock.patch(
             'anthias_server.celery_tasks.normalize_image_asset.delay'
         ) as delay,
-        mock.patch('anthias_server.processing._stamp_processing_start'),
+        mock.patch('anthias_server.processing.stamp_processing_start'),
     ):
         processing.dispatch_normalize_image('asset-1')
     delay.assert_called_once_with('asset-1')
@@ -1803,7 +1803,7 @@ def test_dispatch_normalize_video_invokes_celery_task() -> None:
         mock.patch(
             'anthias_server.celery_tasks.normalize_video_asset.delay'
         ) as delay,
-        mock.patch('anthias_server.processing._stamp_processing_start'),
+        mock.patch('anthias_server.processing.stamp_processing_start'),
     ):
         processing.dispatch_normalize_video('asset-2')
     delay.assert_called_once_with('asset-2')
