@@ -324,9 +324,7 @@ def test_detect_hdmi_falls_back_on_oserror() -> None:
     from anthias_viewer.media_player import _detect_hdmi_audio_device
 
     with (
-        patch(
-            'anthias_viewer.media_player.os.path.exists', return_value=True
-        ),
+        patch('anthias_viewer.media_player.os.path.exists', return_value=True),
         patch('builtins.open', side_effect=OSError('boom')),
     ):
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
