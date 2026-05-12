@@ -933,7 +933,13 @@ def test_handle_reload_reapplies_rotation_when_changed(
 ) -> None:
     """The reload pub/sub message must re-push wlr-randr when the
     operator changes rotation in Settings — that's the whole point of
-    issue #2856's UI-driven knob."""
+    issue #2856's UI-driven knob.
+
+    Wayland-side rotation change must NOT call MediaPlayerProxy.reset()
+    — mpv's wayland VO inherits the compositor transform, so killing
+    the in-flight mpv would just leave the screen black until the
+    asset's original duration elapses (Copilot review of #2882).
+    """
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
@@ -946,8 +952,30 @@ def test_handle_reload_reapplies_rotation_when_changed(
     ):
         viewer._handle_reload()
     apply.assert_called_once_with(90)
-    reset.assert_called_once()
+    reset.assert_not_called()
     assert viewer._last_applied_rotation == 90
+
+
+def test_handle_reload_resets_media_player_on_linuxfb_rotation_change(
+    reset_rotation_state: None,
+) -> None:
+    """On linuxfb (Pi) the rotation change DOES need MediaPlayerProxy
+    reset, because VLC bakes the transform filter into the instance
+    at construction. Bound for the pi1/2/3 boards specifically."""
+    fake_browser = mock.Mock()
+    skip = mock.Mock()
+    viewer._rotation_bounce_pending = False
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi3'}, clear=False),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch('anthias_viewer.MediaPlayerProxy.reset') as reset,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+    reset.assert_called_once()
 
 
 def test_handle_reload_does_not_latch_when_wlr_transform_fails(

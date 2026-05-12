@@ -565,14 +565,22 @@ def _maybe_reapply_rotation() -> None:
         rotation,
     )
 
-    # Drop the cached media player either way — VLC bakes the
+    # Drop the cached media player on linuxfb only — VLC bakes the
     # transform filter into the instance at construction, so the new
-    # angle only takes effect after we re-init. mpv is unaffected
-    # (rotation is computed per play) but reset() is cheap. Safe to
-    # call from the subscriber thread: ``MediaPlayerProxy.INSTANCE``
-    # is only ever read by the main thread at the top of view_video,
-    # and reset() just stops + nulls the cached instance.
-    MediaPlayerProxy.reset()
+    # angle only takes effect after we re-init.
+    #
+    # On Wayland (x86) we explicitly DO NOT call reset(): mpv's
+    # wayland VO inherits the compositor transform from cage, so the
+    # currently-playing video doesn't need to be restarted to honour
+    # the new rotation. Calling reset() here would kill mpv mid-play
+    # and the main thread's view_video() would sit blocked on the
+    # asset's original ``duration`` skip_event with the screen on
+    # the 'null' black image (Copilot review of #2882). VLC isn't
+    # used on x86 at all (MediaPlayerProxy routes pi4-64/pi5/x86 to
+    # MPVMediaPlayer), so there's no transform-filter rebuild reason
+    # to reset() on Wayland either.
+    if not _is_wayland_board():
+        MediaPlayerProxy.reset()
 
     if _is_wayland_board():
         # Apply via wlr-randr from the subscriber thread directly:
