@@ -885,7 +885,11 @@ def test_skip_buttons_publish_correct_command(
 # visible state we stub /dev/vchiq with a plain file before navigating
 # and remove it on teardown.
 
-_SCREENSHOT_DIR = '/usr/src/app/test-artifacts/cec'
+# Relative to wherever pytest is invoked. Matches the `--output
+# test-artifacts` convention pytest-playwright already uses in
+# pyproject.toml's addopts, so CI's upload-artifact step picks up
+# these PNGs alongside any failure traces.
+_SCREENSHOT_DIR = 'test-artifacts/cec'
 
 
 def _ensure_screenshot_dir() -> str:

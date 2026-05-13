@@ -205,6 +205,13 @@ class DisplayPowerViewMixin(APIView):
                 {'message': 'Invalid display state.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # No /dev/cec0 or /dev/vchiq — fail fast with 503 rather than
+        # spawning a 10 s libcec subprocess that's guaranteed to error.
+        if not diagnostics.cec_available():
+            return Response(
+                {'message': 'No HDMI-CEC adapter detected on this device.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         ok, msg = diagnostics.set_display_power(on=(state == 'on'))
         if ok:
             return Response({'message': msg}, status=status.HTTP_200_OK)

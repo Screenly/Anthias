@@ -101,7 +101,25 @@ def set_display_power(on: bool) -> tuple[bool, str]:
         return True, f'Display turn-{verb} command sent.'
     if output.startswith('ERROR: '):
         return False, f'Display turn-{verb} failed: {output[len("ERROR: ") :]}'
-    return False, f'Display turn-{verb} failed: unexpected CEC response.'
+
+    # Subprocess didn't emit one of the two contract sentinels. The
+    # likely causes are an interpreter crash (returncode != 0) or
+    # libcec writing its diagnostic to stderr instead of stdout — both
+    # would surface as "unexpected CEC response." without further
+    # detail, which is useless to an operator. Fall back to stderr (or
+    # the raw stdout if non-empty) so the toast / API response carries
+    # something actionable.
+    stderr = result.stderr.decode('utf-8', errors='replace').strip()
+    # Last line is usually the actual exception/error; trim the
+    # rest of any traceback to keep the toast readable.
+    detail = (stderr.splitlines()[-1] if stderr else output) or (
+        f'subprocess exited with status {result.returncode}'
+    )
+    # Cap the message — libcec can spew multi-kilobyte traces and the
+    # toast/JSON response shouldn't carry an unbounded blob.
+    if len(detail) > 240:
+        detail = detail[:237] + '...'
+    return False, f'Display turn-{verb} failed: {detail}'
 
 
 def cec_available() -> bool:

@@ -515,11 +515,17 @@ def test_integrations_non_balena_environment(
 
 @pytest.mark.django_db
 @mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.cec_available',
+    return_value=True,
+)
+@mock.patch(
     'anthias_server.api.views.mixins.diagnostics.set_display_power',
     return_value=(True, 'Display turn-on command sent.'),
 )
 def test_display_power_on_success(
-    set_display_power_mock: Any, api_client: APIClient
+    set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    api_client: APIClient,
 ) -> None:
     response = api_client.post(
         reverse('api:display_power_v2', kwargs={'state': 'on'})
@@ -531,11 +537,17 @@ def test_display_power_on_success(
 
 @pytest.mark.django_db
 @mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.cec_available',
+    return_value=True,
+)
+@mock.patch(
     'anthias_server.api.views.mixins.diagnostics.set_display_power',
     return_value=(True, 'Display turn-off command sent.'),
 )
 def test_display_power_off_success(
-    set_display_power_mock: Any, api_client: APIClient
+    set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    api_client: APIClient,
 ) -> None:
     response = api_client.post(
         reverse('api:display_power_v2', kwargs={'state': 'off'})
@@ -546,11 +558,17 @@ def test_display_power_off_success(
 
 @pytest.mark.django_db
 @mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.cec_available',
+    return_value=True,
+)
+@mock.patch(
     'anthias_server.api.views.mixins.diagnostics.set_display_power',
     return_value=(False, 'Display turn-on failed: no adapter'),
 )
 def test_display_power_failure_returns_502(
-    set_display_power_mock: Any, api_client: APIClient
+    _set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    api_client: APIClient,
 ) -> None:
     response = api_client.post(
         reverse('api:display_power_v2', kwargs={'state': 'on'})
@@ -569,3 +587,25 @@ def test_display_power_invalid_state_returns_400(
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     set_display_power_mock.assert_not_called()
+
+
+@pytest.mark.django_db
+@mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.cec_available',
+    return_value=False,
+)
+@mock.patch('anthias_server.api.views.mixins.diagnostics.set_display_power')
+def test_display_power_returns_503_when_no_cec_adapter(
+    set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    api_client: APIClient,
+) -> None:
+    """The endpoint must fail fast (no 10 s subprocess) when neither
+    /dev/cec0 nor /dev/vchiq exists. 503 telegraphs 'this server lacks
+    the hardware to satisfy the request' more accurately than 502."""
+    response = api_client.post(
+        reverse('api:display_power_v2', kwargs={'state': 'on'})
+    )
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    set_display_power_mock.assert_not_called()
+    assert 'adapter' in response.data['message']

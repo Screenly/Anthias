@@ -482,11 +482,16 @@ def test_settings_shutdown(shutdown_mock: Any, client: Client) -> None:
 
 @pytest.mark.django_db
 @mock.patch(
+    'anthias_server.app.views.diagnostics.cec_available', return_value=True
+)
+@mock.patch(
     'anthias_server.app.views.diagnostics.set_display_power',
     return_value=(True, 'Display turn-on command sent.'),
 )
 def test_settings_display_on(
-    set_display_power_mock: Any, client: Client
+    set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    client: Client,
 ) -> None:
     response = client.post(
         reverse('anthias_app:settings_display_power', kwargs={'state': 'on'})
@@ -497,11 +502,16 @@ def test_settings_display_on(
 
 @pytest.mark.django_db
 @mock.patch(
+    'anthias_server.app.views.diagnostics.cec_available', return_value=True
+)
+@mock.patch(
     'anthias_server.app.views.diagnostics.set_display_power',
     return_value=(True, 'Display turn-off command sent.'),
 )
 def test_settings_display_off(
-    set_display_power_mock: Any, client: Client
+    set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    client: Client,
 ) -> None:
     response = client.post(
         reverse('anthias_app:settings_display_power', kwargs={'state': 'off'})
@@ -524,11 +534,39 @@ def test_settings_display_invalid_state(
 
 @pytest.mark.django_db
 @mock.patch(
+    'anthias_server.app.views.diagnostics.cec_available', return_value=False
+)
+@mock.patch('anthias_server.app.views.diagnostics.set_display_power')
+def test_settings_display_blocked_without_cec(
+    set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    client: Client,
+) -> None:
+    """A stale form (or direct curl) against a non-CEC device must
+    short-circuit before the 10 s libcec subprocess ever runs."""
+    from django.contrib.messages import get_messages
+
+    response = client.post(
+        reverse('anthias_app:settings_display_power', kwargs={'state': 'on'})
+    )
+    assert response.status_code in (200, 302)
+    set_display_power_mock.assert_not_called()
+    messages_out = [m.message for m in get_messages(response.wsgi_request)]
+    assert any('CEC' in m or 'adapter' in m for m in messages_out)
+
+
+@pytest.mark.django_db
+@mock.patch(
+    'anthias_server.app.views.diagnostics.cec_available', return_value=True
+)
+@mock.patch(
     'anthias_server.app.views.diagnostics.set_display_power',
     return_value=(False, 'Display turn-on failed: no adapter'),
 )
 def test_settings_display_surfaces_error_message(
-    set_display_power_mock: Any, client: Client
+    _set_display_power_mock: Any,
+    _cec_available_mock: Any,
+    client: Client,
 ) -> None:
     """Failed CEC commands must reach the operator via a flash message
     (the feedback loop called out in issue #2575)."""
