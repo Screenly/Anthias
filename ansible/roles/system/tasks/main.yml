@@ -1,6 +1,16 @@
 ---
 - name: Configure boot partition (/boot/{config,cmdline}.txt)
-  ansible.builtin.include_tasks: boot.yml
+  ansible.builtin.include_tasks:
+    file: boot.yml
+    # Without apply:, Ansible's --tags filter would let the include
+    # itself match (so the tasks get *included*) but then filter every
+    # task inside boot.yml back out — touches-boot-partition would
+    # become a no-op. apply: copies these tags onto each included
+    # task so they actually run when the include matches.
+    apply:
+      tags:
+        - touches-boot-partition
+        - raspberry-pi
   tags:
     - touches-boot-partition
     - raspberry-pi
