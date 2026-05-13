@@ -69,6 +69,7 @@ from anthias_server.lib import diagnostics
 from anthias_server.lib.auth import authorized
 from anthias_server.lib.github import is_up_to_date
 from anthias_common.utils import (
+    clamp_screen_rotation,
     connect_to_redis,
     get_balena_device_info,
     get_node_ip,
@@ -580,6 +581,15 @@ class DeviceSettingsViewV2(APIView):
                 'shuffle_playlist': settings['shuffle_playlist'],
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
+                # Clamp on read too — the OpenAPI schema advertises
+                # an enum of {0,90,180,270}, but a hand-edited conf
+                # could have a stale 45 or any other int sitting on
+                # disk. Going through the shared helper guarantees
+                # the API never returns a value the client wasn't
+                # told to expect (Copilot review of #2882).
+                'screen_rotation': clamp_screen_rotation(
+                    settings['screen_rotation']
+                ),
                 'username': (
                     operator_username()
                     if settings['auth_backend'] == 'auth_basic'
@@ -654,6 +664,8 @@ class DeviceSettingsViewV2(APIView):
                 settings['use_24_hour_clock'] = data['use_24_hour_clock']
             if 'debug_logging' in data:
                 settings['debug_logging'] = data['debug_logging']
+            if 'screen_rotation' in data:
+                settings['screen_rotation'] = int(data['screen_rotation'])
 
             settings.save()
             publisher = ViewerPublisher.get_instance()

@@ -46,6 +46,7 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'screen_rotation': 90,
     }[key]
 
     response = api_client.get(device_settings_url)
@@ -64,6 +65,7 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'screen_rotation': 90,
         'username': '',
     }
 
@@ -276,6 +278,7 @@ def test_disable_basic_auth(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'screen_rotation': 0,
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
 
@@ -395,6 +398,57 @@ def test_patch_device_settings_default_assets(
     remove_default_assets_mock.assert_called_once()
     add_default_assets_mock.assert_not_called()
     publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+
+# Issue #2856 — Screen rotation is a UI-driven setting; the v2 patch
+# must accept the four cardinal angles, persist the new value, and
+# publish ``reload`` so the viewer picks the change up live.
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_screen_rotation(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    settings_mock.load = mock.MagicMock()
+    settings_mock.save = mock.MagicMock()
+    settings_mock.__getitem__.side_effect = lambda key: {
+        'player_name': 'Test Player',
+        'auth_backend': '',
+    }[key]
+    settings_mock.__setitem__ = mock.MagicMock()
+
+    publisher_instance = mock.MagicMock()
+    publisher_mock.get_instance.return_value = publisher_instance
+
+    response = api_client.patch(
+        device_settings_url, data={'screen_rotation': 90}, format='json'
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    settings_mock.__setitem__.assert_any_call('screen_rotation', 90)
+    publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+def test_patch_device_settings_rotation_rejects_non_cardinal(
+    settings_mock: Any, api_client: APIClient, device_settings_url: str
+) -> None:
+    """45 isn't one of the four supported angles — serializer must 400
+    rather than passing it through to the viewer (where neither the Qt
+    linuxfb plugin nor wlr-randr will honor it)."""
+    response = api_client.patch(
+        device_settings_url, data={'screen_rotation': 45}, format='json'
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'screen_rotation' in response.data
+    settings_mock.load.assert_not_called()
+    settings_mock.save.assert_not_called()
 
 
 @pytest.fixture

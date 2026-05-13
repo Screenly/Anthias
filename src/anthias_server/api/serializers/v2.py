@@ -17,6 +17,7 @@ from rest_framework.serializers import (
     TimeField,
 )
 
+from anthias_common.utils import SCREEN_ROTATION_CHOICES
 from anthias_server.app.models import (
     Asset,
     REFRESH_INTERVAL_S_MAX,
@@ -301,6 +302,10 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     shuffle_playlist = BooleanField()
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
+    # Mirror the PATCH-side ChoiceField so the OpenAPI schema
+    # advertises the same enum on both directions — clients can rely
+    # on the value being one of {0, 90, 180, 270} when reading too.
+    screen_rotation = ChoiceField(choices=SCREEN_ROTATION_CHOICES)
     username = CharField()
 
 
@@ -315,6 +320,9 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     shuffle_playlist = BooleanField(required=False)
     use_24_hour_clock = BooleanField(required=False)
     debug_logging = BooleanField(required=False)
+    screen_rotation = ChoiceField(
+        required=False, choices=SCREEN_ROTATION_CHOICES
+    )
     username = CharField(required=False, allow_blank=True)
     password = CharField(required=False, allow_blank=True)
     password_2 = CharField(required=False, allow_blank=True)

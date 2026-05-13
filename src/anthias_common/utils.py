@@ -30,6 +30,29 @@ from anthias_server.settings import settings
 arch = machine()
 
 
+# Issue #2856 — the four cardinal screen-rotation angles the Settings
+# page exposes. Centralised here (rather than re-declared in the v2
+# serializer, the form handler, and the two viewer helpers) so the
+# allowed set can't drift between read and write paths.
+SCREEN_ROTATION_CHOICES: tuple[int, ...] = (0, 90, 180, 270)
+
+
+def clamp_screen_rotation(value: Any) -> int:
+    """Coerce a raw rotation value to one of SCREEN_ROTATION_CHOICES.
+
+    Returns 0 for anything that doesn't parse as an int in the
+    cardinal set — defends every read site (env-var composition,
+    mpv/VLC CLI args, form save) against a hand-edited conf or
+    bypassed serializer that could otherwise inject a hostile string
+    into a subprocess argv or QPA option list.
+    """
+    try:
+        rotation = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return rotation if rotation in SCREEN_ROTATION_CHOICES else 0
+
+
 def string_to_bool(string: Any) -> bool:
     # Direct port of distutils.util.strtobool (removed in Python 3.12)
     # so existing callers keep accepting the same y/yes/t/true/on/1 set.

@@ -555,3 +555,111 @@ def test_get_instance_returns_same_instance(
     instance1 = MediaPlayerProxy.get_instance()
     instance2 = MediaPlayerProxy.get_instance()
     assert instance1 is instance2
+
+
+# ---------------------------------------------------------------------------
+# Screen rotation (issue #2856)
+
+
+def _rotated_mpv_settings(rotation: int) -> Any:
+    """Build a settings mock that answers `audio_output` like the
+    default fixture but also surfaces `screen_rotation`. Used by the
+    mpv rotation tests below."""
+    table = {'audio_output': 'hdmi', 'screen_rotation': rotation}
+    mock = MagicMock()
+    mock.__getitem__.side_effect = lambda key: table[key]
+    return mock
+
+
+@patch(
+    'anthias_viewer.media_player._detect_hdmi_audio_device',
+    return_value='sysdefault:CARD=vc4hdmi0',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_mpv_passes_video_rotate_on_pi(
+    mock_popen: Any, _mock_detect: Any
+) -> None:
+    """On --vo=drm the framebuffer is written direct; rotation has to
+    happen inside mpv."""
+    player = MPVMediaPlayer()
+    with (
+        patch(
+            'anthias_viewer.media_player.settings',
+            _rotated_mpv_settings(180),
+        ),
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi5',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}),
+    ):
+        player.set_asset('file:///test/video.mp4', 30)
+        player.play()
+    args, _ = mock_popen.call_args
+    assert '--video-rotate=180' in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_mpv_skips_video_rotate_on_x86(mock_popen: Any) -> None:
+    """x86 inherits the compositor transform via wayland; double-
+    rotating in mpv would undo wlr-randr's work."""
+    player = MPVMediaPlayer()
+    # Patch get_device_type to 'x86' so get_alsa_audio_device() takes
+    # the HID-card fallback branch — patching it to 'pi5' while
+    # DEVICE_TYPE=x86 would route through _detect_hdmi_audio_device()
+    # and stat /sys/class/drm, making the test depend on the host.
+    with (
+        patch(
+            'anthias_viewer.media_player.settings',
+            _rotated_mpv_settings(90),
+        ),
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='x86',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}),
+    ):
+        player.set_asset('file:///test/video.mp4', 30)
+        player.play()
+    args, _ = mock_popen.call_args
+    assert not any(arg.startswith('--video-rotate') for arg in args[0])
+
+
+@patch(
+    'anthias_viewer.media_player._detect_hdmi_audio_device',
+    return_value='sysdefault:CARD=vc4hdmi0',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_mpv_no_video_rotate_at_zero(
+    mock_popen: Any, _mock_detect: Any
+) -> None:
+    """The default-orientation case must NOT add --video-rotate=0 —
+    keeps the CLI surface unchanged for the 99% of operators who never
+    touch the dropdown, matching the existing arg-list test."""
+    player = MPVMediaPlayer()
+    with (
+        patch(
+            'anthias_viewer.media_player.settings',
+            _rotated_mpv_settings(0),
+        ),
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi5',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}),
+    ):
+        player.set_asset('file:///test/video.mp4', 30)
+        player.play()
+    args, _ = mock_popen.call_args
+    assert not any(arg.startswith('--video-rotate') for arg in args[0])
+
+
+def test_proxy_reset_clears_cached_instance(reset_media_proxy: None) -> None:
+    """When the operator changes rotation in Settings, the viewer
+    calls MediaPlayerProxy.reset() so the next play() rebuilds VLC
+    with the new transform-filter options."""
+    fake = MagicMock()
+    MediaPlayerProxy.INSTANCE = fake
+    MediaPlayerProxy.reset()
+    assert MediaPlayerProxy.INSTANCE is None
+    fake.stop.assert_called_once()
