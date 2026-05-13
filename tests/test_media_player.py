@@ -61,7 +61,6 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
             '--vo=gpu',
             '--gpu-context=drm',
             '--hwdec=auto-safe',
-            '--drm-mode=1920x1080@60',
             '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
             '--',
@@ -73,7 +72,7 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_pins_1080p_mode_on_pi4_64(
+def test_play_tunes_decoder_threads_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
@@ -81,14 +80,18 @@ def test_play_pins_1080p_mode_on_pi4_64(
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
     assert '--hwdec=auto-safe' in args[0]
     assert '--hwdec=v4l2m2m-copy' not in args[0]
+    # --drm-mode pinning was used on the legacy --vo=drm path to dodge
+    # CPU zimg upscale at 4K; under --gpu-context=drm the V3D handles
+    # scaling, the pin is no longer needed, and it actively hurts
+    # throughput when combined with GBM (verified on Pi4 hardware).
+    assert '--drm-mode=1920x1080@60' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_pins_1080p_mode_on_pi5(
+def test_play_tunes_decoder_threads_on_pi5(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
@@ -96,12 +99,12 @@ def test_play_pins_1080p_mode_on_pi5(
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
+    assert '--drm-mode=1920x1080@60' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_does_not_pin_mode_on_x86(
+def test_play_omits_pi_tuning_on_x86(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)

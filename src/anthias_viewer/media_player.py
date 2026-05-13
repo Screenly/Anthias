@@ -172,17 +172,15 @@ class MPVMediaPlayer(MediaPlayer):
         # effect without a viewer restart, matching VLCMediaPlayer.
         settings.load()
 
-        # Pin to 1080p on Pi4-64/Pi5: mpv's default --drm-mode=preferred
-        # reads the connector's EDID-preferred mode (4K on most modern
-        # TVs) and runs CPU zimg upscale, which drops below real-time
-        # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
+        # Software-decode tuning for Pi4-64 (A72) / Pi5 (A76). mpv 0.40
+        # in Debian Trixie has v4l2m2m-copy but not v4l2request hwdec,
+        # so --hwdec=auto-safe falls through to software decode on
+        # H.264/HEVC; pinning 4 threads keeps 1080p decode well above
+        # real-time on both SoCs.
         device_type = os.environ.get('DEVICE_TYPE', '')
         extra_args: list[str] = []
         if device_type in ('pi4-64', 'pi5'):
-            extra_args = [
-                '--drm-mode=1920x1080@60',
-                '--vd-lavc-threads=4',
-            ]
+            extra_args = ['--vd-lavc-threads=4']
 
         # Per-board VO selection:
         #
@@ -201,16 +199,18 @@ class MPVMediaPlayer(MediaPlayer):
         #   file open).
         #
         # * Pi4-64 / Pi5 own the framebuffer directly (no compositor)
-        #   but go through the same GL VO with --gpu-context=drm
-        #   instead of wayland. mpv talks to KMS via libgbm and runs
-        #   scaling on the V3D, which avoids the A72/A76 CPU zimg
-        #   upscale path that --vo=drm took. Measured on a 4K-
-        #   connected Pi4-64: 1080p H.264 playback drops 59–75
-        #   frames/30s under --vo=drm but only 3–6 frames/30s under
-        #   --vo=gpu --gpu-context=drm — same hwdec (software fallback
-        #   under mpv 0.40 since v4l2request hwdec isn't compiled in),
-        #   same --drm-mode pin, same --vd-lavc-threads. The savings
-        #   come entirely from offloading the upscale to the V3D.
+        #   and go through the same GL VO with --gpu-context=drm.
+        #   mpv talks to KMS via libgbm and runs scaling on the V3D
+        #   at the connector's preferred mode (typically 4K on a
+        #   modern TV). The previous --vo=drm path ran the same scale
+        #   on CPU zimg and ran out of headroom on the A72; the
+        #   previous --drm-mode=1920x1080@60 pin sidestepped that by
+        #   forcing the output to 1080p. Under --gpu-context=drm
+        #   neither workaround is needed — the V3D upscales for free
+        #   and the --drm-mode flag actively *hurts* throughput here
+        #   (verified on Pi4-64: 294 drops/30s with the pin vs 3-6
+        #   without, on the same clip). So no pin, no extra mpv VO
+        #   args beyond --vd-lavc-threads above.
         if device_type == 'x86':
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         elif device_type in ('pi4-64', 'pi5'):
