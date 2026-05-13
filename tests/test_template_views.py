@@ -489,9 +489,7 @@ def test_settings_display_on(
     set_display_power_mock: Any, client: Client
 ) -> None:
     response = client.post(
-        reverse(
-            'anthias_app:settings_display_power', kwargs={'state': 'on'}
-        )
+        reverse('anthias_app:settings_display_power', kwargs={'state': 'on'})
     )
     assert response.status_code in (200, 302)
     set_display_power_mock.assert_called_once_with(on=True)
@@ -506,9 +504,7 @@ def test_settings_display_off(
     set_display_power_mock: Any, client: Client
 ) -> None:
     response = client.post(
-        reverse(
-            'anthias_app:settings_display_power', kwargs={'state': 'off'}
-        )
+        reverse('anthias_app:settings_display_power', kwargs={'state': 'off'})
     )
     assert response.status_code in (200, 302)
     set_display_power_mock.assert_called_once_with(on=False)
@@ -520,9 +516,7 @@ def test_settings_display_invalid_state(
     set_display_power_mock: Any, client: Client
 ) -> None:
     response = client.post(
-        reverse(
-            'anthias_app:settings_display_power', kwargs={'state': 'foo'}
-        )
+        reverse('anthias_app:settings_display_power', kwargs={'state': 'foo'})
     )
     assert response.status_code in (200, 302)
     set_display_power_mock.assert_not_called()
@@ -541,9 +535,7 @@ def test_settings_display_surfaces_error_message(
     from django.contrib.messages import get_messages
 
     response = client.post(
-        reverse(
-            'anthias_app:settings_display_power', kwargs={'state': 'on'}
-        )
+        reverse('anthias_app:settings_display_power', kwargs={'state': 'on'})
     )
     assert response.status_code in (200, 302)
     messages_out = [m.message for m in get_messages(response.wsgi_request)]

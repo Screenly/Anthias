@@ -100,7 +100,7 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     if output == 'OK':
         return True, f'Display turn-{verb} command sent.'
     if output.startswith('ERROR: '):
-        return False, f'Display turn-{verb} failed: {output[len("ERROR: "):]}'
+        return False, f'Display turn-{verb} failed: {output[len("ERROR: ") :]}'
     return False, f'Display turn-{verb} failed: unexpected CEC response.'
 
 

@@ -992,9 +992,7 @@ def settings_shutdown(request: HttpRequest) -> HttpResponse:
 
 @authorized
 @require_http_methods(['POST'])
-def settings_display_power(
-    request: HttpRequest, state: str
-) -> HttpResponse:
+def settings_display_power(request: HttpRequest, state: str) -> HttpResponse:
     if state not in ('on', 'off'):
         messages.error(request, 'Invalid display state.')
         return redirect(reverse('anthias_app:settings'))

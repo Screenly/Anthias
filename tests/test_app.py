@@ -932,9 +932,7 @@ def test_display_power_section_hidden_without_cec_adapter(
     expect(
         page.get_by_role('heading', name='Settings', exact=True)
     ).to_be_visible()
-    expect(
-        page.get_by_role('heading', name='Display power')
-    ).to_have_count(0)
+    expect(page.get_by_role('heading', name='Display power')).to_have_count(0)
 
 
 @pytest.mark.integration
@@ -945,9 +943,7 @@ def test_display_power_section_visible_with_cec_adapter(
     """With a CEC device node present, both buttons render under an
     Experimental badge inside the System controls neighbourhood."""
     page.goto(SETTINGS_URL)
-    expect(
-        page.get_by_role('heading', name='Display power')
-    ).to_be_visible()
+    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
     expect(page.get_by_role('button', name='Turn display on')).to_be_visible()
     expect(page.get_by_role('button', name='Turn display off')).to_be_visible()
     # Experimental badge sits next to the heading.
@@ -988,9 +984,7 @@ def test_display_power_button_click_surfaces_error_toast(
     succeed or no-op. The container has no real CEC adapter, so the
     inner subprocess fails — exactly the path we want to exercise."""
     page.goto(SETTINGS_URL)
-    expect(
-        page.get_by_role('heading', name='Display power')
-    ).to_be_visible()
+    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
 
     page.get_by_role('button', name='Turn display on').click()
 

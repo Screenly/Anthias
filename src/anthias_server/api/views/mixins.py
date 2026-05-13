@@ -209,9 +209,7 @@ class DisplayPowerViewMixin(APIView):
         if ok:
             return Response({'message': msg}, status=status.HTTP_200_OK)
         # 502: upstream CEC adapter / TV refused or didn't respond.
-        return Response(
-            {'message': msg}, status=status.HTTP_502_BAD_GATEWAY
-        )
+        return Response({'message': msg}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 class FileAssetViewMixin(APIView):
