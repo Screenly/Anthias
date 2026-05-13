@@ -3,6 +3,23 @@
   here as a token list so additions/removals stay easy to review.
   Layout: Anthias-managed tokens first, then any tokens preserved from
   cmdline.txt.orig (e.g. cfg80211.* from raspi-config).
+
+  Note on Pi 5 CMA / 4K HEVC: Pi 5's stock Pi OS default reserves
+  only 64 MB CMA (vs. 512 MB on Pi 4). That's enough for the
+  Hantro G2 HEVC decoder to allocate 1080p reference + output
+  buffers, but not 4K — at 4K mpv hits
+  "v4l2_request_hevc_start_frame: Failed to get dst buffer" and
+  silently SW-falls-back. The obvious fix — adding ``cma=512M`` to
+  cmdline.txt — does NOT work on Pi 5: the kernel takes the cmdline
+  value over the device-tree ``linux,cma`` node, which leaves
+  ``rpi-hevc-dec`` orphaned (it returns ``Failed to probe hardware
+  -517`` and ``/dev/video*`` disappears entirely, killing HEVC HW
+  at every resolution). The right answer is a dtparam / dtoverlay
+  in /boot/firmware/config.txt that resizes the DT-declared CMA
+  region without orphaning the codec's reserved-mem reference;
+  that's tracked as Pi 5 4K HEVC follow-up. In the meantime the
+  asset processor's pi5 profile should downscale 4K → 1080p HEVC
+  so Pi 5 only ever sees clips inside its current HW envelope.
 -#}
 {%- set tokens = [
   'console=serial0,115200',

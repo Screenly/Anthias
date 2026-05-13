@@ -1,0 +1,215 @@
+# Board Enablement Test Bed
+
+A reproducible playback test bed for validating the viewer stack across boards.
+Use this when changing anything that touches mpv flags, hwdec, the cage/Wayland
+stack, or `src/anthias_viewer/media_player.py`.
+
+The viewer is tuned per-board (see `media_player.py` and `bin/start_viewer.sh`):
+
+| Device   | Qt platform | Compositor | mpv VO                          |
+|----------|-------------|-----------|---------------------------------|
+| Pi 2 / 3 | Qt5 linuxfb | none       | VLC                              |
+| Pi 4-64  | Qt6 linuxfb | none       | `--vo=gpu --gpu-context=drm`     |
+| Pi 5     | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
+| arm64    | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
+| x86      | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
+
+Each combination has different hwdec, scaling, and compositing characteristics,
+so a regression on one board can hide behind a clean run on another. Run the
+same asset rotation everywhere and compare drop counts.
+
+## Goal: hardware-accelerated playback on every board
+
+Every clip Anthias displays must be decoded in hardware on the target board.
+Software decode is never the steady state — it produces drops, heats the SoC,
+and on low-end Pis it can't keep up at 1080p30, let alone 4K. The viewer
+configuration alone can't guarantee this, because an upload's codec / profile
+/ resolution might not match what the destination board's silicon supports.
+
+The two halves of that guarantee:
+
+1. **Viewer (`src/anthias_viewer/media_player.py`)** — select the correct mpv
+   hwdec per codec on the target board. On Pi 4 / Pi 5 the launcher ffprobes
+   the asset and passes `--hwdec=v4l2m2m-copy` for H.264 or `--hwdec=drm-copy`
+   for HEVC directly on the mpv command line. (An earlier attempt used a Lua
+   `on_load` hook, but `video-codec-name` is empty at every script event
+   before hwdec init, so the hook was a silent no-op and `--hwdec=auto-copy`
+   leaked through; `auto-copy`'s upstream whitelist excludes `v4l2m2m-copy`,
+   so H.264 fell back to software.)
+2. **Asset processor (`src/anthias_server/processing.py`)** — at upload
+   time, transcode any clip whose codec / profile / resolution can't be
+   hardware-decoded on this device into one that can. The Celery task
+   `process_asset` runs `ffprobe`, compares the result against the board
+   profile, and either passes through or re-encodes (libx264 / libx265
+   with `-threads 2`, nice 19, ionice idle so it doesn't disturb playback).
+
+If a board can't HEVC, the asset processor re-encodes incoming HEVC to
+H.264 *before* it ever reaches the viewer; if a board can't H.264 (Pi 5
+through mpv), it re-encodes to HEVC. The viewer should only ever see
+codecs the board can hardware-decode.
+
+## Hardware decode capabilities per Pi
+
+What the SoC can do, regardless of player:
+
+| Pi   | SoC      | H.264 HW                  | HEVC HW                | VP9 / AV1 HW |
+|------|----------|---------------------------|------------------------|--------------|
+| 2    | BCM2836  | yes, up to 1080p (V3D IV) | **no** — no HEVC block | no           |
+| 3    | BCM2837  | yes, up to 1080p (V3D IV) | **no** — no HEVC block | no           |
+| 4    | BCM2711  | yes, up to 1080p60 (V3D 6.0 V4L2 M2M); 4K H.264 is past the V3D's envelope | yes, up to 4Kp60 (dedicated HEVC block, exposed as `v4l2_request_hevc`) | no |
+| 5    | BCM2712  | yes in silicon (Hantro G1), but **not reachable through mpv** — no `v4l2-request` H.264 hwdec exists upstream | yes, up to 4Kp60 (Hantro G2, exposed as `v4l2_request_hevc`) | no |
+
+HEVC HW decode arrived with the Pi 4. Pi 2 / Pi 3 cannot decode HEVC in
+hardware at all, and software HEVC on a Cortex-A53 won't even hit 1080p30 —
+so the asset processor *must* re-encode HEVC uploads to H.264 for those
+boards.
+
+> **Pi 5 4K HEVC is limited by CMA.** The Hantro G2 driver allocates DMA
+> buffers from the kernel's Contiguous Memory Allocator. Pi OS for Pi 5
+> reserves only 64 MB CMA by default (vs. 512 MB on Pi 4), which is enough
+> for 1080p HEVC reference + output buffers but not 4K — at 4K mpv hits
+> `v4l2_request_hevc_start_frame: Failed to get dst buffer` and silently
+> SW-falls-back. Bumping `cma=512M` on the kernel cmdline does **not**
+> work: the kernel takes the cmdline value over the device-tree
+> `linux,cma` node, which leaves `rpi-hevc-dec` orphaned
+> (`Failed to probe hardware -517`) and `/dev/video*` disappears
+> entirely, killing HEVC HW at every resolution. The right fix is a
+> `dtparam`/`dtoverlay` in `/boot/firmware/config.txt` that resizes the
+> existing DT-declared region (follow-up). In the meantime, the asset
+> processor's `pi5` profile must downscale 4K → 1080p HEVC so Pi 5 only
+> ever sees clips inside its current HW envelope.
+
+## Asset processor: codec policy per board
+
+What the asset processor accepts as-is vs. re-encodes (target = HW-decodable
+on the destination board):
+
+| Pi   | Passthrough          | Re-encode to | Encoder     | Notes                                              |
+|------|----------------------|--------------|-------------|----------------------------------------------------|
+| 2 / 3| H.264 only           | H.264        | `libx264`   | No HEVC silicon. Any HEVC upload becomes H.264.    |
+| 4    | H.264 ≤ 1080p, HEVC  | HEVC         | `libx265`   | 4K H.264 *must* re-encode — V3D maxes at 1080p60.  |
+| 5    | HEVC                 | HEVC         | `libx265`   | H.264 has no mpv HW path on Pi 5, so every H.264 upload re-encodes to HEVC. |
+
+`src/anthias_server/processing.py` holds the per-board profiles
+(`_BOARD_PROFILES`). Each entry has `passthrough_video_codecs` (input the
+viewer can hardware-decode untouched), an optional `passthrough_video_max_pixels`
+(width × height cap per codec — Pi 4's H.264 cap pins to 1920×1080 because the
+V3D maxes out at 1080p60 H.264), and `transcode_target` (what we re-encode to
+when the upload isn't passthrough).
+
+## Test-bed implications
+
+The eight-clip rotation (4 × H.264 + 4 × HEVC, 1080p30/60 + 4K30/60) is
+designed to exercise every cell of the policy table above. After upload,
+the asset processor's metadata (`transcoded`, `transcode_target`,
+`original_ext`) on each asset records what it did. A correct test run has:
+
+| Board | What the viewer sees on disk after processing                 |
+|-------|---------------------------------------------------------------|
+| 2 / 3 | 4 × H.264 (the four HEVC inputs re-encoded to H.264)          |
+| 4     | 1080p H.264 passthrough; 4K H.264 → HEVC; HEVC all passthrough |
+| 5     | All 8 clips end up HEVC (every H.264 input re-encoded)         |
+
+Sample failure modes the rotation catches:
+
+- A clip plays but `Dropped:` climbs steadily → the asset processor handed
+  the viewer something the SoC can't HW-decode (e.g. 4K H.264 passthrough
+  on Pi 4, any H.264 passthrough on Pi 5).
+- mpv's `hwdec-current` banner is `no` instead of `v4l2m2m-copy` /
+  `drm-copy` → the per-codec hook didn't kick in, or the codec isn't what
+  the policy table expects on this board.
+- Playback works on Pi 4 but drops on Pi 5 for the same input → the input
+  is H.264, and the asset processor didn't re-encode it to HEVC for Pi 5.
+
+## Source clips
+
+Big Buck Bunny, H.264 + AAC, public-domain, from
+[download.blender.org/demo/movies/BBB](https://download.blender.org/demo/movies/BBB/):
+
+| File                                     | Resolution / fps |
+|------------------------------------------|------------------|
+| `bbb_sunflower_1080p_30fps_normal.mp4`   | 1080p30          |
+| `bbb_sunflower_1080p_60fps_normal.mp4`   | 1080p60          |
+| `bbb_sunflower_2160p_30fps_normal.mp4`   | 4K30             |
+| `bbb_sunflower_2160p_60fps_normal.mp4`   | 4K60             |
+
+These exercise the H.264 paths (`v4l2m2m-copy` hwdec on Pi 4; software on Pi 5
+because mpv has no `v4l2-request` hwdec for the Hantro G2; vaapi-copy on x86).
+
+## HEVC transcodes
+
+To exercise the HEVC HW decode path on Pi (`drm-copy` / `v4l2_request_hevc`,
+which Pi 4 + Pi 5 both have), transcode the H.264 sources with libx265:
+
+```bash
+ffmpeg -y -i bbb_sunflower_1080p_30fps_normal.mp4 \
+    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_1080p_30fps_hevc.mp4
+ffmpeg -y -i bbb_sunflower_1080p_60fps_normal.mp4 \
+    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_1080p_60fps_hevc.mp4
+ffmpeg -y -i bbb_sunflower_2160p_30fps_normal.mp4 \
+    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_4k_30fps_hevc.mp4
+ffmpeg -y -i bbb_sunflower_2160p_60fps_normal.mp4 \
+    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_4k_60fps_hevc.mp4
+```
+
+Run these on a workstation, not the device under test — even a Pi 5 burns
+hours on the 4K HEVC encodes (sustained load average ~7) and that load alone
+will skew any concurrent playback measurement. Verify each output with
+`ffprobe` before shipping; a power cycle mid-encode leaves a file with
+`moov atom not found` that mpv will refuse to play.
+
+## The rotation
+
+Upload all eight files (4 × H.264 + 4 × HEVC) as Anthias assets and schedule
+them back-to-back. Per-asset boundaries in the drop log make it easy to slice
+results by resolution / fps / codec.
+
+## Drop logging
+
+Set `ANTHIAS_DEBUG_DROPS=1` on the `anthias-viewer` service (compose override
+or `~/anthias/.env`). When enabled, `media_player.py`:
+
+- drops mpv's `--no-terminal`, so the status line
+  (`AV: 00:00:30 / ... Dropped: N`) is emitted continuously;
+- redirects stdout/stderr to `/data/.anthias/mpv.log` inside the container,
+  which is `~/.anthias/mpv.log` on the host (or `~/.screenly/mpv.log` on
+  pre-rebrand installs);
+- writes a `--- mpv launch <uri> ---` marker before each mpv launch so the
+  log can be sliced per asset;
+- captures mpv's `hwdec-current` and VO init banners on stderr — confirms
+  `--vo=gpu --gpu-context=drm` (Pi 4) vs `--gpu-context=wayland` (Pi 5 / x86
+  / arm64) actually took effect, and confirms which hwdec the per-codec Lua
+  hook selected.
+
+With the env var unset, the viewer keeps its silent `DEVNULL` behaviour —
+no host-side log file.
+
+## Reading the log
+
+`Dropped:` in mpv's status line is cumulative for a single mpv process, and
+the viewer spawns one process per asset, so the last `Dropped:` before the
+next `--- mpv launch` marker is that asset's final count over its playback
+window.
+
+```bash
+grep -E "^--- mpv launch|Dropped:" ~/.anthias/mpv.log | tail -80
+```
+
+For a single rolling sample on a running device:
+
+```bash
+tail -F ~/.anthias/mpv.log | grep --line-buffered -E "launch|Dropped:|hwdec-current|VO:"
+```
+
+## Reporting
+
+When attaching results to a PR, include:
+
+- board + Qt/compositor combination (one row of the table above);
+- one drop count per asset, taken from the last `Dropped:N` of each asset's
+  window;
+- the matching `VO:` / `hwdec-current` banner lines so the run can be tied to
+  a specific stack.
+
+For comparable numbers, let the rotation play at least two full cycles before
+sampling — first cycle includes asset-cache warmup and webview teardown.

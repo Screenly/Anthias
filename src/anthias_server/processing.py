@@ -115,19 +115,30 @@ _PASSTHROUGH_AUDIO_CODECS = frozenset(
 # Per-board transcode profile
 # ---------------------------------------------------------------------------
 #
-# The right "video codec" for an Anthias device depends on what the
-# on-device player can hardware-decode (or software-decode at real
-# time). The matrix this PR locks in:
+# Goal of this matrix: every clip the viewer plays must be
+# *hardware-decoded* on the target board. Software decode is never
+# the steady state — it produces drops, heats the SoC, and on low-end
+# Pis can't hit real time at 1080p. So ``passthrough_video_codecs``
+# encodes exactly what the on-device player will hardware-decode,
+# and anything else is re-encoded at upload time:
 #
-#   ┌──────────┬─────────────────┬──────────────┬──────────────┐
-#   │ Board    │ Player          │ HEVC OK?     │ Target codec │
-#   ├──────────┼─────────────────┼──────────────┼──────────────┤
-#   │ pi2/pi3  │ VLC + mmal-vc4  │ no           │ H.264        │
-#   │ pi4-64   │ mpv + V4L2 HEVC │ HW-decoded   │ HEVC         │
-#   │ pi5      │ mpv + SW decode │ A76 SW @ 1080p │ HEVC       │
-#   │ x86      │ mpv + va/nv/qsv │ HW-decoded   │ HEVC         │
-#   │ unset    │ (dev / unknown) │ assume no    │ H.264        │
-#   └──────────┴─────────────────┴──────────────┴──────────────┘
+#   ┌──────────┬─────────────────┬───────────────────────────────────────┐
+#   │ Board    │ Player          │ HW-decodable (= passthrough)          │
+#   ├──────────┼─────────────────┼───────────────────────────────────────┤
+#   │ pi2/pi3  │ VLC + mmal-vc4  │ H.264 only (V3D-IV, 1080p)            │
+#   │ pi4-64   │ mpv + V3D + V4L2│ H.264 ≤1080p (V3D M2M), HEVC ≤4Kp60   │
+#   │ pi5      │ mpv + Hantro G2 │ HEVC ≤4Kp60 only — mpv has no         │
+#   │          │                 │ v4l2-request H.264 path so H.264      │
+#   │          │                 │ would silently SW-fall-back           │
+#   │ x86      │ mpv + va/nv/qsv │ H.264 + HEVC (any modern iGPU)        │
+#   │ unset    │ (dev / unknown) │ assume worst case: H.264 only         │
+#   └──────────┴─────────────────┴───────────────────────────────────────┘
+#
+# Resolution cap on Pi 4 H.264: the V3D 6.0 V4L2 M2M decoder tops out
+# at ~1080p60 H.264. A 4K H.264 upload would clear the codec gate but
+# fall to software at playback time, so the profile carries an
+# optional per-codec pixel cap (``passthrough_video_max_pixels``) that
+# the passthrough check enforces.
 #
 # Two reasons to actually emit HEVC instead of always-H.264:
 #
@@ -135,11 +146,15 @@ _PASSTHROUGH_AUDIO_CODECS = frozenset(
 #      HEVC re-encode at equivalent visual quality is roughly 30–50%
 #      smaller than H.264. For a fleet rotating dozens of clips that
 #      compounds.
-#   2. Decode load. Pi 5 has no hardware video decoder at all; the CPU
-#      handles every codec in software. HEVC's better compression at
-#      the same quality means fewer bits the decoder has to chew
-#      through, which trades coding-tool complexity for raw
-#      bandwidth — a wash on Pi 5 in practice, but never worse.
+#   2. Decode efficiency. HEVC at the same perceived quality means
+#      fewer bytes the decoder has to chew through. On Pi 5 this is
+#      also the *only* HW-decode codec, so it's not optional.
+#
+# This matrix is the source of truth in this PR. A follow-up replaces
+# it with a runtime probe (introspect mpv + /dev/video* + vainfo at
+# anthias-server start, derive the same per-codec set automatically)
+# so future boards self-classify and the matrix can't drift from
+# upstream mpv hwdec changes.
 #
 # The mapping keys match ``DEVICE_TYPE`` (set by the image builder in
 # the Dockerfile, read at celery-task time via ``os.environ``) rather
@@ -152,6 +167,13 @@ _PASSTHROUGH_AUDIO_CODECS = frozenset(
 # var is unset — keeps the dev-environment path safe and gives an
 # unknown future board the most-compatible codec.
 _BoardProfile = dict[str, Any]
+
+# Width × height threshold for Pi 4 H.264 passthrough. The V3D 6.0
+# V4L2 M2M H.264 decoder is rated for 1080p60; 4K (3840×2160 ≈ 8.3 M
+# pixels) clears its envelope and falls to software at playback. The
+# threshold is generous (1920×1080 = ~2.07 M) so any 1080p/720p/SD
+# H.264 upload still passes through.
+_PI4_H264_MAX_PIXELS = 1920 * 1080
 
 
 # ffmpeg encoder args. Each list is what gets passed between ``-i
@@ -212,23 +234,32 @@ _BOARD_PROFILES: dict[str, _BoardProfile] = {
         'passthrough_video_codecs': frozenset({'h264'}),
         'video_args': _H264_VIDEO_ARGS,
     },
-    # 64-bit Pi 4 with mpv + KMS (`--vo=drm`): the kernel's V4L2
-    # stateful HEVC decoder driver (/dev/video10 family) is wired up
-    # and mpv's ``--hwdec=auto-safe`` selects ``v4l2request`` for
-    # hevc. Both H.264 and HEVC pass through.
+    # 64-bit Pi 4 with mpv. Two distinct HW decoders:
+    #   * V3D 6.0 V4L2 M2M (/dev/video10, bcm2835-codec-decode) →
+    #     H.264 up to ~1080p60. Hit by mpv ``--hwdec=v4l2m2m-copy``.
+    #   * dedicated HEVC block (/dev/video19, rpi-hevc-dec) → HEVC
+    #     up to 4Kp60. Hit by mpv ``--hwdec=drm-copy`` (FFmpeg
+    #     v4l2_request_hevc hwaccel).
+    # 4K H.264 exceeds the V3D's H.264 envelope and falls to
+    # software at playback, so the H.264 passthrough carries a pixel
+    # cap (handled in _video_can_passthrough via
+    # passthrough_video_max_pixels). 4K HEVC stays HW.
     'pi4-64': {
         'transcode_target': 'hevc',
         'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
+        'passthrough_video_max_pixels': {'h264': _PI4_H264_MAX_PIXELS},
         'video_args': _HEVC_VIDEO_ARGS,
     },
-    # Pi 5: no hardware video decoder block at all (RP1 dropped it
-    # vs. pi4). The Cortex-A76 quad-core software-decodes 1080p H.264
-    # *and* 1080p HEVC at real time, so HEVC is fine. Picking HEVC
-    # also saves disk: a typical 5-minute clip is ~30% smaller after
-    # re-encode than the equivalent H.264 at perceptual parity.
+    # Pi 5: HEVC HW decode via Hantro G2 (drm-copy / v4l2_request_hevc)
+    # is solid up to 4Kp60. H.264 silicon (Hantro G1) exists but mpv
+    # has *no* v4l2-request H.264 hwdec upstream, so any H.264 clip
+    # the viewer receives drops to a software A76 decoder. To keep
+    # the HW-decode-everywhere contract, H.264 uploads transcode to
+    # HEVC at upload time — the Cortex-A76 software encode is the
+    # one-time cost that buys steady-state HW decode forever after.
     'pi5': {
         'transcode_target': 'hevc',
-        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
+        'passthrough_video_codecs': frozenset({'hevc'}),
         'video_args': _HEVC_VIDEO_ARGS,
     },
     # x86: mpv + ``--hwdec=auto-safe`` selects vaapi (Intel/AMD),
@@ -880,11 +911,17 @@ def _ffprobe_streams(input_path: str) -> dict[str, Any]:
 def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     """Reduce ffprobe's payload to the dimensions we branch on.
 
-    Returns a dict with four keys, all populated:
+    Returns a dict with these keys, all populated:
       * ``container`` — lowercase format token, ``'unknown'`` if
         ffprobe couldn't decide.
       * ``video_codec`` — lowercase codec name, ``'unknown'`` if
         the file has no video stream or the probe failed.
+      * ``video_pixels`` — ``width * height`` for the first video
+        stream, ``None`` if no video stream or dimensions missing.
+        Used by ``_video_can_passthrough`` to enforce the per-codec
+        pixel cap that keeps Pi 4 from passthrough-ing 4K H.264
+        (V3D's H.264 envelope tops out around 1080p60; 4K H.264
+        would clear the codec gate but fall to software at play).
       * ``audio_codec`` — lowercase codec name, ``'none'`` when the
         file genuinely carries no audio stream, or ``'unknown'`` if
         the audio stream existed but ffprobe couldn't name its
@@ -911,6 +948,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         return {
             'container': 'unknown',
             'video_codec': 'unknown',
+            'video_pixels': None,
             'audio_codec': 'unknown',
             'duration_seconds': None,
         }
@@ -947,6 +985,17 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     else:
         container = _ext(input_path).lstrip('.') or 'unknown'
     video_codec = ((video or {}).get('codec_name') or 'unknown').lower()
+    # Width × height for resolution-gated passthrough (Pi 4 H.264).
+    # ffprobe returns ``width`` / ``height`` only for video streams,
+    # and only when the demuxer could decide. A missing or
+    # unparseable value collapses to None so the gate falls back to
+    # "transcode" rather than passing through a clip we can't size.
+    try:
+        vw = int((video or {}).get('width') or 0)
+        vh = int((video or {}).get('height') or 0)
+    except (TypeError, ValueError):
+        vw = vh = 0
+    video_pixels: int | None = vw * vh if vw > 0 and vh > 0 else None
     if audio is None:
         audio_codec = 'none'
     else:
@@ -969,6 +1018,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     return {
         'container': container,
         'video_codec': video_codec,
+        'video_pixels': video_pixels,
         'audio_codec': audio_codec,
         'duration_seconds': duration_seconds,
     }
@@ -999,8 +1049,21 @@ def _video_can_passthrough(
         profile = _resolve_board_profile()
     if summary.get('container') not in _PASSTHROUGH_CONTAINERS:
         return False
-    if summary.get('video_codec') not in profile['passthrough_video_codecs']:
+    video_codec = summary.get('video_codec')
+    if video_codec not in profile['passthrough_video_codecs']:
         return False
+    # Per-codec pixel cap (Pi 4: H.264 only up to 1080p — the V3D
+    # V4L2 M2M decoder's envelope. 4K H.264 would otherwise clear
+    # the codec gate but fall to software at playback time.). The
+    # profile key is optional; when missing or codec-not-listed,
+    # no cap applies. Probe failure (video_pixels=None) is treated
+    # as "don't passthrough" so we don't gamble on an unsized clip.
+    pixel_caps = profile.get('passthrough_video_max_pixels') or {}
+    cap = pixel_caps.get(video_codec)
+    if cap is not None:
+        pixels = summary.get('video_pixels')
+        if pixels is None or pixels > cap:
+            return False
     if summary.get('audio_codec') not in _PASSTHROUGH_AUDIO_CODECS:
         return False
     return True

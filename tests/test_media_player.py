@@ -85,8 +85,108 @@ def test_play_pins_1080p_mode_on_pi4_64(
     args, _ = mock_popen.call_args
     assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='h264',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_picks_v4l2m2m_for_h264_on_pi4_64(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # Pi 4 H.264 dispatches to v4l2m2m-copy (V3D V4L2 M2M); mpv's
+    # auto-copy whitelist excludes v4l2m2m-copy so we have to set it
+    # explicitly.
+    mpv.player.set_asset('file:///test/h264.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
+        mpv.player.play()
+    args, _ = mock_popen.call_args
+    assert '--hwdec=v4l2m2m-copy' in args[0]
+    assert '--hwdec=auto-copy' not in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='h264',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_picks_auto_copy_for_h264_on_pi5(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # Pi 5 has no upstream-mpv H.264 hwdec (Hantro G1 isn't exposed
+    # through v4l2-request in mpv 0.40). Passing v4l2m2m-copy here
+    # would just log "Could not find a valid device" errors before
+    # silently SW-falling-back, so we send auto-copy and let mpv's
+    # default selector pick (which finds nothing for H.264 on Pi 5
+    # and falls to software cleanly). The asset processor re-encodes
+    # H.264 → HEVC on Pi 5 at upload time so this path is only hit
+    # for pre-existing assets during the rollout window.
+    mpv.player.set_asset('file:///test/h264.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
+        mpv.player.play()
+    args, _ = mock_popen.call_args
     assert '--hwdec=auto-copy' in args[0]
     assert '--hwdec=v4l2m2m-copy' not in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='hevc',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_picks_drm_copy_for_hevc_on_pi(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # HEVC on Pi 4 / Pi 5 goes through FFmpeg's v4l2_request_hevc,
+    # exposed in mpv as drm-copy.
+    for device_type in ('pi4-64', 'pi5'):
+        mock_popen.reset_mock()
+        mpv.player.set_asset('file:///test/hevc.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
+            mpv.player.play()
+        args, _ = mock_popen.call_args
+        assert '--hwdec=drm-copy' in args[0], device_type
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_falls_back_to_auto_copy_when_probe_fails_on_pi(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # If ffprobe can't read the codec (missing file, timeout, …)
+    # the Pi dispatch must fall back to auto-copy rather than
+    # passing a bogus --hwdec= value.
+    mpv.player.set_asset('file:///test/missing.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
+        mpv.player.play()
+    args, _ = mock_popen.call_args
+    assert '--hwdec=auto-copy' in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='h264',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_does_not_probe_on_non_pi(
+    mock_popen: Any, mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # ffprobe shouldn't run on x86 / arm64 — they go through
+    # --hwdec=auto-copy unconditionally and probing adds latency
+    # before every mpv launch.
+    for device_type in ('x86', 'arm64'):
+        mock_probe.reset_mock()
+        mock_popen.reset_mock()
+        mpv.player.set_asset('file:///test/video.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
+            mpv.player.play()
+        mock_probe.assert_not_called()
+        args, _ = mock_popen.call_args
+        assert '--hwdec=auto-copy' in args[0], device_type
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
