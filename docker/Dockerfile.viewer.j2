@@ -39,6 +39,43 @@ RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
 
 {% include 'Dockerfile.base.j2' %}
 
+{% if board in ('pi4-64', 'pi5') %}
+# archive.raspberrypi.com ships mpv + the FFmpeg stack patched with
+# Pi-specific v4l2request hwdec — stock Debian Trixie's mpv 0.40
+# doesn't include the v4l2request hwdec the Hantro stateless
+# decoder on Pi 5 needs (Pi 4's V3D V4L2 M2M decoder works via
+# stock mpv's v4l2m2m-copy too, but using the Pi-patched mpv on
+# both boards keeps Pi userspace on a single upstream). x86 and
+# arm64 stay on stock Debian — VAAPI on x86 already works, and
+# Pi's repo isn't tuned for Rockchip / generic ARM hardware.
+#
+# Apt pinning restricts the Pi repo to the mpv + FFmpeg library
+# family only. Without this, Pi's curl, ca-certificates, etc.
+# would silently shadow Debian's versions and we'd drift away
+# from the rest of the image's apt baseline.
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg && \
+    install -d -m 0755 /etc/apt/keyrings && \
+    curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key \
+        | gpg --dearmor -o /etc/apt/keyrings/raspberrypi.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/raspberrypi.gpg] http://archive.raspberrypi.com/debian/ trixie main" \
+        > /etc/apt/sources.list.d/raspberrypi.list && \
+    printf '%s\n' \
+        'Package: mpv libavcodec* libavdevice* libavfilter* libavformat* libavutil* libswresample* libswscale*' \
+        'Pin: origin archive.raspberrypi.com' \
+        'Pin-Priority: 1001' \
+        '' \
+        'Package: *' \
+        'Pin: origin archive.raspberrypi.com' \
+        'Pin-Priority: 100' \
+        > /etc/apt/preferences.d/raspberrypi
+{% endif %}
+
 {% if disable_cache_mounts %}
 RUN \
 {% else %}

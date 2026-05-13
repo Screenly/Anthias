@@ -59,7 +59,7 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
             'mpv',
             '--no-terminal',
             '--vo=drm',
-            '--hwdec=auto-safe',
+            '--hwdec=auto-copy',
             '--drm-mode=1920x1080@60',
             '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
@@ -85,7 +85,7 @@ def test_play_pins_1080p_mode_on_pi4_64(
     args, _ = mock_popen.call_args
     assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
-    assert '--hwdec=auto-safe' in args[0]
+    assert '--hwdec=auto-copy' in args[0]
     assert '--hwdec=v4l2m2m-copy' not in args[0]
 
 

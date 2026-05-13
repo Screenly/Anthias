@@ -283,20 +283,51 @@ class MPVMediaPlayer(MediaPlayer):
         if rotation and device_type == 'pi4-64':
             rotate_args = [f'--video-rotate={rotation}']
 
+        # --hwdec=auto-copy is broader than auto-safe — it includes
+        # every "*-copy" hwdec method (decode in HW, copy frames back
+        # to system memory for the VO). On x86 that resolves to
+        # vaapi-copy; on Pi 4 to v4l2m2m-copy; on Pi 5 (with the
+        # Pi-patched mpv from archive.raspberrypi.com — see
+        # docker/Dockerfile.viewer.j2) to v4l2request. auto-safe
+        # deliberately omits v4l2m2m-copy and v4l2request from its
+        # whitelist for historical compatibility reasons, even though
+        # both work reliably on current Pi firmware. arm64 falls
+        # through to software since stock Debian mpv 0.40 has neither
+        # v4l2request nor a Rockchip-tuned hwdec.
+        #
+        # ANTHIAS_DEBUG_DROPS=1: when set on the viewer container,
+        # mpv's stdout/stderr go to a host-bound log instead of
+        # /dev/null, *and* --no-terminal is dropped so mpv's normal
+        # status line ("AV: 00:00:30 / ... Dropped: N") is emitted.
+        # The log records hwdec-current / VO init banners plus
+        # per-file drop counts so reviewers can validate the test
+        # bed without rebuilding the image. Default (unset)
+        # preserves the silent stdout/stderr=/dev/null behaviour.
+        debug_drops = os.environ.get('ANTHIAS_DEBUG_DROPS') == '1'
+        terminal_args = [] if debug_drops else ['--no-terminal']
+        if debug_drops:
+            log_fd = open('/data/.anthias/mpv.log', 'ab', buffering=0)
+            log_fd.write(f'\n--- mpv launch {self.uri} ---\n'.encode())
+            popen_stdout: object = log_fd
+            popen_stderr: object = subprocess.STDOUT
+        else:
+            popen_stdout = subprocess.DEVNULL
+            popen_stderr = subprocess.DEVNULL
+
         self.process = subprocess.Popen(
             [
                 'mpv',
-                '--no-terminal',
+                *terminal_args,
                 *vo_args,
-                '--hwdec=auto-safe',
+                '--hwdec=auto-copy',
                 *extra_args,
                 *rotate_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,
             ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=popen_stdout,
+            stderr=popen_stderr,
         )
 
     def stop(self) -> None:

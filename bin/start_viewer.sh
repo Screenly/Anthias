@@ -164,29 +164,19 @@ case "$DEVICE_TYPE" in
     export LIBSEAT_BACKEND=builtin
     export WLR_LIBINPUT_NO_DEVICES=1
 
-    # Pick the first connected DRM connector so cage opens on the
-    # display that's actually plugged in. Without -o, cage uses the
-    # first output the DRM backend enumerates (typically HDMI-A-1)
-    # — so a Pi user who plugged into the *other* micro-HDMI port
-    # (HDMI-A-2), or an x86 user on DisplayPort, ends up with cage
-    # rendering to a disconnected connector and a black screen.
-    # Iterating /sys/class/drm gives us the bare connector names
-    # cage's -o expects (HDMI-A-1, HDMI-A-2, DP-1, eDP-1, …). If
-    # nothing is connected we let cage pick — the display may come
-    # up after cage starts via HPD, or this is a build/CI host with
-    # no display at all.
-    cage_args=()
-    for connector in /sys/class/drm/card*-*; do
-        [ -d "$connector" ] || continue
-        [ -f "$connector/status" ] || continue
-        [ "$(cat "$connector/status" 2>/dev/null)" = "connected" ] || continue
-        connector_name=${connector##*/}      # card0-DP-1
-        connector_name=${connector_name#card*-}  # DP-1
-        cage_args=(-o "$connector_name")
-        echo "start_viewer: cage -> $connector_name"
-        break
-    done
-    cage_args+=(--)
+    # cage default `-m extend` spans all enumerated DRM outputs,
+    # including ones that are physically disconnected — so a Pi user
+    # who plugs into the second micro-HDMI port (HDMI-A-2 instead of
+    # HDMI-A-1) ends up with cage rendering to a portion of the
+    # virtual canvas that lands on the disconnected connector, and a
+    # black screen. Trixie ships cage 0.1.x which has no `-o
+    # <connector>` flag, but `-m last` restricts output to whichever
+    # connector came up most recently — for the boot-time case
+    # (which the kernel detects in enumeration order) that's the
+    # last connected output rather than the first. Good enough for
+    # the single-display kiosk path; dual-head signage is a separate
+    # workflow.
+    cage_mode=(-m last)
 
     # cage runs as root (Dockerfile's USER root) and creates the
     # Wayland socket with root:root 0600 perms, so `sudo -u viewer`
@@ -194,7 +184,7 @@ case "$DEVICE_TYPE" in
     # (Permission denied)"). Chown the socket to viewer in cage's
     # child *before* dropping privileges. cage exports WAYLAND_DISPLAY
     # before exec'ing the child, so the path is fully resolved here.
-    cage "${cage_args[@]}" bash -c '
+    cage "${cage_mode[@]}" -- bash -c '
         chown viewer "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" 2>/dev/null || true
         exec sudo \
             --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY,LANG,LANGUAGE,LC_ALL \
