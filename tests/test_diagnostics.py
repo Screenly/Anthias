@@ -250,6 +250,38 @@ def test_set_display_power_caps_long_error_message() -> None:
     assert msg.endswith('...')
 
 
+def test_set_display_power_caps_long_error_sentinel_reason() -> None:
+    """The ERROR: sentinel branch must apply the same length cap +
+    last-line trim as the unexpected-stdout fallback; a hostile or
+    chatty libcec build could otherwise smuggle a multi-line / huge
+    string into the toast via the contract path."""
+    long_reason = 'X' * 4000
+    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
+    completed.stdout = f'ERROR: {long_reason}'.encode()
+    completed.stderr = b''
+    completed.returncode = 0
+    with mock.patch.object(subprocess, 'run', return_value=completed):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert len(msg) < 300
+    assert msg.endswith('...')
+
+
+def test_set_display_power_error_sentinel_strips_multiline() -> None:
+    """Multi-line reason on the ERROR: branch — we keep only the last
+    non-empty line so the toast stays one row tall."""
+    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
+    completed.stdout = b'ERROR: first line\nmiddle line\nactual failure reason'
+    completed.stderr = b''
+    completed.returncode = 0
+    with mock.patch.object(subprocess, 'run', return_value=completed):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'actual failure reason' in msg
+    assert 'first line' not in msg
+    assert 'middle line' not in msg
+
+
 def test_cec_available_true_when_cec0_present() -> None:
     with mock.patch.object(
         os.path, 'exists', side_effect=lambda p: p == '/dev/cec0'

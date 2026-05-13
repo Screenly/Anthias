@@ -100,7 +100,10 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     if output == 'OK':
         return True, f'Display turn-{verb} command sent.'
     if output.startswith('ERROR: '):
-        return False, f'Display turn-{verb} failed: {output[len("ERROR: ") :]}'
+        return False, (
+            f'Display turn-{verb} failed: '
+            f'{_trim_cec_detail(output[len("ERROR: ") :])}'
+        )
 
     # Subprocess didn't emit one of the two contract sentinels. The
     # likely causes are an interpreter crash (returncode != 0) or
@@ -110,16 +113,27 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     # the raw stdout if non-empty) so the toast / API response carries
     # something actionable.
     stderr = result.stderr.decode('utf-8', errors='replace').strip()
-    # Last line is usually the actual exception/error; trim the
-    # rest of any traceback to keep the toast readable.
-    detail = (stderr.splitlines()[-1] if stderr else output) or (
-        f'subprocess exited with status {result.returncode}'
-    )
-    # Cap the message — libcec can spew multi-kilobyte traces and the
-    # toast/JSON response shouldn't carry an unbounded blob.
-    if len(detail) > 240:
-        detail = detail[:237] + '...'
-    return False, f'Display turn-{verb} failed: {detail}'
+    detail = (
+        stderr or output
+    ) or f'subprocess exited with status {result.returncode}'
+    return False, f'Display turn-{verb} failed: {_trim_cec_detail(detail)}'
+
+
+def _trim_cec_detail(detail: str) -> str:
+    """Sanitize an arbitrarily-sized libcec / Python error blob into a
+    one-line, length-capped toast / JSON message.
+
+    libcec (and the in-subprocess Python) can emit multi-line tracebacks
+    or kilobyte-scale diagnostics on either stdout or stderr. The last
+    non-empty line is almost always the actual exception/error message,
+    so we keep that and drop the rest, then cap to 240 chars so the toast
+    stack doesn't overflow and JSON responses stay small.
+    """
+    lines = [line for line in detail.splitlines() if line.strip()]
+    one_line = lines[-1].strip() if lines else detail.strip()
+    if len(one_line) > 240:
+        one_line = one_line[:237] + '...'
+    return one_line
 
 
 def cec_available() -> bool:
