@@ -1162,8 +1162,13 @@ def test_passthrough_containers_match_real_ffprobe_format_names(
         f'{description}: ffprobe format_name={format_name!r} resolved to '
         f'{summary["container"]!r} which is not in _PASSTHROUGH_CONTAINERS'
     )
-    pi5 = processing._BOARD_PROFILES['pi5']
-    assert processing._video_can_passthrough(summary, pi5), (
+    # Use x86 profile here: both pi5 (h264 must transcode) and pi4-64
+    # (h264 capped at 1080p, fake summary has no width/height so
+    # video_pixels=None which fails the cap) would reject the fake
+    # h264 row for reasons orthogonal to the container check this test
+    # is asserting.
+    x86 = processing._BOARD_PROFILES['x86']
+    assert processing._video_can_passthrough(summary, x86), (
         f'{description}: passthrough check rejected a real-ffprobe-name '
         f'container; would force an unnecessary transcode'
     )

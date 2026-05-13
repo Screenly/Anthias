@@ -30,16 +30,29 @@ def mpv() -> Iterator[_MPVFixtures]:
     patch_device_type = patch(
         'anthias_viewer.media_player.get_device_type', return_value='pi4'
     )
+    # Default-mock the ffprobe-based codec probe so tests that pin
+    # DEVICE_TYPE to 'pi4-64'/'pi5' don't try to spawn a real ffprobe
+    # subprocess inside the test harness. Returning '' makes
+    # _pi_hwdec_for_uri fall back to 'auto-copy', which preserves the
+    # pre-ffprobe behaviour the legacy tests assert on. Tests that
+    # care about a specific dispatch (h264 → v4l2m2m-copy etc.) layer
+    # a sharper patch on top of this default.
+    patch_probe = patch(
+        'anthias_viewer.media_player._probe_video_codec',
+        return_value='',
+    )
 
     fixtures.mock_settings = patch_settings.start()
     fixtures.mock_settings.__getitem__.return_value = 'hdmi'
     patch_device_type.start()
+    patch_probe.start()
 
     try:
         yield fixtures
     finally:
         patch_settings.stop()
         patch_device_type.stop()
+        patch_probe.stop()
 
 
 @patch(
@@ -741,12 +754,20 @@ def _rotated_mpv_settings(rotation: int) -> Any:
 @pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
 @pytest.mark.parametrize('rotation', [0, 90, 180, 270])
 @patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
+@patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
 @patch('anthias_viewer.media_player.subprocess.Popen')
 def test_mpv_never_passes_video_rotate_under_cage(
-    mock_popen: Any, _mock_detect: Any, rotation: int, device_type: str
+    mock_popen: Any,
+    _mock_detect: Any,
+    _mock_probe: Any,
+    rotation: int,
+    device_type: str,
 ) -> None:
     """x86 / arm64 / pi5 run under cage and inherit the compositor
     transform via wlr-randr (issue #2856 — driven from
@@ -779,12 +800,16 @@ def test_mpv_never_passes_video_rotate_under_cage(
 
 @pytest.mark.parametrize('rotation', [90, 180, 270])
 @patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
+@patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
 @patch('anthias_viewer.media_player.subprocess.Popen')
 def test_mpv_passes_video_rotate_on_pi4_64(
-    mock_popen: Any, _mock_detect: Any, rotation: int
+    mock_popen: Any, _mock_detect: Any, _mock_probe: Any, rotation: int
 ) -> None:
     """Pi 4 stays on Qt linuxfb (no cage), so there's no compositor
     transform to inherit — mpv has to apply rotation itself."""
@@ -810,9 +835,13 @@ def test_mpv_passes_video_rotate_on_pi4_64(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
 @patch('anthias_viewer.media_player.subprocess.Popen')
 def test_mpv_skips_video_rotate_at_zero_on_pi4_64(
-    mock_popen: Any, _mock_detect: Any
+    mock_popen: Any, _mock_probe: Any, _mock_detect: Any
 ) -> None:
     """0° must NOT emit --video-rotate=0 — keeps the CLI surface
     unchanged for the 99% of operators who never touch the dropdown."""

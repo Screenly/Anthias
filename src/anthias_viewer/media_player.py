@@ -1,7 +1,7 @@
 import logging
 import os
 import subprocess
-from typing import ClassVar
+from typing import IO, ClassVar
 
 from anthias_common.device_helper import get_device_type
 from anthias_common.utils import clamp_screen_rotation
@@ -256,10 +256,14 @@ def _probe_video_codec(uri: str) -> str:
         result = subprocess.run(
             [
                 'ffprobe',
-                '-v', 'error',
-                '-select_streams', 'v:0',
-                '-show_entries', 'stream=codec_name',
-                '-of', 'default=nw=1:nk=1',
+                '-v',
+                'error',
+                '-select_streams',
+                'v:0',
+                '-show_entries',
+                'stream=codec_name',
+                '-of',
+                'default=nw=1:nk=1',
                 uri,
             ],
             capture_output=True,
@@ -381,11 +385,16 @@ class MPVMediaPlayer(MediaPlayer):
         # preserves the silent stdout/stderr=/dev/null behaviour.
         debug_drops = os.environ.get('ANTHIAS_DEBUG_DROPS') == '1'
         terminal_args = [] if debug_drops else ['--no-terminal']
+        # Popen accepts either an int sentinel (DEVNULL / STDOUT) or
+        # an already-opened binary IO stream for stdout/stderr. The
+        # int | IO[bytes] union covers both.
+        popen_stdout: int | IO[bytes]
+        popen_stderr: int | IO[bytes]
         if debug_drops:
             log_fd = open('/data/.anthias/mpv.log', 'ab', buffering=0)
             log_fd.write(f'\n--- mpv launch {self.uri} ---\n'.encode())
-            popen_stdout: object = log_fd
-            popen_stderr: object = subprocess.STDOUT
+            popen_stdout = log_fd
+            popen_stderr = subprocess.STDOUT
         else:
             popen_stdout = subprocess.DEVNULL
             popen_stderr = subprocess.DEVNULL
