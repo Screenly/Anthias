@@ -75,6 +75,16 @@
           </select>
           <label for="date_format">Date format</label>
         </div>
+
+        <div class="app-floating">
+          <select class="app-select" id="screen_rotation" name="screen_rotation">
+            <option value="0" {% if screen_rotation == 0 %}selected{% endif %}>Landscape (0°)</option>
+            <option value="90" {% if screen_rotation == 90 %}selected{% endif %}>Portrait (90°)</option>
+            <option value="180" {% if screen_rotation == 180 %}selected{% endif %}>Landscape, inverted (180°)</option>
+            <option value="270" {% if screen_rotation == 270 %}selected{% endif %}>Portrait, inverted (270°)</option>
+          </select>
+          <label for="screen_rotation">Screen rotation</label>
+        </div>
       </div>
 
       <div>

@@ -180,6 +180,7 @@ def test_page_context_device_settings_keys() -> None:
         'date_format',
         'auth_backend',
         'show_splash',
+        'screen_rotation',
         'date_format_options',
         'is_pi5',
     ):
@@ -417,6 +418,44 @@ def test_settings_save_round_trip(client: Client) -> None:
             },
         )
     assert response.status_code in (200, 302)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'posted, persisted',
+    [
+        ('90', 90),
+        ('270', 270),
+        # Non-cardinal / garbage angles clamp to 0 — defends the
+        # viewer's CLI argv against a hostile or buggy form.
+        ('45', 0),
+        ('definitely-not-a-number', 0),
+    ],
+)
+def test_settings_save_screen_rotation(
+    client: Client, posted: str, persisted: int
+) -> None:
+    """Issue #2856 — form path mirrors the v2 PATCH validation."""
+    from anthias_server.settings import settings
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test',
+                'default_duration': '10',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': '',
+                'screen_rotation': posted,
+            },
+        )
+    assert response.status_code in (200, 302)
+    assert settings['screen_rotation'] == persisted
 
 
 @pytest.mark.django_db

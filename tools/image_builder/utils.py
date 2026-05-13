@@ -274,6 +274,12 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
                     'cage',
                     'qt6-wayland',
                     'va-driver-all',
+                    # wlr-randr is how the viewer applies the Settings
+                    # page's "screen rotation" knob on x86 — Qt's
+                    # wayland QPA has no rotation= equivalent, so the
+                    # transform has to go through the compositor.
+                    # src/anthias_viewer/__init__.py drives this.
+                    'wlr-randr',
                 ]
             )
     else:

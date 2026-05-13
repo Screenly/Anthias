@@ -16,6 +16,7 @@ from django.template.defaultfilters import filesizeformat
 
 from anthias_common import device_helper
 from anthias_common.utils import (
+    clamp_screen_rotation,
     connect_to_redis,
     get_node_mac_address,
     is_balena_app,
@@ -218,6 +219,12 @@ def device_settings() -> dict[str, Any]:
         'shuffle_playlist': settings['shuffle_playlist'],
         'use_24_hour_clock': settings['use_24_hour_clock'],
         'debug_logging': settings['debug_logging'],
+        # Clamp on the read side so a stale conf value (e.g. an
+        # old 45 from a hand-edit) doesn't leave the dropdown with no
+        # ``selected`` option — the template's {% if screen_rotation
+        # == 0 %} ladder picks 0° in that case, matching the
+        # viewer's runtime clamp (Copilot review of #2882).
+        'screen_rotation': clamp_screen_rotation(settings['screen_rotation']),
         # Auth-form chrome
         'has_saved_basic_auth': has_persisted_operator
         or settings['auth_backend'] == 'auth_basic',
