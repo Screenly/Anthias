@@ -73,6 +73,7 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
             '--no-terminal',
             '--vo=drm',
             '--hwdec=auto-copy',
+            '--video-sync=display-resample',
             '--drm-mode=1920x1080@60',
             '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',

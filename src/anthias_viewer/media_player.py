@@ -399,12 +399,24 @@ class MPVMediaPlayer(MediaPlayer):
             popen_stdout = subprocess.DEVNULL
             popen_stderr = subprocess.DEVNULL
 
+        # ``--video-sync=display-resample`` overrides mpv 0.40's
+        # default (``audio``) which syncs video to the audio clock
+        # and drops VO frames when the two clocks drift. On every
+        # board we tested (Pi 4, Pi 5, x86) the audio-clock default
+        # produced 60–90% VO drops at 60 fps content even when the
+        # decoder was healthy (mpv reports drops at the VO, not the
+        # decoder). Digital signage cares about smooth video more
+        # than sub-frame A/V sync; display-resample syncs video to
+        # the display's refresh and resamples audio to match. Audio
+        # resampling is cheap (a 2-channel resample takes <1% CPU)
+        # and most signage clips have no audible content anyway.
         self.process = subprocess.Popen(
             [
                 'mpv',
                 *terminal_args,
                 *vo_args,
                 f'--hwdec={hwdec_value}',
+                '--video-sync=display-resample',
                 *extra_args,
                 *rotate_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',

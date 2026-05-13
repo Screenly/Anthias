@@ -16,7 +16,19 @@ dtparam=audio=on
 camera_auto_detect=1
 display_auto_detect=1
 auto_initramfs=1
+{# vc4-kms-v3d carries the CMA-size parameter on Pi 4/5; we override
+the default on Pi 5 to give Hantro G2 enough buffer pool headroom for
+4K HEVC dst frames. The standalone `dtoverlay=cma,cma-512` route
+silently no-ops on Pi 5 because vc4-kms-v3d initialises the CMA
+region first; reusing the v3d overlay's own cma-512 param is the
+documented merge. Pi 4 already gets 512 MB CMA by default so the
+override is a no-op there; the Pi 5 conditional below keeps the
+extra arg local to the board that strictly needs it. #}
+{% if device_type == 'pi5' -%}
+dtoverlay=vc4-kms-v3d,cma-512
+{%- else -%}
 dtoverlay=vc4-kms-v3d
+{%- endif %}
 max_framebuffers=2
 
 # Don't have the firmware add a video= line to cmdline.txt — let the
