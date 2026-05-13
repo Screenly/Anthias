@@ -8,7 +8,7 @@
 
     - question: What hardware do I need?
       answer: |
-        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5 and 64-bit x86 PCs (Intel NUC or similar). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
+        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5, 64-bit x86 PCs (Intel NUC or similar), and — on a best-effort basis — generic 64-bit ARM single-board computers via [Armbian](https://www.armbian.com/) (Rock Pi, Orange Pi, Banana Pi and similar boards). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
 
     - question: Does Anthias require an internet connection?
       answer: |
@@ -121,6 +121,21 @@
         Open the web dashboard, go to **Settings**, and pick **HDMI** or **3.5mm jack** under *Audio output*. The change applies to video assets immediately — no reboot required.
 
         Note: Raspberry Pi 5 only exposes the **HDMI** option in the dropdown — the 3.5mm jack was removed from the Pi 5 hardware, so the dashboard hides that choice on Pi 5 devices.
+
+    - question: Does Anthias work on Rock Pi, Orange Pi, Banana Pi, and other non-Pi single-board computers?
+      answer: |
+        Yes — on a best-effort basis. If you flash a **Debian-based [Armbian](https://www.armbian.com)** image (Bookworm / Trixie) onto a 64-bit ARM board (Rock Pi, Orange Pi, Banana Pi and similar), the Anthias installer recognises it and sets things up the same way it does on a Raspberry Pi. The dashboard, scheduling, and asset library all work exactly as you'd expect.
+
+        **Pick the Debian build of the Armbian image for your board.** The installer wires Docker's apt repository under the Debian namespace; Ubuntu-based Armbian downloads (Jammy / Noble) fail at the very first `apt update` because Docker doesn't publish those codenames there. Supporting Ubuntu-based Armbian is a follow-up.
+
+        A few things to know before you pick a board for a serious deployment:
+
+        * **Videos play, but the work is done in software.** Raspberry Pi and modern Intel PCs have a dedicated video chip that does the heavy lifting; on these other boards we haven't wired that up yet, so the main CPU is doing the decoding. In practice, anything up to a smooth 720p clip is fine. 1080p is usable on faster boards but can stutter on slower ones. 4K isn't a good fit. **If your content is mostly video, especially HD video walls, stick with a Raspberry Pi 4 / 5 or an x86 mini-PC.**
+        * **Images and web pages are no problem.** Slideshows, dashboards, menus, and most web content run beautifully across the whole range — the limitation above is specifically about video.
+        * **No Anthias boot splash.** Most non-Pi boards don't display our splash — you'll see the kernel boot log scroll on the screen until Anthias starts and shows your first asset (usually a minute or two from power-on). Everything works fine; startup just looks less polished than on a Raspberry Pi.
+        * **Tested boards.** Rock Pi 4, Rock 5, Orange Pi 5, and Banana Pi M5 are known to work well. Orange Pi Zero 3 (and other Allwinner H616 / H618 boards) currently have weaker mainline driver support and are best limited to images and web content.
+
+        See [issue #2849](https://github.com/Screenly/Anthias/issues/2849) for the roadmap on per-board hardware video acceleration.
 
     - question: Can I add transitions (fade / crossfade) between assets?
       answer: |

@@ -151,6 +151,39 @@ def test_play_uses_drm_gpu_context_on_pi4_64_and_pi5(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_wayland_vo_on_arm64(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    # arm64 runs under cage (same as x86), so mpv must go
+    # through --vo=gpu --gpu-context=wayland — cage holds DRM master
+    # and would deny --vo=drm.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--vo=gpu' in args[0]
+    assert '--gpu-context=wayland' in args[0]
+    assert '--vo=drm' not in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_default_alsa_device_on_arm64(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    # No portable per-SoC HDMI card name exists across Rockchip /
+    # Allwinner / Amlogic, so arm64 defers to ALSA's
+    # `default` device rather than the Pi-firmware vc4hdmi* / HID
+    # cards the regular dispatch would otherwise pick.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--audio-device=alsa/default' in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_uses_local_audio_device_when_configured(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
@@ -557,6 +590,26 @@ def test_get_instance_returns_mpv_for_pi5_and_x86(
     with patch(
         'anthias_viewer.media_player.get_device_type',
         return_value=device_type,
+    ):
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, MPVMediaPlayer)
+
+
+def test_get_instance_returns_mpv_for_arm64(
+    reset_media_proxy: None,
+) -> None:
+    # device_helper.get_device_type() falls back to 'pi1' on any
+    # aarch64 host whose /proc/device-tree/model isn't a Pi regex
+    # match — so the override must come from DEVICE_TYPE env, the
+    # only thing that distinguishes a Rock Pi / Orange Pi from a
+    # genuinely old Pi 1.
+    MediaPlayerProxy.INSTANCE = None
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi1',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}),
     ):
         instance = MediaPlayerProxy.get_instance()
     assert isinstance(instance, MPVMediaPlayer)

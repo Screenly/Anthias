@@ -34,6 +34,7 @@
       pi4-64: arm64
       pi3: armhf
       pi2: armhf
+      arm64: arm64
 
 - name: Add Docker repo
   # copy, not lineinfile, so a stale `[arch=...]` entry from an earlier
@@ -52,11 +53,25 @@
   # On hosts already running the wrong arch, apt swaps automatically:
   # docker-ce is Multi-Arch: foreign so requesting `:arm64` removes
   # the `:armhf` install (and pulls dependencies in the new arch).
+  #
+  # docker-buildx-plugin is a *Recommends* of docker-ce, and
+  # `install_recommends: false` above means we have to name it
+  # explicitly. Required for any `upgrade_containers.sh MODE=build`
+  # run — our Dockerfiles use `FROM --platform=$BUILDPLATFORM …`
+  # (see e.g. docker/Dockerfile.server.j2's bun-builder stage),
+  # which the legacy `docker build` builder can't parse and dies
+  # on at the very first FROM ("failed to parse platform"). The
+  # buildkit-backed plugin handles `$BUILDPLATFORM` correctly. Pull-
+  # mode boards don't need it for the steady-state path but the
+  # plugin is ~15 MB to download / ~67 MB extracted (numbers from
+  # the docker-buildx-plugin_0.33.0 deb on arm64), so installing
+  # unconditionally is cheaper than diverging the apt list per board.
   ansible.builtin.apt:
     name:
       - docker-ce:{{ system_architecture }}
       - docker-ce-cli:{{ system_architecture }}
       - docker-compose-plugin:{{ system_architecture }}
+      - docker-buildx-plugin:{{ system_architecture }}
     update_cache: true
     install_recommends: false
 
@@ -73,7 +88,7 @@
   vars:
     anthias_required_groups: >-
       {{ anthias_base_groups +
-         (anthias_pi_groups if is_raspberry_pi else []) }}
+         (anthias_pi_groups if device_is_pi else []) }}
     anthias_base_groups: &base_groups
       - docker
       - adm
@@ -86,16 +101,22 @@
       - dialout
     anthias_pi_groups: &pi_groups
       - gpio
-    is_raspberry_pi: &is_pi >-
-      {{ ansible_architecture in ['aarch64', 'armv7l', 'armv6l'] }}
+    # Derive Pi-ness from device_type, not CPU architecture. Both are
+    # available here, but architecture also matches `arm64`
+    # (and any other future non-Pi aarch64 host), which would silently
+    # apply Pi-specific group/user logic to it. device_type is the
+    # authoritative discriminator and is validated upstream in
+    # ansible/site.yml's pre_tasks.
+    device_is_pi: &is_pi >-
+      {{ device_type in ['pi2', 'pi3', 'pi4-64', 'pi5'] }}
 
 - name: Ensure Anthias user is in required groups
   ansible.builtin.user:
     name: "{{ anthias_user }}"
     group: "{{ anthias_user }}"
     append: true
-    groups: "{{ anthias_base_groups + (anthias_pi_groups if is_raspberry_pi else []) }}"
+    groups: "{{ anthias_base_groups + (anthias_pi_groups if device_is_pi else []) }}"
   vars:
     anthias_base_groups: *base_groups
     anthias_pi_groups: *pi_groups
-    is_raspberry_pi: *is_pi
+    device_is_pi: *is_pi
