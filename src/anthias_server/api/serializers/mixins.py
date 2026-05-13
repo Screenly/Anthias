@@ -233,4 +233,9 @@ class ShutdownViewSerializerMixin(Serializer[Any]):
 
 
 class DisplayPowerViewSerializerMixin(Serializer[Any]):
-    pass
+    # Read-only `message` so drf-spectacular generates an accurate
+    # schema for every status the endpoint returns (200/400/502/503).
+    # All four bodies share the same one-key shape; declaring it once
+    # keeps the OpenAPI document honest and clients can rely on the
+    # field being present regardless of outcome.
+    message = CharField(read_only=True)

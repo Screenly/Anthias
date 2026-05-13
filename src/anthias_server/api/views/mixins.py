@@ -197,6 +197,15 @@ class DisplayPowerViewMixin(APIView):
                 ),
             ),
         ],
+        # Every status returns the same `{message: ...}` shape. Mapping
+        # each code to the serializer keeps drf-spectacular's generated
+        # OpenAPI document accurate so clients know what to parse.
+        responses={
+            200: DisplayPowerViewSerializerMixin,
+            400: DisplayPowerViewSerializerMixin,
+            502: DisplayPowerViewSerializerMixin,
+            503: DisplayPowerViewSerializerMixin,
+        },
     )
     @authorized
     def post(self, request: Request, state: str) -> Response:
