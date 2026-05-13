@@ -73,7 +73,7 @@
   items:
     - question: How do I rotate the screen for portrait orientation?
       answer: |
-        Rotation happens at the kernel / firmware level. The Anthias viewer renders straight to the Linux framebuffer (Qt `linuxfb`) and to KMS (mpv `--vo=drm`) — there's no Wayland compositor in the stack — so the standard Raspberry Pi config knobs apply directly.
+        Use the Settings page in the Anthias dashboard ("Screen rotation"). On Pi 4 / Pi 5 / x86 / arm64 the viewer runs under the `cage` kiosk Wayland compositor and the rotation is applied via `wlr-randr`. On Pi 2 / Pi 3 the viewer still renders to the Linux framebuffer directly, so set the rotation via the kernel / firmware knobs instead.
 
         Edit `/boot/firmware/config.txt` and add one of:
 
@@ -87,9 +87,11 @@
 
     - question: How do I change the screen resolution? Does Anthias support 4K?
       answer: |
-        Anthias displays at whatever resolution the OS reports — there's no resolution setting in the dashboard. Set the output mode at the OS level: on Raspberry Pi OS, use `sudo raspi-config` → **Display Options** → **Resolution**, or set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt`.
+        Anthias displays at whatever resolution the OS reports — there's no resolution setting in the dashboard.
 
-        4K is supported on hardware that supports it natively: Pi 5 handles 4K@60Hz on either HDMI port; Pi 4 supports 4K@30Hz on `HDMI-0` (or 4K@60Hz with `hdmi_enable_4kp60=1` and adequate cooling).
+        - **Pi 4**: Ansible pins HDMI to 1920x1080@60 via `cmdline.txt` (`video=HDMI-A-1:1920x1080@60`). The V3D on the Pi 4 doesn't have the bandwidth to composite 4K under the `cage` compositor while also decoding video, so the pin keeps playback smooth. To override, edit the rendered `cmdline.txt` after install — but expect frame drops on demanding video at 4K.
+        - **Pi 5 / x86 / arm64**: no pin; uses the connector's preferred mode (4K on most modern TVs). Pi 5's V3D 7.1 has the bandwidth headroom Pi 4 lacks; x86 iGPUs handle it via VAAPI; arm64 SBC performance varies by SoC.
+        - **Pi 2 / Pi 3**: no pin (1080p is already at the limit of the older firmware); set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt` if you need to override.
 
     - question: My screen is black or stuck on "Manage the content" — what now?
       answer: |
@@ -98,7 +100,7 @@
         1. SSH in and run `docker compose ps` from `~/anthias/` — all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
         2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
         3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
-        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders to the framebuffer (Qt `linuxfb`) and uses no X server, so `xset` won't help.
+        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders directly to KMS (via `cage` on Pi 4 / Pi 5 / x86 / arm64, or Qt `linuxfb` on Pi 2 / Pi 3) and uses no X server, so `xset` won't help.
 
         If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
 

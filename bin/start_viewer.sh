@@ -116,25 +116,30 @@ fi
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
 #
-# x86 boards run under `cage`, a kiosk wlroots compositor, because
-# balenaOS x86 doesn't expose /dev/fb0 (Qt's linuxfb plugin has nothing
-# to draw to) and there's no host display server. cage acquires DRM
-# master as root, exports WAYLAND_DISPLAY for its child, and exits when
-# the child exits — so the existing kill -0 watchdog below still works.
-# The inner sudo drops back to the viewer user; WAYLAND_DISPLAY has to
-# be added to --preserve-env to survive sudo's env scrub.
-if [ "$DEVICE_TYPE" = "x86" ] || [ "$DEVICE_TYPE" = "arm64" ]; then
+# All Qt6 boards (pi4-64, pi5, x86, arm64) run under `cage`, a kiosk
+# wlroots compositor. cage acquires DRM master as root, exports
+# WAYLAND_DISPLAY for its child, and exits when the child exits — so
+# the existing kill -0 watchdog below still works. The inner sudo
+# drops back to the viewer user; WAYLAND_DISPLAY has to be added to
+# --preserve-env to survive sudo's env scrub. Qt5 boards (pi2/pi3)
+# fall through to the legacy direct-sudo path that runs under
+# QT_QPA_PLATFORM=linuxfb.
+case "$DEVICE_TYPE" in
+    x86|arm64|pi4-64|pi5)
     # /dev/dri/renderD128 carries the host's `render` group, whose
     # numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
-    # 109 elsewhere) and not present in the container's /etc/group.
-    # Without membership the `viewer` user can open card0 (group
-    # `video`, GID 44 — already a member) but not the render node, and
-    # VAAPI silently fails with "wayland: failed to open
-    # /dev/dri/renderD128". mpv then falls back to software decode and
-    # frames drop at 1080p on entry-level x86. Mirror the host GID
-    # into the container as a synthetic `host-render` group and add
-    # `viewer` to it, so the supplementary group list `sudo -u viewer`
-    # later resolves from /etc/group already includes render access.
+    # 109 elsewhere, 106 on Pi OS Bookworm) and not always present in
+    # the container's /etc/group. Without membership the `viewer`
+    # user can open card0 (group `video`, GID 44 — already a member)
+    # but not the render node. On x86 that means VAAPI silently
+    # fails with "wayland: failed to open /dev/dri/renderD128" and
+    # mpv falls back to software decode — frames drop at 1080p on
+    # entry-level x86. On Pi4-64 / Pi5 / arm64 the V3D / Mesa GL
+    # context needs the same access for --vo=gpu --gpu-context=wayland.
+    # Mirror the host GID into the container as a synthetic
+    # `host-render` group and add `viewer` to it, so the
+    # supplementary group list `sudo -u viewer` later resolves from
+    # /etc/group already includes render access.
     if [ -e /dev/dri/renderD128 ]; then
         render_gid=$(stat -c %g /dev/dri/renderD128)
         if [ "$render_gid" -ne 0 ]; then
@@ -168,10 +173,12 @@ if [ "$DEVICE_TYPE" = "x86" ] || [ "$DEVICE_TYPE" = "arm64" ]; then
             -E -u viewer \
             dbus-run-session /venv/bin/python -m anthias_viewer
     ' &
-else
+    ;;
+    *)
     sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,LANG,LANGUAGE,LC_ALL -E -u viewer \
         dbus-run-session /venv/bin/python -m anthias_viewer &
-fi
+    ;;
+esac
 
 # Wait for the viewer
 while true; do

@@ -231,56 +231,31 @@ class MPVMediaPlayer(MediaPlayer):
         if device_type in ('pi4-64', 'pi5'):
             extra_args = ['--vd-lavc-threads=4']
 
-        # Per-board VO selection:
-        #
-        # * x86 / arm64 run under `cage` (a wlroots kiosk compositor —
-        #   see bin/start_viewer.sh); cage holds DRM master, so
-        #   --vo=drm is denied. Route mpv through the GL VO over a
-        #   Wayland EGL context, the generic path mpv supports on
-        #   every x86 GPU with Mesa or vendor GL drivers and on
-        #   Mesa-driven arm64 SBCs. Paired with --hwdec=auto-safe,
-        #   VAAPI-capable iGPUs (Intel iHD/i965, AMD radeonsi, …)
-        #   decode in hardware on x86 and hand frames to the GL
-        #   context as DMA-BUFs via dmabuf-interop-gl; software
-        #   decode still works via the same VO for codecs without HW
-        #   support. --vo=dmabuf-wayland would skip the GL upload
-        #   entirely but segfaults under cage in the viewer's
-        #   background-spawn path (mpv 0.40.0 + wlroots-0.18 +
-        #   libplacebo dies between hwdec init and file open). On
-        #   arm64 (non-Pi ARM SBCs on Armbian) hwdec is best-effort
-        #   per SoC.
-        #
-        # * Pi4-64 / Pi5 own the framebuffer directly (no compositor)
-        #   and go through the same GL VO with --gpu-context=drm.
-        #   mpv talks to KMS via libgbm and runs scaling on the V3D
-        #   at the connector's preferred mode (typically 4K on a
-        #   modern TV). The previous --vo=drm path ran the same scale
-        #   on CPU zimg and ran out of headroom on the A72; the
-        #   previous --drm-mode=1920x1080@60 pin sidestepped that by
-        #   forcing the output to 1080p. Under --gpu-context=drm
-        #   neither workaround is needed — the V3D upscales for free
-        #   and the --drm-mode flag actively *hurts* throughput here
-        #   (verified on Pi4-64: 294 drops/30s with the pin vs 3-6
-        #   without, on the same clip). So no pin, no extra mpv VO
-        #   args beyond --vd-lavc-threads above.
-        if device_type in ('x86', 'arm64'):
-            vo_args = ['--vo=gpu', '--gpu-context=wayland']
-        elif device_type in ('pi4-64', 'pi5'):
-            vo_args = ['--vo=gpu', '--gpu-context=drm']
-        else:
-            vo_args = ['--vo=drm']
+        # All Qt6 boards (pi4-64, pi5, x86, arm64) run under `cage`,
+        # a wlroots kiosk compositor — see bin/start_viewer.sh. cage
+        # holds DRM master, so --vo=drm is denied. Route mpv through
+        # the GL VO over a Wayland EGL context, the generic path mpv
+        # supports on every Mesa-driven GPU (Pi V3D, Intel/AMD iGPU,
+        # Rockchip/Allwinner/Amlogic). Paired with --hwdec=auto-safe,
+        # VAAPI-capable iGPUs on x86 (Intel iHD/i965, AMD radeonsi,
+        # …) decode in hardware and hand frames to the GL context as
+        # DMA-BUFs via dmabuf-interop-gl; software decode still works
+        # via the same VO for codecs without HW support, and that's
+        # what we get on Pi (mpv 0.40 in Trixie has v4l2m2m-copy but
+        # not v4l2request hwdec) and on arm64 (per-SoC, best-effort).
+        # --vo=dmabuf-wayland would skip the GL upload entirely but
+        # segfaults under cage in the viewer's background-spawn path
+        # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
+        # init and file open). Qt5 boards (pi2/pi3) go through
+        # VLCMediaPlayer below and never reach this code path.
+        vo_args = ['--vo=gpu', '--gpu-context=wayland']
 
-        # Issue #2856. On x86, cage/wlroots is rotated via wlr-randr and
-        # mpv's wayland VO inherits the compositor transform — passing
-        # --video-rotate here too would double-rotate. On Pi mpv talks
-        # to KMS directly (no compositor in the path, whether via the
-        # legacy --vo=drm or today's --vo=gpu --gpu-context=drm), so
-        # the rotation has to happen inside mpv. Skip the arg at 0° so
-        # unrotated displays stay on the existing CLI.
-        rotation = _screen_rotation()
-        rotate_args: list[str] = []
-        if rotation and device_type != 'x86':
-            rotate_args = [f'--video-rotate={rotation}']
+        # Rotation: cage/wlroots is rotated via wlr-randr (issue #2856,
+        # the wiring lives in src/anthias_viewer/__init__.py) and
+        # mpv's wayland VO inherits the compositor transform
+        # automatically. Passing --video-rotate would double-rotate;
+        # no per-board branch needed because every device type that
+        # reaches MPVMediaPlayer runs under cage.
 
         self.process = subprocess.Popen(
             [
@@ -289,7 +264,6 @@ class MPVMediaPlayer(MediaPlayer):
                 *vo_args,
                 '--hwdec=auto-safe',
                 *extra_args,
-                *rotate_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,

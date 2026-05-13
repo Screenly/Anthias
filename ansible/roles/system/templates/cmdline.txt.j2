@@ -21,5 +21,25 @@
   'cgroup_memory=1',
   'loglevel=0',
   'logo.nologo',
-] + system_cmdline_preserved_args -%}
+] -%}
+{#-
+  Pi 4 HDMI mode pin. The viewer runs under `cage` (a kiosk wlroots
+  compositor) on every Qt6 board, and cage composites at the
+  connector's KMS mode — typically 4K on a modern TV. On Pi 4 the
+  V3D doesn't have the bandwidth to composite 4K alongside video
+  playback (738 vo drops per 30 s of 1080p H.264 measured on a
+  Pi 4 Model B Rev 1.5 at native 4K under cage). Forcing both HDMI
+  connectors to 1920x1080@60 keeps cage's scanout matched to source
+  size so there's no upscale anywhere in the pipeline. Pi 5 has
+  roughly twice the V3D throughput and does not need this pin; x86
+  and arm64 don't read this template at all (GRUB / Armbian boot
+  loaders).
+-#}
+{%- if device_type == 'pi4-64' -%}
+  {%- set tokens = tokens + [
+    'video=HDMI-A-1:1920x1080@60',
+    'video=HDMI-A-2:1920x1080@60',
+  ] -%}
+{%- endif -%}
+{%- set tokens = tokens + system_cmdline_preserved_args -%}
 {{ tokens | join(' ') }}
