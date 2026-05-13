@@ -23,6 +23,30 @@ except IOError:
     sys.stdout.write('Unknown')
 """
 
+# Issued from the settings page / REST endpoint, *not* from a celery
+# worker, so a hung libcec call would block the request thread until
+# the subprocess timeout fires. Same subprocess+timeout shape as
+# `_CEC_QUERY_SCRIPT` for the same reason: libcec C calls don't
+# honour Python signals.
+_CEC_SET_SCRIPT = """
+import sys
+try:
+    import cec
+    cec.init()
+    tv = cec.Device(cec.CECDEVICE_TV)
+except Exception as exc:
+    sys.stdout.write('ERROR: ' + (str(exc) or 'CEC stack unavailable'))
+    sys.exit(0)
+try:
+    if {on}:
+        tv.power_on()
+    else:
+        tv.standby()
+    sys.stdout.write('OK')
+except Exception as exc:
+    sys.stdout.write('ERROR: ' + (str(exc) or 'CEC command failed'))
+"""
+
 
 def get_display_power() -> str | bool:
     """
@@ -49,6 +73,48 @@ def get_display_power() -> str | bool:
     if output == 'False':
         return False
     return output or 'CEC error'
+
+
+def set_display_power(on: bool) -> tuple[bool, str]:
+    """Send a CEC power_on / standby to the connected TV.
+
+    Returns ``(ok, message)`` for direct surfacing to the operator as
+    a toast. Stays synchronous on purpose — the issue brief asks for
+    an immediate feedback loop so failed CEC commands aren't silent.
+    """
+    script = _CEC_SET_SCRIPT.format(on='True' if on else 'False')
+    verb = 'on' if on else 'off'
+    try:
+        result = subprocess.run(
+            [sys.executable, '-c', script],
+            capture_output=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            False,
+            f'Display turn-{verb} timed out — CEC adapter unresponsive.',
+        )
+
+    output = result.stdout.decode('utf-8', errors='replace').strip()
+    if output == 'OK':
+        return True, f'Display turn-{verb} command sent.'
+    if output.startswith('ERROR: '):
+        return False, f'Display turn-{verb} failed: {output[len("ERROR: "):]}'
+    return False, f'Display turn-{verb} failed: unexpected CEC response.'
+
+
+def cec_available() -> bool:
+    """Cheap render-time gate for whether to show CEC controls.
+
+    Probes only for the device nodes libcec consumes — `/dev/cec0`
+    on mainline kernels (Pi 5, x86 USB adapters when exposed) and
+    `/dev/vchiq` on Pi 1-4 (currently the only one passed into the
+    server container by `docker-compose.yml.tmpl`). A positive result
+    means the adapter *could* work, not that it will: the actual
+    success/failure is surfaced by ``set_display_power``'s toast.
+    """
+    return os.path.exists('/dev/cec0') or os.path.exists('/dev/vchiq')
 
 
 def get_uptime() -> float:

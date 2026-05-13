@@ -508,3 +508,64 @@ def test_integrations_non_balena_environment(
         'balena_host_os_version': None,
         'balena_device_name_at_init': None,
     }
+
+
+# --- Display power (experimental, HDMI-CEC) -------------------------
+
+
+@pytest.mark.django_db
+@mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.set_display_power',
+    return_value=(True, 'Display turn-on command sent.'),
+)
+def test_display_power_on_success(
+    set_display_power_mock: Any, api_client: APIClient
+) -> None:
+    response = api_client.post(
+        reverse('api:display_power_v2', kwargs={'state': 'on'})
+    )
+    assert response.status_code == status.HTTP_200_OK
+    set_display_power_mock.assert_called_once_with(on=True)
+    assert 'sent' in response.data['message']
+
+
+@pytest.mark.django_db
+@mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.set_display_power',
+    return_value=(True, 'Display turn-off command sent.'),
+)
+def test_display_power_off_success(
+    set_display_power_mock: Any, api_client: APIClient
+) -> None:
+    response = api_client.post(
+        reverse('api:display_power_v2', kwargs={'state': 'off'})
+    )
+    assert response.status_code == status.HTTP_200_OK
+    set_display_power_mock.assert_called_once_with(on=False)
+
+
+@pytest.mark.django_db
+@mock.patch(
+    'anthias_server.api.views.mixins.diagnostics.set_display_power',
+    return_value=(False, 'Display turn-on failed: no adapter'),
+)
+def test_display_power_failure_returns_502(
+    set_display_power_mock: Any, api_client: APIClient
+) -> None:
+    response = api_client.post(
+        reverse('api:display_power_v2', kwargs={'state': 'on'})
+    )
+    assert response.status_code == status.HTTP_502_BAD_GATEWAY
+    assert 'no adapter' in response.data['message']
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.mixins.diagnostics.set_display_power')
+def test_display_power_invalid_state_returns_400(
+    set_display_power_mock: Any, api_client: APIClient
+) -> None:
+    response = api_client.post(
+        reverse('api:display_power_v2', kwargs={'state': 'foo'})
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    set_display_power_mock.assert_not_called()

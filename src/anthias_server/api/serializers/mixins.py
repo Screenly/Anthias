@@ -230,3 +230,7 @@ class RebootViewSerializerMixin(Serializer[Any]):
 
 class ShutdownViewSerializerMixin(Serializer[Any]):
     pass
+
+
+class DisplayPowerViewSerializerMixin(Serializer[Any]):
+    pass

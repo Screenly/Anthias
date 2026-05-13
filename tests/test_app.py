@@ -873,3 +873,168 @@ def test_skip_buttons_publish_correct_command(
             sub.close()
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# 8. Display power (experimental, HDMI-CEC) — issue #2575
+# ---------------------------------------------------------------------------
+#
+# The section is gated on cec_available(), which stats /dev/cec0 and
+# /dev/vchiq. Neither exists in the test container by default, so the
+# section is hidden on every other settings test. To exercise the
+# visible state we stub /dev/vchiq with a plain file before navigating
+# and remove it on teardown.
+
+_SCREENSHOT_DIR = '/usr/src/app/test-artifacts/cec'
+
+
+def _ensure_screenshot_dir() -> str:
+    os.makedirs(_SCREENSHOT_DIR, exist_ok=True)
+    return _SCREENSHOT_DIR
+
+
+@pytest.fixture
+def cec_stub_device() -> Any:
+    """Create a stub `/dev/vchiq` so `diagnostics.cec_available()`
+    returns True. /dev is tmpfs+writable in the test container; we
+    create a plain file (not a real device node) — the gate only
+    `os.path.exists`s the path.
+    """
+    path = '/dev/vchiq'
+    created = False
+    if not os.path.exists(path):
+        try:
+            open(path, 'w').close()
+            created = True
+        except OSError:
+            pytest.skip('cannot stub /dev/vchiq in this environment')
+    try:
+        yield path
+    finally:
+        if created:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_section_hidden_without_cec_adapter(
+    reset_assets: None, page: Page
+) -> None:
+    """No /dev/cec0 or /dev/vchiq in the container by default — the
+    experimental section must NOT render. Guards against accidentally
+    surfacing CEC controls on x86 / non-CEC hardware."""
+    if os.path.exists('/dev/vchiq') or os.path.exists('/dev/cec0'):
+        pytest.skip('CEC device present; cannot test the hidden case')
+    page.goto(SETTINGS_URL)
+    expect(
+        page.get_by_role('heading', name='Settings', exact=True)
+    ).to_be_visible()
+    expect(
+        page.get_by_role('heading', name='Display power')
+    ).to_have_count(0)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_section_visible_with_cec_adapter(
+    reset_assets: None, page: Page, cec_stub_device: str
+) -> None:
+    """With a CEC device node present, both buttons render under an
+    Experimental badge inside the System controls neighbourhood."""
+    page.goto(SETTINGS_URL)
+    expect(
+        page.get_by_role('heading', name='Display power')
+    ).to_be_visible()
+    expect(page.get_by_role('button', name='Turn display on')).to_be_visible()
+    expect(page.get_by_role('button', name='Turn display off')).to_be_visible()
+    # Experimental badge sits next to the heading.
+    expect(page.locator('.settings-section__badge')).to_have_text(
+        'Experimental'
+    )
+
+    # Screenshot 1: full settings page with the new section
+    _ensure_screenshot_dir()
+    page.screenshot(
+        path=f'{_SCREENSHOT_DIR}/01-settings-page-with-cec.png',
+        full_page=True,
+    )
+
+    # Screenshot 2: just the Display power card (tight crop)
+    section = page.locator('section', has_text='Display power').last
+    section.scroll_into_view_if_needed()
+    box = section.bounding_box()
+    assert box, 'display-power section has no bounding box'
+    page.screenshot(
+        path=f'{_SCREENSHOT_DIR}/02-display-power-card.png',
+        clip={
+            'x': max(box['x'] - 8, 0),
+            'y': max(box['y'] - 8, 0),
+            'width': box['width'] + 16,
+            'height': box['height'] + 16,
+        },
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_button_click_surfaces_error_toast(
+    reset_assets: None, page: Page, cec_stub_device: str
+) -> None:
+    """Issue #2575's feedback-loop requirement: a failing CEC command
+    must surface to the operator as a visible toast, not silently
+    succeed or no-op. The container has no real CEC adapter, so the
+    inner subprocess fails — exactly the path we want to exercise."""
+    page.goto(SETTINGS_URL)
+    expect(
+        page.get_by_role('heading', name='Display power')
+    ).to_be_visible()
+
+    page.get_by_role('button', name='Turn display on').click()
+
+    # After the form post + redirect, the toast pipeline reads
+    # django-messages and pushes an app-toast--error item. Match by
+    # the CSS class the toast template sets per-kind.
+    error_toast = page.locator('.app-toast--error').first
+    expect(error_toast).to_be_visible()
+    # The message should namespace the failure as a display action.
+    expect(error_toast).to_contain_text('Display turn-on')
+
+    # Screenshot 3: error toast in context
+    _ensure_screenshot_dir()
+    page.screenshot(
+        path=f'{_SCREENSHOT_DIR}/03-error-toast.png',
+        full_page=False,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_success_toast_appearance(
+    reset_assets: None, page: Page, cec_stub_device: str
+) -> None:
+    """Real success path requires a working HDMI-CEC TV, which the
+    test container cannot supply. To exercise the *visual* success
+    treatment (green check, dismissible) we drive Alpine's toast store
+    directly — same call path the server-rendered django-messages
+    drain uses (vendor.ts:50). This isn't asserting on the redirect
+    flow; it's a UX-coverage screenshot for the success kind."""
+    page.goto(SETTINGS_URL)
+    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
+
+    page.evaluate(
+        """() => window.Alpine.store('toasts').push(
+            'success', 'Display turn-on command sent.', 60000
+        )"""
+    )
+    success_toast = page.locator('.app-toast--success').first
+    expect(success_toast).to_be_visible()
+    expect(success_toast).to_contain_text('Display turn-on command sent.')
+
+    _ensure_screenshot_dir()
+    page.screenshot(
+        path=f'{_SCREENSHOT_DIR}/04-success-toast.png',
+        full_page=False,
+    )

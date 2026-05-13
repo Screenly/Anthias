@@ -148,6 +148,72 @@ def test_get_display_power_empty_output_returns_cec_error() -> None:
         assert diagnostics.get_display_power() == 'CEC error'
 
 
+def test_set_display_power_on_success() -> None:
+    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
+    completed.stdout = b'OK'
+    with mock.patch.object(subprocess, 'run', return_value=completed):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is True
+    assert 'on' in msg
+
+
+def test_set_display_power_off_success() -> None:
+    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
+    completed.stdout = b'OK'
+    with mock.patch.object(subprocess, 'run', return_value=completed):
+        ok, msg = diagnostics.set_display_power(on=False)
+    assert ok is True
+    assert 'off' in msg
+
+
+def test_set_display_power_cec_error_passes_through_reason() -> None:
+    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
+    completed.stdout = b'ERROR: no adapter'
+    with mock.patch.object(subprocess, 'run', return_value=completed):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'no adapter' in msg
+
+
+def test_set_display_power_timeout_returns_failure_message() -> None:
+    with mock.patch.object(
+        subprocess,
+        'run',
+        side_effect=subprocess.TimeoutExpired(cmd='python', timeout=10),
+    ):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'timed out' in msg.lower()
+
+
+def test_set_display_power_unexpected_output_returns_failure() -> None:
+    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
+    completed.stdout = b'something weird'
+    with mock.patch.object(subprocess, 'run', return_value=completed):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'unexpected' in msg.lower()
+
+
+def test_cec_available_true_when_cec0_present() -> None:
+    with mock.patch.object(
+        os.path, 'exists', side_effect=lambda p: p == '/dev/cec0'
+    ):
+        assert diagnostics.cec_available() is True
+
+
+def test_cec_available_true_when_vchiq_present() -> None:
+    with mock.patch.object(
+        os.path, 'exists', side_effect=lambda p: p == '/dev/vchiq'
+    ):
+        assert diagnostics.cec_available() is True
+
+
+def test_cec_available_false_when_neither_present() -> None:
+    with mock.patch.object(os.path, 'exists', return_value=False):
+        assert diagnostics.cec_available() is False
+
+
 def test_get_display_power_subprocess_timeout() -> None:
     with mock.patch.object(
         subprocess,

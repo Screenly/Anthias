@@ -8,6 +8,7 @@ from anthias_server.api.views.v2 import (
     AssetViewV2,
     BackupViewV2,
     DeviceSettingsViewV2,
+    DisplayPowerViewV2,
     FileAssetViewV2,
     InfoViewV2,
     IntegrationsViewV2,
@@ -43,6 +44,11 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
         path('v2/recover', RecoverViewV2.as_view(), name='recover_v2'),
         path('v2/reboot', RebootViewV2.as_view(), name='reboot_v2'),
         path('v2/shutdown', ShutdownViewV2.as_view(), name='shutdown_v2'),
+        path(
+            'v2/display/<str:state>',
+            DisplayPowerViewV2.as_view(),
+            name='display_power_v2',
+        ),
         path('v2/file_asset', FileAssetViewV2.as_view(), name='file_asset_v2'),
         path(
             'v2/assets/<str:asset_id>/content',

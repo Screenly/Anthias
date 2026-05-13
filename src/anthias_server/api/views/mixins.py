@@ -21,6 +21,7 @@ from anthias_server.app.models import Asset
 from anthias_server.api.helpers import save_active_assets_ordering
 from anthias_server.api.serializers.mixins import (
     BackupViewSerializerMixin,
+    DisplayPowerViewSerializerMixin,
     PlaylistOrderSerializerMixin,
     RebootViewSerializerMixin,
     ShutdownViewSerializerMixin,
@@ -177,6 +178,40 @@ class ShutdownViewMixin(APIView):
     def post(self, request: Request) -> Response:
         shutdown_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
+
+
+class DisplayPowerViewMixin(APIView):
+    serializer_class = DisplayPowerViewSerializerMixin
+
+    @extend_schema(
+        summary='Set display power state (experimental, HDMI-CEC)',
+        parameters=[
+            OpenApiParameter(
+                name='state',
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                enum=['on', 'off'],
+                description=(
+                    'Desired display power state. Only valid on '
+                    'CEC-capable hardware.'
+                ),
+            ),
+        ],
+    )
+    @authorized
+    def post(self, request: Request, state: str) -> Response:
+        if state not in ('on', 'off'):
+            return Response(
+                {'message': 'Invalid display state.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ok, msg = diagnostics.set_display_power(on=(state == 'on'))
+        if ok:
+            return Response({'message': msg}, status=status.HTTP_200_OK)
+        # 502: upstream CEC adapter / TV refused or didn't respond.
+        return Response(
+            {'message': msg}, status=status.HTTP_502_BAD_GATEWAY
+        )
 
 
 class FileAssetViewMixin(APIView):
