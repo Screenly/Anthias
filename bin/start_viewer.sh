@@ -123,7 +123,7 @@ fi
 # the child exits — so the existing kill -0 watchdog below still works.
 # The inner sudo drops back to the viewer user; WAYLAND_DISPLAY has to
 # be added to --preserve-env to survive sudo's env scrub.
-if [ "$DEVICE_TYPE" = "x86" ]; then
+if [ "$DEVICE_TYPE" = "x86" ] || [ "$DEVICE_TYPE" = "arm64" ]; then
     # /dev/dri/renderD128 carries the host's `render` group, whose
     # numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
     # 109 elsewhere) and not present in the container's /etc/group.

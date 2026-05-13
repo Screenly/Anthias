@@ -125,7 +125,56 @@ def _detect_hdmi_audio_device() -> str:
     return device
 
 
+# Once-per-process flag for _log_arm64_alsa_default_once() — we don't
+# want every play() call repeating the same INFO line.
+_arm64_alsa_logged = False
+
+
+def _log_arm64_alsa_default_once() -> None:
+    """Log the kernel's ALSA card listing so silent-HDMI reports are
+    debuggable from journalctl alone. Reads /proc/asound/cards (always
+    present when sound is registered) rather than shelling to
+    `aplay -l` — the viewer image deliberately doesn't ship
+    alsa-utils, so the subprocess form would always fall through to
+    a "not found" error and surface no useful info.
+    """
+    global _arm64_alsa_logged
+    if _arm64_alsa_logged:
+        return
+    _arm64_alsa_logged = True
+    try:
+        with open('/proc/asound/cards') as f:
+            listing = f.read().strip() or '<no cards registered>'
+    except OSError as exc:
+        listing = f'<could not read /proc/asound/cards: {exc}>'
+    logging.info(
+        'arm64: using ALSA "default" device for HDMI audio. '
+        'If audio is silent, override via ~/.asoundrc (bind-mounted '
+        'into the viewer container — see docker-compose.yml.tmpl). '
+        'Registered ALSA cards:\n%s',
+        listing,
+    )
+
+
 def get_alsa_audio_device() -> str:
+    # device_helper.get_device_type() reads /proc/device-tree/model and
+    # falls back to 'pi1' for any aarch64 host whose model line isn't a
+    # Pi regex match (Rock Pi, Orange Pi, Banana Pi, …). The Pi-firmware
+    # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
+    # those boards, so route via DEVICE_TYPE env first and only fall
+    # through to the Pi-name dispatch when we're actually on a Pi.
+    if os.environ.get('DEVICE_TYPE') == 'arm64':
+        # No portable per-SoC HDMI card name across Rockchip /
+        # Allwinner / Amlogic, so defer to ALSA's `default` device.
+        # Operators with a non-standard HDMI sink can override via
+        # ~/.asoundrc (already bind-mounted into the viewer container
+        # — see docker-compose.yml.tmpl). Log the chosen ALSA card
+        # at INFO once per process so a silent-HDMI report carries
+        # enough breadcrumbs to debug from journalctl alone (the
+        # `aplay -l` enumeration also lands in the same log).
+        _log_arm64_alsa_default_once()
+        return 'default'
+
     device_type = get_device_type()
     if settings['audio_output'] == 'local':
         if device_type == 'pi5':
@@ -198,7 +247,10 @@ class MPVMediaPlayer(MediaPlayer):
         # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
         # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
         # they own the framebuffer directly with no compositor.
-        if device_type == 'x86':
+        # arm64 (non-Pi ARM SBCs on Armbian) goes the same
+        # route as x86 because the viewer container is wrapped in
+        # cage there too; hwdec is best-effort per SoC.
+        if device_type in ('x86', 'arm64'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         else:
             vo_args = ['--vo=drm']
@@ -307,13 +359,24 @@ class MediaPlayerProxy:
     @classmethod
     def get_instance(cls) -> MediaPlayer:
         if cls.INSTANCE is None:
-            # pi4-64 runs Qt6 + linuxfb like pi5/x86, so VLC's GL/GLES2/XCB
-            # outputs have no parent window to draw into. Route it to mpv,
-            # which renders straight to KMS via --vo=drm.
-            is_pi4_64 = os.environ.get('DEVICE_TYPE') == 'pi4-64'
+            # Force MPV (over VLC) on two device_types that otherwise
+            # match the Pi-name dispatch below:
+            #
+            #   * pi4-64 — Qt6 + linuxfb like pi5/x86, so VLC's
+            #     GL/GLES2/XCB outputs have no parent window to draw
+            #     into. MPV renders straight to KMS via --vo=drm.
+            #   * arm64 — device_helper.get_device_type() falls back
+            #     to 'pi1' on any aarch64 host whose
+            #     /proc/device-tree/model isn't a Pi regex match
+            #     (Rock Pi, Orange Pi, Banana Pi, …); without this
+            #     override they'd silently route to VLC, which has
+            #     no working backend on those boards (no vc4 KMS,
+            #     no XCB under cage).
+            device_env = os.environ.get('DEVICE_TYPE')
+            force_mpv = device_env in ('pi4-64', 'arm64')
             if (
                 get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
-                and not is_pi4_64
+                and not force_mpv
             ):
                 cls.INSTANCE = VLCMediaPlayer()
             else:
