@@ -885,10 +885,13 @@ def test_skip_buttons_publish_correct_command(
 # visible state we stub /dev/vchiq with a plain file before navigating
 # and remove it on teardown.
 
-# Relative to wherever pytest is invoked. Matches the `--output
-# test-artifacts` convention pytest-playwright already uses in
-# pyproject.toml's addopts, so CI's upload-artifact step picks up
-# these PNGs alongside any failure traces.
+# Relative to wherever pytest is invoked. Mirrors the `--output
+# test-artifacts` path pytest-playwright already uses (see pyproject
+# .toml addopts) so the PNGs land in the same directory as any
+# failure traces / screenshots the framework drops. Local-run only:
+# the `Upload integration test artifacts` step in
+# .github/workflows/test-runner.yml is gated on `if: failure()`,
+# so these always-on captures are NOT exposed on green CI runs.
 _SCREENSHOT_DIR = 'test-artifacts/cec'
 
 
