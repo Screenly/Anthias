@@ -168,22 +168,37 @@ class MPVMediaPlayer(MediaPlayer):
                 '--vd-lavc-threads=4',
             ]
 
-        # x86 runs under `cage` (a wlroots kiosk compositor — see
-        # bin/start_viewer.sh); cage holds DRM master, so --vo=drm is
-        # denied. Route mpv through the GL VO over a Wayland EGL
-        # context, which is the generic path mpv supports on every x86
-        # GPU with Mesa or vendor GL drivers. Paired with
-        # --hwdec=auto-safe, VAAPI-capable iGPUs (Intel iHD/i965, AMD
-        # radeonsi, …) decode in hardware and hand frames to the GL
-        # context as DMA-BUFs via dmabuf-interop-gl; software decode
-        # still works via the same VO for codecs without HW support.
-        # --vo=dmabuf-wayland would skip the GL upload entirely but
-        # segfaults under cage in the viewer's background-spawn path
-        # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
-        # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
-        # they own the framebuffer directly with no compositor.
+        # Per-board VO selection:
+        #
+        # * x86 runs under `cage` (a wlroots kiosk compositor — see
+        #   bin/start_viewer.sh); cage holds DRM master, so --vo=drm
+        #   is denied. Route mpv through the GL VO over a Wayland EGL
+        #   context, the generic path mpv supports on every x86 GPU
+        #   with Mesa or vendor GL drivers. Paired with
+        #   --hwdec=auto-safe, VAAPI-capable iGPUs (Intel iHD/i965,
+        #   AMD radeonsi, …) decode in hardware and hand frames to
+        #   the GL context as DMA-BUFs via dmabuf-interop-gl; software
+        #   decode still works via the same VO. --vo=dmabuf-wayland
+        #   would skip the GL upload entirely but segfaults under
+        #   cage in the viewer's background-spawn path (mpv 0.40.0 +
+        #   wlroots-0.18 + libplacebo dies between hwdec init and
+        #   file open).
+        #
+        # * Pi4-64 / Pi5 own the framebuffer directly (no compositor)
+        #   but go through the same GL VO with --gpu-context=drm
+        #   instead of wayland. mpv talks to KMS via libgbm and runs
+        #   scaling on the V3D, which avoids the A72/A76 CPU zimg
+        #   upscale path that --vo=drm took. Measured on a 4K-
+        #   connected Pi4-64: 1080p H.264 playback drops 59–75
+        #   frames/30s under --vo=drm but only 3–6 frames/30s under
+        #   --vo=gpu --gpu-context=drm — same hwdec (software fallback
+        #   under mpv 0.40 since v4l2request hwdec isn't compiled in),
+        #   same --drm-mode pin, same --vd-lavc-threads. The savings
+        #   come entirely from offloading the upscale to the V3D.
         if device_type == 'x86':
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
+        elif device_type in ('pi4-64', 'pi5'):
+            vo_args = ['--vo=gpu', '--gpu-context=drm']
         else:
             vo_args = ['--vo=drm']
 

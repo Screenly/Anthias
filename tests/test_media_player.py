@@ -47,19 +47,22 @@ def mpv() -> Iterator[_MPVFixtures]:
     return_value='sysdefault:CARD=vc4hdmi0',
 )
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_invokes_popen_with_expected_args(
+def test_play_invokes_popen_with_expected_args_on_pi4_64(
     mock_popen: Any, _mock_detect: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4'}):
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
     mock_popen.assert_called_once_with(
         [
             'mpv',
             '--no-terminal',
-            '--vo=drm',
+            '--vo=gpu',
+            '--gpu-context=drm',
             '--hwdec=auto-safe',
+            '--drm-mode=1920x1080@60',
+            '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
             '--',
             'file:///test/video.mp4',
@@ -122,6 +125,26 @@ def test_play_uses_wayland_vo_on_x86(
     assert '--vo=gpu' in args[0]
     assert '--gpu-context=wayland' in args[0]
     assert '--vo=drm' not in args[0]
+
+
+@pytest.mark.parametrize('device_type', ['pi4-64', 'pi5'])
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_drm_gpu_context_on_pi4_64_and_pi5(
+    mock_popen: Any, mpv: _MPVFixtures, device_type: str
+) -> None:
+    # Pi4-64 and Pi5 own the framebuffer directly (no compositor)
+    # and use mpv's GL VO with --gpu-context=drm. This offloads the
+    # 1080p->4K upscale to the V3D instead of the A72/A76 CPU zimg
+    # path that --vo=drm took.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--vo=gpu' in args[0]
+    assert '--gpu-context=drm' in args[0]
+    assert '--vo=drm' not in args[0]
+    assert '--gpu-context=wayland' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
