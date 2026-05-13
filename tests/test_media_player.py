@@ -58,9 +58,9 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
         [
             'mpv',
             '--no-terminal',
-            '--vo=gpu',
-            '--gpu-context=drm',
+            '--vo=drm',
             '--hwdec=auto-safe',
+            '--drm-mode=1920x1080@60',
             '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
             '--',
@@ -72,28 +72,31 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_tunes_decoder_threads_on_pi4_64(
+def test_play_pins_1080p_mode_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
+    # Pi 4 stays on --vo=drm (Qt linuxfb + mpv DRM master juggling)
+    # so the --drm-mode pin is still meaningful — it sidesteps the
+    # CPU zimg upscale to 4K that the A72 can't keep up with.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
+    assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
     assert '--hwdec=auto-safe' in args[0]
     assert '--hwdec=v4l2m2m-copy' not in args[0]
-    # --drm-mode pinning was used on the legacy --vo=drm path; it has
-    # no effect under cage (which holds DRM master) and the 1080p
-    # output mode is now pinned at the kernel cmdline level on Pi 4
-    # (ansible/.../cmdline.txt.j2).
-    assert '--drm-mode=1920x1080@60' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_tunes_decoder_threads_on_pi5(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
+    # Pi 5 keeps software-decode threading. mpv ignores --drm-mode
+    # under cage (no DRM master), and the connector's native mode is
+    # what cage runs at — V3D 7.1 has enough bandwidth headroom for
+    # the 4K composite + scale.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
         mpv.player.play()
@@ -136,20 +139,20 @@ def test_play_uses_wayland_vo_under_cage(
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_drm_gpu_context_on_pi4_64(
+def test_play_uses_drm_vo_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
-    # Pi 4 stays on Qt linuxfb (no cage); mpv writes straight to KMS
-    # via libgbm. --gpu-context=drm because there's no Wayland socket.
+    # Pi 4 stays on Qt linuxfb (no cage); mpv uses --vo=drm because
+    # --vo=gpu --gpu-context=drm needs Mesa GBM to hold DRM master
+    # persistently, which contends with Qt linuxfb's framebuffer use
+    # ("Failed to acquire DRM master: Permission denied").
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--vo=gpu' in args[0]
-    assert '--gpu-context=drm' in args[0]
-    assert '--vo=drm' not in args[0]
-    assert '--gpu-context=wayland' not in args[0]
+    assert '--vo=drm' in args[0]
+    assert '--vo=gpu' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')

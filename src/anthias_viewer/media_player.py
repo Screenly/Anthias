@@ -221,14 +221,21 @@ class MPVMediaPlayer(MediaPlayer):
         # effect without a viewer restart, matching VLCMediaPlayer.
         settings.load()
 
-        # Software-decode tuning for Pi4-64 (A72) / Pi5 (A76). mpv 0.40
-        # in Debian Trixie has v4l2m2m-copy but not v4l2request hwdec,
-        # so --hwdec=auto-safe falls through to software decode on
-        # H.264/HEVC; pinning 4 threads keeps 1080p decode well above
-        # real-time on both SoCs.
+        # Pin to 1080p on Pi4-64/Pi5: mpv's default --drm-mode=preferred
+        # reads the connector's EDID-preferred mode (4K on most modern
+        # TVs) and runs CPU zimg upscale, which drops below real-time
+        # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
+        # Pi 5 keeps the same tuning on the cage path — it doesn't
+        # hurt, and mpv ignores --drm-mode under --vo=gpu
+        # --gpu-context=wayland anyway.
         device_type = os.environ.get('DEVICE_TYPE', '')
         extra_args: list[str] = []
-        if device_type in ('pi4-64', 'pi5'):
+        if device_type == 'pi4-64':
+            extra_args = [
+                '--drm-mode=1920x1080@60',
+                '--vd-lavc-threads=4',
+            ]
+        elif device_type == 'pi5':
             extra_args = ['--vd-lavc-threads=4']
 
         # Per-board VO selection:
@@ -244,23 +251,24 @@ class MPVMediaPlayer(MediaPlayer):
         #   same VO. Pi 5's V3D 7.1 has enough bandwidth to composite
         #   at the connector's native mode (typically 4K) on top of
         #   software-decoded video. arm64 is best-effort per SoC.
-        #   --vo=dmabuf-wayland would skip the GL upload entirely but
-        #   segfaults under cage (mpv 0.40 + wlroots-0.18 +
+        #   --vo=dmabuf-wayland would skip the GL upload entirely
+        #   but segfaults under cage (mpv 0.40 + wlroots-0.18 +
         #   libplacebo dies between hwdec init and file open).
         #
-        # * Pi4-64 stays on Qt linuxfb (no compositor) and uses mpv's
-        #   GL VO with --gpu-context=drm. mpv talks straight to KMS
-        #   via libgbm; scaling happens on the V3D 6.0, which has
-        #   roughly half the throughput of the Pi 5 and can't keep
-        #   up with cage's extra composite pass at 4K (738 vo
-        #   drops/30 s under cage vs 3-6 with --gpu-context=drm on
-        #   the same clip). Net result: Pi 4 keeps the GPU-scaling
-        #   perf win without paying for the cage overhead. The
-        #   --vo=drm legacy path is gone in favour of this.
+        # * Pi4-64 stays on Qt linuxfb (no compositor) with mpv's
+        #   --vo=drm. The V3D 6.0 doesn't have the bandwidth to
+        #   composite cage on top of software-decoded video at 4K
+        #   (738 vo drops/30 s in testing). mpv's --vo=drm does its
+        #   own DRM master juggling — briefly grabbing master,
+        #   rendering, dropping back — which coexists with Qt
+        #   linuxfb in a way that --vo=gpu --gpu-context=drm does
+        #   not (Mesa GBM holds master persistently and contends
+        #   with Qt's framebuffer use, manifesting as "Failed to
+        #   acquire DRM master: Permission denied"). So Pi 4 stays
+        #   on --vo=drm + --drm-mode=1920x1080@60 — the production
+        #   path inherited from master.
         if device_type in ('x86', 'arm64', 'pi5'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
-        elif device_type == 'pi4-64':
-            vo_args = ['--vo=gpu', '--gpu-context=drm']
         else:
             vo_args = ['--vo=drm']
 
