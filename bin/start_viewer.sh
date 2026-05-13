@@ -116,6 +116,28 @@ fi
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
 #
+# /dev/dri/renderD128 carries the host's `render` group, whose
+# numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
+# 109 elsewhere, 106 on Pi OS Bookworm) and not always present in
+# the container's /etc/group. Without membership the `viewer` user
+# can open card0 (group `video`, GID 44 — already a member) but
+# not the render node. mpv uses the render node for --vo=gpu on
+# every Qt 6 board, whether via wayland (cage path: x86 / arm64 /
+# pi5) or drm (linuxfb path: pi4-64). Mirror the host GID into
+# the container as a synthetic `host-render` group and add
+# `viewer` to it; the supplementary group list `sudo -u viewer`
+# later resolves from /etc/group then includes render access.
+if [ -e /dev/dri/renderD128 ]; then
+    render_gid=$(stat -c %g /dev/dri/renderD128)
+    if [ "$render_gid" -ne 0 ]; then
+        if ! getent group "$render_gid" >/dev/null; then
+            groupadd -g "$render_gid" host-render
+        fi
+        host_render_group=$(getent group "$render_gid" | cut -d: -f1)
+        usermod -aG "$host_render_group" viewer
+    fi
+fi
+
 # x86 / arm64 / pi5 run under `cage`, a kiosk wlroots compositor.
 # cage acquires DRM master as root, exports WAYLAND_DISPLAY for its
 # child, and exits when the child exits — so the existing kill -0
@@ -132,31 +154,6 @@ fi
 # share the same direct-sudo fallback path.
 case "$DEVICE_TYPE" in
     x86|arm64|pi5)
-    # /dev/dri/renderD128 carries the host's `render` group, whose
-    # numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
-    # 109 elsewhere, 106 on Pi OS Bookworm) and not always present in
-    # the container's /etc/group. Without membership the `viewer`
-    # user can open card0 (group `video`, GID 44 — already a member)
-    # but not the render node. On x86 that means VAAPI silently
-    # fails with "wayland: failed to open /dev/dri/renderD128" and
-    # mpv falls back to software decode — frames drop at 1080p on
-    # entry-level x86. On Pi 5 / arm64 the V3D / Mesa GL context
-    # needs the same access for --vo=gpu --gpu-context=wayland.
-    # Mirror the host GID into the container as a synthetic
-    # `host-render` group and add `viewer` to it, so the
-    # supplementary group list `sudo -u viewer` later resolves from
-    # /etc/group already includes render access.
-    if [ -e /dev/dri/renderD128 ]; then
-        render_gid=$(stat -c %g /dev/dri/renderD128)
-        if [ "$render_gid" -ne 0 ]; then
-            if ! getent group "$render_gid" >/dev/null; then
-                groupadd -g "$render_gid" host-render
-            fi
-            host_render_group=$(getent group "$render_gid" | cut -d: -f1)
-            usermod -aG "$host_render_group" viewer
-        fi
-    fi
-
     # libseat's default `logind` backend D-Buses into systemd-logind to
     # acquire a session, but containers have no logind session — cage
     # exits with "Could not get primary session for user". Switch to
