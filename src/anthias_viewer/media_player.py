@@ -207,11 +207,46 @@ class MediaPlayer:
         raise NotImplementedError
 
 
+# mpv's --hwdec accepts a single value at startup, so on the Pi
+# boards we need a tiny Lua hook that swaps `hwdec` per file load
+# based on the codec. The Pi-tuned mpv from archive.raspberrypi.com
+# exposes both `v4l2m2m-copy` (Pi 4 V3D V4L2 M2M, H.264 + HEVC
+# theoretically, but the V3D's HEVC support has been flaky in
+# practice) and `drm-copy` (FFmpeg's v4l2_request_hevc hwaccel,
+# HEVC only, reachable on both Pi 4 *and* Pi 5). It does NOT have
+# `v4l2request` for H.264, so Pi 5's Hantro G2 H.264 decoder is
+# invisible to mpv and falls back to software — a real gap that's
+# upstream-blocked on mpv re-adding v4l2-request hwdec.
+#
+# Net per-codec preference on Pi:
+#   H.264 → v4l2m2m-copy   (Pi 4: HW; Pi 5: no-op, falls back to SW)
+#   HEVC  → drm-copy       (Pi 4 + Pi 5: HW)
+_PI_HWDEC_LUA = """\
+local PI_HWDEC_BY_CODEC = {
+    h264 = 'v4l2m2m-copy',
+    hevc = 'drm-copy',
+}
+mp.add_hook('on_load', 50, function()
+    local codec = mp.get_property('video-codec-name') or ''
+    local chosen = PI_HWDEC_BY_CODEC[codec]
+    if chosen then
+        mp.set_property('hwdec', chosen)
+        mp.msg.info(string.format(
+            'pi-hwdec: codec=%s -> hwdec=%s', codec, chosen
+        ))
+    end
+end)
+"""
+
+
 class MPVMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
         self.process: subprocess.Popen[bytes] | None = None
         self.uri: str = ''
+        # Lazy-write the Pi codec-aware hwdec hook to /tmp once per
+        # process; --script= will load it on every mpv launch.
+        self._pi_hwdec_script_path: str | None = None
 
     def set_asset(self, uri: str, duration: int | str) -> None:
         self.uri = uri
@@ -283,17 +318,29 @@ class MPVMediaPlayer(MediaPlayer):
         if rotation and device_type == 'pi4-64':
             rotate_args = [f'--video-rotate={rotation}']
 
-        # --hwdec=auto-copy is broader than auto-safe — it includes
-        # every "*-copy" hwdec method (decode in HW, copy frames back
-        # to system memory for the VO). On x86 that resolves to
-        # vaapi-copy; on Pi 4 to v4l2m2m-copy; on Pi 5 (with the
-        # Pi-patched mpv from archive.raspberrypi.com — see
-        # docker/Dockerfile.viewer.j2) to v4l2request. auto-safe
-        # deliberately omits v4l2m2m-copy and v4l2request from its
-        # whitelist for historical compatibility reasons, even though
-        # both work reliably on current Pi firmware. arm64 falls
-        # through to software since stock Debian mpv 0.40 has neither
-        # v4l2request nor a Rockchip-tuned hwdec.
+        # Hwdec selection. Strategy summary:
+        #
+        # * x86 / arm64 → `--hwdec=auto-copy`. Picks vaapi-copy on
+        #   Intel/AMD iGPUs (the only HW decode method mpv 0.40 ships
+        #   with for x86 outside of NVIDIA-specific options); on
+        #   arm64 there's nothing in auto-copy that matches
+        #   Rockchip's V4L2 stateless decoder, so it falls back to
+        #   software. arm64 HW decode via a vendor-tuned plugin is a
+        #   Tier-2 follow-up.
+        # * Pi 4 / Pi 5 → still pass `--hwdec=auto-copy` at startup,
+        #   but a per-codec Lua hook overrides it at file-load time:
+        #     H.264 → v4l2m2m-copy (Pi 4 V3D V4L2 M2M; Pi 5 has no
+        #             stateful API so this no-ops and mpv falls back
+        #             to software — the only path until mpv re-adds
+        #             a v4l2_request_h264 hwdec)
+        #     HEVC  → drm-copy (FFmpeg v4l2_request_hevc; works on
+        #             both Pi 4 and Pi 5)
+        #   The hook is sourced from _PI_HWDEC_LUA above; it's written
+        #   to /tmp on first play() and re-used for subsequent files.
+        #   `auto-copy` deliberately omits v4l2m2m-copy and the drm
+        #   hwdec family from its whitelist for historical-stability
+        #   reasons, which is why we override per-codec rather than
+        #   trusting the auto path on Pi.
         #
         # ANTHIAS_DEBUG_DROPS=1: when set on the viewer container,
         # mpv's stdout/stderr go to a host-bound log instead of
@@ -303,6 +350,14 @@ class MPVMediaPlayer(MediaPlayer):
         # per-file drop counts so reviewers can validate the test
         # bed without rebuilding the image. Default (unset)
         # preserves the silent stdout/stderr=/dev/null behaviour.
+        script_args: list[str] = []
+        if device_type in ('pi4-64', 'pi5'):
+            if self._pi_hwdec_script_path is None:
+                self._pi_hwdec_script_path = '/tmp/anthias-pi-hwdec.lua'
+                with open(self._pi_hwdec_script_path, 'w') as f:
+                    f.write(_PI_HWDEC_LUA)
+            script_args = [f'--script={self._pi_hwdec_script_path}']
+
         debug_drops = os.environ.get('ANTHIAS_DEBUG_DROPS') == '1'
         terminal_args = [] if debug_drops else ['--no-terminal']
         if debug_drops:
@@ -320,6 +375,7 @@ class MPVMediaPlayer(MediaPlayer):
                 *terminal_args,
                 *vo_args,
                 '--hwdec=auto-copy',
+                *script_args,
                 *extra_args,
                 *rotate_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
