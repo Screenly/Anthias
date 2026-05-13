@@ -1,4 +1,5 @@
 import logging
+import re
 import tarfile
 import uuid
 from datetime import datetime
@@ -41,6 +42,12 @@ r = connect_to_redis()
 
 
 _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
+
+# Plain ``.<alnum>`` literal — anything else is rejected by
+# ``assets_upload`` so a hostile ``Content-Disposition: filename=``
+# can't smuggle ``/`` or ``..`` into the on-disk path (CodeQL
+# py/path-injection on ``open(final_path, ...)``).
+_SAFE_EXT_RE = re.compile(r'\.[A-Za-z0-9]{1,16}')
 
 
 def _parse_local_datetime(value: str) -> datetime:
@@ -359,6 +366,16 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # lands extensionless if we can possibly avoid it (an
     # extensionless file silently bypasses the normalise pipeline
     # via ``needs_image_normalisation`` returning False).
+    #
+    # Every candidate must clear ``_SAFE_EXT_RE`` (a plain
+    # ``.<alnum>`` literal) before we accept it — a hostile
+    # ``Content-Disposition: filename=`` value can otherwise smuggle
+    # ``/`` or ``..`` into ``final_path`` (CodeQL py/path-injection).
+    # Each step also falls back to the next one if its own candidate
+    # fails the regex, so an upload with a junk filename ext still
+    # gets the MIME-subtype fallback that keeps the HEIC-on-sparse-DB
+    # pipeline-routing test green.
+    #
     #   1. ``guess_extension(file_type)`` — works for every MIME
     #      that's in the host's mimetypes DB.
     #   2. ``path.splitext(upload_name)[1]`` — operator-supplied
@@ -373,16 +390,19 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     #      ``image/jp2`` entries — without it, a HEIC upload from
     #      a clean Pi base image could slip past normalisation
     #      and fail to render.
-    src_ext = guess_extension(file_type) or ''
+    def _safe_ext(candidate: str) -> str:
+        return candidate if _SAFE_EXT_RE.fullmatch(candidate) else ''
+
+    src_ext = _safe_ext(guess_extension(file_type) or '')
     if not src_ext:
-        src_ext = path.splitext(upload_name)[1].lower()
+        src_ext = _safe_ext(path.splitext(upload_name)[1].lower())
     if not src_ext:
         from anthias_server.processing import NORMALIZE_IMAGE_EXTS
 
         subtype = file_type.split('/', 1)[1] if '/' in file_type else ''
         candidate_ext = f'.{subtype}'
         if mimetype == 'image' and candidate_ext in NORMALIZE_IMAGE_EXTS:
-            src_ext = candidate_ext
+            src_ext = _safe_ext(candidate_ext)
 
     # uuid4 (random) instead of uuid5(NAMESPACE_URL, name): the
     # deterministic v5 form would collide on disk for two files
@@ -977,22 +997,6 @@ def system_info(request: HttpRequest) -> HttpResponse:
     return template(request, 'system_info.html', context)
 
 
-def _safe_login_next(request: HttpRequest, candidate: str) -> str:
-    """Whitelist `next` to same-host paths so the login flow can't be
-    weaponised as an open redirect. Falls back to the dashboard for
-    empty / off-host / scheme-mismatched values."""
-    home = reverse('anthias_app:home')
-    if not candidate:
-        return home
-    if url_has_allowed_host_and_scheme(
-        url=candidate,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure(),
-    ):
-        return candidate
-    return home
-
-
 @require_http_methods(['GET', 'POST'])
 def login(request: HttpRequest) -> HttpResponse:
     # Read `next` from the form on POST (login.html round-trips the
@@ -1011,7 +1015,19 @@ def login(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=username, password=password)
         if user is not None:
             django_login(request, user)
-            return redirect(_safe_login_next(request, next_url))
+            # Run the host/scheme allow-list inline so CodeQL's
+            # py/url-redirection sees the sanitiser guarding the
+            # redirect target (it doesn't propagate sanitisers
+            # through a helper). reverse() also rebuilds the
+            # fallback so none of the inbound string survives.
+            redirect_target = reverse('anthias_app:home')
+            if next_url and url_has_allowed_host_and_scheme(
+                url=next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                redirect_target = next_url
+            return redirect(redirect_target)
         else:
             messages.error(request, 'Invalid username or password')
             return template(request, 'login.html', {'next': next_url})

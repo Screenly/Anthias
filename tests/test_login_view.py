@@ -101,9 +101,8 @@ def test_login_post_rejects_offhost_next(operator: User) -> None:
         },
     )
     assert response.status_code == 302
-    # url_has_allowed_host_and_scheme rejects off-host targets, so
-    # _safe_login_next falls back to anthias_app:home (which reverses
-    # to '/').
+    # url_has_allowed_host_and_scheme rejects off-host targets, so the
+    # view falls back to anthias_app:home (which reverses to '/').
     assert response['Location'] == '/'
 
 
