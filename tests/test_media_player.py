@@ -59,7 +59,7 @@ def test_play_invokes_popen_with_expected_args_on_pi4_64(
             'mpv',
             '--no-terminal',
             '--vo=gpu',
-            '--gpu-context=wayland',
+            '--gpu-context=drm',
             '--hwdec=auto-safe',
             '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
@@ -116,14 +116,14 @@ def test_play_omits_pi_tuning_on_x86(
     assert '--vd-lavc-threads=4' not in args[0]
 
 
-@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi4-64', 'pi5'])
+@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_on_all_qt6_boards(
+def test_play_uses_wayland_vo_under_cage(
     mock_popen: Any, mpv: _MPVFixtures, device_type: str
 ) -> None:
-    # All Qt6 boards run under cage (a wlroots kiosk compositor);
-    # cage holds DRM master, so --vo=drm would be denied. Every Qt6
-    # board must route through --vo=gpu --gpu-context=wayland.
+    # x86 / arm64 / pi5 run under cage (a wlroots kiosk compositor);
+    # cage holds DRM master, so --vo=drm would be denied. These
+    # boards must route through --vo=gpu --gpu-context=wayland.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
         mpv.player.play()
@@ -133,6 +133,23 @@ def test_play_uses_wayland_vo_on_all_qt6_boards(
     assert '--gpu-context=wayland' in args[0]
     assert '--vo=drm' not in args[0]
     assert '--gpu-context=drm' not in args[0]
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_uses_drm_gpu_context_on_pi4_64(
+    mock_popen: Any, mpv: _MPVFixtures
+) -> None:
+    # Pi 4 stays on Qt linuxfb (no cage); mpv writes straight to KMS
+    # via libgbm. --gpu-context=drm because there's no Wayland socket.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
+        mpv.player.play()
+
+    args, _ = mock_popen.call_args
+    assert '--vo=gpu' in args[0]
+    assert '--gpu-context=drm' in args[0]
+    assert '--vo=drm' not in args[0]
+    assert '--gpu-context=wayland' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
@@ -618,7 +635,7 @@ def _rotated_mpv_settings(rotation: int) -> Any:
     return mock
 
 
-@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi4-64', 'pi5'])
+@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
 @pytest.mark.parametrize('rotation', [0, 90, 180, 270])
 @patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
@@ -628,17 +645,18 @@ def _rotated_mpv_settings(rotation: int) -> Any:
 def test_mpv_never_passes_video_rotate_under_cage(
     mock_popen: Any, _mock_detect: Any, rotation: int, device_type: str
 ) -> None:
-    """Every Qt6 board runs under cage and inherits the compositor
+    """x86 / arm64 / pi5 run under cage and inherit the compositor
     transform via wlr-randr (issue #2856 — driven from
     src/anthias_viewer/__init__.py). Passing --video-rotate to mpv
-    would double-rotate, so MPVMediaPlayer must never add it."""
+    would double-rotate, so MPVMediaPlayer must never add it on
+    those boards."""
     player = MPVMediaPlayer()
     # Patch get_device_type alongside DEVICE_TYPE so
     # get_alsa_audio_device() takes a deterministic branch on the
     # host — patching only DEVICE_TYPE while leaving get_device_type
     # at the fixture default ('pi4') would route x86/arm64 through
     # _detect_hdmi_audio_device() and stat /sys/class/drm.
-    audio_device_type = device_type if device_type in ('pi5',) else 'x86'
+    audio_device_type = device_type if device_type == 'pi5' else 'x86'
     with (
         patch(
             'anthias_viewer.media_player.settings',
@@ -649,6 +667,63 @@ def test_mpv_never_passes_video_rotate_under_cage(
             return_value=audio_device_type,
         ),
         patch.dict('os.environ', {'DEVICE_TYPE': device_type}),
+    ):
+        player.set_asset('file:///test/video.mp4', 30)
+        player.play()
+    args, _ = mock_popen.call_args
+    assert not any(arg.startswith('--video-rotate') for arg in args[0])
+
+
+@pytest.mark.parametrize('rotation', [90, 180, 270])
+@patch(
+    'anthias_viewer.media_player._detect_hdmi_audio_device',
+    return_value='sysdefault:CARD=vc4hdmi0',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_mpv_passes_video_rotate_on_pi4_64(
+    mock_popen: Any, _mock_detect: Any, rotation: int
+) -> None:
+    """Pi 4 stays on Qt linuxfb (no cage), so there's no compositor
+    transform to inherit — mpv has to apply rotation itself."""
+    player = MPVMediaPlayer()
+    with (
+        patch(
+            'anthias_viewer.media_player.settings',
+            _rotated_mpv_settings(rotation),
+        ),
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi5',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
+    ):
+        player.set_asset('file:///test/video.mp4', 30)
+        player.play()
+    args, _ = mock_popen.call_args
+    assert f'--video-rotate={rotation}' in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._detect_hdmi_audio_device',
+    return_value='sysdefault:CARD=vc4hdmi0',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_mpv_skips_video_rotate_at_zero_on_pi4_64(
+    mock_popen: Any, _mock_detect: Any
+) -> None:
+    """0° must NOT emit --video-rotate=0 — keeps the CLI surface
+    unchanged for the 99% of operators who never touch the dropdown."""
+    player = MPVMediaPlayer()
+    with (
+        patch(
+            'anthias_viewer.media_player.settings',
+            _rotated_mpv_settings(0),
+        ),
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi5',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
     ):
         player.set_asset('file:///test/video.mp4', 30)
         player.play()

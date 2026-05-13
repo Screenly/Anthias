@@ -181,14 +181,19 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # from apt at runtime — except on Qt 6 boards where qt6-*-dev
     # below also provides the runtime libs.)
     #
-    # X11/XCB packages are intentionally absent. Qt5 boards (pi2/pi3)
-    # use a custom -no-xcb -no-xcb-xlib -qpa eglfs WebView build (see
-    # webview/build_qt5.sh) and run under QT_QPA_PLATFORM=linuxfb
-    # straight on KMS/DRM, with mpv on --vo=drm. Qt6 boards (pi4-64,
-    # pi5, x86, arm64) run the viewer under `cage` (a kiosk wlroots
-    # compositor) with QT_QPA_PLATFORM=wayland and mpv on --vo=gpu
-    # --gpu-context=wayland — no X code path on either track. The
-    # cage + qt6-wayland pair is added to the Qt6 apt extension below.
+    # X11/XCB packages are intentionally absent. Two display tracks
+    # for the four image targets (no X code path on either):
+    #
+    # * Pi2 / Pi3 / Pi4-64: Qt linuxfb + mpv straight to KMS. Pi 2 /
+    #   Pi 3 use a custom -no-xcb -no-xcb-xlib -qpa eglfs Qt 5
+    #   WebView build (see webview/build_qt5.sh) with mpv --vo=drm.
+    #   Pi 4 is Qt 6 with the same QT_QPA_PLATFORM=linuxfb plus mpv
+    #   --vo=gpu --gpu-context=drm — V3D-accelerated scaling without
+    #   the cage composite pass the V3D 6.0 can't keep up with.
+    # * Pi5 / x86 / arm64: cage (a kiosk wlroots compositor) with
+    #   QT_QPA_PLATFORM=wayland and mpv --vo=gpu
+    #   --gpu-context=wayland. The cage + qt6-wayland + wlr-randr
+    #   triple is added to the per-board apt extension below.
     viewer_extra_apt_dependencies = [
         'ca-certificates',
         'dbus-daemon',
@@ -252,30 +257,44 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     ]
 
     if is_qt6:
-        # All Qt6 boards (pi4-64, pi5, x86, arm64) run the viewer
-        # under `cage`, a kiosk wlroots compositor that talks straight
-        # to KMS. qt6-wayland is the Qt platform plugin the viewer
-        # loads to render into cage's surface; mpv talks to the same
-        # Wayland socket via --vo=gpu --gpu-context=wayland (see
-        # MPVMediaPlayer.play in src/anthias_viewer/media_player.py).
-        # wlr-randr is how src/anthias_viewer/__init__.py applies the
-        # Settings page's "screen rotation" knob — Qt's wayland QPA
-        # has no rotation= equivalent, so the transform goes through
-        # the compositor for both Qt and mpv consistently. VLC is
-        # deliberately *not* installed: MediaPlayerProxy routes Qt6
-        # boards to MPVMediaPlayer, so VLC would just be ~80–100 MB
-        # of dead weight here.
+        # Shared Qt 6 runtime for every Qt6 board (pi4-64, pi5, x86,
+        # arm64). mpv handles video for all of them via MPVMediaPlayer;
+        # VLC is deliberately *not* installed because MediaPlayerProxy
+        # never routes Qt6 boards to it (would be ~80-100 MB of dead
+        # weight).
         viewer_extra_apt_dependencies.extend(
             [
-                'cage',
                 'mpv',
                 'qt6-base-dev',
                 'qt6-image-formats-plugins',
-                'qt6-wayland',
                 'qt6-webengine-dev',
-                'wlr-randr',
             ]
         )
+
+        if board in ('x86', 'arm64', 'pi5'):
+            # cage is a kiosk wlroots compositor that talks straight
+            # to KMS; qt6-wayland is the Qt platform plugin the
+            # viewer loads to render into cage's surface; mpv talks
+            # to the same Wayland socket via --vo=gpu
+            # --gpu-context=wayland (see MPVMediaPlayer.play in
+            # src/anthias_viewer/media_player.py). wlr-randr is how
+            # src/anthias_viewer/__init__.py applies the Settings
+            # page's "screen rotation" knob — Qt's wayland QPA has
+            # no rotation= equivalent, so the transform goes through
+            # the compositor for both Qt and mpv consistently.
+            #
+            # Pi 4 is intentionally NOT on this path: the V3D 6.0
+            # doesn't have the bandwidth to composite cage on top of
+            # video. It stays on Qt linuxfb + mpv --vo=gpu
+            # --gpu-context=drm — see bin/start_viewer.sh and
+            # docker/Dockerfile.viewer.j2.
+            viewer_extra_apt_dependencies.extend(
+                [
+                    'cage',
+                    'qt6-wayland',
+                    'wlr-randr',
+                ]
+            )
 
         if board == 'x86':
             # va-driver-all is a Debian metapackage that pulls in

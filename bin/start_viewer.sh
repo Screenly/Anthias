@@ -116,16 +116,22 @@ fi
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
 #
-# All Qt6 boards (pi4-64, pi5, x86, arm64) run under `cage`, a kiosk
-# wlroots compositor. cage acquires DRM master as root, exports
-# WAYLAND_DISPLAY for its child, and exits when the child exits — so
-# the existing kill -0 watchdog below still works. The inner sudo
-# drops back to the viewer user; WAYLAND_DISPLAY has to be added to
-# --preserve-env to survive sudo's env scrub. Qt5 boards (pi2/pi3)
-# fall through to the legacy direct-sudo path that runs under
-# QT_QPA_PLATFORM=linuxfb.
+# x86 / arm64 / pi5 run under `cage`, a kiosk wlroots compositor.
+# cage acquires DRM master as root, exports WAYLAND_DISPLAY for its
+# child, and exits when the child exits — so the existing kill -0
+# watchdog below still works. The inner sudo drops back to the
+# viewer user; WAYLAND_DISPLAY has to be added to --preserve-env to
+# survive sudo's env scrub.
+#
+# Pi 4 falls through to the legacy direct-sudo path that runs under
+# QT_QPA_PLATFORM=linuxfb. The V3D 6.0 doesn't have the bandwidth
+# to composite cage on top of video at 4K (738 vo drops/30 s under
+# cage vs 3-6 on the linuxfb + --gpu-context=drm path), so Pi 4
+# stays on linuxfb until either a newer mpv with v4l2request hwdec
+# or a future Pi platform lets us re-evaluate. Qt5 boards (pi2/pi3)
+# share the same direct-sudo fallback path.
 case "$DEVICE_TYPE" in
-    x86|arm64|pi4-64|pi5)
+    x86|arm64|pi5)
     # /dev/dri/renderD128 carries the host's `render` group, whose
     # numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
     # 109 elsewhere, 106 on Pi OS Bookworm) and not always present in
@@ -134,8 +140,8 @@ case "$DEVICE_TYPE" in
     # but not the render node. On x86 that means VAAPI silently
     # fails with "wayland: failed to open /dev/dri/renderD128" and
     # mpv falls back to software decode — frames drop at 1080p on
-    # entry-level x86. On Pi4-64 / Pi5 / arm64 the V3D / Mesa GL
-    # context needs the same access for --vo=gpu --gpu-context=wayland.
+    # entry-level x86. On Pi 5 / arm64 the V3D / Mesa GL context
+    # needs the same access for --vo=gpu --gpu-context=wayland.
     # Mirror the host GID into the container as a synthetic
     # `host-render` group and add `viewer` to it, so the
     # supplementary group list `sudo -u viewer` later resolves from

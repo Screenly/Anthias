@@ -68,15 +68,16 @@ COPY --from=webview-builder /out/bin/AnthiasWebview /usr/local/bin/AnthiasWebvie
 COPY --from=webview-builder /out/share/AnthiasWebview /usr/local/share/AnthiasWebview
 
 ENV QT_QPA_EGLFS_FORCE888=1
-{% if is_qt6 %}
-# All Qt6 boards (pi4-64, pi5, x86, arm64) run the viewer under
-# `cage`, a kiosk wlroots compositor that talks straight to KMS.
-# bin/start_viewer.sh wraps the viewer in cage; this env var tells
-# Qt to load the qt6-wayland platform plugin so it renders into
-# cage's surface. Qt5 boards (pi2/pi3) keep their classic linuxfb
-# path below.
+{% if board in ('x86', 'arm64', 'pi5') %}
+# x86 / arm64 / pi5 run the viewer under `cage`, a kiosk wlroots
+# compositor that talks straight to KMS. bin/start_viewer.sh wraps
+# the viewer in cage; this env var tells Qt to load the qt6-wayland
+# platform plugin so it renders into cage's surface.
 ENV QT_QPA_PLATFORM=wayland
 {% else %}
+# Pi 4 (Qt6) and Pi 2 / Pi 3 (Qt5) keep the classic linuxfb path —
+# the Pi 4 V3D 6.0 can't keep up with cage's composite pass on top
+# of video, so the viewer renders directly to the framebuffer.
 ENV QT_QPA_PLATFORM=linuxfb
 {% endif %}
 
