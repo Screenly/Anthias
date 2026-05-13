@@ -163,7 +163,10 @@ class RecoverViewMixin(APIView):
 class RebootViewMixin(APIView):
     serializer_class = RebootViewSerializerMixin
 
-    @extend_schema(summary='Reboot system')
+    # Empty body on success; declare it so drf-spectacular doesn't
+    # invent a default schema from the (empty) request serializer.
+    # Matches the pattern DisplayPowerViewMixin uses below.
+    @extend_schema(summary='Reboot system', responses={200: None})
     @authorized
     def post(self, request: Request) -> Response:
         reboot_anthias.apply_async()
@@ -173,7 +176,7 @@ class RebootViewMixin(APIView):
 class ShutdownViewMixin(APIView):
     serializer_class = ShutdownViewSerializerMixin
 
-    @extend_schema(summary='Shut down system')
+    @extend_schema(summary='Shut down system', responses={200: None})
     @authorized
     def post(self, request: Request) -> Response:
         shutdown_anthias.apply_async()
