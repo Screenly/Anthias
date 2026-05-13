@@ -46,6 +46,8 @@ See the [supported hardware](https://anthias.screenly.io/get-started/#supported-
 
 The installer recognizes any 64-bit ARM host that isn't a Raspberry Pi as `arm64` and runs the same Anthias stack on it — [Armbian](https://www.armbian.com) on Rock Pi, Orange Pi, Banana Pi and similar boards. The dashboard, scheduler, and asset library all work as on a Pi.
 
+Anthias only supports **Debian-based Armbian** images (Bookworm / Trixie). The installer wires up the Docker apt repository under [`download.docker.com/linux/debian`](https://download.docker.com/linux/debian), so Ubuntu-based Armbian downloads (Jammy / Noble) will fail at the `apt update` step. Pick the Debian build of the image for your board on the Armbian site.
+
 Things to know before you pick a board:
 
 - **Videos decode in software** — fine for casual 720p, stutter-prone at 1080p on slower SoCs, not suitable for 4K. If your content is mostly video, prefer a Pi 4 / 5 or x86.

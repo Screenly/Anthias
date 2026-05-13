@@ -120,7 +120,7 @@
                     </tr>
                 </tbody>
             </table>
-            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on Armbian (or any aarch64 Debian-derived distro) with software video decode. Hardware video decode varies per SoC and isn't wired up out of the box &mdash; expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
+            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on <strong>Debian-based Armbian</strong> (Bookworm / Trixie) with software video decode. Ubuntu-based Armbian builds aren&rsquo;t supported &mdash; the installer wires up the Debian Docker apt repository, so Ubuntu releases fail at &ldquo;apt update&rdquo;. Hardware video decode varies per SoC and isn&rsquo;t wired up out of the box &mdash; expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
         </div>
     </div>
 </section>

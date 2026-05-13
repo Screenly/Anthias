@@ -124,7 +124,9 @@
 
     - question: Does Anthias work on Rock Pi, Orange Pi, Banana Pi, and other non-Pi single-board computers?
       answer: |
-        Yes — on a best-effort basis. If you flash [Armbian](https://www.armbian.com) onto a 64-bit ARM board (Rock Pi, Orange Pi, Banana Pi and similar), the Anthias installer recognises it and sets things up the same way it does on a Raspberry Pi. The dashboard, scheduling, and asset library all work exactly as you'd expect.
+        Yes — on a best-effort basis. If you flash a **Debian-based [Armbian](https://www.armbian.com)** image (Bookworm / Trixie) onto a 64-bit ARM board (Rock Pi, Orange Pi, Banana Pi and similar), the Anthias installer recognises it and sets things up the same way it does on a Raspberry Pi. The dashboard, scheduling, and asset library all work exactly as you'd expect.
+
+        **Pick the Debian build of the Armbian image for your board.** The installer wires Docker's apt repository under the Debian namespace; Ubuntu-based Armbian downloads (Jammy / Noble) fail at the very first `apt update` because Docker doesn't publish those codenames there. Supporting Ubuntu-based Armbian is a follow-up.
 
         A few things to know before you pick a board for a serious deployment:
 
