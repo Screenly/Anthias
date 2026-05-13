@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from os import path
 from typing import Any
@@ -175,6 +176,16 @@ _BoardProfile = dict[str, Any]
 # H.264 upload still passes through.
 _PI4_H264_MAX_PIXELS = 1920 * 1080
 
+# Width × height threshold for Pi 5 HEVC passthrough + transcode
+# output. Pi 5's Hantro G2 HW decoder is rated for 4Kp60 HEVC, but
+# the stock 64 MB CMA on Pi OS for Pi 5 can't fit a 4K dst buffer
+# pool. Until a dtoverlay-based CMA fix lands (see
+# cmdline.txt.j2's note), the asset processor caps HEVC at 1080p
+# so the viewer only ever sees clips the decoder can actually
+# back. Pi 4 keeps no HEVC cap — its dedicated HEVC block handles
+# 4Kp60 cleanly on Pi 4's larger default CMA.
+_PI5_HEVC_MAX_PIXELS = 1920 * 1080
+
 
 # ffmpeg encoder args. Each list is what gets passed between ``-i
 # <input>`` and ``<output>`` for the video stream — audio always
@@ -251,15 +262,26 @@ _BOARD_PROFILES: dict[str, _BoardProfile] = {
         'video_args': _HEVC_VIDEO_ARGS,
     },
     # Pi 5: HEVC HW decode via Hantro G2 (drm-copy / v4l2_request_hevc)
-    # is solid up to 4Kp60. H.264 silicon (Hantro G1) exists but mpv
-    # has *no* v4l2-request H.264 hwdec upstream, so any H.264 clip
-    # the viewer receives drops to a software A76 decoder. To keep
-    # the HW-decode-everywhere contract, H.264 uploads transcode to
+    # works up to 1080p with the stock Pi OS CMA reservation (64 MB
+    # at the time of writing). At 4K, the decoder fails to allocate
+    # dst buffers ("v4l2_request_hevc_start_frame: Failed to get dst
+    # buffer") because a 4K YUV420 frame is ~12 MB and the pool
+    # needs several references in flight. Bumping cma= on the
+    # kernel cmdline breaks rpi-hevc-dec entirely (it orphans the
+    # DT linux,cma node so the driver fails to probe -517). Until
+    # a dtoverlay-based CMA bump lands, the asset processor caps
+    # HEVC at 1080p on pi5 and downscales 4K uploads on the way in.
+    #
+    # H.264 silicon (Hantro G1) exists but mpv has no v4l2-request
+    # H.264 hwdec upstream, so any H.264 clip the viewer receives
+    # drops to a software A76 decoder. H.264 uploads transcode to
     # HEVC at upload time — the Cortex-A76 software encode is the
     # one-time cost that buys steady-state HW decode forever after.
     'pi5': {
         'transcode_target': 'hevc',
         'passthrough_video_codecs': frozenset({'hevc'}),
+        'passthrough_video_max_pixels': {'hevc': _PI5_HEVC_MAX_PIXELS},
+        'transcode_video_max_pixels': {'hevc': _PI5_HEVC_MAX_PIXELS},
         'video_args': _HEVC_VIDEO_ARGS,
     },
     # x86: mpv + ``--hwdec=auto-safe`` selects vaapi (Intel/AMD),
@@ -1098,6 +1120,40 @@ def _transcode_to_target(
     """
     if profile is None:
         profile = _resolve_board_profile()
+    # Optional per-codec output cap. The profile carries
+    # ``transcode_video_max_pixels`` for boards where the on-device
+    # HW decoder has a usable resolution ceiling smaller than the
+    # board's nominal envelope — Pi 5 HEVC is the current example
+    # (stock CMA can't fit 4K dst buffers). When the cap fires for
+    # the profile's transcode_target codec, append a ``-vf
+    # scale=-2:1080`` style filter that preserves the source's aspect
+    # ratio and caps the *height* at the sqrt of the cap (so a wide
+    # 4K → 1080p downscale and a tall portrait 4K → ~1080p height
+    # both land inside the pixel budget). The "-2" on the width
+    # keeps the encoder happy by rounding to a multiple of 2 (libx265
+    # rejects odd dimensions).
+    vf_args: list[str] = []
+    target_codec = profile.get('transcode_target')
+    output_caps = profile.get('transcode_video_max_pixels') or {}
+    target_cap = output_caps.get(target_codec)
+    if target_cap is not None:
+        # Approximate: cap the longer side so a 4K (3840x2160) clip
+        # downscales to 1920x1080 (cap=1920*1080 → ~1080 cap on the
+        # shorter axis). Tall portrait sources land in the same
+        # budget. Computed as int(sqrt(cap*16/9)) for the longer
+        # axis, but the simpler form below clamps height to the
+        # square-root of (cap × 16/9) which is the 16:9 budget
+        # crossover; for stocky 4:3 content the cap is conservative.
+        cap_h = int(math.sqrt(target_cap * 9 / 16))
+        # Round down to even.
+        cap_h = (cap_h // 2) * 2
+        # Format: scale=-2:1080 — height capped to cap_h, width
+        # picked so width*height ≤ cap (libx265 quirk: even-only).
+        # min(): only downscale; never upscale.
+        vf_args = [
+            '-vf',
+            f"scale='if(gt(ih,{cap_h}),-2,iw)':'min(ih,{cap_h})'",
+        ]
     sh.ffmpeg(
         '-y',
         '-nostdin',
@@ -1105,6 +1161,7 @@ def _transcode_to_target(
         '2',
         '-i',
         input_path,
+        *vf_args,
         *profile['video_args'],
         *_AUDIO_TRANSCODE_ARGS,
         '-movflags',

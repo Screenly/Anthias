@@ -1473,10 +1473,16 @@ def test_resolve_board_profile_picks_target_codec_per_board(
         ('pi4-64', 'h264', None, False),  # probe couldn't size → transcode
         ('pi4-64', 'hevc', 3840 * 2160, True),  # HEVC HW at 4K
         # pi5: HEVC only — mpv has no v4l2-request H.264 path so
-        # any H.264 upload silently SW-falls-back on-device.
+        # any H.264 upload silently SW-falls-back on-device. HEVC
+        # capped at 1080p too (Pi 5's stock CMA can't allocate 4K
+        # HEVC dst buffers; bumping cma= on cmdline orphans the
+        # codec driver). The asset processor downscales 4K HEVC
+        # uploads on the way in so the viewer only ever sees clips
+        # the HW decoder can actually back.
         ('pi5', 'h264', 1920 * 1080, False),
         ('pi5', 'h264', 3840 * 2160, False),
-        ('pi5', 'hevc', 3840 * 2160, True),
+        ('pi5', 'hevc', 1920 * 1080, True),
+        ('pi5', 'hevc', 3840 * 2160, False),
         # x86: VAAPI / NVENC handle both codecs at any practical
         # resolution; no per-codec cap.
         ('x86', 'h264', 3840 * 2160, True),
@@ -1558,6 +1564,53 @@ def test_transcode_to_target_uses_board_specific_encoder(
         assert args[tag_index + 1] == 'hvc1'
     else:
         assert '-tag:v' not in args
+
+
+def test_transcode_to_target_emits_downscale_filter_for_pi5_hevc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pi 5 carries ``transcode_video_max_pixels = {'hevc': ~2 Mpx}``
+    because its stock CMA can't fit a 4K HEVC dst buffer pool. The
+    transcode helper must emit a ``-vf scale=...`` filter that caps
+    the output height at the 16:9 budget so 4K → 1080p downscale
+    happens at upload time. Other boards keep no cap and the filter
+    must not appear in their argv."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target('in.mov', 'out.mp4')
+
+    args = captured['args']
+    assert '-vf' in args, args
+    vf_index = args.index('-vf')
+    # The filter caps height at 1080 (the 16:9 budget for ~2 Mpx).
+    assert '1080' in args[vf_index + 1]
+    # Width is the picked-by-aspect '-2' (libx265 needs even
+    # dimensions); the filter must also use min() to avoid upscaling
+    # sub-1080p sources.
+    assert 'min(ih' in args[vf_index + 1]
+
+
+def test_transcode_to_target_no_downscale_on_pi4_hevc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pi 4 has no transcode_video_max_pixels for HEVC (dedicated
+    decoder block handles 4Kp60 cleanly), so the downscale filter
+    must NOT appear."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target('in.mov', 'out.mp4')
+
+    assert '-vf' not in captured['args'], captured['args']
 
 
 @pytest_ffmpeg
