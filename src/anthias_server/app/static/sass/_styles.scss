@@ -1532,6 +1532,19 @@ label { text-align: left; }
     display: flex;
     gap: var(--space-2);
   }
+  .settings-section__badge {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-md);
+    background: var(--color-warning-soft, #fef3c7);
+    color: var(--color-warning-strong, #92400e);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
 }
 
 .toggle-row {

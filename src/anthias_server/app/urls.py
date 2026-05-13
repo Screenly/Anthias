@@ -30,6 +30,11 @@ urlpatterns = [
         name='settings_shutdown',
     ),
     path(
+        'settings/display/<str:state>/',
+        views.settings_display_power,
+        name='settings_display_power',
+    ),
+    path(
         'settings/migrate-to-screenly/',
         views.migrate_to_screenly,
         name='migrate_to_screenly',

@@ -57,6 +57,7 @@ from anthias_server.api.views.mixins import (
     AssetsControlViewMixin,
     BackupViewMixin,
     DeleteAssetViewMixin,
+    DisplayPowerViewMixin,
     FileAssetViewMixin,
     InfoViewMixin,
     PlaylistOrderViewMixin,
@@ -533,6 +534,10 @@ class RebootViewV2(RebootViewMixin):
 
 
 class ShutdownViewV2(ShutdownViewMixin):
+    pass
+
+
+class DisplayPowerViewV2(DisplayPowerViewMixin):
     pass
 
 
