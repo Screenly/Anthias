@@ -101,19 +101,21 @@ jobs:
       # is lower than the main suite's 5 to keep one flake from
       # thrashing the artifacts directory three extra times.
       #
-      # Each attempt clears test-artifacts/marketing first so a flake
-      # that aborts before the new capture tests run can't leave the
-      # upload step publishing screenshots from a previous attempt —
-      # the upload then either finds the freshly-rendered set (green)
-      # or an empty dir (`if-no-files-found: error` flags it instead
-      # of pretending success).
+      # The session-scoped ``_reset_marketing_dir`` fixture in
+      # tests/conftest.py clears test-artifacts/marketing/ before any
+      # test runs when MARKETING_SCREENSHOTS=1 — done from inside the
+      # container so the cleanup has the same uid as the writer (a
+      # host-side rm from the runner step would hit permission-denied
+      # on a retry attempt because the bind-mount is root-owned).
+      # The upload step then either finds the freshly-rendered set
+      # (green) or an empty dir (`if-no-files-found: error` flags
+      # that instead of pretending success).
       - name: Capture screenshots
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
         with:
           timeout_minutes: 8
           max_attempts: 3
           command: |
-            rm -rf test-artifacts/marketing
             docker compose exec \
               -e ANTHIAS_INTEGRATION_TEST=1 \
               -e MARKETING_SCREENSHOTS=1 \

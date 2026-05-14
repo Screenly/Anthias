@@ -288,7 +288,11 @@ def test_full_migration_flow_with_mixed_results(
     drains, the header reads "Migration finished with errors" (not
     the all-clear copy) and the Retry button surfaces the count."""
     _mock_validate_valid(page)
-    _failure_message = f'File not found on device: {WIZARD_VIDEO_BASENAME}'
+    # a2 is the URL-backed webpage seed (WIZARD_WEBPAGE), so a
+    # plausible failure for it is an upstream fetch error against its
+    # URL — not a "file not found on device" message, which would
+    # only make sense for a1 (video) or a3 (image) local-file seeds.
+    _failure_message = f'Could not fetch URL: {WIZARD_WEBPAGE_URL}'
     _mock_migrate_per_asset(
         page,
         outcomes={

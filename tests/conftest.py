@@ -327,6 +327,24 @@ _MARKETING_SCALE = 3
 _MARKETING_OUT_DIR = Path('test-artifacts/marketing')
 
 
+@pytest.fixture(scope='session', autouse=True)
+def _reset_marketing_dir() -> None:
+    """Clear ``test-artifacts/marketing/`` once per session when
+    marketing capture is enabled. Runs inside the test container
+    (where pytest executes), so the cleanup has the same root
+    permissions as the container that originally wrote the files —
+    a host-side ``rm -rf`` from a CI runner step would hit
+    permission-denied on a retry attempt because the bind-mounted
+    artefacts are owned by root.
+
+    No-op when MARKETING_SCREENSHOTS is unset; ordinary integration
+    runs leave any existing marketing/ tree alone."""
+    if _MARKETING_ENABLED and _MARKETING_OUT_DIR.exists():
+        import shutil
+
+        shutil.rmtree(_MARKETING_OUT_DIR)
+
+
 @pytest.fixture(scope='session')
 def browser_context_args(
     browser_context_args: dict[str, Any],

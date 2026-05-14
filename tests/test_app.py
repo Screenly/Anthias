@@ -330,11 +330,14 @@ def test_home_renders_with_full_schedule(
     # (catches the regression where a flex parent collapses a column),
     # (b) the row's right edge stays within the viewport (catches a
     # layout regression that pushes the action cluster off-screen),
-    # and (c) the rightmost action button — the delete trash — is
-    # visible and clickable. Together these guard the "drag handle
-    # and action cluster stay reachable" behaviour the docstring
-    # promises, not just that the rows exist.
-    for i in range(len(seeds)):
+    # (c) every enabled row's drag handle stays visible (only
+    # is_enabled rows render one — see
+    # test_inactive_row_has_no_drag_handle), and (d) the rightmost
+    # action button — the delete trash — is visible and clickable.
+    # Together these guard the "drag handle and action cluster stay
+    # reachable" behaviour the docstring promises, not just that the
+    # rows exist.
+    for i, spec in enumerate(seeds):
         row = rows.nth(i)
         row_box = row.bounding_box()
         assert row_box, f'row {i} has no bounding box'
@@ -350,6 +353,14 @@ def test_home_renders_with_full_schedule(
         assert name_box and name_box['width'] > 0, (
             f'row {i} name cell collapsed to zero width: {name_box!r}'
         )
+
+        if spec['is_enabled']:
+            drag_handle = row.locator('.drag-handle')
+            expect(drag_handle).to_be_visible()
+            handle_box = drag_handle.bounding_box()
+            assert handle_box and handle_box['width'] > 0, (
+                f'row {i} drag handle has no width: {handle_box!r}'
+            )
 
         # The Delete button is the rightmost action cell. Locating
         # by title rather than nth-child means a re-ordering of the
