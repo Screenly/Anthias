@@ -68,6 +68,11 @@ function init(root: HTMLElement): void {
   // the very first state assignment and the autoplay bar never starts.
   let activeIndex = -1
   let autoplayTimer: number | undefined
+  // Tracks the pending URL-fade text swap so a rapid second slide
+  // change can cancel the prior pending swap — otherwise a stale
+  // timeout could fire later and briefly clobber the URL pill with
+  // the previous slide's value.
+  let urlFadeTimer: number | undefined
   // Tracks whether the user has *interacted* with the slider. After
   // they click prev/next or a pill we stop autoplay entirely — the
   // assumption is they want to inspect the slide, not be swept along.
@@ -106,17 +111,25 @@ function init(root: HTMLElement): void {
     })
 
     // Chrome URL pill. Brief fade so the text swap doesn't read as a
-    // glitch. Don't animate when reduced-motion is on.
+    // glitch. Don't animate when reduced-motion is on. Cancel any
+    // still-pending swap before scheduling a new one so rapid slide
+    // changes (button mashing, swipe + observer) can't leave a stale
+    // older timeout to fire and overwrite the URL with a past value.
     if (refs.url) {
       const slug =
         refs.slides[index]?.dataset.slideUrl?.toLowerCase() ?? 'anthias.local'
       const nextUrl =
         slug === 'home' || !slug ? 'anthias.local' : `anthias.local/${slug}`
+      if (urlFadeTimer !== undefined) {
+        window.clearTimeout(urlFadeTimer)
+        urlFadeTimer = undefined
+      }
       if (reducedMotion) {
         refs.url.textContent = nextUrl
       } else {
         refs.url.classList.add('screenshot-url-fade')
-        window.setTimeout(() => {
+        urlFadeTimer = window.setTimeout(() => {
+          urlFadeTimer = undefined
           if (refs.url) {
             refs.url.textContent = nextUrl
             refs.url.classList.remove('screenshot-url-fade')

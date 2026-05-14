@@ -32,6 +32,14 @@
   {{- if $src -}}
     {{- $webps := slice -}}
     {{- $pngs  := slice -}}
+    {{- /* Capture the 1440-wide renditions during the ladder loop so
+           we can reuse them as the <img>/preload fallback without
+           re-invoking $src.Resize with the same spec. Hugo's resource
+           cache would normally dedupe the duplicate calls, but
+           keeping the references avoids re-walking the cache and
+           keeps the intent legible. */ -}}
+    {{- $primary := false -}}
+    {{- $primaryWebp := false -}}
     {{- range $widths -}}
       {{- /* Skip widths that would upscale — Hugo will happily blow a
              1400-wide source up to 2880 and produce blurry output,
@@ -42,17 +50,23 @@
         {{- $png  := $src.Resize (printf "%dx q90"      $w) -}}
         {{- $webps = $webps | append (printf "%s %dw" $webp.RelPermalink $w) -}}
         {{- $pngs  = $pngs  | append (printf "%s %dw" $png.RelPermalink  $w) -}}
+        {{- if eq $w 1440 -}}
+          {{- /* Middle of the desktop ladder — used as the <img src>
+                 fallback and as the LCP preload's WebP href. */ -}}
+          {{- $primary = $png -}}
+          {{- $primaryWebp = $webp -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
-    {{- /* Use a 1440-wide PNG as the <img src> fallback — that's the
-           middle of the desktop ladder and degrades gracefully on
-           any browser that ignores srcset (very rare in 2026, but
-           the cost is zero so we hedge). The matching WebP variant
-           feeds the LCP preload's href so the type="image/webp"
-           hint is honest — browsers skip preloads whose href type
-           disagrees with the declared MIME. */ -}}
-    {{- $primary    := $src.Resize "1440x q90" -}}
-    {{- $primaryWebp := $src.Resize "1440x webp q82" -}}
+    {{- /* If the source is narrower than 1440 it never produced a
+           1440 rendition in the loop; fall back to the largest width
+           that did fit (the last entry appended to $pngs / $webps).
+           Re-resolve via Resize at the source's own width so we get
+           a real Resource, not just the srcset string. */ -}}
+    {{- if not $primary -}}
+      {{- $primary     = $src.Resize (printf "%dx q90"      $src.Width) -}}
+      {{- $primaryWebp = $src.Resize (printf "%dx webp q82" $src.Width) -}}
+    {{- end -}}
     {{- $slides = $slides | append (dict
         "name"           $entry.name
         "alt"            $entry.alt
