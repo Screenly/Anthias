@@ -1283,7 +1283,6 @@ html {
   outline-offset: 2px;
 }
 .screenshot-slider {
-  --frame-bg: rgb(255 255 255 / 0.05);
   --frame-border: rgb(255 255 255 / 0.12);
   --frame-radius: 0.85rem;
   --autoplay-ms: 6000ms;

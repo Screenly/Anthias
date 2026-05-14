@@ -33,7 +33,6 @@ html {
    render. Auto-advance progress lives on .screenshot-pill-fill;
    slider.ts owns the timing + dataset state. */
 .screenshot-slider {
-  --frame-bg: rgb(255 255 255 / 0.05);
   --frame-border: rgb(255 255 255 / 0.12);
   --frame-radius: 0.85rem;
   --autoplay-ms: 6000ms;
