@@ -1429,10 +1429,13 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
             _envelope_summary('h264', 1920, 1080, 30),
             True,
         ),
-        # HEVC at envelope (codec, dims, fps all match).
+        # Wrong codec — even at envelope dims/fps, HEVC against an
+        # H.264 envelope must transcode (per-codec hwdec routing on
+        # Pi requires the on-disk codec to match envelope.codec
+        # exactly).
         (
             _envelope_summary('hevc', 1920, 1080, 30),
-            True,
+            False,
         ),
         # Non-mp4 container — must transcode (variant convention is mp4).
         (
@@ -2277,11 +2280,17 @@ def test_video_passthrough_skips_duration_when_probe_unavailable(
         fh.write(b'\x00' * 64)
     asset = _make_processing_asset('vid-noprobe', src, mimetype='video')
 
-    summary = {
-        'container': 'mp4',
-        'video_codec': 'h264',
-        'audio_codec': 'aac',
-    }
+    # Synthesised summary must carry the full passthrough-decision
+    # shape (codec / dims / fps) so ``_video_can_passthrough`` takes
+    # the happy path; otherwise the test would fall through to a
+    # real ffmpeg invocation on the 64-byte stub file and fail with
+    # "Invalid data found when processing input". The ``ffprobe
+    # unavailable`` scenario is that the summary lacks
+    # ``duration_seconds`` (which is what the early-return path in
+    # ``_ffprobe_summary`` produces); the *passthrough decision*
+    # itself was already made elsewhere on a normally-probed file.
+    summary = _envelope_summary('h264', 1920, 1080, 30)
+    summary['duration_seconds'] = None
     with (
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=summary

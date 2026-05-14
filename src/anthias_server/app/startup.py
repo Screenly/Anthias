@@ -67,10 +67,19 @@ def run_envelope_check() -> None:
     # Skip during test runs — pytest creates a fresh DB per process
     # and we don't want to pollute it (or hit the cache file in the
     # operator's actual ~/.anthias). The test bed exercises the
-    # walker behaviour directly via tests/test_celery_tasks.py.
+    # walker behaviour directly via tests/test_celery_tasks.py +
+    # tests/test_startup.py (the latter clears ENVIRONMENT for tests
+    # that need to exercise the real hook path).
+    #
+    # We deliberately don't check ``PYTEST_CURRENT_TEST`` here:
+    # pytest re-sets that env var at the start of every test's
+    # ``call`` phase, so a fixture that ``monkeypatch.delenv()``s it
+    # in ``setup`` gets the value re-asserted before the body runs.
+    # That makes it impossible for a test to ever exercise the real
+    # hook path. ``ENVIRONMENT=test`` (set in ``conftest.py`` and
+    # the test compose file) is the durable, fixture-controllable
+    # gate.
     if os.environ.get('ENVIRONMENT') == 'test':
-        return
-    if os.environ.get('PYTEST_CURRENT_TEST'):
         return
     # Skip when imported by a celery worker process. The server is
     # the canonical reconciler; celery workers run the *consumer*

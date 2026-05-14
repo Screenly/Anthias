@@ -82,13 +82,17 @@ def test_short_circuits_when_environment_test(
     load.assert_not_called()
 
 
-def test_short_circuits_when_pytest_current_test(
+def test_short_circuits_when_celery_worker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The ``PYTEST_CURRENT_TEST`` env var is set by pytest for the
-    duration of each test. The hook short-circuits on it too, so a
-    test that *forgets* to clear it never enqueues a stray walker."""
-    monkeypatch.setenv('PYTEST_CURRENT_TEST', 'foo.py::test_bar')
+    """Celery workers also call ``django.setup()`` so the hook
+    would run a second time on every worker boot. The
+    ``_is_celery_worker`` short-circuit prevents a second writer
+    racing on the cache file."""
+    import sys
+
+    monkeypatch.delenv('ENVIRONMENT', raising=False)
+    monkeypatch.setattr(sys, 'argv', ['/usr/local/bin/celery', '-A'])
     with (
         _patched_dispatch() as dispatch,
         mock.patch('anthias_server.playback_envelope.load_cached') as load,
