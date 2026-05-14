@@ -1078,3 +1078,97 @@ def normalize_video_asset(asset_id: str) -> None:
     if asset is None:
         return
     processing._run_video_normalisation(asset)
+
+
+@celery.task(time_limit=300)
+def regenerate_for_envelope_change(force: bool = False) -> int:
+    """Walk every video ``Asset`` and queue a re-render for any
+    whose ``metadata['envelope']`` no longer matches the current
+    ``compute_envelope()``.
+
+    Called from the anthias-server startup hook (see
+    ``anthias_server.apps``) on every boot. Cheap when nothing has
+    changed — one ``compute_envelope()`` + one
+    ``Asset.objects.filter(mimetype='video')`` walk, comparing each
+    row's recorded envelope dict against the current one.
+
+    For each stale row:
+
+    1. ``Asset.objects.filter(asset_id=...).update(is_processing=True)``
+       so the viewer skips the row during re-render (matches the
+       upload-time contract).
+    2. ``stamp_processing_start(asset_id)`` lays the timestamp the
+       periodic ``reconcile_stuck_processing`` task uses to age-gate
+       retries, so a stuck row gets the same recovery the upload
+       path enjoys.
+    3. ``normalize_video_asset.delay(asset_id)`` drops the work on
+       the same celery queue the upload-time normalize uses. The
+       refactored task reads the sibling ``.original.<ext>`` to
+       re-render (or treats the existing variant as the original on
+       first pass, for legacy assets pre-envelope rollout).
+
+    Returns the number of rows queued so the caller / log surface
+    has a "0 → all caught up" / "N → walker found work" signal.
+
+    ``force=True`` re-queues every video asset regardless of
+    envelope match — used by the ``reset-envelope`` manage.py
+    command and the failure-mode test that injects a corrupt
+    cache.
+
+    Failures are non-fatal: any per-row exception is logged but
+    doesn't stop the walker. We want a single bad row to not block
+    the rest of the catalog from getting their fresh variants.
+    """
+    from anthias_server.app.models import Asset
+    from anthias_server.playback_envelope import (
+        PlaybackEnvelope,
+        compute_envelope,
+    )
+
+    current = compute_envelope()
+    current_dict = current.as_dict()
+    queued = 0
+    for asset in Asset.objects.filter(mimetype='video'):
+        metadata = asset.metadata or {}
+        recorded = metadata.get('envelope')
+        if not force and recorded == current_dict:
+            # Variant on disk matches current envelope — nothing to
+            # do. Equality on the JSON-dict form is the right test:
+            # both sides came through ``PlaybackEnvelope.as_dict``,
+            # which has stable key order.
+            continue
+        # Validate any non-None recorded envelope so a corrupt
+        # entry triggers re-render rather than silently passing the
+        # `recorded == current_dict` check on bytewise-different
+        # JSON. We don't *use* the parsed value beyond catching
+        # malformed entries.
+        if recorded is not None:
+            try:
+                PlaybackEnvelope.from_dict(recorded)
+            except (ValueError, TypeError, KeyError):
+                logging.info(
+                    'regenerate_for_envelope_change: asset %s has '
+                    "malformed metadata['envelope']; treating as stale",
+                    asset.asset_id,
+                )
+        try:
+            Asset.objects.filter(asset_id=asset.asset_id).update(
+                is_processing=True,
+            )
+            processing.stamp_processing_start(asset.asset_id)
+            normalize_video_asset.delay(asset.asset_id)
+            queued += 1
+        except Exception:
+            logging.exception(
+                'regenerate_for_envelope_change: queueing asset %s failed; '
+                'continuing with the rest of the catalog',
+                asset.asset_id,
+            )
+    if queued:
+        logging.info(
+            'regenerate_for_envelope_change: queued %d video asset(s) '
+            'for re-render against envelope=%s',
+            queued,
+            current_dict,
+        )
+    return queued

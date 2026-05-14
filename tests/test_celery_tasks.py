@@ -1277,3 +1277,193 @@ def test_reconcile_lock_released_after_clean_run(
         reconcile_stuck_processing.apply()
 
     assert celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) is None
+
+
+# ---------------------------------------------------------------------------
+# regenerate_for_envelope_change — re-render walker
+# ---------------------------------------------------------------------------
+
+from anthias_server.celery_tasks import (  # noqa: E402
+    regenerate_for_envelope_change,
+)
+from anthias_server.playback_envelope import (  # noqa: E402
+    PlaybackEnvelope,
+)
+
+
+def _make_video_asset(asset_id: str, *, envelope_dict: dict | None) -> Asset:
+    """Create a video Asset row with the given envelope recorded.
+
+    Mirrors the production metadata shape after a successful
+    normalize: ``original_uri`` + ``envelope`` populated. The
+    walker reads ``metadata['envelope']`` to decide stale vs fresh
+    — we only ever vary that key per test.
+    """
+    metadata: dict = {}
+    if envelope_dict is not None:
+        metadata['envelope'] = envelope_dict
+        metadata['original_uri'] = (
+            f'/data/anthias_assets/{asset_id}.original.mp4'
+        )
+    return Asset.objects.create(
+        asset_id=asset_id,
+        name=asset_id,
+        uri=f'/data/anthias_assets/{asset_id}.mp4',
+        mimetype='video',
+        is_enabled=1,
+        duration=30,
+        play_order=0,
+        is_processing=False,
+        metadata=metadata,
+    )
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_skips_in_envelope_assets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An asset whose ``metadata['envelope']`` matches the current
+    envelope must NOT be queued — walker is a stale-only operation.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')  # HEVC 4Kp60 envelope
+    current = PlaybackEnvelope('hevc', 3840, 2160, 60)
+    _make_video_asset('in-envelope', envelope_dict=current.as_dict())
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay'
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert n == 0
+    queued.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_queues_stale_assets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Any envelope difference (codec, dims, fps) marks the asset
+    stale; the walker queues it and flips is_processing=True."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')  # current = HEVC 4Kp60
+    stale = PlaybackEnvelope('h264', 1920, 1080, 30).as_dict()
+    _make_video_asset('stale', envelope_dict=stale)
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay'
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert n == 1
+    queued.assert_called_once_with('stale')
+    assert Asset.objects.get(asset_id='stale').is_processing is True
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_queues_assets_with_no_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy assets (no metadata['envelope']) get re-rendered on
+    first walker pass — that's the migration path for the
+    pre-envelope rollout. ``recorded == current`` is False because
+    one side is None."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    _make_video_asset('legacy', envelope_dict=None)
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay'
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert n == 1
+    queued.assert_called_once_with('legacy')
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_skips_image_assets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Images don't have an envelope; the walker is video-only.
+    A mis-routed image row (somehow stale) must not get queued."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    Asset.objects.create(
+        asset_id='image-asset',
+        name='image-asset',
+        uri='/data/anthias_assets/image-asset.webp',
+        mimetype='image',
+        is_enabled=1,
+        duration=10,
+        play_order=0,
+        is_processing=False,
+        metadata={},
+    )
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay'
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert n == 0
+    queued.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_force_requeues_everything(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``force=True`` queues every video asset regardless of
+    envelope match — for the reset-envelope manage.py path and the
+    failure-mode test that injects a corrupt cache."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    current = PlaybackEnvelope('hevc', 3840, 2160, 60).as_dict()
+    _make_video_asset('in-envelope-a', envelope_dict=current)
+    _make_video_asset('in-envelope-b', envelope_dict=current)
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay'
+    ) as queued:
+        n = regenerate_for_envelope_change(force=True)
+
+    assert n == 2
+    assert queued.call_count == 2
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_handles_malformed_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row with a corrupt ``metadata['envelope']`` (missing keys,
+    wrong types) is treated as stale. The walker logs + queues
+    rather than crashing on the validation failure."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    _make_video_asset('malformed', envelope_dict={'codec': 'vp9'})
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay'
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert n == 1
+    queued.assert_called_once_with('malformed')
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_continues_after_per_row_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One row's dispatch failing must not block the rest of the
+    catalog from getting their fresh variants. The walker logs the
+    per-row exception and moves on."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    _make_video_asset('asset-a', envelope_dict=None)
+    _make_video_asset('asset-b', envelope_dict=None)
+
+    # First call raises, second succeeds.
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.delay',
+        side_effect=[RuntimeError('redis hiccup'), None],
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert queued.call_count == 2
+    # Only the successful call counts as "queued".
+    assert n == 1
