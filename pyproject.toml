@@ -105,7 +105,7 @@ dev = [
     "time-machine==2.15.0",
 ]
 host = [
-    "ansible-core==2.19.9",
+    "ansible-core==2.20.5",
     "netifaces2==0.0.22",
     "redis==7.4.0",
     "requests==2.33.1",
