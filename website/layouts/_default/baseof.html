@@ -16,7 +16,11 @@
            fetch); otherwise fall back to the static logo so the
            crawler always gets *something*. */ -}}
     {{- $pageImage := "" -}}
-    {{- $heroSlides := partialCached "screenshots.html" . -}}
+    {{- /* Stable string key — the partial reads only site.Data and
+           bundled resources, so memoising once per build (instead of
+           per-page via "." which differs across pages) is correct and
+           avoids re-running the Resize pipeline for every page. */ -}}
+    {{- $heroSlides := partialCached "screenshots.html" . "screenshots-singleton" -}}
     {{- if $heroSlides -}}
       {{- $pageImage = (index $heroSlides 0).fallback | absURL -}}
     {{- else -}}

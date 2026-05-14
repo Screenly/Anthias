@@ -7,8 +7,11 @@
        Entries whose ``<name>@3x.png`` is absent at build time are
        skipped silently — a partial CI artifact (e.g. one capture
        failed to render) still produces a working slider for the
-       slides that did make it. The home-page layout falls back to a
-       static placeholder when this partial returns an empty slice.
+       slides that did make it. When the returned slice is empty
+       (no captures resolved at all), ``layouts/index.html`` simply
+       omits the slider region — the hero text + CTA buttons still
+       render, the og:image preload falls back to ``logo.svg`` from
+       ``baseof.html``. There is no inline placeholder image.
 
        Returns a slice of dicts:
          name        — slug (matches data/screenshots.yaml `name`)

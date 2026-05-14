@@ -63,7 +63,10 @@ function init(root: HTMLElement): void {
   if (!refs) return
 
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-  let activeIndex = 0
+  // -1 (not 0) so the initial setActive(0) call applies state to the
+  // first pill — otherwise the early-return on equal-index swallows
+  // the very first state assignment and the autoplay bar never starts.
+  let activeIndex = -1
   let autoplayTimer: number | undefined
   // Tracks whether the user has *interacted* with the slider. After
   // they click prev/next or a pill we stop autoplay entirely — the
@@ -77,7 +80,14 @@ function init(root: HTMLElement): void {
 
     refs.pills.forEach((pill, i) => {
       const selected = i === index
-      pill.setAttribute('aria-selected', selected ? 'true' : 'false')
+      // aria-current marks the active pill; presence vs absence is
+      // what assistive tech tests for, so remove on the inactive
+      // pills rather than setting an explicit "false".
+      if (selected) {
+        pill.setAttribute('aria-current', 'true')
+      } else {
+        pill.removeAttribute('aria-current')
+      }
       // Force-restart the CSS animation by detaching+reattaching the
       // node: setting `data-state` alone leaves the animation in its
       // previous phase. animation-name swap also works but reading

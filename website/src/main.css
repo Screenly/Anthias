@@ -299,7 +299,7 @@ html {
 .screenshot-pill:hover {
   background: rgb(255 255 255 / 0.22);
 }
-.screenshot-pill[aria-selected="true"] {
+.screenshot-pill[aria-current="true"] {
   width: 3.5rem;
   background: rgb(255 255 255 / 0.18);
 }
@@ -314,13 +314,13 @@ html {
 }
 /* Animate the fill only while autoplay is running. Pause and resume
    states are toggled by slider.ts via data-state. */
-.screenshot-pill[aria-selected="true"][data-state="playing"] .screenshot-pill-fill {
+.screenshot-pill[aria-current="true"][data-state="playing"] .screenshot-pill-fill {
   animation: screenshot-autoplay var(--autoplay-ms) linear forwards;
 }
-.screenshot-pill[aria-selected="true"][data-state="paused"] .screenshot-pill-fill {
+.screenshot-pill[aria-current="true"][data-state="paused"] .screenshot-pill-fill {
   width: var(--paused-progress, 0%);
 }
-.screenshot-pill[aria-selected="true"][data-state="static"] .screenshot-pill-fill {
+.screenshot-pill[aria-current="true"][data-state="static"] .screenshot-pill-fill {
   width: 100%;
 }
 
@@ -329,7 +329,7 @@ html {
   to   { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .screenshot-pill[aria-selected="true"] .screenshot-pill-fill {
+  .screenshot-pill[aria-current="true"] .screenshot-pill-fill {
     animation: none;
     width: 100%;
   }

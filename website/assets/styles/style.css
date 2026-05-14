@@ -1,4 +1,4 @@
-/*! tailwindcss v4.3.0 | MIT License | https://tailwindcss.com */
+/*! tailwindcss v4.2.4 | MIT License | https://tailwindcss.com */
 @layer properties;
 @layer theme, base, components, utilities;
 @layer theme {
@@ -230,6 +230,12 @@
   .static {
     position: static;
   }
+  .start {
+    inset-inline-start: var(--spacing);
+  }
+  .end {
+    inset-inline-end: var(--spacing);
+  }
   .container {
     width: 100%;
     @media (width >= 40rem) {
@@ -422,6 +428,9 @@
   }
   .cursor-pointer {
     cursor: pointer;
+  }
+  .resize {
+    resize: both;
   }
   .scroll-mt-24 {
     scroll-margin-top: calc(var(--spacing) * 24);
@@ -1517,7 +1526,7 @@ html {
 .screenshot-pill:hover {
   background: rgb(255 255 255 / 0.22);
 }
-.screenshot-pill[aria-selected="true"] {
+.screenshot-pill[aria-current="true"] {
   width: 3.5rem;
   background: rgb(255 255 255 / 0.18);
 }
@@ -1529,13 +1538,13 @@ html {
   border-radius: 999px;
   pointer-events: none;
 }
-.screenshot-pill[aria-selected="true"][data-state="playing"] .screenshot-pill-fill {
+.screenshot-pill[aria-current="true"][data-state="playing"] .screenshot-pill-fill {
   animation: screenshot-autoplay var(--autoplay-ms) linear forwards;
 }
-.screenshot-pill[aria-selected="true"][data-state="paused"] .screenshot-pill-fill {
+.screenshot-pill[aria-current="true"][data-state="paused"] .screenshot-pill-fill {
   width: var(--paused-progress, 0%);
 }
-.screenshot-pill[aria-selected="true"][data-state="static"] .screenshot-pill-fill {
+.screenshot-pill[aria-current="true"][data-state="static"] .screenshot-pill-fill {
   width: 100%;
 }
 @keyframes screenshot-autoplay {
@@ -1547,7 +1556,7 @@ html {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .screenshot-pill[aria-selected="true"] .screenshot-pill-fill {
+  .screenshot-pill[aria-current="true"] .screenshot-pill-fill {
     animation: none;
     width: 100%;
   }
