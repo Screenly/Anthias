@@ -9,10 +9,24 @@ from typing import Any
 import django
 import sh
 from celery import Celery, Task
+from django.apps import apps as _django_apps
 from PIL import UnidentifiedImageError
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-django.setup()
+# ``django.setup()`` is not reentrant — calling it while
+# ``apps.populate()`` is still running (e.g. when an ``AppConfig.ready``
+# hook imports this module) raises ``RuntimeError: populate() isn't
+# reentrant`` and the import dies, taking the caller down silently in
+# any try/except chain. ``apps_ready`` flips to ``True`` after Django
+# finishes the import phase but *before* the per-app ``ready`` hooks
+# run, so the check correctly distinguishes:
+#
+#   * standalone celery worker process → Django not initialised yet
+#     (``apps_ready=False``) → ``setup()`` runs as before;
+#   * import from inside an ``AppConfig.ready`` (server process)
+#     → Django is mid-populate (``apps_ready=True``) → skip.
+if not _django_apps.apps_ready:
+    django.setup()
 
 # Place imports that uses Django in this block.
 
