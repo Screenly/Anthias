@@ -178,6 +178,34 @@
       answer: |
         From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls-ssl).
 
+    - question: How do I run Anthias behind my own reverse proxy?
+      answer: |
+        Most reverse proxies — nginx, Apache (`mod_proxy`), IIS ARR — rewrite the upstream `Host` header by default. When that happens, Django's CSRF protection rejects every POST with `Origin checking failed` and uploads, asset changes, and settings updates all fail.
+
+        You have two options:
+
+        **1. Preserve the upstream `Host` (preferred).** Tell the proxy to pass the original `Host` through:
+
+        | Proxy   | Directive                                       |
+        | ------- | ----------------------------------------------- |
+        | nginx   | `proxy_set_header Host $host;`                  |
+        | Apache  | `ProxyPreserveHost On`                          |
+        | IIS ARR | `preserveHostHeader="true"` (or the GUI toggle) |
+        | Caddy   | preserved by default — no action needed         |
+        | Traefik | preserved by default (`passHostHeader: true`)   |
+
+        With `Host` preserved, Anthias's built-in same-host CSRF fallback handles HTTP-to-HTTPS scheme drift automatically.
+
+        **2. Tell Anthias the public hostname directly.** If you can't (or don't want to) change the proxy config, list the public origin in `CSRF_TRUSTED_ORIGINS`. From `~/anthias/`, edit `.env` (or your compose override) and add:
+
+        ```
+        CSRF_TRUSTED_ORIGINS=https://signage.example.com
+        ```
+
+        Multiple origins are comma-separated. Restart with `docker compose up -d`.
+
+        The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you — the above is only relevant if you're terminating TLS or proxying with something else.
+
     - question: Where is the API reference?
       answer: |
         See the [API page](/api/) for endpoints grouped by tag with their parameters and response schemas. The live ReDoc-rendered docs are also served straight from each device at `http://<device-ip>/api/docs/`.
