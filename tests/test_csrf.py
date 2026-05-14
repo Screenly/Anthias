@@ -9,10 +9,14 @@ bad / missing tokens must still fail.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from django.test import Client
 from django.urls import reverse
-from pytest_django.fixtures import SettingsWrapper
+
+if TYPE_CHECKING:
+    from pytest_django.fixtures import SettingsWrapper
 
 # The whole point of this suite is exercising plain-HTTP Origin headers
 # against an HTTP-served Anthias — that's the deployment shape the bug

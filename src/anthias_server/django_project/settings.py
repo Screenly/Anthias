@@ -74,12 +74,13 @@ ALLOWED_HOSTS = [
 # CSRF_TRUSTED_ORIGINS handles the case where a reverse proxy serves
 # Anthias under a hostname different from the upstream Host the device
 # sees — IIS ARR with preserveHostHeader=false is the canonical
-# example (issue #2900): the browser sends ``Origin: https://signage.
-# example.com`` while uvicorn sees ``Host: anthias.localdomain``, so
-# neither Django's stock host-and-scheme check nor the same-host
-# fallback in SameHostOriginCsrfMiddleware can recognise the request
-# as same-origin. The operator opts in by listing the public origins
-# they actually serve Anthias under, e.g.
+# example (issue #2900): the browser sends
+# ``Origin: https://signage.example.com`` while uvicorn sees
+# ``Host: anthias.localdomain``, so neither Django's stock
+# host-and-scheme check nor the same-host fallback in
+# SameHostOriginCsrfMiddleware can recognise the request as
+# same-origin. The operator opts in by listing the public origins they
+# actually serve Anthias under, e.g.
 # ``CSRF_TRUSTED_ORIGINS=https://signage.example.com``.
 #
 # A wildcard scheme like ``https://*`` is not accepted by Django and
