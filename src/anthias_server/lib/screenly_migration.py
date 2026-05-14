@@ -20,11 +20,18 @@ from typing import Any
 
 import requests
 
+from anthias_common.http import AnthiasSession
 from anthias_server.app.models import Asset
 from anthias_server.app.views_files import ANTHIAS_ASSETS_ROOT
 
 
 SCREENLY_API_BASE = 'https://api.screenlyapp.com/api/v4.1'
+
+# Module-level session so every outbound migration call carries the
+# Anthias User-Agent (see ``AnthiasSession``). The session is cheap to
+# keep open and also gives us connection reuse across the typically
+# 10-100 sequential per-asset calls a migration produces.
+_session = AnthiasSession()
 
 # Title used for the Screenly asset-group that migrated assets are
 # placed under. Lives here so the prepare and per-asset paths agree
@@ -85,7 +92,7 @@ def validate_token(token: str) -> bool:
     into a user-visible message — we don't want to silently treat a
     transient outage as "bad token".
     """
-    response = requests.get(
+    response = _session.get(
         f'{SCREENLY_API_BASE}/assets',
         headers=_auth_headers(token),
         params={'limit': 1},
@@ -139,7 +146,7 @@ def ensure_asset_group(token: str, title: str) -> str:
     # dict[str, object] form here doesn't match any of the params
     # type unions.
     lookup_params: dict[str, str] = {'title': f'eq.{title}', 'limit': '1'}
-    lookup = requests.get(
+    lookup = _session.get(
         f'{SCREENLY_API_BASE}/asset-groups',
         headers=_auth_headers(token),
         params=lookup_params,
@@ -150,7 +157,7 @@ def ensure_asset_group(token: str, title: str) -> str:
         if group_id is not None:
             return group_id
 
-    create = requests.post(
+    create = _session.post(
         f'{SCREENLY_API_BASE}/asset-groups',
         headers={
             **_auth_headers(token),
@@ -310,7 +317,7 @@ def migrate_asset(
         data['source_url'] = asset.uri
 
     try:
-        response = requests.post(
+        response = _session.post(
             f'{SCREENLY_API_BASE}/assets',
             headers=_auth_headers(token),
             data=data,
