@@ -67,7 +67,7 @@ server = [
     "psutil==7.2.1",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
-    "pytz==2025.2",
+    "pytz==2026.2",
     "PyYAML==6.0.2",
     "redis==7.4.0",
     "requests==2.33.1",
@@ -87,7 +87,7 @@ viewer = [
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
     "python-vlc==3.0.21203",
-    "pytz==2025.2",
+    "pytz==2026.2",
     "redis==7.4.0",
     "requests==2.33.1",
     "tenacity==9.1.4",
@@ -147,7 +147,7 @@ mypy = [
     # tool.mypy.overrides above so its missing-import error is
     # ignored, mirroring the cec / pydbus / sh / vlc pattern.
     "Pillow==12.2.0",
-    "pytz==2025.2",
+    "pytz==2026.2",
     "whitenoise==6.12.0",
 ]
 
