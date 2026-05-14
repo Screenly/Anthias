@@ -2473,3 +2473,195 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+# ---------------------------------------------------------------------------
+# Sibling-original storage tests
+#
+# The contract under test: every video asset on disk after
+# ``_run_video_normalisation`` consists of two files —
+#
+#   <id>.<envelope.container_ext>   ← the playback variant
+#   <id>.original.<src_ext>         ← the source bytes, never modified
+#
+# plus two metadata keys (``original_uri`` and ``envelope``). The
+# walker depends on this contract for envelope-change re-renders, so
+# the tests below pin first-upload, re-render, passthrough, and the
+# legacy migration paths.
+# ---------------------------------------------------------------------------
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_sibling_original_created_on_first_run(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fresh upload: source at ``<id>.mov`` becomes
+    ``<id>.original.mov`` next to the rendered ``<id>.mp4`` variant.
+
+    ``monkeypatch`` pins ``DEVICE_TYPE=pi5`` so the source (libx264)
+    triggers a real transcode to HEVC — the *upload extension* (.mov)
+    survives into the sibling regardless of the variant container.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'vid.mov')
+    _make_video(src, codec='libx264', container='mov', audio='aac')
+    asset = _make_processing_asset('vid', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    variant = path.join(asset_dir, 'vid.mp4')
+    original = path.join(asset_dir, 'vid.original.mov')
+
+    assert asset.uri == variant
+    assert path.isfile(variant), 'variant must exist after render'
+    assert path.isfile(original), 'sibling-original must exist'
+    assert asset.metadata['original_uri'] == original
+    assert asset.metadata['envelope'] == {
+        'codec': 'hevc',
+        'max_width': 3840,
+        'max_height': 2160,
+        'max_fps': 60,
+    }
+    assert asset.metadata['transcoded'] is True
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_sibling_original_preserved_across_re_render(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Re-render: ``.original.<ext>`` is the authoritative source. A
+    second normalisation pass reads it, re-renders the variant, and
+    leaves the original byte-for-byte unchanged. This is the walker's
+    happy path on every envelope change."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'reroll.mov')
+    _make_video(src, codec='libx264', container='mov', audio='aac')
+    asset = _make_processing_asset('reroll', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+
+    original = asset.metadata['original_uri']
+    import hashlib
+
+    def _digest(p: str) -> str:
+        h = hashlib.sha256()
+        with open(p, 'rb') as fh:
+            for chunk in iter(lambda: fh.read(65536), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+    original_sha = _digest(original)
+
+    # Re-render against the same envelope. The render path branches
+    # on ``metadata['original_uri']`` existing on disk.
+    asset.is_processing = True
+    asset.save()
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+
+    assert path.isfile(original), 'original deleted across re-render'
+    assert _digest(original) == original_sha, (
+        '.original.<ext> bytes changed across re-render — the walker '
+        'must not rewrite the source'
+    )
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_sibling_original_on_passthrough(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passthrough still produces both files — the variant is a copy
+    of the original, not a rename of it. Lets the walker treat every
+    video asset uniformly regardless of whether the source matched
+    the envelope on first upload."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'pass.mp4')
+    _make_video(src, codec='libx265', container='mp4', audio='aac')
+    asset = _make_processing_asset('pass', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+
+    assert asset.metadata['transcoded'] is False
+    original = path.join(asset_dir, 'pass.original.mp4')
+    variant = path.join(asset_dir, 'pass.mp4')
+    assert path.isfile(original), 'passthrough must still create .original'
+    assert path.isfile(variant)
+    assert asset.uri == variant
+    # Byte-identical copy (passthrough is shutil.copyfile, not a remux).
+    assert os.stat(original).st_size == os.stat(variant).st_size
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_legacy_asset_migrates_on_first_normalisation(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pre-envelope rollout: ``Asset.uri`` points at the historical
+    in-place-transcoded file (no sibling, no envelope key). The
+    walker's first pass after upgrade must rename it to
+    ``.original.<ext>`` and re-render. We can't recover the
+    pre-Anthias upload bytes, but we don't lose more than the next
+    envelope-change step would have lost anyway."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'legacy.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    # Simulate a legacy row: no ``original_uri`` or ``envelope`` key.
+    asset = _make_processing_asset(
+        'legacy', src, mimetype='video', metadata={'transcoded': True}
+    )
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+
+    original = path.join(asset_dir, 'legacy.original.mp4')
+    variant = path.join(asset_dir, 'legacy.mp4')
+    assert path.isfile(original), 'legacy asset must be renamed to .original'
+    assert path.isfile(variant), 'fresh variant must be rendered'
+    assert asset.metadata['original_uri'] == original
+    assert asset.metadata['envelope']['codec'] == 'hevc'
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_re_render_falls_through_when_original_uri_dangling(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Operator deleted ``.original.<ext>`` to free disk: re-render
+    falls back to treating ``Asset.uri`` as the source-to-preserve.
+    No silent error, no lost variant — the asset just loses its
+    bytes-back path for the next envelope change."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'dangling.mov')
+    _make_video(src, codec='libx264', container='mov', audio='aac')
+    asset = _make_processing_asset(
+        'dangling',
+        src,
+        mimetype='video',
+        metadata={
+            'original_uri': path.join(asset_dir, 'does-not-exist.mov'),
+        },
+    )
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+
+    # We can't assert on a particular original path — the fall-through
+    # path renames ``asset.uri`` to ``.original.<ext>``, so the new
+    # original lives at ``dangling.original.mov``.
+    assert path.isfile(path.join(asset_dir, 'dangling.original.mov'))
+    assert path.isfile(path.join(asset_dir, 'dangling.mp4'))
+    assert asset.metadata['original_uri'] == path.join(
+        asset_dir, 'dangling.original.mov'
+    )
