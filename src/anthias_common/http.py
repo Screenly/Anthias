@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import requests
 
-from anthias_server.lib import diagnostics
+from anthias_common.version import get_anthias_release
 
 
 ANTHIAS_HOMEPAGE = 'https://anthias.screenly.io'
@@ -27,10 +27,10 @@ def get_user_agent() -> str:
     ``Product/Version (+URL)`` convention used by well-behaved
     crawlers so ops at the receiving end can identify the source
     without parsing the path. Falls back to ``unknown`` only when
-    ``diagnostics.get_anthias_release()`` finds neither the installed
-    package metadata nor the repo-root pyproject.toml.
+    ``get_anthias_release()`` finds neither the installed package
+    metadata nor the repo-root pyproject.toml.
     """
-    release = diagnostics.get_anthias_release() or 'unknown'
+    release = get_anthias_release() or 'unknown'
     return f'Anthias/{release} (+{ANTHIAS_HOMEPAGE})'
 
 
