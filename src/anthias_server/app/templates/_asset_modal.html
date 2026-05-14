@@ -169,6 +169,48 @@
       >
         {% csrf_token %}
         <div class="modal-card__body">
+          {% comment %} Top-of-modal failure banner. Rendered when the
+             normalisation pipeline wrote metadata.error_message via
+             _NormalizeAssetTask.on_failure. UnsupportedVideoCodecError
+             additionally attaches metadata.error_recipe — an ffmpeg
+             command pre-filled with the upload's filename — which we
+             render in a <code> block plus a copy button so the
+             operator can paste it straight into their terminal.
+          {% endcomment %}
+          <div
+            x-show="editAsset.metadata && editAsset.metadata.error_message"
+            x-cloak
+            class="modal-alert modal-alert--warning mb-4"
+            x-data="{ copied: false, copyRecipe() {
+              const recipe = (editAsset.metadata && editAsset.metadata.error_recipe) || '';
+              if (!recipe) return;
+              navigator.clipboard.writeText(recipe).then(() => {
+                this.copied = true;
+                setTimeout(() => { this.copied = false }, 2000);
+              });
+            } }"
+          >
+            <div class="modal-alert__head">
+              <i class="ti ti-alert-triangle modal-alert__icon" aria-hidden="true"></i>
+              <div>
+                <p class="modal-alert__title">Processing failed</p>
+                <p class="modal-alert__body" x-text="editAsset.metadata.error_message"></p>
+              </div>
+            </div>
+            <template x-if="editAsset.metadata && editAsset.metadata.error_recipe">
+              <div class="modal-alert__recipe">
+                <pre class="modal-alert__code"><code x-text="editAsset.metadata.error_recipe"></code></pre>
+                <button type="button"
+                        class="app-btn app-btn-secondary modal-alert__copy"
+                        @click="copyRecipe()"
+                        :aria-label="copied ? 'Copied' : 'Copy ffmpeg command'">
+                  <i class="ti" :class="copied ? 'ti-check' : 'ti-copy'"></i>
+                  <span x-text="copied ? 'Copied' : 'Copy command'"></span>
+                </button>
+              </div>
+            </template>
+          </div>
+
           <div class="app-floating mb-3">
             <input type="text" class="app-input" id="edit-name" name="name" :value="editAsset.name" required>
             <label for="edit-name">Name</label>

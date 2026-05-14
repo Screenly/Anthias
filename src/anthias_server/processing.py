@@ -317,7 +317,9 @@ def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
     return raw.decode('utf-8', errors='replace').strip()
 
 
-def _set_processing_error(asset_id: str, message: str) -> None:
+def _set_processing_error(
+    asset_id: str, message: str, recipe: str = ''
+) -> None:
     """Persist a human-readable error and clear is_processing.
 
     Both tasks land here on a permanent failure (corrupt HEIC,
@@ -326,6 +328,11 @@ def _set_processing_error(asset_id: str, message: str) -> None:
     instead of leaving the row stuck at ``is_processing=True`` is the
     contract called out by the issue's acceptance criteria. Operators
     surface the message via the v2 API's ``metadata`` field.
+
+    ``recipe``, when present, persists alongside the message as
+    ``metadata.error_recipe`` — the dashboard renders it in a
+    copyable ``<code>`` block in the Edit Asset modal. Empty
+    ``recipe`` clears any stale value from a prior failure.
     """
     try:
         asset = Asset.objects.get(asset_id=asset_id)
@@ -333,6 +340,10 @@ def _set_processing_error(asset_id: str, message: str) -> None:
         return
     metadata = dict(asset.metadata or {})
     metadata['error_message'] = message
+    if recipe:
+        metadata['error_recipe'] = recipe
+    else:
+        metadata.pop('error_recipe', None)
     # Disable the row alongside clearing is_processing. The viewer's
     # scheduling.generate_asset_list filters on ``is_enabled`` + date
     # window only — it doesn't check ``metadata.error_message`` —
@@ -449,10 +460,18 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
     Mirrors the YouTube task's failure handling: clears
     ``is_processing`` and writes ``metadata.error_message`` so the
     operator's table row never stays stuck on "Processing" after a
-    crash. The message is the str() of the exception so it surfaces
-    something concrete (``UnidentifiedImageError: cannot identify
-    image file '/data/anthias_assets/abc.heic'``) without leaking a
-    full traceback into the API response.
+    crash. Two message shapes:
+
+    * ``UnsupportedVideoCodecError`` — the gate's user-facing
+      exception. The message body is already operator-readable
+      (no class-name prefix); any attached ``recipe`` lands in
+      ``metadata.error_recipe`` so the modal can render it in a
+      copyable ``<code>`` block.
+    * Anything else (corrupt HEIC, ffmpeg subprocess error, ...) —
+      prefix with the exception class so the operator sees a
+      concrete signal (``UnidentifiedImageError: cannot identify
+      image file '/data/.../abc.heic'``) without leaking the full
+      traceback.
     """
 
     def on_failure(
@@ -467,7 +486,10 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
         if not asset_id:
             return
         try:
-            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+            if isinstance(exc, UnsupportedVideoCodecError):
+                _set_processing_error(asset_id, str(exc), recipe=exc.recipe)
+            else:
+                _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
             _notify(asset_id)
         except Exception:
             logging.exception(
@@ -852,7 +874,10 @@ def _hw_decoded_codecs() -> frozenset[str]:
     return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
 
 
-def _ffmpeg_reencode_recipe(supported: frozenset[str]) -> str:
+def _ffmpeg_reencode_recipe(
+    supported: frozenset[str],
+    source_filename: str = '',
+) -> str:
     """Return an ``ffmpeg`` command line the operator can run on
     their workstation to transcode an unsupported upload into a
     codec this board hardware-decodes.
@@ -864,30 +889,53 @@ def _ffmpeg_reencode_recipe(supported: frozenset[str]) -> str:
     only board). Returns an empty string when the board has no HW
     decode set at all — there's nothing the operator can transcode
     to that would land in a supported pipe.
+
+    ``source_filename``, when supplied, substitutes the bare upload
+    filename (no path) for the ``INPUT`` placeholder and reuses its
+    stem for ``OUTPUT.mp4`` so the operator can copy the recipe
+    verbatim into their terminal without hand-editing it.
     """
     if 'h264' in supported:
-        return (
-            'ffmpeg -i INPUT -c:v libx264 -preset medium -crf 23 '
-            '-c:a aac -b:a 192k -movflags +faststart OUTPUT.mp4'
+        template = (
+            'ffmpeg -i {input} -c:v libx264 -preset medium -crf 23 '
+            '-c:a aac -b:a 192k -movflags +faststart {output}'
         )
-    if 'hevc' in supported:
-        return (
-            'ffmpeg -i INPUT -c:v libx265 -preset medium -crf 28 '
+    elif 'hevc' in supported:
+        template = (
+            'ffmpeg -i {input} -c:v libx265 -preset medium -crf 28 '
             '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
-            'OUTPUT.mp4'
+            '{output}'
         )
-    return ''
+    else:
+        return ''
+    if source_filename:
+        # Quote with single quotes so spaces / unusual chars in the
+        # filename survive a shell paste. The output reuses the
+        # source's stem so the operator gets a deterministic output
+        # name they can re-upload.
+        in_quoted = f"'{source_filename}'"
+        stem, _ = path.splitext(source_filename)
+        out_quoted = f"'{stem}.mp4'"
+    else:
+        in_quoted = 'INPUT'
+        out_quoted = 'OUTPUT.mp4'
+    return template.format(input=in_quoted, output=out_quoted)
 
 
 class UnsupportedVideoCodecError(Exception):
     """Raised by ``_run_video_normalisation`` when a video upload's
     codec can't be hardware-decoded on this device.
 
-    ``_NormalizeAssetTask.on_failure`` catches this and writes the
-    message into ``metadata['error_message']`` so the operator sees
-    *what* was rejected and *why* on the asset list, without the row
-    staying stuck at ``is_processing=True``.
+    Carries the suggested ``recipe`` (an ``ffmpeg`` command the
+    operator can run to fix the upload) as an attribute so
+    ``_NormalizeAssetTask.on_failure`` can persist it alongside the
+    human-readable message — the UI surfaces the two in different
+    spots (message inline, recipe in a copyable ``<code>`` block).
     """
+
+    def __init__(self, message: str, recipe: str = '') -> None:
+        super().__init__(message)
+        self.recipe = recipe
 
 
 def _run_video_normalisation(asset: Asset) -> None:
@@ -949,11 +997,19 @@ def _run_video_normalisation(asset: Asset) -> None:
     display_codec = (
         src_codec if src_codec and src_codec != 'unknown' else 'unknown'
     )
-    recipe = _ffmpeg_reencode_recipe(supported)
+    # ``upload_name`` is stashed by the dashboard / API at upload
+    # time — the on-disk file gets renamed to ``<uuid>.<ext>`` but
+    # the recipe wants a name the operator can paste straight into
+    # their workstation terminal. YouTube / pre-rebrand rows that
+    # don't carry the field fall through to a stable
+    # ``upload<ext>`` placeholder so the recipe still teaches the
+    # operator the input extension.
+    upload_name = metadata.get('upload_name') or (
+        f'upload{path.splitext(src_uri)[1]}'
+    )
+    recipe = _ffmpeg_reencode_recipe(supported, upload_name)
     message = (
         f'Video codec {display_codec!r} is not hardware-decoded on '
         f'this device. Supported: {supported_str}.'
     )
-    if recipe:
-        message += f' Re-encode on your workstation with: {recipe}'
-    raise UnsupportedVideoCodecError(message)
+    raise UnsupportedVideoCodecError(message, recipe=recipe)

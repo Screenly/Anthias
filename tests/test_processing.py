@@ -638,13 +638,21 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An H.264 upload on a Pi 5 (HEVC only — Pi 5's mpv has no v4l2-
-    request H.264 hwdec) is rejected. The error message names the
-    rejected codec, the supported set, and an ffmpeg recipe the
-    operator can copy-paste."""
+    request H.264 hwdec) is rejected. The exception's message names
+    the rejected codec and supported set; its ``recipe`` attribute
+    carries an ffmpeg command pre-filled with the upload's filename
+    (taken from ``metadata.upload_name``, which the upload view
+    stashes at create time) so the operator can copy-paste it
+    verbatim."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi5')
     src = path.join(asset_dir, 'sample.mp4')
     _make_video(src, codec='libx264', container='mp4', audio='aac')
-    asset = _make_processing_asset('vid-h264-pi5', src, mimetype='video')
+    asset = _make_processing_asset(
+        'vid-h264-pi5',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'beach-clip.mp4'},
+    )
 
     with mock.patch.object(processing, '_notify'):
         with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
@@ -653,15 +661,42 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     msg = str(excinfo.value)
     assert "'h264'" in msg
     assert 'hevc' in msg
-    # Pi 5 supports HEVC only — recipe should suggest libx265.
-    assert 'libx265' in msg
-    assert '-tag:v hvc1' in msg
+    # Recipe is on the exception, not in the message body.
+    recipe = excinfo.value.recipe
+    assert 'libx265' in recipe  # Pi 5 supports HEVC only.
+    assert '-tag:v hvc1' in recipe
+    # The upload's filename appears in the recipe — operator can
+    # copy and paste it without hand-editing INPUT/OUTPUT.
+    assert "'beach-clip.mp4'" in recipe
+    assert "'beach-clip.mp4'" in recipe.split(' -c:v ')[0]  # input slot
 
     # Metadata was still written so the operator can see *what* they
     # uploaded next to the error message in the asset list.
     asset.refresh_from_db()
     assert asset.metadata.get('video_codec') == 'h264'
     assert asset.metadata.get('video_width') == 32
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the row has no ``metadata.upload_name`` (YouTube
+    downloads, pre-rebrand rows), the recipe uses a stable
+    ``upload<ext>`` placeholder so the operator still sees the
+    correct input extension to substitute."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'noname.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-noname', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    recipe = excinfo.value.recipe
+    assert "'upload.mp4'" in recipe
 
 
 @pytest_ffmpeg
@@ -680,9 +715,9 @@ def test_video_unsupported_codec_h264_board_recipe(
         with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
             processing._run_video_normalisation(asset)
 
-    msg = str(excinfo.value)
-    assert 'libx264' in msg
-    assert 'libx265' not in msg
+    recipe = excinfo.value.recipe
+    assert 'libx264' in recipe
+    assert 'libx265' not in recipe
 
 
 @pytest_ffmpeg
@@ -1240,6 +1275,75 @@ def test_normalize_on_failure_no_args_is_safe() -> None:
     task = processing._NormalizeAssetTask()
     # Should not raise.
     task.on_failure(RuntimeError('boom'), 'task-id', (), {}, None)
+
+
+@pytest.mark.django_db
+def test_normalize_on_failure_unsupported_codec_persists_recipe(
+    asset_dir: str,
+) -> None:
+    """``UnsupportedVideoCodecError`` is the gate's user-facing
+    exception. on_failure must:
+
+    * write the bare message into ``metadata.error_message`` (no
+      ``UnsupportedVideoCodecError:`` class-name prefix — that's the
+      P1 review finding), and
+    * mirror the exception's ``recipe`` attribute into
+      ``metadata.error_recipe`` so the Edit modal can render it in a
+      copyable ``<code>`` block.
+    """
+    asset = _make_processing_asset(
+        'vid-onfail',
+        path.join(asset_dir, 'fixture.mpg'),
+        mimetype='video',
+    )
+    task = processing._NormalizeAssetTask()
+    exc = processing.UnsupportedVideoCodecError(
+        "Video codec 'mpeg2video' is not hardware-decoded on this "
+        'device. Supported: h264, hevc.',
+        recipe="ffmpeg -i 'fixture.mpg' -c:v libx264 'fixture.mp4'",
+    )
+
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(exc, 'task-id', (asset.asset_id,), {}, None)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    msg = asset.metadata['error_message']
+    assert 'mpeg2video' in msg
+    assert 'UnsupportedVideoCodecError' not in msg
+    assert asset.metadata['error_recipe'] == (
+        "ffmpeg -i 'fixture.mpg' -c:v libx264 'fixture.mp4'"
+    )
+
+
+@pytest.mark.django_db
+def test_normalize_on_failure_clears_stale_error_recipe(
+    asset_dir: str,
+) -> None:
+    """A subsequent non-recipe failure must clear any stale
+    ``error_recipe`` from a previous run, otherwise the modal would
+    show an outdated recipe alongside the new error message."""
+    asset = _make_processing_asset(
+        'img-clears',
+        path.join(asset_dir, 'fixture.tiff'),
+        mimetype='image',
+        metadata={
+            'error_recipe': "ffmpeg -i 'old.mpg' -c:v libx264 'old.mp4'",
+        },
+    )
+    task = processing._NormalizeAssetTask()
+
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(
+            UnidentifiedImageError('cannot decode'),
+            'task-id',
+            (asset.asset_id,),
+            {},
+            None,
+        )
+
+    asset.refresh_from_db()
+    assert 'error_recipe' not in asset.metadata
 
 
 # ---------------------------------------------------------------------------
