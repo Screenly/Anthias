@@ -16,13 +16,16 @@
            fetch); otherwise fall back to the static logo so the
            crawler always gets *something*. */ -}}
     {{- $pageImage := "" -}}
+    {{- $pageImageAlt := "Anthias logo" -}}
     {{- /* Stable string key — the partial reads only site.Data and
            bundled resources, so memoising once per build (instead of
            per-page via "." which differs across pages) is correct and
            avoids re-running the Resize pipeline for every page. */ -}}
     {{- $heroSlides := partialCached "screenshots.html" . "screenshots-singleton" -}}
     {{- if $heroSlides -}}
-      {{- $pageImage = (index $heroSlides 0).fallback | absURL -}}
+      {{- $first := index $heroSlides 0 -}}
+      {{- $pageImage = $first.fallback | absURL -}}
+      {{- with $first.alt -}}{{- $pageImageAlt = . -}}{{- end -}}
     {{- else -}}
       {{- with resources.Get "images/logo.svg" -}}
         {{- $pageImage = .Permalink -}}
@@ -39,14 +42,14 @@
     <meta property="og:type" content="{{ if and .IsPage (eq (string .Section) "docs") }}article{{ else }}website{{ end }}">
     <meta property="og:url" content="{{ .Permalink }}">
     <meta property="og:image" content="{{ $pageImage }}">
-    <meta property="og:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+    <meta property="og:image:alt" content="{{ $pageImageAlt }}">
     <meta property="og:site_name" content="{{ $brand }}">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $pageTitle }}">
     <meta name="twitter:description" content="{{ $description }}">
     <meta name="twitter:image" content="{{ $pageImage }}">
-    <meta name="twitter:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+    <meta name="twitter:image:alt" content="{{ $pageImageAlt }}">
 
     {{- $favicon := resources.Get "images/favicon.ico" -}}
     {{- $style := resources.Get "styles/style.css" | fingerprint -}}
