@@ -16,20 +16,26 @@
             <h2 class="text-xs font-semibold uppercase tracking-[0.12em] text-brand-purple mb-2">{{ $group.group }}</h2>
             <div class="divide-y divide-black/10 border-t border-black/10">
                 {{- range $i, $item := $group.items -}}
-                {{- $id := printf "faq-%d-%d" (add $gi 1) (add $i 1) -}}
-                <div>
+                {{- $slug := $item.question | anchorize -}}
+                <div id="{{ $slug }}" class="group scroll-mt-4 relative">
+                    <a
+                        href="#{{ $slug }}"
+                        aria-label="Permalink to: {{ $item.question }}"
+                        data-faq-anchor
+                        class="absolute left-0 top-5 leading-relaxed font-mono text-brand-purple/50 hover:text-brand-purple opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity sm:-translate-x-6 px-1 sm:px-0"
+                    >#</a>
                     <button
-                        id="{{ $id }}-btn"
-                        data-accordion="{{ $id }}"
+                        id="{{ $slug }}-btn"
+                        data-accordion="{{ $slug }}-answer"
                         aria-expanded="false"
-                        aria-controls="{{ $id }}"
-                        class="w-full flex items-center justify-between text-left py-5 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed gap-4"
+                        aria-controls="{{ $slug }}-answer"
+                        class="w-full flex items-center justify-between text-left py-5 bg-transparent border-0 cursor-pointer text-brand-near-black font-bold leading-relaxed gap-4 pl-6 sm:pl-0"
                     >
                         <span>{{ $item.question }}</span>
                         <img class="icon-plus w-5 h-5 shrink-0" src="{{ $iconPlus.RelPermalink }}" alt="" aria-hidden="true" />
                         <img class="icon-minus w-5 h-5 shrink-0 hidden" src="{{ $iconMinus.RelPermalink }}" alt="" aria-hidden="true" />
                     </button>
-                    <section id="{{ $id }}" aria-labelledby="{{ $id }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
+                    <section id="{{ $slug }}-answer" aria-labelledby="{{ $slug }}-btn" class="hidden pb-6 docs-prose" data-accordion-content>
                         {{ $item.answer | markdownify }}
                     </section>
                 </div>
