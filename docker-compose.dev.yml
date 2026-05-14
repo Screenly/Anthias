@@ -36,6 +36,7 @@ services:
         condition: service_started
     command: >
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
+      --concurrency=1
       --loglevel=info --scheduler celery.beat.Scheduler
     environment:
       - HOME=/data

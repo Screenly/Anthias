@@ -54,6 +54,7 @@ services:
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
+      --concurrency=1
       --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
       - anthias-server

@@ -92,9 +92,23 @@ services:
     # down. Subprocesses (ffmpeg, ffprobe, Pillow's libheif binding)
     # inherit the wrapper's settings, so a single configuration here
     # covers every workload the worker spawns.
+    #
+    # ``--concurrency=1`` caps the worker at one normalize task at a
+    # time. Default celery concurrency = num_cores, which on a Pi 4
+    # / Pi 5 / Rock Pi 4 means 4 parallel libx265 encodes sharing
+    # the same SoC as the viewer's mpv process. nice(1) helps only
+    # when there's CONTENTION — four ffmpegs at nice 19 still
+    # saturate the cores and push the board into swap (each
+    # libx265 1080p encode needs ~500 MB RAM; a 4 GB SBC OOM-
+    # spirals well before the walker finishes). Live-confirmed on
+    # the Rock Pi 4: sshd starved through banner exchange during
+    # walker bursts. Asset processing is upload-time, not
+    # throughput-bound — serial encodes finish a few minutes
+    # later, but the viewer never drops a frame.
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
+      --concurrency=1
       --loglevel=info --scheduler celery.beat.Scheduler
     depends_on:
       - anthias-server
