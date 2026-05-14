@@ -15,14 +15,18 @@ seed via the ORM the same way ``test_app.py`` does).
 from __future__ import annotations
 
 import json
-from datetime import timedelta
 from typing import Any
 
 import pytest
-from django.utils import timezone
 from playwright.sync_api import Page, Request, Route, expect
 
 from anthias_server.app.models import Asset
+from tests._seed_data import (
+    WIZARD_IMAGE_BASENAME,
+    WIZARD_SEED_ASSETS,
+    WIZARD_VIDEO_BASENAME,
+    WIZARD_WEBPAGE_URL,
+)
 
 
 BASE_URL = 'http://localhost:8080'
@@ -32,61 +36,17 @@ SETTINGS_URL = f'{BASE_URL}/settings/'
 DEFAULT_TIMEOUT_MS = 15_000
 
 
-# ---------------------------------------------------------------------------
-# Asset seeds
-# ---------------------------------------------------------------------------
-
-
-def _asset_row(
-    asset_id: str, name: str, mimetype: str, uri: str
-) -> dict[str, Any]:
-    """Minimum fields ``Asset.objects.create`` accepts plus the
-    schedule-window defaults so the row shows on the home page too.
-    Mirrors the seed helpers in tests/test_app.py."""
-    return {
-        'asset_id': asset_id,
-        'name': name,
-        'mimetype': mimetype,
-        'uri': uri,
-        'start_date': timezone.now() - timedelta(days=1),
-        'end_date': timezone.now() + timedelta(days=1),
-        'duration': 5,
-        'is_enabled': 1,
-        'nocache': 0,
-        'play_order': 0,
-        'skip_asset_check': 0,
-    }
-
-
-SEED_ASSETS = [
-    _asset_row('a1', 'Demo Reel', 'video', '/data/anthias_assets/abc1.mp4'),
-    _asset_row('a2', 'Company Site', 'webpage', 'https://example.com/promo'),
-    _asset_row(
-        'a3', 'Welcome Splash', 'image', '/data/anthias_assets/abc3.png'
-    ),
-]
+# Seeds live in tests/_seed_data.py so the home-page tests and the
+# wizard tests render the same Office Space parody content. Re-export
+# under the short alias the test bodies have always used.
+SEED_ASSETS = WIZARD_SEED_ASSETS
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope='session')
-def browser_context_args(
-    browser_context_args: dict[str, Any],
-) -> dict[str, Any]:
-    return {**browser_context_args, 'viewport': {'width': 1400, 'height': 900}}
-
-
-@pytest.fixture(scope='session')
-def browser_type_launch_args(
-    browser_type_launch_args: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        **browser_type_launch_args,
-        'args': [*browser_type_launch_args.get('args', []), '--no-sandbox'],
-    }
+#
+# Browser viewport / launch args are inherited from tests/conftest.py.
 
 
 @pytest.fixture(autouse=True)
@@ -519,6 +479,6 @@ def test_uri_basename_shown_for_local_assets(
 
     # But it should show the basenames AND let URL-backed assets
     # keep their full URL.
-    expect(page.get_by_text('abc1.mp4')).to_be_visible()
-    expect(page.get_by_text('abc3.png')).to_be_visible()
-    expect(page.get_by_text('https://example.com/promo')).to_be_visible()
+    expect(page.get_by_text(WIZARD_VIDEO_BASENAME)).to_be_visible()
+    expect(page.get_by_text(WIZARD_IMAGE_BASENAME)).to_be_visible()
+    expect(page.get_by_text(WIZARD_WEBPAGE_URL)).to_be_visible()

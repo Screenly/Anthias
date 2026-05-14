@@ -34,16 +34,21 @@ import os
 import shutil
 import tempfile
 from collections.abc import Callable
-from datetime import timedelta
 from time import monotonic, sleep
 from typing import Any
 
 import pytest
-from django.utils import timezone
 from playwright.sync_api import Page, expect
 
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings
+from tests._seed_data import (
+    CHOTCHKIES_FLAIR_POLICY,
+    INITECH_ANNOUNCEMENT,
+    LUMBERGH_MEMO,
+    home_seed_assets,
+)
+from tests.conftest import MarketingShotFn
 
 
 BASE_URL = 'http://localhost:8080'
@@ -56,48 +61,16 @@ DEFAULT_TIMEOUT_MS = 15_000
 # ---------------------------------------------------------------------------
 # Asset seed data
 # ---------------------------------------------------------------------------
+#
+# Concrete sample content lives in ``tests/_seed_data.py`` so the
+# wizard / smoke / marketing pipelines stay on one set of Office Space
+# parody assets. The aliases below preserve the role-based names the
+# existing tests reference (``asset_active`` / ``asset_disabled``) —
+# only the content the rows render with has changed.
 
-asset_active: dict[str, Any] = {
-    'mimetype': 'image',
-    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
-    'name': 'Sample Image',
-    'uri': 'https://example.com/sample.png',
-    'start_date': timezone.now() - timedelta(days=1),
-    'end_date': timezone.now() + timedelta(days=1),
-    'duration': 6,
-    'is_enabled': 1,
-    'nocache': 0,
-    'play_order': 0,
-    'skip_asset_check': 0,
-}
-
-asset_active_2: dict[str, Any] = {
-    'mimetype': 'web',
-    'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
-    'name': 'Wireload',
-    'uri': 'http://www.wireload.net',
-    'start_date': timezone.now() - timedelta(days=1),
-    'end_date': timezone.now() + timedelta(days=1),
-    'duration': 5,
-    'is_enabled': 1,
-    'nocache': 0,
-    'play_order': 1,
-    'skip_asset_check': 0,
-}
-
-asset_disabled: dict[str, Any] = {
-    'mimetype': 'web',
-    'asset_id': 'aa11bb22cc33dd44ee55ff6677889900',
-    'name': 'Disabled Page',
-    'uri': 'https://example.com/disabled',
-    'start_date': timezone.now() - timedelta(days=1),
-    'end_date': timezone.now() + timedelta(days=1),
-    'duration': 5,
-    'is_enabled': 0,
-    'nocache': 0,
-    'play_order': 99,
-    'skip_asset_check': 0,
-}
+asset_active: dict[str, Any] = INITECH_ANNOUNCEMENT
+asset_active_2: dict[str, Any] = LUMBERGH_MEMO
+asset_disabled: dict[str, Any] = CHOTCHKIES_FLAIR_POLICY
 
 
 # ---------------------------------------------------------------------------
@@ -239,43 +212,12 @@ def _drag_handle_to_row(
 # ---------------------------------------------------------------------------
 
 
-# pytest-playwright supplies the `page` fixture. The CLI flags below
-# (set in pyproject.toml addopts) control its behaviour:
-#   --headed=false          headless chromium
-#   --browser chromium      run only chromium (skip firefox/webkit)
-#   --tracing retain-on-failure
-#                           start a per-test trace, drop it for green
-#                           tests, drain to <output>/.../trace.zip on
-#                           failure (`playwright show-trace` replays)
-#   --screenshot only-on-failure
-#                           full-page PNG into the same per-test dir
-#                           on failure
-#   --output test-artifacts the failure bundle directory the GH
-#                           Actions upload-artifact step picks up
-#
-# Browser context args (viewport, default timeout) come from the
-# fixture override below — pytest-playwright merges these into its
-# new_context() call.
-
-
-@pytest.fixture(scope='session')
-def browser_context_args(
-    browser_context_args: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        **browser_context_args,
-        'viewport': {'width': 1400, 'height': 900},
-    }
-
-
-@pytest.fixture(scope='session')
-def browser_type_launch_args(
-    browser_type_launch_args: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        **browser_type_launch_args,
-        'args': [*browser_type_launch_args.get('args', []), '--no-sandbox'],
-    }
+# pytest-playwright supplies the ``page`` fixture; browser viewport,
+# launch flags and the optional 3× marketing scale-up live in
+# ``tests/conftest.py`` so test_app.py and test_migrate_to_screenly.py
+# don't duplicate the same overrides. CLI-level flags (--browser
+# chromium, --tracing retain-on-failure, --screenshot only-on-failure,
+# --output test-artifacts) are still set in pyproject.toml's addopts.
 
 
 @pytest.fixture(autouse=True)
@@ -352,6 +294,66 @@ def test_alpine_click_handlers_fire_on_production_bundle(
     ).to_be_visible()
     page.locator('#add-asset-button').click()
     _wait_alpine(page, 'state.mode', 'add')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_home_renders_with_full_schedule(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """A six-row, mixed-mimetype schedule must render the asset table
+    without layout collapse — the per-row tests below only verify one
+    row at a time and so miss padding / spacing regressions that only
+    surface when the table is populated.
+
+    Doubles as the source for the ``home@Nx.png`` marketing capture
+    when ``MARKETING_SCREENSHOTS=1`` is set."""
+    for spec in home_seed_assets():
+        Asset.objects.create(**spec)
+
+    page.goto(BASE_URL)
+    expect(
+        page.get_by_role('heading', name='Schedule Overview')
+    ).to_be_visible()
+    expect(page.locator('tr[data-asset-id]')).to_have_count(
+        len(home_seed_assets())
+    )
+
+    marketing_screenshot('home')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_asset_modal_layers_over_full_schedule(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """Add-asset modal must layer correctly above a populated table —
+    a regression here would either show the table bleeding through the
+    overlay or push the modal off-screen on the marketing viewport.
+
+    Doubles as the source for the ``add-asset@Nx.png`` capture."""
+    for spec in home_seed_assets():
+        Asset.objects.create(**spec)
+
+    page.goto(BASE_URL)
+    expect(
+        page.get_by_role('heading', name='Schedule Overview')
+    ).to_be_visible()
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+    # Confirm the modal's title rendered before capturing — otherwise
+    # the screenshot can land mid-transition with a partially faded
+    # backdrop.
+    expect(page.get_by_role('heading', name='Add asset')).to_be_visible()
+
+    # full_page=False because the modal is position: fixed; Playwright's
+    # full-page mode would push the modal card off-frame and capture
+    # only the dimmed backdrop over the underlying page.
+    marketing_screenshot('add-asset', full_page=False)
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +732,14 @@ def test_drag_reorders_play_order(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_settings_page_renders(reset_assets: None, page: Page) -> None:
+def test_settings_page_renders(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """Settings must render top-to-bottom on the marketing viewport
+    without any 5xx body — also the source of the ``settings@Nx.png``
+    capture."""
     page.goto(SETTINGS_URL)
     expect(
         page.get_by_role('heading', name='Settings', exact=True)
@@ -738,6 +747,8 @@ def test_settings_page_renders(reset_assets: None, page: Page) -> None:
     body = page.content()
     assert 'Internal Server Error' not in body
     assert 'Gateway Time-out' not in body
+
+    marketing_screenshot('settings')
 
 
 @pytest.mark.integration
