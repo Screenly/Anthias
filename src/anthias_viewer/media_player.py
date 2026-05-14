@@ -233,6 +233,15 @@ class MediaPlayer:
 #                                kernel cmdline `cma=` route silently
 #                                orphans the rpi-hevc-dec driver.)
 #
+#   generic-arm64 (Armbian SBCs — Rock Pi 4, Orange Pi, etc.):
+#         H.264 → v4l2m2m-copy  (RK3399 Hantro via the v4l2m2m
+#         HEVC  → v4l2m2m-copy   driver. mpv's --hwdec=help on the
+#                                latest-generic-arm64 image lists
+#                                both h264_v4l2m2m and hevc_v4l2m2m;
+#                                on boards without a working driver
+#                                mpv logs a warning and SW-falls-
+#                                back at runtime.)
+#
 # `auto-copy` is the universal safe fallback when ffprobe can't
 # read the codec (missing file, network URI we don't probe, etc.).
 #
@@ -244,6 +253,17 @@ class MediaPlayer:
 _PI_HWDEC_BY_CODEC: dict[str, dict[str, str]] = {
     'pi4-64': {'h264': 'v4l2m2m-copy', 'hevc': 'drm-copy'},
     'pi5': {'hevc': 'drm-copy'},
+    # Rock Pi 4 (RK3399, Radxa). Resolved at runtime from
+    # /proc/device-tree/model when DEVICE_TYPE is ``arm64`` — see
+    # ``_pi_hwdec_for_uri``. Both codecs use ``v4l2m2m-copy`` because
+    # mpv's ``--hwdec=help`` on the arm64 image lists both
+    # ``h264_v4l2m2m`` and ``hevc_v4l2m2m`` (live-confirmed during
+    # this PR). The Hantro VPU is what the v4l2m2m driver exposes.
+    # Not added for generic ``arm64`` because every other aarch64
+    # SBC routed to that DEVICE_TYPE may lack a working v4l2m2m
+    # driver, in which case mpv would log "Could not find a valid
+    # device" on every play.
+    'rockpi4': {'h264': 'v4l2m2m-copy', 'hevc': 'v4l2m2m-copy'},
 }
 
 
@@ -279,9 +299,50 @@ def _probe_video_codec(uri: str) -> str:
 
 
 def _pi_hwdec_for_uri(uri: str, device_type: str) -> str:
-    """mpv --hwdec= value for ``uri`` on Pi 4 / Pi 5."""
-    board_map = _PI_HWDEC_BY_CODEC.get(device_type, {})
+    """mpv --hwdec= value for ``uri`` on Pi 4 / Pi 5 / Rock Pi 4.
+
+    Generic ``arm64`` / ``generic-arm64`` DEVICE_TYPEs get a
+    runtime SoC probe — ``bin/install.sh`` writes the same arm64
+    DEVICE_TYPE for every aarch64 SBC because most lack any HW
+    decode path mpv can address, but a few (Rock Pi 4 / RK3399)
+    do expose ``v4l2m2m`` for H.264 + HEVC. We upgrade the
+    dispatch key here when ``/proc/device-tree/model`` identifies
+    a known board; an unknown SBC stays on ``auto-copy``.
+    """
+    effective = device_type
+    if device_type in _ARM64_DEVICE_TYPES:
+        sub = _detect_arm64_subtype()
+        if sub is not None:
+            effective = sub
+    board_map = _PI_HWDEC_BY_CODEC.get(effective, {})
     return board_map.get(_probe_video_codec(uri), 'auto-copy')
+
+
+# DEVICE_TYPE values that trigger the SoC probe above. Mirrors
+# ``anthias_server.playback_envelope._ARM64_KEYS`` — the two paths
+# must agree on what triggers the probe or the viewer's hwdec
+# choice and the server's envelope choice will drift.
+_ARM64_DEVICE_TYPES = frozenset({'arm64', 'generic-arm64'})
+
+
+def _detect_arm64_subtype() -> str | None:
+    """Identify the SBC by reading ``/proc/device-tree/model``.
+
+    Duplicated from ``playback_envelope._detect_arm64_subtype``
+    because the viewer doesn't depend on the server package. Both
+    implementations must stay in sync; the unit test in
+    ``tests/test_playback_envelope.py`` asserts that the
+    server-side function returns the same key as this one for a
+    Rock Pi model string.
+    """
+    try:
+        with open('/proc/device-tree/model', 'rb') as f:
+            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+    except OSError:
+        return None
+    if 'rock pi 4' in model.lower():
+        return 'rockpi4'
+    return None
 
 
 class MPVMediaPlayer(MediaPlayer):

@@ -121,13 +121,23 @@ ENVELOPE_BY_DEVICE_TYPE: dict[str, PlaybackEnvelope] = {
     'pi5': PlaybackEnvelope('hevc', 3840, 2160, 60),
     'x86': PlaybackEnvelope('hevc', 3840, 2160, 60),
     'arm64': PlaybackEnvelope('h264', 1920, 1080, 30),
-    # ``generic-arm64`` is the DEVICE_TYPE the Armbian / Rock Pi
-    # install path writes (see ``feat(install): generic-arm64
-    # best-effort support``). The conservative SW envelope is the
-    # same as the legacy ``arm64`` key, listed explicitly so the
-    # walker treats both labels as in-envelope instead of routing
-    # one through the ``_DEFAULT`` fallback.
+    # ``generic-arm64`` is the legacy label some pre-rebrand images
+    # carry; current builds report ``arm64`` (see
+    # ``refactor: rename device_type generic-arm64 → arm64``). Same
+    # conservative envelope — keep the entry so an unfinished
+    # rolling upgrade doesn't fall through to ``_DEFAULT``.
     'generic-arm64': PlaybackEnvelope('h264', 1920, 1080, 30),
+    # Rock Pi 4 (Radxa, RK3399 SoC). Resolved by the runtime SoC
+    # probe in ``compute_envelope`` — Anthias's install scripts
+    # don't write this DEVICE_TYPE directly, the probe upgrades a
+    # generic ``arm64`` key when ``/proc/device-tree/model`` reads
+    # "Radxa ROCK Pi 4". HEVC 1080p30 because the RK3399's Hantro
+    # VPU does HEVC up to 4Kp60 via ``v4l2m2m`` (live-confirmed on
+    # this test bed) and the four A53/A72 cores software-decode
+    # 1080p30 in real time as a fallback. 1080p ceiling keeps disk
+    # use of the variant + ``.original.<ext>`` sibling pair
+    # comfortable on the typical SD card.
+    'rockpi4': PlaybackEnvelope('hevc', 1920, 1080, 30),
 }
 
 # Fallback when ``DEVICE_TYPE`` is unset (host dev shell,
@@ -144,9 +154,51 @@ def compute_envelope() -> PlaybackEnvelope:
     Reads ``DEVICE_TYPE`` from the environment (the image builder
     writes it in at build time) and returns the matching matrix
     entry. Unknown or empty values resolve to ``_DEFAULT``.
+
+    Generic aarch64 SBCs (``arm64`` / legacy ``generic-arm64``) get
+    a runtime SoC probe — the install script can't differentiate
+    "Rock Pi 4 with HW HEVC via v4l2m2m" from "random Allwinner
+    H6 board with no upstream HW path", but ``/proc/device-tree/model``
+    can. When the probe identifies a known SBC, we use its specific
+    matrix key; otherwise the conservative arm64 envelope stands.
     """
     key = os.environ.get('DEVICE_TYPE', '').strip().lower()
+    if key in _ARM64_KEYS:
+        sub = _detect_arm64_subtype()
+        if sub is not None:
+            key = sub
     return ENVELOPE_BY_DEVICE_TYPE.get(key, _DEFAULT)
+
+
+# DEVICE_TYPE values that trigger the runtime SoC probe. ``arm64``
+# is the current name; ``generic-arm64`` covers pre-rename images
+# that haven't been rebuilt yet.
+_ARM64_KEYS = frozenset({'arm64', 'generic-arm64'})
+
+
+def _detect_arm64_subtype() -> str | None:
+    """Inspect ``/proc/device-tree/model`` to identify the SBC.
+
+    Returns a matrix key (e.g. ``'rockpi4'``) when the model string
+    matches a known board, or ``None`` to leave the caller's
+    DEVICE_TYPE-derived key in place. Failures (file missing,
+    decode error, unfamiliar model) all collapse to ``None`` so
+    the function is safe to call unconditionally on hosts that
+    don't expose a device tree (e.g. development containers).
+    """
+    try:
+        with open('/proc/device-tree/model', 'rb') as f:
+            # The kernel writes a null-terminated string; trim it
+            # plus any surrounding whitespace so the substring
+            # checks below don't have to worry about \x00.
+            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+    except OSError:
+        return None
+    model_low = model.lower()
+    # "Radxa ROCK Pi 4B" (and 4A / 4C variants — all RK3399).
+    if 'rock pi 4' in model_low:
+        return 'rockpi4'
+    return None
 
 
 def _cache_path() -> str:

@@ -87,13 +87,23 @@ The two halves above are reconciled through a single per-board
 asset processor renders every upload into. Implementation in
 `src/anthias_server/playback_envelope.py`:
 
-| Device          | Codec | Max resolution | Max fps |
-|-----------------|-------|----------------|---------|
-| `pi2`, `pi3`    | H.264 | 1920 × 1080    | 30      |
-| `arm64`         | H.264 | 1920 × 1080    | 30      |
-| `pi4-64`        | HEVC  | 3840 × 2160    | 60      |
-| `pi5`           | HEVC  | 3840 × 2160    | 60      |
-| `x86`           | HEVC  | 3840 × 2160    | 60      |
+| Device                | Codec | Max resolution | Max fps |
+|-----------------------|-------|----------------|---------|
+| `pi2`, `pi3`          | H.264 | 1920 × 1080    | 30      |
+| `arm64` (catch-all)   | H.264 | 1920 × 1080    | 30      |
+| `rockpi4`             | HEVC  | 1920 × 1080    | 30      |
+| `pi4-64`              | HEVC  | 3840 × 2160    | 60      |
+| `pi5`                 | HEVC  | 3840 × 2160    | 60      |
+| `x86`                 | HEVC  | 3840 × 2160    | 60      |
+
+`rockpi4` isn't written by `bin/install.sh` directly — that script
+sets `DEVICE_TYPE=arm64` for every aarch64 SBC it doesn't recognise
+as a Pi. At server start, `compute_envelope()` reads
+`/proc/device-tree/model`; if the string matches "Radxa ROCK Pi 4",
+the envelope key is upgraded to `rockpi4` (HEVC + v4l2m2m HW path)
+instead of staying on the conservative `arm64` SW envelope. The
+viewer's hwdec dispatch does the same probe so the two halves
+agree on what silicon they're targeting.
 
 The envelope is the single source of truth read by three places that used
 to drift:

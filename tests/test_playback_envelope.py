@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 
@@ -60,7 +61,14 @@ def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ('pi2', 'h264', 1920, 1080, 30),
         ('pi3', 'h264', 1920, 1080, 30),
         ('arm64', 'h264', 1920, 1080, 30),
+        # Legacy ``generic-arm64`` label (pre-rename images) shares
+        # the conservative ``arm64`` envelope so an unfinished
+        # rolling upgrade doesn't fall through to ``_DEFAULT``.
         ('generic-arm64', 'h264', 1920, 1080, 30),
+        # Rock Pi 4 (RK3399, Hantro VPU via v4l2m2m). Promoted from
+        # the arm64 conservative tier by the runtime SoC probe in
+        # ``compute_envelope`` — exercised separately below.
+        ('rockpi4', 'hevc', 1920, 1080, 30),
         # HEVC 4Kp60 boards (dedicated HEVC block or VAAPI).
         ('pi4-64', 'hevc', 3840, 2160, 60),
         ('pi5', 'hevc', 3840, 2160, 60),
@@ -122,6 +130,79 @@ def test_envelope_device_type_case_and_whitespace(
     legacy _resolve_board_profile did."""
     monkeypatch.setenv('DEVICE_TYPE', '  PI5\n')
     assert compute_envelope() == ENVELOPE_BY_DEVICE_TYPE['pi5']
+
+
+def test_envelope_arm64_probe_promotes_rock_pi(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """A Rock Pi 4 reporting ``DEVICE_TYPE=arm64`` (Anthias's
+    install script writes the same key for every aarch64 SBC) is
+    promoted to the ``rockpi4`` envelope when
+    ``/proc/device-tree/model`` reads "Radxa ROCK Pi 4B". This is
+    the runtime path that unlocks HEVC + v4l2m2m HW decode on a
+    catch-all DEVICE_TYPE.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    fake_model = tmp_path / 'model'
+    fake_model.write_bytes(b'Radxa ROCK Pi 4B\x00')
+    with mock.patch(
+        'anthias_server.playback_envelope.open',
+        mock.mock_open(read_data=fake_model.read_bytes()),
+        create=True,
+    ):
+        result = compute_envelope()
+    assert result == PlaybackEnvelope('hevc', 1920, 1080, 30)
+
+
+def test_envelope_arm64_probe_legacy_label_also_promotes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pre-rename images still write ``generic-arm64`` — the probe
+    must also kick in for that label so a Rock Pi running an
+    older image doesn't sit on the wrong envelope until the next
+    image rebuild."""
+    monkeypatch.setenv('DEVICE_TYPE', 'generic-arm64')
+    with mock.patch(
+        'anthias_server.playback_envelope.open',
+        mock.mock_open(read_data=b'Radxa ROCK Pi 4B\x00'),
+        create=True,
+    ):
+        result = compute_envelope()
+    assert result == PlaybackEnvelope('hevc', 1920, 1080, 30)
+
+
+def test_envelope_arm64_probe_unknown_sbc_keeps_conservative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A generic Armbian board (e.g. an Allwinner H6) without a
+    known signature stays on the conservative arm64 envelope —
+    HEVC + v4l2m2m would log "Could not find a valid device" on
+    every play. The probe only upgrades when it KNOWS the
+    silicon."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    with mock.patch(
+        'anthias_server.playback_envelope.open',
+        mock.mock_open(read_data=b'OrangePi 3 LTS\x00'),
+        create=True,
+    ):
+        result = compute_envelope()
+    assert result == PlaybackEnvelope('h264', 1920, 1080, 30)
+
+
+def test_envelope_arm64_probe_no_devicetree_keeps_conservative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A host without ``/proc/device-tree/model`` (dev container,
+    a non-DT bootloader) collapses cleanly to the static matrix
+    entry instead of raising."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    with mock.patch(
+        'anthias_server.playback_envelope.open',
+        side_effect=FileNotFoundError(),
+        create=True,
+    ):
+        result = compute_envelope()
+    assert result == PlaybackEnvelope('h264', 1920, 1080, 30)
 
 
 def test_envelope_dataclass_round_trip() -> None:
