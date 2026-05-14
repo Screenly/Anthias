@@ -28,16 +28,310 @@ html {
   outline-offset: 2px;
 }
 
-/* Switch the <img>'s aspect-ratio per breakpoint so the layout box
-   matches whichever <picture> <source> the browser picked, keeping
-   CLS at zero across the mobile/desktop split. */
-.hero-img {
-  aspect-ratio: 509 / 301;
+/* Hero screenshot slider — framed as a stylised browser window so
+   the captures read as the live product rather than a flat marketing
+   render. Auto-advance progress lives on .screenshot-pill-fill;
+   slider.ts owns the timing + dataset state. */
+.screenshot-slider {
+  --frame-bg: rgb(255 255 255 / 0.05);
+  --frame-border: rgb(255 255 255 / 0.12);
+  --frame-radius: 0.85rem;
+  --autoplay-ms: 6000ms;
+
+  position: relative;
+  border-radius: var(--frame-radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.025) 100%);
+  border: 1px solid var(--frame-border);
+  padding: 0;
+  box-shadow:
+    0 30px 60px -20px rgb(0 0 0 / 0.55),
+    0 12px 24px -12px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  overflow: hidden;
+}
+
+.screenshot-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+  border-bottom: 1px solid var(--frame-border);
+}
+
+.screenshot-light {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--light, #555);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.25);
+  display: block;
+  flex-shrink: 0;
+}
+
+.screenshot-url {
+  flex: 1;
+  margin: 0 0.75rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  color: rgb(255 255 255 / 0.55);
+  background: rgb(0 0 0 / 0.25);
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  letter-spacing: 0.01em;
+  min-width: 0;
+}
+.screenshot-url > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  transition: opacity 0.25s ease;
+}
+.screenshot-url > span.screenshot-url-fade {
+  opacity: 0;
+}
+.screenshot-url::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--color-brand-yellow);
+  box-shadow: 0 0 8px var(--color-brand-yellow);
+  flex-shrink: 0;
+}
+
+.screenshot-counter {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  color: rgb(255 255 255 / 0.4);
+  letter-spacing: 0.08em;
+  display: flex;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+.screenshot-counter > span:first-child {
+  color: var(--color-brand-yellow);
+  font-weight: 700;
+}
+.screenshot-counter-sep {
+  color: rgb(255 255 255 / 0.2);
+}
+
+.screenshot-stage {
+  position: relative;
+}
+
+.screenshot-track {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: #0d0010;
+}
+.screenshot-track::-webkit-scrollbar {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-track {
+    scroll-behavior: auto;
+  }
+}
+
+.screenshot-slide {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  flex: 0 0 100%;
+  margin: 0;
+  position: relative;
+}
+
+/* Full-page Playwright captures are taller than the 1400×900 viewport
+   (the fixture extends height to fit the document). We render every
+   slide into the same 1400×900 frame for visual rhythm in the slider,
+   anchoring the crop to the top so the navbar and primary UI stay
+   in view rather than the bottom of a long settings page. */
+.screenshot-img {
+  display: block;
+  width: 100%;
   height: auto;
+  aspect-ratio: 1400 / 900;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.screenshot-caption {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgb(8 0 11 / 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.55rem 0.85rem 0.55rem 0.55rem;
+  border-radius: 999px;
+  max-width: calc(100% - 2rem);
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.6);
 }
 @media (min-width: 768px) {
-  .hero-img {
-    aspect-ratio: 1112 / 1044;
+  .screenshot-caption {
+    left: 1.5rem;
+    bottom: 1.5rem;
+    right: auto;
+    font-size: 0.875rem;
+    padding: 0.65rem 1.1rem 0.65rem 0.65rem;
+  }
+}
+.screenshot-caption-tag {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-brand-dark);
+  background: var(--color-brand-yellow);
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+.screenshot-caption-text {
+  letter-spacing: -0.005em;
+}
+
+.screenshot-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.6rem;
+  height: 2.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(8 0 11 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.15);
+  color: #fff;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  z-index: 2;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.screenshot-nav svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.screenshot-slider:hover .screenshot-nav,
+.screenshot-slider:focus-within .screenshot-nav {
+  opacity: 1;
+  pointer-events: auto;
+}
+.screenshot-nav:hover {
+  background: var(--color-brand-yellow);
+  color: var(--color-brand-dark);
+  border-color: var(--color-brand-yellow);
+}
+.screenshot-nav-prev {
+  left: 0.85rem;
+}
+.screenshot-nav-prev:hover {
+  transform: translateY(-50%) translateX(-2px);
+}
+.screenshot-nav-next {
+  right: 0.85rem;
+}
+.screenshot-nav-next:hover {
+  transform: translateY(-50%) translateX(2px);
+}
+.screenshot-nav:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .screenshot-nav {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+  .screenshot-nav svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+.screenshot-pills {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  padding: 0.85rem 0.9rem 0.95rem;
+  background: linear-gradient(0deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+  border-top: 1px solid var(--frame-border);
+}
+
+.screenshot-pill {
+  position: relative;
+  width: 2.6rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.2s ease, width 0.25s ease;
+}
+.screenshot-pill:hover {
+  background: rgb(255 255 255 / 0.22);
+}
+.screenshot-pill[aria-selected="true"] {
+  width: 3.5rem;
+  background: rgb(255 255 255 / 0.18);
+}
+
+.screenshot-pill-fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--color-brand-yellow), var(--color-brand-gold));
+  border-radius: 999px;
+  pointer-events: none;
+}
+/* Animate the fill only while autoplay is running. Pause and resume
+   states are toggled by slider.ts via data-state. */
+.screenshot-pill[aria-selected="true"][data-state="playing"] .screenshot-pill-fill {
+  animation: screenshot-autoplay var(--autoplay-ms) linear forwards;
+}
+.screenshot-pill[aria-selected="true"][data-state="paused"] .screenshot-pill-fill {
+  width: var(--paused-progress, 0%);
+}
+.screenshot-pill[aria-selected="true"][data-state="static"] .screenshot-pill-fill {
+  width: 100%;
+}
+
+@keyframes screenshot-autoplay {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screenshot-pill[aria-selected="true"] .screenshot-pill-fill {
+    animation: none;
+    width: 100%;
   }
 }
 

@@ -24,6 +24,17 @@ The site will be available at http://localhost:1313.
 
 > Skipping the bun step will load the page with broken styling and 404s for `/fonts/...woff2` — the font files come from the npm package `@fontsource/plus-jakarta-sans` and are materialized at build time, not committed.
 
+### Home-page screenshot slider
+
+The hero on `/` is a slider fed by PNGs in `assets/images/screenshots/`. The directory is gitignored — captures are produced by the [`marketing-screenshots.yaml`](../.github/workflows/marketing-screenshots.yaml) workflow and pulled into the build at deploy time. To preview the real slider locally:
+
+```bash
+bun run screenshots:fetch     # latest successful master run
+bun run dev
+```
+
+The fetch script needs the `gh` CLI authenticated against the upstream repo. Pass `--ref <branch>` to pull from a different branch's most recent run. Without screenshots, Hugo still builds — the slider section simply omits.
+
 ## Build
 
 ```bash

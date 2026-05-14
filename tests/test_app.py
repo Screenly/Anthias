@@ -907,12 +907,145 @@ def test_settings_form_persists_default_duration(
         _post_default_duration(original)
 
 
+# Inlined into the system-info marketing capture below. Lives at
+# module scope so the script stays diffable and the indentation
+# doesn't drift with the test body. Mutating the DOM (vs. patching
+# Django context) is the only practical mock here — uvicorn runs in a
+# separate process from pytest, so monkeypatching ``page_context``
+# from a fixture wouldn't reach the rendering process.
+_SYSTEM_INFO_MARKETING_MOCK_JS = """
+() => {
+  const labelToValue = (label) => {
+    for (const card of document.querySelectorAll('.stat-card')) {
+      const l = card.querySelector('.stat-card__label');
+      if (l && l.textContent.trim() === label) {
+        return card.querySelector('.stat-card__value');
+      }
+    }
+    return null;
+  };
+
+  // Load average — three rows + trend card.
+  const loads = [
+    { value: '0.42', pct: 14 },
+    { value: '0.51', pct: 17 },
+    { value: '0.48', pct: 16 },
+  ];
+  document.querySelectorAll('.loadavg-row').forEach((row, i) => {
+    if (!loads[i]) return;
+    row.classList.remove('loadavg-row--warn', 'loadavg-row--high');
+    const fill = row.querySelector('.loadavg-row__fill');
+    if (fill) fill.style.width = loads[i].pct + '%';
+    const v = row.querySelector('.loadavg-row__value');
+    if (v) v.textContent = loads[i].value;
+  });
+  const trend = document.querySelector('.loadavg-trend');
+  if (trend) {
+    trend.classList.remove('loadavg-trend--up', 'loadavg-trend--down');
+    trend.classList.add('loadavg-trend--stable');
+    const primary = trend.querySelector('.loadavg-trend__primary');
+    if (primary) primary.textContent = 'Steady';
+    const secondary = trend.querySelector('.loadavg-trend__secondary');
+    if (secondary) secondary.textContent = '4 CPUs · saturation at 4.0';
+    const icon = trend.querySelector('i');
+    if (icon) icon.className = 'ti ti-minus-circle';
+  }
+
+  const uptime = labelToValue('Uptime');
+  if (uptime) uptime.textContent = '14 days, 6 hours';
+
+  // Memory — Pi 5 8GB realistic numbers.
+  const memPie = document.querySelector('.resource-pie--memory');
+  if (memPie) {
+    memPie.style.setProperty('--slice-1', '40');
+    memPie.style.setProperty('--slice-2', '22');
+    const tot = memPie.querySelector('.resource-pie__total');
+    if (tot) tot.textContent = '8,192';
+    const unit = memPie.querySelector('.resource-pie__unit');
+    if (unit) unit.textContent = 'MiB total';
+    const card = memPie.closest('.stat-card');
+    const rows = card ? card.querySelectorAll('.resource-legend__value') : [];
+    const memLegend = [
+      '3,277 MiB · 40%',
+      '1,802 MiB · 22%',
+      '3,113 MiB · 38%',
+      '4,915 MiB',
+    ];
+    rows.forEach((row, i) => {
+      if (memLegend[i] !== undefined) row.textContent = memLegend[i];
+    });
+  }
+
+  // Disk — 64 GB card, ~28% used.
+  const diskPie = document.querySelector('.resource-pie--disk');
+  if (diskPie) {
+    diskPie.style.setProperty('--slice-1', '28');
+    diskPie.style.setProperty('--slice-2', '0');
+    const tot = diskPie.querySelector('.resource-pie__total');
+    if (tot) tot.textContent = '57.3 GB';
+    const unit = diskPie.querySelector('.resource-pie__unit');
+    if (unit) unit.textContent = 'total';
+    const card = diskPie.closest('.stat-card');
+    const rows = card ? card.querySelectorAll('.resource-legend__value') : [];
+    const diskLegend = ['16.0 GB · 28%', '41.3 GB · 72%'];
+    rows.forEach((row, i) => {
+      if (diskLegend[i] !== undefined) row.textContent = diskLegend[i];
+    });
+  }
+
+  const device = labelToValue('Device model');
+  if (device) device.textContent = 'Raspberry Pi 5 Model B (8 GB RAM)';
+
+  // Resolution + its source meta line.
+  const reso = labelToValue('Resolution');
+  if (reso) {
+    reso.textContent = '1920×1080';
+    const meta = reso.parentElement
+      ? reso.parentElement.querySelector('.stat-card__meta')
+      : null;
+    if (meta) meta.innerHTML = '<i class=\"ti ti-broadcast mr-1\"></i>Reported by viewer';
+  }
+
+  const cec = labelToValue('Display Power (CEC)');
+  if (cec) cec.textContent = 'On';
+
+  const versionHead = document.querySelector('.version-line__head');
+  if (versionHead) {
+    while (versionHead.firstChild) versionHead.removeChild(versionHead.firstChild);
+    versionHead.textContent = 'v0.20.1';
+  }
+  const versionMeta = document.querySelector('.version-line__meta');
+  if (versionMeta) versionMeta.textContent = 'commit a1b2c3d · 2 weeks ago';
+  // Don't show the "Update available" pill in marketing — implies stale.
+  const updatePill = document.querySelector('.update-pill');
+  if (updatePill) updatePill.remove();
+
+  const mac = labelToValue('MAC address');
+  if (mac) mac.textContent = 'DC:A6:32:9F:42:1B';
+}
+"""
+
+
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_system_info_page_renders(reset_assets: None, page: Page) -> None:
+def test_system_info_page_renders(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """System Info renders without 5xx — also the source of the
+    ``system-info@Nx.png`` marketing capture. Under
+    ``MARKETING_SCREENSHOTS=1`` the rendered DOM is overwritten in
+    place with curated Pi-5-shaped values so the slider tile is
+    presentable; the functional assertions above the mock still
+    cover the real values the page actually produced."""
     page.goto(SYSTEM_INFO_URL)
     expect(page.get_by_role('heading', name='System Info')).to_be_visible()
     assert 'Internal Server Error' not in page.content()
+
+    if os.environ.get('MARKETING_SCREENSHOTS') == '1':
+        page.evaluate(_SYSTEM_INFO_MARKETING_MOCK_JS)
+    marketing_screenshot('system-info')
 
 
 @pytest.mark.integration

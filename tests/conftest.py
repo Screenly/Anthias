@@ -389,14 +389,21 @@ def marketing_screenshot(request: pytest.FixtureRequest) -> MarketingShotFn:
     new files without additional config — the base 1× is the canonical
     URL and the ``@Nx`` siblings are retina sources.
 
-    Call as ``marketing_screenshot('home')`` for a full-page capture
-    (default) or ``marketing_screenshot('add-asset', full_page=False)``
-    for a viewport-only capture. The latter is the right shape for any
-    capture that includes a ``position: fixed`` overlay — Playwright's
-    full-page mode artificially extends the viewport height to fit the
-    document, and fixed-position elements anchored to the (now much
-    taller) viewport drift out of frame or get hidden under the
-    dimming backdrop. Viewport-only renders fix the modal in place.
+    Call as ``marketing_screenshot('home')`` for a viewport-only
+    capture (default) at 1400×900 — the size the website's home-page
+    slider expects every slide to be. Pass ``full_page=True`` to
+    capture the entire scrolled document instead; useful for asset
+    pages that aren't sliced into the slider.
+
+    Viewport-only is the default for two reasons. First, the home-
+    page slider in ``website/`` lays every slide into a uniform
+    1400×900 frame, and full-page captures (variable height, growing
+    with document content) crop unpredictably in that frame. Second,
+    any capture that includes a ``position: fixed`` overlay needs
+    viewport-only: Playwright's full-page mode artificially extends
+    the viewport height to fit the document, and fixed-position
+    elements anchored to the (now much taller) viewport drift out of
+    frame or get hidden under the dimming backdrop.
 
     No-op (still callable) when ``MARKETING_SCREENSHOTS`` is unset, so
     test bodies can sprinkle calls unconditionally — non-marketing
@@ -410,7 +417,7 @@ def marketing_screenshot(request: pytest.FixtureRequest) -> MarketingShotFn:
     """
     if not _MARKETING_ENABLED:
 
-        def _noop(name: str, *, full_page: bool = True) -> None:
+        def _noop(name: str, *, full_page: bool = False) -> None:
             pass
 
         return _noop
@@ -430,7 +437,7 @@ def marketing_screenshot(request: pytest.FixtureRequest) -> MarketingShotFn:
 
     _MARKETING_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    def _capture(name: str, *, full_page: bool = True) -> None:
+    def _capture(name: str, *, full_page: bool = False) -> None:
         png_bytes = page.screenshot(full_page=full_page)
 
         # Write the 3× original verbatim — re-encoding through PIL

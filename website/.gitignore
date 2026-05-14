@@ -10,6 +10,13 @@ dist
 assets/fonts/
 static/fonts/
 
+# marketing screenshots fetched at build time from the latest
+# marketing-screenshots workflow run (see scripts/fetch-screenshots.ts
+# for the local-dev fetch and .github/workflows/deploy-website.yaml
+# for the CI step). Not committed — the workflow regenerates these
+# from the Playwright integration suite on demand.
+assets/images/screenshots/
+
 # code coverage
 coverage
 *.lcov

@@ -1,0 +1,25 @@
+# Marketing screenshots rendered on the home-page hero slider.
+#
+# Each entry maps to a <name>@3x.png source under
+# assets/images/screenshots/. The marketing-screenshots.yaml workflow
+# produces these from the Playwright integration suite — see the
+# tests/conftest.py marketing_screenshot fixture for the call sites.
+# deploy-website.yaml downloads the latest successful run's artifact
+# before building, replacing the committed seed copies.
+#
+# Slides whose <name>@3x.png is missing at build time are skipped, so
+# a partial artifact (e.g. one capture broken) still ships a working
+# slider with the slides that did render.
+slides:
+  - name: home
+    alt: "Anthias dashboard showing scheduled assets ready to play"
+    caption: "Manage every asset from one dashboard"
+  - name: add-asset
+    alt: "Add Asset dialog with URL, file upload, and schedule fields"
+    caption: "Upload media or point at any URL"
+  - name: settings
+    alt: "Anthias system settings — display, network, and player options"
+    caption: "Configure the player without touching the CLI"
+  - name: system-info
+    alt: "System Info dashboard with load average, memory, disk and version"
+    caption: "Live diagnostics at a glance"

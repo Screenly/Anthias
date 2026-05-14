@@ -1,0 +1,66 @@
+{{- /* Resolves the home-page hero slider's slides from
+       assets/images/screenshots/. Each entry in data/screenshots.yaml
+       references a ``<name>@3x.png`` source emitted by the
+       ``marketing-screenshots`` workflow; Hugo's image pipeline derives
+       a width ladder of WebP + PNG variants for the <picture> srcset.
+
+       Entries whose ``<name>@3x.png`` is absent at build time are
+       skipped silently — a partial CI artifact (e.g. one capture
+       failed to render) still produces a working slider for the
+       slides that did make it. The home-page layout falls back to a
+       static placeholder when this partial returns an empty slice.
+
+       Returns a slice of dicts:
+         name        — slug (matches data/screenshots.yaml `name`)
+         alt         — accessible label for <img alt="…">
+         caption     — short caption rendered as overlay text
+         webpSrcset  — width-descriptor srcset of WebP renditions
+         pngSrcset   — width-descriptor srcset of PNG renditions
+         fallback    — single representative URL for <img src>
+         width/height — intrinsic dimensions of the fallback image
+                        (used by <img> width/height for CLS-free
+                        layout under a CSS aspect-ratio)
+       Wrap calls in partialCached so the Resize work runs once. */ -}}
+{{- $widths := slice 480 960 1440 2880 -}}
+{{- $slides := slice -}}
+{{- range site.Data.screenshots.slides -}}
+  {{- $entry := . -}}
+  {{- $src := resources.Get (printf "images/screenshots/%s@3x.png" $entry.name) -}}
+  {{- if $src -}}
+    {{- $webps := slice -}}
+    {{- $pngs  := slice -}}
+    {{- range $widths -}}
+      {{- /* Skip widths that would upscale — Hugo will happily blow a
+             1400-wide source up to 2880 and produce blurry output,
+             so cap at the source's native width. */ -}}
+      {{- if le . $src.Width -}}
+        {{- $w := . -}}
+        {{- $webp := $src.Resize (printf "%dx webp q82" $w) -}}
+        {{- $png  := $src.Resize (printf "%dx q90"      $w) -}}
+        {{- $webps = $webps | append (printf "%s %dw" $webp.RelPermalink $w) -}}
+        {{- $pngs  = $pngs  | append (printf "%s %dw" $png.RelPermalink  $w) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- /* Use a 1440-wide PNG as the <img src> fallback — that's the
+           middle of the desktop ladder and degrades gracefully on
+           any browser that ignores srcset (very rare in 2026, but
+           the cost is zero so we hedge). The matching WebP variant
+           feeds the LCP preload's href so the type="image/webp"
+           hint is honest — browsers skip preloads whose href type
+           disagrees with the declared MIME. */ -}}
+    {{- $primary    := $src.Resize "1440x q90" -}}
+    {{- $primaryWebp := $src.Resize "1440x webp q82" -}}
+    {{- $slides = $slides | append (dict
+        "name"           $entry.name
+        "alt"            $entry.alt
+        "caption"        (default "" $entry.caption)
+        "webpSrcset"     (delimit $webps ", ")
+        "pngSrcset"      (delimit $pngs ", ")
+        "fallback"       $primary.RelPermalink
+        "fallbackWebp"   $primaryWebp.RelPermalink
+        "width"          $primary.Width
+        "height"         $primary.Height
+    ) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $slides -}}

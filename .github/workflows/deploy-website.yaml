@@ -59,6 +59,52 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: website
 
+      # Pull the high-DPI marketing captures produced by the
+      # marketing-screenshots.yaml workflow. The home-page slider's
+      # Hugo partial enumerates *.png entries from
+      # website/assets/images/screenshots/ — the files are
+      # gitignored, so this step is the canonical source on every
+      # deploy. We resolve the latest *successful* run on master
+      # (not by ref of the current deploy, because deploy-website is
+      # triggered on master pushes and we want the most recent green
+      # capture set regardless of which commit shipped it last).
+      #
+      # Missing run is a soft fail: the site builds with an empty
+      # screenshots/ dir and the layout falls back gracefully (no
+      # slider section, OG image falls back to logo.svg). That keeps
+      # the first deploy after this change from being blocked by an
+      # ordering chicken-and-egg.
+      - name: Fetch marketing screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dest=website/assets/images/screenshots
+          mkdir -p "$dest"
+          run_id=$(gh run list \
+            --workflow=marketing-screenshots.yaml \
+            --branch=master \
+            --status=success \
+            --limit=1 \
+            --json databaseId \
+            --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then
+            echo "::warning::No successful marketing-screenshots run found on master; building without slider."
+            exit 0
+          fi
+          echo "Fetching marketing-screenshots artifact from run $run_id"
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          gh run download "$run_id" \
+            --name marketing-screenshots \
+            --dir "$tmp"
+          # Copy PNGs only; ignore any unexpected sidecar files so
+          # the layout can trust *everything* in the dir to be a
+          # capture.
+          find "$tmp" -maxdepth 1 -type f -name '*.png' -exec cp {} "$dest/" \;
+          echo "Installed $(ls "$dest" | wc -l) screenshot files"
+          ls -1 "$dest"
+
       - name: Build website CSS
         run: bun run css:build
         working-directory: website
