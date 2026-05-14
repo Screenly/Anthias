@@ -51,8 +51,12 @@ services:
     image: ghcr.io/screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
     # nice + ionice + cgroup cpu-quota keep the upload-time
     # transcode pipeline from starving the on-device viewer; see
-    # docker-compose.yml.tmpl for the full rationale.
-    cpus: 1.0
+    # docker-compose.yml.tmpl for the full rationale. Literal
+    # ``2.0`` here (half of 4-core Pi 2 / 3 / 4 / 5 targets, the
+    # only boards balena builds for); the non-balena compose
+    # computes the limit dynamically via $(nproc) in
+    # ``bin/upgrade_containers.sh``.
+    cpus: 2.0
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias

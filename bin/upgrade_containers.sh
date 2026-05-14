@@ -15,6 +15,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
+# Hard cgroup CPU cap for anthias-celery. Half the host's cores
+# (floored to 1.0 so single-core boxes still make progress) keeps
+# the upload-time normalisation pipeline from starving the viewer
+# or sshd even when libx265 wants every cycle it can get. On a
+# Pi 4 / Pi 5 / Rock Pi 4 (4 cores) that's 2 CPUs' worth of
+# compute, leaving 2 for the viewer + system. On an 8-core x86
+# box that's 4 CPUs, leaving 4 for everything else. Live-
+# confirmed on the Rock Pi 4 that ``nice -n 19`` + ``ionice -c 3``
+# alone are insufficient — the kernel still hands libx265 every
+# available cycle if nothing else is asking for them, which
+# starves sshd through banner exchange and drops mpv frames.
+CELERY_CPU_LIMIT_RAW=$(echo "$(nproc) * 0.5" | bc -l)
+export CELERY_CPU_LIMIT=$(awk -v v="$CELERY_CPU_LIMIT_RAW" 'BEGIN { printf "%.1f", (v < 1.0 ? 1.0 : v) }')
 GIT_BRANCH="${GIT_BRANCH:-master}"
 
 MODE="${MODE:-pull}"

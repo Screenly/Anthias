@@ -30,8 +30,11 @@ services:
     # this service inherits the same image, only overriding CMD.
     image: anthias-server:dev
     # Hard cgroup CFS quota — see docker-compose.yml.tmpl. nice/ionice
-    # are insufficient when the worker is the only heavy workload.
-    cpus: 1.0
+    # are insufficient when the worker is the only heavy workload. Dev
+    # uses a literal ``2.0`` (works on any laptop / desktop / SBC with
+    # at least 2 cores) instead of recomputing per host; the production
+    # path scales with $(nproc) via bin/upgrade_containers.sh.
+    cpus: 2.0
     depends_on:
       anthias-server:
         condition: service_started

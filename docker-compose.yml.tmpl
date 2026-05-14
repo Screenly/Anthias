@@ -104,18 +104,22 @@ services:
     # bound — serial encodes finish a few minutes later, but the
     # viewer never drops a frame.
     #
-    # ``cpus: 1.0`` is a hard cgroup CFS quota (1 CPU's worth of
-    # compute per period). nice/ionice are soft priority hints and
-    # only matter when something else is asking for cycles — when
-    # libx265 is the only heavy workload the scheduler still gives
-    # it everything available, and on a 4 GB SBC that's enough to
-    # starve sshd through banner exchange + mpv mid-frame. The
-    # hard cap is the only way to guarantee "encoding never
-    # impacts playback or UI access". 1.0 leaves 3+ cores for the
-    # viewer + system on every supported SBC; x86 hosts have 8+
-    # cores so the cap is also conservative there but harmless
-    # (asset processor finishes a few seconds later).
-    cpus: 1.0
+    # ``cpus: <half the host>`` is a hard cgroup CFS quota.
+    # nice/ionice are soft priority hints and only matter when
+    # something else is asking for cycles — when libx265 is the
+    # only heavy workload the scheduler still gives it everything
+    # available, and on a 4 GB SBC that's enough to starve sshd
+    # through banner exchange + mpv mid-frame. The hard cap is the
+    # only way to guarantee "encoding never impacts playback or
+    # UI access". Half the host's cores (computed in
+    # bin/upgrade_containers.sh, floored to 1.0) leaves the other
+    # half for the viewer + system on every supported SBC: 2 CPUs
+    # of headroom on a 4-core Pi 4 / Pi 5 / Rock Pi 4, 4 CPUs on
+    # an 8-core x86, etc. Multi-core encoders (libx265 with
+    # ``-threads N``) still run in parallel up to the cap, so
+    # bigger machines finish encodes faster without ever
+    # compromising playback responsiveness.
+    cpus: ${CELERY_CPU_LIMIT}
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
