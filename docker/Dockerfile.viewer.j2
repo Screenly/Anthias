@@ -6,7 +6,7 @@
 {# Qt 6 boards (pi4-64, pi5, x86): Debian apt provides qt6-base-dev
    and qt6-webengine-dev directly, so the builder stage runs at the
    target platform (under QEMU on x86 build hosts) and just qmake's
-   the in-tree webview/ source. #}
+   the in-tree src/anthias_webview/ source. #}
 FROM {{ base_image }}:{{ base_image_tag }} AS webview-builder
 USER root
 {% if disable_cache_mounts %}
@@ -19,10 +19,10 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt6-builder-apt-{{ artifact_boar
         build-essential \
         qt6-base-dev \
         qt6-webengine-dev
-COPY webview/AnthiasWebview.pro /src/webview/AnthiasWebview.pro
-COPY webview/src /src/webview/src
-COPY webview/res /src/webview/res
-WORKDIR /src/webview
+COPY src/anthias_webview/AnthiasWebview.pro /src/anthias_webview/AnthiasWebview.pro
+COPY src/anthias_webview/src /src/anthias_webview/src
+COPY src/anthias_webview/res /src/anthias_webview/res
+WORKDIR /src/anthias_webview
 # webview is 3 .cpp files (~6s on x86 native, ~30s under arm64 QEMU);
 # adding ccache would only save a couple of seconds on incremental
 # rebuilds and the cache mount + apt install + PATH wiring would
@@ -32,7 +32,7 @@ RUN qmake6 && \
     make install
 RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
     mv AnthiasWebview /out/bin/ && \
-    cp -r /src/webview/res /out/share/AnthiasWebview/
+    cp -r /src/anthias_webview/res /out/share/AnthiasWebview/
 {% else %}
 {% include 'Dockerfile.qt5-webview-builder.j2' %}
 {% endif %}

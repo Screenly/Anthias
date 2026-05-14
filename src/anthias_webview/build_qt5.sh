@@ -1,6 +1,6 @@
 #!/bin/bash
 # Qt 5 toolchain builder. Run via bin/rebuild_qt5_toolchain.sh inside
-# the webview/Dockerfile builder image; emits
+# the src/anthias_webview/Dockerfile builder image; emits
 # qt5-5.15.14-trixie-{pi2,pi3}.tar.gz under /build for upload to a
 # WebView-v* GitHub release. Not wired into CI — the viewer image
 # now compiles the webview app inline against the toolchain artifact

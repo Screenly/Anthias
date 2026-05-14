@@ -183,7 +183,8 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     #
     # X11/XCB packages are intentionally absent: the WebView is
     # configured with `-no-xcb -no-xcb-xlib -qpa eglfs` (see
-    # webview/build_qt5.sh) and runs under QT_QPA_PLATFORM=linuxfb
+    # src/anthias_webview/build_qt5.sh) and runs under
+    # QT_QPA_PLATFORM=linuxfb
     # straight on KMS/DRM, so Qt has no X code path to dlopen. mpv
     # uses --vo=drm. Wayland is similarly absent on Pi for the same
     # reason; the x86 board is the one exception (it has no /dev/fb0,

@@ -25,7 +25,7 @@ Inter-service messaging is all Redis: WebSocket fan-out from Celery to browsers 
 - `api/` — REST API (views, serializers, URLs for v1, v1.1, v1.2, v2)
 - `static/src/` — TypeScript/React frontend (components, Redux store, hooks, tests)
 - `viewer/` — Viewer service (scheduling, media player, Redis pub/sub messaging)
-- `webview/` — C++ Qt-based WebView (Qt5 for Pi 1-4, Qt6 for Pi 5/x86)
+- `src/anthias_webview/` — C++ Qt-based WebView (Qt5 for Pi 1-4, Qt6 for Pi 5/x86)
 - `lib/` — Shared Python utilities (auth, device helpers, diagnostics)
 - `docker/` — Dockerfile Jinja2 templates for each service
 - `tests/` — Python unit/integration tests

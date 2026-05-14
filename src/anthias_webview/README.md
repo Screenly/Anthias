@@ -9,8 +9,8 @@ timer.
 
 The webview is **compiled inside the viewer image** as a multi-stage
 build — there is no separate release tag, no curl-from-releases step,
-no version pin to bump. Editing source under `webview/src/` triggers
-a rebuild on the next viewer image build:
+no version pin to bump. Editing source under `src/anthias_webview/src/`
+triggers a rebuild on the next viewer image build:
 
 * Qt 6 boards (`pi4-64`, `pi5`, `x86`) — Debian's `qt6-base-dev` +
   `qt6-webengine-dev` packages, `qmake6 && make && make install`,

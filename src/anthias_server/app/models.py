@@ -15,7 +15,7 @@ ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 # in the C++ webview's setReloadInterval (``seconds * 1000`` would
 # otherwise overflow). Imported by the v2 serializer (write
 # validation), the form handler (clamping), and mirrored by
-# kMaxReloadIntervalS in webview/src/view.cpp.
+# kMaxReloadIntervalS in src/anthias_webview/src/view.cpp.
 REFRESH_INTERVAL_S_MAX = 86400
 
 
