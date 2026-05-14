@@ -156,48 +156,66 @@ def compute_envelope() -> PlaybackEnvelope:
     entry. Unknown or empty values resolve to ``_DEFAULT``.
 
     Generic aarch64 SBCs (``arm64`` / legacy ``generic-arm64``) get
-    a runtime SoC probe — the install script can't differentiate
-    "Rock Pi 4 with HW HEVC via v4l2m2m" from "random Allwinner
-    H6 board with no upstream HW path", but ``/proc/device-tree/model``
-    can. When the probe identifies a known SBC, we use its specific
-    matrix key; otherwise the conservative arm64 envelope stands.
+    upgraded via a Redis-published *board subtype* — the install
+    script can't differentiate "Rock Pi 4 with HW HEVC via
+    v4l2m2m" from "random Allwinner H6 board with no upstream HW
+    path", but ``anthias_host_agent`` reads
+    ``/proc/device-tree/model`` on the host (containers don't see
+    that path by default and we don't want to mount it for one
+    edge case) and writes the resolved subtype to Redis at
+    ``host:board_subtype`` before flipping the
+    ``host_agent_ready`` flag. When that key matches a matrix
+    entry, it overrides the DEVICE_TYPE-derived key; otherwise
+    the conservative arm64 envelope stands.
     """
     key = os.environ.get('DEVICE_TYPE', '').strip().lower()
     if key in _ARM64_KEYS:
-        sub = _detect_arm64_subtype()
-        if sub is not None:
+        sub = _redis_board_subtype()
+        if sub is not None and sub in ENVELOPE_BY_DEVICE_TYPE:
             key = sub
     return ENVELOPE_BY_DEVICE_TYPE.get(key, _DEFAULT)
 
 
-# DEVICE_TYPE values that trigger the runtime SoC probe. ``arm64``
-# is the current name; ``generic-arm64`` covers pre-rename images
-# that haven't been rebuilt yet.
+# DEVICE_TYPE values that trigger the host_agent subtype lookup.
+# ``arm64`` is the current name; ``generic-arm64`` covers pre-rename
+# images that haven't been rebuilt yet.
 _ARM64_KEYS = frozenset({'arm64', 'generic-arm64'})
 
 
-def _detect_arm64_subtype() -> str | None:
-    """Inspect ``/proc/device-tree/model`` to identify the SBC.
+def _redis_board_subtype() -> str | None:
+    """Return the board subtype the host_agent published to Redis.
 
-    Returns a matrix key (e.g. ``'rockpi4'``) when the model string
-    matches a known board, or ``None`` to leave the caller's
-    DEVICE_TYPE-derived key in place. Failures (file missing,
-    decode error, unfamiliar model) all collapse to ``None`` so
-    the function is safe to call unconditionally on hosts that
-    don't expose a device tree (e.g. development containers).
+    ``anthias_host_agent.set_board_subtype`` runs on the host (not
+    in a container) and writes one of the matrix keys (e.g.
+    ``'rockpi4'``) to ``host:board_subtype`` based on
+    ``/proc/device-tree/model``. We read it back here so the
+    server's envelope reconciliation can use it without mounting
+    host paths into the container.
+
+    Returns ``None`` on any failure: Redis unreachable (first boot
+    before redis container is up), key missing (host_agent hasn't
+    run yet, or the SBC didn't match any known signature), or any
+    decode error. The caller falls back to the DEVICE_TYPE-derived
+    matrix entry.
     """
     try:
-        with open('/proc/device-tree/model', 'rb') as f:
-            # The kernel writes a null-terminated string; trim it
-            # plus any surrounding whitespace so the substring
-            # checks below don't have to worry about \x00.
-            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
-    except OSError:
+        from anthias_common.utils import connect_to_redis
+
+        r = connect_to_redis()
+        value = r.get('host:board_subtype')
+    except Exception:
         return None
-    model_low = model.lower()
-    # "Radxa ROCK Pi 4B" (and 4A / 4C variants — all RK3399).
-    if 'rock pi 4' in model_low:
-        return 'rockpi4'
+    # ``redis-py``'s ``.get`` is typed as ``Awaitable | str | bytes |
+    # None`` because the same class drives sync + async clients.
+    # We're on the sync path; narrow accordingly.
+    if isinstance(value, bytes):
+        try:
+            decoded = value.decode('utf-8')
+        except UnicodeDecodeError:
+            return None
+        return decoded.strip().lower() or None
+    if isinstance(value, str):
+        return value.strip().lower() or None
     return None
 
 

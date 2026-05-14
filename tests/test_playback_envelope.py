@@ -132,77 +132,84 @@ def test_envelope_device_type_case_and_whitespace(
     assert compute_envelope() == ENVELOPE_BY_DEVICE_TYPE['pi5']
 
 
-def test_envelope_arm64_probe_promotes_rock_pi(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+def _patch_redis_subtype(value: bytes | str | None) -> Any:
+    """Patch the Redis connection used by
+    ``playback_envelope._redis_board_subtype`` so a test can pin
+    what the host_agent has (or hasn't) published. ``None`` means
+    "redis raised" — exercises the safe-fallback path."""
+    if value is None:
+        return mock.patch(
+            'anthias_common.utils.connect_to_redis',
+            side_effect=ConnectionError('redis unreachable'),
+        )
+    fake = mock.MagicMock()
+    fake.get.return_value = value
+    return mock.patch(
+        'anthias_common.utils.connect_to_redis', return_value=fake
+    )
+
+
+def test_envelope_arm64_subtype_promotes_rock_pi(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A Rock Pi 4 reporting ``DEVICE_TYPE=arm64`` (Anthias's
     install script writes the same key for every aarch64 SBC) is
-    promoted to the ``rockpi4`` envelope when
-    ``/proc/device-tree/model`` reads "Radxa ROCK Pi 4B". This is
-    the runtime path that unlocks HEVC + v4l2m2m HW decode on a
+    promoted to the ``rockpi4`` envelope when the host_agent has
+    published ``host:board_subtype = 'rockpi4'``. This is the
+    runtime path that unlocks HEVC + v4l2m2m HW decode on a
     catch-all DEVICE_TYPE.
     """
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
-    fake_model = tmp_path / 'model'
-    fake_model.write_bytes(b'Radxa ROCK Pi 4B\x00')
-    with mock.patch(
-        'anthias_server.playback_envelope.open',
-        mock.mock_open(read_data=fake_model.read_bytes()),
-        create=True,
-    ):
-        result = compute_envelope()
-    assert result == PlaybackEnvelope('hevc', 1920, 1080, 30)
+    with _patch_redis_subtype(b'rockpi4'):
+        assert compute_envelope() == PlaybackEnvelope('hevc', 1920, 1080, 30)
 
 
-def test_envelope_arm64_probe_legacy_label_also_promotes(
+def test_envelope_arm64_subtype_legacy_label_also_promotes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pre-rename images still write ``generic-arm64`` — the probe
-    must also kick in for that label so a Rock Pi running an
-    older image doesn't sit on the wrong envelope until the next
-    image rebuild."""
+    """Pre-rename images still write ``generic-arm64`` — the
+    subtype lookup must also kick in for that label so a Rock Pi
+    running an older image doesn't sit on the wrong envelope
+    until the next image rebuild."""
     monkeypatch.setenv('DEVICE_TYPE', 'generic-arm64')
-    with mock.patch(
-        'anthias_server.playback_envelope.open',
-        mock.mock_open(read_data=b'Radxa ROCK Pi 4B\x00'),
-        create=True,
-    ):
-        result = compute_envelope()
-    assert result == PlaybackEnvelope('hevc', 1920, 1080, 30)
+    with _patch_redis_subtype(b'rockpi4'):
+        assert compute_envelope() == PlaybackEnvelope('hevc', 1920, 1080, 30)
 
 
-def test_envelope_arm64_probe_unknown_sbc_keeps_conservative(
+def test_envelope_arm64_subtype_unknown_value_keeps_conservative(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A generic Armbian board (e.g. an Allwinner H6) without a
-    known signature stays on the conservative arm64 envelope —
-    HEVC + v4l2m2m would log "Could not find a valid device" on
-    every play. The probe only upgrades when it KNOWS the
-    silicon."""
+    """The host_agent might publish a subtype the matrix doesn't
+    know yet (e.g. ``orangepi3-rk3568`` ahead of a future PR).
+    Until the matrix learns the key, the asset processor must
+    keep the conservative arm64 envelope rather than fall through
+    to ``_DEFAULT``."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
-    with mock.patch(
-        'anthias_server.playback_envelope.open',
-        mock.mock_open(read_data=b'OrangePi 3 LTS\x00'),
-        create=True,
-    ):
-        result = compute_envelope()
-    assert result == PlaybackEnvelope('h264', 1920, 1080, 30)
+    with _patch_redis_subtype(b'orangepi3-rk3568'):
+        assert compute_envelope() == PlaybackEnvelope('h264', 1920, 1080, 30)
 
 
-def test_envelope_arm64_probe_no_devicetree_keeps_conservative(
+def test_envelope_arm64_subtype_empty_keeps_conservative(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A host without ``/proc/device-tree/model`` (dev container,
-    a non-DT bootloader) collapses cleanly to the static matrix
-    entry instead of raising."""
+    """``host_agent`` writes the empty string when it ran but
+    didn't recognise the board. We treat that as "no upgrade" and
+    stay on the static arm64 matrix entry."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
-    with mock.patch(
-        'anthias_server.playback_envelope.open',
-        side_effect=FileNotFoundError(),
-        create=True,
-    ):
-        result = compute_envelope()
-    assert result == PlaybackEnvelope('h264', 1920, 1080, 30)
+    with _patch_redis_subtype(b''):
+        assert compute_envelope() == PlaybackEnvelope('h264', 1920, 1080, 30)
+
+
+def test_envelope_arm64_subtype_redis_down_keeps_conservative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """First boot before the redis container is up: the helper
+    must swallow the connection error and return ``None`` so the
+    caller picks the static arm64 envelope. Otherwise the server
+    would crash on startup whenever redis is slow to come up."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    with _patch_redis_subtype(None):
+        assert compute_envelope() == PlaybackEnvelope('h264', 1920, 1080, 30)
 
 
 def test_envelope_dataclass_round_trip() -> None:

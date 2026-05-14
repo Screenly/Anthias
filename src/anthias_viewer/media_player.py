@@ -301,47 +301,58 @@ def _probe_video_codec(uri: str) -> str:
 def _pi_hwdec_for_uri(uri: str, device_type: str) -> str:
     """mpv --hwdec= value for ``uri`` on Pi 4 / Pi 5 / Rock Pi 4.
 
-    Generic ``arm64`` / ``generic-arm64`` DEVICE_TYPEs get a
-    runtime SoC probe — ``bin/install.sh`` writes the same arm64
-    DEVICE_TYPE for every aarch64 SBC because most lack any HW
-    decode path mpv can address, but a few (Rock Pi 4 / RK3399)
-    do expose ``v4l2m2m`` for H.264 + HEVC. We upgrade the
-    dispatch key here when ``/proc/device-tree/model`` identifies
-    a known board; an unknown SBC stays on ``auto-copy``.
+    Generic ``arm64`` / ``generic-arm64`` DEVICE_TYPEs get
+    upgraded via the host_agent's published board subtype —
+    ``bin/install.sh`` writes the same arm64 DEVICE_TYPE for every
+    aarch64 SBC because most lack any HW decode path mpv can
+    address, but a few (Rock Pi 4 / RK3399) do expose ``v4l2m2m``
+    for H.264 + HEVC. ``anthias_host_agent`` reads
+    ``/proc/device-tree/model`` on the host and writes the
+    resolved subtype to Redis at ``host:board_subtype``; we read
+    it here so the viewer doesn't need a host-path mount of its
+    own.
     """
     effective = device_type
     if device_type in _ARM64_DEVICE_TYPES:
-        sub = _detect_arm64_subtype()
-        if sub is not None:
+        sub = _redis_board_subtype()
+        if sub is not None and sub in _PI_HWDEC_BY_CODEC:
             effective = sub
     board_map = _PI_HWDEC_BY_CODEC.get(effective, {})
     return board_map.get(_probe_video_codec(uri), 'auto-copy')
 
 
-# DEVICE_TYPE values that trigger the SoC probe above. Mirrors
-# ``anthias_server.playback_envelope._ARM64_KEYS`` — the two paths
-# must agree on what triggers the probe or the viewer's hwdec
-# choice and the server's envelope choice will drift.
+# DEVICE_TYPE values that trigger the host_agent subtype lookup.
+# Mirrors ``anthias_server.playback_envelope._ARM64_KEYS`` — the
+# two paths must agree on what triggers the lookup or the viewer's
+# hwdec choice and the server's envelope choice will drift.
 _ARM64_DEVICE_TYPES = frozenset({'arm64', 'generic-arm64'})
 
 
-def _detect_arm64_subtype() -> str | None:
-    """Identify the SBC by reading ``/proc/device-tree/model``.
+def _redis_board_subtype() -> str | None:
+    """Return the host_agent-published board subtype, or ``None``.
 
-    Duplicated from ``playback_envelope._detect_arm64_subtype``
-    because the viewer doesn't depend on the server package. Both
-    implementations must stay in sync; the unit test in
-    ``tests/test_playback_envelope.py`` asserts that the
-    server-side function returns the same key as this one for a
-    Rock Pi model string.
+    Mirrors ``playback_envelope._redis_board_subtype``. We don't
+    import it directly to keep the viewer free of server-package
+    dependencies. Same recovery contract: any failure (Redis down,
+    key missing, decode error) returns ``None`` so the caller
+    falls back to the static ``_PI_HWDEC_BY_CODEC`` entry for the
+    raw DEVICE_TYPE.
     """
     try:
-        with open('/proc/device-tree/model', 'rb') as f:
-            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
-    except OSError:
+        from anthias_common.utils import connect_to_redis
+
+        r = connect_to_redis()
+        value = r.get('host:board_subtype')
+    except Exception:
         return None
-    if 'rock pi 4' in model.lower():
-        return 'rockpi4'
+    if isinstance(value, bytes):
+        try:
+            decoded = value.decode('utf-8')
+        except UnicodeDecodeError:
+            return None
+        return decoded.strip().lower() or None
+    if isinstance(value, str):
+        return value.strip().lower() or None
     return None
 
 
