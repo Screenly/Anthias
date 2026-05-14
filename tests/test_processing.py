@@ -1809,7 +1809,7 @@ def test_transcode_to_target_falls_back_to_sw_on_hwaccel_failure(
         call_args.append(list(args))
         # First call (with -hwaccel) fails; second (SW) succeeds.
         if '-hwaccel' in args:
-            raise sh.ErrorReturnCode(
+            raise sh.ErrorReturnCode_1(
                 full_cmd='ffmpeg ...',
                 stdout=b'',
                 stderr=b'Hwaccel device init failed',
