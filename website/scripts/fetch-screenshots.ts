@@ -9,8 +9,12 @@
  * captures without a custom CI run. Files land gitignored so the
  * fetch is idempotent and never accidentally committed.
  *
- * Requires the `gh` CLI to be installed and authenticated against
- * the upstream repo. Run from the `website/` directory:
+ * Requires the `gh` CLI to be installed and authenticated. Targets
+ * the upstream `Screenly/Anthias` repo by default so contributors
+ * working from a fork still get the canonical artifact (the upstream
+ * is the only place marketing-screenshots.yaml runs on a schedule).
+ * Override with `--repo <owner>/<repo>` to pull from a different
+ * repo. Run from the `website/` directory:
  *
  *   bun run screenshots:fetch
  *
@@ -28,12 +32,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const DEST = 'assets/images/screenshots'
+const DEFAULT_REPO = 'Screenly/Anthias'
 
 const args = Bun.argv.slice(2)
 let branch = 'master'
+let repo = DEFAULT_REPO
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--ref' && i + 1 < args.length) {
     branch = args[++i]!
+  } else if (args[i] === '--repo' && i + 1 < args.length) {
+    repo = args[++i]!
   }
 }
 
@@ -54,6 +62,8 @@ const runId = await sh([
   'gh',
   'run',
   'list',
+  '--repo',
+  repo,
   '--workflow=marketing-screenshots.yaml',
   `--branch=${branch}`,
   '--status=success',
@@ -66,15 +76,17 @@ const runId = await sh([
 
 if (!runId) {
   console.error(
-    `No successful marketing-screenshots run on '${branch}'.\n` +
+    `No successful marketing-screenshots run on '${branch}' in ${repo}.\n` +
       `Trigger one with:\n` +
-      `  gh workflow run marketing-screenshots.yaml --ref ${branch}\n` +
-      `…or pass --ref <branch> to pull from a different branch.`,
+      `  gh workflow run marketing-screenshots.yaml --repo ${repo} --ref ${branch}\n` +
+      `…or pass --ref <branch> / --repo <owner>/<repo> to look elsewhere.`,
   )
   process.exit(1)
 }
 
-console.log(`Fetching marketing-screenshots artifact from run ${runId}`)
+console.log(
+  `Fetching marketing-screenshots artifact from run ${runId} in ${repo}`,
+)
 const tmp = mkdtempSync(join(tmpdir(), 'anthias-screenshots-'))
 try {
   await sh([
@@ -82,6 +94,8 @@ try {
     'run',
     'download',
     runId,
+    '--repo',
+    repo,
     '--name',
     'marketing-screenshots',
     '--dir',

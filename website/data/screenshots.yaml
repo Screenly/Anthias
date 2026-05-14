@@ -1,11 +1,13 @@
 # Marketing screenshots rendered on the home-page hero slider.
 #
 # Each entry maps to a <name>@3x.png source under
-# assets/images/screenshots/. The marketing-screenshots.yaml workflow
-# produces these from the Playwright integration suite — see the
-# tests/conftest.py marketing_screenshot fixture for the call sites.
+# assets/images/screenshots/. That directory is gitignored — no
+# captures are committed. The marketing-screenshots.yaml workflow
+# produces them from the Playwright integration suite (see the
+# tests/conftest.py marketing_screenshot fixture for the call sites);
 # deploy-website.yaml downloads the latest successful run's artifact
-# before building, replacing the committed seed copies.
+# into assets/images/screenshots/ before building, and contributors
+# can mirror that locally with `bun run screenshots:fetch`.
 #
 # Slides whose <name>@3x.png is missing at build time are skipped, so
 # a partial artifact (e.g. one capture broken) still ships a working

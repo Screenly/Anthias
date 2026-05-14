@@ -16,16 +16,10 @@ on:
   # empty os_list while the upload step is still in flight).
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages.
-# `actions: read` is required so the Fetch marketing screenshots step can
-# call `gh run list` / `gh run download` against the Actions API — without
-# it, those calls 403 because explicit permissions blocks default every
-# unspecified scope to `none`.
-permissions:
-  actions: read
-  contents: read
-  pages: write
-  id-token: write
+# Permissions are scoped per-job below (least-privilege). The build
+# job needs read-only access to the Actions and contents APIs (plus
+# pages write so configure-pages can prepare the artifact); the
+# deploy job needs pages:write + id-token:write to publish.
 
 # Allow one concurrent deployment
 concurrency:
@@ -39,6 +33,14 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      # actions:read is required so the Fetch marketing screenshots
+      # step can call `gh run list` / `gh run download` against the
+      # Actions API — explicit permission blocks default every
+      # unspecified scope to `none`.
+      actions: read
+      contents: read
+      pages: write
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -188,6 +190,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-24.04
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

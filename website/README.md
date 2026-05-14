@@ -33,7 +33,7 @@ bun run screenshots:fetch     # latest successful master run
 bun run dev
 ```
 
-The fetch script needs the `gh` CLI authenticated against the upstream repo. Pass `--ref <branch>` to pull from a different branch's most recent run. Without screenshots, Hugo still builds — the slider section simply omits.
+The fetch script needs the `gh` CLI authenticated; it targets `Screenly/Anthias` by default so the upstream artifact is reachable even from a fork clone. Pass `--ref <branch>` to pull from a different branch's most recent run, or `--repo <owner>/<repo>` to point at a different repo. Without screenshots, Hugo still builds — the slider section simply omits.
 
 ## Build
 
