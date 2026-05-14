@@ -1026,6 +1026,12 @@ from anthias_server import processing  # noqa: E402
 
 NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
 
+# Spacing between normalize_video_asset tasks queued by
+# ``regenerate_for_envelope_change``. See the comment at the
+# queueing site for the rationale (operator-overridable
+# cancellation window + box recovery time between encodes).
+_WALKER_DRIP_INTERVAL_S = 60
+
 
 @celery.task(
     base=processing._NormalizeAssetTask,
@@ -1182,7 +1188,26 @@ def regenerate_for_envelope_change(force: bool = False) -> int:
                 is_processing=True,
             )
             processing.stamp_processing_start(asset.asset_id)
-            normalize_video_asset.delay(asset.asset_id)
+            # Drip-feed: stagger queued tasks so an upgrade that
+            # invalidates every asset in the catalog doesn't fire
+            # all libx265 encodes back-to-back. ``--concurrency=1``
+            # already executes them serially, but without
+            # ``countdown`` the celery worker fetches the next
+            # task the instant the previous one finishes, which on
+            # a Pi 4 / Pi 5 / Rock Pi means continuous CPU
+            # saturation for as long as the catalog takes to re-
+            # render (potentially hours). The countdown gives the
+            # operator a chance to ``is_processing=False`` a row
+            # they want to skip and lets the box breathe between
+            # encodes. ``WALKER_DRIP_INTERVAL_S`` (default 60 s)
+            # is a compromise: fast enough to finish a 100-asset
+            # catalog overnight, slow enough that two consecutive
+            # encodes don't queue up before the box has recovered
+            # from the previous one.
+            normalize_video_asset.apply_async(
+                args=(asset.asset_id,),
+                countdown=queued * _WALKER_DRIP_INTERVAL_S,
+            )
             queued += 1
         except Exception:
             logging.exception(

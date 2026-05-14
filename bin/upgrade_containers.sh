@@ -28,6 +28,15 @@ export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
 # starves sshd through banner exchange and drops mpv frames.
 CELERY_CPU_LIMIT_RAW=$(echo "$(nproc) * 0.5" | bc -l)
 export CELERY_CPU_LIMIT=$(awk -v v="$CELERY_CPU_LIMIT_RAW" 'BEGIN { printf "%.1f", (v < 1.0 ? 1.0 : v) }')
+# Hard cgroup memory limit for anthias-celery. 60% of host RAM
+# keeps libx265 (~1.5 GB resident on 4K HEVC encodes) from pushing
+# the system into swap, which is what actually starves sshd + the
+# viewer on 4 GB SBCs. Without this cap a single 4K transcode on
+# the Rock Pi 4 made the box unresponsive even with the CPU quota
+# in place — cgroup CPU isolation doesn't help if libx265 can
+# allocate all available RAM. 60% leaves 40% for the viewer +
+# server + redis + system, matching the CPU 50/50 split.
+export CELERY_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB * 0.6" | bc | cut -d'.' -f1)
 GIT_BRANCH="${GIT_BRANCH:-master}"
 
 MODE="${MODE:-pull}"

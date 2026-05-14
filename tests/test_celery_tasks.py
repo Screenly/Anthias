@@ -1367,7 +1367,7 @@ def test_regenerate_walker_skips_in_envelope_assets(
     _make_video_asset('in-envelope', envelope_dict=current.as_dict())
 
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
     ) as queued:
         n = regenerate_for_envelope_change()
 
@@ -1386,12 +1386,12 @@ def test_regenerate_walker_queues_stale_assets(
     _make_video_asset('stale', envelope_dict=stale)
 
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
     ) as queued:
         n = regenerate_for_envelope_change()
 
     assert n == 1
-    queued.assert_called_once_with('stale')
+    queued.assert_called_once_with(args=('stale',), countdown=0)
     assert Asset.objects.get(asset_id='stale').is_processing is True
 
 
@@ -1407,12 +1407,12 @@ def test_regenerate_walker_queues_assets_with_no_envelope(
     _make_video_asset('legacy', envelope_dict=None)
 
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
     ) as queued:
         n = regenerate_for_envelope_change()
 
     assert n == 1
-    queued.assert_called_once_with('legacy')
+    queued.assert_called_once_with(args=('legacy',), countdown=0)
 
 
 @pytest.mark.django_db
@@ -1435,7 +1435,7 @@ def test_regenerate_walker_skips_image_assets(
     )
 
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
     ) as queued:
         n = regenerate_for_envelope_change()
 
@@ -1456,7 +1456,7 @@ def test_regenerate_walker_force_requeues_everything(
     _make_video_asset('in-envelope-b', envelope_dict=current)
 
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
     ) as queued:
         n = regenerate_for_envelope_change(force=True)
 
@@ -1475,12 +1475,12 @@ def test_regenerate_walker_handles_malformed_envelope(
     _make_video_asset('malformed', envelope_dict={'codec': 'vp9'})
 
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay'
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
     ) as queued:
         n = regenerate_for_envelope_change()
 
     assert n == 1
-    queued.assert_called_once_with('malformed')
+    queued.assert_called_once_with(args=('malformed',), countdown=0)
 
 
 @pytest.mark.django_db
@@ -1496,7 +1496,7 @@ def test_regenerate_walker_continues_after_per_row_failure(
 
     # First call raises, second succeeds.
     with mock.patch(
-        'anthias_server.celery_tasks.normalize_video_asset.delay',
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async',
         side_effect=[RuntimeError('redis hiccup'), None],
     ) as queued:
         n = regenerate_for_envelope_change()
@@ -1504,3 +1504,48 @@ def test_regenerate_walker_continues_after_per_row_failure(
     assert queued.call_count == 2
     # Only the successful call counts as "queued".
     assert n == 1
+
+
+@pytest.mark.django_db
+def test_regenerate_walker_spaces_dispatches_via_countdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An upgrade that invalidates the entire catalog (envelope key
+    change → every recorded envelope is stale → every asset needs
+    re-render) must NOT queue every normalize task back-to-back.
+    The walker drip-feeds via ``apply_async(countdown=N*60)`` so
+    each normalize starts at least 60 s after the previous one was
+    queued. ``--concurrency=1`` already serialises execution, but
+    without countdown the celery worker fetches the next task the
+    instant the previous finishes — same wall-clock effect as
+    queuing them all at once, leaving no breathing room between
+    encodes. Live test on the Rock Pi 4 showed sshd starving
+    through the burst even with cgroup CPU caps in place; the
+    countdown gives the box a recovery window between encodes
+    AND lets the operator cancel a row mid-flight (``is_processing
+    = False`` on the row before its countdown elapses)."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    for i in range(5):
+        _make_video_asset(f'asset-{i}', envelope_dict=None)
+
+    with mock.patch(
+        'anthias_server.celery_tasks.normalize_video_asset.apply_async'
+    ) as queued:
+        n = regenerate_for_envelope_change()
+
+    assert n == 5
+    # Countdown grows by ``_WALKER_DRIP_INTERVAL_S`` per asset.
+    # We don't pin the exact order (Asset queryset ordering is
+    # implementation-defined), just that the set of countdowns is
+    # 0, 60, 120, 180, 240 (or whatever the interval is).
+    countdowns = sorted(
+        call.kwargs['countdown'] for call in queued.call_args_list
+    )
+    interval = celery_tasks_module._WALKER_DRIP_INTERVAL_S
+    assert countdowns == [
+        0,
+        interval,
+        2 * interval,
+        3 * interval,
+        4 * interval,
+    ]

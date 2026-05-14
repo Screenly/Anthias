@@ -171,11 +171,23 @@ _MP4_FAMILY_CONTAINERS = frozenset(
 # CRF values are chosen to roughly match perceived quality across
 # codecs: libx264 CRF 23 ≈ libx265 CRF 28. Both leave plenty of
 # headroom for a fleet's typical image-and-text signage content.
+#
+# ``-preset superfast`` is a deliberate Anthias-specific choice: the
+# upload-time walker runs once per asset, so a 5-10× speedup vs
+# ``medium`` saves the operator real time on every upload, and the
+# slight increase in bitrate (typically 10-20%) is invisible on
+# typical signage content (logos, photos, slow-motion product
+# shots). On low-end SBCs the speedup is the difference between
+# "operator sees the asset in rotation within 30 s" and "operator
+# waits 5+ minutes per 4K clip" — measured live on the Rock Pi 4
+# during this PR's validation. The viewer-side decode is HW
+# regardless of encoder preset, so playback latency / smoothness
+# is unaffected.
 _H264_VIDEO_ARGS = [
     '-c:v',
     'libx264',
     '-preset',
-    'medium',
+    'superfast',
     '-crf',
     '23',
 ]
@@ -184,7 +196,7 @@ _HEVC_VIDEO_ARGS = [
     '-c:v',
     'libx265',
     '-preset',
-    'medium',
+    'superfast',
     '-crf',
     '28',
     '-tag:v',

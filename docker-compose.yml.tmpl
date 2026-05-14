@@ -61,6 +61,21 @@ services:
       - LC_ALL=${LC_ALL}
     privileged: true
     restart: always
+    # cage (the wlroots kiosk compositor used on Pi 5 / x86 /
+    # arm64 viewers) doesn't always release the DRM master on
+    # SIGTERM — its event loop blocks on a libinput shutdown
+    # path that hangs on certain kernels, and the kernel's GPU
+    # driver leaves dangling references that prevent the next
+    # container start from acquiring DRM master. ``stop_grace_period``
+    # caps how long ``docker compose down/restart`` waits before
+    # SIGKILLing the container; 3s is short enough that an
+    # upgrade rolls in a reasonable time even if cage hangs.
+    # ``stop_signal: SIGKILL`` skips the SIGTERM-then-wait dance
+    # entirely on intentional stops — same effect as a kernel
+    # OOM killer landing on the viewer, which the next ``up``
+    # cleans up from automatically.
+    stop_grace_period: 3s
+    stop_signal: SIGKILL
     shm_size: ${SHM_SIZE_KB}kb
     volumes:
       - resin-data:/data
@@ -120,6 +135,17 @@ services:
     # bigger machines finish encodes faster without ever
     # compromising playback responsiveness.
     cpus: ${CELERY_CPU_LIMIT}
+    # ``mem_limit`` partners with the cpus cap above. cgroup CPU
+    # isolation alone doesn't stop libx265 from allocating every
+    # available byte at 4K (~1.5 GB resident), which on a 4 GB
+    # SBC pushes the system into swap and starves the viewer +
+    # sshd. 60% of host RAM (computed in
+    # bin/upgrade_containers.sh) keeps libx265's working set
+    # comfortably inside the cap and leaves enough headroom for
+    # everything else. Live-confirmed on the Rock Pi 4 that
+    # without this cap a single 4K transcode wedged the device
+    # despite the cpus cap.
+    mem_limit: ${CELERY_MEMORY_LIMIT_KB}k
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
