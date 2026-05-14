@@ -607,6 +607,202 @@ def test_video_missing_file_raises_filenotfound(asset_dir: str) -> None:
             processing._run_video_normalisation(asset)
 
 
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_supported_codec_writes_metadata_and_clears_processing(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H.264 upload on a Pi 4 (which HW-decodes H.264) is accepted:
+    the row gets codec / dims / fps written into ``metadata`` and
+    ``is_processing`` is cleared."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-h264-pi4', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
+    assert asset.metadata.get('video_width') == 32
+    assert asset.metadata.get('video_height') == 32
+    # The asset file itself is untouched — no transcode.
+    assert path.exists(src)
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An H.264 upload on a Pi 5 (HEVC only — Pi 5's mpv has no v4l2-
+    request H.264 hwdec) is rejected. The error message names the
+    rejected codec, the supported set, and an ffmpeg recipe the
+    operator can copy-paste."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-h264-pi5', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert "'h264'" in msg
+    assert 'hevc' in msg
+    # Pi 5 supports HEVC only — recipe should suggest libx265.
+    assert 'libx265' in msg
+    assert '-tag:v hvc1' in msg
+
+    # Metadata was still written so the operator can see *what* they
+    # uploaded next to the error message in the asset list.
+    asset.refresh_from_db()
+    assert asset.metadata.get('video_codec') == 'h264'
+    assert asset.metadata.get('video_width') == 32
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unsupported_codec_h264_board_recipe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A board that supports H.264 (Pi 4) gets a libx264 recipe —
+    libx264 is significantly faster than libx265 for the operator."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'sample.mpg')
+    _make_video(src, codec='mpeg2video', container='mpeg', audio=None)
+    asset = _make_processing_asset('vid-mpeg2', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert 'libx264' in msg
+    assert 'libx265' not in msg
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unknown_codec_is_rejected(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ffprobe failure (codec reported as 'unknown') must reject the
+    upload — we won't pass through a clip we can't certify against
+    the board's HW decode set."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-unknown', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'unknown',
+        'video_codec': 'unknown',
+        'video_pixels': None,
+        'video_width': None,
+        'video_height': None,
+        'video_fps': None,
+        'audio_codec': 'unknown',
+        'duration_seconds': None,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert 'unknown' in str(excinfo.value)
+
+
+@pytest.mark.django_db
+def test_video_arm64_catch_all_rejects_everything(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
+    decode map (an unknown aarch64 SBC isn't guaranteed to expose a
+    v4l2-request decoder mpv can address). Without a host_agent
+    subtype publish, every video upload is rejected — operator has
+    to install a board-specific image to get HW decode."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    # Create an empty placeholder file so the FileNotFoundError check
+    # passes; we mock ffprobe below.
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-arm64', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        # Subtype absent — Redis returns None.
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value=None
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert 'none' in msg.lower()  # supported-codec list reads 'none'
+
+
+@pytest.mark.django_db
+def test_video_arm64_with_rockpi4_subtype_accepts_h264(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Rock Pi 4 running the catch-all arm64 image gets its
+    ``{h264, hevc}`` set once ``host:board_subtype=rockpi4`` is
+    published by anthias_host_agent."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rockpi', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rockpi4'
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
+
+
 def test_format_subprocess_stderr_decodes_and_trims() -> None:
     """``_format_subprocess_stderr`` must produce operator-readable
     text: bytes decoded as UTF-8 (with replacement for malformed

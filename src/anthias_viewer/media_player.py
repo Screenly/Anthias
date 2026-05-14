@@ -3,6 +3,7 @@ import os
 import subprocess
 from typing import IO, ClassVar
 
+from anthias_common.board import ARM64_DEVICE_TYPES, resolve_device_key
 from anthias_common.device_helper import get_device_type
 from anthias_common.utils import clamp_screen_rotation
 from anthias_server.settings import settings
@@ -163,7 +164,7 @@ def get_alsa_audio_device() -> str:
     # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
     # those boards, so route via DEVICE_TYPE env first and only fall
     # through to the Pi-name dispatch when we're actually on a Pi.
-    if os.environ.get('DEVICE_TYPE') in _ARM64_DEVICE_TYPES:
+    if os.environ.get('DEVICE_TYPE') in ARM64_DEVICE_TYPES:
         # No portable per-SoC HDMI card name across Rockchip /
         # Allwinner / Amlogic, so defer to ALSA's `default` device.
         # Operators with a non-standard HDMI sink can override via
@@ -298,63 +299,19 @@ def _probe_video_codec(uri: str) -> str:
         return ''
 
 
-def _pi_hwdec_for_uri(uri: str, device_type: str) -> str:
-    """mpv --hwdec= value for ``uri`` on Pi 4 / Pi 5 / Rock Pi 4.
+def _pi_hwdec_for_uri(uri: str) -> str:
+    """mpv ``--hwdec=`` value for ``uri`` on Pi 4 / Pi 5 / Rock Pi 4.
 
-    Generic ``arm64`` / ``generic-arm64`` DEVICE_TYPEs get
-    upgraded via the host_agent's published board subtype —
-    ``bin/install.sh`` writes the same arm64 DEVICE_TYPE for every
-    aarch64 SBC because most lack any HW decode path mpv can
-    address, but a few (Rock Pi 4 / RK3399) do expose ``v4l2m2m``
-    for H.264 + HEVC. ``anthias_host_agent`` reads
-    ``/proc/device-tree/model`` on the host and writes the
-    resolved subtype to Redis at ``host:board_subtype``; we read
-    it here so the viewer doesn't need a host-path mount of its
-    own.
+    Reads the board key via ``resolve_device_key``, which upgrades a
+    catch-all ``arm64`` DEVICE_TYPE to the specific subtype the
+    host_agent publishes (Rock Pi 4 → ``rockpi4``). ``auto-copy`` is
+    the safe fallback when ffprobe can't read the codec; the upload
+    gate (`anthias_server.processing._hw_decoded_codecs`) prevents
+    any codec outside ``_PI_HWDEC_BY_CODEC`` reaching this branch in
+    the first place.
     """
-    effective = device_type
-    if device_type in _ARM64_DEVICE_TYPES:
-        sub = _redis_board_subtype()
-        if sub is not None and sub in _PI_HWDEC_BY_CODEC:
-            effective = sub
-    board_map = _PI_HWDEC_BY_CODEC.get(effective, {})
+    board_map = _PI_HWDEC_BY_CODEC.get(resolve_device_key(), {})
     return board_map.get(_probe_video_codec(uri), 'auto-copy')
-
-
-# DEVICE_TYPE values that trigger the host_agent subtype lookup.
-# ``anthias-host-agent`` (running on the host, not in this container)
-# detects specific SBCs that share Anthias's catch-all ``arm64`` /
-# ``generic-arm64`` DEVICE_TYPE and publishes the subtype to Redis at
-# ``host:board_subtype``. Letting the viewer upgrade its hwdec choice
-# from the subtype lets a Rock Pi 4 running the catch-all arm64 image
-# get the right v4l2_request hwdec without needing a per-board image
-# rebuild.
-_ARM64_DEVICE_TYPES = frozenset({'arm64', 'generic-arm64'})
-
-
-def _redis_board_subtype() -> str | None:
-    """Return the host_agent-published board subtype, or ``None``.
-
-    Any failure (Redis down, key missing, decode error) returns
-    ``None`` so the caller falls back to the static
-    ``_PI_HWDEC_BY_CODEC`` entry for the raw DEVICE_TYPE.
-    """
-    try:
-        from anthias_common.utils import connect_to_redis
-
-        r = connect_to_redis()
-        value = r.get('host:board_subtype')
-    except Exception:
-        return None
-    if isinstance(value, bytes):
-        try:
-            decoded = value.decode('utf-8')
-        except UnicodeDecodeError:
-            return None
-        return decoded.strip().lower() or None
-    if isinstance(value, str):
-        return value.strip().lower() or None
-    return None
 
 
 class MPVMediaPlayer(MediaPlayer):
@@ -452,8 +409,12 @@ class MPVMediaPlayer(MediaPlayer):
         #   file) and pick per-codec, because `auto-copy`'s upstream
         #   whitelist deliberately excludes v4l2m2m-copy (H.264 V3D
         #   M2M is the path Pi 4 needs). See _pi_hwdec_for_uri().
-        if device_type in ('pi4-64', 'pi5'):
-            hwdec_value = _pi_hwdec_for_uri(self.uri, device_type)
+        # ffprobe-and-dispatch on any board the per-codec map covers
+        # (Pi 4 / Pi 5 / Rock Pi 4 via host_agent subtype). x86, the
+        # arm64 catch-all without a subtype, and Pi 2 / Pi 3 fall
+        # through to ``auto-copy`` and don't pay the ffprobe cost.
+        if resolve_device_key() in _PI_HWDEC_BY_CODEC:
+            hwdec_value = _pi_hwdec_for_uri(self.uri)
         else:
             hwdec_value = 'auto-copy'
 

@@ -59,6 +59,7 @@ import sh
 from celery import Task
 from PIL import Image, UnidentifiedImageError
 
+from anthias_common.board import resolve_device_key
 from anthias_server.app.models import Asset
 
 
@@ -815,20 +816,98 @@ _VIDEO_METADATA_KEYS = (
 )
 
 
+# Per-board hardware-decode codec set. Mirrors
+# ``anthias_viewer.media_player._PI_HWDEC_BY_CODEC`` — the two tables
+# must list the same codecs for each board, because the upload-side
+# gate decides what to accept and the playback-side dispatch decides
+# how to play. If they drift, an asset accepted at upload will fail
+# at the viewer with mpv's silent SW-decode fallback (which the gate
+# exists to prevent).
+#
+# Empty / missing entry means "no codec on this device decodes in
+# hardware" — every video upload is rejected. The catch-all ``arm64``
+# DEVICE_TYPE lands here when ``anthias_host_agent`` hasn't published
+# a more specific subtype to Redis; an unknown aarch64 SBC isn't
+# guaranteed to have a v4l2_request decoder mpv can address, so we
+# refuse rather than ship a clip that would SW-decode at play time.
+_HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
+    'pi2': frozenset({'h264'}),
+    'pi3': frozenset({'h264'}),
+    'pi4-64': frozenset({'h264', 'hevc'}),
+    'pi5': frozenset({'hevc'}),
+    'rockpi4': frozenset({'h264', 'hevc'}),
+    'x86': frozenset({'h264', 'hevc'}),
+}
+
+
+def _hw_decoded_codecs() -> frozenset[str]:
+    """Codecs the *current* board can hardware-decode through mpv.
+
+    Resolves ``DEVICE_TYPE`` via ``anthias_common.board.resolve_device_key``
+    so a Rock Pi 4 running the catch-all ``arm64`` image still picks
+    up its ``{h264, hevc}`` set once ``anthias_host_agent`` publishes
+    ``host:board_subtype=rockpi4``. An unknown / unrecognised
+    DEVICE_TYPE returns the empty set so every video gets rejected.
+    """
+    return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
+
+
+def _ffmpeg_reencode_recipe(supported: frozenset[str]) -> str:
+    """Return an ``ffmpeg`` command line the operator can run on
+    their workstation to transcode an unsupported upload into a
+    codec this board hardware-decodes.
+
+    Prefers libx264 when H.264 is in the board's supported set —
+    libx264 is roughly 5-10× faster than libx265 at comparable
+    quality, which matters when the operator is doing the encode by
+    hand. Falls back to libx265 + ``-tag:v hvc1`` for Pi 5 (HEVC-
+    only board). Returns an empty string when the board has no HW
+    decode set at all — there's nothing the operator can transcode
+    to that would land in a supported pipe.
+    """
+    if 'h264' in supported:
+        return (
+            'ffmpeg -i INPUT -c:v libx264 -preset medium -crf 23 '
+            '-c:a aac -b:a 192k -movflags +faststart OUTPUT.mp4'
+        )
+    if 'hevc' in supported:
+        return (
+            'ffmpeg -i INPUT -c:v libx265 -preset medium -crf 28 '
+            '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
+            'OUTPUT.mp4'
+        )
+    return ''
+
+
+class UnsupportedVideoCodecError(Exception):
+    """Raised by ``_run_video_normalisation`` when a video upload's
+    codec can't be hardware-decoded on this device.
+
+    ``_NormalizeAssetTask.on_failure`` catches this and writes the
+    message into ``metadata['error_message']`` so the operator sees
+    *what* was rejected and *why* on the asset list, without the row
+    staying stuck at ``is_processing=True``.
+    """
+
+
 def _run_video_normalisation(asset: Asset) -> None:
     """Probe the upload, record what ffprobe finds in ``metadata``,
-    and clear ``is_processing``.
+    and reject the asset if its codec isn't hardware-decoded on this
+    device.
 
     The file is never rewritten. Anthias does not re-encode video
     on-device — every modern board the viewer supports already
-    hardware-decodes H.264 and HEVC, and the libx265 / libx264
-    transcode path we tried in this PR's earlier revisions wedged a
-    Pi 4's celery worker for 99 minutes on a single 4K60 H.264 →
-    HEVC pass before zombieing. The operator's recovery for
-    genuinely unplayable codecs (MPEG-2, MPEG-4 ASP, ...) is to
-    re-upload a transcoded copy; the metadata fields surfaced here
-    let them see codec / dims / fps before pushing the asset to the
-    field.
+    hardware-decodes its accepted codec set (H.264 + HEVC on most
+    boards; HEVC only on Pi 5; H.264 only on Pi 2 / Pi 3), and the
+    on-device libx265 / libx264 transcode path tried in earlier
+    revisions wedged a Pi 4's celery worker for 99 minutes on a
+    single 4K60 H.264 → HEVC pass before zombieing.
+
+    Uploading a codec outside the board's HW set is rejected — the
+    viewer would otherwise fall through to mpv's software decode and
+    show drops the operator paid for hardware to avoid. The metadata
+    fields written before the rejection let the operator see what
+    they uploaded (codec / dims / fps) alongside the error message.
     """
     asset_id = asset.asset_id
     src_uri = asset.uri or ''
@@ -846,12 +925,35 @@ def _run_video_normalisation(asset: Asset) -> None:
 
     update_dict: dict[str, Any] = {
         'mimetype': 'video',
-        'is_processing': False,
         'metadata': metadata,
     }
     duration_seconds = summary.get('duration_seconds')
     if isinstance(duration_seconds, int) and duration_seconds > 0:
         update_dict['duration'] = duration_seconds
-    Asset.objects.filter(asset_id=asset_id).update(**update_dict)
 
-    _notify(asset_id)
+    src_codec = (summary.get('video_codec') or '').lower()
+    supported = _hw_decoded_codecs()
+    if src_codec in supported:
+        update_dict['is_processing'] = False
+        Asset.objects.filter(asset_id=asset_id).update(**update_dict)
+        _notify(asset_id)
+        return
+
+    # Codec is outside the board's HW decode set (or ffprobe couldn't
+    # read it). Commit the metadata we *did* gather so the operator's
+    # asset-list row carries the rejected codec / dims / fps, then
+    # raise so ``_NormalizeAssetTask.on_failure`` fills in
+    # ``error_message`` and clears ``is_processing``.
+    Asset.objects.filter(asset_id=asset_id).update(**update_dict)
+    supported_str = ', '.join(sorted(supported)) or 'none'
+    display_codec = (
+        src_codec if src_codec and src_codec != 'unknown' else 'unknown'
+    )
+    recipe = _ffmpeg_reencode_recipe(supported)
+    message = (
+        f'Video codec {display_codec!r} is not hardware-decoded on '
+        f'this device. Supported: {supported_str}.'
+    )
+    if recipe:
+        message += f' Re-encode on your workstation with: {recipe}'
+    raise UnsupportedVideoCodecError(message)
