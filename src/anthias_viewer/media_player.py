@@ -163,7 +163,7 @@ def get_alsa_audio_device() -> str:
     # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
     # those boards, so route via DEVICE_TYPE env first and only fall
     # through to the Pi-name dispatch when we're actually on a Pi.
-    if os.environ.get('DEVICE_TYPE') == 'arm64':
+    if os.environ.get('DEVICE_TYPE') in _ARM64_DEVICE_TYPES:
         # No portable per-SoC HDMI card name across Rockchip /
         # Allwinner / Amlogic, so defer to ALSA's `default` device.
         # Operators with a non-standard HDMI sink can override via
@@ -416,7 +416,13 @@ class MPVMediaPlayer(MediaPlayer):
         #   acquire DRM master: Permission denied"). So Pi 4 stays
         #   on --vo=drm + --drm-mode=1920x1080@60 — the production
         #   path inherited from master.
-        if device_type in ('x86', 'arm64', 'pi5'):
+        # ``generic-arm64`` is the legacy label that pre-rename arm64
+        # images carry — it shares the cage + Wayland stack with
+        # ``arm64`` and must take the same VO path. Without this the
+        # Rock Pi 4 (still on a generic-arm64 image) falls into the
+        # ``--vo=drm`` else branch and mpv aborts with "No primary
+        # DRM device could be picked" because cage holds DRM master.
+        if device_type in ('x86', 'arm64', 'generic-arm64', 'pi5'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         else:
             vo_args = ['--vo=drm']
