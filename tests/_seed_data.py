@@ -26,8 +26,15 @@ from django.utils import timezone
 
 def _now_window() -> dict[str, Any]:
     """Yesterday → tomorrow so every seed renders on the home page.
-    Computed at call time (not module-import) so a test that freezes
-    time still sees an in-window asset."""
+
+    Module-level seed constants below call ``_seed()`` (and therefore
+    ``_now_window()``) at import time, so their ``start_date`` /
+    ``end_date`` are captured against wall-clock at the moment this
+    module first loads. ``home_seed_assets()`` is a function and
+    re-evaluates the window on each call. No current test combines
+    these singletons with ``time_machine``; a test that needs to
+    travel time should construct fresh seeds via ``_seed()`` or use
+    the factory rather than the singletons."""
     return {
         'start_date': timezone.now() - timedelta(days=1),
         'end_date': timezone.now() + timedelta(days=1),
@@ -141,9 +148,10 @@ def home_seed_assets() -> list[dict[str, Any]]:
 #
 # Identifiers a1/a2/a3 are referenced directly by the wizard test's
 # call_log assertions ('a1': 1, 'a2': 2, 'a3': 1 etc.), so they stay
-# short. ``WIZARD_LOCAL_VIDEO_BASENAME`` etc. are exported as named
-# constants so the wizard test's "displayUri strips /data/anthias_
-# assets/ prefix" assertions don't have to hardcode the literal again.
+# short. ``WIZARD_VIDEO_BASENAME`` / ``WIZARD_IMAGE_BASENAME`` /
+# ``WIZARD_WEBPAGE_URL`` are exported as named constants so the
+# wizard test's "displayUri strips /data/anthias_assets/ prefix"
+# assertions don't have to hardcode the literal again.
 # ---------------------------------------------------------------------------
 
 

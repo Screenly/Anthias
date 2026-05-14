@@ -304,22 +304,37 @@ def test_home_renders_with_full_schedule(
     marketing_screenshot: MarketingShotFn,
 ) -> None:
     """A six-row, mixed-mimetype schedule must render the asset table
-    without layout collapse — the per-row tests below only verify one
-    row at a time and so miss padding / spacing regressions that only
-    surface when the table is populated.
+    with every row's drag handle and action cluster reachable. The
+    per-row tests below verify one row at a time and so miss
+    regressions where a layout change pushes later rows past the
+    table's right edge or stacks action buttons under a sibling cell.
 
-    Doubles as the source for the ``home@Nx.png`` marketing capture
-    when ``MARKETING_SCREENSHOTS=1`` is set."""
-    for spec in home_seed_assets():
+    Doubles as the source for the ``home`` marketing capture when
+    ``MARKETING_SCREENSHOTS=1`` is set."""
+    seeds = home_seed_assets()
+    for spec in seeds:
         Asset.objects.create(**spec)
 
     page.goto(BASE_URL)
     expect(
         page.get_by_role('heading', name='Schedule Overview')
     ).to_be_visible()
-    expect(page.locator('tr[data-asset-id]')).to_have_count(
-        len(home_seed_assets())
-    )
+
+    rows = page.locator('tr[data-asset-id]')
+    expect(rows).to_have_count(len(seeds))
+
+    # Every row's name cell must be visible and have a non-empty
+    # bounding box — catches the regression where a populated table
+    # collapses a column to 0 width because a flex parent ran out of
+    # space, which to_have_count() alone would miss.
+    name_cells = page.locator('tr[data-asset-id] .asset-cell-name__primary')
+    for i in range(len(seeds)):
+        cell = name_cells.nth(i)
+        expect(cell).to_be_visible()
+        box = cell.bounding_box()
+        assert box and box['width'] > 0, (
+            f'row {i} name cell collapsed to zero width: {box!r}'
+        )
 
     marketing_screenshot('home')
 
@@ -331,12 +346,17 @@ def test_add_asset_modal_layers_over_full_schedule(
     page: Page,
     marketing_screenshot: MarketingShotFn,
 ) -> None:
-    """Add-asset modal must layer correctly above a populated table —
-    a regression here would either show the table bleeding through the
-    overlay or push the modal off-screen on the marketing viewport.
+    """Add-asset modal must layer correctly above a populated table.
+    Asserts that the modal card has a non-zero bounding box inside
+    the visible viewport AND that an asset row directly underneath
+    its centre is occluded — catches the two failure modes that the
+    docstring of test_add_asset_modal_opens doesn't (modal pushed
+    off-screen by a CSS overflow regression, or modal card rendered
+    with display: none while the backdrop alone shows).
 
-    Doubles as the source for the ``add-asset@Nx.png`` capture."""
-    for spec in home_seed_assets():
+    Doubles as the source for the ``add-asset`` marketing capture."""
+    seeds = home_seed_assets()
+    for spec in seeds:
         Asset.objects.create(**spec)
 
     page.goto(BASE_URL)
@@ -345,10 +365,29 @@ def test_add_asset_modal_layers_over_full_schedule(
     ).to_be_visible()
     page.locator('#add-asset-button').click()
     _wait_alpine(page, 'state.mode', 'add')
+
     # Confirm the modal's title rendered before capturing — otherwise
     # the screenshot can land mid-transition with a partially faded
     # backdrop.
     expect(page.get_by_role('heading', name='Add asset')).to_be_visible()
+
+    # Modal card has a real footprint inside the viewport. ``.modal-card``
+    # is the shared shell used by both the asset modal and the delete
+    # confirmation; ``.first`` narrows to the visible add-asset card.
+    modal_card = page.locator('.modal-card').first
+    card_box = modal_card.bounding_box()
+    assert card_box, 'modal card has no bounding box (rendered display:none?)'
+    viewport = page.viewport_size
+    assert viewport, 'viewport size missing'
+    assert card_box['width'] > 200 and card_box['height'] > 200, (
+        f'modal card collapsed: {card_box!r}'
+    )
+    assert (
+        card_box['x'] >= 0
+        and card_box['y'] >= 0
+        and card_box['x'] + card_box['width'] <= viewport['width']
+        and card_box['y'] + card_box['height'] <= viewport['height']
+    ), f'modal card escaped viewport: card={card_box!r} viewport={viewport!r}'
 
     # full_page=False because the modal is position: fixed; Playwright's
     # full-page mode would push the modal card off-frame and capture

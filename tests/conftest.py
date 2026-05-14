@@ -316,10 +316,11 @@ def _mock_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
 #
 # The ``marketing_screenshot`` fixture below is opt-in via
 # MARKETING_SCREENSHOTS=1: when enabled it bumps the context to 3×
-# device scale and saves @1x/@2x/@3x sibling PNGs under
-# test-artifacts/marketing/. Default integration runs stay at 1× and
-# the fixture is a no-op so call sites in test bodies don't need to
-# branch.
+# device scale and saves a ``<name>.png`` plus retina ``<name>@2x.png``
+# and ``<name>@3x.png`` siblings under test-artifacts/marketing/ —
+# matching the website's existing overview*.png naming. Default
+# integration runs stay at 1× and the fixture is a no-op so call sites
+# in test bodies don't need to branch.
 
 _MARKETING_ENABLED = os.environ.get('MARKETING_SCREENSHOTS') == '1'
 _MARKETING_SCALE = 3
@@ -362,8 +363,13 @@ MarketingShotFn = Callable[..., None]
 
 @pytest.fixture
 def marketing_screenshot(request: pytest.FixtureRequest) -> MarketingShotFn:
-    """Capture ``page`` at the context's scale factor and emit
-    @1x / @2x / @3x sibling PNGs under ``test-artifacts/marketing/``.
+    """Capture ``page`` at the context's scale factor and emit a
+    ``<name>.png`` plus retina ``<name>@2x.png`` and ``<name>@3x.png``
+    siblings under ``test-artifacts/marketing/``. Filename convention
+    matches the existing website ``overview.png`` / ``overview@2x.png``
+    / ``overview@3x.png`` set so Hugo's image-set picker resolves the
+    new files without additional config — the base 1× is the canonical
+    URL and the ``@Nx`` siblings are retina sources.
 
     Call as ``marketing_screenshot('home')`` for a full-page capture
     (default) or ``marketing_screenshot('add-asset', full_page=False)``

@@ -3,11 +3,13 @@ name: Marketing Screenshots
 # Manually triggered: produces high-DPI marketing artwork from the
 # existing Playwright integration suite by re-running it with
 # MARKETING_SCREENSHOTS=1. The fixture in tests/conftest.py reads that
-# env var, bumps the browser context to 3× device scale, and emits
-# @1x/@2x/@3x sibling PNGs to test-artifacts/marketing/ for every test
-# that calls ``marketing_screenshot(name)``. The workflow uploads the
-# directory as a workflow artifact so the website pipeline can pull it
-# and social-media variants can be downloaded by hand.
+# env var, bumps the browser context to 3× device scale, and emits a
+# base <name>.png plus retina <name>@2x.png and <name>@3x.png siblings
+# to test-artifacts/marketing/ for every test that calls
+# ``marketing_screenshot(name)`` — matching the existing
+# website/assets/images/overview*.png convention. The workflow uploads
+# the directory as a workflow artifact so the website pipeline can
+# pull it and social-media variants can be downloaded by hand.
 #
 # This is intentionally a separate workflow from docker-test.yaml — we
 # don't want every PR run to pay the 3× rendering cost or accumulate
