@@ -190,29 +190,59 @@
           });
         }
 
+        function closeAllAccordions() {
+          document.querySelectorAll('[data-accordion-content]').forEach(function (c) {
+            c.classList.add('hidden');
+          });
+          document.querySelectorAll('[data-accordion]').forEach(function (b) {
+            b.querySelector('.icon-minus').classList.add('hidden');
+            b.querySelector('.icon-plus').classList.remove('hidden');
+            b.setAttribute('aria-expanded', 'false');
+          });
+        }
+
+        function openAccordion(btn) {
+          var target = document.getElementById(btn.dataset.accordion);
+          if (!target) return;
+          target.classList.remove('hidden');
+          btn.querySelector('.icon-minus').classList.remove('hidden');
+          btn.querySelector('.icon-plus').classList.add('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+        }
+
         document.querySelectorAll('[data-accordion]').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            var targetId = this.dataset.accordion;
-            var target = document.getElementById(targetId);
-            var isOpen = !target.classList.contains('hidden');
-
-            document.querySelectorAll('[data-accordion-content]').forEach(function (c) {
-              c.classList.add('hidden');
-            });
-            document.querySelectorAll('[data-accordion]').forEach(function (b) {
-              b.querySelector('.icon-minus').classList.add('hidden');
-              b.querySelector('.icon-plus').classList.remove('hidden');
-              b.setAttribute('aria-expanded', 'false');
-            });
-
-            if (!isOpen) {
-              target.classList.remove('hidden');
-              this.querySelector('.icon-minus').classList.remove('hidden');
-              this.querySelector('.icon-plus').classList.add('hidden');
-              this.setAttribute('aria-expanded', 'true');
+            var wasOpen = this.getAttribute('aria-expanded') === 'true';
+            closeAllAccordions();
+            if (!wasOpen) {
+              openAccordion(this);
+              var wrapper = this.parentElement;
+              if (wrapper && wrapper.id) {
+                history.replaceState(null, '', '#' + wrapper.id);
+              }
             }
           });
         });
+
+        function openAccordionFromHash() {
+          var hash = window.location.hash;
+          if (!hash || hash.length < 2) return;
+          var wrapper;
+          try {
+            wrapper = document.querySelector(hash);
+          } catch (e) {
+            return;
+          }
+          if (!wrapper) return;
+          var btn = wrapper.querySelector('[data-accordion]');
+          if (!btn) return;
+          closeAllAccordions();
+          openAccordion(btn);
+          wrapper.scrollIntoView({ block: 'start' });
+        }
+
+        openAccordionFromHash();
+        window.addEventListener('hashchange', openAccordionFromHash);
       });
     </script>
     <script>
