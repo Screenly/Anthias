@@ -930,6 +930,12 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         pixel cap that keeps Pi 4 from passthrough-ing 4K H.264
         (V3D's H.264 envelope tops out around 1080p60; 4K H.264
         would clear the codec gate but fall to software at play).
+      * ``video_fps`` — the first video stream's average frame rate
+        as a float, or ``None`` if no video stream or
+        ``r_frame_rate`` was unparseable. Used by the playback-
+        envelope transcode to decide whether to emit
+        ``-r envelope.max_fps`` (only when source > cap; the cap
+        is one-way and never up-converts sub-cap content).
       * ``audio_codec`` — lowercase codec name, ``'none'`` when the
         file genuinely carries no audio stream, or ``'unknown'`` if
         the audio stream existed but ffprobe couldn't name its
@@ -957,6 +963,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
             'container': 'unknown',
             'video_codec': 'unknown',
             'video_pixels': None,
+            'video_fps': None,
             'audio_codec': 'unknown',
             'duration_seconds': None,
         }
@@ -1004,6 +1011,22 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     except (TypeError, ValueError):
         vw = vh = 0
     video_pixels: int | None = vw * vh if vw > 0 and vh > 0 else None
+    # Average frame rate, used by the envelope transcode to decide
+    # whether to emit ``-r``. ffprobe writes ``r_frame_rate`` as a
+    # rational ``num/den`` string (e.g. ``30000/1001`` for NTSC,
+    # ``60/1`` for true 60 fps). Anything unparseable collapses to
+    # ``None`` so the caller treats it as "we can't tell" and skips
+    # the fps gate (the codec / resolution gates still fire).
+    video_fps: float | None = None
+    raw_fps = (video or {}).get('r_frame_rate')
+    if raw_fps and isinstance(raw_fps, str) and '/' in raw_fps:
+        num_str, _, den_str = raw_fps.partition('/')
+        try:
+            num, den = float(num_str), float(den_str)
+            if den > 0:
+                video_fps = num / den
+        except ValueError:
+            video_fps = None
     if audio is None:
         audio_codec = 'none'
     else:
@@ -1027,6 +1050,7 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         'container': container,
         'video_codec': video_codec,
         'video_pixels': video_pixels,
+        'video_fps': video_fps,
         'audio_codec': audio_codec,
         'duration_seconds': duration_seconds,
     }

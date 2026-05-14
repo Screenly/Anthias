@@ -1087,6 +1087,50 @@ def test_ffprobe_summary_handles_no_audio_track() -> None:
     assert summary['audio_codec'] == 'none'
 
 
+@pytest.mark.parametrize(
+    ('r_frame_rate', 'expected_fps'),
+    [
+        # Integer rates land cleanly.
+        ('30/1', 30.0),
+        ('60/1', 60.0),
+        ('25/1', 25.0),
+        # NTSC drop-frame: 30000/1001 ≈ 29.97.
+        ('30000/1001', 29.97002997002997),
+        # 60000/1001 ≈ 59.94 (NTSC 60).
+        ('60000/1001', 59.94005994005994),
+        # Garbage values collapse to None so the envelope cap
+        # treats the source as "we can't tell" and skips the fps
+        # gate — codec / resolution gates still fire.
+        ('bogus', None),
+        ('60', None),  # no slash → no rational, drop to None
+        ('0/0', None),  # denominator 0 → no fps
+    ],
+)
+def test_ffprobe_summary_parses_video_fps(
+    r_frame_rate: str, expected_fps: float | None
+) -> None:
+    """``video_fps`` is the average frame rate parsed from
+    ffprobe's ``r_frame_rate`` rational. The envelope transcode
+    uses it to decide when to emit ``-r envelope.max_fps`` — only
+    when source fps > cap. Garbage / zero-denominator → ``None``."""
+    fake = {
+        'format': {},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'r_frame_rate': r_frame_rate,
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    if expected_fps is None:
+        assert summary['video_fps'] is None
+    else:
+        assert summary['video_fps'] == pytest.approx(expected_fps)
+
+
 def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
     """Defensive: ffprobe-reported ``format.format_name`` beats the
     filename. A ``.bin`` file that's actually an MP4 must classify
@@ -1204,6 +1248,7 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
         'container': 'unknown',
         'video_codec': 'unknown',
         'video_pixels': None,
+        'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -1345,6 +1390,7 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
         'container': 'unknown',
         'video_codec': 'unknown',
         'video_pixels': None,
+        'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
