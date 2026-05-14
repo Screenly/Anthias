@@ -717,6 +717,25 @@ def test_get_instance_returns_mpv_for_arm64(
     assert isinstance(instance, MPVMediaPlayer)
 
 
+def test_get_instance_returns_mpv_for_generic_arm64(
+    reset_media_proxy: None,
+) -> None:
+    # Legacy ``generic-arm64`` DEVICE_TYPE label (pre-rename images
+    # still in the wild) must also force MPV — the Rock Pi 4 in
+    # particular reports this label and would crash on VLC's
+    # absent backend without the override.
+    MediaPlayerProxy.INSTANCE = None
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi1',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'generic-arm64'}),
+    ):
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, MPVMediaPlayer)
+
+
 def test_get_instance_returns_mpv_for_pi4_64(reset_media_proxy: None) -> None:
     MediaPlayerProxy.INSTANCE = None
     with (

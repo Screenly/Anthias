@@ -579,21 +579,23 @@ class MediaPlayerProxy:
     @classmethod
     def get_instance(cls) -> MediaPlayer:
         if cls.INSTANCE is None:
-            # Force MPV (over VLC) on two device_types that otherwise
+            # Force MPV (over VLC) on the device_types that otherwise
             # match the Pi-name dispatch below:
             #
             #   * pi4-64 — Qt6 + linuxfb like pi5/x86, so VLC's
             #     GL/GLES2/XCB outputs have no parent window to draw
             #     into. MPV renders straight to KMS via --vo=drm.
-            #   * arm64 — device_helper.get_device_type() falls back
-            #     to 'pi1' on any aarch64 host whose
+            #   * arm64 / generic-arm64 —
+            #     device_helper.get_device_type() falls back to
+            #     'pi1' on any aarch64 host whose
             #     /proc/device-tree/model isn't a Pi regex match
             #     (Rock Pi, Orange Pi, Banana Pi, …); without this
             #     override they'd silently route to VLC, which has
             #     no working backend on those boards (no vc4 KMS,
-            #     no XCB under cage).
+            #     no XCB under cage). ``generic-arm64`` covers
+            #     pre-rename images still in the wild.
             device_env = os.environ.get('DEVICE_TYPE')
-            force_mpv = device_env in ('pi4-64', 'arm64')
+            force_mpv = device_env in ('pi4-64', 'arm64', 'generic-arm64')
             if (
                 get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
                 and not force_mpv
