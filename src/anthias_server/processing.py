@@ -115,6 +115,20 @@ _PASSTHROUGH_AUDIO_CODECS = frozenset(
 )
 
 
+# Containers that the mp4 muxer/demuxer family treats as one. ffprobe
+# reports an MP4 file's ``format_name`` as
+# ``mov,mp4,m4a,3gp,3g2,mj2`` — ``mov`` first — because the demuxer
+# is the same code path for every member of the QuickTime family.
+# For envelope-vs-source comparison we collapse those to "mp4": the
+# variant we render is an mp4 (always), and any source whose
+# format_name claims any of these synonyms is mp4-compatible bytes.
+# Without this, every mp4 upload would re-encode at the container
+# gate even though the bytes are already exactly what we'd produce.
+_MP4_FAMILY_CONTAINERS = frozenset(
+    {'mp4', 'mov', 'm4v', 'm4a', '3gp', '3g2', 'mj2'}
+)
+
+
 # ---------------------------------------------------------------------------
 # Per-board envelope: see anthias_server.playback_envelope
 # ---------------------------------------------------------------------------
@@ -984,7 +998,15 @@ def _video_can_passthrough(
     """
     if envelope is None:
         envelope = compute_envelope()
-    if summary.get('container') != envelope.container_ext:
+    src_container = summary.get('container')
+    if envelope.container_ext == 'mp4':
+        # The mp4 muxer/demuxer family is one codepath in ffmpeg; any
+        # synonym in ``_MP4_FAMILY_CONTAINERS`` is mp4-compatible
+        # bytes for our purposes. See the constant's docstring for
+        # why ffprobe routinely reports ``mov`` for true mp4 files.
+        if src_container not in _MP4_FAMILY_CONTAINERS:
+            return False
+    elif src_container != envelope.container_ext:
         return False
     if summary.get('video_codec') != envelope.codec:
         return False

@@ -36,15 +36,20 @@ from anthias_server.playback_envelope import (
 def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect the envelope cache to a tmpdir.
 
-    The module reads ``settings.get_configdir()`` to find its
-    persistent state. The simplest, side-effect-free override is to
-    point ``$HOME`` at a tmp dir + create the ``.anthias`` subdir
-    inside it. ``AnthiasSettings`` re-reads ``$HOME`` on every
-    method call.
+    The module reads ``settings.get_configdir()``, which captures
+    ``$HOME`` once at ``AnthiasSettings.__init__`` time and stores
+    it on the singleton. Monkeypatching ``HOME`` alone doesn't reach
+    that captured value, so we also patch the singleton's ``home``
+    attribute for the test. Other state (config file path, asset
+    dir) is unaffected because we don't touch those for envelope
+    cache tests.
     """
+    from anthias_server.settings import settings as anthias_settings
+
     home = tmp_path / 'home'
     (home / '.anthias').mkdir(parents=True)
     monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setattr(anthias_settings, 'home', str(home))
     return home / '.anthias'
 
 

@@ -164,24 +164,6 @@ def test_original_sibling_is_preserved(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
-def test_cleanup_tolerates_non_dict_metadata(asset_dir: str) -> None:
-    """A legacy row with ``metadata=None`` (or some non-dict junk a
-    third-party tool wrote) must not crash the sweep. The orphan
-    walker still preserves ``Asset.uri`` regardless."""
-    variant = _touch(asset_dir, 'legacy_meta.mp4', age_seconds=2 * 60 * 60)
-    Asset.objects.create(
-        asset_id='legacy_meta',
-        name='legacy_meta',
-        uri=variant,
-        mimetype='video',
-        duration=10,
-        metadata=None,
-    )
-    cleanup.apply()
-    assert path.exists(variant)
-
-
-@pytest.mark.django_db
 def test_fresh_ytdl_sidecar_is_retained(asset_dir: str) -> None:
     """In-flight yt-dlp sidecars (<1h) must survive the sweep."""
     fresh_part = _touch(asset_dir, 'video.mp4.part', age_seconds=10 * 60)

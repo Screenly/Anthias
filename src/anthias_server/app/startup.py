@@ -19,8 +19,30 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 
 logger = logging.getLogger(__name__)
+
+
+def _is_celery_worker() -> bool:
+    """``True`` when the current process was launched as a celery
+    worker (``celery -A anthias_server.celery_tasks.celery worker
+    ...``) or a celery management command (beat, call, inspect).
+
+    The celery process imports ``anthias_server.celery_tasks``,
+    which top-level-calls ``django.setup()``, which fires every
+    ``AppConfig.ready`` hook — including this one. We want exactly
+    one source of truth per host for envelope-cache reconciliation,
+    and that's the web server. Two writers (server + celery) would
+    race on the cache file and could double-queue the walker for a
+    single envelope change; one writer side-steps that without
+    needing a lock.
+    """
+    argv0 = sys.argv[0] if sys.argv else ''
+    # ``celery -A ...`` lands here. ``celery_test_*`` invocations
+    # (rare) and ``celery inspect`` also short-circuit, which is
+    # the right behaviour — none of them should rewrite the cache.
+    return os.path.basename(argv0).startswith('celery')
 
 
 def run_envelope_check() -> None:
@@ -49,6 +71,12 @@ def run_envelope_check() -> None:
     if os.environ.get('ENVIRONMENT') == 'test':
         return
     if os.environ.get('PYTEST_CURRENT_TEST'):
+        return
+    # Skip when imported by a celery worker process. The server is
+    # the canonical reconciler; celery workers run the *consumer*
+    # side of the walker (executing ``normalize_video_asset``). See
+    # ``_is_celery_worker`` for why we don't want two writers.
+    if _is_celery_worker():
         return
 
     # Deferred imports keep the module load light: this file is

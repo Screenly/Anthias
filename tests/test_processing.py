@@ -656,29 +656,31 @@ def test_video_h264_mp4_passes_through(asset_dir: str) -> None:
 @pytest_ffmpeg
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    ('codec', 'ext', 'container'),
+    ('device_type', 'codec'),
     [
-        ('libx264', '.mkv', 'matroska'),
-        ('libx264', '.mov', 'mov'),
-        ('libx265', '.mp4', 'mp4'),
-        ('libx265', '.mkv', 'matroska'),
+        # H.264 board → libx264 mp4 source passes through; HEVC
+        # source on the same board re-encodes to H.264.
+        ('pi3', 'libx264'),
+        # HEVC board → libx265 mp4 source passes through; H.264
+        # source on the same board re-encodes to HEVC.
+        ('pi4-64', 'libx265'),
+        ('pi5', 'libx265'),
+        ('x86', 'libx265'),
     ],
 )
-def test_video_passthrough_for_h264_or_hevc_in_known_containers(
+def test_video_passthrough_when_source_matches_board_envelope(
     asset_dir: str,
+    device_type: str,
     codec: str,
-    ext: str,
-    container: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """H.264 and HEVC in any of the accepted containers passes
-    through *on a board profile that accepts both codecs*. Pin
-    ``DEVICE_TYPE=pi4-64`` so the libx265-source rows hit passthrough
-    (pi5 no longer passthroughs H.264 — see anthias_server.playback_envelope.ENVELOPE_BY_DEVICE_TYPE
-    — so libx264 rows would transcode there)."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
-    src = path.join(asset_dir, f'sample{ext}')
-    _make_video(src, codec=codec, container=container, audio='aac')
+    """A source in the board's envelope codec, packaged as mp4,
+    passes through. The variant ``<id>.mp4`` is a byte-identical
+    copy of the original sibling. Non-mp4 containers always
+    transcode because the variant slot is fixed at ``.mp4``."""
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec=codec, container='mp4', audio='aac')
     asset = _make_processing_asset('vid-pass', src, mimetype='video')
 
     with mock.patch.object(processing, '_notify'):
@@ -1272,6 +1274,8 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
         'container': 'unknown',
         'video_codec': 'unknown',
         'video_pixels': None,
+        'video_width': None,
+        'video_height': None,
         'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
@@ -1335,15 +1339,10 @@ def test_video_passthrough_uses_summary_duration_no_second_probe(
         fh.write(b'\x00' * 64)
     asset = _make_processing_asset('vid-no-2nd-probe', src, mimetype='video')
 
-    summary = {
-        'container': 'mp4',
-        'video_codec': 'h264',
-        # 1080p — under the pi4-64 H.264 pixel cap so passthrough is
-        # what we expect to exercise here.
-        'video_pixels': 1920 * 1080,
-        'audio_codec': 'aac',
-        'duration_seconds': 42,
-    }
+    # HEVC 1080p30 in-envelope on pi4-64 → passthrough branch fires
+    # and ``get_video_duration`` must not be re-shelled.
+    summary = _envelope_summary('hevc', 1920, 1080, 30)
+    summary['duration_seconds'] = 42
     with (
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=summary
@@ -1414,6 +1413,8 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
         'container': 'unknown',
         'video_codec': 'unknown',
         'video_pixels': None,
+        'video_width': None,
+        'video_height': None,
         'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
@@ -1699,12 +1700,12 @@ def test_video_passthrough_records_target_codec(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Passthrough rows still get ``transcode_target`` written so the
-    operator can see "this device wanted hevc, the upload already was
-    h264, no work needed at 1080p". Pinned to ``pi4-64`` because pi5
-    no longer passthroughs H.264 — its profile demands HEVC."""
+    operator can see at a glance which envelope.codec the variant
+    was rendered against. Use the pi4-64 envelope (HEVC) and a
+    libx265 source to hit the passthrough path."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
     src = path.join(asset_dir, 'sample.mp4')
-    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    _make_video(src, codec='libx265', container='mp4', audio='aac')
     asset = _make_processing_asset('vid-pass-pi4', src, mimetype='video')
 
     with mock.patch.object(processing, '_notify'):

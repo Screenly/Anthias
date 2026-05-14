@@ -35,13 +35,16 @@ def fake_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Redirect the envelope cache to a tmpdir for each test.
 
     ``run_envelope_check`` calls into ``playback_envelope.load_cached``
-    / ``save_cached``, which read ``settings.get_configdir()`` which
-    in turn reads ``$HOME``. Pointing ``$HOME`` at a tmpdir keeps
-    the test from clobbering the operator's actual cache.
+    / ``save_cached``, which read ``settings.get_configdir()`` —
+    that returns ``$HOME`` captured once at singleton init time,
+    so we patch ``settings.home`` directly as well as the env var.
     """
+    from anthias_server.settings import settings as anthias_settings
+
     home = tmp_path / 'home'
     (home / '.anthias').mkdir(parents=True)
     monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setattr(anthias_settings, 'home', str(home))
     # Make sure we're not flagged as a test run by the hook itself —
     # the tests below want to exercise the real code path, not the
     # short-circuit. We delete both keys it checks.
