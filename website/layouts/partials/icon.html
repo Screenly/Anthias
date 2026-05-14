@@ -1,0 +1,35 @@
+{{- /* Inline a Font Awesome SVG with explicit sizing. FA's source
+       SVGs declare ``fill="currentColor"``, so the icon inherits the
+       parent's CSS ``color`` — Tailwind classes like ``text-white``
+       or ``text-[#ea4aaa]`` tint it without per-icon overrides.
+
+       Usage: {{ partial "icon.html" (dict "name" "linkedin" "size" "1.25rem" "class" "block") }}
+
+       Inputs:
+         name  — slug matching ``assets/images/icons/<name>.svg``
+                 (populated by ``bun run icons:install``).
+         size  — CSS length applied to both width and height. Default
+                 "1em" so the icon scales with the surrounding font.
+         class — extra classes merged into the <svg> element.
+         alt   — accessible label; when present the SVG gets
+                 ``role="img"`` + ``aria-label``. Omit for decorative
+                 icons (added to ``aria-hidden`` instead).
+
+       The replaceRE injection runs once per call; partialCached on
+       the call site is cheap (the entire output is just the SVG
+       string) but recommended for icons that appear many times. */ -}}
+{{- $name := .name -}}
+{{- $size := default "1em" .size -}}
+{{- $extra := default "" .class -}}
+{{- $alt := default "" .alt -}}
+{{- $r := resources.Get (printf "images/icons/%s.svg" $name) -}}
+{{- if $r -}}
+  {{- $attrs := printf `width="%s" height="%s" class="%s"` $size $size $extra -}}
+  {{- if $alt -}}
+    {{- $attrs = printf `%s role="img" aria-label=%q` $attrs $alt -}}
+  {{- else -}}
+    {{- $attrs = printf `%s aria-hidden="true"` $attrs -}}
+  {{- end -}}
+  {{- $svg := replaceRE `<svg ` (printf "<svg %s " $attrs) $r.Content -}}
+  {{- $svg | safeHTML -}}
+{{- end -}}
