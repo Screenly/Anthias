@@ -195,8 +195,6 @@ def get_git_hash() -> str | None:
 _RELEASE_BRANCHES = frozenset({'master', 'main'})
 
 
-
-
 def get_anthias_version_head() -> str:
     """The primary version line — ``v{calver}``. Returns ``''`` only
     when ``get_anthias_release()`` finds neither the installed package
