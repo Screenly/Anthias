@@ -323,18 +323,43 @@ def test_home_renders_with_full_schedule(
     rows = page.locator('tr[data-asset-id]')
     expect(rows).to_have_count(len(seeds))
 
-    # Every row's name cell must be visible and have a non-empty
-    # bounding box — catches the regression where a populated table
-    # collapses a column to 0 width because a flex parent ran out of
-    # space, which to_have_count() alone would miss.
-    name_cells = page.locator('tr[data-asset-id] .asset-cell-name__primary')
+    viewport = page.viewport_size
+    assert viewport, 'viewport size missing'
+
+    # For every row, verify that (a) the name cell has a real width
+    # (catches the regression where a flex parent collapses a column),
+    # (b) the row's right edge stays within the viewport (catches a
+    # layout regression that pushes the action cluster off-screen),
+    # and (c) the rightmost action button — the delete trash — is
+    # visible and clickable. Together these guard the "drag handle
+    # and action cluster stay reachable" behaviour the docstring
+    # promises, not just that the rows exist.
     for i in range(len(seeds)):
-        cell = name_cells.nth(i)
-        expect(cell).to_be_visible()
-        box = cell.bounding_box()
-        assert box and box['width'] > 0, (
-            f'row {i} name cell collapsed to zero width: {box!r}'
+        row = rows.nth(i)
+        row_box = row.bounding_box()
+        assert row_box, f'row {i} has no bounding box'
+        assert row_box['x'] + row_box['width'] <= viewport['width'] + 1, (
+            f'row {i} extends past viewport right edge: '
+            f'row_right={row_box["x"] + row_box["width"]:.1f}, '
+            f'viewport={viewport["width"]}'
         )
+
+        name_cell = row.locator('.asset-cell-name__primary')
+        expect(name_cell).to_be_visible()
+        name_box = name_cell.bounding_box()
+        assert name_box and name_box['width'] > 0, (
+            f'row {i} name cell collapsed to zero width: {name_box!r}'
+        )
+
+        # The Delete button is the rightmost action cell. Locating
+        # by title rather than nth-child means a re-ordering of the
+        # action cluster still finds the right element.
+        delete_btn = row.locator('button[title="Delete"]')
+        expect(delete_btn).to_be_visible()
+        del_box = delete_btn.bounding_box()
+        assert (
+            del_box and del_box['x'] + del_box['width'] <= viewport['width']
+        ), f'row {i} Delete button pushed past viewport: {del_box!r}'
 
     marketing_screenshot('home')
 
@@ -388,6 +413,25 @@ def test_add_asset_modal_layers_over_full_schedule(
         and card_box['x'] + card_box['width'] <= viewport['width']
         and card_box['y'] + card_box['height'] <= viewport['height']
     ), f'modal card escaped viewport: card={card_box!r} viewport={viewport!r}'
+
+    # The actual stacking check: the topmost element at the modal's
+    # centre must live inside the modal subtree. A z-index regression
+    # that leaves an asset row floating above the modal would make
+    # ``elementFromPoint`` return that row instead — bounding-box
+    # checks alone wouldn't catch that.
+    center_x = card_box['x'] + card_box['width'] / 2
+    center_y = card_box['y'] + card_box['height'] / 2
+    topmost_in_modal = page.evaluate(
+        """([x, y]) => {
+            const el = document.elementFromPoint(x, y);
+            return Boolean(el && el.closest('.modal-card'));
+        }""",
+        [center_x, center_y],
+    )
+    assert topmost_in_modal, (
+        f'topmost element at modal centre ({center_x}, {center_y}) is not '
+        f'inside .modal-card — z-index/stacking regression'
+    )
 
     # full_page=False because the modal is position: fixed; Playwright's
     # full-page mode would push the modal card off-frame and capture

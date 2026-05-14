@@ -106,15 +106,28 @@ CHOTCHKIES_FLAIR_POLICY = _seed(
 )
 
 
+def _with_fresh_window(seed: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``seed`` with ``start_date`` / ``end_date``
+    recomputed against current wall-clock. The module-level seed
+    singletons freeze their window at import time; this helper lets
+    factories that promise "fresh schedule" honour that contract
+    without redefining every field."""
+    return {**seed, **_now_window()}
+
+
 def home_seed_assets() -> list[dict[str, Any]]:
     """A representative 6-asset schedule for marketing-quality home
-    captures and the new ``test_home_renders_with_full_schedule``
-    layout-regression test. Mix of mimetypes, durations and an
-    explicit disabled row so the table renders every visual branch
-    in one go."""
+    captures and the ``test_home_renders_with_full_schedule`` layout-
+    regression test. Mix of mimetypes, durations and an explicit
+    disabled row so the table renders every visual branch in one go.
+
+    Every dict in the returned list has its schedule window computed
+    on each call — the singletons are wrapped through
+    ``_with_fresh_window`` so a time-travelling test sees an
+    in-window schedule rather than the values captured at import."""
     return [
-        INITECH_ANNOUNCEMENT,
-        LUMBERGH_MEMO,
+        _with_fresh_window(INITECH_ANNOUNCEMENT),
+        _with_fresh_window(LUMBERGH_MEMO),
         _seed(
             asset_id='b1d31a8f2e7c4d5a9f6b2e1c8d3f0a4e',
             name='Milton — Stapler Inventory Audit',
@@ -139,7 +152,7 @@ def home_seed_assets() -> list[dict[str, Any]]:
             duration=7,
             play_order=4,
         ),
-        CHOTCHKIES_FLAIR_POLICY,
+        _with_fresh_window(CHOTCHKIES_FLAIR_POLICY),
     ]
 
 

@@ -82,13 +82,28 @@ jobs:
       # SQLite file uvicorn reads from; if pytest-django were to
       # destroy and recreate it mid-run, uvicorn's open handle would
       # point at an unlinked inode.
+      #
+      # Wrapped in nick-fields/retry to mirror the integration-test
+      # CI step (see .github/workflows/test-runner.yml:104-115).
+      # Playwright's CDP socket and SQLite WAL handoff have occasional
+      # flakes that a single rerun clears; without the wrapper a
+      # transient flake would abort the manual artifact pipeline with
+      # no usable screenshot bundle. timeout_minutes=8 accommodates
+      # the ~25% per-test slowdown at 3× device scale; max_attempts=3
+      # is lower than the main suite's 5 because every retry
+      # overwrites the previous capture set on the runner workspace
+      # and we don't want a flake retry thrashing the artifacts.
       - name: Capture screenshots
-        run: |
-          docker compose exec \
-            -e ANTHIAS_INTEGRATION_TEST=1 \
-            -e MARKETING_SCREENSHOTS=1 \
-            anthias-test \
-            pytest -m integration --reuse-db
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
+        with:
+          timeout_minutes: 8
+          max_attempts: 3
+          command: |
+            docker compose exec \
+              -e ANTHIAS_INTEGRATION_TEST=1 \
+              -e MARKETING_SCREENSHOTS=1 \
+              anthias-test \
+              pytest -m integration --reuse-db
 
       # The /usr/src/app bind-mount means test-artifacts/marketing/
       # lands directly on the runner workspace — no docker cp needed.
