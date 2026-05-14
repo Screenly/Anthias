@@ -63,7 +63,7 @@ server = [
     # — adding it here instead of relying on a transitive import keeps
     # the dependency explicit.
     "Pillow==12.2.0",
-    "pillow-heif==1.2.1",
+    "pillow-heif==1.3.0",
     "psutil==7.2.1",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
