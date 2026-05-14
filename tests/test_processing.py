@@ -1697,6 +1697,140 @@ def test_transcode_to_target_omits_clamps_when_source_at_envelope(
     assert '-r' not in args
 
 
+@pytest.mark.parametrize(
+    ('device_type', 'source_codec', 'subtype', 'expected_hwaccel'),
+    [
+        # Pi 4: both codecs go through v4l2_request via the +rpt1
+        # ffmpeg's drm hwaccel.
+        ('pi4-64', 'h264', None, ['-hwaccel', 'drm']),
+        ('pi4-64', 'hevc', None, ['-hwaccel', 'drm']),
+        # Pi 5: only HEVC has an upstream HW path; H.264 stays SW.
+        ('pi5', 'hevc', None, ['-hwaccel', 'drm']),
+        ('pi5', 'h264', None, []),
+        # Rock Pi 4: both codecs reachable via v4l2_request when the
+        # host_agent has published the subtype.
+        ('arm64', 'h264', 'rockpi4', ['-hwaccel', 'drm']),
+        ('arm64', 'hevc', 'rockpi4', ['-hwaccel', 'drm']),
+        # Generic arm64 without a known subtype stays on SW decode —
+        # we have no way to know what HW path the SBC exposes.
+        ('arm64', 'h264', None, []),
+        ('arm64', 'hevc', None, []),
+        # x86: VAAPI for both codecs.
+        (
+            'x86',
+            'h264',
+            None,
+            ['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128'],
+        ),
+        (
+            'x86',
+            'hevc',
+            None,
+            ['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128'],
+        ),
+        # Pi 2 / Pi 3: no HW decode path mpv can address.
+        ('pi2', 'h264', None, []),
+        ('pi3', 'h264', None, []),
+        # Empty source codec (probe failure) collapses to SW. We
+        # don't gamble on the wrong decoder.
+        ('pi4-64', '', None, []),
+        ('pi4-64', None, None, []),
+    ],
+)
+def test_decode_hwaccel_args_per_board(
+    monkeypatch: pytest.MonkeyPatch,
+    device_type: str,
+    source_codec: str | None,
+    subtype: str | None,
+    expected_hwaccel: list[str],
+) -> None:
+    """The walker's HW-decode dispatch matrix is the source of truth
+    for which boards offload the decode half of the transcode
+    pipeline. Drift between this table and what the +rpt1 ffmpeg
+    can actually reach would silently route encodes through SW even
+    on boards that could be using hardware — pin every cell."""
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+    # Patch the Redis subtype probe to return the test's chosen
+    # subtype value. ``None`` exercises the "no subtype published"
+    # path; a bytes value exercises the "host_agent has run"
+    # promotion.
+    fake = mock.MagicMock()
+    fake.get.return_value = subtype.encode() if subtype else None
+    with mock.patch(
+        'anthias_common.utils.connect_to_redis', return_value=fake
+    ):
+        result = processing._decode_hwaccel_args(source_codec)
+    assert result == expected_hwaccel
+
+
+def test_transcode_to_target_inserts_hwaccel_before_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the dispatch matrix says a HW path is available, ffmpeg
+    sees the ``-hwaccel`` flags *before* ``-i`` (where ffmpeg looks
+    for input-related options). Placing them after ``-i`` would
+    silently no-op — ffmpeg treats them as output-side then."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+
+    summary = _envelope_summary('h264', 1920, 1080, 30)
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target(
+            'in.mp4', 'out.mp4', source_summary=summary
+        )
+
+    args = captured['args']
+    assert '-hwaccel' in args
+    hwaccel_idx = args.index('-hwaccel')
+    input_idx = args.index('-i')
+    assert hwaccel_idx < input_idx, (
+        'ffmpeg -hwaccel must precede -i to apply to the input '
+        f'(got hwaccel at {hwaccel_idx}, -i at {input_idx})'
+    )
+
+
+def test_transcode_to_target_falls_back_to_sw_on_hwaccel_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Runtime HW decode init can fail even on a board that
+    nominally supports it (device busy, kernel driver mismatch,
+    bitstream the v4l2_request decoder rejects). The walker must
+    not error the asset in that case — it should retry once with
+    the hwaccel flags stripped, so the operator gets a slow SW
+    pass instead of a permanent processing-failed flag.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    call_args: list[list[Any]] = []
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        call_args.append(list(args))
+        # First call (with -hwaccel) fails; second (SW) succeeds.
+        if '-hwaccel' in args:
+            raise sh.ErrorReturnCode(
+                full_cmd='ffmpeg ...',
+                stdout=b'',
+                stderr=b'Hwaccel device init failed',
+                truncate=False,
+            )
+
+    summary = _envelope_summary('h264', 1920, 1080, 30)
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target(
+            'in.mp4', 'out.mp4', source_summary=summary
+        )
+
+    assert len(call_args) == 2, (
+        f'expected exactly 2 ffmpeg calls (HW then SW); got {len(call_args)}'
+    )
+    assert '-hwaccel' in call_args[0], 'first attempt should use HW decode'
+    assert '-hwaccel' not in call_args[1], (
+        'second attempt should be plain SW (no hwaccel flags)'
+    )
+
+
 @pytest_ffmpeg
 @pytest.mark.django_db
 def test_video_passthrough_records_target_codec(

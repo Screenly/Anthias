@@ -56,7 +56,9 @@ from PIL import Image, UnidentifiedImageError
 from anthias_common.utils import get_video_duration
 from anthias_server.app.models import Asset
 from anthias_server.playback_envelope import (
+    _ARM64_KEYS,
     PlaybackEnvelope,
+    _redis_board_subtype,
     compute_envelope,
 )
 
@@ -1032,6 +1034,57 @@ def _video_can_passthrough(
     return True
 
 
+def _decode_hwaccel_args(source_codec: str | None) -> list[str]:
+    """Return ffmpeg flags to use the board's hardware decoder for
+    the *input* file, or ``[]`` if no HW path is available.
+
+    The walker spends most of its wall-clock in the decode + encode
+    pipeline; encoding HEVC is libx265 software on every supported
+    SBC (no Pi or Rockchip SoC has HEVC HW encode), but the *decode*
+    half of the pipeline can be offloaded to the same silicon mpv
+    uses for playback. Per board / source-codec:
+
+    * Pi 4 (V3D V4L2 M2M + rpi-hevc-dec): both H.264 and HEVC
+      via ``-hwaccel drm`` (the +rpt1 ffmpeg's v4l2_request path).
+    * Pi 5 (Hantro G2): HEVC only — no upstream H.264 HW path.
+    * Rock Pi 4 (rkvdec + Hantro VPU, both via v4l2_request):
+      both H.264 and HEVC via ``-hwaccel drm``.
+    * x86 (VAAPI on Intel / AMD): both via
+      ``-hwaccel vaapi -hwaccel_device /dev/dri/renderD128``.
+
+    Pi 2 / Pi 3 / catch-all ``arm64`` get ``[]`` — no upstream HW
+    decode path mpv can address in this build.
+
+    Failure modes (kernel driver weird, /dev/video* permissions,
+    device busy) raise inside ffmpeg, where the caller catches them
+    and retries with the args stripped — see ``_transcode_to_target``.
+    """
+    if not source_codec:
+        return []
+    # Reuse the playback_envelope subtype probe so the walker and
+    # the viewer agree on what board they're targeting.
+    key = os.environ.get('DEVICE_TYPE', '').strip().lower()
+    if key in _ARM64_KEYS:
+        sub = _redis_board_subtype()
+        if sub is not None:
+            key = sub
+    # ``drm`` hwaccel is what ffmpeg uses for v4l2_request stateless
+    # decoders; vaapi for x86's iGPU. ``drm`` is also what Pi 4's
+    # V3D path lands on under the +rpt1 ffmpeg build.
+    if key in ('pi4-64', 'rockpi4'):
+        return ['-hwaccel', 'drm']
+    if key == 'pi5' and source_codec == 'hevc':
+        return ['-hwaccel', 'drm']
+    if key == 'x86':
+        return [
+            '-hwaccel',
+            'vaapi',
+            '-hwaccel_device',
+            '/dev/dri/renderD128',
+        ]
+    return []
+
+
 def _transcode_to_target(
     input_path: str,
     output_path: str,
@@ -1104,22 +1157,49 @@ def _transcode_to_target(
         src_fps = source_summary.get('video_fps')
         if src_fps is not None and src_fps > envelope.max_fps:
             fps_args = ['-r', str(envelope.max_fps)]
-    sh.ffmpeg(
-        '-y',
-        '-nostdin',
-        '-threads',
-        '2',
-        '-i',
-        input_path,
-        *vf_args,
-        *fps_args,
-        *_video_args_for_codec(envelope.codec),
-        *_AUDIO_TRANSCODE_ARGS,
-        '-movflags',
-        '+faststart',
-        output_path,
-        _timeout=NORMALIZE_VIDEO_TIME_LIMIT_S,
-    )
+    src_codec = (source_summary or {}).get('video_codec')
+    hwaccel_args = _decode_hwaccel_args(src_codec)
+
+    def _run(hw: list[str]) -> None:
+        sh.ffmpeg(
+            '-y',
+            '-nostdin',
+            '-threads',
+            '2',
+            *hw,
+            '-i',
+            input_path,
+            *vf_args,
+            *fps_args,
+            *_video_args_for_codec(envelope.codec),
+            *_AUDIO_TRANSCODE_ARGS,
+            '-movflags',
+            '+faststart',
+            output_path,
+            _timeout=NORMALIZE_VIDEO_TIME_LIMIT_S,
+        )
+
+    if hwaccel_args:
+        try:
+            _run(hwaccel_args)
+            return
+        except sh.ErrorReturnCode as exc:
+            # HW decode init can fail at runtime even when the board
+            # nominally supports it (kernel driver mismatch, device
+            # busy with another ffmpeg, /dev/dri permission quirk,
+            # source bitstream the v4l2_request decoder doesn't
+            # accept). Retry once with the args stripped — software
+            # decode is slower but always works. We log the original
+            # failure so an operator chasing a slow walker can see
+            # the HW path is failing and fix the root cause.
+            logging.warning(
+                'ffmpeg HW decode (%s) failed for %r; falling back '
+                'to software decode. Underlying ffmpeg stderr: %s',
+                ' '.join(hwaccel_args),
+                input_path,
+                _format_subprocess_stderr(exc),
+            )
+    _run([])
 
 
 def _resolve_duration_seconds(uri: str) -> int | None:
