@@ -894,7 +894,12 @@ def test_skip_buttons_publish_correct_command(
 # design tweaks). Relative path mirrors the `--output test-artifacts`
 # convention pytest-playwright already uses in pyproject.toml.
 _SCREENSHOT_DIR = 'test-artifacts/cec'
-_CAPTURE_SCREENSHOTS = bool(os.environ.get('PYTEST_CAPTURE_SCREENSHOTS'))
+# Explicit truthy parse so `PYTEST_CAPTURE_SCREENSHOTS=0` keeps the
+# gate OFF — bool(os.environ.get(...)) would flip on for any non-empty
+# string, including '0'/'false'.
+_CAPTURE_SCREENSHOTS = os.environ.get(
+    'PYTEST_CAPTURE_SCREENSHOTS', ''
+).lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _maybe_screenshot(page: Page, filename: str, **kwargs: Any) -> None:
