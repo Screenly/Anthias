@@ -23,6 +23,14 @@ on:
         required: false
         type: string
 
+# workflow_dispatch lets an operator run this against any ref, so the
+# job token must not inherit write-level scopes from the repo default.
+# Read-only is enough for checkout + uses: setup-uv etc.; the only
+# write is the upload-artifact step, which uses a separate API and
+# doesn't read this block.
+permissions:
+  contents: read
+
 jobs:
   capture:
     name: Capture marketing screenshots
@@ -90,15 +98,22 @@ jobs:
       # transient flake would abort the manual artifact pipeline with
       # no usable screenshot bundle. timeout_minutes=8 accommodates
       # the ~25% per-test slowdown at 3× device scale; max_attempts=3
-      # is lower than the main suite's 5 because every retry
-      # overwrites the previous capture set on the runner workspace
-      # and we don't want a flake retry thrashing the artifacts.
+      # is lower than the main suite's 5 to keep one flake from
+      # thrashing the artifacts directory three extra times.
+      #
+      # Each attempt clears test-artifacts/marketing first so a flake
+      # that aborts before the new capture tests run can't leave the
+      # upload step publishing screenshots from a previous attempt —
+      # the upload then either finds the freshly-rendered set (green)
+      # or an empty dir (`if-no-files-found: error` flags it instead
+      # of pretending success).
       - name: Capture screenshots
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
         with:
           timeout_minutes: 8
           max_attempts: 3
           command: |
+            rm -rf test-artifacts/marketing
             docker compose exec \
               -e ANTHIAS_INTEGRATION_TEST=1 \
               -e MARKETING_SCREENSHOTS=1 \

@@ -8,12 +8,17 @@ up high-DPI captures via the ``marketing_screenshot`` fixture in
 just the data the tests work against, no different from the bare
 dicts they replaced.
 
-The parody is deliberately unmistakable without using any registered
-trademark or copyrighted material — every name is a generic riff on
-the source film, and URIs use ``example.com`` plus made-up local
-paths. ``asset_id`` values match the originals so tests that key off
-them (e.g. the migration wizard's per-asset call-log assertion) keep
-working unchanged.
+Sample content is a parody nod to the 1999 film "Office Space" —
+Initech, Lumbergh, Chotchkie's, Milton, Peter Gibbons. No movie
+stills, logos or assets are bundled; URIs point at ``example.com``
+and made-up local paths. The parody is recognisable on purpose so
+the marketing captures read as "real digital signage" rather than
+generic placeholder text, and falls within standard parody/fair-use
+treatment for character and company names. If a downstream use
+requires fully generic naming (e.g. for paid ads), the constants
+below are the single place to swap names. ``asset_id`` values match
+the originals so tests that key off them (e.g. the migration
+wizard's per-asset call-log assertion) keep working unchanged.
 """
 
 from __future__ import annotations

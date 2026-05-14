@@ -353,12 +353,18 @@ def test_home_renders_with_full_schedule(
 
         # The Delete button is the rightmost action cell. Locating
         # by title rather than nth-child means a re-ordering of the
-        # action cluster still finds the right element.
+        # action cluster still finds the right element. The +1
+        # tolerance mirrors the row-edge check — Playwright reports
+        # bounding boxes as floating-point CSS pixels and sub-pixel
+        # rounding (especially under the 3× marketing device scale)
+        # can produce a right edge like 1400.2 for a button that's
+        # visually in-bounds.
         delete_btn = row.locator('button[title="Delete"]')
         expect(delete_btn).to_be_visible()
         del_box = delete_btn.bounding_box()
         assert (
-            del_box and del_box['x'] + del_box['width'] <= viewport['width']
+            del_box
+            and del_box['x'] + del_box['width'] <= viewport['width'] + 1
         ), f'row {i} Delete button pushed past viewport: {del_box!r}'
 
     marketing_screenshot('home')
@@ -396,6 +402,25 @@ def test_add_asset_modal_layers_over_full_schedule(
     # backdrop.
     expect(page.get_by_role('heading', name='Add asset')).to_be_visible()
 
+    # The modal card runs a 220ms ``modal-in`` keyframe animation
+    # (opacity + translateY). Playwright's ``to_be_visible()`` only
+    # checks for a non-empty box; without explicitly waiting for the
+    # animation to settle, the screenshot can land mid-fade and the
+    # bounding-box assertions below would see the pre-final position.
+    # Element.getAnimations({subtree:true}) returns all running or
+    # pending animations under the card — wait until every one is in
+    # the terminal ``finished`` / ``idle`` state.
+    page.wait_for_function(
+        """() => {
+            const card = document.querySelector('.modal-card');
+            if (!card) return false;
+            const anims = card.getAnimations({ subtree: true });
+            return anims.every(a =>
+                a.playState === 'finished' || a.playState === 'idle'
+            );
+        }"""
+    )
+
     # Modal card has a real footprint inside the viewport. ``.modal-card``
     # is the shared shell used by both the asset modal and the delete
     # confirmation; ``.first`` narrows to the visible add-asset card.
@@ -407,11 +432,13 @@ def test_add_asset_modal_layers_over_full_schedule(
     assert card_box['width'] > 200 and card_box['height'] > 200, (
         f'modal card collapsed: {card_box!r}'
     )
+    # +1px tolerance on each edge for the same sub-pixel-rounding
+    # reason as the home-row check above.
     assert (
-        card_box['x'] >= 0
-        and card_box['y'] >= 0
-        and card_box['x'] + card_box['width'] <= viewport['width']
-        and card_box['y'] + card_box['height'] <= viewport['height']
+        card_box['x'] >= -1
+        and card_box['y'] >= -1
+        and card_box['x'] + card_box['width'] <= viewport['width'] + 1
+        and card_box['y'] + card_box['height'] <= viewport['height'] + 1
     ), f'modal card escaped viewport: card={card_box!r} viewport={viewport!r}'
 
     # The actual stacking check: the topmost element at the modal's

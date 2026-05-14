@@ -288,12 +288,13 @@ def test_full_migration_flow_with_mixed_results(
     drains, the header reads "Migration finished with errors" (not
     the all-clear copy) and the Retry button surfaces the count."""
     _mock_validate_valid(page)
+    _failure_message = f'File not found on device: {WIZARD_VIDEO_BASENAME}'
     _mock_migrate_per_asset(
         page,
         outcomes={
             'a2': {
                 'success': False,
-                'error': 'File not found on device: abc1.mp4',
+                'error': _failure_message,
             },
         },
     )
@@ -319,9 +320,7 @@ def test_full_migration_flow_with_mixed_results(
     expect(page.get_by_role('button', name='Retry 1 failed')).to_be_visible()
 
     # Failed row must surface the backend's error verbatim.
-    expect(
-        page.get_by_text('File not found on device: abc1.mp4')
-    ).to_be_visible()
+    expect(page.get_by_text(_failure_message)).to_be_visible()
     # Two success rows — we count occurrences of the "Uploaded to
     # Screenly" label instead of asserting on the ULID, which the
     # done state intentionally suppresses (operators can't act on it).
@@ -453,8 +452,9 @@ def test_uri_basename_shown_for_local_assets(
     seeded_assets: list[Asset], page: Page
 ) -> None:
     """For local-file assets the picker should show the basename
-    (e.g. ``abc1.mp4``) — pasting the full ``/data/anthias_assets/...``
-    path is noisy and tells the operator nothing about the asset."""
+    (e.g. ``WIZARD_VIDEO_BASENAME``) — pasting the full
+    ``/data/anthias_assets/...`` path is noisy and tells the operator
+    nothing about the asset."""
     _mock_validate_valid(page)
 
     page.goto(MIGRATE_URL)
