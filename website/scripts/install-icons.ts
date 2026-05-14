@@ -20,7 +20,6 @@ import { join } from 'node:path'
 const ICONS: ReadonlyArray<{ name: string; pack: 'brands' | 'solid' }> = [
   { name: 'github', pack: 'brands' },
   { name: 'linkedin', pack: 'brands' },
-  { name: 'x-twitter', pack: 'brands' },
   { name: 'youtube', pack: 'brands' },
   { name: 'heart', pack: 'solid' },
 ]
