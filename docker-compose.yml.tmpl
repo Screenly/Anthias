@@ -93,18 +93,29 @@ services:
     # inherit the wrapper's settings, so a single configuration here
     # covers every workload the worker spawns.
     #
-    # ``--concurrency=1`` caps the worker at one normalize task at a
-    # time. Default celery concurrency = num_cores, which on a Pi 4
-    # / Pi 5 / Rock Pi 4 means 4 parallel libx265 encodes sharing
-    # the same SoC as the viewer's mpv process. nice(1) helps only
-    # when there's CONTENTION — four ffmpegs at nice 19 still
-    # saturate the cores and push the board into swap (each
-    # libx265 1080p encode needs ~500 MB RAM; a 4 GB SBC OOM-
-    # spirals well before the walker finishes). Live-confirmed on
-    # the Rock Pi 4: sshd starved through banner exchange during
-    # walker bursts. Asset processing is upload-time, not
-    # throughput-bound — serial encodes finish a few minutes
-    # later, but the viewer never drops a frame.
+    # ``--concurrency=1`` caps the worker at one normalize task at
+    # a time. Default celery concurrency = num_cores, which on a
+    # Pi 4 / Pi 5 / Rock Pi 4 means 4 parallel libx265 encodes
+    # sharing the same SoC as the viewer's mpv process. Even at
+    # nice 19 four ffmpegs still saturate the cores and push the
+    # board into swap (each libx265 1080p encode needs ~500 MB
+    # RAM; a 4 GB SBC OOM-spirals well before the walker
+    # finishes). Asset processing is upload-time, not throughput-
+    # bound — serial encodes finish a few minutes later, but the
+    # viewer never drops a frame.
+    #
+    # ``cpus: 1.0`` is a hard cgroup CFS quota (1 CPU's worth of
+    # compute per period). nice/ionice are soft priority hints and
+    # only matter when something else is asking for cycles — when
+    # libx265 is the only heavy workload the scheduler still gives
+    # it everything available, and on a 4 GB SBC that's enough to
+    # starve sshd through banner exchange + mpv mid-frame. The
+    # hard cap is the only way to guarantee "encoding never
+    # impacts playback or UI access". 1.0 leaves 3+ cores for the
+    # viewer + system on every supported SBC; x86 hosts have 8+
+    # cores so the cap is also conservative there but harmless
+    # (asset processor finishes a few seconds later).
+    cpus: 1.0
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias

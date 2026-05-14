@@ -29,6 +29,9 @@ services:
     # Compose builds anthias-server first (it owns the build:) and
     # this service inherits the same image, only overriding CMD.
     image: anthias-server:dev
+    # Hard cgroup CFS quota — see docker-compose.yml.tmpl. nice/ionice
+    # are insufficient when the worker is the only heavy workload.
+    cpus: 1.0
     depends_on:
       anthias-server:
         condition: service_started
