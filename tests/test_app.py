@@ -885,16 +885,29 @@ def test_skip_buttons_publish_correct_command(
 # visible state we stub /dev/vchiq with a plain file before navigating
 # and remove it on teardown.
 
-# Relative to wherever pytest is invoked. Matches the `--output
-# test-artifacts` convention pytest-playwright already uses in
-# pyproject.toml's addopts, so CI's upload-artifact step picks up
-# these PNGs alongside any failure traces.
+# Screenshot capture is OFF by default. The original PR (#2886) used
+# screenshots for a one-time UX review; running them on every CI cycle
+# is pure overhead because the `Upload integration test artifacts` step
+# in .github/workflows/test-runner.yml is gated on `if: failure()` —
+# the PNGs on a green run get written and immediately discarded. Set
+# `PYTEST_CAPTURE_SCREENSHOTS=1` when you want them locally (UX work,
+# design tweaks). Relative path mirrors the `--output test-artifacts`
+# convention pytest-playwright already uses in pyproject.toml.
 _SCREENSHOT_DIR = 'test-artifacts/cec'
+# Explicit truthy parse so `PYTEST_CAPTURE_SCREENSHOTS=0` keeps the
+# gate OFF — bool(os.environ.get(...)) would flip on for any non-empty
+# string, including '0'/'false'.
+_CAPTURE_SCREENSHOTS = os.environ.get(
+    'PYTEST_CAPTURE_SCREENSHOTS', ''
+).lower() in {'1', 'true', 'yes', 'on'}
 
 
-def _ensure_screenshot_dir() -> str:
+def _maybe_screenshot(page: Page, filename: str, **kwargs: Any) -> None:
+    """No-op unless PYTEST_CAPTURE_SCREENSHOTS is set in the env."""
+    if not _CAPTURE_SCREENSHOTS:
+        return
     os.makedirs(_SCREENSHOT_DIR, exist_ok=True)
-    return _SCREENSHOT_DIR
+    page.screenshot(path=f'{_SCREENSHOT_DIR}/{filename}', **kwargs)
 
 
 @pytest.fixture
@@ -956,26 +969,24 @@ def test_display_power_section_visible_with_cec_adapter(
     )
 
     # Screenshot 1: full settings page with the new section
-    _ensure_screenshot_dir()
-    page.screenshot(
-        path=f'{_SCREENSHOT_DIR}/01-settings-page-with-cec.png',
-        full_page=True,
-    )
+    _maybe_screenshot(page, '01-settings-page-with-cec.png', full_page=True)
 
     # Screenshot 2: just the Display power card (tight crop)
-    section = page.locator('section', has_text='Display power').last
-    section.scroll_into_view_if_needed()
-    box = section.bounding_box()
-    assert box, 'display-power section has no bounding box'
-    page.screenshot(
-        path=f'{_SCREENSHOT_DIR}/02-display-power-card.png',
-        clip={
-            'x': max(box['x'] - 8, 0),
-            'y': max(box['y'] - 8, 0),
-            'width': box['width'] + 16,
-            'height': box['height'] + 16,
-        },
-    )
+    if _CAPTURE_SCREENSHOTS:
+        section = page.locator('section', has_text='Display power').last
+        section.scroll_into_view_if_needed()
+        box = section.bounding_box()
+        assert box, 'display-power section has no bounding box'
+        _maybe_screenshot(
+            page,
+            '02-display-power-card.png',
+            clip={
+                'x': max(box['x'] - 8, 0),
+                'y': max(box['y'] - 8, 0),
+                'width': box['width'] + 16,
+                'height': box['height'] + 16,
+            },
+        )
 
 
 @pytest.mark.integration
@@ -1001,38 +1012,4 @@ def test_display_power_button_click_surfaces_error_toast(
     expect(error_toast).to_contain_text('Display turn-on')
 
     # Screenshot 3: error toast in context
-    _ensure_screenshot_dir()
-    page.screenshot(
-        path=f'{_SCREENSHOT_DIR}/03-error-toast.png',
-        full_page=False,
-    )
-
-
-@pytest.mark.integration
-@pytest.mark.django_db(transaction=True)
-def test_display_power_success_toast_appearance(
-    reset_assets: None, page: Page, cec_stub_device: str
-) -> None:
-    """Real success path requires a working HDMI-CEC TV, which the
-    test container cannot supply. To exercise the *visual* success
-    treatment (green check, dismissible) we drive Alpine's toast store
-    directly — same call path the server-rendered django-messages
-    drain uses (vendor.ts:50). This isn't asserting on the redirect
-    flow; it's a UX-coverage screenshot for the success kind."""
-    page.goto(SETTINGS_URL)
-    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
-
-    page.evaluate(
-        """() => window.Alpine.store('toasts').push(
-            'success', 'Display turn-on command sent.', 60000
-        )"""
-    )
-    success_toast = page.locator('.app-toast--success').first
-    expect(success_toast).to_be_visible()
-    expect(success_toast).to_contain_text('Display turn-on command sent.')
-
-    _ensure_screenshot_dir()
-    page.screenshot(
-        path=f'{_SCREENSHOT_DIR}/04-success-toast.png',
-        full_page=False,
-    )
+    _maybe_screenshot(page, '03-error-toast.png', full_page=False)
