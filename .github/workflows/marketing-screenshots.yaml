@@ -91,15 +91,15 @@ jobs:
       # destroy and recreate it mid-run, uvicorn's open handle would
       # point at an unlinked inode.
       #
-      # Wrapped in nick-fields/retry to mirror the integration-test
-      # CI step (see .github/workflows/test-runner.yml:104-115).
-      # Playwright's CDP socket and SQLite WAL handoff have occasional
-      # flakes that a single rerun clears; without the wrapper a
-      # transient flake would abort the manual artifact pipeline with
-      # no usable screenshot bundle. timeout_minutes=8 accommodates
-      # the ~25% per-test slowdown at 3× device scale; max_attempts=3
-      # is lower than the main suite's 5 to keep one flake from
-      # thrashing the artifacts directory three extra times.
+      # Wrapped in a bash retry loop to mirror the integration-test
+      # CI step (see .github/workflows/test-runner.yml). Playwright's
+      # CDP socket and SQLite WAL handoff have occasional flakes that
+      # a single rerun clears; without the wrapper a transient flake
+      # would abort the manual artifact pipeline with no usable
+      # screenshot bundle. timeout_minutes=8 accommodates the ~25%
+      # per-test slowdown at 3× device scale; max_attempts=3 is lower
+      # than the main suite's 5 to keep one flake from thrashing the
+      # artifacts directory three extra times.
       #
       # The session-scoped ``_reset_marketing_dir`` fixture in
       # tests/conftest.py clears test-artifacts/marketing/ before any
@@ -111,16 +111,27 @@ jobs:
       # (green) or an empty dir (`if-no-files-found: error` flags
       # that instead of pretending success).
       - name: Capture screenshots
-        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
-        with:
-          timeout_minutes: 8
-          max_attempts: 3
-          command: |
-            docker compose exec \
-              -e ANTHIAS_INTEGRATION_TEST=1 \
-              -e MARKETING_SCREENSHOTS=1 \
-              anthias-test \
-              pytest -m integration --reuse-db
+        run: |
+          max_attempts=3
+          timeout_minutes=8
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Attempt $attempt of $max_attempts"
+            if timeout "${timeout_minutes}m" bash -c '
+              docker compose exec \
+                -e ANTHIAS_INTEGRATION_TEST=1 \
+                -e MARKETING_SCREENSHOTS=1 \
+                anthias-test \
+                pytest -m integration --reuse-db
+            '; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            attempt=$((attempt + 1))
+          done
+          echo "All $max_attempts attempts failed"
+          exit 1
 
       # The /usr/src/app bind-mount means test-artifacts/marketing/
       # lands directly on the runner workspace — no docker cp needed.
