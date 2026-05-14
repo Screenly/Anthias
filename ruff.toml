@@ -5,7 +5,7 @@ exclude = [
     # Vendored verbatim from a pinned Yocto/poky upstream commit; see
     # the file header. Reformatting would put the file off-pin and
     # silently break the provenance comment.
-    "webview/sysroot-relativelinks.py",
+    "src/anthias_webview/sysroot-relativelinks.py",
 ]
 target-version = "py313"
 

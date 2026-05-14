@@ -34,7 +34,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WEBVIEW_DIR="${REPO_ROOT}/webview"
+WEBVIEW_DIR="${REPO_ROOT}/src/anthias_webview"
 BUILD_ROOT="${REPO_ROOT}/.qt5-toolchain-build"
 SRC_DIR="${BUILD_ROOT}/src"
 OUT_DIR="${BUILD_ROOT}/release"
