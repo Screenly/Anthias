@@ -48,7 +48,7 @@ server = [
     "channels==4.3.1",
     "channels-redis==4.3.0",
     "Django==5.2.14",
-    "djangorestframework==3.16.1",
+    "djangorestframework==3.17.1",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.3",
     "drf-spectacular==0.29.0",
@@ -138,7 +138,7 @@ mypy = [
     "Django==5.2.14",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.3",
-    "djangorestframework==3.16.1",
+    "djangorestframework==3.17.1",
     "drf-spectacular==0.29.0",
     # Pillow ships PEP 561 stubs (py.typed). The processing module
     # imports PIL at top level, so mypy needs the package resolvable
