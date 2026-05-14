@@ -217,20 +217,32 @@ def cleanup() -> None:
     # the pre-rebrand prefix (~/screenly_assets/..., now a symlink to
     # ~/anthias_assets) are recognized as live and their files aren't
     # mistaken for orphans on upgraded installs.
+    #
+    # The reference set must include the ``.original.<ext>`` sibling
+    # for every video row: ``Asset.uri`` points at the playback variant
+    # (``<id>.mp4``), and the source is stashed at
+    # ``metadata['original_uri']`` (e.g. ``<id>.original.mov``). Without
+    # that second source the sweep below would treat every original as
+    # an orphan after the 1h mtime cutoff and silently destroy the only
+    # path back to the upload bytes.
     asset_dir_real = path.realpath(asset_dir)
-    referenced = set()
-    for uri in (
-        Asset.objects.exclude(uri__isnull=True)
-        .exclude(uri__exact='')
-        .values_list('uri', flat=True)
-    ):
-        if not uri:
-            continue
+    referenced: set[str] = set()
+
+    def _claim(p: str | None) -> None:
+        if not p:
+            return
         try:
-            if path.realpath(path.dirname(uri)) == asset_dir_real:
-                referenced.add(path.basename(uri))
+            if path.realpath(path.dirname(p)) == asset_dir_real:
+                referenced.add(path.basename(p))
         except OSError:
-            continue
+            return
+
+    for uri, metadata in Asset.objects.exclude(uri__isnull=True).values_list(
+        'uri', 'metadata'
+    ):
+        _claim(uri)
+        if isinstance(metadata, dict):
+            _claim(metadata.get('original_uri'))
     cutoff = 60 * 60  # match the .tmp guard above
     now = time.time()
     for entry in os.scandir(asset_dir):

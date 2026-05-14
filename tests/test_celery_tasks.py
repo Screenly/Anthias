@@ -129,6 +129,58 @@ def test_legacy_symlinked_uri_is_preserved(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
+def test_original_sibling_is_preserved(asset_dir: str) -> None:
+    """The sibling-original of a video asset
+    (``metadata['original_uri']`` → ``<id>.original.<ext>``) is not
+    referenced by ``Asset.uri`` (which points at the playback variant)
+    but must survive the orphan sweep.
+
+    Without this, every video upload would lose its bytes-back path
+    one hour after the variant is rendered, which would silently
+    break the re-render walker on every envelope change.
+    """
+    variant = _touch(asset_dir, 'vid.mp4', age_seconds=2 * 60 * 60)
+    original = _touch(asset_dir, 'vid.original.mov', age_seconds=2 * 60 * 60)
+    Asset.objects.create(
+        asset_id='vid',
+        name='vid',
+        uri=variant,
+        mimetype='video',
+        duration=10,
+        metadata={
+            'original_uri': original,
+            'envelope': {
+                'codec': 'hevc',
+                'max_width': 3840,
+                'max_height': 2160,
+                'max_fps': 60,
+            },
+        },
+    )
+    cleanup.apply()
+    assert path.exists(variant), 'variant must not be swept'
+    assert path.exists(original), '.original.<ext> must not be swept'
+
+
+@pytest.mark.django_db
+def test_cleanup_tolerates_non_dict_metadata(asset_dir: str) -> None:
+    """A legacy row with ``metadata=None`` (or some non-dict junk a
+    third-party tool wrote) must not crash the sweep. The orphan
+    walker still preserves ``Asset.uri`` regardless."""
+    variant = _touch(asset_dir, 'legacy_meta.mp4', age_seconds=2 * 60 * 60)
+    Asset.objects.create(
+        asset_id='legacy_meta',
+        name='legacy_meta',
+        uri=variant,
+        mimetype='video',
+        duration=10,
+        metadata=None,
+    )
+    cleanup.apply()
+    assert path.exists(variant)
+
+
+@pytest.mark.django_db
 def test_fresh_ytdl_sidecar_is_retained(asset_dir: str) -> None:
     """In-flight yt-dlp sidecars (<1h) must survive the sweep."""
     fresh_part = _touch(asset_dir, 'video.mp4.part', age_seconds=10 * 60)
