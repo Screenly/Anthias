@@ -23,8 +23,26 @@
 //     [data-screenshot-url]    — URL pill text inside the chrome
 //     [data-screenshot-counter] — "01" counter in the chrome
 
-const AUTOPLAY_MS = 6000
+// Default autoplay cadence in ms — only used if the slider element
+// hasn't set the `--autoplay-ms` custom property (which is the
+// authoritative source: see .screenshot-slider in main.css). Reading
+// the CSS variable at init keeps the JS timeout and the progress-bar
+// animation duration in lock-step, so changing one in CSS doesn't
+// leave the bar and the slide-advance silently disagreeing.
+const AUTOPLAY_MS_FALLBACK = 6000
 const URL_FADE_MS = 250
+
+function readAutoplayMs(root: HTMLElement): number {
+  const raw = getComputedStyle(root).getPropertyValue('--autoplay-ms').trim()
+  if (!raw) return AUTOPLAY_MS_FALLBACK
+  // CSS time values can be `<number>ms` or `<number>s`. Strip the unit
+  // and convert. parseFloat is fine here — it stops at the first
+  // non-numeric char and returns NaN for empty/bad input, which we
+  // catch with the isFinite check below.
+  const value = Number.parseFloat(raw)
+  if (!Number.isFinite(value) || value <= 0) return AUTOPLAY_MS_FALLBACK
+  return raw.endsWith('s') && !raw.endsWith('ms') ? value * 1000 : value
+}
 
 interface SliderRefs {
   root: HTMLElement
@@ -63,6 +81,7 @@ function init(root: HTMLElement): void {
   if (!refs) return
 
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const autoplayMs = readAutoplayMs(root)
   // -1 (not 0) so the initial setActive(0) call applies state to the
   // first pill — otherwise the early-return on equal-index swallows
   // the very first state assignment and the autoplay bar never starts.
@@ -93,10 +112,12 @@ function init(root: HTMLElement): void {
       } else {
         pill.removeAttribute('aria-current')
       }
-      // Force-restart the CSS animation by detaching+reattaching the
-      // node: setting `data-state` alone leaves the animation in its
-      // previous phase. animation-name swap also works but reading
-      // it back to confirm reset is brittle across browsers.
+      // Drive the progress-bar animation purely through CSS selector
+      // state: the @keyframes only attaches to .screenshot-pill with
+      // `aria-current="true"` and `data-state="playing"`, so removing
+      // `data-state` from the previous pill (the else branch) is what
+      // restarts the animation when the same pill goes active again —
+      // no manual DOM detach/reattach or animation-name juggling.
       if (selected) {
         if (userInteracted || reducedMotion) {
           pill.dataset.state = reducedMotion ? 'static' : 'paused'
@@ -185,7 +206,7 @@ function init(root: HTMLElement): void {
     autoplayTimer = window.setTimeout(() => {
       goTo(activeIndex + 1, false)
       scheduleAutoplay()
-    }, AUTOPLAY_MS)
+    }, autoplayMs)
   }
 
   // IntersectionObserver tracks which slide is centered so dot state
