@@ -10,6 +10,9 @@ dist
 assets/fonts/
 static/fonts/
 
+# icons materialized from @fortawesome/fontawesome-free by `bun run icons:install`
+assets/images/icons/
+
 # marketing screenshots fetched at build time from the latest
 # marketing-screenshots workflow run (see scripts/fetch-screenshots.ts
 # for the local-dev fetch and .github/workflows/deploy-website.yaml

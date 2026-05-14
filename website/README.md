@@ -22,7 +22,7 @@ bun run dev            # bun css:watch + hugo server in parallel
 
 The site will be available at http://localhost:1313.
 
-> Skipping the bun step will load the page with broken styling and 404s for `/fonts/...woff2` — the font files come from the npm package `@fontsource/plus-jakarta-sans` and are materialized at build time, not committed.
+> Skipping the bun step will load the page with broken styling and 404s for `/fonts/...woff2` — the font files come from the npm package `@fontsource/plus-jakarta-sans` and are materialized at build time, not committed. Icons are handled the same way: `bun run icons:install` copies a curated subset of Font Awesome SVGs from `@fortawesome/fontawesome-free` into `assets/images/icons/` (gitignored). Both run automatically as part of `css:build` / `css:watch`.
 
 ### Home-page screenshot slider
 
