@@ -11,13 +11,20 @@ Two Celery tasks that run on every fresh upload:
   (BMP especially). JPEG / PNG / WebP / GIF / SVG short-circuit
   through the no-op branch — they're already viewer-friendly *and*
   well-compressed.
-* ``normalize_video_asset`` — probes the upload's container/codec with
-  ffprobe and either passes it through (rename only) or transcodes
-  with ffmpeg's ``-threads 2`` to a board-appropriate codec: libx264
-  on legacy Pi 2/Pi 3 (mmal-vc4 path; no hardware HEVC) and libx265
-  with the iOS-friendly ``hvc1`` tag on Pi 4-64 / Pi 5 / x86 (mpv
-  path; HEVC hardware-decoded on Pi 4 / x86, software on Pi 5). The
-  on-device player only ever sees a codec it can decode.
+* ``normalize_video_asset`` — runs ffprobe on the upload and records
+  what it finds in ``metadata`` (codec, dimensions, fps, audio codec,
+  container, duration). The file itself is never rewritten. Anthias
+  does not transcode video on-device: the viewer's per-board mpv
+  hwdec dispatch already handles every codec a modern board can play
+  in hardware (H.264, HEVC, plus VAAPI's wider set on x86), and the
+  on-device libx265 / libx264 transcode path we tried in this PR's
+  earlier revisions wedged a Pi 4's celery worker for 99 minutes on a
+  single 4K60 H.264 → HEVC pass before zombieing. For codecs the
+  board genuinely can't decode (MPEG-2, MPEG-4 ASP, ...), playback
+  will stutter and the operator's recovery is to upload a transcoded
+  copy — the metadata fields surface what's on each row so the
+  operator can see the codec / dims / fps before pushing the asset to
+  the field.
 
 Both tasks follow the YouTube-download Celery pattern in
 ``anthias_server.celery_tasks``:
@@ -25,20 +32,19 @@ Both tasks follow the YouTube-download Celery pattern in
 * The upload-path serializer flips ``is_processing=True`` and enqueues
   the task before returning. The viewer treats in-flight rows as
   not-displayable and silently skips them during rotation.
-* On success the task atomically replaces the file at the row's
-  ``uri``, refreshes the duration where applicable, writes
-  ``metadata['original_ext']`` / ``metadata['transcoded']`` /
-  ``metadata['converted']``, and clears ``is_processing``.
+* On success the task writes the metadata fields and clears
+  ``is_processing``. The image task additionally rewrites the file
+  in place to WebP; the video task leaves the file unchanged.
 * On failure the row's ``metadata['error_message']`` is filled in and
   ``is_processing`` is cleared via the custom ``Task.on_failure``
   hook so an operator can edit / delete the row instead of being
   stuck on the "Processing" pill forever.
 
 Tasks run inside the same ``anthias-celery`` worker that handles the
-existing ``download_youtube_asset`` flow. The compose file wraps the
-worker command with ``nice -n 19 ionice -c 3`` so a transcode never
-starves the on-device viewer; the ffmpeg invocation here additionally
-caps thread count to two cores.
+existing ``download_youtube_asset`` flow. The compose file still
+wraps the worker with ``nice -n 19 ionice -c 3`` and a cgroup CPU
+cap; those are defensive — none of the remaining task bodies are
+CPU-bound now that the on-device transcode is gone.
 """
 
 from __future__ import annotations
@@ -53,169 +59,7 @@ import sh
 from celery import Task
 from PIL import Image, UnidentifiedImageError
 
-from anthias_common.utils import get_video_duration
 from anthias_server.app.models import Asset
-from anthias_server.playback_envelope import (
-    _ARM64_KEYS,
-    PlaybackEnvelope,
-    _redis_board_subtype,
-    compute_envelope,
-)
-
-
-# Containers whose H.264/HEVC payloads play directly in mpv / VLC
-# on the Pi without remuxing. Anything outside this set falls through
-# to a full transcode regardless of codec — a "passthrough" rename
-# preserving a weird container would still need a downstream remux
-# to land in MP4, and the viewer's media stack is happiest on .mp4.
-# Keeping the list explicit also stops a typo'd extension from being
-# silently retained.
-#
-# The set carries BOTH the short extension labels (``ts``, ``mkv``,
-# ``mpg``) AND the canonical ffprobe ``format_name`` tokens
-# (``mpegts``, ``matroska``, ``mpeg``) because the same set is
-# matched against two sources of truth:
-#
-#   * the upload's filename extension (extension fallback path in
-#     ``_ffprobe_summary`` — short labels), and
-#   * ffprobe's reported ``format.format_name`` (canonical names).
-#
-# A pure short-label set would force unnecessary transcodes whenever
-# ffprobe's name (e.g. ``mpegts`` for an MPEG-TS upload) didn't
-# match the extension's short label (``ts``). Listing both keeps the
-# decision aligned across detection paths.
-_PASSTHROUGH_CONTAINERS = frozenset(
-    {
-        # Short extension labels (matched against filename ext).
-        'mp4',
-        'm4v',
-        'mkv',
-        'mov',
-        'webm',
-        'ts',
-        'mpg',
-        'mpeg',
-        'flv',
-        'avi',
-        # ffprobe ``format_name`` tokens not already covered above.
-        # ``matroska`` for .mkv (ffprobe reports ``matroska,webm``).
-        # ``mpegts`` for .ts (ffprobe reports ``mpegts`` not ``ts``).
-        # ``mov`` / ``mp4`` / ``mpeg`` / ``flv`` / ``avi`` / ``webm``
-        # are the canonical names *and* extension labels — only
-        # listed once above.
-        'matroska',
-        'mpegts',
-    }
-)
-
-
-# Audio codecs the viewer can demux without a transcode. ``None`` is
-# represented as the literal string ``'none'`` so a probe result with
-# no audio stream still falls in the "passthrough OK" set.
-_PASSTHROUGH_AUDIO_CODECS = frozenset(
-    {'aac', 'mp3', 'opus', 'vorbis', 'ac3', 'none'}
-)
-
-
-# Containers that the mp4 muxer/demuxer family treats as one. ffprobe
-# reports an MP4 file's ``format_name`` as
-# ``mov,mp4,m4a,3gp,3g2,mj2`` — ``mov`` first — because the demuxer
-# is the same code path for every member of the QuickTime family.
-# For envelope-vs-source comparison we collapse those to "mp4": the
-# variant we render is an mp4 (always), and any source whose
-# format_name claims any of these synonyms is mp4-compatible bytes.
-# Without this, every mp4 upload would re-encode at the container
-# gate even though the bytes are already exactly what we'd produce.
-_MP4_FAMILY_CONTAINERS = frozenset(
-    {'mp4', 'mov', 'm4v', 'm4a', '3gp', '3g2', 'mj2'}
-)
-
-
-# ---------------------------------------------------------------------------
-# Per-board envelope: see anthias_server.playback_envelope
-# ---------------------------------------------------------------------------
-#
-# Goal: every clip the viewer plays must be hardware-decoded on the
-# target board. The envelope (codec + max_width + max_height +
-# max_fps) is the canonical per-board contract — every variant on
-# disk matches it. ``compute_envelope()`` reads ``DEVICE_TYPE`` and
-# returns the right ``PlaybackEnvelope`` for the current process.
-#
-# Three rules govern passthrough vs transcode for a fresh upload:
-#
-#   1. Container must be mp4 (we always write mp4 — keeps the
-#      variant filename convention `<id>.mp4` exception-free).
-#   2. Source codec must equal envelope.codec exactly. The mpv
-#      hwdec dispatch on Pi resolves per-codec (v4l2m2m-copy for
-#      h264, drm-copy for hevc), so codec drift = wrong hwdec.
-#   3. Source dimensions must fit inside the envelope cap; source
-#      fps must not exceed it. The fps cap is one-way — we never
-#      up-convert a sub-cap source by emitting ``-r``.
-#
-# When all three hold, we copy the source bytewise into the variant
-# slot and preserve it as the sibling ``.original.<ext>``. When any
-# fail, we run ffmpeg with the smallest set of flags that brings
-# the output inside the envelope: ``-vf scale=...`` (only when over
-# resolution) plus ``-r <cap>`` (only when over fps) plus the codec
-# choice. The source survives at ``.original.<ext>`` either way, so
-# an envelope change in the future re-renders from the master.
-
-
-# ffmpeg encoder args. Each list is what gets passed between ``-i
-# <input>`` and ``<output>`` for the video stream — audio always
-# becomes AAC 192k via _AUDIO_TRANSCODE_ARGS. ``-tag:v hvc1`` on the
-# HEVC encoder writes the iOS-friendly ``hvc1`` codec tag instead of
-# ffmpeg's default ``hev1``; mpv/VLC handle either, but hvc1 is the
-# broader-compat choice if we ever serve these files to a browser.
-#
-# CRF values are chosen to roughly match perceived quality across
-# codecs: libx264 CRF 23 ≈ libx265 CRF 28. Both leave plenty of
-# headroom for a fleet's typical image-and-text signage content.
-#
-# ``-preset superfast`` is a deliberate Anthias-specific choice: the
-# upload-time walker runs once per asset, so a 5-10× speedup vs
-# ``medium`` saves the operator real time on every upload, and the
-# slight increase in bitrate (typically 10-20%) is invisible on
-# typical signage content (logos, photos, slow-motion product
-# shots). On low-end SBCs the speedup is the difference between
-# "operator sees the asset in rotation within 30 s" and "operator
-# waits 5+ minutes per 4K clip" — measured live on the Rock Pi 4
-# during this PR's validation. The viewer-side decode is HW
-# regardless of encoder preset, so playback latency / smoothness
-# is unaffected.
-_H264_VIDEO_ARGS = [
-    '-c:v',
-    'libx264',
-    '-preset',
-    'superfast',
-    '-crf',
-    '23',
-]
-
-_HEVC_VIDEO_ARGS = [
-    '-c:v',
-    'libx265',
-    '-preset',
-    'superfast',
-    '-crf',
-    '28',
-    '-tag:v',
-    'hvc1',
-]
-
-_AUDIO_TRANSCODE_ARGS = ['-c:a', 'aac', '-b:a', '192k']
-
-
-def _video_args_for_codec(codec: str) -> list[str]:
-    """ffmpeg ``-c:v`` args for the envelope's codec.
-
-    The dispatch is exhaustive — ``PlaybackEnvelope.from_dict``
-    already rejects any codec outside ``{'h264', 'hevc'}``, so this
-    can assume one of the two. A future envelope value would land a
-    ``KeyError`` here, which is the right failure mode (loud, at the
-    transcode boundary, not silent in the file on disk).
-    """
-    return {'h264': _H264_VIDEO_ARGS, 'hevc': _HEVC_VIDEO_ARGS}[codec]
 
 
 # Image extensions we route through the conversion task. The
@@ -793,14 +637,6 @@ def _run_image_normalisation(asset: Asset) -> None:
 # ---------------------------------------------------------------------------
 
 
-# How long a single transcode attempt is allowed to run. 30 minutes
-# matches the ceiling called out in the issue; a 1080p H.264-source
-# transcode of a typical 5-minute clip on a Pi 5 finishes in well
-# under 2 minutes. The hard ceiling is the bound for the pathological
-# case (mis-routed long-form upload, hung ffmpeg). Once exceeded,
-# Celery kills the worker process and on_failure clears is_processing.
-NORMALIZE_VIDEO_TIME_LIMIT_S = 60 * 30
-
 # Wall-clock cap on the ffprobe call. A working ffprobe answers in
 # under a second on small files; 60s covers a stalled-IO worst case
 # and stops a hung process from blocking the worker indefinitely.
@@ -897,34 +733,23 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         None,
     )
     fmt_data = probe.get('format') or {}
-    # Container resolution prefers ffprobe's ``format.format_name``
-    # over the filename extension: a ``.mov`` file that's actually
-    # MKV bytes (or a ``.bin`` extension hiding an mp4) would be
-    # mis-classified as passthrough-eligible if we trusted the
-    # filename. ffprobe reports a comma-joined list of synonyms
-    # (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``) — we accept the
-    # passthrough decision if ANY token matches the supported set.
-    # Falls back to the extension only when ffprobe couldn't
-    # populate format_name (probe failed; shouldn't happen here
-    # since we already returned 'unknown' above on probe error).
+    # ffprobe reports a comma-joined synonym list in
+    # ``format.format_name`` (e.g. ``mov,mp4,m4a,3gp,3g2,mj2`` for
+    # the QuickTime family). The first token is the canonical
+    # container name; we keep it as-is for the metadata surface so
+    # the operator UI can show "mp4" for an mp4-family upload
+    # without having to know about the synonyms.
     fmt = fmt_data.get('format_name') or ''
     fmt_tokens = [t.strip().lower() for t in fmt.split(',') if t.strip()]
     if fmt_tokens:
-        # Pick the first token that's in the passthrough set; if
-        # none match, take the first reported token verbatim so
-        # downstream branching produces a deterministic 'unknown'.
-        container = next(
-            (t for t in fmt_tokens if t in _PASSTHROUGH_CONTAINERS),
-            fmt_tokens[0],
-        )
+        container = fmt_tokens[0]
     else:
         container = _ext(input_path).lstrip('.') or 'unknown'
     video_codec = ((video or {}).get('codec_name') or 'unknown').lower()
-    # Width × height for resolution-gated passthrough (Pi 4 H.264).
-    # ffprobe returns ``width`` / ``height`` only for video streams,
-    # and only when the demuxer could decide. A missing or
-    # unparseable value collapses to None so the gate falls back to
-    # "transcode" rather than passing through a clip we can't size.
+    # Width × height for the metadata surface. ffprobe returns
+    # ``width`` / ``height`` only for video streams, and only when
+    # the demuxer could decide. A missing or unparseable value
+    # collapses to None.
     try:
         vw = int((video or {}).get('width') or 0)
         vh = int((video or {}).get('height') or 0)
@@ -980,452 +805,53 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     }
 
 
-def _video_can_passthrough(
-    summary: dict[str, Any],
-    envelope: PlaybackEnvelope | None = None,
-) -> bool:
-    """``True`` if the file is already inside the envelope and we can
-    skip the ffmpeg pass — copy bytes into the variant slot as-is.
-
-    All four gates must pass:
-
-    1. **Container** is mp4. The variant convention is fixed
-       (`<id>.mp4`), so any non-mp4 source needs a remux at minimum
-       and falls through to the transcode branch.
-    2. **Video codec** equals the envelope's codec exactly. The mpv
-       hwdec dispatch on Pi resolves per-codec; codec drift between
-       variant on disk and the viewer's expected hwdec is exactly
-       the silent-SW-fallback bug `bb27b186` closed.
-    3. **Dimensions** fit ``envelope.max_width / max_height``.
-       Probe failure (``video_pixels = None``) is treated as
-       "don't passthrough" — we don't gamble on an unsized clip.
-    4. **Frame rate** is at-or-under ``envelope.max_fps``. The cap
-       is one-way: sub-cap content keeps its source rate, only
-       over-cap content gets clamped via ``-r``.
-
-    Plus the existing audio gate — anything outside the demuxer-
-    compatible audio set triggers a re-encode regardless.
-
-    ``envelope`` defaults to ``compute_envelope()`` for production
-    callers; tests pass a specific value to exercise per-board rules
-    without mutating ``DEVICE_TYPE``.
-    """
-    if envelope is None:
-        envelope = compute_envelope()
-    src_container = summary.get('container')
-    if envelope.container_ext == 'mp4':
-        # The mp4 muxer/demuxer family is one codepath in ffmpeg; any
-        # synonym in ``_MP4_FAMILY_CONTAINERS`` is mp4-compatible
-        # bytes for our purposes. See the constant's docstring for
-        # why ffprobe routinely reports ``mov`` for true mp4 files.
-        if src_container not in _MP4_FAMILY_CONTAINERS:
-            return False
-    elif src_container != envelope.container_ext:
-        return False
-    if summary.get('video_codec') != envelope.codec:
-        return False
-    # Dimension cap: per-axis ceiling, not a total-pixel budget. A
-    # 5760×1080 ultrawide has fewer total pixels than 4K but exceeds
-    # the 3840 width cap and must transcode. Probe failure on either
-    # axis → bail to transcode.
-    src_w = summary.get('video_width')
-    src_h = summary.get('video_height')
-    if src_w is None or src_h is None:
-        return False
-    if src_w > envelope.max_width or src_h > envelope.max_height:
-        return False
-    # FPS cap is one-way. ``video_fps = None`` means we couldn't size
-    # the source, so we can't certify it; fall through to transcode
-    # where the source rate is preserved (no ``-r`` flag emitted when
-    # source is at-or-under cap).
-    src_fps = summary.get('video_fps')
-    if src_fps is None or src_fps > envelope.max_fps:
-        return False
-    if summary.get('audio_codec') not in _PASSTHROUGH_AUDIO_CODECS:
-        return False
-    return True
-
-
-def _decode_hwaccel_args(source_codec: str | None) -> list[str]:
-    """Return ffmpeg flags to use the board's hardware decoder for
-    the *input* file, or ``[]`` if no HW path is available.
-
-    The walker spends most of its wall-clock in the decode + encode
-    pipeline; encoding HEVC is libx265 software on every supported
-    SBC (no Pi or Rockchip SoC has HEVC HW encode), but the *decode*
-    half of the pipeline can be offloaded to the same silicon mpv
-    uses for playback. Per board / source-codec:
-
-    * Pi 4 (V3D V4L2 M2M + rpi-hevc-dec): both H.264 and HEVC
-      via ``-hwaccel drm`` (the +rpt1 ffmpeg's v4l2_request path).
-    * Pi 5 (Hantro G2): HEVC only — no upstream H.264 HW path.
-    * Rock Pi 4 (rkvdec + Hantro VPU, both via v4l2_request):
-      both H.264 and HEVC via ``-hwaccel drm``.
-    * x86 (VAAPI on Intel / AMD): both via
-      ``-hwaccel vaapi -hwaccel_device /dev/dri/renderD128``.
-
-    Pi 2 / Pi 3 / catch-all ``arm64`` get ``[]`` — no upstream HW
-    decode path mpv can address in this build.
-
-    Failure modes (kernel driver weird, /dev/video* permissions,
-    device busy) raise inside ffmpeg, where the caller catches them
-    and retries with the args stripped — see ``_transcode_to_target``.
-    """
-    if not source_codec:
-        return []
-    # Reuse the playback_envelope subtype probe so the walker and
-    # the viewer agree on what board they're targeting.
-    key = os.environ.get('DEVICE_TYPE', '').strip().lower()
-    if key in _ARM64_KEYS:
-        sub = _redis_board_subtype()
-        if sub is not None:
-            key = sub
-    # ``drm`` hwaccel is what ffmpeg uses for v4l2_request stateless
-    # decoders; vaapi for x86's iGPU. ``drm`` is also what Pi 4's
-    # V3D path lands on under the +rpt1 ffmpeg build.
-    if key in ('pi4-64', 'rockpi4'):
-        return ['-hwaccel', 'drm']
-    if key == 'pi5' and source_codec == 'hevc':
-        return ['-hwaccel', 'drm']
-    if key == 'x86':
-        return [
-            '-hwaccel',
-            'vaapi',
-            '-hwaccel_device',
-            '/dev/dri/renderD128',
-        ]
-    return []
-
-
-def _transcode_to_target(
-    input_path: str,
-    output_path: str,
-    envelope: PlaybackEnvelope | None = None,
-    source_summary: dict[str, Any] | None = None,
-) -> None:
-    """Run a libx264 or libx265 transcode that lands the output
-    inside the playback envelope.
-
-    Envelope decides codec + encoder args. The source summary, if
-    provided, lets us add the *smallest* set of extra flags to
-    bring the output within the envelope:
-
-    * ``-vf scale=...`` only when source width or height exceeds the
-      envelope cap. The expression preserves aspect ratio by
-      letting the longer axis hit the cap and computing the other
-      from the source's ratio (``-2`` on width = even-aligned auto,
-      libx265 / libx264 both reject odd dimensions). Sub-cap
-      sources are untouched.
-    * ``-r envelope.max_fps`` only when source fps > cap. The cap
-      is one-way — we never up-convert a sub-cap source. A
-      ``video_fps = None`` (probe couldn't read r_frame_rate) is
-      treated as "we don't know, don't emit -r" so the source's
-      native rate is preserved.
-
-    Invariants regardless of the optional flags:
-
-    * ``-y`` and ``-nostdin`` keep ffmpeg non-interactive.
-    * ``-threads 2`` caps CPU usage so two cores stay free for the
-      viewer; combined with the celery worker's
-      ``nice -n 19 ionice -c 3`` wrapper, a transcode effectively
-      never disrupts active playback.
-    * ``-c:a aac -b:a 192k`` matches every Anthias-supplied
-      default asset's audio profile.
-    * ``-movflags +faststart`` shifts the moov atom to the front
-      of the file so playback can begin before the file is fully
-      buffered.
-
-    The ``envelope`` parameter lets callers (read: tests) override
-    the env-resolved value to exercise both codec branches without
-    mutating ``DEVICE_TYPE``.
-    """
-    if envelope is None:
-        envelope = compute_envelope()
-    vf_args: list[str] = []
-    fps_args: list[str] = []
-    if source_summary is not None:
-        src_w = source_summary.get('video_width')
-        src_h = source_summary.get('video_height')
-        if (
-            src_w is not None
-            and src_h is not None
-            and (src_w > envelope.max_width or src_h > envelope.max_height)
-        ):
-            # Scale the longer axis to its cap; let ffmpeg compute
-            # the other from the source aspect (``-2`` rounds to
-            # even, libx264/libx265 both reject odd dims). When the
-            # source aspect is wider than the envelope, width is
-            # the binding axis; when taller, height is. The two
-            # ``min(...)`` arms encode both cases.
-            vf_args = [
-                '-vf',
-                (
-                    f"scale='if(gt(a,{envelope.max_width}/{envelope.max_height}),"
-                    f"{envelope.max_width},-2)':"
-                    f"'if(gt(a,{envelope.max_width}/{envelope.max_height}),"
-                    f"-2,{envelope.max_height})'"
-                ),
-            ]
-        src_fps = source_summary.get('video_fps')
-        if src_fps is not None and src_fps > envelope.max_fps:
-            fps_args = ['-r', str(envelope.max_fps)]
-    src_codec = (source_summary or {}).get('video_codec')
-    hwaccel_args = _decode_hwaccel_args(src_codec)
-
-    def _run(hw: list[str]) -> None:
-        sh.ffmpeg(
-            '-y',
-            '-nostdin',
-            '-threads',
-            '2',
-            *hw,
-            '-i',
-            input_path,
-            *vf_args,
-            *fps_args,
-            *_video_args_for_codec(envelope.codec),
-            *_AUDIO_TRANSCODE_ARGS,
-            '-movflags',
-            '+faststart',
-            output_path,
-            _timeout=NORMALIZE_VIDEO_TIME_LIMIT_S,
-        )
-
-    if hwaccel_args:
-        try:
-            _run(hwaccel_args)
-            return
-        except sh.ErrorReturnCode as exc:
-            # HW decode init can fail at runtime even when the board
-            # nominally supports it (kernel driver mismatch, device
-            # busy with another ffmpeg, /dev/dri permission quirk,
-            # source bitstream the v4l2_request decoder doesn't
-            # accept). Retry once with the args stripped — software
-            # decode is slower but always works. We log the original
-            # failure so an operator chasing a slow walker can see
-            # the HW path is failing and fix the root cause.
-            logging.warning(
-                'ffmpeg HW decode (%s) failed for %r; falling back '
-                'to software decode. Underlying ffmpeg stderr: %s',
-                ' '.join(hwaccel_args),
-                input_path,
-                _format_subprocess_stderr(exc),
-            )
-    _run([])
-
-
-def _resolve_duration_seconds(uri: str) -> int | None:
-    """ffprobe-driven duration for the post-transcode row.
-
-    Used only on the transcode branch (where the file path changed
-    so the summary's pre-transcode duration is no longer
-    representative). The passthrough branch reuses the duration
-    pulled from ``_ffprobe_summary`` to avoid a second ffprobe shell.
-
-    Returns ``None`` when:
-      * ffprobe is unavailable in this environment
-        (``get_video_duration`` returns None on CommandNotFound),
-      * the probe ran but couldn't extract a duration line, OR
-      * the probe raised any exception.
-
-    The exception-swallowing branch matters: ``get_video_duration``
-    raises on ``sh.ErrorReturnCode_1`` ("Bad video format") and on
-    bare ``Exception`` for unexpected failures. After a successful
-    transcode the file is on disk and the row is otherwise ready —
-    failing the *whole task* because the post-transcode duration
-    probe stumbled would be an own-goal. Keep duration best-effort
-    and let the operator edit the row's duration manually if
-    needed.
-    """
-    try:
-        delta = get_video_duration(uri)
-    except Exception:
-        logging.exception(
-            'normalize_video_asset: post-transcode duration probe '
-            'failed for %s; leaving duration unset',
-            uri,
-        )
-        return None
-    if delta is None:
-        return None
-    return max(1, int(delta.total_seconds()))
+_VIDEO_METADATA_KEYS = (
+    'container',
+    'video_codec',
+    'video_width',
+    'video_height',
+    'video_fps',
+    'audio_codec',
+)
 
 
 def _run_video_normalisation(asset: Asset) -> None:
-    """Render the asset's playback variant against the current
-    envelope, preserving the original next to it.
+    """Probe the upload, record what ffprobe finds in ``metadata``,
+    and clear ``is_processing``.
 
-    Three on-disk states the function moves between, idempotently:
-
-    * **Fresh upload** — ``asset.uri`` points at the file the upload
-      serializer wrote; no ``.original.*`` sibling yet;
-      ``metadata['original_uri']`` is absent. We rename the upload
-      to ``.original.<ext>`` and render the variant from it.
-    * **Legacy asset** (pre-envelope rollout) — ``asset.uri`` points
-      at an in-place-rewritten variant; no sibling, no envelope key
-      in metadata. Same treatment as fresh: rename the variant to
-      ``.original.<ext>`` and render fresh. The "original" we
-      preserve is whatever the asset already has; we can't get back
-      the pre-Anthias upload but we never lose more than the next
-      envelope-change step would have lost anyway.
-    * **Re-render** — ``.original.<ext>`` already exists and is the
-      authoritative source. We read from it and overwrite the
-      variant at ``asset.uri`` (or its envelope-shape variant
-      path). Original stays bit-identical across re-renders.
-
-    On success: ``asset.uri`` points at the variant;
-    ``metadata['original_uri']`` points at the original sibling;
-    ``metadata['envelope']`` records which envelope the variant was
-    rendered against (the walker reads this to decide if an asset
-    is stale on the next envelope change).
+    The file is never rewritten. Anthias does not re-encode video
+    on-device — every modern board the viewer supports already
+    hardware-decodes H.264 and HEVC, and the libx265 / libx264
+    transcode path we tried in this PR's earlier revisions wedged a
+    Pi 4's celery worker for 99 minutes on a single 4K60 H.264 →
+    HEVC pass before zombieing. The operator's recovery for
+    genuinely unplayable codecs (MPEG-2, MPEG-4 ASP, ...) is to
+    re-upload a transcoded copy; the metadata fields surfaced here
+    let them see codec / dims / fps before pushing the asset to the
+    field.
     """
     asset_id = asset.asset_id
     src_uri = asset.uri or ''
     if not src_uri or not path.isfile(src_uri):
         raise FileNotFoundError(f'video source missing: {src_uri!r}')
 
-    envelope = compute_envelope()
+    summary = _ffprobe_summary(src_uri)
 
     metadata = dict(asset.metadata or {})
     metadata.pop('error_message', None)
+    for key in _VIDEO_METADATA_KEYS:
+        value = summary.get(key)
+        if value is not None:
+            metadata[key] = value
 
-    # Step 1: settle the original. If we already have one on disk
-    # (re-render), read from there; otherwise treat ``asset.uri`` as
-    # the original-to-preserve and rename it into the sibling slot.
-    # The rename is atomic on every filesystem Anthias supports;
-    # ``asset.uri`` reads from the new location for the rest of the
-    # function regardless of which branch ran.
-    base_no_ext = path.splitext(src_uri)[0]
-    src_ext = _ext(src_uri)
-    metadata['original_ext'] = src_ext
-    final_uri = f'{base_no_ext}.{envelope.container_ext}'
-
-    existing_original = metadata.get('original_uri')
-    if existing_original and path.isfile(existing_original):
-        source_for_render = existing_original
-    else:
-        # Move asset.uri to .original.<ext>. ``.original`` is the
-        # marker; the trailing extension is whatever the upload
-        # originally was (mp4, mov, mkv, …).
-        original_path = f'{base_no_ext}.original{src_ext}'
-        try:
-            os.rename(src_uri, original_path)
-        except OSError as exc:
-            raise RuntimeError(
-                f'failed to preserve source as .original.* '
-                f'(from {src_uri!r} to {original_path!r}): {exc}'
-            ) from exc
-        metadata['original_uri'] = original_path
-        source_for_render = original_path
-        # Persist ``original_uri`` to the DB *before* attempting the
-        # render so that ``cleanup`` recognises the renamed file as
-        # claimed if the render fails mid-flight (disk-full, ffmpeg
-        # crash, worker SIGKILL). Without this commit, the sweep
-        # below would treat the freshly renamed ``.original.<ext>``
-        # as an orphan -- ``Asset.uri`` still points at the variant
-        # path which no longer exists on disk -- and silently delete
-        # the source bytes on its next 1h tick. Tested live on the
-        # Pi 4 with a disk-full mid-walker run.
-        Asset.objects.filter(asset_id=asset_id).update(metadata=metadata)
-
-    # Re-probe the source from its (possibly new) location. The
-    # passthrough decision below reads codec / dims / fps from this.
-    summary = _ffprobe_summary(source_for_render)
-
-    passthrough = _video_can_passthrough(summary, envelope)
-    duration: int | None
-    if passthrough:
-        # Variant is identical to the original (codec + dims + fps
-        # all match envelope, container is mp4). Copy bytes into the
-        # variant slot. We deliberately keep both files: cross-
-        # device fleet sha256 needs the variant as-is, and operators
-        # asking "what was uploaded" need the original. Disk cost
-        # is bounded — the file is the same content twice.
-        try:
-            import shutil
-
-            shutil.copyfile(source_for_render, final_uri)
-        except OSError as exc:
-            raise RuntimeError(
-                f'failed to copy original to variant slot '
-                f'({source_for_render!r} → {final_uri!r}): {exc}'
-            ) from exc
-        # Summary's duration is authoritative — bytes didn't change.
-        passthrough_duration = summary.get('duration_seconds')
-        duration = (
-            passthrough_duration
-            if isinstance(passthrough_duration, int)
-            else None
-        )
-    else:
-        # Transcode. Render through a staging file then atomic-
-        # replace into ``final_uri``. The ``.staging.mp4`` suffix
-        # avoids the ``.tmp`` muxer-detection issue ffmpeg has and
-        # sits inside ``cleanup()``'s mtime guard so a crashed
-        # transcode gets GCed as an orphan.
-        staging = f'{base_no_ext}.staging.mp4'
-
-        def _drop_staging() -> None:
-            try:
-                os.remove(staging)
-            except OSError:
-                pass
-
-        try:
-            _transcode_to_target(
-                source_for_render,
-                staging,
-                envelope=envelope,
-                source_summary=summary,
-            )
-        except sh.TimeoutException as exc:
-            _drop_staging()
-            raise RuntimeError(
-                f'ffmpeg timed out for {source_for_render!r}: {exc}'
-            ) from exc
-        except sh.ErrorReturnCode as exc:
-            _drop_staging()
-            raise RuntimeError(
-                f'ffmpeg failed for {source_for_render!r}: '
-                f'{_format_subprocess_stderr(exc)}'
-            ) from exc
-
-        if not path.isfile(staging) or os.stat(staging).st_size == 0:
-            _drop_staging()
-            raise RuntimeError(
-                f'ffmpeg produced no output for {source_for_render!r}'
-            )
-
-        try:
-            os.replace(staging, final_uri)
-        except OSError:
-            _drop_staging()
-            raise
-
-        duration = _resolve_duration_seconds(final_uri)
-
-    metadata['transcoded'] = not passthrough
-    # ``transcode_target`` is kept for back-compat with the v1
-    # serializer metadata surface (api/serializers/mixins.py and
-    # operator diagnostic views read it). It now duplicates
-    # ``envelope.codec`` — both record "what the on-disk variant's
-    # codec is meant to be". Slated for deprecation after one
-    # release cycle once the envelope field is fully wired into the
-    # serializers.
-    metadata['transcode_target'] = envelope.codec
-    # ``envelope`` records which envelope this variant was rendered
-    # against. The walker (``regenerate_for_envelope_change``) reads
-    # this on server start: if the current envelope differs, the
-    # asset is queued for re-render from its ``.original.*`` sibling.
-    metadata['envelope'] = envelope.as_dict()
     update_dict: dict[str, Any] = {
-        'uri': final_uri,
         'mimetype': 'video',
         'is_processing': False,
         'metadata': metadata,
     }
-    if duration is not None:
-        update_dict['duration'] = duration
+    duration_seconds = summary.get('duration_seconds')
+    if isinstance(duration_seconds, int) and duration_seconds > 0:
+        update_dict['duration'] = duration_seconds
     Asset.objects.filter(asset_id=asset_id).update(**update_dict)
 
     _notify(asset_id)

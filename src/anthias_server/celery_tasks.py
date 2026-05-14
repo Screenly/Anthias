@@ -82,10 +82,10 @@ ASSET_REVALIDATION_INTERVAL_S = 60 * 15
 RECONCILE_STUCK_INTERVAL_S = 60 * 10
 
 # Age threshold for considering a row stuck. Has to be *longer* than
-# the longest reasonable Celery task: ``NORMALIZE_VIDEO_TIME_LIMIT_S``
-# is 30 min and ``YOUTUBE_DOWNLOAD_TIME_LIMIT_S`` is 15 min, so 60 min
-# is a safe floor. A row past the threshold either had its worker
-# time-limit expire (in which case ``on_failure`` should already have
+# the longest reasonable Celery task: ``YOUTUBE_DOWNLOAD_TIME_LIMIT_S``
+# is 15 min, so 60 min is a safe floor. A row past the threshold
+# either had its worker time-limit expire (in which case
+# ``on_failure`` should already have
 # cleared the flag — and the reconciler only sees rows where it
 # didn't, e.g. SIGKILL before on_failure could run) OR was never
 # picked up at all (Redis flake during ``.delay()``, worker crashed
@@ -232,13 +232,6 @@ def cleanup() -> None:
     # ~/anthias_assets) are recognized as live and their files aren't
     # mistaken for orphans on upgraded installs.
     #
-    # The reference set must include the ``.original.<ext>`` sibling
-    # for every video row: ``Asset.uri`` points at the playback variant
-    # (``<id>.mp4``), and the source is stashed at
-    # ``metadata['original_uri']`` (e.g. ``<id>.original.mov``). Without
-    # that second source the sweep below would treat every original as
-    # an orphan after the 1h mtime cutoff and silently destroy the only
-    # path back to the upload bytes.
     asset_dir_real = path.realpath(asset_dir)
     referenced: set[str] = set()
 
@@ -251,12 +244,10 @@ def cleanup() -> None:
         except OSError:
             return
 
-    for uri, metadata in Asset.objects.exclude(uri__isnull=True).values_list(
-        'uri', 'metadata'
+    for uri in Asset.objects.exclude(uri__isnull=True).values_list(
+        'uri', flat=True
     ):
         _claim(uri)
-        if isinstance(metadata, dict):
-            _claim(metadata.get('original_uri'))
     cutoff = 60 * 60  # match the .tmp guard above
     now = time.time()
     for entry in os.scandir(asset_dir):
@@ -640,13 +631,9 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
 
     _notify(asset_id, reload_viewer=False)
 
-    # Hand off to the per-board normalisation pass. This is what
-    # gives YouTube downloads the same codec / container guarantees
-    # as direct file uploads: ffprobe → passthrough on H.264/HEVC
-    # (per board profile) or transcode to libx264/libx265 otherwise.
-    # It also writes ``original_ext`` / ``transcoded`` /
-    # ``transcode_target`` to metadata, so the operator's view of a
-    # YouTube row carries the same diagnostic shape as a file upload.
+    # Hand off to ``normalize_video_asset`` so the YouTube download
+    # gets the same ffprobe metadata pass (codec / dims / fps /
+    # duration written into ``metadata``) as a direct file upload.
     dispatch_normalize_video(asset_id)
 
 
@@ -827,9 +814,9 @@ def reconcile_stuck_processing() -> None:
     ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) from that stamp — at
     a 10-min sweep cadence that's six sweeps where the row stays
     inside the grace window before becoming eligible. The grace is
-    deliberately long enough to cover the worst-case live transcode
-    (``NORMALIZE_VIDEO_TIME_LIMIT_S=30min``) plus margin, so a
-    still-in-flight task never gets yanked out from under itself.
+    deliberately longer than any single task's ``time_limit`` (the
+    longest is the 15-min YouTube download) so a still-in-flight
+    task never gets yanked out from under itself.
 
     Rows older than ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) get
     re-dispatched via the normalisation path matching their mimetype.
@@ -1024,14 +1011,6 @@ def revalidate_asset_url(asset_id: str) -> None:
 # the worker and ``apply_async`` works out of the box.
 from anthias_server import processing  # noqa: E402
 
-NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
-
-# Spacing between normalize_video_asset tasks queued by
-# ``regenerate_for_envelope_change``. See the comment at the
-# queueing site for the rationale (operator-overridable
-# cancellation window + box recovery time between encodes).
-_WALKER_DRIP_INTERVAL_S = 60
-
 
 @celery.task(
     base=processing._NormalizeAssetTask,
@@ -1078,7 +1057,7 @@ def normalize_image_asset(asset_id: str) -> None:
 
 @celery.task(
     base=processing._NormalizeAssetTask,
-    time_limit=NORMALIZE_VIDEO_TIME_LIMIT_S,
+    time_limit=120,
     autoretry_for=(OSError,),
     # Same rationale as normalize_image_asset above: a missing source
     # file is permanent and should land on on_failure right away.
@@ -1089,137 +1068,17 @@ def normalize_image_asset(asset_id: str) -> None:
     max_retries=1,
 )
 def normalize_video_asset(asset_id: str) -> None:
-    """Probe the upload; passthrough or transcode to a board-appropriate
-    codec in MP4.
+    """Probe the upload with ffprobe, write codec / dims / fps /
+    duration into ``metadata``, and clear ``is_processing``. The
+    asset file is never rewritten — see
+    ``processing._run_video_normalisation`` for why.
 
-    The output codec is decided by ``processing.compute_envelope``:
-    libx264 on legacy Pi 2/Pi 3 (mmal-vc4 path; no HEVC hardware) and
-    libx265 with the iOS-friendly ``-tag:v hvc1`` on Pi 4-64 / Pi 5 /
-    x86 (mpv path; HEVC hardware-decoded on Pi 4 / x86, software on
-    Pi 5). The on-device player only ever sees a codec it can decode.
-
-    ffmpeg is wrapped with ``-threads 2`` so two cores stay free for
-    the on-device viewer; the celery worker itself runs under
-    ``nice -n 19 ionice -c 3`` (set in docker-compose.yml.tmpl).
-
-    Retry policy mirrors ``download_youtube_asset``: OSError gets one
-    retry (transient IO), ffmpeg subprocess failures and timeouts are
-    permanent and land on on_failure.
+    Retry policy: OSError gets one retry (transient IO), an ffprobe
+    timeout or non-zero exit is permanent and lands on on_failure
+    via ``_NormalizeAssetTask``. ``time_limit=120`` is the worst-case
+    ffprobe wall-clock (``_FFPROBE_TIMEOUT_S`` is 60 s) doubled.
     """
     asset = processing._row_or_none(asset_id)
     if asset is None:
         return
     processing._run_video_normalisation(asset)
-
-
-@celery.task(time_limit=300)
-def regenerate_for_envelope_change(force: bool = False) -> int:
-    """Walk every video ``Asset`` and queue a re-render for any
-    whose ``metadata['envelope']`` no longer matches the current
-    ``compute_envelope()``.
-
-    Called from the anthias-server startup hook (see
-    ``anthias_server.apps``) on every boot. Cheap when nothing has
-    changed — one ``compute_envelope()`` + one
-    ``Asset.objects.filter(mimetype='video')`` walk, comparing each
-    row's recorded envelope dict against the current one.
-
-    For each stale row:
-
-    1. ``Asset.objects.filter(asset_id=...).update(is_processing=True)``
-       so the viewer skips the row during re-render (matches the
-       upload-time contract).
-    2. ``stamp_processing_start(asset_id)`` lays the timestamp the
-       periodic ``reconcile_stuck_processing`` task uses to age-gate
-       retries, so a stuck row gets the same recovery the upload
-       path enjoys.
-    3. ``normalize_video_asset.delay(asset_id)`` drops the work on
-       the same celery queue the upload-time normalize uses. The
-       refactored task reads the sibling ``.original.<ext>`` to
-       re-render (or treats the existing variant as the original on
-       first pass, for legacy assets pre-envelope rollout).
-
-    Returns the number of rows queued so the caller / log surface
-    has a "0 → all caught up" / "N → walker found work" signal.
-
-    ``force=True`` re-queues every video asset regardless of
-    envelope match — used by the ``reset-envelope`` manage.py
-    command and the failure-mode test that injects a corrupt
-    cache.
-
-    Failures are non-fatal: any per-row exception is logged but
-    doesn't stop the walker. We want a single bad row to not block
-    the rest of the catalog from getting their fresh variants.
-    """
-    from anthias_server.app.models import Asset
-    from anthias_server.playback_envelope import (
-        PlaybackEnvelope,
-        compute_envelope,
-    )
-
-    current = compute_envelope()
-    current_dict = current.as_dict()
-    queued = 0
-    for asset in Asset.objects.filter(mimetype='video'):
-        metadata = asset.metadata or {}
-        recorded = metadata.get('envelope')
-        if not force and recorded == current_dict:
-            # Variant on disk matches current envelope — nothing to
-            # do. Equality on the JSON-dict form is the right test:
-            # both sides came through ``PlaybackEnvelope.as_dict``,
-            # which has stable key order.
-            continue
-        # Validate any non-None recorded envelope so a corrupt
-        # entry triggers re-render rather than silently passing the
-        # `recorded == current_dict` check on bytewise-different
-        # JSON. We don't *use* the parsed value beyond catching
-        # malformed entries.
-        if recorded is not None:
-            try:
-                PlaybackEnvelope.from_dict(recorded)
-            except (ValueError, TypeError, KeyError):
-                logging.info(
-                    'regenerate_for_envelope_change: asset %s has '
-                    "malformed metadata['envelope']; treating as stale",
-                    asset.asset_id,
-                )
-        try:
-            Asset.objects.filter(asset_id=asset.asset_id).update(
-                is_processing=True,
-            )
-            processing.stamp_processing_start(asset.asset_id)
-            # Drip-feed: stagger queued tasks so an upgrade that
-            # invalidates every asset in the catalog doesn't fire
-            # all libx265 encodes back-to-back. ``--concurrency=1``
-            # already executes them serially, but without
-            # ``countdown`` the celery worker fetches the next
-            # task the instant the previous one finishes, which on
-            # a Pi 4 / Pi 5 / Rock Pi means continuous CPU
-            # saturation for as long as the catalog takes to re-
-            # render (potentially hours). The countdown gives the
-            # operator a chance to ``is_processing=False`` a row
-            # they want to skip and lets the box breathe between
-            # encodes. ``WALKER_DRIP_INTERVAL_S`` (default 60 s)
-            # is a compromise: fast enough to finish a 100-asset
-            # catalog overnight, slow enough that two consecutive
-            # encodes don't queue up before the box has recovered
-            # from the previous one.
-            normalize_video_asset.apply_async(
-                args=(asset.asset_id,),
-                countdown=queued * _WALKER_DRIP_INTERVAL_S,
-            )
-            queued += 1
-        except Exception:
-            logging.exception(
-                'regenerate_for_envelope_change: queueing asset %s failed; '
-                'continuing with the rest of the catalog',
-                asset.asset_id,
-            )
-    if queued:
-        logging.info(
-            'regenerate_for_envelope_change: queued %d video asset(s) '
-            'for re-render against envelope=%s',
-            queued,
-            current_dict,
-        )
-    return queued

@@ -322,21 +322,22 @@ def _pi_hwdec_for_uri(uri: str, device_type: str) -> str:
 
 
 # DEVICE_TYPE values that trigger the host_agent subtype lookup.
-# Mirrors ``anthias_server.playback_envelope._ARM64_KEYS`` — the
-# two paths must agree on what triggers the lookup or the viewer's
-# hwdec choice and the server's envelope choice will drift.
+# ``anthias-host-agent`` (running on the host, not in this container)
+# detects specific SBCs that share Anthias's catch-all ``arm64`` /
+# ``generic-arm64`` DEVICE_TYPE and publishes the subtype to Redis at
+# ``host:board_subtype``. Letting the viewer upgrade its hwdec choice
+# from the subtype lets a Rock Pi 4 running the catch-all arm64 image
+# get the right v4l2_request hwdec without needing a per-board image
+# rebuild.
 _ARM64_DEVICE_TYPES = frozenset({'arm64', 'generic-arm64'})
 
 
 def _redis_board_subtype() -> str | None:
     """Return the host_agent-published board subtype, or ``None``.
 
-    Mirrors ``playback_envelope._redis_board_subtype``. We don't
-    import it directly to keep the viewer free of server-package
-    dependencies. Same recovery contract: any failure (Redis down,
-    key missing, decode error) returns ``None`` so the caller
-    falls back to the static ``_PI_HWDEC_BY_CODEC`` entry for the
-    raw DEVICE_TYPE.
+    Any failure (Redis down, key missing, decode error) returns
+    ``None`` so the caller falls back to the static
+    ``_PI_HWDEC_BY_CODEC`` entry for the raw DEVICE_TYPE.
     """
     try:
         from anthias_common.utils import connect_to_redis
