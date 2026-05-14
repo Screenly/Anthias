@@ -9,6 +9,49 @@
 chgrp -f video /dev/vchiq
 chmod -f g+rwX /dev/vchiq
 
+# Recreate the kernel's ``/dev/video-dec*`` symlinks inside the
+# container for boards whose v4l2_request decoders are reachable
+# from upstream mpv (RK3399 / Rock Pi 4 today; future Rockchip /
+# Allwinner / Amlogic SBCs likely too). Privileged docker passes
+# the underlying ``/dev/video*`` char devices through but mounts
+# its own ``/dev`` tmpfs without the udev rules that produce the
+# decoder symlinks on the host. ffmpeg's ``hevc_v4l2m2m`` /
+# ``h264_v4l2m2m`` lookup expects ``/dev/video-dec*`` and dies
+# with "Could not find a valid device" otherwise.
+#
+# We can't run udev inside the container (no privileged
+# udevd, and /sys/class/video4linux is read-only via /sys
+# bind), but we don't need to — the rule is mechanical: any
+# /dev/video* whose /sys/class/video4linux/<name>/name reads as
+# a stateless decoder driver gets a symlink. Iterate explicitly
+# instead of shelling udev.
+for dev_node in /dev/video*; do
+    [ -c "$dev_node" ] || continue
+    base=$(basename "$dev_node")
+    drv_name_file="/sys/class/video4linux/$base/name"
+    [ -r "$drv_name_file" ] || continue
+    name=$(cat "$drv_name_file" 2>/dev/null)
+    # Rockchip / Allwinner / Amlogic stateless decoders. The
+    # canonical kernel naming is:
+    #
+    #   * ``rkvdec`` — Rock Pi 4's RK3399 HEVC + VP9 stateless
+    #     decoder (and equivalents on RK3328 / RK356x / RK3588);
+    #   * ``rockchip,<soc>-vpu-dec`` — the legacy "VPU" H.264 /
+    #     MPEG block, exposed as a separate v4l2 node;
+    #   * ``hantro-vpu`` / ``hantro-g*`` — same silicon family,
+    #     different vendor-tree naming on a handful of boards;
+    #   * ``cedrus`` — Allwinner H6 / H616 stateless decoder.
+    #
+    # We match the suffix ``-dec`` plus the ``rkvdec`` / ``cedrus``
+    # / ``hantro`` prefixes so all the above hit the same alias
+    # rule without us enumerating every kernel build's exact name.
+    case "$name" in
+        rkvdec*|cedrus*|hantro*|*-vpu-dec|*-dec)
+            ln -snf "$dev_node" "/dev/video-dec${base#video}"
+            ;;
+    esac
+done
+
 # Set permission for sha file
 chown -f viewer /dev/snd/*
 chown -f viewer /data/.anthias/latest_anthias_sha

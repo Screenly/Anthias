@@ -253,17 +253,19 @@ class MediaPlayer:
 _PI_HWDEC_BY_CODEC: dict[str, dict[str, str]] = {
     'pi4-64': {'h264': 'v4l2m2m-copy', 'hevc': 'drm-copy'},
     'pi5': {'hevc': 'drm-copy'},
-    # Rock Pi 4 (RK3399, Radxa). Resolved at runtime from
-    # /proc/device-tree/model when DEVICE_TYPE is ``arm64`` — see
-    # ``_pi_hwdec_for_uri``. Both codecs use ``v4l2m2m-copy`` because
-    # mpv's ``--hwdec=help`` on the arm64 image lists both
-    # ``h264_v4l2m2m`` and ``hevc_v4l2m2m`` (live-confirmed during
-    # this PR). The Hantro VPU is what the v4l2m2m driver exposes.
-    # Not added for generic ``arm64`` because every other aarch64
-    # SBC routed to that DEVICE_TYPE may lack a working v4l2m2m
-    # driver, in which case mpv would log "Could not find a valid
-    # device" on every play.
-    'rockpi4': {'h264': 'v4l2m2m-copy', 'hevc': 'v4l2m2m-copy'},
+    # Rock Pi 4 (RK3399, Radxa) intentionally has NO entry here:
+    # mpv's ``--hwdec=help`` on the arm64 viewer image lists
+    # ``hevc_v4l2m2m`` / ``h264_v4l2m2m`` but the underlying
+    # decoders on the RK3399 use the stateless v4l2_request API,
+    # while ffmpeg's ``*_v4l2m2m`` codecs expect the older stateful
+    # M2M API. Live test: ``hevc_v4l2m2m: Could not find a valid
+    # device`` even with the ``/dev/video-dec*`` symlinks created
+    # by ``start_viewer.sh``. The arm64 image's stock ffmpeg
+    # (Debian 7.1.3) is built without ``--enable-v4l2-request``,
+    # so the stateless path isn't reachable either. A follow-up
+    # adding v4l2_request to the viewer's ffmpeg build (or linking
+    # against Rockchip MPP) will let this dispatch table be
+    # extended without further matrix churn.
 }
 
 

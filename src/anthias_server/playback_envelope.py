@@ -128,16 +128,20 @@ ENVELOPE_BY_DEVICE_TYPE: dict[str, PlaybackEnvelope] = {
     # rolling upgrade doesn't fall through to ``_DEFAULT``.
     'generic-arm64': PlaybackEnvelope('h264', 1920, 1080, 30),
     # Rock Pi 4 (Radxa, RK3399 SoC). Resolved by the runtime SoC
-    # probe in ``compute_envelope`` — Anthias's install scripts
-    # don't write this DEVICE_TYPE directly, the probe upgrades a
-    # generic ``arm64`` key when ``/proc/device-tree/model`` reads
-    # "Radxa ROCK Pi 4". HEVC 1080p30 because the RK3399's Hantro
-    # VPU does HEVC up to 4Kp60 via ``v4l2m2m`` (live-confirmed on
-    # this test bed) and the four A53/A72 cores software-decode
-    # 1080p30 in real time as a fallback. 1080p ceiling keeps disk
-    # use of the variant + ``.original.<ext>`` sibling pair
-    # comfortable on the typical SD card.
-    'rockpi4': PlaybackEnvelope('hevc', 1920, 1080, 30),
+    # probe via host_agent (``host:board_subtype`` in Redis) when
+    # ``DEVICE_TYPE`` is ``arm64`` / legacy ``generic-arm64``. The
+    # RK3399 has a stateless v4l2_request HEVC decoder (``rkvdec``)
+    # AND a stateful Hantro H.264 block, but the Anthias arm64
+    # image's stock ffmpeg + mpv (Debian's packages) don't include
+    # ``--enable-v4l2-request`` and don't link against Rockchip's
+    # MPP, so neither path is reachable today — this envelope is
+    # deliberately conservative (H.264 1080p30, same as the
+    # catch-all arm64 entry) until a follow-up enables one of those
+    # paths in the viewer build. Listed as a distinct key anyway
+    # so the host_agent's detection has a place to land + the
+    # walker's ``metadata['envelope']`` field flips immediately
+    # when a future image starts publishing HEVC for ``rockpi4``.
+    'rockpi4': PlaybackEnvelope('h264', 1920, 1080, 30),
 }
 
 # Fallback when ``DEVICE_TYPE`` is unset (host dev shell,

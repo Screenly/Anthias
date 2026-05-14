@@ -65,10 +65,12 @@ def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         # the conservative ``arm64`` envelope so an unfinished
         # rolling upgrade doesn't fall through to ``_DEFAULT``.
         ('generic-arm64', 'h264', 1920, 1080, 30),
-        # Rock Pi 4 (RK3399, Hantro VPU via v4l2m2m). Promoted from
-        # the arm64 conservative tier by the runtime SoC probe in
-        # ``compute_envelope`` — exercised separately below.
-        ('rockpi4', 'hevc', 1920, 1080, 30),
+        # Rock Pi 4 (RK3399). Listed as a distinct subtype key so
+        # the host_agent's detection has a place to land, but the
+        # envelope stays at the conservative H.264 1080p30 tier
+        # until the viewer image's ffmpeg gains a v4l2_request /
+        # rkmpp path (Debian's stock ffmpeg 7.1.3 has neither).
+        ('rockpi4', 'h264', 1920, 1080, 30),
         # HEVC 4Kp60 boards (dedicated HEVC block or VAAPI).
         ('pi4-64', 'hevc', 3840, 2160, 60),
         ('pi5', 'hevc', 3840, 2160, 60),
@@ -149,31 +151,34 @@ def _patch_redis_subtype(value: bytes | str | None) -> Any:
     )
 
 
-def test_envelope_arm64_subtype_promotes_rock_pi(
+def test_envelope_arm64_subtype_routes_rock_pi(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A Rock Pi 4 reporting ``DEVICE_TYPE=arm64`` (Anthias's
-    install script writes the same key for every aarch64 SBC) is
-    promoted to the ``rockpi4`` envelope when the host_agent has
-    published ``host:board_subtype = 'rockpi4'``. This is the
-    runtime path that unlocks HEVC + v4l2m2m HW decode on a
-    catch-all DEVICE_TYPE.
+    install script writes the same key for every aarch64 SBC)
+    resolves to the ``rockpi4`` matrix entry when the host_agent
+    has published ``host:board_subtype = 'rockpi4'``. The
+    envelope matches the conservative ``arm64`` tier today
+    (Debian's stock ffmpeg has no v4l2_request path); the test
+    asserts the *routing* is in place so a future image with HW
+    decode just needs the matrix entry value bumped, not new
+    plumbing.
     """
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     with _patch_redis_subtype(b'rockpi4'):
-        assert compute_envelope() == PlaybackEnvelope('hevc', 1920, 1080, 30)
+        assert compute_envelope() == PlaybackEnvelope('h264', 1920, 1080, 30)
 
 
-def test_envelope_arm64_subtype_legacy_label_also_promotes(
+def test_envelope_arm64_subtype_legacy_label_also_routes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Pre-rename images still write ``generic-arm64`` — the
     subtype lookup must also kick in for that label so a Rock Pi
-    running an older image doesn't sit on the wrong envelope
-    until the next image rebuild."""
+    running an older image gets the same routing as a fresh
+    install."""
     monkeypatch.setenv('DEVICE_TYPE', 'generic-arm64')
     with _patch_redis_subtype(b'rockpi4'):
-        assert compute_envelope() == PlaybackEnvelope('hevc', 1920, 1080, 30)
+        assert compute_envelope() == PlaybackEnvelope('h264', 1920, 1080, 30)
 
 
 def test_envelope_arm64_subtype_unknown_value_keeps_conservative(
