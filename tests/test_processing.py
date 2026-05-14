@@ -665,10 +665,14 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     recipe = excinfo.value.recipe
     assert 'libx265' in recipe  # Pi 5 supports HEVC only.
     assert '-tag:v hvc1' in recipe
-    # The upload's filename appears in the recipe — operator can
-    # copy and paste it without hand-editing INPUT/OUTPUT.
-    assert "'beach-clip.mp4'" in recipe
-    assert "'beach-clip.mp4'" in recipe.split(' -c:v ')[0]  # input slot
+    # The upload's filename appears in the recipe's input slot —
+    # operator can copy and paste it without hand-editing INPUT.
+    pre_codec, post_codec = recipe.split(' -c:v ', 1)
+    assert "'beach-clip.mp4'" in pre_codec
+    # Output filename carries a ``.hevc.`` suffix so the recipe
+    # doesn't ask the operator to overwrite their source file.
+    assert "'beach-clip.hevc.mp4'" in post_codec
+    assert "'beach-clip.mp4'" not in post_codec
 
     # Metadata was still written so the operator can see *what* they
     # uploaded next to the error message in the asset list.
@@ -696,7 +700,9 @@ def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
             processing._run_video_normalisation(asset)
 
     recipe = excinfo.value.recipe
-    assert "'upload.mp4'" in recipe
+    pre_codec, post_codec = recipe.split(' -c:v ', 1)
+    assert "'upload.mp4'" in pre_codec
+    assert "'upload.hevc.mp4'" in post_codec
 
 
 @pytest_ffmpeg

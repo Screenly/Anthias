@@ -900,25 +900,29 @@ def _ffmpeg_reencode_recipe(
             'ffmpeg -i {input} -c:v libx264 -preset medium -crf 23 '
             '-c:a aac -b:a 192k -movflags +faststart {output}'
         )
+        target_suffix = 'h264'
     elif 'hevc' in supported:
         template = (
             'ffmpeg -i {input} -c:v libx265 -preset medium -crf 28 '
             '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
             '{output}'
         )
+        target_suffix = 'hevc'
     else:
         return ''
     if source_filename:
         # Quote with single quotes so spaces / unusual chars in the
-        # filename survive a shell paste. The output reuses the
-        # source's stem so the operator gets a deterministic output
-        # name they can re-upload.
+        # filename survive a shell paste. The output filename
+        # carries the target-codec suffix (``sample.h264.mp4``,
+        # ``sample.hevc.mp4``) so a recipe whose input shares the
+        # output stem (e.g. ``sample.mp4`` re-encoded to H.264 on a
+        # board that supports H.264) doesn't overwrite the source.
         in_quoted = f"'{source_filename}'"
         stem, _ = path.splitext(source_filename)
-        out_quoted = f"'{stem}.mp4'"
+        out_quoted = f"'{stem}.{target_suffix}.mp4'"
     else:
         in_quoted = 'INPUT'
-        out_quoted = 'OUTPUT.mp4'
+        out_quoted = f'OUTPUT.{target_suffix}.mp4'
     return template.format(input=in_quoted, output=out_quoted)
 
 
