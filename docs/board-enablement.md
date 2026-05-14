@@ -91,7 +91,7 @@ asset processor renders every upload into. Implementation in
 |-----------------------|-------|----------------|---------|
 | `pi2`, `pi3`          | H.264 | 1920 × 1080    | 30      |
 | `arm64` (catch-all)   | H.264 | 1920 × 1080    | 30      |
-| `rockpi4`             | H.264 | 1920 × 1080    | 30      |
+| `rockpi4`             | HEVC  | 3840 × 2160    | 60      |
 | `pi4-64`              | HEVC  | 3840 × 2160    | 60      |
 | `pi5`                 | HEVC  | 3840 × 2160    | 60      |
 | `x86`                 | HEVC  | 3840 × 2160    | 60      |
@@ -101,20 +101,20 @@ sets `DEVICE_TYPE=arm64` for every aarch64 SBC it doesn't recognise
 as a Pi. `anthias_host_agent` reads `/proc/device-tree/model` on the
 host and publishes `host:board_subtype = 'rockpi4'` to Redis when
 the string matches "Radxa ROCK Pi 4"; server + viewer consume that
-key to route the Rock Pi to the dedicated matrix entry. The
-envelope is the same H.264 1080p30 the generic arm64 tier uses,
-because the viewer image's stock ffmpeg (Debian 7.1.3) is built
-without `--enable-v4l2-request` and doesn't link Rockchip's MPP, so
-neither the stateless `rkvdec` nor the Hantro VPU is reachable from
-mpv today. The routing is already in place, though: a follow-up
-that adds v4l2_request (or links MPP) to the viewer build can flip
-the `rockpi4` envelope row to HEVC + per-codec hwdec dispatch
-without touching any plumbing.
+key to route the Rock Pi to its dedicated matrix entry (HEVC
+1080p30 + `--hwdec=drm-copy`).
 
-For the Rock Pi side, the start_viewer.sh entrypoint creates the
-`/dev/video-dec*` symlinks the future v4l2_request decoder will
-want (privileged docker mounts its own /dev tmpfs without udev's
-symlinks). That code is dormant on every other board.
+The arm64 viewer image pulls `ffmpeg` and the libav* family from
+`archive.raspberrypi.com` (the `+rpt1` build), which adds
+`--enable-v4l2-request --enable-libudev --enable-vout-drm`. That's
+the same package family Pi 4 / Pi 5 use, so the RK3399's stateless
+`rkvdec` (HEVC) and Hantro VPU (`rockchip,rk3399-vpu-dec`, H.264)
+are both reachable via mpv's `--hwdec=drm-copy`. The
+`start_viewer.sh` entrypoint creates the `/dev/video-dec*` symlinks
+the v4l2_request decoder discovery code expects (privileged docker
+mounts its own /dev tmpfs without udev's symlinks). The `+rpt1`
+repo is pinned to only override ffmpeg + libav* + mpv on arm64; Pi
+userspace baseline is unaffected on every board.
 
 The envelope is the single source of truth read by three places that used
 to drift:

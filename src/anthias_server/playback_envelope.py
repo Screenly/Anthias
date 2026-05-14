@@ -130,18 +130,21 @@ ENVELOPE_BY_DEVICE_TYPE: dict[str, PlaybackEnvelope] = {
     # Rock Pi 4 (Radxa, RK3399 SoC). Resolved by the runtime SoC
     # probe via host_agent (``host:board_subtype`` in Redis) when
     # ``DEVICE_TYPE`` is ``arm64`` / legacy ``generic-arm64``. The
-    # RK3399 has a stateless v4l2_request HEVC decoder (``rkvdec``)
-    # AND a stateful Hantro H.264 block, but the Anthias arm64
-    # image's stock ffmpeg + mpv (Debian's packages) don't include
-    # ``--enable-v4l2-request`` and don't link against Rockchip's
-    # MPP, so neither path is reachable today — this envelope is
-    # deliberately conservative (H.264 1080p30, same as the
-    # catch-all arm64 entry) until a follow-up enables one of those
-    # paths in the viewer build. Listed as a distinct key anyway
-    # so the host_agent's detection has a place to land + the
-    # walker's ``metadata['envelope']`` field flips immediately
-    # when a future image starts publishing HEVC for ``rockpi4``.
-    'rockpi4': PlaybackEnvelope('h264', 1920, 1080, 30),
+    # RK3399 exposes stateless v4l2_request decoders for both
+    # HEVC (``rkvdec``, /dev/video2) and H.264 (Hantro VPU on
+    # ``rockchip,rk3399-vpu-dec``, /dev/video4). Anthias's arm64
+    # viewer image now pulls the Raspberry Pi repo's ffmpeg
+    # (``+rpt1``, which adds ``--enable-v4l2-request``) — the same
+    # build Pi 4 / Pi 5 use — so both decoders are reachable via
+    # mpv's ``--hwdec=drm-copy``. The Hantro G2 in the RK3399 is
+    # the same decoder family as Pi 5's HEVC block and supports
+    # 4Kp60 per the Rockchip datasheet, so the envelope matches
+    # Pi 5's. If a specific Rock Pi 4 deployment turns out to
+    # need a CMA bump (the way Pi 5 needs ``dtoverlay=vc4-kms-v3d,
+    # cma-512`` for 4K HEVC), document it as a Rockchip-specific
+    # bootloader requirement rather than dialing back the
+    # envelope here.
+    'rockpi4': PlaybackEnvelope('hevc', 3840, 2160, 60),
 }
 
 # Fallback when ``DEVICE_TYPE`` is unset (host dev shell,

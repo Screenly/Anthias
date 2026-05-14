@@ -253,19 +253,17 @@ class MediaPlayer:
 _PI_HWDEC_BY_CODEC: dict[str, dict[str, str]] = {
     'pi4-64': {'h264': 'v4l2m2m-copy', 'hevc': 'drm-copy'},
     'pi5': {'hevc': 'drm-copy'},
-    # Rock Pi 4 (RK3399, Radxa) intentionally has NO entry here:
-    # mpv's ``--hwdec=help`` on the arm64 viewer image lists
-    # ``hevc_v4l2m2m`` / ``h264_v4l2m2m`` but the underlying
-    # decoders on the RK3399 use the stateless v4l2_request API,
-    # while ffmpeg's ``*_v4l2m2m`` codecs expect the older stateful
-    # M2M API. Live test: ``hevc_v4l2m2m: Could not find a valid
-    # device`` even with the ``/dev/video-dec*`` symlinks created
-    # by ``start_viewer.sh``. The arm64 image's stock ffmpeg
-    # (Debian 7.1.3) is built without ``--enable-v4l2-request``,
-    # so the stateless path isn't reachable either. A follow-up
-    # adding v4l2_request to the viewer's ffmpeg build (or linking
-    # against Rockchip MPP) will let this dispatch table be
-    # extended without further matrix churn.
+    # Rock Pi 4 (RK3399, Radxa). Both codecs go through
+    # ``drm-copy``: the arm64 viewer image now pulls the Raspberry
+    # Pi repo's ffmpeg (``+rpt1``, with ``--enable-v4l2-request``
+    # — same package family as Pi 4 / Pi 5), so mpv exposes the
+    # stateless v4l2_request decoders that the RK3399's ``rkvdec``
+    # (HEVC) and ``rockchip,rk3399-vpu-dec`` Hantro VPU (H.264)
+    # implement. The ``start_viewer.sh`` entrypoint creates the
+    # ``/dev/video-dec*`` symlinks the v4l2_request decoder
+    # discovery code expects (privileged docker mounts its own
+    # /dev tmpfs without udev's symlinks).
+    'rockpi4': {'h264': 'drm-copy', 'hevc': 'drm-copy'},
 }
 
 

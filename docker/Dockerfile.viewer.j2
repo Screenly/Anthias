@@ -39,15 +39,26 @@ RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
 
 {% include 'Dockerfile.base.j2' %}
 
-{% if board in ('pi4-64', 'pi5') %}
-# archive.raspberrypi.com ships mpv + the FFmpeg stack patched with
-# Pi-specific v4l2request hwdec — stock Debian Trixie's mpv 0.40
-# doesn't include the v4l2request hwdec the Hantro stateless
-# decoder on Pi 5 needs (Pi 4's V3D V4L2 M2M decoder works via
-# stock mpv's v4l2m2m-copy too, but using the Pi-patched mpv on
-# both boards keeps Pi userspace on a single upstream). x86 and
-# arm64 stay on stock Debian — VAAPI on x86 already works, and
-# Pi's repo isn't tuned for Rockchip / generic ARM hardware.
+{% if board in ('pi4-64', 'pi5', 'arm64') %}
+# archive.raspberrypi.com ships ffmpeg patched with v4l2_request
+# enabled (``--enable-v4l2-request --enable-libudev
+# --enable-vout-drm --enable-sand --enable-neon``). Stock Debian
+# Trixie's ffmpeg drops v4l2_request entirely, so the stateless
+# hardware decoders Anthias needs are unreachable without these
+# packages:
+#
+# * Pi 4-64 — V3D V4L2 M2M (H.264 via stateful v4l2m2m, works on
+#   stock too) plus the dedicated rpi-hevc-dec block (HEVC via
+#   v4l2_request, needs ``+rpt1``).
+# * Pi 5 — Hantro G2 HEVC via v4l2_request (needs ``+rpt1``).
+# * arm64 — Rock Pi 4 / RK3399's ``rkvdec`` (HEVC) and Hantro VPU
+#   (H.264) are also stateless v4l2_request decoders. Live test
+#   on the Rock Pi 4 in this PR confirmed stock Debian arm64
+#   ffmpeg can't reach them; the ``+rpt1`` build has the
+#   v4l2_request code paths that DO reach them.
+#
+# x86 stays on stock Debian — VAAPI already works there and Pi's
+# repo doesn't add anything relevant for Intel / AMD iGPUs.
 #
 # Apt pinning restricts the Pi repo to the mpv + FFmpeg library
 # family only. Without this, Pi's curl, ca-certificates, etc.
