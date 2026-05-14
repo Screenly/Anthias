@@ -10,7 +10,7 @@ Two tasks under test:
   ffprobe call against the source. Transcode target depends on the
   board profile resolved from ``DEVICE_TYPE``: libx264 on legacy Pi
   2 / Pi 3 (no HEVC hardware), libx265 + ``-tag:v hvc1`` on Pi 4-64
-  / Pi 5 / x86. The grid lives in ``processing._BOARD_PROFILES``
+  / Pi 5 / x86. The grid lives in ``anthias_server.playback_envelope.ENVELOPE_BY_DEVICE_TYPE``
   and is exercised end-to-end by the per-board parametrised tests.
 
 Fixtures are generated programmatically (Pillow + ffmpeg) so the test
@@ -46,9 +46,37 @@ import pytest
 import sh
 from PIL import Image, UnidentifiedImageError
 
-from anthias_server import processing
+from anthias_server import playback_envelope, processing
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
+
+
+def _envelope_summary(
+    codec: str,
+    width: int,
+    height: int,
+    fps: float,
+    *,
+    container: str = 'mp4',
+    audio_codec: str = 'aac',
+    codec_override: str | None = None,
+) -> dict[str, Any]:
+    """Hand-build an ``_ffprobe_summary``-shape dict for envelope
+    tests. ``codec_override`` lets a test inject an off-envelope
+    codec name (e.g. 'prores') while keeping the other axes valid,
+    so a single test row exercises exactly one gate. ``audio_codec``
+    defaults to 'aac' because audio is orthogonal to the envelope
+    decision — it's the existing demuxer-set gate."""
+    return {
+        'container': container,
+        'video_codec': codec_override if codec_override is not None else codec,
+        'video_pixels': width * height,
+        'video_width': width,
+        'video_height': height,
+        'video_fps': fps,
+        'audio_codec': audio_codec,
+        'duration_seconds': 30,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -646,7 +674,7 @@ def test_video_passthrough_for_h264_or_hevc_in_known_containers(
     """H.264 and HEVC in any of the accepted containers passes
     through *on a board profile that accepts both codecs*. Pin
     ``DEVICE_TYPE=pi4-64`` so the libx265-source rows hit passthrough
-    (pi5 no longer passthroughs H.264 — see processing._BOARD_PROFILES
+    (pi5 no longer passthroughs H.264 — see anthias_server.playback_envelope.ENVELOPE_BY_DEVICE_TYPE
     — so libx264 rows would transcode there)."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
     src = path.join(asset_dir, f'sample{ext}')
@@ -787,7 +815,7 @@ def test_video_ffprobe_failure_falls_through_to_transcode(
         'duration_seconds': None,
     }
 
-    def fake_transcode(_in: str, out: str, _profile: Any = None) -> None:
+    def fake_transcode(_in: str, out: str, **kwargs: Any) -> None:
         with open(out, 'wb') as fh:
             fh.write(b'\x00\x00\x00\x18ftypmp42')  # 24-byte stub
 
@@ -832,7 +860,7 @@ def test_video_ffmpeg_timeout_cleans_staging(asset_dir: str) -> None:
         'audio_codec': 'aac',
     }
 
-    def explode(_in: str, staging: str, _profile: Any = None) -> None:
+    def explode(_in: str, staging: str, **kwargs: Any) -> None:
         # Half-write the staging file so the cleanup branch has
         # something to remove — proves we don't leak orphans.
         with open(staging, 'wb') as fh:
@@ -877,7 +905,7 @@ def test_video_ffmpeg_error_cleans_staging(asset_dir: str) -> None:
         'audio_codec': 'pcm_s16le',
     }
 
-    def explode(_in: str, staging: str, _profile: Any = None) -> None:
+    def explode(_in: str, staging: str, **kwargs: Any) -> None:
         with open(staging, 'wb') as fh:
             fh.write(b'')
         # ``ErrorReturnCode`` is the abstract parent — sh exports
@@ -981,7 +1009,7 @@ def test_video_zero_byte_output_fails_clean(asset_dir: str) -> None:
         'audio_codec': 'aac',
     }
 
-    def empty_transcode(_in: str, staging: str, _profile: Any = None) -> None:
+    def empty_transcode(_in: str, staging: str, **kwargs: Any) -> None:
         with open(staging, 'wb') as fh:
             fh.write(b'')
 
@@ -1022,7 +1050,7 @@ def test_video_rename_failure_cleans_staging(asset_dir: str) -> None:
         'audio_codec': 'aac',
     }
 
-    def good_transcode(_in: str, staging: str, _profile: Any = None) -> None:
+    def good_transcode(_in: str, staging: str, **kwargs: Any) -> None:
         with open(staging, 'wb') as fh:
             fh.write(b'\x00\x00\x00\x18ftypmp42')
 
@@ -1206,16 +1234,12 @@ def test_passthrough_containers_match_real_ffprobe_format_names(
         f'{description}: ffprobe format_name={format_name!r} resolved to '
         f'{summary["container"]!r} which is not in _PASSTHROUGH_CONTAINERS'
     )
-    # Use x86 profile here: both pi5 (h264 must transcode) and pi4-64
-    # (h264 capped at 1080p, fake summary has no width/height so
-    # video_pixels=None which fails the cap) would reject the fake
-    # h264 row for reasons orthogonal to the container check this test
-    # is asserting.
-    x86 = processing._BOARD_PROFILES['x86']
-    assert processing._video_can_passthrough(summary, x86), (
-        f'{description}: passthrough check rejected a real-ffprobe-name '
-        f'container; would force an unnecessary transcode'
-    )
+    # The passthrough decision itself moved to the envelope check
+    # in ``_video_can_passthrough`` (container must equal
+    # envelope.container_ext, always 'mp4'). This test only locks
+    # in the format_name → container mapping in
+    # ``_ffprobe_summary``; the broader passthrough behaviour is
+    # covered by ``test_video_can_passthrough_respects_envelope``.
 
 
 def test_ffprobe_summary_falls_back_to_extension_when_format_missing() -> None:
@@ -1399,63 +1423,70 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
 @pytest.mark.parametrize(
     ('summary', 'expected'),
     [
-        # Happy path: H.264 + AAC in mp4
+        # Happy path: H.264 + AAC in mp4 at envelope.
         (
-            {
-                'container': 'mp4',
-                'video_codec': 'h264',
-                'video_pixels': 1920 * 1080,
-                'audio_codec': 'aac',
-            },
+            _envelope_summary('h264', 1920, 1080, 30),
             True,
         ),
-        # HEVC in mkv with no audio (board profile must allow hevc)
+        # HEVC at envelope (codec, dims, fps all match).
         (
-            {
-                'container': 'mkv',
-                'video_codec': 'hevc',
-                'video_pixels': 3840 * 2160,
-                'audio_codec': 'none',
-            },
+            _envelope_summary('hevc', 1920, 1080, 30),
             True,
         ),
-        # Unknown container — fail
+        # Non-mp4 container — must transcode (variant convention is mp4).
         (
-            {
-                'container': 'avs',
-                'video_codec': 'h264',
-                'video_pixels': 1280 * 720,
-                'audio_codec': 'aac',
-            },
+            _envelope_summary('h264', 1920, 1080, 30, container='matroska'),
             False,
         ),
-        # Exotic codec — fail
+        # Wrong codec — must transcode (codec is the only HW path).
         (
-            {
-                'container': 'mov',
-                'video_codec': 'prores',
-                'video_pixels': 1920 * 1080,
-                'audio_codec': 'pcm_s16le',
-            },
+            _envelope_summary('hevc', 1920, 1080, 30, codec_override='prores'),
             False,
         ),
-        # Unknown audio codec — fail (we'd have to demux it out)
+        # Width over cap — transcode (per-axis cap, not total pixels).
         (
-            {
-                'container': 'mp4',
-                'video_codec': 'h264',
-                'video_pixels': 1920 * 1080,
-                'audio_codec': 'truehd',
-            },
+            _envelope_summary('h264', 5760, 1080, 30),
             False,
         ),
-        # All unknowns (probe failed) — fail safely → transcode
+        # Height over cap.
+        (
+            _envelope_summary('h264', 1080, 1920, 30),
+            False,
+        ),
+        # FPS over cap (envelope is 30 here).
+        (
+            _envelope_summary('h264', 1920, 1080, 60),
+            False,
+        ),
+        # Unknown audio codec — fail (we'd have to demux it out).
+        (
+            _envelope_summary('h264', 1920, 1080, 30, audio_codec='truehd'),
+            False,
+        ),
+        # All unknowns (probe failed) — fail safely → transcode.
         (
             {
                 'container': 'unknown',
                 'video_codec': 'unknown',
                 'video_pixels': None,
+                'video_width': None,
+                'video_height': None,
+                'video_fps': None,
                 'audio_codec': 'unknown',
+            },
+            False,
+        ),
+        # Width / height probe gap (a malformed source) — bail to
+        # transcode rather than gamble on an unsized clip.
+        (
+            {
+                'container': 'mp4',
+                'video_codec': 'h264',
+                'video_pixels': None,
+                'video_width': None,
+                'video_height': None,
+                'video_fps': 30,
+                'audio_codec': 'aac',
             },
             False,
         ),
@@ -1464,100 +1495,64 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
 def test_video_can_passthrough_decision_table(
     summary: dict[str, Any], expected: bool
 ) -> None:
-    """Exhaustive truth table for ``_video_can_passthrough``. Catches
-    a future change to the passthrough sets that wasn't intended.
-    Pins the board profile to ``x86`` (which accepts both h264 + hevc
-    and has no per-codec pixel cap) so the legacy "happy path" cases
-    aren't coupled to Pi 4's resolution gate or Pi 5's H.264 ban —
-    those have dedicated tests below."""
-    x86_profile = processing._BOARD_PROFILES['x86']
-    assert processing._video_can_passthrough(summary, x86_profile) is expected
-
-
-# ---------------------------------------------------------------------------
-# Per-board transcode profile (the codec grid)
-# ---------------------------------------------------------------------------
+    """Exhaustive truth table for the envelope-driven passthrough
+    check. The envelope used here is the conservative
+    H.264 1920×1080 30 fps default (matches an unset ``DEVICE_TYPE``)
+    so the dimensions / fps cells exercise the gate directly. Per-
+    board behaviour (Pi 4 / Pi 5 / x86 land on the larger HEVC
+    envelope) is covered by
+    ``test_video_can_passthrough_respects_envelope`` below."""
+    envelope = playback_envelope.PlaybackEnvelope('h264', 1920, 1080, 30)
+    assert processing._video_can_passthrough(summary, envelope) is expected
 
 
 @pytest.mark.parametrize(
-    ('device_type', 'expected_target'),
+    (
+        'device_type',
+        'codec',
+        'width',
+        'height',
+        'fps',
+        'expected_passthrough',
+    ),
     [
-        ('pi2', 'h264'),
-        ('pi3', 'h264'),
-        ('pi4-64', 'hevc'),
-        ('pi5', 'hevc'),
-        ('x86', 'hevc'),
-        # Unset / unknown env var falls back to H.264 — the most
-        # compatible codec for any Anthias-supported device.
-        ('', 'h264'),
-        ('weird-future-board', 'h264'),
+        # pi2 / pi3: H.264 1920×1080 30. Anything off-codec, over
+        # axis, or over fps must transcode.
+        ('pi2', 'h264', 1920, 1080, 30, True),
+        ('pi2', 'h264', 1920, 1080, 60, False),  # over fps
+        ('pi2', 'hevc', 1920, 1080, 30, False),  # wrong codec
+        ('pi3', 'h264', 1920, 1080, 30, True),
+        ('pi3', 'h264', 3840, 2160, 30, False),  # over dims
+        # pi4-64 / pi5 / x86: HEVC 3840×2160 60. H.264 always
+        # transcodes (envelope is HEVC), even at 1080p.
+        ('pi4-64', 'hevc', 3840, 2160, 60, True),
+        ('pi4-64', 'hevc', 1920, 1080, 30, True),  # sub-cap OK
+        ('pi4-64', 'h264', 1920, 1080, 30, False),  # wrong codec
+        ('pi5', 'hevc', 3840, 2160, 60, True),
+        ('pi5', 'h264', 1920, 1080, 30, False),  # wrong codec
+        ('x86', 'hevc', 3840, 2160, 60, True),
+        ('x86', 'h264', 1920, 1080, 30, False),  # wrong codec
+        # Default profile is H.264 1920×1080 30.
+        ('', 'h264', 1920, 1080, 30, True),
+        ('', 'hevc', 1920, 1080, 30, False),
     ],
 )
-def test_resolve_board_profile_picks_target_codec_per_board(
-    device_type: str, expected_target: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The transcode target lives in a board profile keyed by
-    ``DEVICE_TYPE``. This regression-tests the grid in one place so a
-    future "let's also build a pi6 image" rollout can't silently fall
-    through to H.264 if it forgets to register a profile entry."""
-    monkeypatch.setenv('DEVICE_TYPE', device_type)
-    profile = processing._resolve_board_profile()
-    assert profile['transcode_target'] == expected_target
-
-
-@pytest.mark.parametrize(
-    ('device_type', 'video_codec', 'video_pixels', 'expected_passthrough'),
-    [
-        # pi2 / pi3: VLC + mmal-vc4. H.264 only. HEVC must transcode.
-        ('pi2', 'h264', 1920 * 1080, True),
-        ('pi2', 'hevc', 1920 * 1080, False),
-        ('pi3', 'h264', 1920 * 1080, True),
-        ('pi3', 'hevc', 1920 * 1080, False),
-        # pi4-64: V3D H.264 is 1080p-capped; HEVC has no cap.
-        ('pi4-64', 'h264', 1920 * 1080, True),
-        ('pi4-64', 'h264', 3840 * 2160, False),  # 4K → SW, force transcode
-        ('pi4-64', 'h264', None, False),  # probe couldn't size → transcode
-        ('pi4-64', 'hevc', 3840 * 2160, True),  # HEVC HW at 4K
-        # pi5: HEVC only — mpv has no v4l2-request H.264 path so
-        # any H.264 upload silently SW-falls-back on-device. HEVC
-        # is unconstrained on resolution: the Hantro G2 handles
-        # 4Kp60 at silicon, and config.txt enlarges CMA via a
-        # dtoverlay (see ansible/.../config.txt.j2) so the driver
-        # has buffer pool headroom for 4K dst frames.
-        ('pi5', 'h264', 1920 * 1080, False),
-        ('pi5', 'h264', 3840 * 2160, False),
-        ('pi5', 'hevc', 1920 * 1080, True),
-        ('pi5', 'hevc', 3840 * 2160, True),
-        # x86: VAAPI / NVENC handle both codecs at any practical
-        # resolution; no per-codec cap.
-        ('x86', 'h264', 3840 * 2160, True),
-        ('x86', 'hevc', 3840 * 2160, True),
-        # Default profile is H.264-only — safer for unknown boards.
-        ('', 'h264', 1920 * 1080, True),
-        ('', 'hevc', 1920 * 1080, False),
-    ],
-)
-def test_video_can_passthrough_respects_board_codec_set(
+def test_video_can_passthrough_respects_envelope(
     device_type: str,
-    video_codec: str,
-    video_pixels: int | None,
+    codec: str,
+    width: int,
+    height: int,
+    fps: int,
     expected_passthrough: bool,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """End-to-end matrix: a pi3 with HEVC transcodes; a pi5 with
-    H.264 transcodes (no mpv HW path); a pi4-64 with 4K H.264
-    transcodes (V3D's H.264 envelope); a pi4-64 with HEVC at any
-    resolution passes through. Pins ``DEVICE_TYPE`` rather than
-    passing the profile explicitly so the env-resolution path is
-    exercised end-to-end (mirrors how the celery worker decides at
-    runtime)."""
+    """End-to-end envelope matrix: pin ``DEVICE_TYPE``, build a
+    summary at the given (codec, width, height, fps), assert the
+    passthrough verdict. Mirrors the production code path: the
+    celery worker resolves the envelope from env then calls
+    ``_video_can_passthrough(summary)`` without threading a profile."""
     monkeypatch.setenv('DEVICE_TYPE', device_type)
-    summary = {
-        'container': 'mp4',
-        'video_codec': video_codec,
-        'video_pixels': video_pixels,
-        'audio_codec': 'aac',
-    }
+    summary = _envelope_summary(codec, width, height, fps)
     assert processing._video_can_passthrough(summary) is expected_passthrough
 
 
@@ -1580,8 +1575,8 @@ def test_transcode_to_target_uses_board_specific_encoder(
 ) -> None:
     """Capture the ffmpeg argv ``_transcode_to_target`` invokes and
     assert the encoder + ``-tag:v hvc1`` (HEVC only) match the
-    board's expected output. Mocks ``sh.ffmpeg`` so no actual encode
-    runs — we only care about the argv shape here."""
+    envelope's expected output. Mocks ``sh.ffmpeg`` so no actual
+    encode runs — we only care about the argv shape here."""
     monkeypatch.setenv('DEVICE_TYPE', device_type)
 
     captured: dict[str, Any] = {}
@@ -1591,6 +1586,9 @@ def test_transcode_to_target_uses_board_specific_encoder(
         captured['kwargs'] = kwargs
 
     with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        # No source_summary passed: the function resolves the
+        # envelope from DEVICE_TYPE but emits no -vf / -r flags
+        # (those require the source to be known over-envelope).
         processing._transcode_to_target('in.mov', 'out.mp4')
 
     args = captured['args']
@@ -1609,6 +1607,90 @@ def test_transcode_to_target_uses_board_specific_encoder(
         assert args[tag_index + 1] == 'hvc1'
     else:
         assert '-tag:v' not in args
+    # Without a source_summary, no scale / fps clamp emitted.
+    assert '-vf' not in args
+    assert '-r' not in args
+
+
+def test_transcode_to_target_emits_scale_when_source_oversize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 4K source under a 1080p envelope must get ``-vf scale=...``
+    so the rendered variant fits the envelope. The scale expression
+    caps the binding axis and lets ffmpeg pick the other side from
+    the source aspect (``-2`` = even-aligned, libx264/libx265 both
+    reject odd dims)."""
+    monkeypatch.delenv('DEVICE_TYPE', raising=False)  # default H.264 1080p30
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+
+    summary = _envelope_summary('h264', 3840, 2160, 30)  # 4K, in-fps cap
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target(
+            'in.mp4', 'out.mp4', source_summary=summary
+        )
+
+    args = captured['args']
+    assert '-vf' in args, args
+    vf_index = args.index('-vf')
+    vf_expr = args[vf_index + 1]
+    # Envelope is 1920×1080; the scale expression must reference
+    # both axes so it works for landscape AND portrait sources.
+    assert '1920' in vf_expr
+    assert '1080' in vf_expr
+    # No fps clamp — source is 30 fps, envelope is 30 fps.
+    assert '-r' not in args
+
+
+def test_transcode_to_target_emits_fps_clamp_when_source_fast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 60 fps source under a 30 fps envelope must get
+    ``-r 30`` so the variant doesn't carry frames the display
+    can't refresh fast enough to show."""
+    monkeypatch.delenv('DEVICE_TYPE', raising=False)  # default H.264 1080p30
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+
+    summary = _envelope_summary('h264', 1920, 1080, 60)  # at dims, over fps
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target(
+            'in.mp4', 'out.mp4', source_summary=summary
+        )
+
+    args = captured['args']
+    assert '-r' in args, args
+    r_index = args.index('-r')
+    assert args[r_index + 1] == '30'
+    # No scale — dims already inside envelope.
+    assert '-vf' not in args
+
+
+def test_transcode_to_target_omits_clamps_when_source_at_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An at-envelope source (codec aside) doesn't trigger either
+    flag. The one-way cap means sub-cap source rates stay native;
+    sub-cap dimensions stay untouched."""
+    monkeypatch.delenv('DEVICE_TYPE', raising=False)
+    captured: dict[str, Any] = {}
+
+    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
+        captured['args'] = list(args)
+
+    summary = _envelope_summary('h264', 1280, 720, 24)
+    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
+        processing._transcode_to_target(
+            'in.mp4', 'out.mp4', source_summary=summary
+        )
+
+    args = captured['args']
+    assert '-vf' not in args
+    assert '-r' not in args
 
 
 @pytest_ffmpeg
@@ -1655,10 +1737,10 @@ def test_video_pi3_transcodes_hevc_to_h264(
     }
     captured: dict[str, Any] = {}
 
-    def fake_transcode(_in: str, staging: str, _profile: Any = None) -> None:
+    def fake_transcode(_in: str, staging: str, **kwargs: Any) -> None:
         # Capture the profile that was selected and produce a stub
         # output so the runner can finalise the row.
-        captured['profile'] = _profile
+        captured['profile'] = kwargs.get('envelope')
         with open(staging, 'wb') as fh:
             fh.write(b'\x00\x00\x00\x18ftypmp42')
 
@@ -1682,7 +1764,7 @@ def test_video_pi3_transcodes_hevc_to_h264(
     # The runner threaded the resolved profile to the transcode
     # helper rather than letting it re-resolve from env (which would
     # also be correct, but threading is the cheaper invariant).
-    assert captured['profile']['transcode_target'] == 'h264'
+    assert captured['profile'].codec == 'h264'
 
 
 @pytest.mark.django_db
@@ -1708,8 +1790,8 @@ def test_video_pi5_transcodes_h264_to_hevc(
     }
     captured: dict[str, Any] = {}
 
-    def fake_transcode(_in: str, staging: str, _profile: Any = None) -> None:
-        captured['profile'] = _profile
+    def fake_transcode(_in: str, staging: str, **kwargs: Any) -> None:
+        captured['profile'] = kwargs.get('envelope')
         with open(staging, 'wb') as fh:
             fh.write(b'\x00\x00\x00\x18ftypmp42')
 
@@ -1730,7 +1812,7 @@ def test_video_pi5_transcodes_h264_to_hevc(
     asset.refresh_from_db()
     assert asset.metadata['transcoded'] is True
     assert asset.metadata['transcode_target'] == 'hevc'
-    assert captured['profile']['transcode_target'] == 'hevc'
+    assert captured['profile'].codec == 'hevc'
 
 
 @pytest.mark.django_db
@@ -1756,8 +1838,8 @@ def test_video_pi4_64_transcodes_4k_h264_to_hevc(
     }
     captured: dict[str, Any] = {}
 
-    def fake_transcode(_in: str, staging: str, _profile: Any = None) -> None:
-        captured['profile'] = _profile
+    def fake_transcode(_in: str, staging: str, **kwargs: Any) -> None:
+        captured['profile'] = kwargs.get('envelope')
         with open(staging, 'wb') as fh:
             fh.write(b'\x00\x00\x00\x18ftypmp42')
 
@@ -1778,7 +1860,7 @@ def test_video_pi4_64_transcodes_4k_h264_to_hevc(
     asset.refresh_from_db()
     assert asset.metadata['transcoded'] is True
     assert asset.metadata['transcode_target'] == 'hevc'
-    assert captured['profile']['transcode_target'] == 'hevc'
+    assert captured['profile'].codec == 'hevc'
 
 
 # ---------------------------------------------------------------------------

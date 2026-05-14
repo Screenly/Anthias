@@ -113,7 +113,7 @@ def test_envelope_device_type_case_and_whitespace(
     """``compute_envelope`` lowercases + strips so a stray newline
     in the env file or a mixed-case board key doesn't fall through
     to the default by accident. Matches the same normalisation the
-    legacy `_resolve_board_profile` did."""
+    legacy _resolve_board_profile did."""
     monkeypatch.setenv('DEVICE_TYPE', '  PI5\n')
     assert compute_envelope() == ENVELOPE_BY_DEVICE_TYPE['pi5']
 

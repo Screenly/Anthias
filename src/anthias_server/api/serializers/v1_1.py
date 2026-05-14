@@ -188,7 +188,7 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
         # Flag the freshly-uploaded local video for the normalisation
         # pipeline. Fixes GH #2870: pre-fix, v1 / v1.1 left the file
         # in whatever codec the operator uploaded (e.g. MPEG-1 on an
-        # x86 board with passthrough_video_codecs={'h264','hevc'}),
+        # x86 board with envelope.codec='hevc'),
         # and the viewer silently skipped it forever. Set
         # ``is_processing=1`` so the viewer drops the in-flight row
         # from rotation until ``normalize_video_asset`` finalises it.
