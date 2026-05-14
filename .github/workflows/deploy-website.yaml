@@ -102,9 +102,9 @@ jobs:
           # the layout can trust *everything* in the dir to be a
           # capture.
           find "$tmp" -maxdepth 1 -type f -name '*.png' -exec cp {} "$dest/" \;
-          # shellcheck SC2012: `ls | wc` is unsafe on weird filenames;
-          # screenshots are workflow-controlled (no newlines etc.) so
-          # `find` is fine and avoids the actionlint hit.
+          # ``find | wc -l`` avoids actionlint's SC2012 hit on
+          # ``ls | wc -l`` (unsafe with newlines in filenames — moot
+          # here since the artifact contents are workflow-controlled).
           count=$(find "$dest" -maxdepth 1 -type f -name '*.png' | wc -l)
           echo "Installed $count screenshot files"
           find "$dest" -maxdepth 1 -type f -name '*.png' -printf '%f\n' | sort
