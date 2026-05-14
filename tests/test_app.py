@@ -1033,12 +1033,13 @@ def test_system_info_page_renders(
     page: Page,
     marketing_screenshot: MarketingShotFn,
 ) -> None:
-    """System Info renders without 5xx — also the source of the
-    ``system-info@Nx.png`` marketing capture. Under
+    """Smoke-test that System Info renders (heading visible, no 5xx)
+    against the values the page actually produced — also the source of
+    the ``system-info@Nx.png`` marketing capture. Under
     ``MARKETING_SCREENSHOTS=1`` the rendered DOM is overwritten in
-    place with curated Pi-5-shaped values so the slider tile is
-    presentable; the functional assertions above the mock still
-    cover the real values the page actually produced."""
+    place after those assertions with curated Pi-5-shaped values so
+    the slider tile is presentable; the mock never runs before the
+    assertions, so this stays a real smoke test in CI."""
     page.goto(SYSTEM_INFO_URL)
     expect(page.get_by_role('heading', name='System Info')).to_be_visible()
     assert 'Internal Server Error' not in page.content()
