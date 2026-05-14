@@ -173,3 +173,72 @@ def test_no_origin_header_still_works() -> None:
         HTTP_HOST='anthias.local',
     )
     assert response.status_code == 302
+
+
+# ---------------------------------------------------------------------------
+# Issue #2900 — IIS ARR with preserveHostHeader=false rewrites Host
+# upstream, so the request lands on uvicorn with ``Host: anthias.local``
+# (the rewrite target) while the browser's Origin is
+# ``https://signage.example.com``. The same-host fallback can't reconcile
+# them — the hostnames really are different — so operators have to opt
+# the public hostname into CSRF_TRUSTED_ORIGINS explicitly.
+# ---------------------------------------------------------------------------
+
+_IIS_PUBLIC_ORIGIN = 'https://signage.example.com'
+
+
+@pytest.mark.django_db
+def test_iis_rewrite_host_proxy_without_trusted_origin_rejected() -> None:
+    """Today's behaviour: IIS rewrites Host upstream, no trusted
+    origin is configured, and the same-host fallback can't bridge
+    two genuinely different hostnames. POST stays 403 — pinning this
+    is what justifies the CSRF_TRUSTED_ORIGINS escape hatch."""
+    client = Client(enforce_csrf_checks=True)
+    token = _seed_csrf_cookie(client, 'anthias.local')
+    response = client.post(
+        reverse('anthias_app:assets_control', args=['next']),
+        data={'csrfmiddlewaretoken': token},
+        HTTP_HOST='anthias.local',
+        HTTP_ORIGIN=_IIS_PUBLIC_ORIGIN,
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_iis_rewrite_host_proxy_with_trusted_origin_passes(
+    settings: pytest.FixtureRequest,
+) -> None:
+    """Issue #2900 fix: when the operator lists the public hostname
+    they actually serve Anthias under in CSRF_TRUSTED_ORIGINS,
+    Django's stock check accepts the Origin even though uvicorn sees
+    a different upstream Host."""
+    settings.CSRF_TRUSTED_ORIGINS = [_IIS_PUBLIC_ORIGIN]
+    client = Client(enforce_csrf_checks=True)
+    token = _seed_csrf_cookie(client, 'anthias.local')
+    response = client.post(
+        reverse('anthias_app:assets_control', args=['next']),
+        data={'csrfmiddlewaretoken': token},
+        HTTP_HOST='anthias.local',
+        HTTP_ORIGIN=_IIS_PUBLIC_ORIGIN,
+    )
+    assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_trusted_origin_does_not_open_other_hosts(
+    settings: pytest.FixtureRequest,
+) -> None:
+    """Trusting ``https://signage.example.com`` must not implicitly
+    trust ``https://attacker.example``. The trusted-origin allowlist
+    is exact: only the listed origin passes, everything else still
+    has to clear the same-host fallback (or 403)."""
+    settings.CSRF_TRUSTED_ORIGINS = [_IIS_PUBLIC_ORIGIN]
+    client = Client(enforce_csrf_checks=True)
+    token = _seed_csrf_cookie(client, 'anthias.local')
+    response = client.post(
+        reverse('anthias_app:assets_control', args=['next']),
+        data={'csrfmiddlewaretoken': token},
+        HTTP_HOST='anthias.local',
+        HTTP_ORIGIN=_HTTP_CROSS_HOST_ORIGIN,
+    )
+    assert response.status_code == 403
