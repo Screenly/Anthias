@@ -23,6 +23,30 @@ except IOError:
     sys.stdout.write('Unknown')
 """
 
+# Issued from the settings page / REST endpoint, *not* from a celery
+# worker, so a hung libcec call would block the request thread until
+# the subprocess timeout fires. Same subprocess+timeout shape as
+# `_CEC_QUERY_SCRIPT` for the same reason: libcec C calls don't
+# honour Python signals.
+_CEC_SET_SCRIPT = """
+import sys
+try:
+    import cec
+    cec.init()
+    tv = cec.Device(cec.CECDEVICE_TV)
+except Exception as exc:
+    sys.stdout.write('ERROR: ' + (str(exc) or 'CEC stack unavailable'))
+    sys.exit(0)
+try:
+    if {on}:
+        tv.power_on()
+    else:
+        tv.standby()
+    sys.stdout.write('OK')
+except Exception as exc:
+    sys.stdout.write('ERROR: ' + (str(exc) or 'CEC command failed'))
+"""
+
 
 def get_display_power() -> str | bool:
     """
@@ -49,6 +73,80 @@ def get_display_power() -> str | bool:
     if output == 'False':
         return False
     return output or 'CEC error'
+
+
+def set_display_power(on: bool) -> tuple[bool, str]:
+    """Send a CEC power_on / standby to the connected TV.
+
+    Returns ``(ok, message)`` for direct surfacing to the operator as
+    a toast. Stays synchronous on purpose — the issue brief asks for
+    an immediate feedback loop so failed CEC commands aren't silent.
+    """
+    script = _CEC_SET_SCRIPT.format(on='True' if on else 'False')
+    verb = 'on' if on else 'off'
+    try:
+        result = subprocess.run(
+            [sys.executable, '-c', script],
+            capture_output=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            False,
+            f'Display turn-{verb} timed out — CEC adapter unresponsive.',
+        )
+
+    output = result.stdout.decode('utf-8', errors='replace').strip()
+    if output == 'OK':
+        return True, f'Display turn-{verb} command sent.'
+    if output.startswith('ERROR: '):
+        return False, (
+            f'Display turn-{verb} failed: '
+            f'{_trim_cec_detail(output[len("ERROR: ") :])}'
+        )
+
+    # Subprocess didn't emit one of the two contract sentinels. The
+    # likely causes are an interpreter crash (returncode != 0) or
+    # libcec writing its diagnostic to stderr instead of stdout — both
+    # would surface as "unexpected CEC response." without further
+    # detail, which is useless to an operator. Fall back to stderr (or
+    # the raw stdout if non-empty) so the toast / API response carries
+    # something actionable.
+    stderr = result.stderr.decode('utf-8', errors='replace').strip()
+    detail = (
+        stderr or output
+    ) or f'subprocess exited with status {result.returncode}'
+    return False, f'Display turn-{verb} failed: {_trim_cec_detail(detail)}'
+
+
+def _trim_cec_detail(detail: str) -> str:
+    """Sanitize an arbitrarily-sized libcec / Python error blob into a
+    one-line, length-capped toast / JSON message.
+
+    libcec (and the in-subprocess Python) can emit multi-line tracebacks
+    or kilobyte-scale diagnostics on either stdout or stderr. The last
+    non-empty line is almost always the actual exception/error message,
+    so we keep that and drop the rest, then cap to 240 chars so the toast
+    stack doesn't overflow and JSON responses stay small.
+    """
+    lines = [line for line in detail.splitlines() if line.strip()]
+    one_line = lines[-1].strip() if lines else detail.strip()
+    if len(one_line) > 240:
+        one_line = one_line[:237] + '...'
+    return one_line
+
+
+def cec_available() -> bool:
+    """Cheap render-time gate for whether to show CEC controls.
+
+    Probes only for the device nodes libcec consumes — `/dev/cec0`
+    on mainline kernels (Pi 5, x86 USB adapters when exposed) and
+    `/dev/vchiq` on Pi 1-4 (currently the only one passed into the
+    server container by `docker-compose.yml.tmpl`). A positive result
+    means the adapter *could* work, not that it will: the actual
+    success/failure is surfaced by ``set_display_power``'s toast.
+    """
+    return os.path.exists('/dev/cec0') or os.path.exists('/dev/vchiq')
 
 
 def get_uptime() -> float:

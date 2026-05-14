@@ -247,5 +247,35 @@
       </div>
     </div>
   </section>
+
+  {% if cec_available %}
+  {# ===== Display power (experimental, HDMI-CEC) ===== #}
+  <section class="settings-section mt-4">
+    <header>
+      <div>
+        <h2>Display power <span class="settings-section__badge" aria-label="Experimental feature">Experimental</span></h2>
+        <p class="settings-section__lede">
+          Toggle the connected display over HDMI-CEC. Works only on
+          CEC-capable hardware (most x86 PCs are not). The outcome
+          will appear as a toast.
+        </p>
+      </div>
+      <div class="settings-section__actions">
+        <form method="post" action="{% url 'anthias_app:settings_display_power' state='on' %}" class="inline m-0">
+          {% csrf_token %}
+          <button type="submit" class="app-btn app-btn-outline-dark">
+            <i class="ti ti-bulb"></i><span>Turn display on</span>
+          </button>
+        </form>
+        <form method="post" action="{% url 'anthias_app:settings_display_power' state='off' %}" class="inline m-0">
+          {% csrf_token %}
+          <button type="submit" class="app-btn app-btn-outline-dark">
+            <i class="ti ti-bulb-off"></i><span>Turn display off</span>
+          </button>
+        </form>
+      </div>
+    </header>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

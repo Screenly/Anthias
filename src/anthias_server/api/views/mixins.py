@@ -21,6 +21,7 @@ from anthias_server.app.models import Asset
 from anthias_server.api.helpers import save_active_assets_ordering
 from anthias_server.api.serializers.mixins import (
     BackupViewSerializerMixin,
+    DisplayPowerViewSerializerMixin,
     PlaylistOrderSerializerMixin,
     RebootViewSerializerMixin,
     ShutdownViewSerializerMixin,
@@ -162,7 +163,10 @@ class RecoverViewMixin(APIView):
 class RebootViewMixin(APIView):
     serializer_class = RebootViewSerializerMixin
 
-    @extend_schema(summary='Reboot system')
+    # Empty body on success; declare it so drf-spectacular doesn't
+    # invent a default schema from the (empty) request serializer.
+    # Matches the pattern DisplayPowerViewMixin uses below.
+    @extend_schema(summary='Reboot system', responses={200: None})
     @authorized
     def post(self, request: Request) -> Response:
         reboot_anthias.apply_async()
@@ -172,11 +176,59 @@ class RebootViewMixin(APIView):
 class ShutdownViewMixin(APIView):
     serializer_class = ShutdownViewSerializerMixin
 
-    @extend_schema(summary='Shut down system')
+    @extend_schema(summary='Shut down system', responses={200: None})
     @authorized
     def post(self, request: Request) -> Response:
         shutdown_anthias.apply_async()
         return Response(status=status.HTTP_200_OK)
+
+
+class DisplayPowerViewMixin(APIView):
+    serializer_class = DisplayPowerViewSerializerMixin
+
+    @extend_schema(
+        summary='Set display power state (experimental, HDMI-CEC)',
+        parameters=[
+            OpenApiParameter(
+                name='state',
+                location=OpenApiParameter.PATH,
+                type=OpenApiTypes.STR,
+                enum=['on', 'off'],
+                description=(
+                    'Desired display power state. Only valid on '
+                    'CEC-capable hardware.'
+                ),
+            ),
+        ],
+        # Every status returns the same `{message: ...}` shape. Mapping
+        # each code to the serializer keeps drf-spectacular's generated
+        # OpenAPI document accurate so clients know what to parse.
+        responses={
+            200: DisplayPowerViewSerializerMixin,
+            400: DisplayPowerViewSerializerMixin,
+            502: DisplayPowerViewSerializerMixin,
+            503: DisplayPowerViewSerializerMixin,
+        },
+    )
+    @authorized
+    def post(self, request: Request, state: str) -> Response:
+        if state not in ('on', 'off'):
+            return Response(
+                {'message': 'Invalid display state.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # No /dev/cec0 or /dev/vchiq — fail fast with 503 rather than
+        # spawning a 10 s libcec subprocess that's guaranteed to error.
+        if not diagnostics.cec_available():
+            return Response(
+                {'message': 'No HDMI-CEC adapter detected on this device.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        ok, msg = diagnostics.set_display_power(on=(state == 'on'))
+        if ok:
+            return Response({'message': msg}, status=status.HTTP_200_OK)
+        # 502: upstream CEC adapter / TV refused or didn't respond.
+        return Response({'message': msg}, status=status.HTTP_502_BAD_GATEWAY)
 
 
 class FileAssetViewMixin(APIView):

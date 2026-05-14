@@ -186,10 +186,11 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     #
     # * Pi2 / Pi3 / Pi4-64: Qt linuxfb + mpv straight to KMS. Pi 2 /
     #   Pi 3 use a custom -no-xcb -no-xcb-xlib -qpa eglfs Qt 5
-    #   WebView build (see webview/build_qt5.sh) with mpv --vo=drm.
-    #   Pi 4 is Qt 6 with the same QT_QPA_PLATFORM=linuxfb plus mpv
-    #   --vo=gpu --gpu-context=drm — V3D-accelerated scaling without
-    #   the cage composite pass the V3D 6.0 can't keep up with.
+    #   WebView build (see src/anthias_webview/build_qt5.sh) with mpv
+    #   --vo=drm. Pi 4 is Qt 6 with the same
+    #   QT_QPA_PLATFORM=linuxfb plus mpv --vo=gpu --gpu-context=drm —
+    #   V3D-accelerated scaling without the cage composite pass the
+    #   V3D 6.0 can't keep up with.
     # * Pi5 / x86 / arm64: cage (a kiosk wlroots compositor) with
     #   QT_QPA_PLATFORM=wayland and mpv --vo=gpu
     #   --gpu-context=wayland. The cage + qt6-wayland + wlr-randr

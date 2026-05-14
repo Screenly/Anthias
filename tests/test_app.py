@@ -34,16 +34,21 @@ import os
 import shutil
 import tempfile
 from collections.abc import Callable
-from datetime import timedelta
 from time import monotonic, sleep
 from typing import Any
 
 import pytest
-from django.utils import timezone
 from playwright.sync_api import Page, expect
 
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings
+from tests._seed_data import (
+    CHOTCHKIES_FLAIR_POLICY,
+    INITECH_ANNOUNCEMENT,
+    LUMBERGH_MEMO,
+    home_seed_assets,
+)
+from tests.conftest import MarketingShotFn
 
 
 BASE_URL = 'http://localhost:8080'
@@ -56,48 +61,16 @@ DEFAULT_TIMEOUT_MS = 15_000
 # ---------------------------------------------------------------------------
 # Asset seed data
 # ---------------------------------------------------------------------------
+#
+# Concrete sample content lives in ``tests/_seed_data.py`` so the
+# wizard / smoke / marketing pipelines stay on one set of Office Space
+# parody assets. The aliases below preserve the role-based names the
+# existing tests reference (``asset_active`` / ``asset_disabled``) —
+# only the content the rows render with has changed.
 
-asset_active: dict[str, Any] = {
-    'mimetype': 'image',
-    'asset_id': '7e978f8c1204a6f70770a1eb54a76e9b',
-    'name': 'Sample Image',
-    'uri': 'https://example.com/sample.png',
-    'start_date': timezone.now() - timedelta(days=1),
-    'end_date': timezone.now() + timedelta(days=1),
-    'duration': 6,
-    'is_enabled': 1,
-    'nocache': 0,
-    'play_order': 0,
-    'skip_asset_check': 0,
-}
-
-asset_active_2: dict[str, Any] = {
-    'mimetype': 'web',
-    'asset_id': '4c8dbce552edb5812d3a866cfe5f159d',
-    'name': 'Wireload',
-    'uri': 'http://www.wireload.net',
-    'start_date': timezone.now() - timedelta(days=1),
-    'end_date': timezone.now() + timedelta(days=1),
-    'duration': 5,
-    'is_enabled': 1,
-    'nocache': 0,
-    'play_order': 1,
-    'skip_asset_check': 0,
-}
-
-asset_disabled: dict[str, Any] = {
-    'mimetype': 'web',
-    'asset_id': 'aa11bb22cc33dd44ee55ff6677889900',
-    'name': 'Disabled Page',
-    'uri': 'https://example.com/disabled',
-    'start_date': timezone.now() - timedelta(days=1),
-    'end_date': timezone.now() + timedelta(days=1),
-    'duration': 5,
-    'is_enabled': 0,
-    'nocache': 0,
-    'play_order': 99,
-    'skip_asset_check': 0,
-}
+asset_active: dict[str, Any] = INITECH_ANNOUNCEMENT
+asset_active_2: dict[str, Any] = LUMBERGH_MEMO
+asset_disabled: dict[str, Any] = CHOTCHKIES_FLAIR_POLICY
 
 
 # ---------------------------------------------------------------------------
@@ -239,43 +212,12 @@ def _drag_handle_to_row(
 # ---------------------------------------------------------------------------
 
 
-# pytest-playwright supplies the `page` fixture. The CLI flags below
-# (set in pyproject.toml addopts) control its behaviour:
-#   --headed=false          headless chromium
-#   --browser chromium      run only chromium (skip firefox/webkit)
-#   --tracing retain-on-failure
-#                           start a per-test trace, drop it for green
-#                           tests, drain to <output>/.../trace.zip on
-#                           failure (`playwright show-trace` replays)
-#   --screenshot only-on-failure
-#                           full-page PNG into the same per-test dir
-#                           on failure
-#   --output test-artifacts the failure bundle directory the GH
-#                           Actions upload-artifact step picks up
-#
-# Browser context args (viewport, default timeout) come from the
-# fixture override below — pytest-playwright merges these into its
-# new_context() call.
-
-
-@pytest.fixture(scope='session')
-def browser_context_args(
-    browser_context_args: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        **browser_context_args,
-        'viewport': {'width': 1400, 'height': 900},
-    }
-
-
-@pytest.fixture(scope='session')
-def browser_type_launch_args(
-    browser_type_launch_args: dict[str, Any],
-) -> dict[str, Any]:
-    return {
-        **browser_type_launch_args,
-        'args': [*browser_type_launch_args.get('args', []), '--no-sandbox'],
-    }
+# pytest-playwright supplies the ``page`` fixture; browser viewport,
+# launch flags and the optional 3× marketing scale-up live in
+# ``tests/conftest.py`` so test_app.py and test_migrate_to_screenly.py
+# don't duplicate the same overrides. CLI-level flags (--browser
+# chromium, --tracing retain-on-failure, --screenshot only-on-failure,
+# --output test-artifacts) are still set in pyproject.toml's addopts.
 
 
 @pytest.fixture(autouse=True)
@@ -352,6 +294,187 @@ def test_alpine_click_handlers_fire_on_production_bundle(
     ).to_be_visible()
     page.locator('#add-asset-button').click()
     _wait_alpine(page, 'state.mode', 'add')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_home_renders_with_full_schedule(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """A six-row, mixed-mimetype schedule must render the asset table
+    with every row's drag handle and action cluster reachable. The
+    per-row tests below verify one row at a time and so miss
+    regressions where a layout change pushes later rows past the
+    table's right edge or stacks action buttons under a sibling cell.
+
+    Doubles as the source for the ``home`` marketing capture when
+    ``MARKETING_SCREENSHOTS=1`` is set."""
+    seeds = home_seed_assets()
+    for spec in seeds:
+        Asset.objects.create(**spec)
+
+    page.goto(BASE_URL)
+    expect(
+        page.get_by_role('heading', name='Schedule Overview')
+    ).to_be_visible()
+
+    rows = page.locator('tr[data-asset-id]')
+    expect(rows).to_have_count(len(seeds))
+
+    viewport = page.viewport_size
+    assert viewport, 'viewport size missing'
+
+    # For every row, verify that (a) the name cell has a real width
+    # (catches the regression where a flex parent collapses a column),
+    # (b) the row's right edge stays within the viewport (catches a
+    # layout regression that pushes the action cluster off-screen),
+    # (c) every enabled row's drag handle stays visible (only
+    # is_enabled rows render one — see
+    # test_inactive_row_has_no_drag_handle), and (d) the rightmost
+    # action button — the delete trash — is visible and clickable.
+    # Together these guard the "drag handle and action cluster stay
+    # reachable" behaviour the docstring promises, not just that the
+    # rows exist.
+    for i, spec in enumerate(seeds):
+        row = rows.nth(i)
+        row_box = row.bounding_box()
+        assert row_box, f'row {i} has no bounding box'
+        assert row_box['x'] + row_box['width'] <= viewport['width'] + 1, (
+            f'row {i} extends past viewport right edge: '
+            f'row_right={row_box["x"] + row_box["width"]:.1f}, '
+            f'viewport={viewport["width"]}'
+        )
+
+        name_cell = row.locator('.asset-cell-name__primary')
+        expect(name_cell).to_be_visible()
+        name_box = name_cell.bounding_box()
+        assert name_box and name_box['width'] > 0, (
+            f'row {i} name cell collapsed to zero width: {name_box!r}'
+        )
+
+        if spec['is_enabled']:
+            drag_handle = row.locator('.drag-handle')
+            expect(drag_handle).to_be_visible()
+            handle_box = drag_handle.bounding_box()
+            assert handle_box and handle_box['width'] > 0, (
+                f'row {i} drag handle has no width: {handle_box!r}'
+            )
+
+        # The Delete button is the rightmost action cell. Locating
+        # by title rather than nth-child means a re-ordering of the
+        # action cluster still finds the right element. The +1
+        # tolerance mirrors the row-edge check — Playwright reports
+        # bounding boxes as floating-point CSS pixels and sub-pixel
+        # rounding (especially under the 3× marketing device scale)
+        # can produce a right edge like 1400.2 for a button that's
+        # visually in-bounds.
+        delete_btn = row.locator('button[title="Delete"]')
+        expect(delete_btn).to_be_visible()
+        del_box = delete_btn.bounding_box()
+        assert (
+            del_box
+            and del_box['x'] + del_box['width'] <= viewport['width'] + 1
+        ), f'row {i} Delete button pushed past viewport: {del_box!r}'
+
+    marketing_screenshot('home')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_asset_modal_layers_over_full_schedule(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """Add-asset modal must layer correctly above a populated table.
+    Asserts that the modal card has a non-zero bounding box inside
+    the visible viewport AND that an asset row directly underneath
+    its centre is occluded — catches the two failure modes that the
+    docstring of test_add_asset_modal_opens doesn't (modal pushed
+    off-screen by a CSS overflow regression, or modal card rendered
+    with display: none while the backdrop alone shows).
+
+    Doubles as the source for the ``add-asset`` marketing capture."""
+    seeds = home_seed_assets()
+    for spec in seeds:
+        Asset.objects.create(**spec)
+
+    page.goto(BASE_URL)
+    expect(
+        page.get_by_role('heading', name='Schedule Overview')
+    ).to_be_visible()
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+
+    # Confirm the modal's title rendered before capturing — otherwise
+    # the screenshot can land mid-transition with a partially faded
+    # backdrop.
+    expect(page.get_by_role('heading', name='Add asset')).to_be_visible()
+
+    # The modal card runs a 220ms ``modal-in`` keyframe animation
+    # (opacity + translateY). Playwright's ``to_be_visible()`` only
+    # checks for a non-empty box; without explicitly waiting for the
+    # animation to settle, the screenshot can land mid-fade and the
+    # bounding-box assertions below would see the pre-final position.
+    # Element.getAnimations({subtree:true}) returns all running or
+    # pending animations under the card — wait until every one is in
+    # the terminal ``finished`` / ``idle`` state.
+    page.wait_for_function(
+        """() => {
+            const card = document.querySelector('.modal-card');
+            if (!card) return false;
+            const anims = card.getAnimations({ subtree: true });
+            return anims.every(a =>
+                a.playState === 'finished' || a.playState === 'idle'
+            );
+        }"""
+    )
+
+    # Modal card has a real footprint inside the viewport. ``.modal-card``
+    # is the shared shell used by both the asset modal and the delete
+    # confirmation; ``.first`` narrows to the visible add-asset card.
+    modal_card = page.locator('.modal-card').first
+    card_box = modal_card.bounding_box()
+    assert card_box, 'modal card has no bounding box (rendered display:none?)'
+    viewport = page.viewport_size
+    assert viewport, 'viewport size missing'
+    assert card_box['width'] > 200 and card_box['height'] > 200, (
+        f'modal card collapsed: {card_box!r}'
+    )
+    # +1px tolerance on each edge for the same sub-pixel-rounding
+    # reason as the home-row check above.
+    assert (
+        card_box['x'] >= -1
+        and card_box['y'] >= -1
+        and card_box['x'] + card_box['width'] <= viewport['width'] + 1
+        and card_box['y'] + card_box['height'] <= viewport['height'] + 1
+    ), f'modal card escaped viewport: card={card_box!r} viewport={viewport!r}'
+
+    # The actual stacking check: the topmost element at the modal's
+    # centre must live inside the modal subtree. A z-index regression
+    # that leaves an asset row floating above the modal would make
+    # ``elementFromPoint`` return that row instead — bounding-box
+    # checks alone wouldn't catch that.
+    center_x = card_box['x'] + card_box['width'] / 2
+    center_y = card_box['y'] + card_box['height'] / 2
+    topmost_in_modal = page.evaluate(
+        """([x, y]) => {
+            const el = document.elementFromPoint(x, y);
+            return Boolean(el && el.closest('.modal-card'));
+        }""",
+        [center_x, center_y],
+    )
+    assert topmost_in_modal, (
+        f'topmost element at modal centre ({center_x}, {center_y}) is not '
+        f'inside .modal-card — z-index/stacking regression'
+    )
+
+    # full_page=False because the modal is position: fixed; Playwright's
+    # full-page mode would push the modal card off-frame and capture
+    # only the dimmed backdrop over the underlying page.
+    marketing_screenshot('add-asset', full_page=False)
 
 
 # ---------------------------------------------------------------------------
@@ -730,7 +853,14 @@ def test_drag_reorders_play_order(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
-def test_settings_page_renders(reset_assets: None, page: Page) -> None:
+def test_settings_page_renders(
+    reset_assets: None,
+    page: Page,
+    marketing_screenshot: MarketingShotFn,
+) -> None:
+    """Settings must render top-to-bottom on the marketing viewport
+    without any 5xx body — also the source of the ``settings@Nx.png``
+    capture."""
     page.goto(SETTINGS_URL)
     expect(
         page.get_by_role('heading', name='Settings', exact=True)
@@ -738,6 +868,8 @@ def test_settings_page_renders(reset_assets: None, page: Page) -> None:
     body = page.content()
     assert 'Internal Server Error' not in body
     assert 'Gateway Time-out' not in body
+
+    marketing_screenshot('settings')
 
 
 @pytest.mark.integration
@@ -873,3 +1005,143 @@ def test_skip_buttons_publish_correct_command(
             sub.close()
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# 8. Display power (experimental, HDMI-CEC) — issue #2575
+# ---------------------------------------------------------------------------
+#
+# The section is gated on cec_available(), which stats /dev/cec0 and
+# /dev/vchiq. Neither exists in the test container by default, so the
+# section is hidden on every other settings test. To exercise the
+# visible state we stub /dev/vchiq with a plain file before navigating
+# and remove it on teardown.
+
+# Screenshot capture is OFF by default. The original PR (#2886) used
+# screenshots for a one-time UX review; running them on every CI cycle
+# is pure overhead because the `Upload integration test artifacts` step
+# in .github/workflows/test-runner.yml is gated on `if: failure()` —
+# the PNGs on a green run get written and immediately discarded. Set
+# `PYTEST_CAPTURE_SCREENSHOTS=1` when you want them locally (UX work,
+# design tweaks). Relative path mirrors the `--output test-artifacts`
+# convention pytest-playwright already uses in pyproject.toml.
+_SCREENSHOT_DIR = 'test-artifacts/cec'
+# Explicit truthy parse so `PYTEST_CAPTURE_SCREENSHOTS=0` keeps the
+# gate OFF — bool(os.environ.get(...)) would flip on for any non-empty
+# string, including '0'/'false'.
+_CAPTURE_SCREENSHOTS = os.environ.get(
+    'PYTEST_CAPTURE_SCREENSHOTS', ''
+).lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _maybe_screenshot(page: Page, filename: str, **kwargs: Any) -> None:
+    """No-op unless PYTEST_CAPTURE_SCREENSHOTS is set in the env."""
+    if not _CAPTURE_SCREENSHOTS:
+        return
+    os.makedirs(_SCREENSHOT_DIR, exist_ok=True)
+    page.screenshot(path=f'{_SCREENSHOT_DIR}/{filename}', **kwargs)
+
+
+@pytest.fixture
+def cec_stub_device() -> Any:
+    """Create a stub `/dev/vchiq` so `diagnostics.cec_available()`
+    returns True. /dev is tmpfs+writable in the test container; we
+    create a plain file (not a real device node) — the gate only
+    `os.path.exists`s the path.
+    """
+    path = '/dev/vchiq'
+    created = False
+    if not os.path.exists(path):
+        try:
+            open(path, 'w').close()
+            created = True
+        except OSError:
+            pytest.skip('cannot stub /dev/vchiq in this environment')
+    try:
+        yield path
+    finally:
+        if created:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_section_hidden_without_cec_adapter(
+    reset_assets: None, page: Page
+) -> None:
+    """No /dev/cec0 or /dev/vchiq in the container by default — the
+    experimental section must NOT render. Guards against accidentally
+    surfacing CEC controls on x86 / non-CEC hardware."""
+    if os.path.exists('/dev/vchiq') or os.path.exists('/dev/cec0'):
+        pytest.skip('CEC device present; cannot test the hidden case')
+    page.goto(SETTINGS_URL)
+    expect(
+        page.get_by_role('heading', name='Settings', exact=True)
+    ).to_be_visible()
+    expect(page.get_by_role('heading', name='Display power')).to_have_count(0)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_section_visible_with_cec_adapter(
+    reset_assets: None, page: Page, cec_stub_device: str
+) -> None:
+    """With a CEC device node present, both buttons render under an
+    Experimental badge inside the System controls neighbourhood."""
+    page.goto(SETTINGS_URL)
+    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
+    expect(page.get_by_role('button', name='Turn display on')).to_be_visible()
+    expect(page.get_by_role('button', name='Turn display off')).to_be_visible()
+    # Experimental badge sits next to the heading.
+    expect(page.locator('.settings-section__badge')).to_have_text(
+        'Experimental'
+    )
+
+    # Screenshot 1: full settings page with the new section
+    _maybe_screenshot(page, '01-settings-page-with-cec.png', full_page=True)
+
+    # Screenshot 2: just the Display power card (tight crop)
+    if _CAPTURE_SCREENSHOTS:
+        section = page.locator('section', has_text='Display power').last
+        section.scroll_into_view_if_needed()
+        box = section.bounding_box()
+        assert box, 'display-power section has no bounding box'
+        _maybe_screenshot(
+            page,
+            '02-display-power-card.png',
+            clip={
+                'x': max(box['x'] - 8, 0),
+                'y': max(box['y'] - 8, 0),
+                'width': box['width'] + 16,
+                'height': box['height'] + 16,
+            },
+        )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_button_click_surfaces_error_toast(
+    reset_assets: None, page: Page, cec_stub_device: str
+) -> None:
+    """Issue #2575's feedback-loop requirement: a failing CEC command
+    must surface to the operator as a visible toast, not silently
+    succeed or no-op. The container has no real CEC adapter, so the
+    inner subprocess fails — exactly the path we want to exercise."""
+    page.goto(SETTINGS_URL)
+    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
+
+    page.get_by_role('button', name='Turn display on').click()
+
+    # After the form post + redirect, the toast pipeline reads
+    # django-messages and pushes an app-toast--error item. Match by
+    # the CSS class the toast template sets per-kind.
+    error_toast = page.locator('.app-toast--error').first
+    expect(error_toast).to_be_visible()
+    # The message should namespace the failure as a display action.
+    expect(error_toast).to_contain_text('Display turn-on')
+
+    # Screenshot 3: error toast in context
+    _maybe_screenshot(page, '03-error-toast.png', full_page=False)

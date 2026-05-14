@@ -991,6 +991,26 @@ def settings_shutdown(request: HttpRequest) -> HttpResponse:
 
 
 @authorized
+@require_http_methods(['POST'])
+def settings_display_power(request: HttpRequest, state: str) -> HttpResponse:
+    if state not in ('on', 'off'):
+        messages.error(request, 'Invalid display state.')
+        return redirect(reverse('anthias_app:settings'))
+    # Guard the (otherwise hidden) endpoint so a stale form or a
+    # direct curl on non-CEC hardware doesn't burn the request thread
+    # on a 10 s libcec subprocess that's guaranteed to fail.
+    if not diagnostics.cec_available():
+        messages.error(
+            request,
+            'No HDMI-CEC adapter detected on this device.',
+        )
+        return redirect(reverse('anthias_app:settings'))
+    ok, msg = diagnostics.set_display_power(on=(state == 'on'))
+    (messages.success if ok else messages.error)(request, msg)
+    return redirect(reverse('anthias_app:settings'))
+
+
+@authorized
 @require_http_methods(['GET'])
 def system_info(request: HttpRequest) -> HttpResponse:
     context = page_context.system_info()

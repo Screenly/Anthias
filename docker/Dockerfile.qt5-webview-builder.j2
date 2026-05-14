@@ -1,6 +1,6 @@
 {# Qt 5 cross-compile webview-builder. Mirrors the historical
-   webview/Dockerfile pipeline (which is now reserved for offline
-   Qt 5 toolchain rebuilds via bin/rebuild_qt5_toolchain.sh).
+   src/anthias_webview/Dockerfile pipeline (which is now reserved for
+   offline Qt 5 toolchain rebuilds via bin/rebuild_qt5_toolchain.sh).
 
    Stage layout:
      1. qt5-sysroot  — armhf Debian + Raspbian/Pi userland; provides
@@ -9,7 +9,7 @@
      2. webview-builder  — host x86 (`$BUILDPLATFORM`); installs the
         Linaro gcc-7.4.1 cross-compiler plus the pre-built Qt 5
         toolchain pinned to WebView-v2026.04.1, then compiles the
-        in-tree webview/ source.
+        in-tree src/anthias_webview/ source.
 
    Qt 5 is frozen for pi2/pi3 boards, so the toolchain artifact at
    WebView-v2026.04.1 never changes. To CVE-patch the toolchain run
@@ -41,8 +41,9 @@ RUN apt-get update && \
 
 # Cross-build sysroot deps: every -dev whose .so the WebView app's
 # linker dereferences through Qt 5's qmake. Set matches what Qt 5 was
-# originally cross-built against (webview/Dockerfile builder stage),
-# so the link surface is identical to the toolchain's expectations.
+# originally cross-built against (src/anthias_webview/Dockerfile
+# builder stage), so the link surface is identical to the toolchain's
+# expectations.
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -169,11 +170,12 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt5-host-apt,sharing=locked \
 
 WORKDIR /build
 
-# sysroot-relativelinks.py is vendored at webview/ so the Qt 5 build
-# isn't gated on an unpinned curl from raw.githubusercontent.com.
-# Rewrites absolute symlinks under /sysroot to relative so cross-gcc
-# resolves them inside the sysroot, not the build host's filesystem.
-COPY webview/sysroot-relativelinks.py /usr/local/bin/sysroot-relativelinks.py
+# sysroot-relativelinks.py is vendored at src/anthias_webview/ so the
+# Qt 5 build isn't gated on an unpinned curl from
+# raw.githubusercontent.com. Rewrites absolute symlinks under /sysroot
+# to relative so cross-gcc resolves them inside the sysroot, not the
+# build host's filesystem.
+COPY src/anthias_webview/sysroot-relativelinks.py /usr/local/bin/sysroot-relativelinks.py
 
 RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib
 COPY --from=qt5-sysroot /lib/ /sysroot/lib/
@@ -189,7 +191,8 @@ RUN python3 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
 # Linaro gcc-7.4.1 — hardcoded path matches the CROSS_COMPILE setting
 # baked into the Qt 5 toolchain's qmake.conf at original toolchain
-# build time (webview/build_qt5.sh `-device-option CROSS_COMPILE=`).
+# build time (src/anthias_webview/build_qt5.sh
+# `-device-option CROSS_COMPILE=`).
 # SHA256-pinned: Linaro doesn't publish signed manifests for these
 # legacy 7.4 binaries, so the hash is the trust anchor.
 RUN mkdir -p /src && \
@@ -212,10 +215,10 @@ RUN mkdir -p /src/{{ artifact_board }} && \
     tar -xzf "${QT5_TARBALL}" -C /src/{{ artifact_board }} && \
     rm "${QT5_TARBALL}" "${QT5_TARBALL}.sha256"
 
-COPY webview/AnthiasWebview.pro /src/{{ artifact_board }}/webview/AnthiasWebview.pro
-COPY webview/src /src/{{ artifact_board }}/webview/src
-COPY webview/res /src/{{ artifact_board }}/webview/res
-WORKDIR /src/{{ artifact_board }}/webview
+COPY src/anthias_webview/AnthiasWebview.pro /src/{{ artifact_board }}/anthias_webview/AnthiasWebview.pro
+COPY src/anthias_webview/src /src/{{ artifact_board }}/anthias_webview/src
+COPY src/anthias_webview/res /src/{{ artifact_board }}/anthias_webview/res
+WORKDIR /src/{{ artifact_board }}/anthias_webview
 
 # webview is 3 .cpp files; ccache wiring through Linaro's cross-gcc
 # would save seconds at most, so plain make.
@@ -228,5 +231,5 @@ RUN /src/{{ artifact_board }}/qt5pi/bin/qmake && \
 # install prefix Qt 5 was originally configured against.
 RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
     mv AnthiasWebview /out/bin/ && \
-    cp -r /src/{{ artifact_board }}/webview/res /out/share/AnthiasWebview/ && \
+    cp -r /src/{{ artifact_board }}/anthias_webview/res /out/share/AnthiasWebview/ && \
     cp -r /src/{{ artifact_board }}/qt5pi /out/qt5pi

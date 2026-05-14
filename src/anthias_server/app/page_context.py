@@ -232,6 +232,10 @@ def device_settings() -> dict[str, Any]:
         # on that revision (matches the React audio-output dropdown).
         'is_pi5': 'Raspberry Pi 5' in device_model,
         'date_format_options': _DATE_FORMAT_OPTIONS,
+        # Render-time gate for the experimental CEC display-power
+        # buttons; cec_available() only stats device nodes, so it's
+        # cheap enough to call on every settings render.
+        'cec_available': diagnostics.cec_available(),
     }
 
 

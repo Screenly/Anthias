@@ -1,0 +1,150 @@
+name: Marketing Screenshots
+
+# Manually triggered: produces high-DPI marketing artwork from the
+# existing Playwright integration suite by re-running it with
+# MARKETING_SCREENSHOTS=1. The fixture in tests/conftest.py reads that
+# env var, bumps the browser context to 3× device scale, and emits a
+# base <name>.png plus retina <name>@2x.png and <name>@3x.png siblings
+# to test-artifacts/marketing/ for every test that calls
+# ``marketing_screenshot(name)`` — matching the existing
+# website/assets/images/overview*.png convention. The workflow uploads
+# the directory as a workflow artifact so the website pipeline can
+# pull it and social-media variants can be downloaded by hand.
+#
+# This is intentionally a separate workflow from docker-test.yaml — we
+# don't want every PR run to pay the 3× rendering cost or accumulate
+# artifact storage.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch / tag / SHA to capture from (default: current branch)'
+        required: false
+        type: string
+
+# workflow_dispatch lets an operator run this against any ref, so the
+# job token must not inherit write-level scopes from the repo default.
+# Read-only is enough for checkout + uses: setup-uv etc.; the only
+# write is the upload-artifact step, which uses a separate API and
+# doesn't read this block.
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture marketing screenshots
+    runs-on: ubuntu-24.04
+    env:
+      COMPOSE_FILE: docker-compose.test.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: '0.9.17'
+
+      - name: Install builder dependencies
+        run: |
+          uv venv
+          uv pip install --group docker-image-builder
+
+      - name: Build test containers
+        run: |
+          uv run python -m tools.image_builder \
+            --dockerfiles-only \
+            --disable-cache-mounts \
+            --service redis \
+            --service test
+
+      - name: Start test stack
+        run: docker compose up -d --build
+
+      # ANTHIAS_INTEGRATION_TEST=1 pins TEST.NAME to the SQLite file
+      # uvicorn writes to (same wiring as test-runner.yml). Marketing
+      # capture needs the asset rows the test fixtures create to be
+      # visible to the browser; without this they'd land in
+      # pytest-django's in-memory DB while uvicorn reads the file.
+      - name: Prepare integration environment
+        run: |
+          docker compose exec anthias-test \
+            bash ./bin/prepare_test_environment.sh -s
+
+      # MARKETING_SCREENSHOTS=1 flips tests/conftest.py's
+      # marketing_screenshot fixture from no-op to capture mode. The
+      # full integration suite runs (rather than a hand-picked subset)
+      # so the marketing-capturing tests share their browser-bringup
+      # cost with the rest of the suite and we get the regular green-
+      # tests signal for free.
+      #
+      # --reuse-db: prepare_test_environment.sh already migrated the
+      # SQLite file uvicorn reads from; if pytest-django were to
+      # destroy and recreate it mid-run, uvicorn's open handle would
+      # point at an unlinked inode.
+      #
+      # Wrapped in nick-fields/retry to mirror the integration-test
+      # CI step (see .github/workflows/test-runner.yml:104-115).
+      # Playwright's CDP socket and SQLite WAL handoff have occasional
+      # flakes that a single rerun clears; without the wrapper a
+      # transient flake would abort the manual artifact pipeline with
+      # no usable screenshot bundle. timeout_minutes=8 accommodates
+      # the ~25% per-test slowdown at 3× device scale; max_attempts=3
+      # is lower than the main suite's 5 to keep one flake from
+      # thrashing the artifacts directory three extra times.
+      #
+      # The session-scoped ``_reset_marketing_dir`` fixture in
+      # tests/conftest.py clears test-artifacts/marketing/ before any
+      # test runs when MARKETING_SCREENSHOTS=1 — done from inside the
+      # container so the cleanup has the same uid as the writer (a
+      # host-side rm from the runner step would hit permission-denied
+      # on a retry attempt because the bind-mount is root-owned).
+      # The upload step then either finds the freshly-rendered set
+      # (green) or an empty dir (`if-no-files-found: error` flags
+      # that instead of pretending success).
+      - name: Capture screenshots
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4
+        with:
+          timeout_minutes: 8
+          max_attempts: 3
+          command: |
+            docker compose exec \
+              -e ANTHIAS_INTEGRATION_TEST=1 \
+              -e MARKETING_SCREENSHOTS=1 \
+              anthias-test \
+              pytest -m integration --reuse-db
+
+      # The /usr/src/app bind-mount means test-artifacts/marketing/
+      # lands directly on the runner workspace — no docker cp needed.
+      - name: Upload marketing screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: marketing-screenshots
+          path: test-artifacts/marketing/
+          if-no-files-found: error
+          retention-days: 90
+
+      # If something failed mid-suite, the failure traces are still
+      # useful — upload them as a separate artifact so the green path's
+      # marketing-screenshots bundle stays clean of trace.zip noise.
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: marketing-failure-traces
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop test stack
+        if: always()
+        run: docker compose down

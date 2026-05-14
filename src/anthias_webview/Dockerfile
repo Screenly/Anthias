@@ -1,11 +1,12 @@
 # Qt 5 cross-compile toolchain builder image. Not wired into CI —
 # the Anthias viewer build no longer consumes a webview tarball; it
-# compiles the webview app inline from the in-tree webview/ source
-# (see docker/Dockerfile.qt5-webview-builder.j2). This file remains
-# only for the rare Qt 5 toolchain rebuild (CVE patch, base image
-# bump) driven by bin/rebuild_qt5_toolchain.sh, which uploads the
-# resulting qt5-5.15.14-trixie-{pi2,pi3}.tar.gz tarballs to a
-# WebView-v* GitHub release.
+# compiles the webview app inline from the in-tree
+# src/anthias_webview/ source (see
+# docker/Dockerfile.qt5-webview-builder.j2). This file remains only
+# for the rare Qt 5 toolchain rebuild (CVE patch, base image bump)
+# driven by bin/rebuild_qt5_toolchain.sh, which uploads the resulting
+# qt5-5.15.14-trixie-{pi2,pi3}.tar.gz tarballs to a WebView-v* GitHub
+# release.
 
 ARG BUILDER_BASE_PLATFORM=linux/arm/v7
 FROM --platform=${BUILDER_BASE_PLATFORM} mirror.gcr.io/library/debian:trixie AS builder
@@ -251,11 +252,12 @@ RUN printf 'Types: deb\nURIs: http://archive.debian.org/debian\nSuites: bullseye
 WORKDIR /build
 
 # sysroot-relativelinks.py is now vendored in-tree alongside this
-# Dockerfile (see webview/sysroot-relativelinks.py, pinned to a
-# Yocto/poky upstream commit). bin/rebuild_qt5_toolchain.sh runs the
-# build with WEBVIEW_DIR (the webview/ directory) as the docker
-# context, so a plain COPY picks up the vendored copy without re-curling
-# from raw.githubusercontent.com.
+# Dockerfile (see src/anthias_webview/sysroot-relativelinks.py,
+# pinned to a Yocto/poky upstream commit).
+# bin/rebuild_qt5_toolchain.sh runs the build with WEBVIEW_DIR (the
+# src/anthias_webview/ directory) as the docker context, so a plain
+# COPY picks up the vendored copy without re-curling from
+# raw.githubusercontent.com.
 COPY sysroot-relativelinks.py /usr/local/bin/sysroot-relativelinks.py
 
 RUN mkdir -p /sysroot/usr /sysroot/opt /sysroot/lib

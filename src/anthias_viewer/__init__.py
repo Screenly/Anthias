@@ -382,7 +382,8 @@ def load_browser() -> None:
     # Bound the wait so we don't hang the viewer indefinitely if
     # AnthiasWebview fails to register on D-Bus (missing binary, broken
     # library link, handshake-line drift, etc.). The string here must
-    # match `qInfo() << "Anthias service start"` in webview/src/main.cpp.
+    # match `qInfo() << "Anthias service start"` in
+    # src/anthias_webview/src/main.cpp.
     deadline = monotonic() + BROWSER_STARTUP_TIMEOUT_SECONDS
     while monotonic() < deadline:
         if BROWSER_HANDSHAKE_LINE in browser.process.stdout.decode('utf-8'):

@@ -73,4 +73,4 @@ Per-SoC hardware video decode (Rockchip `rkmpp`, Allwinner `cedrus`, Amlogic `me
 * [General documentation](https://anthias.screenly.io/docs/)
 * [Developer documentation](https://anthias.screenly.io/docs/development/)
 * [Migrating assets from Anthias to Screenly](https://anthias.screenly.io/docs/migrate-to-screenly/)
-* [WebView](/webview/README.md)
+* [WebView](/src/anthias_webview/README.md)
