@@ -385,6 +385,7 @@ def marketing_screenshot(request: pytest.FixtureRequest) -> MarketingShotFn:
     do that.
     """
     if not _MARKETING_ENABLED:
+
         def _noop(name: str, *, full_page: bool = True) -> None:
             pass
 
