@@ -2540,6 +2540,51 @@ def test_sibling_original_created_on_first_run(
 
 @pytest_ffmpeg
 @pytest.mark.django_db
+def test_original_uri_persisted_before_render_for_crash_safety(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mid-flight failure (disk-full / SIGKILL / ffmpeg crash) must
+    not leak the source bytes. The walker commits
+    ``metadata['original_uri']`` to the DB right after renaming the
+    upload to ``.original.<ext>``, *before* attempting the render,
+    so the orphan-sweep in ``cleanup()`` recognises the renamed
+    file as claimed. Without this contract a disk-full mid-walker
+    silently deletes every renamed source on the next 1h tick --
+    live-confirmed on the Pi 4 test bed during the envelope rollout.
+
+    Asserts the DB write happens before ``_transcode_to_target`` by
+    raising from the mock and checking the committed row state.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'crashy.mov')
+    _make_video(src, codec='libx264', container='mov', audio='aac')
+    asset = _make_processing_asset('crashy', src, mimetype='video')
+
+    def _explode(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError('simulated mid-render crash')
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_transcode_to_target', side_effect=_explode
+        ),
+    ):
+        with pytest.raises(RuntimeError, match='simulated mid-render crash'):
+            processing._run_video_normalisation(asset)
+
+    # The .original.<ext> was renamed onto disk AND the DB row
+    # carries the pointer -- a subsequent cleanup() pass will see
+    # the file as claimed even though the variant slot is empty.
+    original = path.join(asset_dir, 'crashy.original.mov')
+    assert path.isfile(original), '.original.<ext> must exist on disk'
+    asset.refresh_from_db()
+    assert asset.metadata.get('original_uri') == original, (
+        'metadata.original_uri must be committed before render attempts'
+    )
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
 def test_sibling_original_preserved_across_re_render(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

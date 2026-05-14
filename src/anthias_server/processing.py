@@ -1225,6 +1225,16 @@ def _run_video_normalisation(asset: Asset) -> None:
             ) from exc
         metadata['original_uri'] = original_path
         source_for_render = original_path
+        # Persist ``original_uri`` to the DB *before* attempting the
+        # render so that ``cleanup`` recognises the renamed file as
+        # claimed if the render fails mid-flight (disk-full, ffmpeg
+        # crash, worker SIGKILL). Without this commit, the sweep
+        # below would treat the freshly renamed ``.original.<ext>``
+        # as an orphan -- ``Asset.uri`` still points at the variant
+        # path which no longer exists on disk -- and silently delete
+        # the source bytes on its next 1h tick. Tested live on the
+        # Pi 4 with a disk-full mid-walker run.
+        Asset.objects.filter(asset_id=asset_id).update(metadata=metadata)
 
     # Re-probe the source from its (possibly new) location. The
     # passthrough decision below reads codec / dims / fps from this.
