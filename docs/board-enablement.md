@@ -161,42 +161,47 @@ Sample failure modes the rotation catches:
   every asset on every restart → cache write failure (check
   `~/.anthias/playback-envelope.json` is writable, JSON is valid).
 
-## Source clips
+## Sample pack
 
-Big Buck Bunny, H.264 + AAC, public-domain, from
-[download.blender.org/demo/movies/BBB](https://download.blender.org/demo/movies/BBB/):
-
-| File                                     | Resolution / fps |
-|------------------------------------------|------------------|
-| `bbb_sunflower_1080p_30fps_normal.mp4`   | 1080p30          |
-| `bbb_sunflower_1080p_60fps_normal.mp4`   | 1080p60          |
-| `bbb_sunflower_2160p_30fps_normal.mp4`   | 4K30             |
-| `bbb_sunflower_2160p_60fps_normal.mp4`   | 4K60             |
-
-These exercise the H.264 paths (`v4l2m2m-copy` hwdec on Pi 4; software on Pi 5
-because mpv has no `v4l2-request` hwdec for the Hantro G2; vaapi-copy on x86).
-
-## HEVC transcodes
-
-To exercise the HEVC HW decode path on Pi (`drm-copy` / `v4l2_request_hevc`,
-which Pi 4 + Pi 5 both have), transcode the H.264 sources with libx265:
+Run `bin/generate_board_enablement_testbed.sh` on a workstation
+(not the device under test) to produce the 8-clip pack:
 
 ```bash
-ffmpeg -y -i bbb_sunflower_1080p_30fps_normal.mp4 \
-    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_1080p_30fps_hevc.mp4
-ffmpeg -y -i bbb_sunflower_1080p_60fps_normal.mp4 \
-    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_1080p_60fps_hevc.mp4
-ffmpeg -y -i bbb_sunflower_2160p_30fps_normal.mp4 \
-    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_4k_30fps_hevc.mp4
-ffmpeg -y -i bbb_sunflower_2160p_60fps_normal.mp4 \
-    -c:v libx265 -preset medium -crf 23 -c:a copy bbb_4k_60fps_hevc.mp4
+bash bin/generate_board_enablement_testbed.sh ~/bbb-testbed
 ```
 
-Run these on a workstation, not the device under test — even a Pi 5 burns
-hours on the 4K HEVC encodes (sustained load average ~7) and that load alone
-will skew any concurrent playback measurement. Verify each output with
-`ffprobe` before shipping; a power cycle mid-encode leaves a file with
-`moov atom not found` that mpv will refuse to play.
+The script:
+
+1. Downloads four Big Buck Bunny H.264 + AAC sources (public-domain,
+   from `download.blender.org/demo/movies/BBB`) — skipped if already
+   present.
+2. Trims each to 60 seconds via `-c copy` (instant, no re-encode) —
+   produces the H.264 half of the pack.
+3. Re-encodes each cut with `libx265 -preset medium -crf 23 -tag:v hvc1`
+   — produces the HEVC half.
+4. Prints a verification table (codec + resolution + fps + duration
+   from `ffprobe`).
+
+| File                             | Codec | Resolution | fps | Notes                                    |
+|----------------------------------|-------|------------|-----|------------------------------------------|
+| `bbb_1080p_30fps.mp4`            | H.264 | 1920×1080  | 30  | Baseline 1080p signage rate              |
+| `bbb_1080p_60fps.mp4`            | H.264 | 1920×1080  | 60  | High-rate 1080p                          |
+| `bbb_4k_30fps.mp4`               | H.264 | 3840×2160  | 30  | 4K H.264 — re-encodes on Pi 4 (over V3D's 1080p60 H.264 cap)              |
+| `bbb_4k_60fps.mp4`               | H.264 | 3840×2160  | 60  | Worst-case H.264 — re-encodes on every Pi |
+| `bbb_1080p_30fps_hevc.mp4`       | HEVC  | 1920×1080  | 30  | Baseline HEVC, passthrough on Pi 4 / Pi 5 / x86 |
+| `bbb_1080p_60fps_hevc.mp4`       | HEVC  | 1920×1080  | 60  | High-rate HEVC                           |
+| `bbb_4k_30fps_hevc.mp4`          | HEVC  | 3840×2160  | 30  | 4K HEVC, passthrough on Pi 5 with `dtoverlay=vc4-kms-v3d,cma-512` applied |
+| `bbb_4k_60fps_hevc.mp4`          | HEVC  | 3840×2160  | 60  | Worst-case HEVC — 60 fps display required to read without drops |
+
+60 seconds per clip is enough to capture mpv's `hwdec-current` banner and
+read a stable `Dropped:` count, while keeping a full pack regen achievable
+in a few minutes on a laptop. Pass `CUT_SECONDS=N` to the script to change
+the per-clip length; pass `HEVC_CRF=N` to override the encoder's quality
+target.
+
+The script is idempotent: clips that already exist (and pass an `ffprobe`
+sanity check) are skipped on re-run. A power cycle mid-encode leaves the
+temp file as `*.tmp.mp4`; the next invocation regenerates from scratch.
 
 ## The rotation
 
