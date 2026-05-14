@@ -12,36 +12,145 @@
                 <a class="btn-primary" href="/get-started/">Get Started</a>
                 <a class="btn-secondary" href="/features/">See Features</a>
             </div>
-            <div class="mt-8">
+            <div class="mt-8 flex flex-wrap items-center gap-3">
                 <a class="inline-flex items-center gap-2 rounded-md bg-white/10 hover:bg-white/15 border border-white/20 text-white/90 hover:text-white text-sm font-semibold no-underline px-4 py-2 transition-colors"
                    href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.63 22.41c.58.1.79-.25.79-.56v-2.05c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.71 1.25 3.37.95.1-.74.4-1.25.73-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.17a10.92 10.92 0 0 1 5.74 0c2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.26 5.65.41.36.78 1.06.78 2.13v3.16c0 .31.21.67.8.55A11.5 11.5 0 0 0 12 .5Z"/></svg>
+                    {{ partial "icon.html" (dict "name" "github" "size" "1rem") }}
                     Star on GitHub
+                </a>
+                <a class="inline-flex items-center gap-2 rounded-md bg-white/10 hover:bg-white/15 border border-white/20 text-white/90 hover:text-white text-sm font-semibold no-underline px-4 py-2 transition-colors"
+                   href="https://github.com/sponsors/Screenly" target="_blank" rel="noopener">
+                    {{ partial "icon.html" (dict "name" "heart" "size" "1rem" "class" "text-[#ea4aaa]") }}
+                    Sponsor
                 </a>
             </div>
         </div>
     </div>
     <div class="max-w-7xl mx-auto px-6 md:px-12 lg:px-20 pb-8">
-        {{- $hero := partialCached "hero-images.html" . -}}
-        {{- /* Single <picture> so the browser only fetches the source
-               matching the current viewport. CSS aspect-ratio on the
-               <img> reserves the right box per breakpoint, keeping
-               CLS at zero whether the mobile or desktop source loads. */ -}}
-        <picture>
-            <source type="image/webp" media="(max-width: 767px)"
-                srcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x">
-            <source type="image/webp" media="(min-width: 768px)"
-                srcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x">
-            <source media="(max-width: 767px)"
-                srcset="{{ $hero.mobile1x.RelPermalink }}, {{ $hero.mobile2x.RelPermalink }} 2x, {{ $hero.mobile3x.RelPermalink }} 3x">
-            <img
-                class="hero-img rounded-t-lg w-full"
-                srcset="{{ $hero.desk1x.RelPermalink }}, {{ $hero.desk2x.RelPermalink }} 2x, {{ $hero.desk3x.RelPermalink }} 3x"
-                src="{{ $hero.desk1x.RelPermalink }}"
-                alt="Anthias dashboard showing scheduled content"
-                fetchpriority="high"
-                decoding="async">
-        </picture>
+        {{- /* Same stable cache key as baseof.html so the resize
+               pipeline runs once per build and the preload + slider
+               see the identical resource references. */ -}}
+        {{- $slides := partialCached "screenshots.html" . "screenshots-singleton" -}}
+        {{- if $slides -}}
+        {{- /* Browser-chrome framed scroll-snap slider. Each <img>
+               carries an explicit aspect-ratio matched to the
+               1400×900 capture viewport from tests/conftest.py so
+               the box is reserved before WebP decode (CLS = 0). The
+               track is the scroll container; the surrounding chrome,
+               indicator pills, and prev/next controls are wired up by
+               slider.ts via data-screenshot-* hooks. */ -}}
+        <div
+            class="screenshot-slider"
+            data-screenshot-slider
+            data-slide-count="{{ len $slides }}"
+            role="region"
+            aria-roledescription="carousel"
+            aria-label="Anthias product screenshots">
+
+            {{- /* Top chrome — traffic-light dots + URL pill. Reads
+                   as a real browser frame so the dashboard captures
+                   inside feel like the live product, not a flat PR
+                   render. The URL value flips per-slide via
+                   data-screenshot-url; slider.ts updates it on
+                   slide change so the chrome stays in character. */ -}}
+            <div class="screenshot-chrome" aria-hidden="true">
+                <span class="screenshot-light" style="--light:#ff5f57;"></span>
+                <span class="screenshot-light" style="--light:#febc2e;"></span>
+                <span class="screenshot-light" style="--light:#28c840;"></span>
+                <span class="screenshot-url"><span data-screenshot-url>anthias.local</span></span>
+                <span class="screenshot-counter">
+                    <span data-screenshot-counter>01</span>
+                    <span class="screenshot-counter-sep">/</span>
+                    <span>{{ printf "%02d" (len $slides) }}</span>
+                </span>
+            </div>
+
+            <div class="screenshot-stage">
+                <div
+                    class="screenshot-track"
+                    data-screenshot-track
+                    tabindex="0">
+                    {{- range $i, $slide := $slides }}
+                    <figure
+                        class="screenshot-slide"
+                        role="group"
+                        aria-roledescription="slide"
+                        aria-label="{{ add $i 1 }} of {{ len $slides }}: {{ $slide.alt }}"
+                        data-screenshot-slide
+                        data-slide-index="{{ $i }}"
+                        data-slide-url="{{ $slide.name }}">
+                        <picture>
+                            <source
+                                type="image/webp"
+                                srcset="{{ $slide.webpSrcset }}"
+                                sizes="(min-width: 1280px) 1200px, 100vw">
+                            <img
+                                class="screenshot-img"
+                                srcset="{{ $slide.pngSrcset }}"
+                                sizes="(min-width: 1280px) 1200px, 100vw"
+                                src="{{ $slide.fallback }}"
+                                width="{{ $slide.width }}"
+                                height="{{ $slide.height }}"
+                                alt="{{ $slide.alt }}"
+                                loading="{{ if eq $i 0 }}eager{{ else }}lazy{{ end }}"
+                                decoding="async"
+                                {{- if eq $i 0 }} fetchpriority="high"{{ end }}>
+                        </picture>
+                        {{- with $slide.caption }}
+                        <figcaption class="screenshot-caption">
+                            <span class="screenshot-caption-tag">{{ printf "%02d" (add $i 1) }}</span>
+                            <span class="screenshot-caption-text">{{ . }}</span>
+                        </figcaption>
+                        {{- end }}
+                    </figure>
+                    {{- end }}
+                </div>
+
+                {{- if gt (len $slides) 1 }}
+                <button
+                    type="button"
+                    class="screenshot-nav screenshot-nav-prev"
+                    data-screenshot-prev
+                    aria-label="Previous screenshot">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+                <button
+                    type="button"
+                    class="screenshot-nav screenshot-nav-next"
+                    data-screenshot-next
+                    aria-label="Next screenshot">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+                {{- end }}
+            </div>
+
+            {{- if gt (len $slides) 1 }}
+            {{- /* Plain buttons with aria-current — not role="tab"
+                   inside role="tablist". The full ARIA Tabs pattern
+                   (roving tabindex, aria-controls/tabpanel) doesn't
+                   fit a horizontal-scroll carousel where every slide
+                   stays in the DOM, so the simpler current-state
+                   semantics are more honest for assistive tech. */ -}}
+            <div class="screenshot-pills" aria-label="Select screenshot" role="group">
+                {{- range $i, $slide := $slides }}
+                <button
+                    type="button"
+                    class="screenshot-pill"
+                    aria-label="Show screenshot {{ add $i 1 }}: {{ $slide.alt }}"
+                    {{- if eq $i 0 }} aria-current="true"{{ end }}
+                    data-screenshot-pill
+                    data-slide-index="{{ $i }}">
+                    <span class="screenshot-pill-fill" aria-hidden="true"></span>
+                </button>
+                {{- end }}
+            </div>
+            {{- end }}
+        </div>
+        {{- end }}
     </div>
 </header>
 

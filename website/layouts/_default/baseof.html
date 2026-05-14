@@ -11,7 +11,26 @@
       {{- $titleSuffix = printf " | %s" $brand -}}
     {{- end -}}
     {{- $pageTitle := printf "%s%s" .Title $titleSuffix -}}
-    {{- $pageImage := (resources.Get "images/overview.png").Permalink -}}
+    {{- /* OG/Twitter card image. Prefer the first marketing slide if
+           the screenshots dir has been populated (CI artifact / local
+           fetch); otherwise fall back to the static logo so the
+           crawler always gets *something*. */ -}}
+    {{- $pageImage := "" -}}
+    {{- $pageImageAlt := "Anthias logo" -}}
+    {{- /* Stable string key — the partial reads only site.Data and
+           bundled resources, so memoising once per build (instead of
+           per-page via "." which differs across pages) is correct and
+           avoids re-running the Resize pipeline for every page. */ -}}
+    {{- $heroSlides := partialCached "screenshots.html" . "screenshots-singleton" -}}
+    {{- if $heroSlides -}}
+      {{- $first := index $heroSlides 0 -}}
+      {{- $pageImage = $first.fallback | absURL -}}
+      {{- with $first.alt -}}{{- $pageImageAlt = . -}}{{- end -}}
+    {{- else -}}
+      {{- with resources.Get "images/logo.svg" -}}
+        {{- $pageImage = .Permalink -}}
+      {{- end -}}
+    {{- end -}}
 
     <title>{{ $pageTitle }}</title>
     <meta name="description" content="{{ $description }}">
@@ -23,14 +42,14 @@
     <meta property="og:type" content="{{ if and .IsPage (eq (string .Section) "docs") }}article{{ else }}website{{ end }}">
     <meta property="og:url" content="{{ .Permalink }}">
     <meta property="og:image" content="{{ $pageImage }}">
-    <meta property="og:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+    <meta property="og:image:alt" content="{{ $pageImageAlt }}">
     <meta property="og:site_name" content="{{ $brand }}">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $pageTitle }}">
     <meta name="twitter:description" content="{{ $description }}">
     <meta name="twitter:image" content="{{ $pageImage }}">
-    <meta name="twitter:image:alt" content="Anthias dashboard showing scheduled content on a Raspberry Pi-driven display">
+    <meta name="twitter:image:alt" content="{{ $pageImageAlt }}">
 
     {{- $favicon := resources.Get "images/favicon.ico" -}}
     {{- $style := resources.Get "styles/style.css" | fingerprint -}}
@@ -41,13 +60,12 @@
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 
-    {{- /* Preload the LCP hero image on the home page. Two preload
-           links with mutually exclusive media queries — only the one
-           matching the current viewport actually fetches. */ -}}
-    {{- if .IsHome -}}
-      {{- $hero := partialCached "hero-images.html" . -}}
-    <link rel="preload" as="image" type="image/webp" media="(max-width: 767px)" href="{{ $hero.mobile1xW.RelPermalink }}" imagesrcset="{{ $hero.mobile1xW.RelPermalink }}, {{ $hero.mobile2xW.RelPermalink }} 2x, {{ $hero.mobile3xW.RelPermalink }} 3x" fetchpriority="high">
-    <link rel="preload" as="image" type="image/webp" media="(min-width: 768px)" href="{{ $hero.desk1xW.RelPermalink }}" imagesrcset="{{ $hero.desk1xW.RelPermalink }}, {{ $hero.desk2xW.RelPermalink }} 2x, {{ $hero.desk3xW.RelPermalink }} 3x" fetchpriority="high">
+    {{- /* Preload the LCP hero image on the home page — only the
+           first slide of the screenshot slider. Subsequent slides
+           come in via lazy <img> as the user scrolls/advances. */ -}}
+    {{- if and .IsHome $heroSlides -}}
+      {{- $first := index $heroSlides 0 -}}
+    <link rel="preload" as="image" type="image/webp" href="{{ $first.fallbackWebp }}" imagesrcset="{{ $first.webpSrcset }}" imagesizes="(min-width: 1280px) 1200px, 100vw" fetchpriority="high">
     {{- end }}
 
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
@@ -116,6 +134,18 @@
     }
     </script>
     {{ end }}
+
+    {{- /* Screenshot slider script — only on the home page where the
+           slider markup exists. js.Build runs esbuild internally
+           (target=es2020, minify=true) so the published artifact is
+           a small, tree-shaken bundle. `defer` lets the browser
+           parse it without blocking LCP; fingerprint busts caches
+           on next deploy. */ -}}
+    {{- if and .IsHome $heroSlides -}}
+      {{- $sliderOpts := dict "targetPath" "js/slider.js" "minify" true "target" "es2020" -}}
+      {{- $slider := resources.Get "js/slider.ts" | js.Build $sliderOpts | fingerprint -}}
+    <script defer src="{{ $slider.RelPermalink }}" integrity="{{ $slider.Data.Integrity }}"></script>
+    {{- end }}
 
     {{- /* Article structured data on individual docs pages */ -}}
     {{ if and .IsPage (eq (string .Section) "docs") }}

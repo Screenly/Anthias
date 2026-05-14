@@ -1,0 +1,83 @@
+{{- /* Resolves the home-page hero slider's slides from
+       assets/images/screenshots/. Each entry in data/screenshots.yaml
+       references a ``<name>@3x.png`` source emitted by the
+       ``marketing-screenshots`` workflow; Hugo's image pipeline derives
+       a width ladder of WebP + PNG variants for the <picture> srcset.
+
+       Entries whose ``<name>@3x.png`` is absent at build time are
+       skipped silently — a partial CI artifact (e.g. one capture
+       failed to render) still produces a working slider for the
+       slides that did make it. When the returned slice is empty
+       (no captures resolved at all), ``layouts/index.html`` simply
+       omits the slider region — the hero text + CTA buttons still
+       render, the og:image preload falls back to ``logo.svg`` from
+       ``baseof.html``. There is no inline placeholder image.
+
+       Returns a slice of dicts:
+         name        — slug (matches data/screenshots.yaml `name`)
+         alt         — accessible label for <img alt="…">
+         caption     — short caption rendered as overlay text
+         webpSrcset  — width-descriptor srcset of WebP renditions
+         pngSrcset   — width-descriptor srcset of PNG renditions
+         fallback    — single representative URL for <img src>
+         width/height — intrinsic dimensions of the fallback image
+                        (used by <img> width/height for CLS-free
+                        layout under a CSS aspect-ratio)
+       Wrap calls in partialCached so the Resize work runs once. */ -}}
+{{- $widths := slice 480 960 1440 2880 -}}
+{{- $slides := slice -}}
+{{- range site.Data.screenshots.slides -}}
+  {{- $entry := . -}}
+  {{- $src := resources.Get (printf "images/screenshots/%s@3x.png" $entry.name) -}}
+  {{- if $src -}}
+    {{- $webps := slice -}}
+    {{- $pngs  := slice -}}
+    {{- /* Capture the 1440-wide renditions during the ladder loop so
+           we can reuse them as the <img>/preload fallback without
+           re-invoking $src.Resize with the same spec. Hugo's resource
+           cache would normally dedupe the duplicate calls, but
+           keeping the references avoids re-walking the cache and
+           keeps the intent legible. */ -}}
+    {{- $primary := false -}}
+    {{- $primaryWebp := false -}}
+    {{- range $widths -}}
+      {{- /* Skip widths that would upscale — Hugo will happily blow a
+             1400-wide source up to 2880 and produce blurry output,
+             so cap at the source's native width. */ -}}
+      {{- if le . $src.Width -}}
+        {{- $w := . -}}
+        {{- $webp := $src.Resize (printf "%dx webp q82" $w) -}}
+        {{- $png  := $src.Resize (printf "%dx q90"      $w) -}}
+        {{- $webps = $webps | append (printf "%s %dw" $webp.RelPermalink $w) -}}
+        {{- $pngs  = $pngs  | append (printf "%s %dw" $png.RelPermalink  $w) -}}
+        {{- if eq $w 1440 -}}
+          {{- /* Middle of the desktop ladder — used as the <img src>
+                 fallback and as the LCP preload's WebP href. */ -}}
+          {{- $primary = $png -}}
+          {{- $primaryWebp = $webp -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- /* If the source is narrower than 1440 it never produced a
+           1440 rendition in the loop; fall back to the largest width
+           that did fit (the last entry appended to $pngs / $webps).
+           Re-resolve via Resize at the source's own width so we get
+           a real Resource, not just the srcset string. */ -}}
+    {{- if not $primary -}}
+      {{- $primary     = $src.Resize (printf "%dx q90"      $src.Width) -}}
+      {{- $primaryWebp = $src.Resize (printf "%dx webp q82" $src.Width) -}}
+    {{- end -}}
+    {{- $slides = $slides | append (dict
+        "name"           $entry.name
+        "alt"            $entry.alt
+        "caption"        (default "" $entry.caption)
+        "webpSrcset"     (delimit $webps ", ")
+        "pngSrcset"      (delimit $pngs ", ")
+        "fallback"       $primary.RelPermalink
+        "fallbackWebp"   $primaryWebp.RelPermalink
+        "width"          $primary.Width
+        "height"         $primary.Height
+    ) -}}
+  {{- end -}}
+{{- end -}}
+{{- return $slides -}}
