@@ -64,62 +64,102 @@ hardware at all, and software HEVC on a Cortex-A53 won't even hit 1080p30 —
 so the asset processor *must* re-encode HEVC uploads to H.264 for those
 boards.
 
-> **Pi 5 4K HEVC is limited by CMA.** The Hantro G2 driver allocates DMA
-> buffers from the kernel's Contiguous Memory Allocator. Pi OS for Pi 5
-> reserves only 64 MB CMA by default (vs. 512 MB on Pi 4), which is enough
-> for 1080p HEVC reference + output buffers but not 4K — at 4K mpv hits
-> `v4l2_request_hevc_start_frame: Failed to get dst buffer` and silently
-> SW-falls-back. Bumping `cma=512M` on the kernel cmdline does **not**
-> work: the kernel takes the cmdline value over the device-tree
+> **Pi 5 4K HEVC requires `dtoverlay=vc4-kms-v3d,cma-512`.** The Hantro G2
+> driver allocates DMA buffers from the kernel's Contiguous Memory Allocator.
+> Pi OS for Pi 5 reserves only 64 MB CMA by default (vs. 512 MB on Pi 4),
+> which is enough for 1080p HEVC reference + output buffers but not 4K — at
+> 4K mpv hits `v4l2_request_hevc_start_frame: Failed to get dst buffer` and
+> silently SW-falls-back. Bumping `cma=512M` on the kernel cmdline does
+> **not** work: the kernel takes the cmdline value over the device-tree
 > `linux,cma` node, which leaves `rpi-hevc-dec` orphaned
-> (`Failed to probe hardware -517`) and `/dev/video*` disappears
-> entirely, killing HEVC HW at every resolution. The right fix is a
-> `dtparam`/`dtoverlay` in `/boot/firmware/config.txt` that resizes the
-> existing DT-declared region (follow-up). In the meantime, the asset
-> processor's `pi5` profile must downscale 4K → 1080p HEVC so Pi 5 only
-> ever sees clips inside its current HW envelope.
+> (`Failed to probe hardware -517`) and `/dev/video*` disappears entirely,
+> killing HEVC HW at every resolution. The right fix is the
+> `dtoverlay=vc4-kms-v3d,cma-512` line in `/boot/firmware/config.txt` —
+> the vc4 overlay carries the `cma-N` knob and resizes the DT-declared
+> region without orphaning the HEVC driver. The Anthias ansible template
+> at `ansible/roles/system/templates/config.txt.j2` writes that line on
+> install.
 
-## Asset processor: codec policy per board
+## Playback envelope
 
-What the asset processor accepts as-is vs. re-encodes (target = HW-decodable
-on the destination board):
+The two halves above are reconciled through a single per-board
+**playback envelope** — codec + max width × height + max fps — that the
+asset processor renders every upload into. Implementation in
+`src/anthias_server/playback_envelope.py`:
 
-| Pi   | Passthrough          | Re-encode to | Encoder     | Notes                                              |
-|------|----------------------|--------------|-------------|----------------------------------------------------|
-| 2 / 3| H.264 only           | H.264        | `libx264`   | No HEVC silicon. Any HEVC upload becomes H.264.    |
-| 4    | H.264 ≤ 1080p, HEVC  | HEVC         | `libx265`   | 4K H.264 *must* re-encode — V3D maxes at 1080p60.  |
-| 5    | HEVC                 | HEVC         | `libx265`   | H.264 has no mpv HW path on Pi 5, so every H.264 upload re-encodes to HEVC. |
+| Device          | Codec | Max resolution | Max fps |
+|-----------------|-------|----------------|---------|
+| `pi2`, `pi3`    | H.264 | 1920 × 1080    | 30      |
+| `arm64`         | H.264 | 1920 × 1080    | 30      |
+| `pi4-64`        | HEVC  | 3840 × 2160    | 60      |
+| `pi5`           | HEVC  | 3840 × 2160    | 60      |
+| `x86`           | HEVC  | 3840 × 2160    | 60      |
 
-`src/anthias_server/processing.py` holds the per-board profiles
-(`_BOARD_PROFILES`). Each entry has `passthrough_video_codecs` (input the
-viewer can hardware-decode untouched), an optional `passthrough_video_max_pixels`
-(width × height cap per codec — Pi 4's H.264 cap pins to 1920×1080 because the
-V3D maxes out at 1080p60 H.264), and `transcode_target` (what we re-encode to
-when the upload isn't passthrough).
+The envelope is the single source of truth read by three places that used
+to drift:
 
-## Test-bed implications
+1. `processing.py` — what we transcode to at upload time.
+2. `celery_tasks.py:regenerate_for_envelope_change` — what the walker
+   considers "stale" on server start (`metadata['envelope']` per asset
+   compared against the current matrix).
+3. `media_player.py:_PI_HWDEC_BY_CODEC` — what hwdec the viewer asks
+   mpv for when it sees a clip at play time.
+
+Container is fixed at `.mp4` across every envelope; the variant filename
+is always `<id>.mp4`.
+
+### How each asset lives on disk
+
+Every video asset is stored as two files alongside each other:
+
+```
+~/anthias_assets/<id>.original.<src_ext>   ← upload bytes, never modified
+~/anthias_assets/<id>.mp4                  ← playback variant (Asset.uri)
+```
+
+`Asset.metadata` carries `original_uri` (full path to the sibling) and
+`envelope` (which playback envelope the variant was rendered against).
+On every server start, `app/startup.py:run_envelope_check` compares the
+cached envelope against what `compute_envelope()` produces now. If they
+differ — board swap, Anthias upgrade that changed the matrix, hand-edited
+cache — the walker queues a re-render for every asset whose
+`metadata['envelope']` is stale. The original sibling stays bit-identical
+across re-renders.
+
+### Test-bed implications
 
 The eight-clip rotation (4 × H.264 + 4 × HEVC, 1080p30/60 + 4K30/60) is
-designed to exercise every cell of the policy table above. After upload,
-the asset processor's metadata (`transcoded`, `transcode_target`,
-`original_ext`) on each asset records what it did. A correct test run has:
+designed to exercise the envelope per board. After upload, every asset's
+metadata records the envelope it was rendered into:
 
-| Board | What the viewer sees on disk after processing                 |
-|-------|---------------------------------------------------------------|
-| 2 / 3 | 4 × H.264 (the four HEVC inputs re-encoded to H.264)          |
-| 4     | 1080p H.264 passthrough; 4K H.264 → HEVC; HEVC all passthrough |
-| 5     | All 8 clips end up HEVC (every H.264 input re-encoded)         |
+| Board   | Variants on disk after processing                              |
+|---------|----------------------------------------------------------------|
+| 2 / 3   | 8 × H.264 1080p30 (every HEVC + every 60 fps + every 4K clip re-encoded) |
+| 4-64    | 8 × HEVC up to 4Kp60; H.264 inputs re-encoded, HEVC ≤ envelope passes through |
+| 5       | 8 × HEVC up to 4Kp60 (cma-512 dtoverlay must be applied first) |
+| x86     | 8 × HEVC up to 4Kp60 (libx265 software encode; VAAPI playback) |
+
+Cross-board fleet expectation: the same source clip uploaded to Pi 4,
+Pi 5, and x86 produces three variants with identical sha256 (same
+envelope → same ffmpeg invocation).
 
 Sample failure modes the rotation catches:
 
-- A clip plays but `Dropped:` climbs steadily → the asset processor handed
-  the viewer something the SoC can't HW-decode (e.g. 4K H.264 passthrough
-  on Pi 4, any H.264 passthrough on Pi 5).
+- A clip plays but `Dropped:` climbs steadily → either the variant is
+  off-envelope (asset processor bug: check `metadata.envelope` matches
+  the matrix), or the display panel can't refresh fast enough at the
+  envelope's max — for example a 4Kp30-only monitor under a 4Kp60
+  envelope on Pi 5 drops ~58 frames per second of every 60 fps clip.
 - mpv's `hwdec-current` banner is `no` instead of `v4l2m2m-copy` /
-  `drm-copy` → the per-codec hook didn't kick in, or the codec isn't what
-  the policy table expects on this board.
-- Playback works on Pi 4 but drops on Pi 5 for the same input → the input
-  is H.264, and the asset processor didn't re-encode it to HEVC for Pi 5.
+  `drm-copy` → ffprobe at viewer launch returned an unexpected codec
+  (does it match `metadata.envelope.codec` for the asset?), or the
+  envelope matrix has drifted from the viewer's `_PI_HWDEC_BY_CODEC`.
+- Variant from Pi 4 and Pi 5 don't match sha256 for the same source →
+  envelopes for the two boards have diverged; the matrix needs to be
+  consistent or the cross-device fleet test will keep failing.
+- Server-start log shows `regenerate_for_envelope_change` enqueued
+  every asset on every restart → cache write failure (check
+  `~/.anthias/playback-envelope.json` is writable, JSON is valid).
 
 ## Source clips
 

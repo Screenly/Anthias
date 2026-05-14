@@ -220,15 +220,18 @@ class MediaPlayer:
 #                                here would just log "Could not
 #                                find a valid device" errors before
 #                                silently SW-falling-back. The
-#                                asset processor's pi5 profile
-#                                re-encodes H.264 → HEVC at upload
-#                                time so this path is only hit for
-#                                pre-existing assets during the
-#                                rollout window.)
+#                                playback envelope (HEVC 4Kp60) means
+#                                every asset normalised post-rollout
+#                                lands as HEVC, so this branch only
+#                                fires for legacy variants the
+#                                re-render walker hasn't caught yet.)
 #         HEVC  → drm-copy      (Hantro G2, up to 4Kp60. Requires
-#                                cma=512M in /boot/firmware/cmdline.txt
-#                                — Pi 5's stock 64 MB CMA can't fit
-#                                a 4K dst buffer pool.)
+#                                `dtoverlay=vc4-kms-v3d,cma-512` in
+#                                /boot/firmware/config.txt — the
+#                                stock 64 MB CMA region can't fit
+#                                a 4K HEVC dst buffer pool, and the
+#                                kernel cmdline `cma=` route silently
+#                                orphans the rpi-hevc-dec driver.)
 #
 # `auto-copy` is the universal safe fallback when ffprobe can't
 # read the codec (missing file, network URI we don't probe, etc.).
