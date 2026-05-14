@@ -60,6 +60,7 @@ def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ('pi2', 'h264', 1920, 1080, 30),
         ('pi3', 'h264', 1920, 1080, 30),
         ('arm64', 'h264', 1920, 1080, 30),
+        ('generic-arm64', 'h264', 1920, 1080, 30),
         # HEVC 4Kp60 boards (dedicated HEVC block or VAAPI).
         ('pi4-64', 'hevc', 3840, 2160, 60),
         ('pi5', 'hevc', 3840, 2160, 60),

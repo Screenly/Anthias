@@ -121,6 +121,13 @@ ENVELOPE_BY_DEVICE_TYPE: dict[str, PlaybackEnvelope] = {
     'pi5': PlaybackEnvelope('hevc', 3840, 2160, 60),
     'x86': PlaybackEnvelope('hevc', 3840, 2160, 60),
     'arm64': PlaybackEnvelope('h264', 1920, 1080, 30),
+    # ``generic-arm64`` is the DEVICE_TYPE the Armbian / Rock Pi
+    # install path writes (see ``feat(install): generic-arm64
+    # best-effort support``). The conservative SW envelope is the
+    # same as the legacy ``arm64`` key, listed explicitly so the
+    # walker treats both labels as in-envelope instead of routing
+    # one through the ``_DEFAULT`` fallback.
+    'generic-arm64': PlaybackEnvelope('h264', 1920, 1080, 30),
 }
 
 # Fallback when ``DEVICE_TYPE`` is unset (host dev shell,
