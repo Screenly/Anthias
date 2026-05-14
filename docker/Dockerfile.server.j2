@@ -49,6 +49,31 @@ RUN bun run build
 
 {% include 'Dockerfile.base.j2' %}
 
+{# Hardware-decode codecs the asset processor's walker uses to
+   transcode source video. The pin only fires on boards whose
+   v4l2_request HEVC / H.264 decoders aren't reachable from stock
+   Debian's ffmpeg — same set as the viewer image. See the include
+   file's header for the full per-board rationale. #}
+{% include '_rpt1-ffmpeg-pin.j2' %}
+
+{# Pull in the same ffmpeg + libav* family the pin made eligible.
+   Without re-running ``apt install ffmpeg`` here the base image
+   stage's earlier install wins and we silently stay on the
+   vanilla Debian build. ``--reinstall`` forces the +rpt1 package
+   to land even when the same version is already on disk. #}
+{% if board in ('pi4-64', 'pi5', 'arm64') %}
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+{% endif %}
+    apt-get update && \
+    apt-get install -y --reinstall --no-install-recommends \
+        ffmpeg libavcodec61 libavdevice61 libavfilter10 \
+        libavformat61 libavutil59 libpostproc58 libswresample5 \
+        libswscale8
+{% endif %}
+
 COPY --from=uv-builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 ENV VIRTUAL_ENV="/venv"

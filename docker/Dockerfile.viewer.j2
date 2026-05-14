@@ -39,73 +39,7 @@ RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
 
 {% include 'Dockerfile.base.j2' %}
 
-{% if board in ('pi4-64', 'pi5', 'arm64') %}
-# archive.raspberrypi.com ships ffmpeg patched with v4l2_request
-# enabled (``--enable-v4l2-request --enable-libudev
-# --enable-vout-drm --enable-sand --enable-neon``). Stock Debian
-# Trixie's ffmpeg drops v4l2_request entirely, so the stateless
-# hardware decoders Anthias needs are unreachable without these
-# packages:
-#
-# * Pi 4-64 — V3D V4L2 M2M (H.264 via stateful v4l2m2m, works on
-#   stock too) plus the dedicated rpi-hevc-dec block (HEVC via
-#   v4l2_request, needs ``+rpt1``).
-# * Pi 5 — Hantro G2 HEVC via v4l2_request (needs ``+rpt1``).
-# * arm64 — Rock Pi 4 / RK3399's ``rkvdec`` (HEVC) and Hantro VPU
-#   (H.264) are also stateless v4l2_request decoders. Live test
-#   on the Rock Pi 4 in this PR confirmed stock Debian arm64
-#   ffmpeg can't reach them; the ``+rpt1`` build has the
-#   v4l2_request code paths that DO reach them.
-#
-# x86 stays on stock Debian — VAAPI already works there and Pi's
-# repo doesn't add anything relevant for Intel / AMD iGPUs.
-#
-# Apt pinning restricts the Pi repo to the mpv + FFmpeg library
-# family only. Without this, Pi's curl, ca-certificates, etc.
-# would silently shadow Debian's versions and we'd drift away
-# from the rest of the image's apt baseline.
-{% if disable_cache_mounts %}
-RUN \
-{% else %}
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-{% endif %}
-    set -o pipefail; \
-    apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
-    install -d -m 0755 /etc/apt/keyrings && \
-    curl -fsSL --retry 3 \
-        https://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2025.1+rpt1_all.deb \
-        -o /tmp/raspberrypi-archive-keyring.deb && \
-    dpkg-deb -x /tmp/raspberrypi-archive-keyring.deb /tmp/raspberrypi-keyring && \
-    install -m 0644 \
-        /tmp/raspberrypi-keyring/usr/share/keyrings/raspberrypi-archive-keyring.pgp \
-        /etc/apt/keyrings/raspberrypi-archive.pgp && \
-    rm -rf /tmp/raspberrypi-archive-keyring.deb /tmp/raspberrypi-keyring && \
-    echo "deb [signed-by=/etc/apt/keyrings/raspberrypi-archive.pgp] https://archive.raspberrypi.com/debian/ trixie main" \
-        > /etc/apt/sources.list.d/raspberrypi.list && \
-    printf '%s\n' \
-        'Package: mpv libavcodec* libavdevice* libavfilter* libavformat* libavutil* libpostproc* libswresample* libswscale* ffmpeg' \
-        'Pin: origin archive.raspberrypi.com' \
-        'Pin-Priority: 1001' \
-        '' \
-        'Package: *' \
-        'Pin: origin archive.raspberrypi.com' \
-        'Pin-Priority: 100' \
-        > /etc/apt/preferences.d/raspberrypi
-# The bare `raspberrypi.gpg.key` ASCII key on the Pi website still
-# carries SHA1 binding signatures (RSA 2048, generated 2012-06-17)
-# that Trixie's sqv refuses to certify under its post-2026-02-01
-# crypto policy ("Signing key … is not bound: No binding signature
-# at time …, SHA1 is not considered secure since 2026-02-01"). The
-# *deb-packaged* keyring `raspberrypi-archive-keyring_*.pgp` ships
-# the same key fingerprint but with rebuilt binding signatures that
-# sqv accepts — that's the keyring Pi OS Trixie itself installs and
-# the reason `apt update` works on a real Pi 5 today. Fetching it
-# directly here gives us the same verified path without depending
-# on Pi's apt repo being reachable for an apt install (chicken-and-
-# egg). Pin to a known-good version so a regenerated keyring deb
-# can't silently change what we trust.
-{% endif %}
+{% include '_rpt1-ffmpeg-pin.j2' %}
 
 {% if disable_cache_mounts %}
 RUN \
