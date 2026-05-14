@@ -3,6 +3,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from os import path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -1343,7 +1344,9 @@ from anthias_server.playback_envelope import (  # noqa: E402
 )
 
 
-def _make_video_asset(asset_id: str, *, envelope_dict: dict | None) -> Asset:
+def _make_video_asset(
+    asset_id: str, *, envelope_dict: dict[str, Any] | None
+) -> Asset:
     """Create a video Asset row with the given envelope recorded.
 
     Mirrors the production metadata shape after a successful
@@ -1351,7 +1354,7 @@ def _make_video_asset(asset_id: str, *, envelope_dict: dict | None) -> Asset:
     walker reads ``metadata['envelope']`` to decide stale vs fresh
     — we only ever vary that key per test.
     """
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     if envelope_dict is not None:
         metadata['envelope'] = envelope_dict
         metadata['original_uri'] = (
@@ -1362,7 +1365,7 @@ def _make_video_asset(asset_id: str, *, envelope_dict: dict | None) -> Asset:
         name=asset_id,
         uri=f'/data/anthias_assets/{asset_id}.mp4',
         mimetype='video',
-        is_enabled=1,
+        is_enabled=True,
         duration=30,
         play_order=0,
         is_processing=False,
@@ -1442,7 +1445,7 @@ def test_regenerate_walker_skips_image_assets(
         name='image-asset',
         uri='/data/anthias_assets/image-asset.webp',
         mimetype='image',
-        is_enabled=1,
+        is_enabled=True,
         duration=10,
         play_order=0,
         is_processing=False,
