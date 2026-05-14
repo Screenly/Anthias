@@ -231,18 +231,20 @@ function init(root: HTMLElement): void {
   // Pause autoplay when the slider is off-screen — saves CPU below
   // the fold and avoids a "race" where the page loads, the slider
   // ticks twice before the user scrolls down, and they land on
-  // slide 3 instead of 1.
+  // slide 3 instead of 1. Delegating to hoverPause/hoverResume keeps
+  // the CSS progress bar (data-state) and the JS timer in lock-step;
+  // stopping the timer alone would let the bar keep advancing while
+  // off-screen and desync from the fresh timer on resume.
   const visibilityObserver = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
         isVisible = entry.isIntersecting
-        if (isVisible) scheduleAutoplay()
-        else stopAutoplay()
+        if (isVisible) hoverResume()
+        else hoverPause()
       }
     },
     { threshold: 0.2 },
   )
-  visibilityObserver.observe(refs.root)
 
   refs.prev?.addEventListener('click', () => goTo(activeIndex - 1, true))
   refs.next?.addEventListener('click', () => goTo(activeIndex + 1, true))
@@ -311,7 +313,19 @@ function init(root: HTMLElement): void {
   refs.root.addEventListener('mouseenter', hoverPause)
   refs.root.addEventListener('mouseleave', hoverResume)
   refs.root.addEventListener('focusin', hoverPause)
-  refs.root.addEventListener('focusout', hoverResume)
+  // focusout bubbles, so a child-to-child focus shift inside the
+  // slider (e.g. track → next button) would otherwise re-trigger
+  // resume mid-keyboard-nav. Skip when focus is still inside the
+  // slider; only treat focus actually leaving the root as "resume".
+  refs.root.addEventListener('focusout', (event) => {
+    const next = (event as FocusEvent).relatedTarget as Node | null
+    if (next && refs.root.contains(next)) return
+    hoverResume()
+  })
+
+  // Attach the visibility observer last — its callback dispatches to
+  // hoverPause/hoverResume, which must be defined first.
+  visibilityObserver.observe(refs.root)
 
   // Initial state: pill 0 active, autoplay armed.
   setActive(0)
