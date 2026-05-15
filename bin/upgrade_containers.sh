@@ -15,27 +15,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
 export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
-# Hard cgroup CPU cap for anthias-celery. Half the host's cores
-# (floored to 1.0 so single-core boxes still make progress) keeps
-# the upload-time normalisation pipeline from starving the viewer
-# or sshd even when libx265 wants every cycle it can get. On a
-# Pi 4 / Pi 5 / Rock Pi 4 (4 cores) that's 2 CPUs' worth of
-# compute, leaving 2 for the viewer + system. On an 8-core x86
-# box that's 4 CPUs, leaving 4 for everything else. Live-
-# confirmed on the Rock Pi 4 that ``nice -n 19`` + ``ionice -c 3``
-# alone are insufficient — the kernel still hands libx265 every
-# available cycle if nothing else is asking for them, which
-# starves sshd through banner exchange and drops mpv frames.
-CELERY_CPU_LIMIT_RAW=$(echo "$(nproc) * 0.5" | bc -l)
-export CELERY_CPU_LIMIT=$(awk -v v="$CELERY_CPU_LIMIT_RAW" 'BEGIN { printf "%.1f", (v < 1.0 ? 1.0 : v) }')
-# Hard cgroup memory limit for anthias-celery. 60% of host RAM
-# keeps libx265 (~1.5 GB resident on 4K HEVC encodes) from pushing
-# the system into swap, which is what actually starves sshd + the
-# viewer on 4 GB SBCs. Without this cap a single 4K transcode on
-# the Rock Pi 4 made the box unresponsive even with the CPU quota
-# in place — cgroup CPU isolation doesn't help if libx265 can
-# allocate all available RAM. 60% leaves 40% for the viewer +
-# server + redis + system, matching the CPU 50/50 split.
+# Memory cap for anthias-celery. 60% of host RAM is conservative
+# headroom for the remaining celery workloads (ffprobe metadata,
+# HEIC → WebP image conversion); the cap is here as a safety net
+# against a decompression-bomb fixture or runaway ffprobe, not
+# because routine workloads come anywhere near it.
 export CELERY_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB * 0.6" | bc | cut -d'.' -f1)
 GIT_BRANCH="${GIT_BRANCH:-master}"
 

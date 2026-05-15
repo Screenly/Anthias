@@ -98,58 +98,14 @@ services:
     # and a separate celery image was duplicating ~825 MB extracted of
     # identical content per device. See refactor: drop celery image.
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
-    # ``nice -n 19 ionice -c 3`` lowers CPU and IO priority to the
-    # idle class so the upload-time normalisation pipeline (HEIC→WebP,
-    # exotic-codec → board-appropriate H.264/HEVC transcode) never starves the on-device
-    # viewer mid-playback. Both wrappers are no-ops when the system is
-    # idle — a background sweep on a quiet device still runs at
-    # full speed; only contention with the viewer process slows it
-    # down. Subprocesses (ffmpeg, ffprobe, Pillow's libheif binding)
-    # inherit the wrapper's settings, so a single configuration here
-    # covers every workload the worker spawns.
-    #
-    # ``--concurrency=1`` caps the worker at one normalize task at
-    # a time. Default celery concurrency = num_cores, which on a
-    # Pi 4 / Pi 5 / Rock Pi 4 means 4 parallel libx265 encodes
-    # sharing the same SoC as the viewer's mpv process. Even at
-    # nice 19 four ffmpegs still saturate the cores and push the
-    # board into swap (each libx265 1080p encode needs ~500 MB
-    # RAM; a 4 GB SBC OOM-spirals well before the walker
-    # finishes). Asset processing is upload-time, not throughput-
-    # bound — serial encodes finish a few minutes later, but the
-    # viewer never drops a frame.
-    #
-    # ``cpus: <half the host>`` is a hard cgroup CFS quota.
-    # nice/ionice are soft priority hints and only matter when
-    # something else is asking for cycles — when libx265 is the
-    # only heavy workload the scheduler still gives it everything
-    # available, and on a 4 GB SBC that's enough to starve sshd
-    # through banner exchange + mpv mid-frame. The hard cap is the
-    # only way to guarantee "encoding never impacts playback or
-    # UI access". Half the host's cores (computed in
-    # bin/upgrade_containers.sh, floored to 1.0) leaves the other
-    # half for the viewer + system on every supported SBC: 2 CPUs
-    # of headroom on a 4-core Pi 4 / Pi 5 / Rock Pi 4, 4 CPUs on
-    # an 8-core x86, etc. Multi-core encoders (libx265 with
-    # ``-threads N``) still run in parallel up to the cap, so
-    # bigger machines finish encodes faster without ever
-    # compromising playback responsiveness.
-    cpus: ${CELERY_CPU_LIMIT}
-    # ``mem_limit`` partners with the cpus cap above. cgroup CPU
-    # isolation alone doesn't stop libx265 from allocating every
-    # available byte at 4K (~1.5 GB resident), which on a 4 GB
-    # SBC pushes the system into swap and starves the viewer +
-    # sshd. 60% of host RAM (computed in
-    # bin/upgrade_containers.sh) keeps libx265's working set
-    # comfortably inside the cap and leaves enough headroom for
-    # everything else. Live-confirmed on the Rock Pi 4 that
-    # without this cap a single 4K transcode wedged the device
-    # despite the cpus cap.
+    # ``mem_limit`` keeps a runaway celery task (e.g. a HEIC →
+    # WebP convert on a decompression-bomb fixture) from eating
+    # the box's RAM and starving the viewer. 60% of host (computed
+    # in bin/upgrade_containers.sh) leaves comfortable headroom on
+    # every supported SBC.
     mem_limit: ${CELERY_MEMORY_LIMIT_KB}k
     command: >
-      nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
-      --concurrency=1
       --loglevel=info --scheduler celery.beat.Scheduler
     depends_on:
       - anthias-server

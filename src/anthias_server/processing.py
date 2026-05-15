@@ -656,7 +656,7 @@ def _run_image_normalisation(asset: Asset) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Video normalisation: ffprobe → passthrough or libx264/aac transcode
+# Video normalisation: ffprobe → metadata write + HW-decode codec gate
 # ---------------------------------------------------------------------------
 
 
