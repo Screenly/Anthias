@@ -35,6 +35,7 @@ services:
       redis:
         condition: service_started
     command: >
+      nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --scheduler celery.beat.Scheduler
     environment:

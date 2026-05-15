@@ -104,7 +104,14 @@ services:
     # in bin/upgrade_containers.sh) leaves comfortable headroom on
     # every supported SBC.
     mem_limit: ${CELERY_MEMORY_LIMIT_KB}k
+    # ``nice -n 19 ionice -c 3`` keeps any subprocess celery
+    # spawns (ffprobe, Pillow's libheif binding) at idle priority
+    # so the on-device viewer always wins CPU + IO contention. No
+    # current task is CPU-bound enough that this matters in
+    # practice, but the wrappers are cheap insurance against a
+    # pathological input.
     command: >
+      nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --scheduler celery.beat.Scheduler
     depends_on:

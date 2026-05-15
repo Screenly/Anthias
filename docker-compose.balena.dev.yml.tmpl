@@ -53,6 +53,7 @@ services:
     # See docker-compose.yml.tmpl for context on the merge.
     image: ghcr.io/screenly/anthias-server:${GIT_SHORT_HASH}-${BOARD}
     command: >
+      nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --schedule /tmp/celerybeat-schedule
     depends_on:
