@@ -658,6 +658,8 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
         with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
             processing._run_video_normalisation(asset)
 
+    import shlex as _shlex
+
     msg = str(excinfo.value)
     assert "'h264'" in msg
     assert 'hevc' in msg
@@ -667,12 +669,12 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     assert '-tag:v hvc1' in recipe
     # The upload's filename appears in the recipe's input slot —
     # operator can copy and paste it without hand-editing INPUT.
-    pre_codec, post_codec = recipe.split(' -c:v ', 1)
-    assert "'beach-clip.mp4'" in pre_codec
+    tokens = _shlex.split(recipe)
+    assert tokens[1] == '-i'
+    assert tokens[2] == 'beach-clip.mp4'
     # Output filename carries a ``.hevc.`` suffix so the recipe
     # doesn't ask the operator to overwrite their source file.
-    assert "'beach-clip.hevc.mp4'" in post_codec
-    assert "'beach-clip.mp4'" not in post_codec
+    assert tokens[-1] == 'beach-clip.hevc.mp4'
 
     # Metadata was still written so the operator can see *what* they
     # uploaded next to the error message in the asset list.
@@ -699,10 +701,13 @@ def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
         with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
             processing._run_video_normalisation(asset)
 
+    import shlex as _shlex
+
     recipe = excinfo.value.recipe
-    pre_codec, post_codec = recipe.split(' -c:v ', 1)
-    assert "'upload.mp4'" in pre_codec
-    assert "'upload.hevc.mp4'" in post_codec
+    tokens = _shlex.split(recipe)
+    assert tokens[1] == '-i'
+    assert tokens[2] == 'upload.mp4'
+    assert tokens[-1] == 'upload.hevc.mp4'
 
 
 @pytest_ffmpeg
@@ -724,6 +729,38 @@ def test_video_unsupported_codec_h264_board_recipe(
     recipe = excinfo.value.recipe
     assert 'libx264' in recipe
     assert 'libx265' not in recipe
+
+
+@pytest.mark.parametrize(
+    'filename',
+    [
+        "O'Brien.mp4",
+        'two words.mov',
+        'evil; rm -rf $HOME.mp4',
+        'tick`uname`.mp4',
+        'sub$(whoami).mp4',
+    ],
+)
+def test_ffmpeg_recipe_quotes_hostile_filenames(filename: str) -> None:
+    """``_ffmpeg_reencode_recipe`` must round-trip any filename through
+    ``shlex`` so a user-supplied ``upload_name`` can't break out of the
+    recipe's quoting and inject commands the operator copy-pastes.
+
+    Round-trip means: ``shlex.split(recipe)`` recovers the *original*
+    filename byte-for-byte in the input slot. If the recipe still
+    interpolated raw (the pre-fix ``f"'{filename}'"`` path), the
+    embedded quote / metachar would either truncate the token or shell-
+    interpret on paste."""
+    import shlex as _shlex
+
+    recipe = processing._ffmpeg_reencode_recipe(frozenset({'h264'}), filename)
+    tokens = _shlex.split(recipe)
+    # ffmpeg -i <input> -c:v libx264 ... <output>
+    assert tokens[0] == 'ffmpeg'
+    assert tokens[1] == '-i'
+    assert tokens[2] == filename
+    # Output filename ends with .h264.mp4 and is the recipe's last token.
+    assert tokens[-1].endswith('.h264.mp4')
 
 
 @pytest_ffmpeg
@@ -802,7 +839,11 @@ def test_video_arm64_catch_all_rejects_everything(
         processing._run_video_normalisation(asset)
 
     msg = str(excinfo.value)
-    assert 'none' in msg.lower()  # supported-codec list reads 'none'
+    # Catch-all branch must explain the board-subtype gap rather
+    # than the misleading "Supported: none." that earlier revisions
+    # surfaced.
+    assert 'subtype' in msg.lower()
+    assert 'board-specific image' in msg.lower()
 
 
 @pytest.mark.django_db

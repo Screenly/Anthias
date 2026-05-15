@@ -892,3 +892,34 @@ def test_proxy_reset_clears_cached_instance(reset_media_proxy: None) -> None:
     MediaPlayerProxy.reset()
     assert MediaPlayerProxy.INSTANCE is None
     fake.stop.assert_called_once()
+
+
+def test_pi_hwdec_dispatch_matches_upload_gate() -> None:
+    """The upload gate (``processing._HW_DECODE_VIDEO_CODECS``) and
+    the viewer's per-codec mpv dispatch (``_PI_HWDEC_BY_CODEC``) must
+    not drift. If the gate accepts a codec on a board, the viewer
+    must have an explicit hwdec entry for it — otherwise the operator
+    uploads a clip that passes validation, then plays back through
+    ``auto-copy`` and quietly software-decodes, defeating the gate.
+
+    The reverse direction (viewer claims to hardware-decode a codec
+    the gate rejects) is just as bad — the viewer path becomes dead
+    code while the gate refuses every upload that would exercise it.
+
+    Boards present in the gate but absent from ``_PI_HWDEC_BY_CODEC``
+    (``pi2``, ``pi3``, ``x86``) are intentional: Pi 2/3 use VLC, x86
+    falls through to mpv ``--hwdec=auto-copy`` which picks vaapi-copy
+    on Intel iGPUs. Those paths don't need an explicit table entry."""
+    from anthias_server.processing import _HW_DECODE_VIDEO_CODECS
+    from anthias_viewer.media_player import _PI_HWDEC_BY_CODEC
+
+    for board, viewer_codecs in _PI_HWDEC_BY_CODEC.items():
+        assert board in _HW_DECODE_VIDEO_CODECS, (
+            f'viewer dispatches {board!r} but the upload gate has no '
+            f'entry — every upload to that board would be rejected.'
+        )
+        gate_codecs = _HW_DECODE_VIDEO_CODECS[board]
+        assert frozenset(viewer_codecs) == gate_codecs, (
+            f'codec mismatch for {board!r}: '
+            f'viewer={sorted(viewer_codecs)} gate={sorted(gate_codecs)}'
+        )

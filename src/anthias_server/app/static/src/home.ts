@@ -11,6 +11,7 @@ declare global {
     Alpine: typeof Alpine
     flatpickr: typeof flatpickrLib
     homeApp: () => HomeAppData
+    fallbackCopyToClipboard: (text: string) => boolean
   }
 }
 
@@ -423,6 +424,36 @@ function setupActiveRowsDrag(): void {
   if (!tbody) return
   bindActiveRowsDrag(tbody, orderUrl)
 }
+
+// Plain-HTTP clipboard fallback. navigator.clipboard.writeText only
+// resolves on secure origins (HTTPS or localhost); Anthias devices
+// serve the dashboard over plain HTTP on the LAN by default, so
+// invoking writeText() there throws "writeText is not a function" or
+// rejects with SecurityError. The deprecated execCommand('copy') path
+// still works from a user gesture in every browser we ship to.
+function fallbackCopyToClipboard(text: string): boolean {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  // Off-screen but in the layout, so .select() works without
+  // flashing the input.
+  ta.setAttribute('readonly', '')
+  ta.style.position = 'fixed'
+  ta.style.top = '0'
+  ta.style.left = '0'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  ta.setSelectionRange(0, text.length)
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  document.body.removeChild(ta)
+  return ok
+}
+window.fallbackCopyToClipboard = fallbackCopyToClipboard
 
 window.homeApp = homeApp
 

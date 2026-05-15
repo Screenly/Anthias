@@ -42,9 +42,10 @@ Both tasks follow the YouTube-download Celery pattern in
 
 Tasks run inside the same ``anthias-celery`` worker that handles the
 existing ``download_youtube_asset`` flow. The compose file still
-wraps the worker with ``nice -n 19 ionice -c 3`` and a cgroup CPU
-cap; those are defensive — none of the remaining task bodies are
-CPU-bound now that the on-device transcode is gone.
+wraps the worker with ``nice -n 19 ionice -c 3`` and a memory limit;
+those are defensive — none of the remaining task bodies are CPU-bound
+now that the on-device video transcode is gone, but a Pillow decode
+on a 100 MP TIFF can still pressure RAM on a 1 GB Pi 2.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shlex
 from os import path
 from typing import Any
 
@@ -911,15 +913,16 @@ def _ffmpeg_reencode_recipe(
     else:
         return ''
     if source_filename:
-        # Quote with single quotes so spaces / unusual chars in the
-        # filename survive a shell paste. The output filename
-        # carries the target-codec suffix (``sample.h264.mp4``,
-        # ``sample.hevc.mp4``) so a recipe whose input shares the
-        # output stem (e.g. ``sample.mp4`` re-encoded to H.264 on a
-        # board that supports H.264) doesn't overwrite the source.
-        in_quoted = f"'{source_filename}'"
+        # ``shlex.quote`` produces a safe shell-quoted form for any
+        # filename — single quotes, spaces, ``;``, ``$()``, etc. all
+        # land inside literal quoting that the operator can paste
+        # without re-editing. The output filename carries the
+        # target-codec suffix (``sample.h264.mp4`` / ``sample.hevc.mp4``)
+        # so a recipe whose input shares the output stem doesn't ask
+        # the operator to overwrite their source.
+        in_quoted = shlex.quote(source_filename)
         stem, _ = path.splitext(source_filename)
-        out_quoted = f"'{stem}.{target_suffix}.mp4'"
+        out_quoted = shlex.quote(f'{stem}.{target_suffix}.mp4')
     else:
         in_quoted = 'INPUT'
         out_quoted = f'OUTPUT.{target_suffix}.mp4'
@@ -997,7 +1000,6 @@ def _run_video_normalisation(asset: Asset) -> None:
     # raise so ``_NormalizeAssetTask.on_failure`` fills in
     # ``error_message`` and clears ``is_processing``.
     Asset.objects.filter(asset_id=asset_id).update(**update_dict)
-    supported_str = ', '.join(sorted(supported)) or 'none'
     display_codec = (
         src_codec if src_codec and src_codec != 'unknown' else 'unknown'
     )
@@ -1012,8 +1014,23 @@ def _run_video_normalisation(asset: Asset) -> None:
         f'upload{path.splitext(src_uri)[1]}'
     )
     recipe = _ffmpeg_reencode_recipe(supported, upload_name)
-    message = (
-        f'Video codec {display_codec!r} is not hardware-decoded on '
-        f'this device. Supported: {supported_str}.'
-    )
+    if supported:
+        supported_str = ', '.join(sorted(supported))
+        message = (
+            f'Video codec {display_codec!r} is not hardware-decoded on '
+            f'this device. Supported: {supported_str}.'
+        )
+    else:
+        # Empty ``supported`` means we hit the catch-all ``arm64``
+        # branch — DEVICE_TYPE is set but host_agent never published
+        # ``host:board_subtype`` so we can't certify any codec. Say
+        # so rather than the misleading "Supported: none." which
+        # reads like the board has no decoder at all.
+        message = (
+            f'Video codec {display_codec!r} can not be verified for '
+            'hardware decoding on this device — the board has not '
+            'reported a known subtype. Re-flash with the board-'
+            'specific image (e.g. Rock Pi 4) so anthias_host_agent '
+            'can publish its capabilities.'
+        )
     raise UnsupportedVideoCodecError(message, recipe=recipe)

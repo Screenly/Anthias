@@ -181,14 +181,30 @@
             x-show="editAsset.metadata && editAsset.metadata.error_message"
             x-cloak
             class="modal-alert modal-alert--warning mb-4"
-            x-data="{ copied: false, copyRecipe() {
-              const recipe = (editAsset.metadata && editAsset.metadata.error_recipe) || '';
-              if (!recipe) return;
-              navigator.clipboard.writeText(recipe).then(() => {
-                this.copied = true;
-                setTimeout(() => { this.copied = false }, 2000);
-              });
-            } }"
+            x-data="{
+              copied: false,
+              copyRecipe($refs) {
+                const recipe = (editAsset.metadata && editAsset.metadata.error_recipe) || '';
+                if (!recipe) return;
+                const flash = () => {
+                  this.copied = true;
+                  setTimeout(() => { this.copied = false }, 2000);
+                };
+                /* navigator.clipboard is only available in secure
+                   contexts (HTTPS or localhost). Anthias deploys
+                   plain HTTP by default, so we fall back to a
+                   transient hidden textarea + execCommand on
+                   insecure origins. Either path leaves the recipe
+                   on the system clipboard. */
+                if (window.isSecureContext && navigator.clipboard) {
+                  navigator.clipboard.writeText(recipe)
+                    .then(flash)
+                    .catch(() => fallbackCopyToClipboard(recipe) && flash());
+                } else {
+                  if (fallbackCopyToClipboard(recipe)) flash();
+                }
+              }
+            }"
           >
             <div class="modal-alert__head">
               <i class="ti ti-alert-triangle modal-alert__icon" aria-hidden="true"></i>
@@ -199,7 +215,11 @@
             </div>
             <template x-if="editAsset.metadata && editAsset.metadata.error_recipe">
               <div class="modal-alert__recipe">
-                <pre class="modal-alert__code"><code x-text="editAsset.metadata.error_recipe"></code></pre>
+                {% comment %} user-select: all lets the operator double-click → Ctrl/Cmd-C
+                   even if the copy button never fires for any reason. {% endcomment %}
+                <pre class="modal-alert__code"
+                     style="user-select: all"
+                ><code x-text="editAsset.metadata.error_recipe"></code></pre>
                 <button type="button"
                         class="app-btn app-btn-secondary modal-alert__copy"
                         @click="copyRecipe()"
