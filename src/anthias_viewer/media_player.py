@@ -434,7 +434,22 @@ class MPVMediaPlayer(MediaPlayer):
         popen_stdout: int | IO[bytes]
         popen_stderr: int | IO[bytes]
         if debug_drops:
-            log_fd = open('/data/.anthias/mpv.log', 'ab', buffering=0)
+            log_path = '/data/.anthias/mpv.log'
+            # Rolling-buffer size cap: a forgotten-on debug flag
+            # otherwise grows the log unbounded (a viewer process can
+            # run for weeks). 64 MB holds plenty of per-asset launch
+            # context — mpv's status-line + banner output is on the
+            # order of 10-20 KB per clip — and re-truncates at the
+            # next launch once the cap is hit, so disk pressure
+            # stays bounded without losing the immediately-recent
+            # context most debug sessions actually want.
+            mode = 'ab'
+            try:
+                if os.path.getsize(log_path) > 64 * 1024 * 1024:
+                    mode = 'wb'
+            except OSError:
+                pass
+            log_fd = open(log_path, mode, buffering=0)
             log_fd.write(f'\n--- mpv launch {self.uri} ---\n'.encode())
             popen_stdout = log_fd
             popen_stderr = subprocess.STDOUT

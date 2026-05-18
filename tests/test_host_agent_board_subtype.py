@@ -101,10 +101,14 @@ def test_set_board_subtype_writes_empty_string_on_unknown() -> None:
     fake_redis.set.assert_called_once_with('host:board_subtype', '')
 
 
-def test_set_board_subtype_does_not_raise_on_redis_failure() -> None:
-    """``host_agent``'s startup must not crash if ``rdb.set``
-    fails (some transient redis issue). The function is best-
-    effort — the consumer-side reader handles missing keys."""
+def test_set_board_subtype_propagates_redis_failures() -> None:
+    """Current contract: ``set_board_subtype`` propagates exceptions
+    from ``rdb.set``. host_agent is a systemd unit with restart-on-
+    failure, so a transient redis hiccup at startup loops the unit
+    until redis is reachable rather than silently shipping a stale
+    or empty subtype to downstream consumers. If we ever wrap this
+    in try/except, update both this test and the function's
+    docstring to reflect the new contract."""
     fake_redis = mock.MagicMock()
     fake_redis.set.side_effect = Exception('simulated redis hiccup')
     with mock.patch(
@@ -112,11 +116,6 @@ def test_set_board_subtype_does_not_raise_on_redis_failure() -> None:
         return_value='rockpi4',
     ):
         with pytest.raises(Exception, match='simulated redis hiccup'):
-            # Current contract: the host_agent surfaces redis
-            # failures (it's a systemd unit; restart-on-failure
-            # will retry). If we ever wrap this in try/except,
-            # update both this test and the function's docstring
-            # to reflect the new contract.
             set_board_subtype(fake_redis)
 
 

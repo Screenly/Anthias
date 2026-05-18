@@ -42,11 +42,16 @@ for dev_node in /dev/video*; do
     #     different vendor-tree naming on a handful of boards;
     #   * ``cedrus`` — Allwinner H6 / H616 stateless decoder.
     #
-    # We match the suffix ``-dec`` plus the ``rkvdec`` / ``cedrus``
-    # / ``hantro`` prefixes so all the above hit the same alias
-    # rule without us enumerating every kernel build's exact name.
+    # The match list is the explicit prefix set above plus
+    # ``*-vpu-dec`` for the rockchip,<soc>-vpu-dec naming. A
+    # broader ``*-dec`` catch-all is tempting but would symlink
+    # any future v4l2 device that happens to end ``-dec``
+    # (encoders' status nodes, vendor diagnostics) into the
+    # decoder namespace; the explicit list covers every kernel
+    # naming we've shipped and a new SoC adding one entry here
+    # is cheap.
     case "$name" in
-        rkvdec*|cedrus*|hantro*|*-vpu-dec|*-dec)
+        rkvdec*|cedrus*|hantro*|*-vpu-dec)
             ln -snf "$dev_node" "/dev/video-dec${base#video}"
             ;;
     esac

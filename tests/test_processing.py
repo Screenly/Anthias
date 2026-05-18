@@ -1020,24 +1020,39 @@ def test_ffprobe_summary_parses_video_fps(
         assert summary['video_fps'] == pytest.approx(expected_fps)
 
 
-def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
-    """Defensive: ffprobe-reported ``format.format_name`` beats the
-    filename. A ``.bin`` file that's actually an MP4 reports the
-    canonical container token from ffprobe; a ``.mp4`` file whose
-    bytes are a non-mp4 format reports the format token verbatim,
-    not the misleading extension."""
-    # MP4 bytes hidden behind an arbitrary extension — the first
-    # token in ffprobe's synonym list is the canonical name.
+def test_ffprobe_summary_prefers_extension_match_in_synonym_list() -> None:
+    """ffprobe's ``format_name`` for the QuickTime family is a
+    synonym list (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``). Operator-facing
+    metadata should match what the operator uploaded: an ``.mp4``
+    file surfaces as ``mp4`` (not ``mov``, the first token), and an
+    ``.m4v`` file surfaces as ``m4v`` if ffprobe includes it. Falls
+    back to the first ffprobe token only when the extension doesn't
+    appear in the list at all (extension-less URI / genuinely exotic
+    container)."""
     mp4_format_name = 'mov,mp4,m4a,3gp,3g2,mj2'
     fake = {
         'format': {'format_name': mp4_format_name},
         'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
     }
+    # .mp4 → operator sees 'mp4', not 'mov'.
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['container'] == 'mp4'
+
+    # .m4a → 'm4a' (also in the synonym list).
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.m4a')
+    assert summary['container'] == 'm4a'
+
+    # No extension match (.bin hides mp4 bytes) → first ffprobe
+    # token wins so the metadata still reflects something concrete.
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
         summary = processing._ffprobe_summary('fixture.bin')
     assert summary['container'] == 'mov'
 
-    # Made-up format name — reported verbatim, no extension fallback.
+    # Made-up format name with a misleading filename extension →
+    # reported verbatim, no extension fallback (the file genuinely
+    # isn't mp4 despite the name).
     fake = {
         'format': {'format_name': 'unsupported_format'},
         'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],

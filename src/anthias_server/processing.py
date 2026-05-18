@@ -760,14 +760,19 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     fmt_data = probe.get('format') or {}
     # ffprobe reports a comma-joined synonym list in
     # ``format.format_name`` (e.g. ``mov,mp4,m4a,3gp,3g2,mj2`` for
-    # the QuickTime family). The first token is the canonical
-    # container name; we keep it as-is for the metadata surface so
-    # the operator UI can show "mp4" for an mp4-family upload
-    # without having to know about the synonyms.
+    # the QuickTime family). The first token is ffprobe's canonical
+    # name but it's not always the operator-friendly one — for the
+    # QuickTime family it's ``mov``, so an ``.mp4`` upload would
+    # otherwise surface as ``container=mov`` in the asset row.
+    # Prefer the file extension's token when it appears anywhere in
+    # the synonym list so the operator UI matches what the operator
+    # uploaded; fall back to the first token when nothing matches
+    # (extension-less URI, or genuinely exotic container).
     fmt = fmt_data.get('format_name') or ''
     fmt_tokens = [t.strip().lower() for t in fmt.split(',') if t.strip()]
     if fmt_tokens:
-        container = fmt_tokens[0]
+        ext_token = _ext(input_path).lstrip('.')
+        container = ext_token if ext_token in fmt_tokens else fmt_tokens[0]
     else:
         container = _ext(input_path).lstrip('.') or 'unknown'
     video_codec = ((video or {}).get('codec_name') or 'unknown').lower()
