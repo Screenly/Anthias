@@ -132,6 +132,15 @@ View::View(QWidget* parent) : QWidget(parent)
     connect(webView2->page(), &QWebEnginePage::authenticationRequired,
             this, &View::handleAuthRequest);
 
+    // QtMultimedia-backed video surface. Created hidden — only
+    // made visible when ``playVideo`` fires. The QMediaPlayer +
+    // QGraphicsVideoItem live for the lifetime of this widget so
+    // repeated plays don't pay pipeline-rebuild cost on every
+    // asset.
+    videoView = new VideoView(this);
+    videoView->setVisible(false);
+    connect(videoView, &VideoView::videoEnded, this, &View::videoEnded);
+
     networkManager = new QNetworkAccessManager(this);
     movie = nullptr;
     isAnimatedImage = false;
@@ -174,6 +183,11 @@ void View::loadPage(const QString &uri)
     qDebug() << "Type: Webpage";
 
     const quint64 requestId = ++loadGenerationId;
+    // Drop back to the web/image surface in case the previous asset
+    // was a video. Stops the QMediaPlayer (frees its decoder
+    // pipeline + audio device) and hides the graphics view so the
+    // QWebEngineView paints are visible.
+    hideVideoSurface();
     currentImage = QImage();
     stopAnimation();
     // Drop any per-asset reload timer left over from the previous
@@ -233,6 +247,22 @@ void View::loadImage(const QString &preUri)
 {
     qDebug() << "Type: Image";
     const quint64 requestId = ++loadGenerationId;
+
+    // ``view_image('null')`` in src/anthias_viewer/__init__.py:495
+    // is called AFTER ``media_player.play()`` to sweep any
+    // lingering web/image background out of the way of the new
+    // video — it is NOT a request to take down the freshly-
+    // started video surface. Skipping ``hideVideoSurface`` for the
+    // sentinel ``'null'`` URI keeps the just-started video alive;
+    // calling stop() here interrupted the QMediaPlayer mid-
+    // decoder init for Pi 5's Hantro G2 on 4K60 HEVC (~66 ms after
+    // the first PLAYING event) and left position stuck at 0 for
+    // the full 60 s asset_loop window. For a real image URI the
+    // prior video must still be torn down, so the call is
+    // preserved there.
+    if (preUri != QLatin1String("null")) {
+        hideVideoSurface();
+    }
 
     // Cancel any pending page load so we don't keep streaming a web
     // page in the background after the user has switched to image
@@ -391,6 +421,59 @@ void View::resizeEvent(QResizeEvent* event)
     QWidget::resizeEvent(event);
     webView1->setGeometry(rect());
     webView2->setGeometry(rect());
+    if (videoView) {
+        videoView->setGeometry(rect());
+    }
+}
+
+void View::playVideo(const QString &uri, const QVariantMap &options)
+{
+    qDebug() << "Type: Video";
+    ++loadGenerationId;
+
+    // Cancel any pending QWebEngineView load so a slow page-load
+    // completion doesn't race the video onto the screen mid-play.
+    // Mirrors the loadImage path's handling.
+    if (pageLoadConnection) {
+        QObject::disconnect(pageLoadConnection);
+        pageLoadConnection = QMetaObject::Connection{};
+    }
+    stopReloadTimer();
+    pendingReloadIntervalS = 0;
+    webView1->stop();
+    webView2->stop();
+    webView1->setVisible(false);
+    webView2->setVisible(false);
+    // Blank the image canvas so an old still doesn't flash through
+    // before the first mpv frame paints.
+    stopAnimation();
+    currentImage = QImage();
+    update();
+
+    if (!videoView) {
+        qWarning() << "View::playVideo: VideoView not constructed";
+        return;
+    }
+    videoView->setGeometry(rect());
+    videoView->raise();
+    videoView->setVisible(true);
+    videoView->play(uri, options);
+}
+
+void View::stopVideo()
+{
+    if (videoView) {
+        videoView->stop();
+    }
+}
+
+void View::hideVideoSurface()
+{
+    if (!videoView || !videoView->isVisible()) {
+        return;
+    }
+    videoView->stop();
+    videoView->setVisible(false);
 }
 
 void View::handleAuthRequest(const QUrl& requestUrl, QAuthenticator*)

@@ -1,5 +1,4 @@
 import logging
-import subprocess
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -19,6 +18,7 @@ logging.disable(logging.CRITICAL)
 class _MPVFixtures:
     player: MPVMediaPlayer
     mock_settings: Any
+    mock_bus: Any
 
 
 @pytest.fixture
@@ -26,329 +26,232 @@ def mpv() -> Iterator[_MPVFixtures]:
     fixtures = _MPVFixtures()
     fixtures.player = MPVMediaPlayer()
 
+    # MPVMediaPlayer now hands play() / stop() through a pydbus
+    # proxy of the AnthiasWebview C++ process (issue #2904 —
+    # libmpv lives inside the webview). Inject a Mock so tests
+    # can assert on the options dict shipped over D-Bus without
+    # standing up a real D-Bus session.
+    fixtures.mock_bus = MagicMock()
+    patch_bus = patch(
+        'anthias_viewer.media_player._browser_bus', fixtures.mock_bus
+    )
+    # Production wraps each option value in GLib.Variant('s', ...)
+    # so pydbus can marshal it as ``a{sv}``. Tests bypass that wrap
+    # so assertions like ``options['hwdec'] == 'auto-copy'`` keep
+    # working — the wrap is integration concern, the option
+    # composition is what the tests cover.
+    patch_marshal = patch(
+        'anthias_viewer.media_player._marshal_dbus_options',
+        side_effect=lambda opts: opts,
+    )
     patch_settings = patch('anthias_viewer.media_player.settings')
     patch_device_type = patch(
         'anthias_viewer.media_player.get_device_type', return_value='pi4'
     )
-    # Default-mock the ffprobe-based codec probe so tests that pin
-    # DEVICE_TYPE to 'pi4-64'/'pi5' don't try to spawn a real ffprobe
-    # subprocess inside the test harness. Returning '' makes
-    # _pi_hwdec_for_uri fall back to 'auto-copy', which preserves the
-    # pre-ffprobe behaviour the legacy tests assert on. Tests that
-    # care about a specific dispatch (h264 → v4l2m2m-copy etc.) layer
-    # a sharper patch on top of this default.
-    patch_probe = patch(
-        'anthias_viewer.media_player._probe_video_codec',
-        return_value='',
-    )
 
+    patch_bus.start()
+    patch_marshal.start()
     fixtures.mock_settings = patch_settings.start()
     fixtures.mock_settings.__getitem__.return_value = 'hdmi'
     patch_device_type.start()
-    patch_probe.start()
 
     try:
         yield fixtures
     finally:
+        patch_bus.stop()
+        patch_marshal.stop()
         patch_settings.stop()
         patch_device_type.stop()
-        patch_probe.stop()
+
+
+def _last_play_options(bus: Any) -> dict[str, str]:
+    """Extract the options dict from the most recent ``playVideo`` call."""
+    bus.playVideo.assert_called()
+    _, kwargs = bus.playVideo.call_args
+    args = bus.playVideo.call_args.args
+    # The Python side calls bus.playVideo(uri, options) — positional.
+    assert len(args) == 2, args
+    return args[1]
+
+
+def _last_play_uri(bus: Any) -> str:
+    args = bus.playVideo.call_args.args
+    assert len(args) == 2, args
+    return args[0]
 
 
 @patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_invokes_popen_with_expected_args_on_pi4_64(
-    mock_popen: Any, _mock_detect: Any, mpv: _MPVFixtures
+def test_play_calls_browser_bus_with_expected_options_on_pi4_64(
+    _mock_detect: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
-    mock_popen.assert_called_once_with(
-        [
-            'mpv',
-            '--no-terminal',
-            '--vo=drm',
-            '--hwdec=auto-copy',
-            '--video-sync=display-resample',
-            '--drm-mode=1920x1080@60',
-            '--vd-lavc-threads=4',
-            '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
-            '--',
-            'file:///test/video.mp4',
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    assert _last_play_uri(mpv.mock_bus) == 'file:///test/video.mp4'
+    options = _last_play_options(mpv.mock_bus)
+    assert options['audio-device'] == 'alsa/sysdefault:CARD=vc4hdmi0'
 
 
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_pins_1080p_mode_on_pi4_64(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    # Pi 4 stays on --vo=drm (Qt linuxfb + mpv DRM master juggling)
-    # so the --drm-mode pin is still meaningful — it sidesteps the
-    # CPU zimg upscale to 4K that the A72 can't keep up with.
+def test_play_omits_libmpv_era_options(mpv: _MPVFixtures) -> None:
+    # The libmpv era options dict carried ``hwdec``, ``video-sync``,
+    # ``vd-lavc-threads``, ``vo``, ``drm-mode``. Under QtMultimedia
+    # + libavcodec the decoder + sync are handled inside the
+    # backend, so the Python side must not send any of those —
+    # defensive, in case the C++ side starts forwarding unknown
+    # keys to the player as element properties and one happens
+    # to collide.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
-
-    args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' in args[0]
-    assert '--vd-lavc-threads=4' in args[0]
-
-
-@patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='h264',
-)
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_picks_v4l2m2m_for_h264_on_pi4_64(
-    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
-) -> None:
-    # Pi 4 H.264 dispatches to v4l2m2m-copy (V3D V4L2 M2M); mpv's
-    # auto-copy whitelist excludes v4l2m2m-copy so we have to set it
-    # explicitly.
-    mpv.player.set_asset('file:///test/h264.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
-        mpv.player.play()
-    args, _ = mock_popen.call_args
-    assert '--hwdec=v4l2m2m-copy' in args[0]
-    assert '--hwdec=auto-copy' not in args[0]
+    options = _last_play_options(mpv.mock_bus)
+    for legacy in ('hwdec', 'video-sync', 'vd-lavc-threads', 'vo', 'drm-mode'):
+        assert legacy not in options, legacy
 
 
-@patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='h264',
-)
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_picks_auto_copy_for_h264_on_pi5(
-    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
-) -> None:
-    # Pi 5 has no upstream-mpv H.264 hwdec (Hantro G1 isn't exposed
-    # through v4l2-request in mpv 0.40). Passing v4l2m2m-copy here
-    # would just log "Could not find a valid device" errors before
-    # silently SW-falling-back, so we send auto-copy and let mpv's
-    # default selector pick (which finds nothing for H.264 on Pi 5
-    # and falls to software cleanly). The asset processor re-encodes
-    # H.264 → HEVC on Pi 5 at upload time so this path is only hit
-    # for pre-existing assets during the rollout window.
-    mpv.player.set_asset('file:///test/h264.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
-        mpv.player.play()
-    args, _ = mock_popen.call_args
-    assert '--hwdec=auto-copy' in args[0]
-    assert '--hwdec=v4l2m2m-copy' not in args[0]
-
-
-@patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='hevc',
-)
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_picks_drm_copy_for_hevc_on_pi(
-    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
-) -> None:
-    # HEVC on Pi 4 / Pi 5 goes through FFmpeg's v4l2_request_hevc,
-    # exposed in mpv as drm-copy.
-    for device_type in ('pi4-64', 'pi5'):
-        mock_popen.reset_mock()
-        mpv.player.set_asset('file:///test/hevc.mp4', 30)
-        with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
-            mpv.player.play()
-        args, _ = mock_popen.call_args
-        assert '--hwdec=drm-copy' in args[0], device_type
-
-
-@patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='',
-)
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_falls_back_to_auto_copy_when_probe_fails_on_pi(
-    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
-) -> None:
-    # If ffprobe can't read the codec (missing file, timeout, …)
-    # the Pi dispatch must fall back to auto-copy rather than
-    # passing a bogus --hwdec= value.
-    mpv.player.set_asset('file:///test/missing.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
-        mpv.player.play()
-    args, _ = mock_popen.call_args
-    assert '--hwdec=auto-copy' in args[0]
-
-
-@patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='h264',
-)
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_does_not_probe_on_non_pi(
-    mock_popen: Any, mock_probe: Any, mpv: _MPVFixtures
-) -> None:
-    # ffprobe shouldn't run on x86 / arm64 — they go through
-    # --hwdec=auto-copy unconditionally and probing adds latency
-    # before every mpv launch.
-    for device_type in ('x86', 'arm64'):
-        mock_probe.reset_mock()
-        mock_popen.reset_mock()
-        mpv.player.set_asset('file:///test/video.mp4', 30)
-        with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
-            mpv.player.play()
-        mock_probe.assert_not_called()
-        args, _ = mock_popen.call_args
-        assert '--hwdec=auto-copy' in args[0], device_type
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_tunes_decoder_threads_on_pi5(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    # Pi 5 keeps software-decode threading. mpv ignores --drm-mode
-    # under cage (no DRM master), and the connector's native mode is
-    # what cage runs at — V3D 7.1 has enough bandwidth headroom for
-    # the 4K composite + scale.
-    mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
-        mpv.player.play()
-
-    args, _ = mock_popen.call_args
-    assert '--vd-lavc-threads=4' in args[0]
-    assert '--drm-mode=1920x1080@60' not in args[0]
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_omits_pi_tuning_on_x86(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
-        mpv.player.play()
-
-    args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' not in args[0]
-    assert '--vd-lavc-threads=4' not in args[0]
-
-
-@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_under_cage(
-    mock_popen: Any, mpv: _MPVFixtures, device_type: str
-) -> None:
-    # x86 / arm64 / pi5 run under cage (a wlroots kiosk compositor);
-    # cage holds DRM master, so --vo=drm would be denied. These
-    # boards must route through --vo=gpu --gpu-context=wayland.
-    mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
-        mpv.player.play()
-
-    args, _ = mock_popen.call_args
-    assert '--vo=gpu' in args[0]
-    assert '--gpu-context=wayland' in args[0]
-    assert '--vo=drm' not in args[0]
-    assert '--gpu-context=drm' not in args[0]
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_drm_vo_on_pi4_64(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    # Pi 4 stays on Qt linuxfb (no cage); mpv uses --vo=drm because
-    # --vo=gpu --gpu-context=drm needs Mesa GBM to hold DRM master
-    # persistently, which contends with Qt linuxfb's framebuffer use
-    # ("Failed to acquire DRM master: Permission denied").
-    mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
-        mpv.player.play()
-
-    args, _ = mock_popen.call_args
-    assert '--vo=drm' in args[0]
-    assert '--vo=gpu' not in args[0]
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_default_alsa_device_on_arm64(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
+def test_play_uses_default_alsa_device_on_arm64(mpv: _MPVFixtures) -> None:
     # No portable per-SoC HDMI card name exists across Rockchip /
-    # Allwinner / Amlogic, so arm64 defers to ALSA's
-    # `default` device rather than the Pi-firmware vc4hdmi* / HID
-    # cards the regular dispatch would otherwise pick.
+    # Allwinner / Amlogic, so arm64 defers to ALSA's `default`
+    # device rather than the Pi-firmware vc4hdmi* / HID cards the
+    # regular dispatch would otherwise pick.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
         mpv.player.play()
 
-    args, _ = mock_popen.call_args
-    assert '--audio-device=alsa/default' in args[0]
+    options = _last_play_options(mpv.mock_bus)
+    assert options['audio-device'] == 'alsa/default'
 
 
-@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_play_uses_local_audio_device_when_configured(
-    mock_popen: Any, mpv: _MPVFixtures
+    mpv: _MPVFixtures,
 ) -> None:
     mpv.mock_settings.__getitem__.return_value = 'local'
     mpv.player.set_asset('file:///test/video.mp4', 30)
     mpv.player.play()
 
-    args, _ = mock_popen.call_args
-    assert '--audio-device=alsa/plughw:CARD=Headphones' in args[0]
+    options = _last_play_options(mpv.mock_bus)
+    assert options['audio-device'] == 'alsa/plughw:CARD=Headphones'
 
 
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_reloads_settings_each_call(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
+def test_play_reloads_settings_each_call(mpv: _MPVFixtures) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
     mpv.player.play()
     mpv.mock_settings.load.assert_called_once()
 
 
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_is_playing_returns_true_when_process_running(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    mock_process = MagicMock()
-    mock_process.poll.return_value = None
-    mock_popen.return_value = mock_process
+def test_play_no_bus_logs_and_clears_state(mpv: _MPVFixtures) -> None:
+    # If the webview proxy hasn't been injected (failed handshake,
+    # crashed webview that hasn't respawned), play() must not
+    # latch is_playing() into a false-true state.
+    with patch('anthias_viewer.media_player._browser_bus', None):
+        mpv.player.set_asset('file:///test/video.mp4', 30)
+        mpv.player.play()
+    assert not mpv.player.is_playing()
 
+
+def test_play_bus_failure_clears_playing_state(mpv: _MPVFixtures) -> None:
+    # A pydbus transport error on play() (webview just crashed,
+    # SIGPIPE on the bus, …) must reset the local flag so a
+    # downstream is_playing() call doesn't report a phantom video.
+    mpv.mock_bus.playVideo.side_effect = RuntimeError('bus down')
     mpv.player.set_asset('file:///test/video.mp4', 30)
     mpv.player.play()
+    assert not mpv.player.is_playing()
 
+
+def test_is_playing_returns_true_after_play(mpv: _MPVFixtures) -> None:
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    mpv.player.play()
     assert mpv.player.is_playing()
 
 
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_is_playing_returns_false_when_process_finished(
-    mock_popen: Any, mpv: _MPVFixtures
-) -> None:
-    mock_process = MagicMock()
-    mock_process.poll.return_value = 0
-    mock_popen.return_value = mock_process
-
-    mpv.player.set_asset('file:///test/video.mp4', 30)
-    mpv.player.play()
-
-    assert not mpv.player.is_playing()
-
-
-def test_is_playing_returns_false_when_no_process(mpv: _MPVFixtures) -> None:
-    assert not mpv.player.is_playing()
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_stop_terminates_process(mock_popen: Any, mpv: _MPVFixtures) -> None:
-    mock_process = MagicMock()
-    mock_popen.return_value = mock_process
-
+def test_is_playing_returns_false_after_stop(mpv: _MPVFixtures) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
     mpv.player.play()
     mpv.player.stop()
+    assert not mpv.player.is_playing()
 
-    mock_process.terminate.assert_called_once()
-    assert mpv.player.process is None
+
+def test_is_playing_returns_false_before_play(mpv: _MPVFixtures) -> None:
+    assert not mpv.player.is_playing()
+
+
+def test_stop_calls_browser_bus_stop_video(mpv: _MPVFixtures) -> None:
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    mpv.player.play()
+    mpv.player.stop()
+    mpv.mock_bus.stopVideo.assert_called_once()
+
+
+def test_stop_without_play_is_safe(mpv: _MPVFixtures) -> None:
+    # Defensive: viewer code may call stop() on an idle player
+    # (e.g. when rotating from a video back to a webpage and the
+    # video had already self-finished). Must not raise even if
+    # play() was never called.
+    mpv.player.stop()
+    mpv.mock_bus.stopVideo.assert_called_once()
+
+
+def test_stop_without_bus_is_safe(mpv: _MPVFixtures) -> None:
+    with patch('anthias_viewer.media_player._browser_bus', None):
+        # No bus, no exception.
+        mpv.player.stop()
+    assert not mpv.player.is_playing()
+
+
+def test_marshal_dbus_options_wraps_in_glib_variant() -> None:
+    """pydbus refuses to coerce a Python scalar to ``GLib.Variant``
+    when the slot is declared ``a{sv}`` ("Expected GLib.Variant, but
+    got str" at runtime). Regression: a viewer deploy without this
+    wrap surfaced the error on every video play. The marshal is
+    type-aware so a future non-string option (``int`` / ``bool`` /
+    ``float``) round-trips without bespoke wrapping at the call site
+    — verify every supported type picks its own GVariant signature.
+    """
+    import anthias_viewer.media_player as mp
+
+    out = mp._marshal_dbus_options(
+        {
+            'audio-device': 'alsa/sysdefault:CARD=vc4hdmi0',
+            'video-rotate': 90,
+            'mute': True,
+            'volume': 0.75,
+        }
+    )
+    # Conftest stubs ``gi.repository.GLib`` to a MagicMock on hosts
+    # without PyGObject; ``GLib.Variant('s', '...')`` returns a
+    # MagicMock whose ``call_args`` records the args. On the real
+    # viewer image GLib is real and Variant returns an actual
+    # variant — but the call signature is the same.
+    from gi.repository import GLib
+
+    assert set(out) == {'audio-device', 'video-rotate', 'mute', 'volume'}
+    GLib.Variant.assert_any_call('s', 'alsa/sysdefault:CARD=vc4hdmi0')
+    GLib.Variant.assert_any_call('i', 90)
+    GLib.Variant.assert_any_call('b', True)
+    GLib.Variant.assert_any_call('d', 0.75)
+
+
+def test_set_browser_bus_injects_module_state() -> None:
+    # Smoke test the injection hook the viewer uses after the
+    # AnthiasWebview D-Bus handshake. Re-injecting a fresh proxy
+    # (post-webview-restart) must replace the previous one rather
+    # than appending.
+    import anthias_viewer.media_player as mp
+
+    saved = mp._browser_bus
+    try:
+        first = MagicMock()
+        second = MagicMock()
+        mp.set_browser_bus(first)
+        assert mp.get_browser_bus() is first
+        mp.set_browser_bus(second)
+        assert mp.get_browser_bus() is second
+    finally:
+        mp.set_browser_bus(saved)
 
 
 @pytest.fixture
@@ -774,34 +677,31 @@ def _rotated_mpv_settings(rotation: int) -> Any:
 @pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
 @pytest.mark.parametrize('rotation', [0, 90, 180, 270])
 @patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='',
-)
-@patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
-@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_mpv_never_passes_video_rotate_under_cage(
-    mock_popen: Any,
     _mock_detect: Any,
-    _mock_probe: Any,
     rotation: int,
     device_type: str,
 ) -> None:
     """x86 / arm64 / pi5 run under cage and inherit the compositor
     transform via wlr-randr (issue #2856 — driven from
-    src/anthias_viewer/__init__.py). Passing --video-rotate to mpv
-    would double-rotate, so MPVMediaPlayer must never add it on
-    those boards."""
+    src/anthias_viewer/__init__.py). Passing ``video-rotate`` on
+    those boards would double-rotate, so the option must be
+    omitted regardless of the Settings page value."""
     player = MPVMediaPlayer()
-    # Patch get_device_type alongside DEVICE_TYPE so
-    # get_alsa_audio_device() takes a deterministic branch on the
-    # host — patching only DEVICE_TYPE while leaving get_device_type
-    # at the fixture default ('pi4') would route x86/arm64 through
-    # _detect_hdmi_audio_device() and stat /sys/class/drm.
+    mock_bus = MagicMock()
+    # See history: we patch get_device_type alongside DEVICE_TYPE
+    # because get_alsa_audio_device() reads /sys/class/drm when
+    # device_type resolves to pi4/pi5.
     audio_device_type = device_type if device_type == 'pi5' else 'x86'
     with (
+        patch('anthias_viewer.media_player._browser_bus', mock_bus),
+        patch(
+            'anthias_viewer.media_player._marshal_dbus_options',
+            side_effect=lambda opts: opts,
+        ),
         patch(
             'anthias_viewer.media_player.settings',
             _rotated_mpv_settings(rotation),
@@ -814,27 +714,31 @@ def test_mpv_never_passes_video_rotate_under_cage(
     ):
         player.set_asset('file:///test/video.mp4', 30)
         player.play()
-    args, _ = mock_popen.call_args
-    assert not any(arg.startswith('--video-rotate') for arg in args[0])
+    options = _last_play_options(mock_bus)
+    assert 'video-rotate' not in options
 
 
 @pytest.mark.parametrize('rotation', [90, 180, 270])
 @patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='',
-)
-@patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
-@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_mpv_passes_video_rotate_on_pi4_64(
-    mock_popen: Any, _mock_detect: Any, _mock_probe: Any, rotation: int
+    _mock_detect: Any, rotation: int
 ) -> None:
-    """Pi 4 stays on Qt linuxfb (no cage), so there's no compositor
-    transform to inherit — mpv has to apply rotation itself."""
+    """Pi 4 (eglfs, no compositor) has no transform plumbing — the
+    video pipeline has to apply rotation itself via the
+    ``video-rotate`` option (forwarded to
+    ``QGraphicsVideoItem::setRotation`` on the C++ side; sent as an
+    ``int``, marshalled to ``Variant('i', …)``)."""
     player = MPVMediaPlayer()
+    mock_bus = MagicMock()
     with (
+        patch('anthias_viewer.media_player._browser_bus', mock_bus),
+        patch(
+            'anthias_viewer.media_player._marshal_dbus_options',
+            side_effect=lambda opts: opts,
+        ),
         patch(
             'anthias_viewer.media_player.settings',
             _rotated_mpv_settings(rotation),
@@ -847,26 +751,30 @@ def test_mpv_passes_video_rotate_on_pi4_64(
     ):
         player.set_asset('file:///test/video.mp4', 30)
         player.play()
-    args, _ = mock_popen.call_args
-    assert f'--video-rotate={rotation}' in args[0]
+    options = _last_play_options(mock_bus)
+    assert options['video-rotate'] == rotation
+    assert isinstance(options['video-rotate'], int)
 
 
 @patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
-@patch(
-    'anthias_viewer.media_player._probe_video_codec',
-    return_value='',
-)
-@patch('anthias_viewer.media_player.subprocess.Popen')
 def test_mpv_skips_video_rotate_at_zero_on_pi4_64(
-    mock_popen: Any, _mock_probe: Any, _mock_detect: Any
+    _mock_detect: Any,
 ) -> None:
-    """0° must NOT emit --video-rotate=0 — keeps the CLI surface
-    unchanged for the 99% of operators who never touch the dropdown."""
+    """0° must NOT emit ``video-rotate=0`` — keeps the D-Bus surface
+    unchanged for the 99% of operators who never touch the dropdown,
+    so the video pipeline falls back to its own default rather than
+    being told to rotate by zero."""
     player = MPVMediaPlayer()
+    mock_bus = MagicMock()
     with (
+        patch('anthias_viewer.media_player._browser_bus', mock_bus),
+        patch(
+            'anthias_viewer.media_player._marshal_dbus_options',
+            side_effect=lambda opts: opts,
+        ),
         patch(
             'anthias_viewer.media_player.settings',
             _rotated_mpv_settings(0),
@@ -879,8 +787,8 @@ def test_mpv_skips_video_rotate_at_zero_on_pi4_64(
     ):
         player.set_asset('file:///test/video.mp4', 30)
         player.play()
-    args, _ = mock_popen.call_args
-    assert not any(arg.startswith('--video-rotate') for arg in args[0])
+    options = _last_play_options(mock_bus)
+    assert 'video-rotate' not in options
 
 
 def test_proxy_reset_clears_cached_instance(reset_media_proxy: None) -> None:
@@ -894,32 +802,28 @@ def test_proxy_reset_clears_cached_instance(reset_media_proxy: None) -> None:
     fake.stop.assert_called_once()
 
 
-def test_pi_hwdec_dispatch_matches_upload_gate() -> None:
-    """The upload gate (``processing._HW_DECODE_VIDEO_CODECS``) and
-    the viewer's per-codec mpv dispatch (``_PI_HWDEC_BY_CODEC``) must
-    not drift. If the gate accepts a codec on a board, the viewer
-    must have an explicit hwdec entry for it — otherwise the operator
-    uploads a clip that passes validation, then plays back through
-    ``auto-copy`` and quietly software-decodes, defeating the gate.
-
-    The reverse direction (viewer claims to hardware-decode a codec
-    the gate rejects) is just as bad — the viewer path becomes dead
-    code while the gate refuses every upload that would exercise it.
-
-    Boards present in the gate but absent from ``_PI_HWDEC_BY_CODEC``
-    (``pi2``, ``pi3``, ``x86``) are intentional: Pi 2/3 use VLC, x86
-    falls through to mpv ``--hwdec=auto-copy`` which picks vaapi-copy
-    on Intel iGPUs. Those paths don't need an explicit table entry."""
+def test_upload_gate_codecs_are_h264_or_hevc() -> None:
+    """QtMultimedia + libavcodec (the ffmpeg-backed Qt 6 media
+    plugin) auto-selects the appropriate decoder at playback time
+    — V4L2 stateless ``rpi-hevc-dec`` for HEVC and
+    ``bcm2835-codec`` for H.264 on Pi 4 via the +rpt1
+    ``libav*`` packages, the Hantro G2 on Pi 5, ``rkvdec`` on
+    Rock Pi 4, VA-API on x86. The application no longer
+    maintains an explicit per-codec hwdec table — but the
+    upload gate from PR #2885 still restricts accepted codecs to
+    whichever ones the board can play. This test asserts the
+    gate's accepted codecs are entirely the h264 / hevc family
+    libavcodec's v4l2_request paths cover, so a clip that passes
+    the gate is by construction playable. New codecs (av1, vp9,
+    mpeg2) need to be both gated on the server side and confirmed
+    available in the runtime ffmpeg before the gate is relaxed."""
     from anthias_server.processing import _HW_DECODE_VIDEO_CODECS
-    from anthias_viewer.media_player import _PI_HWDEC_BY_CODEC
 
-    for board, viewer_codecs in _PI_HWDEC_BY_CODEC.items():
-        assert board in _HW_DECODE_VIDEO_CODECS, (
-            f'viewer dispatches {board!r} but the upload gate has no '
-            f'entry — every upload to that board would be rejected.'
-        )
-        gate_codecs = _HW_DECODE_VIDEO_CODECS[board]
-        assert frozenset(viewer_codecs) == gate_codecs, (
-            f'codec mismatch for {board!r}: '
-            f'viewer={sorted(viewer_codecs)} gate={sorted(gate_codecs)}'
+    supported = {'h264', 'hevc'}
+    for board, codecs in _HW_DECODE_VIDEO_CODECS.items():
+        extra = set(codecs) - supported
+        assert not extra, (
+            f'{board!r} gate accepts {sorted(extra)} which is not '
+            f'in the libavcodec h264/hevc dispatch — add the '
+            f'matching decoder or remove from the gate.'
         )
