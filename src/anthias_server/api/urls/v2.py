@@ -19,6 +19,8 @@ from anthias_server.api.views.v2 import (
     ScreenlyMigrateAssetViewV2,
     ScreenlyValidateTokenViewV2,
     ShutdownViewV2,
+    ViewerPlaylistViewV2,
+    ViewerSettingsViewV2,
 )
 
 
@@ -89,5 +91,15 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
             'v2/network/ip-addresses',
             NetworkIpAddressesViewV2.as_view(),
             name='network_ip_addresses_v2',
+        ),
+        path(
+            'v2/viewer/playlist',
+            ViewerPlaylistViewV2.as_view(),
+            name='viewer_playlist_v2',
+        ),
+        path(
+            'v2/viewer/settings',
+            ViewerSettingsViewV2.as_view(),
+            name='viewer_settings_v2',
         ),
     ]

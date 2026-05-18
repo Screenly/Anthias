@@ -61,14 +61,38 @@ done
 chown -f viewer /dev/snd/*
 chown -f viewer /data/.anthias/latest_anthias_sha
 
-# Fixes caching in QTWebEngine
-mkdir -p /data/.local/share/AnthiasWebview/QtWebEngine \
-    /data/.cache/AnthiasWebview \
+# Fixes caching in QTWebEngine.
+#
+# QtWebEngine derives its on-disk state path from QCoreApplication's
+# applicationName(), which Qt sets from the binary basename when no
+# explicit name is supplied. Renaming the binary (AnthiasWebview →
+# AnthiasViewer per GH #2906 Phase 4) shifts the state path with it:
+#
+#   /data/.local/share/AnthiasWebview/QtWebEngine → AnthiasViewer/...
+#   /data/.cache/AnthiasWebview                  → AnthiasViewer/...
+#
+# A clean install just lands at the new path. For upgraded devices,
+# preserve cookies / local-storage / cached pages by symlinking the
+# old paths onto the new ones on first boot. The symlink lets the
+# renamed binary see the old state at its new lookup path without
+# moving bytes around on a Pi's SD card; idempotent on subsequent
+# boots because we only symlink when the new path doesn't already
+# exist.
+for dir in /data/.local/share /data/.cache; do
+    old="${dir}/AnthiasWebview"
+    new="${dir}/AnthiasViewer"
+    if [ -d "${old}" ] && [ ! -e "${new}" ]; then
+        ln -s AnthiasWebview "${new}"
+    fi
+done
+
+mkdir -p /data/.local/share/AnthiasViewer/QtWebEngine \
+    /data/.cache/AnthiasViewer \
     /data/.cache/fontconfig \
     /data/.pki
 
-chown -Rf viewer /data/.local/share/AnthiasWebview
-chown -Rf viewer /data/.cache/AnthiasWebview/
+chown -Rf viewer /data/.local/share/AnthiasViewer
+chown -Rf viewer /data/.cache/AnthiasViewer/
 chown -Rf viewer /data/.cache/fontconfig
 chown -Rf viewer /data/.pki
 

@@ -1,7 +1,8 @@
 import ipaddress
 import json
 import logging
-from datetime import timedelta
+import secrets
+from datetime import datetime, timedelta
 from os import getenv, statvfs
 from platform import machine
 from typing import Any
@@ -11,6 +12,7 @@ import redis
 import requests
 from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import filesizeformat
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.request import Request
@@ -44,6 +46,8 @@ from anthias_server.api.serializers.v2 import (
     ScreenlyTokenSerializerV2,
     UpdateAssetSerializerV2,
     UpdateDeviceSettingsSerializerV2,
+    ViewerPlaylistSerializerV2,
+    ViewerSettingsSerializerV2,
 )
 from anthias_server.lib.screenly_migration import (
     MIGRATION_ASSET_GROUP_TITLE,
@@ -683,6 +687,152 @@ class DeviceSettingsViewV2(APIView):
                 {'error': 'An error occurred while saving settings.'},
                 status=400,
             )
+
+
+# Re-evaluate windowed playlists at most this often. Day-of-week and
+# time-of-day boundaries don't show up in start_date/end_date, so we
+# need a polling cap to ensure transitions are picked up. Mirrors
+# ``anthias_viewer.scheduling.WINDOWED_DEADLINE_CAP_SECONDS``; once
+# the C++ viewer consumes /api/v2/viewer/playlist (Phase 3 of GH
+# #2906) the Python copy can be deleted.
+_VIEWER_WINDOWED_DEADLINE_CAP_S = 60
+
+_viewer_sysrandom = secrets.SystemRandom()
+
+
+def _evaluate_viewer_playlist(
+    now: datetime,
+) -> tuple[list[Asset], datetime | None]:
+    """Server-side equivalent of ``generate_asset_list()`` returning
+    Asset rows (so ``AssetSerializerV2`` can serialise them) instead
+    of plain dicts.
+
+    Active filter and deadline computation share a single ``now`` so
+    a row can't be filtered as active here while its end_date is
+    skipped as past in the deadline pass — the two would otherwise
+    disagree across a midnight tick.
+    """
+    candidates = list(
+        Asset.objects.filter(
+            is_enabled=True,
+            start_date__isnull=False,
+            end_date__isnull=False,
+        ).order_by('play_order')
+    )
+
+    active_flags = [a.is_active(now=now) for a in candidates]
+    active_assets = [a for a, ok in zip(candidates, active_flags) if ok]
+
+    if settings['shuffle_playlist']:
+        _viewer_sysrandom.shuffle(active_assets)
+
+    deadline = _compute_viewer_deadline(candidates, active_flags, now)
+    return active_assets, deadline
+
+
+def _compute_viewer_deadline(
+    assets: list[Asset],
+    active_flags: list[bool],
+    now: datetime,
+) -> datetime | None:
+    """Soonest future moment when the playlist might need refetching.
+
+    Mirrors ``anthias_viewer.scheduling._compute_deadline``: past
+    boundaries are dropped so a long-ago start_date on a window-
+    blocked asset doesn't pin the deadline to "always overdue", and
+    the windowed cap only applies while the asset is in its date
+    range (the window can't toggle activeness outside of it).
+    """
+    candidates: list[datetime] = []
+    has_windowed = False
+
+    for asset, is_active in zip(assets, active_flags):
+        boundary = asset.end_date if is_active else asset.start_date
+        if boundary and boundary > now:
+            candidates.append(boundary)
+        if (
+            asset.has_window_filter()
+            and asset.start_date is not None
+            and asset.end_date is not None
+            and asset.start_date < now < asset.end_date
+        ):
+            has_windowed = True
+
+    if has_windowed:
+        candidates.append(
+            now + timedelta(seconds=_VIEWER_WINDOWED_DEADLINE_CAP_S)
+        )
+
+    return min(candidates) if candidates else None
+
+
+class ViewerPlaylistViewV2(APIView):
+    """Active assets + next deadline, evaluated against server time.
+
+    Intended for the C++ viewer (GH #2906 Phase 3) so the viewer no
+    longer needs Django ORM access or its own ``Asset.is_active()``
+    re-implementation. The Python viewer keeps using
+    ``anthias_viewer.scheduling.generate_asset_list()`` directly until
+    Phase 3 swaps it.
+
+    Internal-auth gated for the same reason as
+    ``AssetRecheckViewV2``: the viewer can't attach operator
+    BasicAuth, so it presents the shared token derived from
+    ``anthias.conf``.
+    """
+
+    @extend_schema(
+        summary='Get the active playlist and next re-evaluation deadline',
+        responses={200: ViewerPlaylistSerializerV2, 403: None},
+    )
+    def get(self, request: Request) -> Response:
+        if not is_internal_request(request, settings):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        now = timezone.now()
+        active_assets, deadline = _evaluate_viewer_playlist(now)
+        return Response(
+            {
+                'assets': AssetSerializerV2(active_assets, many=True).data,
+                'deadline': deadline,
+                'now': now,
+            }
+        )
+
+
+class ViewerSettingsViewV2(APIView):
+    """Viewer-relevant settings subset for the C++ viewer.
+
+    Narrower than ``DeviceSettingsViewV2`` on purpose: only the keys
+    the viewer reads at runtime are exposed, so the internal-auth
+    path doesn't surface operator credential fields. Internal-auth
+    gated like ``ViewerPlaylistViewV2`` above.
+    """
+
+    @extend_schema(
+        summary='Get viewer-relevant device settings',
+        responses={200: ViewerSettingsSerializerV2, 403: None},
+    )
+    def get(self, request: Request) -> Response:
+        if not is_internal_request(request, settings):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            settings.load()
+        except Exception:
+            logger.exception('Failed to reload settings for viewer')
+
+        return Response(
+            {
+                'shuffle_playlist': settings['shuffle_playlist'],
+                'show_splash': settings['show_splash'],
+                'screen_rotation': clamp_screen_rotation(
+                    settings['screen_rotation']
+                ),
+                'audio_output': settings['audio_output'],
+                'debug_logging': settings['debug_logging'],
+            }
+        )
 
 
 class InfoViewV2(InfoViewMixin):

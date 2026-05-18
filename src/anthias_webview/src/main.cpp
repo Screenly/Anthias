@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     }
     qDebug() << "WebView connected to D-bus";
 
-    if (!connection.registerService("anthias.webview")) {
+    if (!connection.registerService("anthias.viewer")) {
         qWarning() << qPrintable(connection.lastError().message());
         return 1;
     }

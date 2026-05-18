@@ -1,16 +1,22 @@
-# AnthiasWebview
+# AnthiasViewer
 
 The Qt-based browser that the viewer service launches on each
-display. The host viewer binds it via D-Bus (`anthias.webview` at
+display. The host viewer binds it via D-Bus (`anthias.viewer` at
 `/Anthias`) to load pages, images, and arm a per-asset auto-refresh
 timer.
 
+> Renamed from `AnthiasWebview` / `anthias.webview` in GH #2906
+> Phase 4. The source directory is still `src/anthias_webview/`;
+> it'll move to `src/anthias_viewer/` once the Python viewer
+> package is deleted (Phase 5).
+
 ## Build flow
 
-The webview is **compiled inside the viewer image** as a multi-stage
-build — there is no separate release tag, no curl-from-releases step,
-no version pin to bump. Editing source under `src/anthias_webview/src/`
-triggers a rebuild on the next viewer image build:
+The viewer binary is **compiled inside the viewer image** as a
+multi-stage build — there is no separate release tag, no
+curl-from-releases step, no version pin to bump. Editing source
+under `src/anthias_webview/src/` triggers a rebuild on the next
+viewer image build:
 
 * Qt 6 boards (`pi4-64`, `pi5`, `x86`) — Debian's `qt6-base-dev` +
   `qt6-webengine-dev` packages, `qmake6 && make && make install`,
@@ -21,7 +27,7 @@ triggers a rebuild on the next viewer image build:
   these boards, so the toolchain itself is a permanent artifact at
   the `WebView-v2026.04.1` GitHub release.
 
-To rebuild a viewer image (which rebuilds the webview):
+To rebuild a viewer image (which rebuilds the binary):
 
 ```bash
 uv run python -m tools.image_builder \
@@ -41,8 +47,8 @@ qemu-arm); see the script header for memory caveats.
 
 ## D-Bus API
 
-Webview registers `anthias.webview` at `/Anthias` on the session bus
-and exposes three methods:
+The binary registers `anthias.viewer` at `/Anthias` on the session
+bus and exposes three methods:
 
 * `loadPage(url)` — load an HTTP(S) URL.
 * `loadImage(path)` — render a local image asset.
@@ -58,7 +64,7 @@ Example:
 from pydbus import SessionBus
 
 bus = SessionBus()
-browser_bus = bus.get('anthias.webview', '/Anthias')
+browser_bus = bus.get('anthias.viewer', '/Anthias')
 
 browser_bus.loadPage("https://www.example.com")
 browser_bus.setReloadInterval(30)  # reload every 30s; 0 disables
