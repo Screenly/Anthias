@@ -233,7 +233,7 @@ class MediaPlayer:
         raise NotImplementedError
 
 
-def _marshal_dbus_options(options: dict[str, Any]) -> dict:
+def _marshal_dbus_options(options: dict[str, Any]) -> dict[str, Any]:
     """Wrap each value as a ``GLib.Variant`` for pydbus.
 
     AnthiasWebview's ``playVideo`` slot is declared with
@@ -261,7 +261,7 @@ def _marshal_dbus_options(options: dict[str, Any]) -> dict:
     return {key: variant_for(value) for key, value in options.items()}
 
 
-def _build_mpv_options(uri: str) -> dict[str, str]:
+def _build_video_options(uri: str) -> dict[str, Any]:
     """Build the per-file option dict sent over D-Bus to AnthiasWebview.
 
     Qt 6.5 dropped the upstream gstreamer media backend, so the
@@ -285,10 +285,6 @@ def _build_mpv_options(uri: str) -> dict[str, str]:
     with the libmpv era (where it fed ffprobe). It's no longer
     read because libavcodec handles codec probing internally —
     but a future codec-specific tuning may re-introduce it.
-
-    Return type is annotated as ``dict[str, str]`` for historic
-    compatibility; values may be ``int`` (``video-rotate``) — the
-    marshalling layer accepts either.
     """
     del uri  # see docstring; kept for signature compatibility.
     device_type = os.environ.get('DEVICE_TYPE', '')
@@ -316,11 +312,12 @@ class MPVMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
         self.uri: str = ''
-        # No mpv subprocess any more — the C++ AnthiasWebview owns
-        # the libmpv handle. Track local playback state so
-        # is_playing() (called only by tests today; the asset_loop
-        # sleeps for ``duration``) can still answer without a D-Bus
-        # round-trip.
+        # No mpv subprocess any more — playback runs inside
+        # AnthiasWebview via QtMultimedia (``QMediaPlayer`` +
+        # ``QGraphicsVideoItem``), reached over D-Bus. Track local
+        # playback state so ``is_playing()`` (called only by tests
+        # today; the asset_loop sleeps for ``duration``) can still
+        # answer without a D-Bus round-trip.
         self._playing: bool = False
 
     def set_asset(self, uri: str, duration: int | str) -> None:
@@ -332,7 +329,7 @@ class MPVMediaPlayer(MediaPlayer):
         # subprocess path and VLCMediaPlayer.
         settings.load()
 
-        options = _build_mpv_options(self.uri)
+        options = _build_video_options(self.uri)
 
         bus = get_browser_bus()
         if bus is None:

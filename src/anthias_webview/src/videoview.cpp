@@ -254,15 +254,21 @@ void VideoView::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
 {
     if (status == QMediaPlayer::LoadedMedia
         || status == QMediaPlayer::BufferedMedia) {
-        // Start the elapsed-ms clock at first-frame-ready, not at
-        // play()-time. ``LoadedMedia`` fires once libavcodec has
-        // probed the stream and the first decoded frame is in the
-        // pipeline, which is the moment the video can actually
-        // appear on screen — anything before that is decoder init
-        // and shouldn't count toward the "expected frames at
-        // wall-clock X" computation. Defensive: only restart on
-        // the FIRST transition (isValid() check) so a mid-clip
-        // BufferedMedia bounce doesn't reset the counter.
+        // Start the elapsed-ms clock when QMediaPlayer reports the
+        // stream is ready to play, not at play()-time. Per Qt 6
+        // docs ``LoadedMedia`` means "metadata available, playback
+        // can start" — the actual first decoded frame lands a hair
+        // later via ``QVideoSink::videoFrameChanged``, but starting
+        // here is close enough (within a few ms) and avoids
+        // counting libavcodec init time as wall-clock playback.
+        // The decoder init window was 100-200 ms on Pi 4 cold-
+        // starts, which inflated drop counts on the first clip
+        // after a viewer restart; deferring to here removes that
+        // skew. Both ``LoadedMedia`` and ``BufferedMedia`` are
+        // accepted so the clock arms whichever fires first (the
+        // order varies by backend). Only the FIRST transition
+        // starts it (``isValid()`` check) so a mid-clip buffering
+        // bounce doesn't reset the counter.
         if (!playStartedAt.isValid()) {
             playStartedAt.start();
         }
