@@ -61,6 +61,21 @@ services:
       - LC_ALL=${LC_ALL}
     privileged: true
     restart: always
+    # cage (the wlroots kiosk compositor used on Pi 5 / x86 /
+    # arm64 viewers) doesn't always release the DRM master on
+    # SIGTERM — its event loop blocks on a libinput shutdown
+    # path that hangs on certain kernels, and the kernel's GPU
+    # driver leaves dangling references that prevent the next
+    # container start from acquiring DRM master. ``stop_grace_period``
+    # caps how long ``docker compose down/restart`` waits before
+    # SIGKILLing the container; 3s is short enough that an
+    # upgrade rolls in a reasonable time even if cage hangs.
+    # ``stop_signal: SIGKILL`` skips the SIGTERM-then-wait dance
+    # entirely on intentional stops — same effect as a kernel
+    # OOM killer landing on the viewer, which the next ``up``
+    # cleans up from automatically.
+    stop_grace_period: 3s
+    stop_signal: SIGKILL
     shm_size: ${SHM_SIZE_KB}kb
     volumes:
       - resin-data:/data
@@ -83,15 +98,18 @@ services:
     # and a separate celery image was duplicating ~825 MB extracted of
     # identical content per device. See refactor: drop celery image.
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
-    # ``nice -n 19 ionice -c 3`` lowers CPU and IO priority to the
-    # idle class so the upload-time normalisation pipeline (HEIC→WebP,
-    # exotic-codec → board-appropriate H.264/HEVC transcode) never starves the on-device
-    # viewer mid-playback. Both wrappers are no-ops when the system is
-    # idle — a background sweep on a quiet device still runs at
-    # full speed; only contention with the viewer process slows it
-    # down. Subprocesses (ffmpeg, ffprobe, Pillow's libheif binding)
-    # inherit the wrapper's settings, so a single configuration here
-    # covers every workload the worker spawns.
+    # ``mem_limit`` keeps a runaway celery task (e.g. a HEIC →
+    # WebP convert on a decompression-bomb fixture) from eating
+    # the box's RAM and starving the viewer. 60% of host (computed
+    # in bin/upgrade_containers.sh) leaves comfortable headroom on
+    # every supported SBC.
+    mem_limit: ${CELERY_MEMORY_LIMIT_KB}k
+    # ``nice -n 19 ionice -c 3`` keeps any subprocess celery
+    # spawns (ffprobe, Pillow's libheif binding) at idle priority
+    # so the on-device viewer always wins CPU + IO contention. No
+    # current task is CPU-bound enough that this matters in
+    # practice, but the wrappers are cheap insurance against a
+    # pathological input.
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias

@@ -3,6 +3,15 @@
   here as a token list so additions/removals stay easy to review.
   Layout: Anthias-managed tokens first, then any tokens preserved from
   cmdline.txt.orig (e.g. cfg80211.* from raspi-config).
+
+  Pi 5 4K HEVC CMA: NOT done via cmdline. Adding ``cma=512M`` here
+  makes the kernel take the cmdline value over the device-tree
+  ``linux,cma`` node, orphaning rpi-hevc-dec entirely (returns
+  ``Failed to probe hardware -517`` and ``/dev/video*`` disappears,
+  killing HEVC HW at every resolution). The CMA bump lives in
+  config.txt.j2 instead — ``dtoverlay=cma,cma-512`` rewrites the
+  DT linux,cma size in place, which preserves the codec driver's
+  ``memory-region`` reference.
 -#}
 {%- set tokens = [
   'console=serial0,115200',

@@ -30,16 +30,29 @@ def mpv() -> Iterator[_MPVFixtures]:
     patch_device_type = patch(
         'anthias_viewer.media_player.get_device_type', return_value='pi4'
     )
+    # Default-mock the ffprobe-based codec probe so tests that pin
+    # DEVICE_TYPE to 'pi4-64'/'pi5' don't try to spawn a real ffprobe
+    # subprocess inside the test harness. Returning '' makes
+    # _pi_hwdec_for_uri fall back to 'auto-copy', which preserves the
+    # pre-ffprobe behaviour the legacy tests assert on. Tests that
+    # care about a specific dispatch (h264 → v4l2m2m-copy etc.) layer
+    # a sharper patch on top of this default.
+    patch_probe = patch(
+        'anthias_viewer.media_player._probe_video_codec',
+        return_value='',
+    )
 
     fixtures.mock_settings = patch_settings.start()
     fixtures.mock_settings.__getitem__.return_value = 'hdmi'
     patch_device_type.start()
+    patch_probe.start()
 
     try:
         yield fixtures
     finally:
         patch_settings.stop()
         patch_device_type.stop()
+        patch_probe.stop()
 
 
 @patch(
@@ -47,11 +60,11 @@ def mpv() -> Iterator[_MPVFixtures]:
     return_value='sysdefault:CARD=vc4hdmi0',
 )
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_invokes_popen_with_expected_args(
+def test_play_invokes_popen_with_expected_args_on_pi4_64(
     mock_popen: Any, _mock_detect: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4'}):
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
     mock_popen.assert_called_once_with(
@@ -59,7 +72,10 @@ def test_play_invokes_popen_with_expected_args(
             'mpv',
             '--no-terminal',
             '--vo=drm',
-            '--hwdec=auto-safe',
+            '--hwdec=auto-copy',
+            '--video-sync=display-resample',
+            '--drm-mode=1920x1080@60',
+            '--vd-lavc-threads=4',
             '--audio-device=alsa/sysdefault:CARD=vc4hdmi0',
             '--',
             'file:///test/video.mp4',
@@ -73,6 +89,9 @@ def test_play_invokes_popen_with_expected_args(
 def test_play_pins_1080p_mode_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
+    # Pi 4 stays on --vo=drm (Qt linuxfb + mpv DRM master juggling)
+    # so the --drm-mode pin is still meaningful — it sidesteps the
+    # CPU zimg upscale to 4K that the A72 can't keep up with.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
@@ -80,25 +99,129 @@ def test_play_pins_1080p_mode_on_pi4_64(
     args, _ = mock_popen.call_args
     assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
-    assert '--hwdec=auto-safe' in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='h264',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_picks_v4l2m2m_for_h264_on_pi4_64(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # Pi 4 H.264 dispatches to v4l2m2m-copy (V3D V4L2 M2M); mpv's
+    # auto-copy whitelist excludes v4l2m2m-copy so we have to set it
+    # explicitly.
+    mpv.player.set_asset('file:///test/h264.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
+        mpv.player.play()
+    args, _ = mock_popen.call_args
+    assert '--hwdec=v4l2m2m-copy' in args[0]
+    assert '--hwdec=auto-copy' not in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='h264',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_picks_auto_copy_for_h264_on_pi5(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # Pi 5 has no upstream-mpv H.264 hwdec (Hantro G1 isn't exposed
+    # through v4l2-request in mpv 0.40). Passing v4l2m2m-copy here
+    # would just log "Could not find a valid device" errors before
+    # silently SW-falling-back, so we send auto-copy and let mpv's
+    # default selector pick (which finds nothing for H.264 on Pi 5
+    # and falls to software cleanly). The asset processor re-encodes
+    # H.264 → HEVC on Pi 5 at upload time so this path is only hit
+    # for pre-existing assets during the rollout window.
+    mpv.player.set_asset('file:///test/h264.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
+        mpv.player.play()
+    args, _ = mock_popen.call_args
+    assert '--hwdec=auto-copy' in args[0]
     assert '--hwdec=v4l2m2m-copy' not in args[0]
 
 
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='hevc',
+)
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_pins_1080p_mode_on_pi5(
+def test_play_picks_drm_copy_for_hevc_on_pi(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # HEVC on Pi 4 / Pi 5 goes through FFmpeg's v4l2_request_hevc,
+    # exposed in mpv as drm-copy.
+    for device_type in ('pi4-64', 'pi5'):
+        mock_popen.reset_mock()
+        mpv.player.set_asset('file:///test/hevc.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
+            mpv.player.play()
+        args, _ = mock_popen.call_args
+        assert '--hwdec=drm-copy' in args[0], device_type
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_falls_back_to_auto_copy_when_probe_fails_on_pi(
+    mock_popen: Any, _mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # If ffprobe can't read the codec (missing file, timeout, …)
+    # the Pi dispatch must fall back to auto-copy rather than
+    # passing a bogus --hwdec= value.
+    mpv.player.set_asset('file:///test/missing.mp4', 30)
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
+        mpv.player.play()
+    args, _ = mock_popen.call_args
+    assert '--hwdec=auto-copy' in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='h264',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_does_not_probe_on_non_pi(
+    mock_popen: Any, mock_probe: Any, mpv: _MPVFixtures
+) -> None:
+    # ffprobe shouldn't run on x86 / arm64 — they go through
+    # --hwdec=auto-copy unconditionally and probing adds latency
+    # before every mpv launch.
+    for device_type in ('x86', 'arm64'):
+        mock_probe.reset_mock()
+        mock_popen.reset_mock()
+        mpv.player.set_asset('file:///test/video.mp4', 30)
+        with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
+            mpv.player.play()
+        mock_probe.assert_not_called()
+        args, _ = mock_popen.call_args
+        assert '--hwdec=auto-copy' in args[0], device_type
+
+
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_play_tunes_decoder_threads_on_pi5(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
+    # Pi 5 keeps software-decode threading. mpv ignores --drm-mode
+    # under cage (no DRM master), and the connector's native mode is
+    # what cage runs at — V3D 7.1 has enough bandwidth headroom for
+    # the 4K composite + scale.
     mpv.player.set_asset('file:///test/video.mp4', 30)
     with patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--drm-mode=1920x1080@60' in args[0]
     assert '--vd-lavc-threads=4' in args[0]
+    assert '--drm-mode=1920x1080@60' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_does_not_pin_mode_on_x86(
+def test_play_omits_pi_tuning_on_x86(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
     mpv.player.set_asset('file:///test/video.mp4', 30)
@@ -110,35 +233,40 @@ def test_play_does_not_pin_mode_on_x86(
     assert '--vd-lavc-threads=4' not in args[0]
 
 
+@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_on_x86(
-    mock_popen: Any, mpv: _MPVFixtures
+def test_play_uses_wayland_vo_under_cage(
+    mock_popen: Any, mpv: _MPVFixtures, device_type: str
 ) -> None:
+    # x86 / arm64 / pi5 run under cage (a wlroots kiosk compositor);
+    # cage holds DRM master, so --vo=drm would be denied. These
+    # boards must route through --vo=gpu --gpu-context=wayland.
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}):
+    with patch.dict('os.environ', {'DEVICE_TYPE': device_type}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
     assert '--vo=gpu' in args[0]
     assert '--gpu-context=wayland' in args[0]
     assert '--vo=drm' not in args[0]
+    assert '--gpu-context=drm' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_play_uses_wayland_vo_on_arm64(
+def test_play_uses_drm_vo_on_pi4_64(
     mock_popen: Any, mpv: _MPVFixtures
 ) -> None:
-    # arm64 runs under cage (same as x86), so mpv must go
-    # through --vo=gpu --gpu-context=wayland — cage holds DRM master
-    # and would deny --vo=drm.
+    # Pi 4 stays on Qt linuxfb (no cage); mpv uses --vo=drm because
+    # --vo=gpu --gpu-context=drm needs Mesa GBM to hold DRM master
+    # persistently, which contends with Qt linuxfb's framebuffer use
+    # ("Failed to acquire DRM master: Permission denied").
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
+    with patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}):
         mpv.player.play()
 
     args, _ = mock_popen.call_args
-    assert '--vo=gpu' in args[0]
-    assert '--gpu-context=wayland' in args[0]
-    assert '--vo=drm' not in args[0]
+    assert '--vo=drm' in args[0]
+    assert '--vo=gpu' not in args[0]
 
 
 @patch('anthias_viewer.media_player.subprocess.Popen')
@@ -589,6 +717,25 @@ def test_get_instance_returns_mpv_for_arm64(
     assert isinstance(instance, MPVMediaPlayer)
 
 
+def test_get_instance_returns_mpv_for_generic_arm64(
+    reset_media_proxy: None,
+) -> None:
+    # Legacy ``generic-arm64`` DEVICE_TYPE label (pre-rename images
+    # still in the wild) must also force MPV — the Rock Pi 4 in
+    # particular reports this label and would crash on VLC's
+    # absent backend without the override.
+    MediaPlayerProxy.INSTANCE = None
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi1',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'generic-arm64'}),
+    ):
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, MPVMediaPlayer)
+
+
 def test_get_instance_returns_mpv_for_pi4_64(reset_media_proxy: None) -> None:
     MediaPlayerProxy.INSTANCE = None
     with (
@@ -624,53 +771,46 @@ def _rotated_mpv_settings(rotation: int) -> Any:
     return mock
 
 
+@pytest.mark.parametrize('device_type', ['x86', 'arm64', 'pi5'])
+@pytest.mark.parametrize('rotation', [0, 90, 180, 270])
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
 @patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_mpv_passes_video_rotate_on_pi(
-    mock_popen: Any, _mock_detect: Any
+def test_mpv_never_passes_video_rotate_under_cage(
+    mock_popen: Any,
+    _mock_detect: Any,
+    _mock_probe: Any,
+    rotation: int,
+    device_type: str,
 ) -> None:
-    """On --vo=drm the framebuffer is written direct; rotation has to
-    happen inside mpv."""
+    """x86 / arm64 / pi5 run under cage and inherit the compositor
+    transform via wlr-randr (issue #2856 — driven from
+    src/anthias_viewer/__init__.py). Passing --video-rotate to mpv
+    would double-rotate, so MPVMediaPlayer must never add it on
+    those boards."""
     player = MPVMediaPlayer()
+    # Patch get_device_type alongside DEVICE_TYPE so
+    # get_alsa_audio_device() takes a deterministic branch on the
+    # host — patching only DEVICE_TYPE while leaving get_device_type
+    # at the fixture default ('pi4') would route x86/arm64 through
+    # _detect_hdmi_audio_device() and stat /sys/class/drm.
+    audio_device_type = device_type if device_type == 'pi5' else 'x86'
     with (
         patch(
             'anthias_viewer.media_player.settings',
-            _rotated_mpv_settings(180),
+            _rotated_mpv_settings(rotation),
         ),
         patch(
             'anthias_viewer.media_player.get_device_type',
-            return_value='pi5',
+            return_value=audio_device_type,
         ),
-        patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}),
-    ):
-        player.set_asset('file:///test/video.mp4', 30)
-        player.play()
-    args, _ = mock_popen.call_args
-    assert '--video-rotate=180' in args[0]
-
-
-@patch('anthias_viewer.media_player.subprocess.Popen')
-def test_mpv_skips_video_rotate_on_x86(mock_popen: Any) -> None:
-    """x86 inherits the compositor transform via wayland; double-
-    rotating in mpv would undo wlr-randr's work."""
-    player = MPVMediaPlayer()
-    # Patch get_device_type to 'x86' so get_alsa_audio_device() takes
-    # the HID-card fallback branch — patching it to 'pi5' while
-    # DEVICE_TYPE=x86 would route through _detect_hdmi_audio_device()
-    # and stat /sys/class/drm, making the test depend on the host.
-    with (
-        patch(
-            'anthias_viewer.media_player.settings',
-            _rotated_mpv_settings(90),
-        ),
-        patch(
-            'anthias_viewer.media_player.get_device_type',
-            return_value='x86',
-        ),
-        patch.dict('os.environ', {'DEVICE_TYPE': 'x86'}),
+        patch.dict('os.environ', {'DEVICE_TYPE': device_type}),
     ):
         player.set_asset('file:///test/video.mp4', 30)
         player.play()
@@ -678,17 +818,53 @@ def test_mpv_skips_video_rotate_on_x86(mock_popen: Any) -> None:
     assert not any(arg.startswith('--video-rotate') for arg in args[0])
 
 
+@pytest.mark.parametrize('rotation', [90, 180, 270])
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
 @patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
 @patch('anthias_viewer.media_player.subprocess.Popen')
-def test_mpv_no_video_rotate_at_zero(
-    mock_popen: Any, _mock_detect: Any
+def test_mpv_passes_video_rotate_on_pi4_64(
+    mock_popen: Any, _mock_detect: Any, _mock_probe: Any, rotation: int
 ) -> None:
-    """The default-orientation case must NOT add --video-rotate=0 —
-    keeps the CLI surface unchanged for the 99% of operators who never
-    touch the dropdown, matching the existing arg-list test."""
+    """Pi 4 stays on Qt linuxfb (no cage), so there's no compositor
+    transform to inherit — mpv has to apply rotation itself."""
+    player = MPVMediaPlayer()
+    with (
+        patch(
+            'anthias_viewer.media_player.settings',
+            _rotated_mpv_settings(rotation),
+        ),
+        patch(
+            'anthias_viewer.media_player.get_device_type',
+            return_value='pi5',
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
+    ):
+        player.set_asset('file:///test/video.mp4', 30)
+        player.play()
+    args, _ = mock_popen.call_args
+    assert f'--video-rotate={rotation}' in args[0]
+
+
+@patch(
+    'anthias_viewer.media_player._detect_hdmi_audio_device',
+    return_value='sysdefault:CARD=vc4hdmi0',
+)
+@patch(
+    'anthias_viewer.media_player._probe_video_codec',
+    return_value='',
+)
+@patch('anthias_viewer.media_player.subprocess.Popen')
+def test_mpv_skips_video_rotate_at_zero_on_pi4_64(
+    mock_popen: Any, _mock_probe: Any, _mock_detect: Any
+) -> None:
+    """0° must NOT emit --video-rotate=0 — keeps the CLI surface
+    unchanged for the 99% of operators who never touch the dropdown."""
     player = MPVMediaPlayer()
     with (
         patch(
@@ -699,7 +875,7 @@ def test_mpv_no_video_rotate_at_zero(
             'anthias_viewer.media_player.get_device_type',
             return_value='pi5',
         ),
-        patch.dict('os.environ', {'DEVICE_TYPE': 'pi5'}),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
     ):
         player.set_asset('file:///test/video.mp4', 30)
         player.play()
@@ -716,3 +892,34 @@ def test_proxy_reset_clears_cached_instance(reset_media_proxy: None) -> None:
     MediaPlayerProxy.reset()
     assert MediaPlayerProxy.INSTANCE is None
     fake.stop.assert_called_once()
+
+
+def test_pi_hwdec_dispatch_matches_upload_gate() -> None:
+    """The upload gate (``processing._HW_DECODE_VIDEO_CODECS``) and
+    the viewer's per-codec mpv dispatch (``_PI_HWDEC_BY_CODEC``) must
+    not drift. If the gate accepts a codec on a board, the viewer
+    must have an explicit hwdec entry for it — otherwise the operator
+    uploads a clip that passes validation, then plays back through
+    ``auto-copy`` and quietly software-decodes, defeating the gate.
+
+    The reverse direction (viewer claims to hardware-decode a codec
+    the gate rejects) is just as bad — the viewer path becomes dead
+    code while the gate refuses every upload that would exercise it.
+
+    Boards present in the gate but absent from ``_PI_HWDEC_BY_CODEC``
+    (``pi2``, ``pi3``, ``x86``) are intentional: Pi 2/3 use VLC, x86
+    falls through to mpv ``--hwdec=auto-copy`` which picks vaapi-copy
+    on Intel iGPUs. Those paths don't need an explicit table entry."""
+    from anthias_server.processing import _HW_DECODE_VIDEO_CODECS
+    from anthias_viewer.media_player import _PI_HWDEC_BY_CODEC
+
+    for board, viewer_codecs in _PI_HWDEC_BY_CODEC.items():
+        assert board in _HW_DECODE_VIDEO_CODECS, (
+            f'viewer dispatches {board!r} but the upload gate has no '
+            f'entry — every upload to that board would be rejected.'
+        )
+        gate_codecs = _HW_DECODE_VIDEO_CODECS[board]
+        assert frozenset(viewer_codecs) == gate_codecs, (
+            f'codec mismatch for {board!r}: '
+            f'viewer={sorted(viewer_codecs)} gate={sorted(gate_codecs)}'
+        )

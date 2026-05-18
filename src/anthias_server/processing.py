@@ -11,13 +11,20 @@ Two Celery tasks that run on every fresh upload:
   (BMP especially). JPEG / PNG / WebP / GIF / SVG short-circuit
   through the no-op branch — they're already viewer-friendly *and*
   well-compressed.
-* ``normalize_video_asset`` — probes the upload's container/codec with
-  ffprobe and either passes it through (rename only) or transcodes
-  with ffmpeg's ``-threads 2`` to a board-appropriate codec: libx264
-  on legacy Pi 2/Pi 3 (mmal-vc4 path; no hardware HEVC) and libx265
-  with the iOS-friendly ``hvc1`` tag on Pi 4-64 / Pi 5 / x86 (mpv
-  path; HEVC hardware-decoded on Pi 4 / x86, software on Pi 5). The
-  on-device player only ever sees a codec it can decode.
+* ``normalize_video_asset`` — runs ffprobe on the upload and records
+  what it finds in ``metadata`` (codec, dimensions, fps, audio codec,
+  container, duration). The file itself is never rewritten. Anthias
+  does not transcode video on-device: the viewer's per-board mpv
+  hwdec dispatch already handles every codec a modern board can play
+  in hardware (H.264, HEVC, plus VAAPI's wider set on x86), and the
+  on-device libx265 / libx264 transcode path we tried in this PR's
+  earlier revisions wedged a Pi 4's celery worker for 99 minutes on a
+  single 4K60 H.264 → HEVC pass before zombieing. For codecs the
+  board genuinely can't decode (MPEG-2, MPEG-4 ASP, ...), playback
+  will stutter and the operator's recovery is to upload a transcoded
+  copy — the metadata fields surface what's on each row so the
+  operator can see the codec / dims / fps before pushing the asset to
+  the field.
 
 Both tasks follow the YouTube-download Celery pattern in
 ``anthias_server.celery_tasks``:
@@ -25,20 +32,20 @@ Both tasks follow the YouTube-download Celery pattern in
 * The upload-path serializer flips ``is_processing=True`` and enqueues
   the task before returning. The viewer treats in-flight rows as
   not-displayable and silently skips them during rotation.
-* On success the task atomically replaces the file at the row's
-  ``uri``, refreshes the duration where applicable, writes
-  ``metadata['original_ext']`` / ``metadata['transcoded']`` /
-  ``metadata['converted']``, and clears ``is_processing``.
+* On success the task writes the metadata fields and clears
+  ``is_processing``. The image task additionally rewrites the file
+  in place to WebP; the video task leaves the file unchanged.
 * On failure the row's ``metadata['error_message']`` is filled in and
   ``is_processing`` is cleared via the custom ``Task.on_failure``
   hook so an operator can edit / delete the row instead of being
   stuck on the "Processing" pill forever.
 
 Tasks run inside the same ``anthias-celery`` worker that handles the
-existing ``download_youtube_asset`` flow. The compose file wraps the
-worker command with ``nice -n 19 ionice -c 3`` so a transcode never
-starves the on-device viewer; the ffmpeg invocation here additionally
-caps thread count to two cores.
+existing ``download_youtube_asset`` flow. The compose file still
+wraps the worker with ``nice -n 19 ionice -c 3`` and a memory limit;
+those are defensive — none of the remaining task bodies are CPU-bound
+now that the on-device video transcode is gone, but a Pillow decode
+on a 100 MP TIFF can still pressure RAM on a 1 GB Pi 2.
 """
 
 from __future__ import annotations
@@ -46,6 +53,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shlex
 from os import path
 from typing import Any
 
@@ -53,216 +61,8 @@ import sh
 from celery import Task
 from PIL import Image, UnidentifiedImageError
 
-from anthias_common.utils import get_video_duration
+from anthias_common.board import resolve_device_key
 from anthias_server.app.models import Asset
-
-
-# Containers whose H.264/HEVC payloads play directly in mpv / VLC
-# on the Pi without remuxing. Anything outside this set falls through
-# to a full transcode regardless of codec — a "passthrough" rename
-# preserving a weird container would still need a downstream remux
-# to land in MP4, and the viewer's media stack is happiest on .mp4.
-# Keeping the list explicit also stops a typo'd extension from being
-# silently retained.
-#
-# The set carries BOTH the short extension labels (``ts``, ``mkv``,
-# ``mpg``) AND the canonical ffprobe ``format_name`` tokens
-# (``mpegts``, ``matroska``, ``mpeg``) because the same set is
-# matched against two sources of truth:
-#
-#   * the upload's filename extension (extension fallback path in
-#     ``_ffprobe_summary`` — short labels), and
-#   * ffprobe's reported ``format.format_name`` (canonical names).
-#
-# A pure short-label set would force unnecessary transcodes whenever
-# ffprobe's name (e.g. ``mpegts`` for an MPEG-TS upload) didn't
-# match the extension's short label (``ts``). Listing both keeps the
-# decision aligned across detection paths.
-_PASSTHROUGH_CONTAINERS = frozenset(
-    {
-        # Short extension labels (matched against filename ext).
-        'mp4',
-        'm4v',
-        'mkv',
-        'mov',
-        'webm',
-        'ts',
-        'mpg',
-        'mpeg',
-        'flv',
-        'avi',
-        # ffprobe ``format_name`` tokens not already covered above.
-        # ``matroska`` for .mkv (ffprobe reports ``matroska,webm``).
-        # ``mpegts`` for .ts (ffprobe reports ``mpegts`` not ``ts``).
-        # ``mov`` / ``mp4`` / ``mpeg`` / ``flv`` / ``avi`` / ``webm``
-        # are the canonical names *and* extension labels — only
-        # listed once above.
-        'matroska',
-        'mpegts',
-    }
-)
-
-
-# Audio codecs the viewer can demux without a transcode. ``None`` is
-# represented as the literal string ``'none'`` so a probe result with
-# no audio stream still falls in the "passthrough OK" set.
-_PASSTHROUGH_AUDIO_CODECS = frozenset(
-    {'aac', 'mp3', 'opus', 'vorbis', 'ac3', 'none'}
-)
-
-
-# ---------------------------------------------------------------------------
-# Per-board transcode profile
-# ---------------------------------------------------------------------------
-#
-# The right "video codec" for an Anthias device depends on what the
-# on-device player can hardware-decode (or software-decode at real
-# time). The matrix this PR locks in:
-#
-#   ┌──────────┬─────────────────┬──────────────┬──────────────┐
-#   │ Board    │ Player          │ HEVC OK?     │ Target codec │
-#   ├──────────┼─────────────────┼──────────────┼──────────────┤
-#   │ pi2/pi3  │ VLC + mmal-vc4  │ no           │ H.264        │
-#   │ pi4-64   │ mpv + V4L2 HEVC │ HW-decoded   │ HEVC         │
-#   │ pi5      │ mpv + SW decode │ A76 SW @ 1080p │ HEVC       │
-#   │ x86      │ mpv + va/nv/qsv │ HW-decoded   │ HEVC         │
-#   │ unset    │ (dev / unknown) │ assume no    │ H.264        │
-#   └──────────┴─────────────────┴──────────────┴──────────────┘
-#
-# Two reasons to actually emit HEVC instead of always-H.264:
-#
-#   1. Storage. Anthias devices have small SD cards / eMMC modules; an
-#      HEVC re-encode at equivalent visual quality is roughly 30–50%
-#      smaller than H.264. For a fleet rotating dozens of clips that
-#      compounds.
-#   2. Decode load. Pi 5 has no hardware video decoder at all; the CPU
-#      handles every codec in software. HEVC's better compression at
-#      the same quality means fewer bits the decoder has to chew
-#      through, which trades coding-tool complexity for raw
-#      bandwidth — a wash on Pi 5 in practice, but never worse.
-#
-# The mapping keys match ``DEVICE_TYPE`` (set by the image builder in
-# the Dockerfile, read at celery-task time via ``os.environ``) rather
-# than the runtime-detected ``get_device_type()``. The celery worker
-# shares the env var with anthias-server; it does NOT mount
-# ``/proc/device-tree/model`` from the host. The image builder also
-# uses these exact strings (``pi2`` / ``pi3`` / ``pi4-64`` / ``pi5`` /
-# ``x86``), so a build-time decision and the transcode-time decision
-# always agree. Fallback to ``_DEFAULT_PROFILE`` (H.264) when the env
-# var is unset — keeps the dev-environment path safe and gives an
-# unknown future board the most-compatible codec.
-_BoardProfile = dict[str, Any]
-
-
-# ffmpeg encoder args. Each list is what gets passed between ``-i
-# <input>`` and ``<output>`` for the video stream — audio always
-# becomes AAC 192k via _AUDIO_TRANSCODE_ARGS. ``-tag:v hvc1`` on the
-# HEVC encoder writes the iOS-friendly ``hvc1`` codec tag instead of
-# ffmpeg's default ``hev1``; mpv/VLC handle either, but hvc1 is the
-# broader-compat choice if we ever serve these files to a browser.
-#
-# CRF values are chosen to roughly match perceived quality across
-# codecs: libx264 CRF 23 ≈ libx265 CRF 28. Both leave plenty of
-# headroom for a fleet's typical image-and-text signage content.
-_H264_VIDEO_ARGS = [
-    '-c:v',
-    'libx264',
-    '-preset',
-    'medium',
-    '-crf',
-    '23',
-]
-
-_HEVC_VIDEO_ARGS = [
-    '-c:v',
-    'libx265',
-    '-preset',
-    'medium',
-    '-crf',
-    '28',
-    '-tag:v',
-    'hvc1',
-]
-
-_AUDIO_TRANSCODE_ARGS = ['-c:a', 'aac', '-b:a', '192k']
-
-
-_DEFAULT_PROFILE: _BoardProfile = {
-    # Default lands on H.264 — safe on every Anthias-supported device,
-    # and the fallback for ``DEVICE_TYPE`` unset (dev environment) or
-    # an unrecognised value.
-    'transcode_target': 'h264',
-    'passthrough_video_codecs': frozenset({'h264'}),
-    'video_args': _H264_VIDEO_ARGS,
-}
-
-
-_BOARD_PROFILES: dict[str, _BoardProfile] = {
-    # Legacy 32-bit Pi boards: VLC + mmal-vc4 path. mmal hardware
-    # decode is H.264-only, the CPU is too slow to software-decode
-    # 1080p HEVC, so HEVC is *not* in the passthrough set — uploading
-    # an HEVC clip to a pi2/pi3 must go through a libx264 transcode.
-    'pi2': {
-        'transcode_target': 'h264',
-        'passthrough_video_codecs': frozenset({'h264'}),
-        'video_args': _H264_VIDEO_ARGS,
-    },
-    'pi3': {
-        'transcode_target': 'h264',
-        'passthrough_video_codecs': frozenset({'h264'}),
-        'video_args': _H264_VIDEO_ARGS,
-    },
-    # 64-bit Pi 4 with mpv + KMS (`--vo=drm`): the kernel's V4L2
-    # stateful HEVC decoder driver (/dev/video10 family) is wired up
-    # and mpv's ``--hwdec=auto-safe`` selects ``v4l2request`` for
-    # hevc. Both H.264 and HEVC pass through.
-    'pi4-64': {
-        'transcode_target': 'hevc',
-        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
-        'video_args': _HEVC_VIDEO_ARGS,
-    },
-    # Pi 5: no hardware video decoder block at all (RP1 dropped it
-    # vs. pi4). The Cortex-A76 quad-core software-decodes 1080p H.264
-    # *and* 1080p HEVC at real time, so HEVC is fine. Picking HEVC
-    # also saves disk: a typical 5-minute clip is ~30% smaller after
-    # re-encode than the equivalent H.264 at perceptual parity.
-    'pi5': {
-        'transcode_target': 'hevc',
-        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
-        'video_args': _HEVC_VIDEO_ARGS,
-    },
-    # x86: mpv + ``--hwdec=auto-safe`` selects vaapi (Intel/AMD),
-    # nvdec (NVIDIA), or qsv (Intel iGPU) and every modern x86
-    # platform handles both H.264 and HEVC in hardware. Even on a
-    # software-decode-only x86 box, the CPU has plenty of headroom.
-    'x86': {
-        'transcode_target': 'hevc',
-        'passthrough_video_codecs': frozenset({'h264', 'hevc'}),
-        'video_args': _HEVC_VIDEO_ARGS,
-    },
-}
-
-
-def _resolve_board_profile() -> _BoardProfile:
-    """Map the runtime ``DEVICE_TYPE`` env var to a transcode profile.
-
-    The image builder writes ``DEVICE_TYPE=<board>`` into the server
-    image's env at build time (see ``docker/Dockerfile.server.j2``);
-    the celery worker inherits the same env. Looking it up here means
-    a transcode pipeline running on a pi5 image always picks the pi5
-    profile, even if the underlying CPU briefly looks different to
-    /proc inspection (Balena / dev workflows can run amd64 builds on
-    x86 hardware while still claiming a Pi target).
-
-    Falls back to ``_DEFAULT_PROFILE`` (H.264) on:
-      * unset env var (host dev environment, ``ENVIRONMENT=test``),
-      * a future board name we haven't profiled yet.
-
-    The H.264 default is the most compatible choice — every Anthias
-    device, present and historic, plays libx264.
-    """
-    device_type = os.environ.get('DEVICE_TYPE', '').strip().lower()
-    return _BOARD_PROFILES.get(device_type, _DEFAULT_PROFILE)
 
 
 # Image extensions we route through the conversion task. The
@@ -519,7 +319,9 @@ def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
     return raw.decode('utf-8', errors='replace').strip()
 
 
-def _set_processing_error(asset_id: str, message: str) -> None:
+def _set_processing_error(
+    asset_id: str, message: str, recipe: str = ''
+) -> None:
     """Persist a human-readable error and clear is_processing.
 
     Both tasks land here on a permanent failure (corrupt HEIC,
@@ -528,6 +330,11 @@ def _set_processing_error(asset_id: str, message: str) -> None:
     instead of leaving the row stuck at ``is_processing=True`` is the
     contract called out by the issue's acceptance criteria. Operators
     surface the message via the v2 API's ``metadata`` field.
+
+    ``recipe``, when present, persists alongside the message as
+    ``metadata.error_recipe`` — the dashboard renders it in a
+    copyable ``<code>`` block in the Edit Asset modal. Empty
+    ``recipe`` clears any stale value from a prior failure.
     """
     try:
         asset = Asset.objects.get(asset_id=asset_id)
@@ -535,6 +342,10 @@ def _set_processing_error(asset_id: str, message: str) -> None:
         return
     metadata = dict(asset.metadata or {})
     metadata['error_message'] = message
+    if recipe:
+        metadata['error_recipe'] = recipe
+    else:
+        metadata.pop('error_recipe', None)
     # Disable the row alongside clearing is_processing. The viewer's
     # scheduling.generate_asset_list filters on ``is_enabled`` + date
     # window only — it doesn't check ``metadata.error_message`` —
@@ -651,10 +462,18 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
     Mirrors the YouTube task's failure handling: clears
     ``is_processing`` and writes ``metadata.error_message`` so the
     operator's table row never stays stuck on "Processing" after a
-    crash. The message is the str() of the exception so it surfaces
-    something concrete (``UnidentifiedImageError: cannot identify
-    image file '/data/anthias_assets/abc.heic'``) without leaking a
-    full traceback into the API response.
+    crash. Two message shapes:
+
+    * ``UnsupportedVideoCodecError`` — the gate's user-facing
+      exception. The message body is already operator-readable
+      (no class-name prefix); any attached ``recipe`` lands in
+      ``metadata.error_recipe`` so the modal can render it in a
+      copyable ``<code>`` block.
+    * Anything else (corrupt HEIC, ffmpeg subprocess error, ...) —
+      prefix with the exception class so the operator sees a
+      concrete signal (``UnidentifiedImageError: cannot identify
+      image file '/data/.../abc.heic'``) without leaking the full
+      traceback.
     """
 
     def on_failure(
@@ -669,7 +488,10 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
         if not asset_id:
             return
         try:
-            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+            if isinstance(exc, UnsupportedVideoCodecError):
+                _set_processing_error(asset_id, str(exc), recipe=exc.recipe)
+            else:
+                _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
             _notify(asset_id)
         except Exception:
             logging.exception(
@@ -836,17 +658,9 @@ def _run_image_normalisation(asset: Asset) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Video normalisation: ffprobe → passthrough or libx264/aac transcode
+# Video normalisation: ffprobe → metadata write + HW-decode codec gate
 # ---------------------------------------------------------------------------
 
-
-# How long a single transcode attempt is allowed to run. 30 minutes
-# matches the ceiling called out in the issue; a 1080p H.264-source
-# transcode of a typical 5-minute clip on a Pi 5 finishes in well
-# under 2 minutes. The hard ceiling is the bound for the pathological
-# case (mis-routed long-form upload, hung ffmpeg). Once exceeded,
-# Celery kills the worker process and on_failure clears is_processing.
-NORMALIZE_VIDEO_TIME_LIMIT_S = 60 * 30
 
 # Wall-clock cap on the ffprobe call. A working ffprobe answers in
 # under a second on small files; 60s covers a stalled-IO worst case
@@ -880,11 +694,27 @@ def _ffprobe_streams(input_path: str) -> dict[str, Any]:
 def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     """Reduce ffprobe's payload to the dimensions we branch on.
 
-    Returns a dict with four keys, all populated:
+    Returns a dict with these keys, all populated:
       * ``container`` — lowercase format token, ``'unknown'`` if
         ffprobe couldn't decide.
       * ``video_codec`` — lowercase codec name, ``'unknown'`` if
         the file has no video stream or the probe failed.
+      * ``video_pixels`` — ``width * height`` for the first video
+        stream, ``None`` if no video stream or dimensions missing.
+        Convenience for callers comparing against a total-pixel
+        budget.
+      * ``video_width`` / ``video_height`` — per-axis dimensions
+        of the first video stream, ``None`` if no video stream or
+        dimensions missing. The envelope passthrough check uses
+        these axis-by-axis (an ultrawide 5760×1080 source has fewer
+        total pixels than 4K but exceeds the width of a 3840×2160
+        envelope and must transcode).
+      * ``video_fps`` — the first video stream's average frame rate
+        as a float, or ``None`` if no video stream or
+        ``r_frame_rate`` was unparseable. Used by the playback-
+        envelope transcode to decide whether to emit
+        ``-r envelope.max_fps`` (only when source > cap; the cap
+        is one-way and never up-converts sub-cap content).
       * ``audio_codec`` — lowercase codec name, ``'none'`` when the
         file genuinely carries no audio stream, or ``'unknown'`` if
         the audio stream existed but ffprobe couldn't name its
@@ -911,6 +741,10 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         return {
             'container': 'unknown',
             'video_codec': 'unknown',
+            'video_pixels': None,
+            'video_width': None,
+            'video_height': None,
+            'video_fps': None,
             'audio_codec': 'unknown',
             'duration_seconds': None,
         }
@@ -924,29 +758,52 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         None,
     )
     fmt_data = probe.get('format') or {}
-    # Container resolution prefers ffprobe's ``format.format_name``
-    # over the filename extension: a ``.mov`` file that's actually
-    # MKV bytes (or a ``.bin`` extension hiding an mp4) would be
-    # mis-classified as passthrough-eligible if we trusted the
-    # filename. ffprobe reports a comma-joined list of synonyms
-    # (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``) — we accept the
-    # passthrough decision if ANY token matches the supported set.
-    # Falls back to the extension only when ffprobe couldn't
-    # populate format_name (probe failed; shouldn't happen here
-    # since we already returned 'unknown' above on probe error).
+    # ffprobe reports a comma-joined synonym list in
+    # ``format.format_name`` (e.g. ``mov,mp4,m4a,3gp,3g2,mj2`` for
+    # the QuickTime family). The first token is ffprobe's canonical
+    # name but it's not always the operator-friendly one — for the
+    # QuickTime family it's ``mov``, so an ``.mp4`` upload would
+    # otherwise surface as ``container=mov`` in the asset row.
+    # Prefer the file extension's token when it appears anywhere in
+    # the synonym list so the operator UI matches what the operator
+    # uploaded; fall back to the first token when nothing matches
+    # (extension-less URI, or genuinely exotic container).
     fmt = fmt_data.get('format_name') or ''
     fmt_tokens = [t.strip().lower() for t in fmt.split(',') if t.strip()]
     if fmt_tokens:
-        # Pick the first token that's in the passthrough set; if
-        # none match, take the first reported token verbatim so
-        # downstream branching produces a deterministic 'unknown'.
-        container = next(
-            (t for t in fmt_tokens if t in _PASSTHROUGH_CONTAINERS),
-            fmt_tokens[0],
-        )
+        ext_token = _ext(input_path).lstrip('.')
+        container = ext_token if ext_token in fmt_tokens else fmt_tokens[0]
     else:
         container = _ext(input_path).lstrip('.') or 'unknown'
     video_codec = ((video or {}).get('codec_name') or 'unknown').lower()
+    # Width × height for the metadata surface. ffprobe returns
+    # ``width`` / ``height`` only for video streams, and only when
+    # the demuxer could decide. A missing or unparseable value
+    # collapses to None.
+    try:
+        vw = int((video or {}).get('width') or 0)
+        vh = int((video or {}).get('height') or 0)
+    except (TypeError, ValueError):
+        vw = vh = 0
+    video_width: int | None = vw if vw > 0 else None
+    video_height: int | None = vh if vh > 0 else None
+    video_pixels: int | None = vw * vh if vw > 0 and vh > 0 else None
+    # Average frame rate, used by the envelope transcode to decide
+    # whether to emit ``-r``. ffprobe writes ``r_frame_rate`` as a
+    # rational ``num/den`` string (e.g. ``30000/1001`` for NTSC,
+    # ``60/1`` for true 60 fps). Anything unparseable collapses to
+    # ``None`` so the caller treats it as "we can't tell" and skips
+    # the fps gate (the codec / resolution gates still fire).
+    video_fps: float | None = None
+    raw_fps = (video or {}).get('r_frame_rate')
+    if raw_fps and isinstance(raw_fps, str) and '/' in raw_fps:
+        num_str, _, den_str = raw_fps.partition('/')
+        try:
+            num, den = float(num_str), float(den_str)
+            if den > 0:
+                video_fps = num / den
+        except ValueError:
+            video_fps = None
     if audio is None:
         audio_codec = 'none'
     else:
@@ -969,260 +826,216 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
     return {
         'container': container,
         'video_codec': video_codec,
+        'video_pixels': video_pixels,
+        'video_width': video_width,
+        'video_height': video_height,
+        'video_fps': video_fps,
         'audio_codec': audio_codec,
         'duration_seconds': duration_seconds,
     }
 
 
-def _video_can_passthrough(
-    summary: dict[str, Any],
-    profile: _BoardProfile | None = None,
-) -> bool:
-    """``True`` if the file is in a format the *target board's* viewer
-    plays directly.
+_VIDEO_METADATA_KEYS = (
+    'container',
+    'video_codec',
+    'video_width',
+    'video_height',
+    'video_fps',
+    'audio_codec',
+)
 
-    The probe needs to answer "yes" to all three questions: is the
-    container one we accept; is the video codec one the board's
-    player handles (H.264 only on pi2/pi3 — they have no HEVC
-    hardware and an A53 CPU can't software-decode HEVC at 1080p; H.264
-    + HEVC on pi4-64/pi5/x86); is the audio codec one of the
-    demuxer-compatible set (or absent). Any 'unknown' answer (probe
-    failed, exotic codec) triggers a transcode — better to spend the
-    cycles than to let an unplayable file sit in the rotation.
 
-    ``profile`` defaults to the board profile resolved from
-    ``DEVICE_TYPE`` so callers don't have to thread it through. Tests
-    pass a specific profile to assert per-board behaviour without
-    mutating the env.
+# Per-board hardware-decode codec set. Mirrors
+# ``anthias_viewer.media_player._PI_HWDEC_BY_CODEC`` — the two tables
+# must list the same codecs for each board, because the upload-side
+# gate decides what to accept and the playback-side dispatch decides
+# how to play. If they drift, an asset accepted at upload will fail
+# at the viewer with mpv's silent SW-decode fallback (which the gate
+# exists to prevent).
+#
+# Empty / missing entry means "no codec on this device decodes in
+# hardware" — every video upload is rejected. The catch-all ``arm64``
+# DEVICE_TYPE lands here when ``anthias_host_agent`` hasn't published
+# a more specific subtype to Redis; an unknown aarch64 SBC isn't
+# guaranteed to have a v4l2_request decoder mpv can address, so we
+# refuse rather than ship a clip that would SW-decode at play time.
+_HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
+    'pi2': frozenset({'h264'}),
+    'pi3': frozenset({'h264'}),
+    'pi4-64': frozenset({'h264', 'hevc'}),
+    'pi5': frozenset({'hevc'}),
+    'rockpi4': frozenset({'h264', 'hevc'}),
+    'x86': frozenset({'h264', 'hevc'}),
+}
+
+
+def _hw_decoded_codecs() -> frozenset[str]:
+    """Codecs the *current* board can hardware-decode through mpv.
+
+    Resolves ``DEVICE_TYPE`` via ``anthias_common.board.resolve_device_key``
+    so a Rock Pi 4 running the catch-all ``arm64`` image still picks
+    up its ``{h264, hevc}`` set once ``anthias_host_agent`` publishes
+    ``host:board_subtype=rockpi4``. An unknown / unrecognised
+    DEVICE_TYPE returns the empty set so every video gets rejected.
     """
-    if profile is None:
-        profile = _resolve_board_profile()
-    if summary.get('container') not in _PASSTHROUGH_CONTAINERS:
-        return False
-    if summary.get('video_codec') not in profile['passthrough_video_codecs']:
-        return False
-    if summary.get('audio_codec') not in _PASSTHROUGH_AUDIO_CODECS:
-        return False
-    return True
+    return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
 
 
-def _transcode_to_target(
-    input_path: str,
-    output_path: str,
-    profile: _BoardProfile | None = None,
-) -> None:
-    """Run a libx264 or libx265 transcode picked by the board profile.
+def _ffmpeg_reencode_recipe(
+    supported: frozenset[str],
+    source_filename: str = '',
+) -> str:
+    """Return an ``ffmpeg`` command line the operator can run on
+    their workstation to transcode an unsupported upload into a
+    codec this board hardware-decodes.
 
-    Profile decides codec + encoder args; the *invariants* are:
+    Prefers libx264 when H.264 is in the board's supported set —
+    libx264 is roughly 5-10× faster than libx265 at comparable
+    quality, which matters when the operator is doing the encode by
+    hand. Falls back to libx265 + ``-tag:v hvc1`` for Pi 5 (HEVC-
+    only board). Returns an empty string when the board has no HW
+    decode set at all — there's nothing the operator can transcode
+    to that would land in a supported pipe.
 
-    * ``-y`` and ``-nostdin`` keep ffmpeg non-interactive (it would
-      otherwise prompt on overwrite or block waiting for input).
-    * ``-threads 2`` caps CPU usage so the viewer keeps two cores
-      free on Pi 4 / Pi 5; combined with the ``nice -n 19 ionice -c
-      3`` wrapper on the celery worker this means a transcode
-      effectively never disrupts active playback. libx265 honours the
-      same flag and parallelises within those two threads.
-    * ``-c:a aac -b:a 192k`` matches every Anthias-supplied default
-      asset's audio profile, regardless of video codec.
-    * ``-movflags +faststart`` shifts the moov atom to the front of
-      the file so playback can begin before the file is fully
-      buffered — relevant when the viewer is fed via an HTTP serve
-      later, and harmless otherwise.
-
-    The ``profile`` parameter lets callers (read: tests) override the
-    env-resolved profile so a single host can exercise both the
-    libx264 and libx265 branches without mutating ``DEVICE_TYPE``.
+    ``source_filename``, when supplied, substitutes the bare upload
+    filename (no path) for the ``INPUT`` placeholder and reuses its
+    stem for ``OUTPUT.mp4`` so the operator can copy the recipe
+    verbatim into their terminal without hand-editing it.
     """
-    if profile is None:
-        profile = _resolve_board_profile()
-    sh.ffmpeg(
-        '-y',
-        '-nostdin',
-        '-threads',
-        '2',
-        '-i',
-        input_path,
-        *profile['video_args'],
-        *_AUDIO_TRANSCODE_ARGS,
-        '-movflags',
-        '+faststart',
-        output_path,
-        _timeout=NORMALIZE_VIDEO_TIME_LIMIT_S,
-    )
-
-
-def _resolve_duration_seconds(uri: str) -> int | None:
-    """ffprobe-driven duration for the post-transcode row.
-
-    Used only on the transcode branch (where the file path changed
-    so the summary's pre-transcode duration is no longer
-    representative). The passthrough branch reuses the duration
-    pulled from ``_ffprobe_summary`` to avoid a second ffprobe shell.
-
-    Returns ``None`` when:
-      * ffprobe is unavailable in this environment
-        (``get_video_duration`` returns None on CommandNotFound),
-      * the probe ran but couldn't extract a duration line, OR
-      * the probe raised any exception.
-
-    The exception-swallowing branch matters: ``get_video_duration``
-    raises on ``sh.ErrorReturnCode_1`` ("Bad video format") and on
-    bare ``Exception`` for unexpected failures. After a successful
-    transcode the file is on disk and the row is otherwise ready —
-    failing the *whole task* because the post-transcode duration
-    probe stumbled would be an own-goal. Keep duration best-effort
-    and let the operator edit the row's duration manually if
-    needed.
-    """
-    try:
-        delta = get_video_duration(uri)
-    except Exception:
-        logging.exception(
-            'normalize_video_asset: post-transcode duration probe '
-            'failed for %s; leaving duration unset',
-            uri,
+    if 'h264' in supported:
+        template = (
+            'ffmpeg -i {input} -c:v libx264 -preset medium -crf 23 '
+            '-c:a aac -b:a 192k -movflags +faststart {output}'
         )
-        return None
-    if delta is None:
-        return None
-    return max(1, int(delta.total_seconds()))
+        target_suffix = 'h264'
+    elif 'hevc' in supported:
+        template = (
+            'ffmpeg -i {input} -c:v libx265 -preset medium -crf 28 '
+            '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
+            '{output}'
+        )
+        target_suffix = 'hevc'
+    else:
+        return ''
+    if source_filename:
+        # ``shlex.quote`` produces a safe shell-quoted form for any
+        # filename — single quotes, spaces, ``;``, ``$()``, etc. all
+        # land inside literal quoting that the operator can paste
+        # without re-editing. The output filename carries the
+        # target-codec suffix (``sample.h264.mp4`` / ``sample.hevc.mp4``)
+        # so a recipe whose input shares the output stem doesn't ask
+        # the operator to overwrite their source.
+        in_quoted = shlex.quote(source_filename)
+        stem, _ = path.splitext(source_filename)
+        out_quoted = shlex.quote(f'{stem}.{target_suffix}.mp4')
+    else:
+        in_quoted = 'INPUT'
+        out_quoted = f'OUTPUT.{target_suffix}.mp4'
+    return template.format(input=in_quoted, output=out_quoted)
+
+
+class UnsupportedVideoCodecError(Exception):
+    """Raised by ``_run_video_normalisation`` when a video upload's
+    codec can't be hardware-decoded on this device.
+
+    Carries the suggested ``recipe`` (an ``ffmpeg`` command the
+    operator can run to fix the upload) as an attribute so
+    ``_NormalizeAssetTask.on_failure`` can persist it alongside the
+    human-readable message — the UI surfaces the two in different
+    spots (message inline, recipe in a copyable ``<code>`` block).
+    """
+
+    def __init__(self, message: str, recipe: str = '') -> None:
+        super().__init__(message)
+        self.recipe = recipe
 
 
 def _run_video_normalisation(asset: Asset) -> None:
+    """Probe the upload, record what ffprobe finds in ``metadata``,
+    and reject the asset if its codec isn't hardware-decoded on this
+    device.
+
+    The file is never rewritten. Anthias does not re-encode video
+    on-device — every modern board the viewer supports already
+    hardware-decodes its accepted codec set (H.264 + HEVC on most
+    boards; HEVC only on Pi 5; H.264 only on Pi 2 / Pi 3), and the
+    on-device libx265 / libx264 transcode path tried in earlier
+    revisions wedged a Pi 4's celery worker for 99 minutes on a
+    single 4K60 H.264 → HEVC pass before zombieing.
+
+    Uploading a codec outside the board's HW set is rejected — the
+    viewer would otherwise fall through to mpv's software decode and
+    show drops the operator paid for hardware to avoid. The metadata
+    fields written before the rejection let the operator see what
+    they uploaded (codec / dims / fps) alongside the error message.
+    """
     asset_id = asset.asset_id
     src_uri = asset.uri or ''
     if not src_uri or not path.isfile(src_uri):
         raise FileNotFoundError(f'video source missing: {src_uri!r}')
 
-    src_ext = _ext(src_uri)
     summary = _ffprobe_summary(src_uri)
-    profile = _resolve_board_profile()
 
     metadata = dict(asset.metadata or {})
-    metadata['original_ext'] = src_ext
     metadata.pop('error_message', None)
+    for key in _VIDEO_METADATA_KEYS:
+        value = summary.get(key)
+        if value is not None:
+            metadata[key] = value
 
-    if _video_can_passthrough(summary, profile):
-        # No re-encode. Keep the file at its current uri; flip the
-        # in-progress flag and write the duration if ffprobe could
-        # answer for it. Recording ``transcode_target`` even on the
-        # passthrough path keeps an operator's metadata view
-        # consistent — they can see "this device wanted hevc, the
-        # upload already was hevc, no work needed" without inferring.
-        metadata['transcoded'] = False
-        metadata['transcode_target'] = profile['transcode_target']
-        update: dict[str, Any] = {
-            'is_processing': False,
-            'metadata': metadata,
-        }
-        # Reuse the duration from ``_ffprobe_summary`` rather than
-        # re-shelling ffprobe via ``get_video_duration``: the file
-        # didn't move, so the summary's value is authoritative.
-        # Saves one ffprobe invocation per passthrough row — the
-        # common case on a per-board-codec-matched fleet.
-        passthrough_duration = summary.get('duration_seconds')
-        if isinstance(passthrough_duration, int):
-            update['duration'] = passthrough_duration
-        Asset.objects.filter(asset_id=asset_id).update(**update)
+    update_dict: dict[str, Any] = {
+        'mimetype': 'video',
+        'metadata': metadata,
+    }
+    duration_seconds = summary.get('duration_seconds')
+    if isinstance(duration_seconds, int) and duration_seconds > 0:
+        update_dict['duration'] = duration_seconds
+
+    src_codec = (summary.get('video_codec') or '').lower()
+    supported = _hw_decoded_codecs()
+    if src_codec in supported:
+        update_dict['is_processing'] = False
+        Asset.objects.filter(asset_id=asset_id).update(**update_dict)
         _notify(asset_id)
         return
 
-    # Transcode. Output lives next to the source as ``<base>.mp4``.
-    # The staging file uses a `.staging.mp4` suffix rather than
-    # ``.mp4.tmp`` because ffmpeg picks the muxer from the output
-    # extension; ``.tmp`` makes it bail with "Unable to choose an
-    # output format". The staging-file suffix sits inside the same
-    # mtime guard as cleanup() so a crash mid-transcode still gets
-    # GCed by the orphan-file sweep.
-    base_no_ext = path.splitext(src_uri)[0]
-    final_uri = f'{base_no_ext}.mp4'
-    # ``staging`` deliberately uses a ``.staging.mp4`` suffix rather
-    # than ``.mp4.tmp``: ffmpeg picks its muxer from the output
-    # extension, and ``.tmp`` makes it bail with "Unable to choose an
-    # output format". The suffix also guarantees ``staging != src_uri``
-    # for the in-place transcode case (a non-h264 ``.mp4`` whose
-    # ``base_no_ext`` matches): ffmpeg keeps reading from src_uri while
-    # writing to a distinct path. ``os.replace`` then atomically swaps
-    # the input out for the transcoded output.
-    staging = f'{base_no_ext}.staging.mp4'
-
-    def _drop_staging() -> None:
-        # All transcode failure paths converge through this helper so
-        # a partially-written staging file never lingers after a raise.
-        # cleanup() would eventually GC it as an orphan, but doing it
-        # inline keeps /anthias_assets/ free of debris an operator
-        # might trip over.
-        try:
-            os.remove(staging)
-        except OSError:
-            pass
-
-    try:
-        _transcode_to_target(src_uri, staging, profile)
-    except sh.TimeoutException as exc:
-        # Time-limit overruns are surfaced as TimeoutException; let
-        # on_failure land so is_processing clears.
-        _drop_staging()
-        raise RuntimeError(f'ffmpeg timed out for {src_uri!r}: {exc}') from exc
-    except sh.ErrorReturnCode as exc:
-        _drop_staging()
-        # ``exc.stderr`` is bytes; ``!r`` would render it as
-        # ``b'...'`` in the operator-facing metadata.error_message.
-        # Decode + trim the tail for readability — ffmpeg's last few
-        # lines of stderr are usually the diagnostic, the rest is
-        # build-info noise.
-        raise RuntimeError(
-            f'ffmpeg failed for {src_uri!r}: {_format_subprocess_stderr(exc)}'
-        ) from exc
-
-    if not path.isfile(staging) or os.stat(staging).st_size == 0:
-        # ffmpeg sometimes returns exit 0 but produces an empty file
-        # (broken stream, silent codec mismatch). Reject the result
-        # and clean up the empty file rather than promoting it.
-        _drop_staging()
-        raise RuntimeError(f'ffmpeg produced no output for {src_uri!r}')
-
-    # Same rename-failure cleanup as the image pipeline: the atomic
-    # rename normally succeeds in <1ms, but a filesystem-full /
-    # permissions / cross-device error here would otherwise leave
-    # the staging file hanging around. Mirror the contract by
-    # dropping it on any OSError.
-    try:
-        os.replace(staging, final_uri)
-    except OSError:
-        _drop_staging()
-        raise
-
-    # Drop the original if it lived under a different name (e.g. a
-    # ProRes .mov whose transcoded H.264 lands at the same base.mp4).
-    if final_uri != src_uri:
-        try:
-            os.remove(src_uri)
-        except OSError:
-            logging.exception(
-                'normalize_video_asset: removing original %s failed',
-                src_uri,
-            )
-
-    duration = _resolve_duration_seconds(final_uri)
-
-    metadata['transcoded'] = True
-    # ``transcode_target`` records what we *aimed* to produce so an
-    # operator can see "this row was re-encoded to hevc on a pi5
-    # device" without re-probing the file. The actual codec landed in
-    # the file is identical to this target — ffmpeg only deviates
-    # silently if the encoder is unavailable, which is fatal at this
-    # point (libx265 ships in the apt ffmpeg build for every Anthias
-    # board, see the configure flags in image_builder).
-    metadata['transcode_target'] = profile['transcode_target']
-    update_dict: dict[str, Any] = {
-        'uri': final_uri,
-        'mimetype': 'video',
-        'is_processing': False,
-        'metadata': metadata,
-    }
-    if duration is not None:
-        update_dict['duration'] = duration
+    # Codec is outside the board's HW decode set (or ffprobe couldn't
+    # read it). Commit the metadata we *did* gather so the operator's
+    # asset-list row carries the rejected codec / dims / fps, then
+    # raise so ``_NormalizeAssetTask.on_failure`` fills in
+    # ``error_message`` and clears ``is_processing``.
     Asset.objects.filter(asset_id=asset_id).update(**update_dict)
-
-    _notify(asset_id)
+    display_codec = (
+        src_codec if src_codec and src_codec != 'unknown' else 'unknown'
+    )
+    # ``upload_name`` is stashed by the dashboard / API at upload
+    # time — the on-disk file gets renamed to ``<uuid>.<ext>`` but
+    # the recipe wants a name the operator can paste straight into
+    # their workstation terminal. YouTube / pre-rebrand rows that
+    # don't carry the field fall through to a stable
+    # ``upload<ext>`` placeholder so the recipe still teaches the
+    # operator the input extension.
+    upload_name = metadata.get('upload_name') or (
+        f'upload{path.splitext(src_uri)[1]}'
+    )
+    recipe = _ffmpeg_reencode_recipe(supported, upload_name)
+    if supported:
+        supported_str = ', '.join(sorted(supported))
+        message = (
+            f'Video codec {display_codec!r} is not hardware-decoded on '
+            f'this device. Supported: {supported_str}.'
+        )
+    else:
+        # Empty ``supported`` means we hit the catch-all ``arm64``
+        # branch — DEVICE_TYPE is set but host_agent never published
+        # ``host:board_subtype`` so we can't certify any codec. Say
+        # so rather than the misleading "Supported: none." which
+        # reads like the board has no decoder at all.
+        message = (
+            f'Video codec {display_codec!r} can not be verified for '
+            'hardware decoding on this device — the board has not '
+            'reported a known subtype. Re-flash with the board-'
+            'specific image (e.g. Rock Pi 4) so anthias_host_agent '
+            'can publish its capabilities.'
+        )
+    raise UnsupportedVideoCodecError(message, recipe=recipe)

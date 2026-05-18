@@ -142,6 +142,69 @@ def process_message(message: dict[str, Any]) -> None:
         logging.info('Received unsolicited message: %s', message)
 
 
+def detect_board_subtype() -> str | None:
+    """Identify the SBC by reading ``/proc/device-tree/model``.
+
+    Returns a stable short token (e.g. ``'rockpi4'``) when the model
+    string matches a known board, or ``None`` for unknown boards /
+    hosts without a device tree. The viewer reads the value the
+    publisher writes (``host:board_subtype``) to pick the right
+    ``--hwdec=`` for the SoC.
+
+    Anthias's ``bin/install.sh`` writes ``DEVICE_TYPE=arm64`` for
+    every aarch64 SBC it doesn't recognise as a Pi. Most such boards
+    have no upstream-mpv HW decode path, but a few (Rock Pi 4 with
+    RK3399's Hantro VPU via v4l2m2m) do. Knowing which is which at
+    runtime lets the viewer pick the right ``--hwdec=`` value
+    without forcing operators to manually distinguish images.
+
+    Host_agent runs on the host (not in a container) so it can
+    read the device tree directly — the alternative (mounting
+    ``/proc/device-tree`` into every container) is heavier and
+    doesn't compose well with balena.
+    """
+    try:
+        with open('/proc/device-tree/model', 'rb') as f:
+            # Kernel writes a null-terminated UTF-8 string.
+            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+    except OSError:
+        return None
+    if not model:
+        return None
+    model_low = model.lower()
+    # "Radxa ROCK Pi 4B" (and 4A / 4C variants — all RK3399).
+    if 'rock pi 4' in model_low:
+        return 'rockpi4'
+    return None
+
+
+def set_board_subtype(rdb: 'redis.Redis') -> None:
+    """Publish the host's board subtype to Redis.
+
+    Server + viewer read ``host:board_subtype`` to upgrade the
+    catch-all ``arm64`` DEVICE_TYPE into a board-specific matrix
+    key when one is detected. Written before
+    ``host_agent_ready`` flips so consumers don't read a stale
+    None when they wait on the readiness flag.
+
+    On an unknown board (or a host without a device tree) the key
+    is set to the empty string. The server-side reader treats
+    empty / missing identically — falls back to the static
+    DEVICE_TYPE matrix entry — but writing the empty string still
+    distinguishes "host_agent ran and didn't recognise this board"
+    from "host_agent never ran".
+    """
+    subtype = detect_board_subtype() or ''
+    rdb.set('host:board_subtype', subtype)
+    if subtype:
+        logging.info('Published board subtype %r to redis', subtype)
+    else:
+        logging.info(
+            'No known board subtype for /proc/device-tree/model — '
+            'staying on DEVICE_TYPE-derived envelope'
+        )
+
+
 def subscriber_loop() -> None:
     # On first boot the redis container may not yet accept connections;
     # retry quietly instead of crashing the unit on every attempt.
@@ -162,6 +225,7 @@ def subscriber_loop() -> None:
             )
             pubsub = rdb.pubsub(ignore_subscribe_messages=True)
             pubsub.subscribe(CHANNEL_NAME)
+    set_board_subtype(rdb)
     rdb.set('host_agent_ready', 'true')
     logging.info(
         'Subscribed to channel %s, ready to process messages', CHANNEL_NAME

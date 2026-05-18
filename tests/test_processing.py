@@ -6,12 +6,10 @@ Two tasks under test:
   ``NORMALIZE_IMAGE_EXTS`` (HEIC / HEIF / TIFF / BMP / ICO / TGA /
   JPEG 2000 family / AVIF) → lossless WebP. JPEG / PNG / WebP / GIF
   / SVG short-circuit through the no-op branch.
-* ``normalize_video_asset`` — passthrough or transcode driven by an
-  ffprobe call against the source. Transcode target depends on the
-  board profile resolved from ``DEVICE_TYPE``: libx264 on legacy Pi
-  2 / Pi 3 (no HEVC hardware), libx265 + ``-tag:v hvc1`` on Pi 4-64
-  / Pi 5 / x86. The grid lives in ``processing._BOARD_PROFILES``
-  and is exercised end-to-end by the per-board parametrised tests.
+* ``normalize_video_asset`` — runs ffprobe and writes codec / dims /
+  fps / audio codec / container / duration into ``metadata``. The
+  asset file is never rewritten; the operator's UI uses the metadata
+  fields to identify clips the board can't decode in hardware.
 
 Fixtures are generated programmatically (Pillow + ffmpeg) so the test
 suite is self-contained — no checked-in binary blobs to drift, and
@@ -600,163 +598,6 @@ def test_set_processing_error_writes_metadata(asset_dir: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest_ffmpeg
-@pytest.mark.django_db
-def test_video_h264_mp4_passes_through(asset_dir: str) -> None:
-    """The bread-and-butter case: an H.264 MP4 with AAC audio. ffmpeg
-    is *not* called; the row gets duration + metadata + is_processing
-    cleared, file untouched on disk."""
-    src = path.join(asset_dir, 'sample.mp4')
-    _make_video(src, codec='libx264', container='mp4', audio='aac')
-    asset = _make_processing_asset('vid-h264', src, mimetype='video')
-
-    pre_size = os.stat(src).st_size
-    with mock.patch.object(processing, '_notify') as notify:
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.uri == src  # passthrough — no rename
-    assert asset.is_processing is False
-    assert asset.metadata['original_ext'] == '.mp4'
-    assert asset.metadata['transcoded'] is False
-    # Duration has been probed in (>= 1 second floor).
-    assert asset.duration is not None and asset.duration >= 1
-    assert os.stat(src).st_size == pre_size  # bytes untouched
-    notify.assert_called_once_with('vid-h264')
-
-
-@pytest_ffmpeg
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    ('codec', 'ext', 'container'),
-    [
-        ('libx264', '.mkv', 'matroska'),
-        ('libx264', '.mov', 'mov'),
-        ('libx265', '.mp4', 'mp4'),
-        ('libx265', '.mkv', 'matroska'),
-    ],
-)
-def test_video_passthrough_for_h264_or_hevc_in_known_containers(
-    asset_dir: str,
-    codec: str,
-    ext: str,
-    container: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """H.264 and HEVC in any of the accepted containers passes
-    through *on a board profile that supports HEVC*. Pin
-    ``DEVICE_TYPE=pi5`` so the libx265-source rows hit passthrough
-    rather than getting transcoded back down to H.264 by the
-    default profile."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
-    src = path.join(asset_dir, f'sample{ext}')
-    _make_video(src, codec=codec, container=container, audio='aac')
-    asset = _make_processing_asset('vid-pass', src, mimetype='video')
-
-    with mock.patch.object(processing, '_notify'):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.metadata['transcoded'] is False
-    assert asset.uri == src
-
-
-@pytest_ffmpeg
-@pytest.mark.django_db
-def test_video_silent_passes_through(asset_dir: str) -> None:
-    """A muted clip (no audio stream at all) must passthrough — the
-    audio_codec=='none' branch is the third leg of
-    _video_can_passthrough and the easiest to regress."""
-    src = path.join(asset_dir, 'silent.mp4')
-    _make_video(src, codec='libx264', container='mp4', audio=None)
-    asset = _make_processing_asset('vid-silent', src, mimetype='video')
-
-    with mock.patch.object(processing, '_notify'):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.metadata['transcoded'] is False
-
-
-@pytest_ffmpeg
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    ('codec', 'ext', 'container', 'extra'),
-    [
-        # MPEG-2 in an MPEG-PS container — common camcorder dump.
-        ('mpeg2video', '.mpg', 'mpeg', ()),
-        # Motion JPEG — exotic but ffmpeg-supported.
-        ('mjpeg', '.avi', 'avi', ('-q:v', '5')),
-    ],
-)
-def test_video_exotic_codec_transcodes_to_h264_mp4(
-    asset_dir: str,
-    codec: str,
-    ext: str,
-    container: str,
-    extra: tuple[str, ...],
-) -> None:
-    """Codecs outside the passthrough set become H.264 + AAC MP4. The
-    output filename ends in .mp4 regardless of the source extension;
-    the source file is removed once the .mp4 is in place."""
-    src = path.join(asset_dir, f'fixture{ext}')
-    _make_video(
-        src, codec=codec, container=container, audio='mp2', extra_args=extra
-    )
-    asset = _make_processing_asset('vid-tc', src, mimetype='video')
-
-    with mock.patch.object(processing, '_notify') as notify:
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    final_uri = path.join(asset_dir, 'fixture.mp4')
-    assert asset.uri == final_uri
-    assert path.isfile(final_uri)
-    assert not path.exists(src), 'original must be removed after transcode'
-    assert asset.metadata['transcoded'] is True
-    assert asset.metadata['original_ext'] == ext
-    assert asset.is_processing is False
-    notify.assert_called_once_with('vid-tc')
-
-    # Verify the output is actually H.264 in a passthrough-eligible
-    # container — not just an extension-rename of the source. The
-    # container check uses the passthrough set rather than asserting
-    # ``container == 'mp4'`` directly because ffprobe's
-    # format.format_name reports a comma-joined synonym list for MP4
-    # files (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``); _ffprobe_summary
-    # picks whichever token first matches the passthrough set, and
-    # the exact pick is implementation detail.
-    summary = processing._ffprobe_summary(final_uri)
-    assert summary['video_codec'] == 'h264'
-    assert summary['container'] in processing._PASSTHROUGH_CONTAINERS
-
-
-@pytest_ffmpeg
-@pytest.mark.django_db
-def test_video_non_h264_mp4_is_transcoded_in_place(asset_dir: str) -> None:
-    """An MP4-container with a non-passthrough codec needs a transcode
-    even though the extension is already .mp4. Test the staging
-    rename: source must NOT be truncated mid-read by the output going
-    to the same path. Output ends up at the same `<base>.mp4` URI."""
-    src = path.join(asset_dir, 'fixture.mp4')
-    # MPEG-4 Part 2 (xvid-style). Neither h264 nor hevc → must
-    # transcode despite landing in mp4.
-    _make_video(src, codec='mpeg4', container='mp4', audio='aac')
-    pre_inode = os.stat(src).st_ino
-    asset = _make_processing_asset('vid-mpeg4', src, mimetype='video')
-
-    with mock.patch.object(processing, '_notify'):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.uri == src
-    summary = processing._ffprobe_summary(src)
-    assert summary['video_codec'] == 'h264'
-    # Post-transcode the on-disk inode must differ — the staging
-    # rename replaced the original; we did not in-place truncate.
-    assert os.stat(src).st_ino != pre_inode
-
-
 @pytest.mark.django_db
 def test_video_missing_file_raises_filenotfound(asset_dir: str) -> None:
     src = path.join(asset_dir, 'gone.mp4')
@@ -766,151 +607,282 @@ def test_video_missing_file_raises_filenotfound(asset_dir: str) -> None:
             processing._run_video_normalisation(asset)
 
 
+@pytest_ffmpeg
 @pytest.mark.django_db
-def test_video_ffprobe_failure_falls_through_to_transcode(
-    asset_dir: str,
+def test_video_supported_codec_writes_metadata_and_clears_processing(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A probe that crashes (corrupt header) returns 'unknown' for
-    every dimension; _video_can_passthrough rejects unknowns so the
-    code falls through to transcode. We mock ffprobe to verify the
-    branch wires up — running the real probe on a synthetic corrupt
-    file is non-deterministic across ffprobe versions."""
-    src = path.join(asset_dir, 'broken.mp4')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 32)
-    asset = _make_processing_asset('vid-broken', src, mimetype='video')
+    """H.264 upload on a Pi 4 (which HW-decodes H.264) is accepted:
+    the row gets codec / dims / fps written into ``metadata`` and
+    ``is_processing`` is cleared."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-h264-pi4', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
+    assert asset.metadata.get('video_width') == 32
+    assert asset.metadata.get('video_height') == 32
+    # The asset file itself is untouched — no transcode.
+    assert path.exists(src)
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An H.264 upload on a Pi 5 (HEVC only — Pi 5's mpv has no v4l2-
+    request H.264 hwdec) is rejected. The exception's message names
+    the rejected codec and supported set; its ``recipe`` attribute
+    carries an ffmpeg command pre-filled with the upload's filename
+    (taken from ``metadata.upload_name``, which the upload view
+    stashes at create time) so the operator can copy-paste it
+    verbatim."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset(
+        'vid-h264-pi5',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'beach-clip.mp4'},
+    )
+
+    with mock.patch.object(processing, '_notify'):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    import shlex as _shlex
+
+    msg = str(excinfo.value)
+    assert "'h264'" in msg
+    assert 'hevc' in msg
+    # Recipe is on the exception, not in the message body.
+    recipe = excinfo.value.recipe
+    assert 'libx265' in recipe  # Pi 5 supports HEVC only.
+    assert '-tag:v hvc1' in recipe
+    # The upload's filename appears in the recipe's input slot —
+    # operator can copy and paste it without hand-editing INPUT.
+    tokens = _shlex.split(recipe)
+    assert tokens[1] == '-i'
+    assert tokens[2] == 'beach-clip.mp4'
+    # Output filename carries a ``.hevc.`` suffix so the recipe
+    # doesn't ask the operator to overwrite their source file.
+    assert tokens[-1] == 'beach-clip.hevc.mp4'
+
+    # Metadata was still written so the operator can see *what* they
+    # uploaded next to the error message in the asset list.
+    asset.refresh_from_db()
+    assert asset.metadata.get('video_codec') == 'h264'
+    assert asset.metadata.get('video_width') == 32
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the row has no ``metadata.upload_name`` (YouTube
+    downloads, pre-rebrand rows), the recipe uses a stable
+    ``upload<ext>`` placeholder so the operator still sees the
+    correct input extension to substitute."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'noname.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-noname', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    import shlex as _shlex
+
+    recipe = excinfo.value.recipe
+    tokens = _shlex.split(recipe)
+    assert tokens[1] == '-i'
+    assert tokens[2] == 'upload.mp4'
+    assert tokens[-1] == 'upload.hevc.mp4'
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unsupported_codec_h264_board_recipe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A board that supports H.264 (Pi 4) gets a libx264 recipe —
+    libx264 is significantly faster than libx265 for the operator."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'sample.mpg')
+    _make_video(src, codec='mpeg2video', container='mpeg', audio=None)
+    asset = _make_processing_asset('vid-mpeg2', src, mimetype='video')
+
+    with mock.patch.object(processing, '_notify'):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    recipe = excinfo.value.recipe
+    assert 'libx264' in recipe
+    assert 'libx265' not in recipe
+
+
+@pytest.mark.parametrize(
+    'filename',
+    [
+        "O'Brien.mp4",
+        'two words.mov',
+        'evil; rm -rf $HOME.mp4',
+        'tick`uname`.mp4',
+        'sub$(whoami).mp4',
+    ],
+)
+def test_ffmpeg_recipe_quotes_hostile_filenames(filename: str) -> None:
+    """``_ffmpeg_reencode_recipe`` must round-trip any filename through
+    ``shlex`` so a user-supplied ``upload_name`` can't break out of the
+    recipe's quoting and inject commands the operator copy-pastes.
+
+    Round-trip means: ``shlex.split(recipe)`` recovers the *original*
+    filename byte-for-byte in the input slot. If the recipe still
+    interpolated raw (the pre-fix ``f"'{filename}'"`` path), the
+    embedded quote / metachar would either truncate the token or shell-
+    interpret on paste."""
+    import shlex as _shlex
+
+    recipe = processing._ffmpeg_reencode_recipe(frozenset({'h264'}), filename)
+    tokens = _shlex.split(recipe)
+    # ffmpeg -i <input> -c:v libx264 ... <output>
+    assert tokens[0] == 'ffmpeg'
+    assert tokens[1] == '-i'
+    assert tokens[2] == filename
+    # Output filename ends with .h264.mp4 and is the recipe's last token.
+    assert tokens[-1].endswith('.h264.mp4')
+
+
+@pytest_ffmpeg
+@pytest.mark.django_db
+def test_video_unknown_codec_is_rejected(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ffprobe failure (codec reported as 'unknown') must reject the
+    upload — we won't pass through a clip we can't certify against
+    the board's HW decode set."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'sample.mp4')
+    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    asset = _make_processing_asset('vid-unknown', src, mimetype='video')
 
     fake_summary = {
         'container': 'unknown',
         'video_codec': 'unknown',
+        'video_pixels': None,
+        'video_width': None,
+        'video_height': None,
+        'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
-
-    def fake_transcode(_in: str, out: str, _profile: Any = None) -> None:
-        with open(out, 'wb') as fh:
-            fh.write(b'\x00\x00\x00\x18ftypmp42')  # 24-byte stub
-
-    def fake_probe_post(uri: str) -> int | None:
-        return 5  # mocked duration
-
     with (
         mock.patch.object(processing, '_notify'),
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert 'unknown' in str(excinfo.value)
+
+
+@pytest.mark.django_db
+def test_video_arm64_catch_all_rejects_everything(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
+    decode map (an unknown aarch64 SBC isn't guaranteed to expose a
+    v4l2-request decoder mpv can address). Without a host_agent
+    subtype publish, every video upload is rejected — operator has
+    to install a board-specific image to get HW decode."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    # Create an empty placeholder file so the FileNotFoundError check
+    # passes; we mock ffprobe below.
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-arm64', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
         mock.patch.object(
-            processing, '_transcode_to_target', side_effect=fake_transcode
+            processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        # Subtype absent — Redis returns None.
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value=None
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    # Catch-all branch must explain the board-subtype gap rather
+    # than the misleading "Supported: none." that earlier revisions
+    # surfaced.
+    assert 'subtype' in msg.lower()
+    assert 'board-specific image' in msg.lower()
+
+
+@pytest.mark.django_db
+def test_video_arm64_with_rockpi4_subtype_accepts_h264(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Rock Pi 4 running the catch-all arm64 image gets its
+    ``{h264, hevc}`` set once ``host:board_subtype=rockpi4`` is
+    published by anthias_host_agent."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rockpi', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
         mock.patch.object(
-            processing,
-            '_resolve_duration_seconds',
-            side_effect=fake_probe_post,
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rockpi4'
         ),
     ):
         processing._run_video_normalisation(asset)
 
     asset.refresh_from_db()
-    assert asset.metadata['transcoded'] is True
-    assert asset.duration == 5
-
-
-@pytest.mark.django_db
-def test_video_ffmpeg_timeout_cleans_staging(asset_dir: str) -> None:
-    """ffmpeg time-limit overrun: staging file removed, RuntimeError
-    raised so on_failure clears is_processing. Mocking the transcode
-    helper directly because reproducing a real time-limit kill in a
-    unit test is brittle (depends on subprocess scheduling)."""
-    src = path.join(asset_dir, 'bigfile.mov')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 256)
-    asset = _make_processing_asset('vid-timeout', src, mimetype='video')
-
-    summary = {
-        'container': 'mov',
-        'video_codec': 'prores',  # not passthrough
-        'audio_codec': 'aac',
-    }
-
-    def explode(_in: str, staging: str, _profile: Any = None) -> None:
-        # Half-write the staging file so the cleanup branch has
-        # something to remove — proves we don't leak orphans.
-        with open(staging, 'wb') as fh:
-            fh.write(b'partial')
-        raise sh.TimeoutException(
-            exit_code=124,
-            full_cmd='ffmpeg ...',
-        )
-
-    with (
-        mock.patch.object(processing, '_notify'),
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(
-            processing, '_transcode_to_target', side_effect=explode
-        ),
-    ):
-        with pytest.raises(RuntimeError):
-            processing._run_video_normalisation(asset)
-
-    # Staging file was cleaned up.
-    leftover = [
-        n for n in os.listdir(asset_dir) if n.startswith('bigfile.mp4')
-    ]
-    assert not leftover, f'staging leftover: {leftover}'
-
-
-@pytest.mark.django_db
-def test_video_ffmpeg_error_cleans_staging(asset_dir: str) -> None:
-    """Same shape as the timeout test but for a non-zero ffmpeg
-    exit. RuntimeError must include stderr so the operator gets a
-    diagnostic in metadata.error_message."""
-    src = path.join(asset_dir, 'bad.avi')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 16)
-    asset = _make_processing_asset('vid-fail', src, mimetype='video')
-
-    summary = {
-        'container': 'avi',
-        'video_codec': 'cinepak',
-        'audio_codec': 'pcm_s16le',
-    }
-
-    def explode(_in: str, staging: str, _profile: Any = None) -> None:
-        with open(staging, 'wb') as fh:
-            fh.write(b'')
-        # ``ErrorReturnCode`` is the abstract parent — sh exports
-        # numeric subclasses (ErrorReturnCode_1, ..._127) for each
-        # exit code. The processing code catches the parent class so
-        # the test can raise any subclass.
-        raise sh.ErrorReturnCode_1(
-            full_cmd='ffmpeg ...',
-            stdout=b'',
-            stderr=b'Invalid data found',
-            truncate=False,
-        )
-
-    with (
-        mock.patch.object(processing, '_notify'),
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(
-            processing, '_transcode_to_target', side_effect=explode
-        ),
-    ):
-        with pytest.raises(RuntimeError) as excinfo:
-            processing._run_video_normalisation(asset)
-
-    msg = str(excinfo.value)
-    assert 'Invalid data found' in msg
-    # The error message goes straight into metadata.error_message
-    # which renders on the operator-facing "Failed" pill — must NOT
-    # contain a Python bytes repr (``b'...'``) wrapper.
-    assert "b'Invalid" not in msg, (
-        'stderr should be decoded for operator display'
-    )
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
 
 
 def test_format_subprocess_stderr_decodes_and_trims() -> None:
@@ -964,89 +936,6 @@ def test_format_subprocess_stderr_decodes_and_trims() -> None:
     assert processing._format_subprocess_stderr(exc) == ''
 
 
-@pytest.mark.django_db
-def test_video_zero_byte_output_fails_clean(asset_dir: str) -> None:
-    """ffmpeg sometimes returns exit 0 but produces an empty file
-    (broken stream, codec mismatch the syntax would have rejected
-    in newer builds). The task must reject the empty output and
-    raise — never advertise a 0-byte .mp4 as ready."""
-    src = path.join(asset_dir, 'odd.mov')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 16)
-    asset = _make_processing_asset('vid-empty', src, mimetype='video')
-
-    summary = {
-        'container': 'mov',
-        'video_codec': 'prores',
-        'audio_codec': 'aac',
-    }
-
-    def empty_transcode(_in: str, staging: str, _profile: Any = None) -> None:
-        with open(staging, 'wb') as fh:
-            fh.write(b'')
-
-    with (
-        mock.patch.object(processing, '_notify'),
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(
-            processing, '_transcode_to_target', side_effect=empty_transcode
-        ),
-    ):
-        with pytest.raises(RuntimeError, match='no output'):
-            processing._run_video_normalisation(asset)
-
-    # The empty staging file must be removed too, not just the
-    # error raised — otherwise cleanup() would have to GC it
-    # later via the orphan-file sweep. Same contract as the
-    # timeout/error branches above.
-    leftover = [n for n in os.listdir(asset_dir) if 'staging' in n]
-    assert not leftover, f'staging leftover after empty output: {leftover}'
-
-
-@pytest.mark.django_db
-def test_video_rename_failure_cleans_staging(asset_dir: str) -> None:
-    """Video pipeline mirrors the image-pipeline contract: an OSError
-    on the post-transcode ``os.replace(staging, final_uri)`` (disk
-    full, permissions, cross-device) drops the .staging.mp4 file
-    before propagating."""
-    src = path.join(asset_dir, 'odd.mov')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 16)
-    asset = _make_processing_asset('vid-rename-fail', src, mimetype='video')
-
-    summary = {
-        'container': 'mov',
-        'video_codec': 'prores',
-        'audio_codec': 'aac',
-    }
-
-    def good_transcode(_in: str, staging: str, _profile: Any = None) -> None:
-        with open(staging, 'wb') as fh:
-            fh.write(b'\x00\x00\x00\x18ftypmp42')
-
-    def boom(staging: str, final_uri: str) -> None:
-        assert path.isfile(staging), 'precondition: staging must exist'
-        raise OSError('simulated rename failure')
-
-    with (
-        mock.patch.object(processing, '_notify'),
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(
-            processing, '_transcode_to_target', side_effect=good_transcode
-        ),
-        mock.patch('anthias_server.processing.os.replace', side_effect=boom),
-    ):
-        with pytest.raises(OSError, match='rename failure'):
-            processing._run_video_normalisation(asset)
-
-    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.staging.mp4')]
-    assert not leftover, f'video staging leftover after rename: {leftover}'
-
-
 # ---------------------------------------------------------------------------
 # ffprobe summary parsing — tested independently of the runner
 # ---------------------------------------------------------------------------
@@ -1087,28 +976,83 @@ def test_ffprobe_summary_handles_no_audio_track() -> None:
     assert summary['audio_codec'] == 'none'
 
 
-def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
-    """Defensive: ffprobe-reported ``format.format_name`` beats the
-    filename. A ``.bin`` file that's actually an MP4 must classify
-    as passthrough-eligible — and a ``.mp4`` file whose bytes are
-    actually a non-passthrough format (e.g. ``avi``) must classify
-    out of the passthrough set despite the misleading extension."""
-    # MP4 bytes hidden behind an arbitrary extension.
+@pytest.mark.parametrize(
+    ('r_frame_rate', 'expected_fps'),
+    [
+        # Integer rates land cleanly.
+        ('30/1', 30.0),
+        ('60/1', 60.0),
+        ('25/1', 25.0),
+        # NTSC drop-frame: 30000/1001 ≈ 29.97.
+        ('30000/1001', 29.97002997002997),
+        # 60000/1001 ≈ 59.94 (NTSC 60).
+        ('60000/1001', 59.94005994005994),
+        # Garbage values collapse to None so the envelope cap
+        # treats the source as "we can't tell" and skips the fps
+        # gate — codec / resolution gates still fire.
+        ('bogus', None),
+        ('60', None),  # no slash → no rational, drop to None
+        ('0/0', None),  # denominator 0 → no fps
+    ],
+)
+def test_ffprobe_summary_parses_video_fps(
+    r_frame_rate: str, expected_fps: float | None
+) -> None:
+    """``video_fps`` is the average frame rate parsed from
+    ffprobe's ``r_frame_rate`` rational. The envelope transcode
+    uses it to decide when to emit ``-r envelope.max_fps`` — only
+    when source fps > cap. Garbage / zero-denominator → ``None``."""
+    fake = {
+        'format': {},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'r_frame_rate': r_frame_rate,
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    if expected_fps is None:
+        assert summary['video_fps'] is None
+    else:
+        assert summary['video_fps'] == pytest.approx(expected_fps)
+
+
+def test_ffprobe_summary_prefers_extension_match_in_synonym_list() -> None:
+    """ffprobe's ``format_name`` for the QuickTime family is a
+    synonym list (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``). Operator-facing
+    metadata should match what the operator uploaded: an ``.mp4``
+    file surfaces as ``mp4`` (not ``mov``, the first token), and an
+    ``.m4v`` file surfaces as ``m4v`` if ffprobe includes it. Falls
+    back to the first ffprobe token only when the extension doesn't
+    appear in the list at all (extension-less URI / genuinely exotic
+    container)."""
     mp4_format_name = 'mov,mp4,m4a,3gp,3g2,mj2'
     fake = {
         'format': {'format_name': mp4_format_name},
         'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
     }
+    # .mp4 → operator sees 'mp4', not 'mov'.
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['container'] == 'mp4'
+
+    # .m4a → 'm4a' (also in the synonym list).
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.m4a')
+    assert summary['container'] == 'm4a'
+
+    # No extension match (.bin hides mp4 bytes) → first ffprobe
+    # token wins so the metadata still reflects something concrete.
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
         summary = processing._ffprobe_summary('fixture.bin')
-    # The picked token matches the passthrough set.
-    assert summary['container'] in processing._PASSTHROUGH_CONTAINERS
+    assert summary['container'] == 'mov'
 
-    # AVI bytes hidden behind a `.mp4` filename — must NOT pass
-    # through. avi is intentionally in the passthrough list (h264
-    # in avi is fine), but if format.format_name returns just
-    # 'foo' (made up, not in our set) we report that token verbatim
-    # so the caller falls through to transcode.
+    # Made-up format name with a misleading filename extension →
+    # reported verbatim, no extension fallback (the file genuinely
+    # isn't mp4 despite the name).
     fake = {
         'format': {'format_name': 'unsupported_format'},
         'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
@@ -1116,57 +1060,6 @@ def test_ffprobe_summary_prefers_format_name_over_filename_extension() -> None:
     with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
         summary = processing._ffprobe_summary('fixture.mp4')
     assert summary['container'] == 'unsupported_format'
-    assert summary['container'] not in processing._PASSTHROUGH_CONTAINERS
-
-
-@pytest.mark.parametrize(
-    ('format_name', 'description'),
-    [
-        # Real ffprobe format_name strings observed for each container
-        # in the passthrough set. The decision must classify them all
-        # as eligible — without ``mpegts`` / ``matroska`` in the set,
-        # an MPEG-TS or MKV upload would force an unnecessary transcode
-        # despite both being playable on every Anthias-supported board.
-        ('mov,mp4,m4a,3gp,3g2,mj2', '.mp4 / .m4v / .mov'),
-        ('matroska,webm', '.mkv / .webm'),
-        ('mpegts', '.ts'),
-        ('mpeg', '.mpg / .mpeg'),
-        ('flv', '.flv'),
-        ('avi', '.avi'),
-    ],
-)
-def test_passthrough_containers_match_real_ffprobe_format_names(
-    format_name: str, description: str
-) -> None:
-    """Every container that's listed in ``_PASSTHROUGH_CONTAINERS`` as
-    a "we accept this" must actually match what ffprobe writes for
-    real files of that container — not just the file's extension.
-
-    Regression: ffprobe reports ``mpegts`` for .ts (not ``ts``) and
-    ``matroska`` for .mkv (not ``mkv``). The passthrough set used to
-    carry only the short extension labels, so MPEG-TS uploads were
-    being unnecessarily re-encoded. Adding the canonical ffprobe
-    names to the set keeps the decision consistent between the
-    extension-fallback and format_name-driven detection paths.
-    """
-    fake = {
-        'format': {'format_name': format_name},
-        'streams': [
-            {'codec_type': 'video', 'codec_name': 'h264'},
-            {'codec_type': 'audio', 'codec_name': 'aac'},
-        ],
-    }
-    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
-        summary = processing._ffprobe_summary('fixture.unused')
-    assert summary['container'] in processing._PASSTHROUGH_CONTAINERS, (
-        f'{description}: ffprobe format_name={format_name!r} resolved to '
-        f'{summary["container"]!r} which is not in _PASSTHROUGH_CONTAINERS'
-    )
-    pi5 = processing._BOARD_PROFILES['pi5']
-    assert processing._video_can_passthrough(summary, pi5), (
-        f'{description}: passthrough check rejected a real-ffprobe-name '
-        f'container; would force an unnecessary transcode'
-    )
 
 
 def test_ffprobe_summary_falls_back_to_extension_when_format_missing() -> None:
@@ -1198,6 +1091,10 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
     assert summary == {
         'container': 'unknown',
         'video_codec': 'unknown',
+        'video_pixels': None,
+        'video_width': None,
+        'video_height': None,
+        'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -1247,57 +1144,6 @@ def test_ffprobe_summary_extracts_duration_from_probe_payload() -> None:
     assert summary['duration_seconds'] is None
 
 
-@pytest.mark.django_db
-def test_video_passthrough_uses_summary_duration_no_second_probe(
-    asset_dir: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The passthrough branch must reuse the duration the summary
-    already extracted; calling ``get_video_duration`` (which would
-    re-shell ffprobe) is a regression. Asserts via mock-not-called."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
-    src = path.join(asset_dir, 'clip.mp4')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 64)
-    asset = _make_processing_asset('vid-no-2nd-probe', src, mimetype='video')
-
-    summary = {
-        'container': 'mp4',
-        'video_codec': 'h264',
-        'audio_codec': 'aac',
-        'duration_seconds': 42,
-    }
-    with (
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(processing, 'get_video_duration') as get_dur,
-        mock.patch.object(processing, '_notify'),
-    ):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.duration == 42
-    # Crucially: the second ffprobe shell never happened.
-    get_dur.assert_not_called()
-
-
-def test_resolve_duration_seconds_swallows_probe_exceptions() -> None:
-    """``get_video_duration`` raises on ffprobe errors. After a
-    successful transcode the row is otherwise ready to play; failing
-    the entire task because the post-transcode duration probe stumbled
-    would lose all the work. Helper must catch and return None so the
-    runner just skips the duration update and lets the operator edit
-    manually."""
-    with mock.patch.object(
-        processing,
-        'get_video_duration',
-        side_effect=Exception('Bad video format'),
-    ):
-        # Should NOT raise.
-        result = processing._resolve_duration_seconds('clip.mp4')
-    assert result is None
-
-
 def test_format_subprocess_stderr_byte_trim_handles_multibyte_utf8() -> None:
     """The trim is documented as a byte limit; multibyte characters
     in the keep window must not push the decoded string over the
@@ -1335,261 +1181,13 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
     assert summary == {
         'container': 'unknown',
         'video_codec': 'unknown',
+        'video_pixels': None,
+        'video_width': None,
+        'video_height': None,
+        'video_fps': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
-
-
-@pytest.mark.parametrize(
-    ('summary', 'expected'),
-    [
-        # Happy path: H.264 + AAC in mp4
-        (
-            {'container': 'mp4', 'video_codec': 'h264', 'audio_codec': 'aac'},
-            True,
-        ),
-        # HEVC in mkv with no audio (board profile must allow hevc)
-        (
-            {'container': 'mkv', 'video_codec': 'hevc', 'audio_codec': 'none'},
-            True,
-        ),
-        # Unknown container — fail
-        (
-            {'container': 'avs', 'video_codec': 'h264', 'audio_codec': 'aac'},
-            False,
-        ),
-        # Exotic codec — fail
-        (
-            {
-                'container': 'mov',
-                'video_codec': 'prores',
-                'audio_codec': 'pcm_s16le',
-            },
-            False,
-        ),
-        # Unknown audio codec — fail (we'd have to demux it out)
-        (
-            {
-                'container': 'mp4',
-                'video_codec': 'h264',
-                'audio_codec': 'truehd',
-            },
-            False,
-        ),
-        # All unknowns (probe failed) — fail safely → transcode
-        (
-            {
-                'container': 'unknown',
-                'video_codec': 'unknown',
-                'audio_codec': 'unknown',
-            },
-            False,
-        ),
-    ],
-)
-def test_video_can_passthrough_decision_table(
-    summary: dict[str, str], expected: bool
-) -> None:
-    """Exhaustive truth table for ``_video_can_passthrough``. Catches
-    a future change to the passthrough sets that wasn't intended.
-    Pins the board profile to ``pi5`` (which accepts both h264 + hevc)
-    so the legacy "happy path" cases stay equivalent — separate
-    per-board tests below cover the pi2/pi3 H.264-only branch."""
-    pi5_profile = processing._BOARD_PROFILES['pi5']
-    assert processing._video_can_passthrough(summary, pi5_profile) is expected
-
-
-# ---------------------------------------------------------------------------
-# Per-board transcode profile (the codec grid)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ('device_type', 'expected_target'),
-    [
-        ('pi2', 'h264'),
-        ('pi3', 'h264'),
-        ('pi4-64', 'hevc'),
-        ('pi5', 'hevc'),
-        ('x86', 'hevc'),
-        # Unset / unknown env var falls back to H.264 — the most
-        # compatible codec for any Anthias-supported device.
-        ('', 'h264'),
-        ('weird-future-board', 'h264'),
-    ],
-)
-def test_resolve_board_profile_picks_target_codec_per_board(
-    device_type: str, expected_target: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The transcode target lives in a board profile keyed by
-    ``DEVICE_TYPE``. This regression-tests the grid in one place so a
-    future "let's also build a pi6 image" rollout can't silently fall
-    through to H.264 if it forgets to register a profile entry."""
-    monkeypatch.setenv('DEVICE_TYPE', device_type)
-    profile = processing._resolve_board_profile()
-    assert profile['transcode_target'] == expected_target
-
-
-@pytest.mark.parametrize(
-    ('device_type', 'video_codec', 'expected_passthrough'),
-    [
-        # pi2 / pi3: VLC + mmal-vc4. H.264 only. HEVC must transcode.
-        ('pi2', 'h264', True),
-        ('pi2', 'hevc', False),
-        ('pi3', 'h264', True),
-        ('pi3', 'hevc', False),
-        # pi4-64 / pi5 / x86: mpv with HEVC support. Both codecs OK.
-        ('pi4-64', 'h264', True),
-        ('pi4-64', 'hevc', True),
-        ('pi5', 'h264', True),
-        ('pi5', 'hevc', True),
-        ('x86', 'h264', True),
-        ('x86', 'hevc', True),
-        # Default profile is H.264-only — safer for unknown boards.
-        ('', 'h264', True),
-        ('', 'hevc', False),
-    ],
-)
-def test_video_can_passthrough_respects_board_codec_set(
-    device_type: str,
-    video_codec: str,
-    expected_passthrough: bool,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A pi3 device must not passthrough an HEVC upload; a pi5 device
-    must. The test pins ``DEVICE_TYPE`` rather than passing the
-    profile explicitly so the env-resolution code path is exercised
-    end-to-end (mirrors how the celery worker decides at runtime)."""
-    monkeypatch.setenv('DEVICE_TYPE', device_type)
-    summary = {
-        'container': 'mp4',
-        'video_codec': video_codec,
-        'audio_codec': 'aac',
-    }
-    assert processing._video_can_passthrough(summary) is expected_passthrough
-
-
-@pytest.mark.parametrize(
-    ('device_type', 'expected_codec', 'expected_extra'),
-    [
-        ('pi2', 'libx264', None),
-        ('pi3', 'libx264', None),
-        ('pi4-64', 'libx265', 'hvc1'),
-        ('pi5', 'libx265', 'hvc1'),
-        ('x86', 'libx265', 'hvc1'),
-        ('', 'libx264', None),
-    ],
-)
-def test_transcode_to_target_uses_board_specific_encoder(
-    device_type: str,
-    expected_codec: str,
-    expected_extra: str | None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Capture the ffmpeg argv ``_transcode_to_target`` invokes and
-    assert the encoder + ``-tag:v hvc1`` (HEVC only) match the
-    board's expected output. Mocks ``sh.ffmpeg`` so no actual encode
-    runs — we only care about the argv shape here."""
-    monkeypatch.setenv('DEVICE_TYPE', device_type)
-
-    captured: dict[str, Any] = {}
-
-    def fake_ffmpeg(*args: Any, **kwargs: Any) -> None:
-        captured['args'] = list(args)
-        captured['kwargs'] = kwargs
-
-    with mock.patch.object(sh, 'ffmpeg', side_effect=fake_ffmpeg):
-        processing._transcode_to_target('in.mov', 'out.mp4')
-
-    args = captured['args']
-    # ``-c:v <encoder>`` lands somewhere in the middle of the argv.
-    assert '-c:v' in args
-    codec_index = args.index('-c:v')
-    assert args[codec_index + 1] == expected_codec
-    # AAC audio + faststart are invariants across boards.
-    assert '-c:a' in args and 'aac' in args
-    assert '-movflags' in args and '+faststart' in args
-    assert '-threads' in args and '2' in args
-    if expected_extra == 'hvc1':
-        # HEVC output gets the iOS-friendly hvc1 codec tag.
-        assert '-tag:v' in args
-        tag_index = args.index('-tag:v')
-        assert args[tag_index + 1] == 'hvc1'
-    else:
-        assert '-tag:v' not in args
-
-
-@pytest_ffmpeg
-@pytest.mark.django_db
-def test_video_passthrough_records_target_codec(
-    asset_dir: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Passthrough rows still get ``transcode_target`` written so the
-    operator can see "this device wanted hevc, the upload already was
-    hevc, no work needed"."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
-    src = path.join(asset_dir, 'sample.mp4')
-    _make_video(src, codec='libx264', container='mp4', audio='aac')
-    asset = _make_processing_asset('vid-pass-pi5', src, mimetype='video')
-
-    with mock.patch.object(processing, '_notify'):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.metadata['transcoded'] is False
-    assert asset.metadata['transcode_target'] == 'hevc'
-
-
-@pytest.mark.django_db
-def test_video_pi3_transcodes_hevc_to_h264(
-    asset_dir: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A pi3 device receiving an HEVC upload must transcode to H.264
-    even though the source is in an accepted container — pi3's VLC +
-    mmal-vc4 path can't decode HEVC. Mocks the actual ffmpeg run so
-    the test doesn't depend on libx265 being available; asserts on
-    the captured argv to lock in the codec choice."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi3')
-    src = path.join(asset_dir, 'fixture.mkv')
-    with open(src, 'wb') as fh:
-        fh.write(b'\x00' * 64)
-    asset = _make_processing_asset('vid-pi3-hevc', src, mimetype='video')
-
-    summary = {
-        'container': 'mkv',
-        'video_codec': 'hevc',
-        'audio_codec': 'aac',
-    }
-    captured: dict[str, Any] = {}
-
-    def fake_transcode(_in: str, staging: str, _profile: Any = None) -> None:
-        # Capture the profile that was selected and produce a stub
-        # output so the runner can finalise the row.
-        captured['profile'] = _profile
-        with open(staging, 'wb') as fh:
-            fh.write(b'\x00\x00\x00\x18ftypmp42')
-
-    with (
-        mock.patch.object(processing, '_notify'),
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(
-            processing, '_transcode_to_target', side_effect=fake_transcode
-        ),
-        mock.patch.object(
-            processing, '_resolve_duration_seconds', return_value=10
-        ),
-    ):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.metadata['transcoded'] is True
-    assert asset.metadata['transcode_target'] == 'h264'
-    # The runner threaded the resolved profile to the transcode
-    # helper rather than letting it re-resolve from env (which would
-    # also be correct, but threading is the cheaper invariant).
-    assert captured['profile']['transcode_target'] == 'h264'
 
 
 # ---------------------------------------------------------------------------
@@ -1739,6 +1337,75 @@ def test_normalize_on_failure_no_args_is_safe() -> None:
     task = processing._NormalizeAssetTask()
     # Should not raise.
     task.on_failure(RuntimeError('boom'), 'task-id', (), {}, None)
+
+
+@pytest.mark.django_db
+def test_normalize_on_failure_unsupported_codec_persists_recipe(
+    asset_dir: str,
+) -> None:
+    """``UnsupportedVideoCodecError`` is the gate's user-facing
+    exception. on_failure must:
+
+    * write the bare message into ``metadata.error_message`` (no
+      ``UnsupportedVideoCodecError:`` class-name prefix — that's the
+      P1 review finding), and
+    * mirror the exception's ``recipe`` attribute into
+      ``metadata.error_recipe`` so the Edit modal can render it in a
+      copyable ``<code>`` block.
+    """
+    asset = _make_processing_asset(
+        'vid-onfail',
+        path.join(asset_dir, 'fixture.mpg'),
+        mimetype='video',
+    )
+    task = processing._NormalizeAssetTask()
+    exc = processing.UnsupportedVideoCodecError(
+        "Video codec 'mpeg2video' is not hardware-decoded on this "
+        'device. Supported: h264, hevc.',
+        recipe="ffmpeg -i 'fixture.mpg' -c:v libx264 'fixture.mp4'",
+    )
+
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(exc, 'task-id', (asset.asset_id,), {}, None)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    msg = asset.metadata['error_message']
+    assert 'mpeg2video' in msg
+    assert 'UnsupportedVideoCodecError' not in msg
+    assert asset.metadata['error_recipe'] == (
+        "ffmpeg -i 'fixture.mpg' -c:v libx264 'fixture.mp4'"
+    )
+
+
+@pytest.mark.django_db
+def test_normalize_on_failure_clears_stale_error_recipe(
+    asset_dir: str,
+) -> None:
+    """A subsequent non-recipe failure must clear any stale
+    ``error_recipe`` from a previous run, otherwise the modal would
+    show an outdated recipe alongside the new error message."""
+    asset = _make_processing_asset(
+        'img-clears',
+        path.join(asset_dir, 'fixture.tiff'),
+        mimetype='image',
+        metadata={
+            'error_recipe': "ffmpeg -i 'old.mpg' -c:v libx264 'old.mp4'",
+        },
+    )
+    task = processing._NormalizeAssetTask()
+
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(
+            UnidentifiedImageError('cannot decode'),
+            'task-id',
+            (asset.asset_id,),
+            {},
+            None,
+        )
+
+    asset.refresh_from_db()
+    assert 'error_recipe' not in asset.metadata
 
 
 # ---------------------------------------------------------------------------
@@ -1989,43 +1656,6 @@ def test_ffprobe_streams_parses_json() -> None:
     ):
         result = processing._ffprobe_streams('fixture.mp4')
     assert result['streams'][0]['codec_name'] == 'h264'
-
-
-@pytest.mark.django_db
-def test_video_passthrough_skips_duration_when_probe_unavailable(
-    asset_dir: str,
-) -> None:
-    """If ffprobe is unavailable (host without ffmpeg apt package),
-    the passthrough branch still flips is_processing — the row
-    stays at its placeholder duration so the operator can edit it
-    manually rather than being stuck."""
-    src = path.join(asset_dir, 'fixture.mp4')
-    with open(src, 'wb') as fh:
-        # Just enough so isfile() passes; the probe is mocked anyway.
-        fh.write(b'\x00' * 64)
-    asset = _make_processing_asset('vid-noprobe', src, mimetype='video')
-
-    summary = {
-        'container': 'mp4',
-        'video_codec': 'h264',
-        'audio_codec': 'aac',
-    }
-    with (
-        mock.patch.object(
-            processing, '_ffprobe_summary', return_value=summary
-        ),
-        mock.patch.object(
-            processing, '_resolve_duration_seconds', return_value=None
-        ),
-        mock.patch.object(processing, '_notify'),
-    ):
-        processing._run_video_normalisation(asset)
-
-    asset.refresh_from_db()
-    assert asset.is_processing is False
-    # Duration left at the placeholder — never overwritten with None.
-    assert asset.duration == 0
-    assert asset.metadata['transcoded'] is False
 
 
 # ---------------------------------------------------------------------------

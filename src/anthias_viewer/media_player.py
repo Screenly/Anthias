@@ -1,8 +1,9 @@
 import logging
 import os
 import subprocess
-from typing import ClassVar
+from typing import IO, ClassVar
 
+from anthias_common.board import ARM64_DEVICE_TYPES, resolve_device_key
 from anthias_common.device_helper import get_device_type
 from anthias_common.utils import clamp_screen_rotation
 from anthias_server.settings import settings
@@ -163,7 +164,7 @@ def get_alsa_audio_device() -> str:
     # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
     # those boards, so route via DEVICE_TYPE env first and only fall
     # through to the Pi-name dispatch when we're actually on a Pi.
-    if os.environ.get('DEVICE_TYPE') == 'arm64':
+    if os.environ.get('DEVICE_TYPE') in ARM64_DEVICE_TYPES:
         # No portable per-SoC HDMI card name across Rockchip /
         # Allwinner / Amlogic, so defer to ALSA's `default` device.
         # Operators with a non-standard HDMI sink can override via
@@ -207,6 +208,112 @@ class MediaPlayer:
         raise NotImplementedError
 
 
+# Per-codec hwdec preference on Pi, per-board:
+#
+#   Pi 4: H.264 → v4l2m2m-copy  (V3D V4L2 M2M decoder via
+#                                bcm2835-codec, up to 1080p60)
+#         HEVC  → drm-copy      (FFmpeg v4l2_request_hevc, up to
+#                                4Kp60 via the dedicated HEVC block)
+#
+#   Pi 5: H.264 → auto-copy     (Hantro G1 silicon exists but mpv
+#                                has no v4l2-request H.264 hwdec
+#                                upstream; passing v4l2m2m-copy
+#                                here would just log "Could not
+#                                find a valid device" errors before
+#                                silently SW-falling-back. The
+#                                playback envelope (HEVC 4Kp60) means
+#                                every asset normalised post-rollout
+#                                lands as HEVC, so this branch only
+#                                fires for legacy variants the
+#                                re-render walker hasn't caught yet.)
+#         HEVC  → drm-copy      (Hantro G2, up to 4Kp60. Requires
+#                                `dtoverlay=vc4-kms-v3d,cma-512` in
+#                                /boot/firmware/config.txt — the
+#                                stock 64 MB CMA region can't fit
+#                                a 4K HEVC dst buffer pool, and the
+#                                kernel cmdline `cma=` route silently
+#                                orphans the rpi-hevc-dec driver.)
+#
+#   generic-arm64 (Armbian SBCs — Rock Pi 4, Orange Pi, etc.):
+#         H.264 → v4l2m2m-copy  (RK3399 Hantro via the v4l2m2m
+#         HEVC  → v4l2m2m-copy   driver. mpv's --hwdec=help on the
+#                                latest-generic-arm64 image lists
+#                                both h264_v4l2m2m and hevc_v4l2m2m;
+#                                on boards without a working driver
+#                                mpv logs a warning and SW-falls-
+#                                back at runtime.)
+#
+# `auto-copy` is the universal safe fallback when ffprobe can't
+# read the codec (missing file, network URI we don't probe, etc.).
+#
+# An earlier revision did this with a Lua on_load hook, but
+# video-codec-name is empty at every event mpv exposes to scripts
+# before hwdec init (on_load, on_preloaded). ffprobing from Python
+# at launch time is both simpler and the only thing that actually
+# works.
+_PI_HWDEC_BY_CODEC: dict[str, dict[str, str]] = {
+    'pi4-64': {'h264': 'v4l2m2m-copy', 'hevc': 'drm-copy'},
+    'pi5': {'hevc': 'drm-copy'},
+    # Rock Pi 4 (RK3399, Radxa). Both codecs go through
+    # ``drm-copy``: the arm64 viewer image now pulls the Raspberry
+    # Pi repo's ffmpeg (``+rpt1``, with ``--enable-v4l2-request``
+    # — same package family as Pi 4 / Pi 5), so mpv exposes the
+    # stateless v4l2_request decoders that the RK3399's ``rkvdec``
+    # (HEVC) and ``rockchip,rk3399-vpu-dec`` Hantro VPU (H.264)
+    # implement. The ``start_viewer.sh`` entrypoint creates the
+    # ``/dev/video-dec*`` symlinks the v4l2_request decoder
+    # discovery code expects (privileged docker mounts its own
+    # /dev tmpfs without udev's symlinks).
+    'rockpi4': {'h264': 'drm-copy', 'hevc': 'drm-copy'},
+}
+
+
+def _probe_video_codec(uri: str) -> str:
+    """Return the canonical lowercase video codec name for ``uri``.
+
+    Empty string on probe failure (missing file, unreadable codec,
+    ffprobe absent, etc.) — callers should then pick a safe
+    fallback like ``auto-copy``. Short timeout because this runs
+    synchronously before every mpv launch.
+    """
+    try:
+        result = subprocess.run(
+            [
+                'ffprobe',
+                '-v',
+                'error',
+                '-select_streams',
+                'v:0',
+                '-show_entries',
+                'stream=codec_name',
+                '-of',
+                'default=nw=1:nk=1',
+                uri,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.stdout.strip().lower()
+    except (subprocess.SubprocessError, OSError):
+        return ''
+
+
+def _pi_hwdec_for_uri(uri: str) -> str:
+    """mpv ``--hwdec=`` value for ``uri`` on Pi 4 / Pi 5 / Rock Pi 4.
+
+    Reads the board key via ``resolve_device_key``, which upgrades a
+    catch-all ``arm64`` DEVICE_TYPE to the specific subtype the
+    host_agent publishes (Rock Pi 4 → ``rockpi4``). ``auto-copy`` is
+    the safe fallback when ffprobe can't read the codec; the upload
+    gate (`anthias_server.processing._hw_decoded_codecs`) prevents
+    any codec outside ``_PI_HWDEC_BY_CODEC`` reaching this branch in
+    the first place.
+    """
+    board_map = _PI_HWDEC_BY_CODEC.get(resolve_device_key(), {})
+    return board_map.get(_probe_video_codec(uri), 'auto-copy')
+
+
 class MPVMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
@@ -225,61 +332,157 @@ class MPVMediaPlayer(MediaPlayer):
         # reads the connector's EDID-preferred mode (4K on most modern
         # TVs) and runs CPU zimg upscale, which drops below real-time
         # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
+        # Pi 5 keeps the same tuning on the cage path — it doesn't
+        # hurt, and mpv ignores --drm-mode under --vo=gpu
+        # --gpu-context=wayland anyway.
         device_type = os.environ.get('DEVICE_TYPE', '')
         extra_args: list[str] = []
-        if device_type in ('pi4-64', 'pi5'):
+        if device_type == 'pi4-64':
             extra_args = [
                 '--drm-mode=1920x1080@60',
                 '--vd-lavc-threads=4',
             ]
+        elif device_type == 'pi5':
+            extra_args = ['--vd-lavc-threads=4']
 
-        # x86 runs under `cage` (a wlroots kiosk compositor — see
-        # bin/start_viewer.sh); cage holds DRM master, so --vo=drm is
-        # denied. Route mpv through the GL VO over a Wayland EGL
-        # context, which is the generic path mpv supports on every x86
-        # GPU with Mesa or vendor GL drivers. Paired with
-        # --hwdec=auto-safe, VAAPI-capable iGPUs (Intel iHD/i965, AMD
-        # radeonsi, …) decode in hardware and hand frames to the GL
-        # context as DMA-BUFs via dmabuf-interop-gl; software decode
-        # still works via the same VO for codecs without HW support.
-        # --vo=dmabuf-wayland would skip the GL upload entirely but
-        # segfaults under cage in the viewer's background-spawn path
-        # (mpv 0.40.0 + wlroots-0.18 + libplacebo dies between hwdec
-        # init and file open). Pi boards (pi4-64/pi5) keep --vo=drm —
-        # they own the framebuffer directly with no compositor.
-        # arm64 (non-Pi ARM SBCs on Armbian) goes the same
-        # route as x86 because the viewer container is wrapped in
-        # cage there too; hwdec is best-effort per SoC.
-        if device_type in ('x86', 'arm64'):
+        # Per-board VO selection:
+        #
+        # * x86 / arm64 / pi5 run under `cage` (a wlroots kiosk
+        #   compositor — see bin/start_viewer.sh); cage holds DRM
+        #   master, so --vo=drm is denied. mpv goes through the GL
+        #   VO over a Wayland EGL context. Paired with
+        #   --hwdec=auto-safe, VAAPI-capable iGPUs on x86 (Intel
+        #   iHD/i965, AMD radeonsi, …) decode in hardware and hand
+        #   frames to the GL context as DMA-BUFs via
+        #   dmabuf-interop-gl; software decode still works via the
+        #   same VO. Pi 5's V3D 7.1 has enough bandwidth to composite
+        #   at the connector's native mode (typically 4K) on top of
+        #   software-decoded video. arm64 is best-effort per SoC.
+        #   --vo=dmabuf-wayland would skip the GL upload entirely
+        #   but segfaults under cage (mpv 0.40 + wlroots-0.18 +
+        #   libplacebo dies between hwdec init and file open).
+        #
+        # * Pi4-64 stays on Qt linuxfb (no compositor) with mpv's
+        #   --vo=drm. The V3D 6.0 doesn't have the bandwidth to
+        #   composite cage on top of software-decoded video at 4K
+        #   (738 vo drops/30 s in testing). mpv's --vo=drm does its
+        #   own DRM master juggling — briefly grabbing master,
+        #   rendering, dropping back — which coexists with Qt
+        #   linuxfb in a way that --vo=gpu --gpu-context=drm does
+        #   not (Mesa GBM holds master persistently and contends
+        #   with Qt's framebuffer use, manifesting as "Failed to
+        #   acquire DRM master: Permission denied"). So Pi 4 stays
+        #   on --vo=drm + --drm-mode=1920x1080@60 — the production
+        #   path inherited from master.
+        # ``generic-arm64`` is the legacy label that pre-rename arm64
+        # images carry — it shares the cage + Wayland stack with
+        # ``arm64`` and must take the same VO path. Without this the
+        # Rock Pi 4 (still on a generic-arm64 image) falls into the
+        # ``--vo=drm`` else branch and mpv aborts with "No primary
+        # DRM device could be picked" because cage holds DRM master.
+        if device_type in ('x86', 'arm64', 'generic-arm64', 'pi5'):
             vo_args = ['--vo=gpu', '--gpu-context=wayland']
         else:
             vo_args = ['--vo=drm']
 
-        # Issue #2856. On x86, cage/wlroots is rotated via wlr-randr and
-        # mpv's wayland VO inherits the compositor transform — passing
-        # --video-rotate here too would double-rotate. On Pi --vo=drm
-        # writes straight to the framebuffer with no compositor in the
-        # path, so the rotation has to happen inside mpv. Skip the arg
-        # at 0° so unrotated displays stay on the existing CLI.
+        # Rotation: cage/wlroots is rotated via wlr-randr (issue
+        # #2856, the wiring lives in src/anthias_viewer/__init__.py)
+        # and mpv's wayland VO inherits the compositor transform
+        # automatically — passing --video-rotate would double-rotate
+        # there. On Pi 4 (linuxfb, no compositor) mpv has to apply
+        # the transform itself.
         rotation = _screen_rotation()
         rotate_args: list[str] = []
-        if rotation and device_type != 'x86':
+        if rotation and device_type == 'pi4-64':
             rotate_args = [f'--video-rotate={rotation}']
 
+        # Hwdec selection. Strategy summary:
+        #
+        # * x86 / arm64 → `--hwdec=auto-copy`. Picks vaapi-copy on
+        #   Intel/AMD iGPUs (the only HW decode method mpv 0.40 ships
+        #   with for x86 outside of NVIDIA-specific options); on
+        #   arm64 there's nothing in auto-copy that matches
+        #   Rockchip's V4L2 stateless decoder, so it falls back to
+        #   software. arm64 HW decode via a vendor-tuned plugin is a
+        #   Tier-2 follow-up.
+        # * Pi 4 / Pi 5 → ffprobe the asset (~50 ms for a local
+        #   file) and pick per-codec, because `auto-copy`'s upstream
+        #   whitelist deliberately excludes v4l2m2m-copy (H.264 V3D
+        #   M2M is the path Pi 4 needs). See _pi_hwdec_for_uri().
+        # ffprobe-and-dispatch on any board the per-codec map covers
+        # (Pi 4 / Pi 5 / Rock Pi 4 via host_agent subtype). x86, the
+        # arm64 catch-all without a subtype, and Pi 2 / Pi 3 fall
+        # through to ``auto-copy`` and don't pay the ffprobe cost.
+        if resolve_device_key() in _PI_HWDEC_BY_CODEC:
+            hwdec_value = _pi_hwdec_for_uri(self.uri)
+        else:
+            hwdec_value = 'auto-copy'
+
+        # ANTHIAS_DEBUG_DROPS=1: when set on the viewer container,
+        # mpv's stdout/stderr go to a host-bound log instead of
+        # /dev/null, *and* --no-terminal is dropped so mpv's normal
+        # status line ("AV: 00:00:30 / ... Dropped: N") is emitted.
+        # The log records hwdec-current / VO init banners plus
+        # per-file drop counts so reviewers can validate the test
+        # bed without rebuilding the image. Default (unset)
+        # preserves the silent stdout/stderr=/dev/null behaviour.
+        debug_drops = os.environ.get('ANTHIAS_DEBUG_DROPS') == '1'
+        terminal_args = [] if debug_drops else ['--no-terminal']
+        # Popen accepts either an int sentinel (DEVNULL / STDOUT) or
+        # an already-opened binary IO stream for stdout/stderr. The
+        # int | IO[bytes] union covers both.
+        popen_stdout: int | IO[bytes]
+        popen_stderr: int | IO[bytes]
+        if debug_drops:
+            log_path = '/data/.anthias/mpv.log'
+            # Rolling-buffer size cap: a forgotten-on debug flag
+            # otherwise grows the log unbounded (a viewer process can
+            # run for weeks). 64 MB holds plenty of per-asset launch
+            # context — mpv's status-line + banner output is on the
+            # order of 10-20 KB per clip — and re-truncates at the
+            # next launch once the cap is hit, so disk pressure
+            # stays bounded without losing the immediately-recent
+            # context most debug sessions actually want.
+            mode = 'ab'
+            try:
+                if os.path.getsize(log_path) > 64 * 1024 * 1024:
+                    mode = 'wb'
+            except OSError:
+                pass
+            log_fd = open(log_path, mode, buffering=0)
+            log_fd.write(f'\n--- mpv launch {self.uri} ---\n'.encode())
+            popen_stdout = log_fd
+            popen_stderr = subprocess.STDOUT
+        else:
+            popen_stdout = subprocess.DEVNULL
+            popen_stderr = subprocess.DEVNULL
+
+        # ``--video-sync=display-resample`` overrides mpv 0.40's
+        # default (``audio``) which syncs video to the audio clock
+        # and drops VO frames when the two clocks drift. On every
+        # board we tested (Pi 4, Pi 5, x86) the audio-clock default
+        # produced 60–90% VO drops at 60 fps content even when the
+        # decoder was healthy (mpv reports drops at the VO, not the
+        # decoder). Digital signage cares about smooth video more
+        # than sub-frame A/V sync; display-resample syncs video to
+        # the display's refresh and resamples audio to match. Audio
+        # resampling is cheap (a 2-channel resample takes <1% CPU)
+        # and most signage clips have no audible content anyway.
         self.process = subprocess.Popen(
             [
                 'mpv',
-                '--no-terminal',
+                *terminal_args,
                 *vo_args,
-                '--hwdec=auto-safe',
+                f'--hwdec={hwdec_value}',
+                '--video-sync=display-resample',
                 *extra_args,
                 *rotate_args,
                 f'--audio-device=alsa/{get_alsa_audio_device()}',
                 '--',
                 self.uri,
             ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=popen_stdout,
+            stderr=popen_stderr,
         )
 
     def stop(self) -> None:
@@ -359,21 +562,23 @@ class MediaPlayerProxy:
     @classmethod
     def get_instance(cls) -> MediaPlayer:
         if cls.INSTANCE is None:
-            # Force MPV (over VLC) on two device_types that otherwise
+            # Force MPV (over VLC) on the device_types that otherwise
             # match the Pi-name dispatch below:
             #
             #   * pi4-64 — Qt6 + linuxfb like pi5/x86, so VLC's
             #     GL/GLES2/XCB outputs have no parent window to draw
             #     into. MPV renders straight to KMS via --vo=drm.
-            #   * arm64 — device_helper.get_device_type() falls back
-            #     to 'pi1' on any aarch64 host whose
+            #   * arm64 / generic-arm64 —
+            #     device_helper.get_device_type() falls back to
+            #     'pi1' on any aarch64 host whose
             #     /proc/device-tree/model isn't a Pi regex match
             #     (Rock Pi, Orange Pi, Banana Pi, …); without this
             #     override they'd silently route to VLC, which has
             #     no working backend on those boards (no vc4 KMS,
-            #     no XCB under cage).
+            #     no XCB under cage). ``generic-arm64`` covers
+            #     pre-rename images still in the wild.
             device_env = os.environ.get('DEVICE_TYPE')
-            force_mpv = device_env in ('pi4-64', 'arm64')
+            force_mpv = device_env in ('pi4-64', 'arm64', 'generic-arm64')
             if (
                 get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
                 and not force_mpv

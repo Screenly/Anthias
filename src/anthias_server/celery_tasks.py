@@ -9,10 +9,24 @@ from typing import Any
 import django
 import sh
 from celery import Celery, Task
+from django.apps import apps as _django_apps
 from PIL import UnidentifiedImageError
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 
-django.setup()
+# ``django.setup()`` is not reentrant — calling it while
+# ``apps.populate()`` is still running (e.g. when an ``AppConfig.ready``
+# hook imports this module) raises ``RuntimeError: populate() isn't
+# reentrant`` and the import dies, taking the caller down silently in
+# any try/except chain. ``apps_ready`` flips to ``True`` after Django
+# finishes the import phase but *before* the per-app ``ready`` hooks
+# run, so the check correctly distinguishes:
+#
+#   * standalone celery worker process → Django not initialised yet
+#     (``apps_ready=False``) → ``setup()`` runs as before;
+#   * import from inside an ``AppConfig.ready`` (server process)
+#     → Django is mid-populate (``apps_ready=True``) → skip.
+if not _django_apps.apps_ready:
+    django.setup()
 
 # Place imports that uses Django in this block.
 
@@ -68,10 +82,10 @@ ASSET_REVALIDATION_INTERVAL_S = 60 * 15
 RECONCILE_STUCK_INTERVAL_S = 60 * 10
 
 # Age threshold for considering a row stuck. Has to be *longer* than
-# the longest reasonable Celery task: ``NORMALIZE_VIDEO_TIME_LIMIT_S``
-# is 30 min and ``YOUTUBE_DOWNLOAD_TIME_LIMIT_S`` is 15 min, so 60 min
-# is a safe floor. A row past the threshold either had its worker
-# time-limit expire (in which case ``on_failure`` should already have
+# the longest reasonable Celery task: ``YOUTUBE_DOWNLOAD_TIME_LIMIT_S``
+# is 15 min, so 60 min is a safe floor. A row past the threshold
+# either had its worker time-limit expire (in which case
+# ``on_failure`` should already have
 # cleared the flag — and the reconciler only sees rows where it
 # didn't, e.g. SIGKILL before on_failure could run) OR was never
 # picked up at all (Redis flake during ``.delay()``, worker crashed
@@ -217,20 +231,23 @@ def cleanup() -> None:
     # the pre-rebrand prefix (~/screenly_assets/..., now a symlink to
     # ~/anthias_assets) are recognized as live and their files aren't
     # mistaken for orphans on upgraded installs.
+    #
     asset_dir_real = path.realpath(asset_dir)
-    referenced = set()
-    for uri in (
-        Asset.objects.exclude(uri__isnull=True)
-        .exclude(uri__exact='')
-        .values_list('uri', flat=True)
-    ):
-        if not uri:
-            continue
+    referenced: set[str] = set()
+
+    def _claim(p: str | None) -> None:
+        if not p:
+            return
         try:
-            if path.realpath(path.dirname(uri)) == asset_dir_real:
-                referenced.add(path.basename(uri))
+            if path.realpath(path.dirname(p)) == asset_dir_real:
+                referenced.add(path.basename(p))
         except OSError:
-            continue
+            return
+
+    for uri in Asset.objects.exclude(uri__isnull=True).values_list(
+        'uri', flat=True
+    ):
+        _claim(uri)
     cutoff = 60 * 60  # match the .tmp guard above
     now = time.time()
     for entry in os.scandir(asset_dir):
@@ -614,13 +631,9 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
 
     _notify(asset_id, reload_viewer=False)
 
-    # Hand off to the per-board normalisation pass. This is what
-    # gives YouTube downloads the same codec / container guarantees
-    # as direct file uploads: ffprobe → passthrough on H.264/HEVC
-    # (per board profile) or transcode to libx264/libx265 otherwise.
-    # It also writes ``original_ext`` / ``transcoded`` /
-    # ``transcode_target`` to metadata, so the operator's view of a
-    # YouTube row carries the same diagnostic shape as a file upload.
+    # Hand off to ``normalize_video_asset`` so the YouTube download
+    # gets the same ffprobe metadata pass (codec / dims / fps /
+    # duration written into ``metadata``) as a direct file upload.
     dispatch_normalize_video(asset_id)
 
 
@@ -801,9 +814,9 @@ def reconcile_stuck_processing() -> None:
     ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) from that stamp — at
     a 10-min sweep cadence that's six sweeps where the row stays
     inside the grace window before becoming eligible. The grace is
-    deliberately long enough to cover the worst-case live transcode
-    (``NORMALIZE_VIDEO_TIME_LIMIT_S=30min``) plus margin, so a
-    still-in-flight task never gets yanked out from under itself.
+    deliberately longer than any single task's ``time_limit`` (the
+    longest is the 15-min YouTube download) so a still-in-flight
+    task never gets yanked out from under itself.
 
     Rows older than ``RECONCILE_STUCK_THRESHOLD_S`` (60 min) get
     re-dispatched via the normalisation path matching their mimetype.
@@ -998,8 +1011,6 @@ def revalidate_asset_url(asset_id: str) -> None:
 # the worker and ``apply_async`` works out of the box.
 from anthias_server import processing  # noqa: E402
 
-NORMALIZE_VIDEO_TIME_LIMIT_S = processing.NORMALIZE_VIDEO_TIME_LIMIT_S
-
 
 @celery.task(
     base=processing._NormalizeAssetTask,
@@ -1046,7 +1057,7 @@ def normalize_image_asset(asset_id: str) -> None:
 
 @celery.task(
     base=processing._NormalizeAssetTask,
-    time_limit=NORMALIZE_VIDEO_TIME_LIMIT_S,
+    time_limit=120,
     autoretry_for=(OSError,),
     # Same rationale as normalize_image_asset above: a missing source
     # file is permanent and should land on on_failure right away.
@@ -1057,22 +1068,15 @@ def normalize_image_asset(asset_id: str) -> None:
     max_retries=1,
 )
 def normalize_video_asset(asset_id: str) -> None:
-    """Probe the upload; passthrough or transcode to a board-appropriate
-    codec in MP4.
+    """Probe the upload with ffprobe, write codec / dims / fps /
+    duration into ``metadata``, and clear ``is_processing``. The
+    asset file is never rewritten — see
+    ``processing._run_video_normalisation`` for why.
 
-    The output codec is decided by ``processing._resolve_board_profile``:
-    libx264 on legacy Pi 2/Pi 3 (mmal-vc4 path; no HEVC hardware) and
-    libx265 with the iOS-friendly ``-tag:v hvc1`` on Pi 4-64 / Pi 5 /
-    x86 (mpv path; HEVC hardware-decoded on Pi 4 / x86, software on
-    Pi 5). The on-device player only ever sees a codec it can decode.
-
-    ffmpeg is wrapped with ``-threads 2`` so two cores stay free for
-    the on-device viewer; the celery worker itself runs under
-    ``nice -n 19 ionice -c 3`` (set in docker-compose.yml.tmpl).
-
-    Retry policy mirrors ``download_youtube_asset``: OSError gets one
-    retry (transient IO), ffmpeg subprocess failures and timeouts are
-    permanent and land on on_failure.
+    Retry policy: OSError gets one retry (transient IO), an ffprobe
+    timeout or non-zero exit is permanent and lands on on_failure
+    via ``_NormalizeAssetTask``. ``time_limit=120`` is the worst-case
+    ffprobe wall-clock (``_FFPROBE_TIMEOUT_S`` is 60 s) doubled.
     """
     asset = processing._row_or_none(asset_id)
     if asset is None:

@@ -9,6 +9,54 @@
 chgrp -f video /dev/vchiq
 chmod -f g+rwX /dev/vchiq
 
+# Recreate the kernel's ``/dev/video-dec*`` symlinks inside the
+# container for boards whose v4l2_request decoders are reachable
+# from upstream mpv (RK3399 / Rock Pi 4 today; future Rockchip /
+# Allwinner / Amlogic SBCs likely too). Privileged docker passes
+# the underlying ``/dev/video*`` char devices through but mounts
+# its own ``/dev`` tmpfs without the udev rules that produce the
+# decoder symlinks on the host. ffmpeg's ``hevc_v4l2m2m`` /
+# ``h264_v4l2m2m`` lookup expects ``/dev/video-dec*`` and dies
+# with "Could not find a valid device" otherwise.
+#
+# We can't run udev inside the container (no privileged
+# udevd, and /sys/class/video4linux is read-only via /sys
+# bind), but we don't need to — the rule is mechanical: any
+# /dev/video* whose /sys/class/video4linux/<name>/name reads as
+# a stateless decoder driver gets a symlink. Iterate explicitly
+# instead of shelling udev.
+for dev_node in /dev/video*; do
+    [ -c "$dev_node" ] || continue
+    base=$(basename "$dev_node")
+    drv_name_file="/sys/class/video4linux/$base/name"
+    [ -r "$drv_name_file" ] || continue
+    name=$(cat "$drv_name_file" 2>/dev/null)
+    # Rockchip / Allwinner / Amlogic stateless decoders. The
+    # canonical kernel naming is:
+    #
+    #   * ``rkvdec`` — Rock Pi 4's RK3399 HEVC + VP9 stateless
+    #     decoder (and equivalents on RK3328 / RK356x / RK3588);
+    #   * ``rockchip,<soc>-vpu-dec`` — the legacy "VPU" H.264 /
+    #     MPEG block, exposed as a separate v4l2 node;
+    #   * ``hantro-vpu`` / ``hantro-g*`` — same silicon family,
+    #     different vendor-tree naming on a handful of boards;
+    #   * ``cedrus`` — Allwinner H6 / H616 stateless decoder.
+    #
+    # The match list is the explicit prefix set above plus
+    # ``*-vpu-dec`` for the rockchip,<soc>-vpu-dec naming. A
+    # broader ``*-dec`` catch-all is tempting but would symlink
+    # any future v4l2 device that happens to end ``-dec``
+    # (encoders' status nodes, vendor diagnostics) into the
+    # decoder namespace; the explicit list covers every kernel
+    # naming we've shipped and a new SoC adding one entry here
+    # is cheap.
+    case "$name" in
+        rkvdec*|cedrus*|hantro*|*-vpu-dec)
+            ln -snf "$dev_node" "/dev/video-dec${base#video}"
+            ;;
+    esac
+done
+
 # Set permission for sha file
 chown -f viewer /dev/snd/*
 chown -f viewer /data/.anthias/latest_anthias_sha
@@ -116,36 +164,44 @@ fi
 # we just set; -E alone is subject to env_check / env_delete and is not
 # guaranteed for XDG_* on Debian's default sudoers.
 #
-# x86 boards run under `cage`, a kiosk wlroots compositor, because
-# balenaOS x86 doesn't expose /dev/fb0 (Qt's linuxfb plugin has nothing
-# to draw to) and there's no host display server. cage acquires DRM
-# master as root, exports WAYLAND_DISPLAY for its child, and exits when
-# the child exits — so the existing kill -0 watchdog below still works.
-# The inner sudo drops back to the viewer user; WAYLAND_DISPLAY has to
-# be added to --preserve-env to survive sudo's env scrub.
-if [ "$DEVICE_TYPE" = "x86" ] || [ "$DEVICE_TYPE" = "arm64" ]; then
-    # /dev/dri/renderD128 carries the host's `render` group, whose
-    # numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
-    # 109 elsewhere) and not present in the container's /etc/group.
-    # Without membership the `viewer` user can open card0 (group
-    # `video`, GID 44 — already a member) but not the render node, and
-    # VAAPI silently fails with "wayland: failed to open
-    # /dev/dri/renderD128". mpv then falls back to software decode and
-    # frames drop at 1080p on entry-level x86. Mirror the host GID
-    # into the container as a synthetic `host-render` group and add
-    # `viewer` to it, so the supplementary group list `sudo -u viewer`
-    # later resolves from /etc/group already includes render access.
-    if [ -e /dev/dri/renderD128 ]; then
-        render_gid=$(stat -c %g /dev/dri/renderD128)
-        if [ "$render_gid" -ne 0 ]; then
-            if ! getent group "$render_gid" >/dev/null; then
-                groupadd -g "$render_gid" host-render
-            fi
-            host_render_group=$(getent group "$render_gid" | cut -d: -f1)
-            usermod -aG "$host_render_group" viewer
+# /dev/dri/renderD128 carries the host's `render` group, whose
+# numeric GID is distro-dependent (typically 992 on Debian/Ubuntu,
+# 109 elsewhere, 106 on Pi OS Bookworm) and not always present in
+# the container's /etc/group. Without membership the `viewer` user
+# can open card0 (group `video`, GID 44 — already a member) but
+# not the render node. mpv uses the render node for --vo=gpu on
+# every Qt 6 board, whether via wayland (cage path: x86 / arm64 /
+# pi5) or drm (linuxfb path: pi4-64). Mirror the host GID into
+# the container as a synthetic `host-render` group and add
+# `viewer` to it; the supplementary group list `sudo -u viewer`
+# later resolves from /etc/group then includes render access.
+if [ -e /dev/dri/renderD128 ]; then
+    render_gid=$(stat -c %g /dev/dri/renderD128)
+    if [ "$render_gid" -ne 0 ]; then
+        if ! getent group "$render_gid" >/dev/null; then
+            groupadd -g "$render_gid" host-render
         fi
+        host_render_group=$(getent group "$render_gid" | cut -d: -f1)
+        usermod -aG "$host_render_group" viewer
     fi
+fi
 
+# x86 / arm64 / pi5 run under `cage`, a kiosk wlroots compositor.
+# cage acquires DRM master as root, exports WAYLAND_DISPLAY for its
+# child, and exits when the child exits — so the existing kill -0
+# watchdog below still works. The inner sudo drops back to the
+# viewer user; WAYLAND_DISPLAY has to be added to --preserve-env to
+# survive sudo's env scrub.
+#
+# Pi 4 falls through to the legacy direct-sudo path that runs under
+# QT_QPA_PLATFORM=linuxfb. The V3D 6.0 doesn't have the bandwidth
+# to composite cage on top of video at 4K (738 vo drops/30 s under
+# cage vs 3-6 on the linuxfb + --gpu-context=drm path), so Pi 4
+# stays on linuxfb until either a newer mpv with v4l2request hwdec
+# or a future Pi platform lets us re-evaluate. Qt5 boards (pi2/pi3)
+# share the same direct-sudo fallback path.
+case "$DEVICE_TYPE" in
+    x86|arm64|pi5)
     # libseat's default `logind` backend D-Buses into systemd-logind to
     # acquire a session, but containers have no logind session — cage
     # exits with "Could not get primary session for user". Switch to
@@ -155,23 +211,40 @@ if [ "$DEVICE_TYPE" = "x86" ] || [ "$DEVICE_TYPE" = "arm64" ]; then
     # devices — a digital-signage kiosk has no keyboard or mouse.
     export LIBSEAT_BACKEND=builtin
     export WLR_LIBINPUT_NO_DEVICES=1
+
+    # cage default `-m extend` spans all enumerated DRM outputs,
+    # including ones that are physically disconnected — so a Pi user
+    # who plugs into the second micro-HDMI port (HDMI-A-2 instead of
+    # HDMI-A-1) ends up with cage rendering to a portion of the
+    # virtual canvas that lands on the disconnected connector, and a
+    # black screen. Trixie ships cage 0.1.x which has no `-o
+    # <connector>` flag, but `-m last` restricts output to whichever
+    # connector came up most recently — for the boot-time case
+    # (which the kernel detects in enumeration order) that's the
+    # last connected output rather than the first. Good enough for
+    # the single-display kiosk path; dual-head signage is a separate
+    # workflow.
+    cage_mode=(-m last)
+
     # cage runs as root (Dockerfile's USER root) and creates the
     # Wayland socket with root:root 0600 perms, so `sudo -u viewer`
     # below can't connect (Qt: "Failed to create wl_display
     # (Permission denied)"). Chown the socket to viewer in cage's
     # child *before* dropping privileges. cage exports WAYLAND_DISPLAY
     # before exec'ing the child, so the path is fully resolved here.
-    cage -- bash -c '
+    cage "${cage_mode[@]}" -- bash -c '
         chown viewer "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" 2>/dev/null || true
         exec sudo \
             --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY,LANG,LANGUAGE,LC_ALL \
             -E -u viewer \
             dbus-run-session /venv/bin/python -m anthias_viewer
     ' &
-else
+    ;;
+    *)
     sudo --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,LANG,LANGUAGE,LC_ALL -E -u viewer \
         dbus-run-session /venv/bin/python -m anthias_viewer &
-fi
+    ;;
+esac
 
 # Wait for the viewer
 while true; do

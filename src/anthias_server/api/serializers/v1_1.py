@@ -185,15 +185,16 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
         ):
             raise Exception('Could not retrieve file. Check the asset URL.')
 
-        # Flag the freshly-uploaded local video for the normalisation
-        # pipeline. Fixes GH #2870: pre-fix, v1 / v1.1 left the file
-        # in whatever codec the operator uploaded (e.g. MPEG-1 on an
-        # x86 board with passthrough_video_codecs={'h264','hevc'}),
-        # and the viewer silently skipped it forever. Set
-        # ``is_processing=1`` so the viewer drops the in-flight row
-        # from rotation until ``normalize_video_asset`` finalises it.
-        # Image normalisation deliberately stays opt-in via v1.2 / v2
-        # — see the class-level ``_pending_normalize`` docstring.
+        # Flag the freshly-uploaded local video for the
+        # normalisation pipeline. Fixes GH #2870: pre-fix, v1 / v1.1
+        # left the row at ``is_processing=False`` and the viewer
+        # would try to play the upload before ffprobe metadata had
+        # been written, silently skipping anything mpv couldn't size.
+        # Set ``is_processing=1`` so the viewer drops the in-flight
+        # row from rotation until ``normalize_video_asset`` finalises
+        # it. Image normalisation deliberately stays opt-in via
+        # v1.2 / v2 — see the class-level ``_pending_normalize``
+        # docstring.
         if (
             is_local_upload
             and not is_youtube

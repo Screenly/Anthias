@@ -73,7 +73,7 @@
   items:
     - question: How do I rotate the screen for portrait orientation?
       answer: |
-        Rotation happens at the kernel / firmware level. The Anthias viewer renders straight to the Linux framebuffer (Qt `linuxfb`) and to KMS (mpv `--vo=drm`) — there's no Wayland compositor in the stack — so the standard Raspberry Pi config knobs apply directly.
+        Use the Settings page in the Anthias dashboard ("Screen rotation"). On Pi 5 / x86 / arm64 the viewer runs under the `cage` kiosk Wayland compositor and the rotation is applied via `wlr-randr`. On Pi 2 / Pi 3 / Pi 4 the viewer renders to the Linux framebuffer directly and the transform is applied inside the media player; the Settings page works the same way.
 
         Edit `/boot/firmware/config.txt` and add one of:
 
@@ -89,7 +89,7 @@
       answer: |
         Anthias displays at whatever resolution the OS reports — there's no resolution setting in the dashboard. Set the output mode at the OS level: on Raspberry Pi OS, use `sudo raspi-config` → **Display Options** → **Resolution**, or set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt`.
 
-        4K is supported on hardware that supports it natively: Pi 5 handles 4K@60Hz on either HDMI port; Pi 4 supports 4K@30Hz on `HDMI-0` (or 4K@60Hz with `hdmi_enable_4kp60=1` and adequate cooling).
+        4K is supported on Pi 5 / x86 / arm64 — those run the viewer under the `cage` Wayland compositor and the GPU handles the upscale for free. On Pi 4 the viewer renders to the Linux framebuffer directly and mpv hands video scaling to the V3D, so 1080p source on a 4K connector works smoothly; demanding 4K-source video on Pi 4 will drop frames, however, because the V3D doesn't have the bandwidth headroom Pi 5's V3D 7.1 has.
 
     - question: My screen is black or stuck on "Manage the content" — what now?
       answer: |
@@ -98,7 +98,7 @@
         1. SSH in and run `docker compose ps` from `~/anthias/` — all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
         2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
         3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
-        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders to the framebuffer (Qt `linuxfb`) and uses no X server, so `xset` won't help.
+        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders directly to KMS (via `cage` on Pi 5 / x86 / arm64, or Qt `linuxfb` on Pi 2 / Pi 3 / Pi 4) and uses no X server, so `xset` won't help.
 
         If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
 

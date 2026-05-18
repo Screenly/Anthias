@@ -44,16 +44,19 @@
     <span class="processing-pill"><i class="ti ti-refresh"></i>Processing</span>
     {% elif asset.metadata.error_message %}
     {% comment %} Processing failed and the celery task wrote
-       metadata.error_message via _NormalizeAssetTask.on_failure. Show
-       a small badge with a hover tooltip carrying the full message
-       (truncate via the title attribute, no extra JS) so the operator
-       can see *why* the row never finalised, edit/delete it, or
-       re-upload a fixed file. {% endcomment %}
-    <span class="error-pill"
+       metadata.error_message via _NormalizeAssetTask.on_failure.
+       The pill is a button — clicking it opens the Edit Asset
+       modal which renders the full message + any attached ffmpeg
+       recipe as a copyable <code> block. Title attribute is kept
+       as a hover preview for desktop operators; the click path is
+       the canonical action (works on touch, supports copy). {% endcomment %}
+    <button type="button"
+          class="error-pill"
           title="{{ asset.metadata.error_message }}"
-          aria-label="Processing failed: {{ asset.metadata.error_message }}">
+          aria-label="Processing failed: {{ asset.metadata.error_message }} — click to view details"
+          @click='openEdit({{ asset|to_json }})'>
       <i class="ti ti-alert-triangle"></i>Failed
-    </span>
+    </button>
     {% else %}
     <form method="post" action="{% url 'anthias_app:assets_toggle' asset_id=asset.asset_id %}" class="m-0">
       {% csrf_token %}

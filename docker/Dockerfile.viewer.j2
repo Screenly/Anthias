@@ -39,6 +39,8 @@ RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
 
 {% include 'Dockerfile.base.j2' %}
 
+{% include '_rpt1-ffmpeg-pin.j2' %}
+
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -68,15 +70,16 @@ COPY --from=webview-builder /out/bin/AnthiasWebview /usr/local/bin/AnthiasWebvie
 COPY --from=webview-builder /out/share/AnthiasWebview /usr/local/share/AnthiasWebview
 
 ENV QT_QPA_EGLFS_FORCE888=1
-{% if board in ('x86', 'arm64') %}
-# balenaOS x86 doesn't expose /dev/fb0, so the linuxfb plugin has
-# nothing to draw to. Run Qt under Wayland instead; bin/start_viewer.sh
-# wraps the viewer in `cage`, a kiosk Wayland compositor that talks to
-# KMS via wlroots. The same path covers arm64 boards (Armbian
-# on Rock Pi / Orange Pi / Banana Pi, …), which similarly boot Mesa
-# straight to DRM/KMS without a fbdev emulation node.
+{% if board in ('x86', 'arm64', 'pi5') %}
+# x86 / arm64 / pi5 run the viewer under `cage`, a kiosk wlroots
+# compositor that talks straight to KMS. bin/start_viewer.sh wraps
+# the viewer in cage; this env var tells Qt to load the qt6-wayland
+# platform plugin so it renders into cage's surface.
 ENV QT_QPA_PLATFORM=wayland
 {% else %}
+# Pi 4 (Qt6) and Pi 2 / Pi 3 (Qt5) keep the classic linuxfb path —
+# the Pi 4 V3D 6.0 can't keep up with cage's composite pass on top
+# of video, so the viewer renders directly to the framebuffer.
 ENV QT_QPA_PLATFORM=linuxfb
 {% endif %}
 

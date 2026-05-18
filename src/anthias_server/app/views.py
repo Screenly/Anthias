@@ -459,6 +459,14 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
         play_order=play_order,
         start_date=now,
         end_date=now + timedelta(days=30),
+        # Stash the operator's original filename. The on-disk file
+        # is renamed to <uuid>.<ext> at upload time (see
+        # ``final_name = uuid.uuid4().hex`` above) so the operator's
+        # local filename would otherwise be lost — but the video
+        # gate's ``UnsupportedVideoCodecError`` recipe wants to
+        # quote a name the operator can paste straight into their
+        # terminal, which is the upload name, not the on-disk UUID.
+        metadata={'upload_name': upload_name},
     )
     # Route through the shared ``dispatch_normalize_*`` helpers rather
     # than ``.delay()`` directly so the
@@ -473,7 +481,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             request,
             toast=(
                 'info',
-                f'Uploaded {upload_name} — analysing video…',
+                f'Uploaded {upload_name} — reading metadata…',
             ),
         )
     if needs_image_normalize:

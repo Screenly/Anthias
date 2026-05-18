@@ -728,23 +728,91 @@ label { text-align: left; }
 }
 
 // Shown in place of the active toggle when the upload-time
-// normalisation pipeline failed (corrupt HEIC, ffmpeg error, etc.).
-// Same shape as .processing-pill so the column layout doesn't shift
-// between in-progress / failed / done states; warn-coloured so a
-// row that needs operator attention is visible at a glance. The
-// hover tooltip on the element itself carries metadata.error_message
-// from the row.
+// normalisation pipeline failed (corrupt HEIC, ffmpeg error,
+// unsupported video codec, ...). Same shape as .processing-pill so
+// the column layout doesn't shift between in-progress / failed /
+// done states; warn-coloured so a row that needs operator
+// attention is visible at a glance. Rendered as a <button> — click
+// opens the Edit Asset modal which surfaces the full
+// metadata.error_message + any attached ffmpeg recipe.
 .error-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
   padding: 0.15rem 0.55rem;
+  border: none;
   border-radius: var(--radius-pill);
   font-size: 0.72rem;
   font-weight: 600;
   background: var(--color-warning-soft, #fef3c7);
   color: var(--color-warning-strong, #92400e);
-  cursor: help;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in oklab, var(--color-warning-soft, #fef3c7) 80%, #000);
+    outline: none;
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+// Banner shown at the top of the Edit Asset modal when the row
+// carries metadata.error_message. Replaces the silent title-tooltip
+// pattern with something the operator can read, copy from, and
+// dismiss by editing the row.
+.modal-alert {
+  border: 1px solid var(--color-warning-strong, #92400e);
+  border-radius: var(--radius-md, 0.5rem);
+  padding: 0.85rem 1rem;
+  background: var(--color-warning-soft, #fef3c7);
+  color: var(--color-warning-strong, #92400e);
+
+  .modal-alert__head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .modal-alert__icon {
+    font-size: 1.15rem;
+    line-height: 1.2;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+  }
+  .modal-alert__title {
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.3;
+  }
+  .modal-alert__body {
+    margin: 0.15rem 0 0;
+    line-height: 1.4;
+  }
+  .modal-alert__recipe {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+  }
+  .modal-alert__code {
+    flex: 1;
+    margin: 0;
+    padding: 0.55rem 0.7rem;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-sm, 0.35rem);
+    font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: inherit;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .modal-alert__copy {
+    flex-shrink: 0;
+    align-self: flex-start;
+  }
 }
 
 // -----------------------------------------------------------------------------
