@@ -64,20 +64,30 @@ def mpv() -> Iterator[_MPVFixtures]:
         patch_device_type.stop()
 
 
-def _last_play_options(bus: Any) -> dict[str, str]:
-    """Extract the options dict from the most recent ``playVideo`` call."""
+def _last_play_options(bus: Any) -> dict[str, Any]:
+    """Extract the options dict from the most recent ``playVideo`` call.
+
+    Option values can be str / int / bool / float — the C++ side
+    receives a ``QVariantMap`` and ``_marshal_dbus_options`` picks
+    the GVariant signature by Python type. The ``isinstance``
+    assertion narrows the bus-fetched value (which mypy sees as
+    ``Any``) back into ``dict[str, Any]`` without using ``cast``.
+    """
     bus.playVideo.assert_called()
-    _, kwargs = bus.playVideo.call_args
     args = bus.playVideo.call_args.args
     # The Python side calls bus.playVideo(uri, options) — positional.
     assert len(args) == 2, args
-    return args[1]
+    options = args[1]
+    assert isinstance(options, dict)
+    return options
 
 
 def _last_play_uri(bus: Any) -> str:
     args = bus.playVideo.call_args.args
     assert len(args) == 2, args
-    return args[0]
+    uri = args[0]
+    assert isinstance(uri, str)
+    return uri
 
 
 @patch(
@@ -210,29 +220,35 @@ def test_marshal_dbus_options_wraps_in_glib_variant() -> None:
     type-aware so a future non-string option (``int`` / ``bool`` /
     ``float``) round-trips without bespoke wrapping at the call site
     — verify every supported type picks its own GVariant signature.
+
+    Patches ``GLib.Variant`` to a sentinel-returning callable so the
+    test passes both with the conftest's MagicMock stub (hosts
+    without PyGObject) AND with real PyGObject on the viewer image
+    (where ``GLib.Variant`` is a real class and MagicMock helpers
+    like ``assert_any_call`` aren't available on it).
     """
     import anthias_viewer.media_player as mp
 
-    out = mp._marshal_dbus_options(
-        {
-            'audio-device': 'alsa/sysdefault:CARD=vc4hdmi0',
-            'video-rotate': 90,
-            'mute': True,
-            'volume': 0.75,
-        }
-    )
-    # Conftest stubs ``gi.repository.GLib`` to a MagicMock on hosts
-    # without PyGObject; ``GLib.Variant('s', '...')`` returns a
-    # MagicMock whose ``call_args`` records the args. On the real
-    # viewer image GLib is real and Variant returns an actual
-    # variant — but the call signature is the same.
-    from gi.repository import GLib
+    # Make the marshal hand back tuples we can compare on, regardless
+    # of whether the real GLib.Variant is installed in the test env.
+    with patch(
+        'gi.repository.GLib.Variant',
+        side_effect=lambda signature, value: (signature, value),
+    ):
+        out = mp._marshal_dbus_options(
+            {
+                'audio-device': 'alsa/sysdefault:CARD=vc4hdmi0',
+                'video-rotate': 90,
+                'mute': True,
+                'volume': 0.75,
+            }
+        )
 
     assert set(out) == {'audio-device', 'video-rotate', 'mute', 'volume'}
-    GLib.Variant.assert_any_call('s', 'alsa/sysdefault:CARD=vc4hdmi0')
-    GLib.Variant.assert_any_call('i', 90)
-    GLib.Variant.assert_any_call('b', True)
-    GLib.Variant.assert_any_call('d', 0.75)
+    assert out['audio-device'] == ('s', 'alsa/sysdefault:CARD=vc4hdmi0')
+    assert out['video-rotate'] == ('i', 90)
+    assert out['mute'] == ('b', True)
+    assert out['volume'] == ('d', 0.75)
 
 
 def test_set_browser_bus_injects_module_state() -> None:
