@@ -103,7 +103,16 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_active(self, obj: Asset) -> bool:
-        return obj.is_active()
+        # When the caller has already evaluated activeness against a
+        # shared ``now`` (e.g. ViewerPlaylistViewV2 freezes it once so
+        # the filter and the deadline computation can't disagree
+        # across a window-boundary tick), accept the same timestamp
+        # via context so this field renders against the same instant
+        # rather than re-reading ``timezone.now()`` a few ms later.
+        # Default path (no context['now']) preserves the previous
+        # "evaluate at render time" behaviour for every other caller.
+        now = self.context.get('now')
+        return obj.is_active(now=now)
 
     @extend_schema_field({'type': 'array', 'items': {'type': 'integer'}})
     def get_play_days(self, obj: Asset) -> list[int]:

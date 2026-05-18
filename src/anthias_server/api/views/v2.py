@@ -789,11 +789,30 @@ class ViewerPlaylistViewV2(APIView):
         if not is_internal_request(request, settings):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
+        # Re-read anthias.conf for the same reason DeviceSettingsViewV2
+        # does: an operator PATCH to /api/v2/device_settings updates the
+        # on-disk file, and a viewer GET arriving before the in-memory
+        # cache invalidates would otherwise shuffle (or not shuffle)
+        # off the stale value. The PATCH path also broadcasts a Redis
+        # ``reload`` so the viewer eventually catches up via the
+        # subscriber, but reloading on read avoids a one-tick lag.
+        try:
+            settings.load()
+        except Exception:
+            logger.exception('Failed to reload settings for viewer playlist')
+
         now = timezone.now()
         active_assets, deadline = _evaluate_viewer_playlist(now)
         return Response(
             {
-                'assets': AssetSerializerV2(active_assets, many=True).data,
+                # Pass ``now`` through context so AssetSerializerV2's
+                # ``is_active`` field renders against the same instant
+                # the filter used — without it a row right on a window
+                # boundary could be returned in ``assets`` while its
+                # ``is_active`` re-evaluates to False a few ms later.
+                'assets': AssetSerializerV2(
+                    active_assets, many=True, context={'now': now}
+                ).data,
                 'deadline': deadline,
                 'now': now,
             }

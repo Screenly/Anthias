@@ -10,7 +10,7 @@ anthias.conf — the same gating as POST /api/v2/assets/<id>/recheck.
 """
 
 from collections.abc import Iterator
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 
 import pytest
@@ -27,6 +27,12 @@ from anthias_server.settings import settings as anthias_settings
 
 
 _DEFAULT_PLAY_DAYS = '[1, 2, 3, 4, 5, 6, 7]'
+
+# Mirrors anthias_server.api.views.v2._VIEWER_WINDOWED_DEADLINE_CAP_S
+# — duplicated here rather than imported because importing a private
+# constant for a single assertion isn't worth the coupling; bump
+# both if it ever changes.
+_VIEWER_WINDOWED_DEADLINE_CAP_S = 60
 
 
 @pytest.fixture(autouse=True)
@@ -230,13 +236,13 @@ def test_playlist_deadline_caps_when_asset_has_time_window(
         )
     body = response.json()
     assert body['deadline'] is not None
-    # The deadline should be at or before now + 61s (60s cap + the
-    # split-second between timezone.now() and response build).
-    cap_upper = now + timedelta(seconds=61)
-    assert (
-        body['deadline'] <= cap_upper.isoformat().replace('+00:00', 'Z')
-        or body['deadline'] <= cap_upper.isoformat()
-    )
+    # Time is frozen via ``time_machine.travel(..., tick=False)``, so
+    # the server's ``timezone.now()`` matches the test's ``now``
+    # exactly and the windowed cap should land at ``now + 60s`` with
+    # no slack to account for. Parse rather than string-compare so
+    # the assertion isn't sensitive to DRF's exact ISO format.
+    deadline = datetime.fromisoformat(body['deadline'].replace('Z', '+00:00'))
+    assert deadline == now + timedelta(seconds=_VIEWER_WINDOWED_DEADLINE_CAP_S)
 
 
 @pytest.mark.django_db
