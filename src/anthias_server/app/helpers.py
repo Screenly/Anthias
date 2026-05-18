@@ -1,5 +1,6 @@
+import logging
 import uuid
-from os import getenv, path
+from os import getenv, path, remove
 from typing import Any
 
 import yaml
@@ -10,7 +11,9 @@ from django.utils import timezone
 from anthias_server.app.models import Asset
 from anthias_server.app.page_context import navbar as _navbar_context
 from anthias_common.utils import get_video_duration
-from anthias_server.settings import settings
+from anthias_server.settings import ViewerPublisher, settings
+
+logger = logging.getLogger(__name__)
 
 
 def template(
@@ -111,3 +114,37 @@ def remove_default_assets() -> None:
     for asset in Asset.objects.all():
         if asset.asset_id.startswith('default_'):
             asset.delete()
+
+
+def delete_asset_with_file(asset: Asset) -> None:
+    """Delete an ``Asset`` row, remove its on-disk file (if owned), and
+    nudge the viewer to advance past it.
+
+    Shared by the v1/v1.1/v1.2/v2 API delete endpoint and the HTML form
+    delete route on the home page. Both must behave identically — GH
+    #2908 was the case where the UI form-post handler dropped the row
+    but left the binary in ``settings['assetdir']`` indefinitely.
+
+    File removal is gated on ``asset.uri`` starting with
+    ``settings['assetdir']`` so rows whose URI is a remote URL
+    (webpage, RTSP, streaming video) are left untouched. Failures are
+    logged and swallowed: the row is the operator's source of truth,
+    and a stray file is eventually cleaned up by the periodic
+    ``cleanup()`` orphan sweep — letting an unlink error block the DB
+    delete would leave the operator unable to remove the row at all.
+    """
+    if asset.uri and asset.uri.startswith(settings['assetdir']):
+        try:
+            remove(asset.uri)
+        except OSError as exc:
+            logger.warning(
+                'Failed to remove asset file %s: %s', asset.uri, exc
+            )
+
+    asset.delete()
+
+    # Wake the viewer so it skips a now-deleted asset that's still on
+    # screen instead of finishing its remaining ``duration`` (#2430).
+    # The viewer's reload handler checks whether the currently-shown
+    # asset is still active and advances if not.
+    ViewerPublisher.get_instance().send_to_viewer('reload')

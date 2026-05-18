@@ -581,7 +581,7 @@ def test_create_youtube_asset_dispatches_celery_task(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
-@mock.patch('anthias_server.api.views.mixins.ViewerPublisher')
+@mock.patch('anthias_server.app.helpers.ViewerPublisher')
 def test_delete_asset_publishes_reload(
     publisher_mock: Any, api_client: APIClient, version: str
 ) -> None:
