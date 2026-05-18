@@ -259,15 +259,25 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
 
     if is_qt6:
         # Shared Qt 6 runtime for every Qt6 board (pi4-64, pi5, x86,
-        # arm64). mpv handles video for all of them via MPVMediaPlayer;
-        # VLC is deliberately *not* installed because MediaPlayerProxy
-        # never routes Qt6 boards to it (would be ~80-100 MB of dead
-        # weight).
+        # arm64). VideoView uses QMediaPlayer + QVideoWidget from
+        # qt6-multimedia. Qt 6.8 dropped its gstreamer backend
+        # upstream (only ``libffmpegmediaplugin.so`` ships in
+        # ``/usr/lib/.../qt6/plugins/multimedia/``); decode goes
+        # through libavcodec directly. The +rpt1 ``ffmpeg`` /
+        # ``libav*`` packages pinned in _rpt1-ffmpeg-pin.j2 carry
+        # ``--enable-v4l2-request`` + ``--enable-v4l2-m2m`` on
+        # Pi/arm64, so libavcodec engages the same rpi-hevc-dec +
+        # bcm2835-codec hardware that libmpv era used — no
+        # gstreamer plugin set needed. VLC is deliberately not
+        # installed because MediaPlayerProxy never routes Qt6
+        # boards to it.
         viewer_extra_apt_dependencies.extend(
             [
-                'mpv',
+                'libqt6multimedia6',
+                'libqt6multimediawidgets6',
                 'qt6-base-dev',
                 'qt6-image-formats-plugins',
+                'qt6-multimedia-dev',
                 'qt6-webengine-dev',
             ]
         )

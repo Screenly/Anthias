@@ -15,7 +15,16 @@ int main(int argc, char *argv[])
 
     QDBusConnection connection = QDBusConnection::sessionBus();
 
-    if (!connection.registerObject("/Anthias", window, QDBusConnection::ExportAllSlots))
+    // ExportAllSlots covers loadPage / loadImage / setReloadInterval /
+    // playVideo / stopVideo; ExportAllSignals exposes MainWindow's
+    // ``videoEnded`` signal so the Python viewer can subscribe to it
+    // and learn when libmpv finishes a clip without polling (issue
+    // #2904 follow-up; the current asset_loop still sleeps for
+    // ``duration`` and doesn't subscribe).
+    if (!connection.registerObject(
+            "/Anthias", window,
+            QDBusConnection::ExportAllSlots
+                | QDBusConnection::ExportAllSignals))
     {
         qWarning() << "Can't register object:" << connection.lastError().message();
         return 1;

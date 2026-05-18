@@ -20,6 +20,7 @@ from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
+from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.media_player import MediaPlayerProxy
 from anthias_viewer.playback import (
     navigate_to_asset,
@@ -907,6 +908,12 @@ def setup() -> None:
 
     bus = pydbus.SessionBus()
     browser_bus = bus.get('anthias.webview', '/Anthias')
+    # MPVMediaPlayer calls AnthiasWebview's playVideo / stopVideo
+    # slots via this same proxy now that video lives in-process
+    # (issue #2904). Inject after load_browser so the proxy is
+    # already bound to the running AnthiasWebview; load_browser
+    # would otherwise race the D-Bus name registration.
+    _media_player_module.set_browser_bus(browser_bus)
 
 
 def start_loop() -> None:

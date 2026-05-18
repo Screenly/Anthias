@@ -1,14 +1,39 @@
 import logging
 import os
-import subprocess
-from typing import IO, ClassVar
+from typing import Any, ClassVar
 
-from anthias_common.board import ARM64_DEVICE_TYPES, resolve_device_key
+from anthias_common.board import ARM64_DEVICE_TYPES
 from anthias_common.device_helper import get_device_type
 from anthias_common.utils import clamp_screen_rotation
 from anthias_server.settings import settings
 
 VIDEO_TIMEOUT = 20  # secs
+
+
+# Lazy import for the pydbus proxy: the viewer service hands
+# MPVMediaPlayer the same ``browser_bus`` object it uses for
+# loadPage / loadImage (created in src/anthias_viewer/__init__.py
+# during load_browser()). Tests inject a mock; importing pydbus at
+# module load time would force every test to have pydbus available
+# even when only exercising VLCMediaPlayer.
+_browser_bus: Any = None
+
+
+def set_browser_bus(bus: Any) -> None:
+    """Inject the AnthiasWebview D-Bus proxy.
+
+    Called from ``anthias_viewer/__init__.py`` after the webview's
+    ``Anthias service start`` handshake. ``MPVMediaPlayer`` reads
+    this module-global on every play() / stop() so a webview crash +
+    re-launch (with a fresh ``browser_bus`` proxy) can re-inject
+    without rebuilding the media player.
+    """
+    global _browser_bus
+    _browser_bus = bus
+
+
+def get_browser_bus() -> Any:
+    return _browser_bus
 
 
 def _screen_rotation() -> int:
@@ -208,295 +233,136 @@ class MediaPlayer:
         raise NotImplementedError
 
 
-# Per-codec hwdec preference on Pi, per-board:
-#
-#   Pi 4: H.264 → v4l2m2m-copy  (V3D V4L2 M2M decoder via
-#                                bcm2835-codec, up to 1080p60)
-#         HEVC  → drm-copy      (FFmpeg v4l2_request_hevc, up to
-#                                4Kp60 via the dedicated HEVC block)
-#
-#   Pi 5: H.264 → auto-copy     (Hantro G1 silicon exists but mpv
-#                                has no v4l2-request H.264 hwdec
-#                                upstream; passing v4l2m2m-copy
-#                                here would just log "Could not
-#                                find a valid device" errors before
-#                                silently SW-falling-back. The
-#                                playback envelope (HEVC 4Kp60) means
-#                                every asset normalised post-rollout
-#                                lands as HEVC, so this branch only
-#                                fires for legacy variants the
-#                                re-render walker hasn't caught yet.)
-#         HEVC  → drm-copy      (Hantro G2, up to 4Kp60. Requires
-#                                `dtoverlay=vc4-kms-v3d,cma-512` in
-#                                /boot/firmware/config.txt — the
-#                                stock 64 MB CMA region can't fit
-#                                a 4K HEVC dst buffer pool, and the
-#                                kernel cmdline `cma=` route silently
-#                                orphans the rpi-hevc-dec driver.)
-#
-#   generic-arm64 (Armbian SBCs — Rock Pi 4, Orange Pi, etc.):
-#         H.264 → v4l2m2m-copy  (RK3399 Hantro via the v4l2m2m
-#         HEVC  → v4l2m2m-copy   driver. mpv's --hwdec=help on the
-#                                latest-generic-arm64 image lists
-#                                both h264_v4l2m2m and hevc_v4l2m2m;
-#                                on boards without a working driver
-#                                mpv logs a warning and SW-falls-
-#                                back at runtime.)
-#
-# `auto-copy` is the universal safe fallback when ffprobe can't
-# read the codec (missing file, network URI we don't probe, etc.).
-#
-# An earlier revision did this with a Lua on_load hook, but
-# video-codec-name is empty at every event mpv exposes to scripts
-# before hwdec init (on_load, on_preloaded). ffprobing from Python
-# at launch time is both simpler and the only thing that actually
-# works.
-_PI_HWDEC_BY_CODEC: dict[str, dict[str, str]] = {
-    'pi4-64': {'h264': 'v4l2m2m-copy', 'hevc': 'drm-copy'},
-    'pi5': {'hevc': 'drm-copy'},
-    # Rock Pi 4 (RK3399, Radxa). Both codecs go through
-    # ``drm-copy``: the arm64 viewer image now pulls the Raspberry
-    # Pi repo's ffmpeg (``+rpt1``, with ``--enable-v4l2-request``
-    # — same package family as Pi 4 / Pi 5), so mpv exposes the
-    # stateless v4l2_request decoders that the RK3399's ``rkvdec``
-    # (HEVC) and ``rockchip,rk3399-vpu-dec`` Hantro VPU (H.264)
-    # implement. The ``start_viewer.sh`` entrypoint creates the
-    # ``/dev/video-dec*`` symlinks the v4l2_request decoder
-    # discovery code expects (privileged docker mounts its own
-    # /dev tmpfs without udev's symlinks).
-    'rockpi4': {'h264': 'drm-copy', 'hevc': 'drm-copy'},
-}
+def _marshal_dbus_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Wrap each value as a ``GLib.Variant`` for pydbus.
 
-
-def _probe_video_codec(uri: str) -> str:
-    """Return the canonical lowercase video codec name for ``uri``.
-
-    Empty string on probe failure (missing file, unreadable codec,
-    ffprobe absent, etc.) — callers should then pick a safe
-    fallback like ``auto-copy``. Short timeout because this runs
-    synchronously before every mpv launch.
+    AnthiasWebview's ``playVideo`` slot is declared with
+    ``QVariantMap`` (Qt's ``a{sv}`` D-Bus signature) so the dict
+    values are *variant-typed* across the wire. pydbus refuses to
+    auto-coerce a plain Python scalar to ``GLib.Variant`` ("Expected
+    GLib.Variant, but got str") — the wrap has to happen on the
+    Python side. The variant signature is picked by Python type so a
+    future int / bool option doesn't silently fail at
+    ``GLib.Variant('s', 90)`` time (review of PR #2905 caught the
+    prior string-only marshal as a footgun). Tests monkeypatch this
+    function to the identity so they can assert on the plain dict.
     """
-    try:
-        result = subprocess.run(
-            [
-                'ffprobe',
-                '-v',
-                'error',
-                '-select_streams',
-                'v:0',
-                '-show_entries',
-                'stream=codec_name',
-                '-of',
-                'default=nw=1:nk=1',
-                uri,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.stdout.strip().lower()
-    except (subprocess.SubprocessError, OSError):
-        return ''
+    from gi.repository import GLib
+
+    def variant_for(value: Any) -> Any:
+        if isinstance(value, bool):
+            return GLib.Variant('b', value)
+        if isinstance(value, int):
+            return GLib.Variant('i', value)
+        if isinstance(value, float):
+            return GLib.Variant('d', value)
+        return GLib.Variant('s', str(value))
+
+    return {key: variant_for(value) for key, value in options.items()}
 
 
-def _pi_hwdec_for_uri(uri: str) -> str:
-    """mpv ``--hwdec=`` value for ``uri`` on Pi 4 / Pi 5 / Rock Pi 4.
+def _build_video_options(uri: str) -> dict[str, Any]:
+    """Build the per-file option dict sent over D-Bus to AnthiasWebview.
 
-    Reads the board key via ``resolve_device_key``, which upgrades a
-    catch-all ``arm64`` DEVICE_TYPE to the specific subtype the
-    host_agent publishes (Rock Pi 4 → ``rockpi4``). ``auto-copy`` is
-    the safe fallback when ffprobe can't read the codec; the upload
-    gate (`anthias_server.processing._hw_decoded_codecs`) prevents
-    any codec outside ``_PI_HWDEC_BY_CODEC`` reaching this branch in
-    the first place.
+    Qt 6.5 dropped the upstream gstreamer media backend, so the
+    runtime path is QtMultimedia → libavcodec (the ffmpeg-backed
+    plugin). The +rpt1 ``libav*`` packages pinned in
+    ``docker/_rpt1-ffmpeg-pin.j2`` carry ``--enable-v4l2-request``
+    / ``--enable-v4l2-m2m``, so libavcodec engages the Pi-family
+    hardware decoders automatically — the application no longer
+    dispatches per-codec hwdec. The options dict shrinks to:
+
+    * ``audio-device`` — ALSA device name. C++ side strips the
+      ``alsa/`` prefix and extracts the ``CARD=<name>`` segment
+      to look up the matching ``QAudioDevice``.
+    * ``video-rotate`` — Pi 4 only. Cage / wayland boards inherit
+      the transform from wlr-randr at the compositor level;
+      sending ``video-rotate`` on top would double-rotate. Sent
+      as a Python ``int`` (was ``str`` before — the type-aware
+      ``_marshal_dbus_options`` now serialises both correctly).
+
+    The ``uri`` argument is kept on the signature for symmetry
+    with the libmpv era (where it fed ffprobe). It's no longer
+    read because libavcodec handles codec probing internally —
+    but a future codec-specific tuning may re-introduce it.
     """
-    board_map = _PI_HWDEC_BY_CODEC.get(resolve_device_key(), {})
-    return board_map.get(_probe_video_codec(uri), 'auto-copy')
+    del uri  # see docstring; kept for signature compatibility.
+    device_type = os.environ.get('DEVICE_TYPE', '')
+
+    options: dict[str, Any] = {
+        'audio-device': f'alsa/{get_alsa_audio_device()}',
+    }
+
+    # Rotation: cage/wlroots boards rotate via wlr-randr (issue
+    # #2856, wired in src/anthias_viewer/__init__.py) and Qt's
+    # wayland QPA inherits the transform — passing video-rotate
+    # on top would double-rotate. On Pi 4 (eglfs, no compositor)
+    # Qt has no transform plumbing, so the video pipeline has to
+    # apply the rotation itself (via QGraphicsVideoItem::setRotation
+    # in VideoView). Sent as int so the C++ side parses it cleanly
+    # via ``QVariant::toInt`` without a string round-trip.
+    rotation = _screen_rotation()
+    if rotation and device_type == 'pi4-64':
+        options['video-rotate'] = rotation
+
+    return options
 
 
 class MPVMediaPlayer(MediaPlayer):
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
-        self.process: subprocess.Popen[bytes] | None = None
         self.uri: str = ''
+        # No mpv subprocess any more — playback runs inside
+        # AnthiasWebview via QtMultimedia (``QMediaPlayer`` +
+        # ``QGraphicsVideoItem``), reached over D-Bus. Track local
+        # playback state so ``is_playing()`` (called only by tests
+        # today; the asset_loop sleeps for ``duration``) can still
+        # answer without a D-Bus round-trip.
+        self._playing: bool = False
 
     def set_asset(self, uri: str, duration: int | str) -> None:
         self.uri = uri
 
     def play(self) -> None:
-        # Re-read settings each play so the audio_output dropdown takes
-        # effect without a viewer restart, matching VLCMediaPlayer.
+        # Re-read settings each play so the audio_output dropdown
+        # takes effect without a viewer restart, matching the prior
+        # subprocess path and VLCMediaPlayer.
         settings.load()
 
-        # Pin to 1080p on Pi4-64/Pi5: mpv's default --drm-mode=preferred
-        # reads the connector's EDID-preferred mode (4K on most modern
-        # TVs) and runs CPU zimg upscale, which drops below real-time
-        # on the A72. Software decode of 1080p H.264 fits 4 cores fine.
-        # Pi 5 keeps the same tuning on the cage path — it doesn't
-        # hurt, and mpv ignores --drm-mode under --vo=gpu
-        # --gpu-context=wayland anyway.
-        device_type = os.environ.get('DEVICE_TYPE', '')
-        extra_args: list[str] = []
-        if device_type == 'pi4-64':
-            extra_args = [
-                '--drm-mode=1920x1080@60',
-                '--vd-lavc-threads=4',
-            ]
-        elif device_type == 'pi5':
-            extra_args = ['--vd-lavc-threads=4']
+        options = _build_video_options(self.uri)
 
-        # Per-board VO selection:
-        #
-        # * x86 / arm64 / pi5 run under `cage` (a wlroots kiosk
-        #   compositor — see bin/start_viewer.sh); cage holds DRM
-        #   master, so --vo=drm is denied. mpv goes through the GL
-        #   VO over a Wayland EGL context. Paired with
-        #   --hwdec=auto-safe, VAAPI-capable iGPUs on x86 (Intel
-        #   iHD/i965, AMD radeonsi, …) decode in hardware and hand
-        #   frames to the GL context as DMA-BUFs via
-        #   dmabuf-interop-gl; software decode still works via the
-        #   same VO. Pi 5's V3D 7.1 has enough bandwidth to composite
-        #   at the connector's native mode (typically 4K) on top of
-        #   software-decoded video. arm64 is best-effort per SoC.
-        #   --vo=dmabuf-wayland would skip the GL upload entirely
-        #   but segfaults under cage (mpv 0.40 + wlroots-0.18 +
-        #   libplacebo dies between hwdec init and file open).
-        #
-        # * Pi4-64 stays on Qt linuxfb (no compositor) with mpv's
-        #   --vo=drm. The V3D 6.0 doesn't have the bandwidth to
-        #   composite cage on top of software-decoded video at 4K
-        #   (738 vo drops/30 s in testing). mpv's --vo=drm does its
-        #   own DRM master juggling — briefly grabbing master,
-        #   rendering, dropping back — which coexists with Qt
-        #   linuxfb in a way that --vo=gpu --gpu-context=drm does
-        #   not (Mesa GBM holds master persistently and contends
-        #   with Qt's framebuffer use, manifesting as "Failed to
-        #   acquire DRM master: Permission denied"). So Pi 4 stays
-        #   on --vo=drm + --drm-mode=1920x1080@60 — the production
-        #   path inherited from master.
-        # ``generic-arm64`` is the legacy label that pre-rename arm64
-        # images carry — it shares the cage + Wayland stack with
-        # ``arm64`` and must take the same VO path. Without this the
-        # Rock Pi 4 (still on a generic-arm64 image) falls into the
-        # ``--vo=drm`` else branch and mpv aborts with "No primary
-        # DRM device could be picked" because cage holds DRM master.
-        if device_type in ('x86', 'arm64', 'generic-arm64', 'pi5'):
-            vo_args = ['--vo=gpu', '--gpu-context=wayland']
-        else:
-            vo_args = ['--vo=drm']
+        bus = get_browser_bus()
+        if bus is None:
+            logging.error(
+                'MPVMediaPlayer.play: AnthiasWebview D-Bus proxy not '
+                'set — call set_browser_bus() after the webview '
+                'handshake (src/anthias_viewer/__init__.py).'
+            )
+            return
 
-        # Rotation: cage/wlroots is rotated via wlr-randr (issue
-        # #2856, the wiring lives in src/anthias_viewer/__init__.py)
-        # and mpv's wayland VO inherits the compositor transform
-        # automatically — passing --video-rotate would double-rotate
-        # there. On Pi 4 (linuxfb, no compositor) mpv has to apply
-        # the transform itself.
-        rotation = _screen_rotation()
-        rotate_args: list[str] = []
-        if rotation and device_type == 'pi4-64':
-            rotate_args = [f'--video-rotate={rotation}']
-
-        # Hwdec selection. Strategy summary:
-        #
-        # * x86 / arm64 → `--hwdec=auto-copy`. Picks vaapi-copy on
-        #   Intel/AMD iGPUs (the only HW decode method mpv 0.40 ships
-        #   with for x86 outside of NVIDIA-specific options); on
-        #   arm64 there's nothing in auto-copy that matches
-        #   Rockchip's V4L2 stateless decoder, so it falls back to
-        #   software. arm64 HW decode via a vendor-tuned plugin is a
-        #   Tier-2 follow-up.
-        # * Pi 4 / Pi 5 → ffprobe the asset (~50 ms for a local
-        #   file) and pick per-codec, because `auto-copy`'s upstream
-        #   whitelist deliberately excludes v4l2m2m-copy (H.264 V3D
-        #   M2M is the path Pi 4 needs). See _pi_hwdec_for_uri().
-        # ffprobe-and-dispatch on any board the per-codec map covers
-        # (Pi 4 / Pi 5 / Rock Pi 4 via host_agent subtype). x86, the
-        # arm64 catch-all without a subtype, and Pi 2 / Pi 3 fall
-        # through to ``auto-copy`` and don't pay the ffprobe cost.
-        if resolve_device_key() in _PI_HWDEC_BY_CODEC:
-            hwdec_value = _pi_hwdec_for_uri(self.uri)
-        else:
-            hwdec_value = 'auto-copy'
-
-        # ANTHIAS_DEBUG_DROPS=1: when set on the viewer container,
-        # mpv's stdout/stderr go to a host-bound log instead of
-        # /dev/null, *and* --no-terminal is dropped so mpv's normal
-        # status line ("AV: 00:00:30 / ... Dropped: N") is emitted.
-        # The log records hwdec-current / VO init banners plus
-        # per-file drop counts so reviewers can validate the test
-        # bed without rebuilding the image. Default (unset)
-        # preserves the silent stdout/stderr=/dev/null behaviour.
-        debug_drops = os.environ.get('ANTHIAS_DEBUG_DROPS') == '1'
-        terminal_args = [] if debug_drops else ['--no-terminal']
-        # Popen accepts either an int sentinel (DEVNULL / STDOUT) or
-        # an already-opened binary IO stream for stdout/stderr. The
-        # int | IO[bytes] union covers both.
-        popen_stdout: int | IO[bytes]
-        popen_stderr: int | IO[bytes]
-        if debug_drops:
-            log_path = '/data/.anthias/mpv.log'
-            # Rolling-buffer size cap: a forgotten-on debug flag
-            # otherwise grows the log unbounded (a viewer process can
-            # run for weeks). 64 MB holds plenty of per-asset launch
-            # context — mpv's status-line + banner output is on the
-            # order of 10-20 KB per clip — and re-truncates at the
-            # next launch once the cap is hit, so disk pressure
-            # stays bounded without losing the immediately-recent
-            # context most debug sessions actually want.
-            mode = 'ab'
-            try:
-                if os.path.getsize(log_path) > 64 * 1024 * 1024:
-                    mode = 'wb'
-            except OSError:
-                pass
-            log_fd = open(log_path, mode, buffering=0)
-            log_fd.write(f'\n--- mpv launch {self.uri} ---\n'.encode())
-            popen_stdout = log_fd
-            popen_stderr = subprocess.STDOUT
-        else:
-            popen_stdout = subprocess.DEVNULL
-            popen_stderr = subprocess.DEVNULL
-
-        # ``--video-sync=display-resample`` overrides mpv 0.40's
-        # default (``audio``) which syncs video to the audio clock
-        # and drops VO frames when the two clocks drift. On every
-        # board we tested (Pi 4, Pi 5, x86) the audio-clock default
-        # produced 60–90% VO drops at 60 fps content even when the
-        # decoder was healthy (mpv reports drops at the VO, not the
-        # decoder). Digital signage cares about smooth video more
-        # than sub-frame A/V sync; display-resample syncs video to
-        # the display's refresh and resamples audio to match. Audio
-        # resampling is cheap (a 2-channel resample takes <1% CPU)
-        # and most signage clips have no audible content anyway.
-        self.process = subprocess.Popen(
-            [
-                'mpv',
-                *terminal_args,
-                *vo_args,
-                f'--hwdec={hwdec_value}',
-                '--video-sync=display-resample',
-                *extra_args,
-                *rotate_args,
-                f'--audio-device=alsa/{get_alsa_audio_device()}',
-                '--',
-                self.uri,
-            ],
-            stdout=popen_stdout,
-            stderr=popen_stderr,
-        )
+        try:
+            bus.playVideo(self.uri, _marshal_dbus_options(options))
+            self._playing = True
+        except Exception as exc:
+            # pydbus surfaces transport / signature errors as
+            # generic exceptions. Log + clear local state so a
+            # transient AnthiasWebview crash doesn't leave the
+            # player thinking a video is on screen.
+            logging.error('MPVMediaPlayer.play failed: %s', exc)
+            self._playing = False
 
     def stop(self) -> None:
+        self._playing = False
+        bus = get_browser_bus()
+        if bus is None:
+            return
         try:
-            if self.process:
-                self.process.terminate()
-                self.process = None
-        except Exception as e:
-            logging.error(f'Exception in stop(): {e}')
+            bus.stopVideo()
+        except Exception as exc:
+            logging.error('MPVMediaPlayer.stop failed: %s', exc)
 
     def is_playing(self) -> bool:
-        if self.process:
-            return self.process.poll() is None
-        return False
+        return self._playing
 
 
 class VLCMediaPlayer(MediaPlayer):
