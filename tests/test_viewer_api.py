@@ -68,7 +68,7 @@ def _make(**kwargs: Any) -> Asset:
     defaults: dict[str, Any] = {
         'mimetype': 'image',
         'name': 'a',
-        'uri': 'http://example.com/x.png',
+        'uri': 'https://example.com/x.png',
         'duration': 5,
         'is_enabled': True,
         'nocache': False,
