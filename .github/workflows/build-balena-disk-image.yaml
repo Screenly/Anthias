@@ -160,8 +160,19 @@ jobs:
       # than piping a remote shell script into bash. Node ships with
       # ubuntu-24.04 so balena-cli's runtime is available without
       # extra setup.
+      #
+      # The helper is fetched from the workflow's own ref rather than
+      # the tag-checked-out workspace: a workflow_dispatch against a
+      # release tag predating this helper (e.g. v2026.05.0) would
+      # otherwise fail with "No such file or directory".
       - name: Install bun
-        run: bash .github/workflows/scripts/install-bun.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/scripts/install-bun.sh?ref=${WORKFLOW_SHA}" \
+            --jq .content | base64 -d > /tmp/install-bun.sh
+          bash /tmp/install-bun.sh
 
       - name: Install balena CLI
         run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
@@ -246,8 +257,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd
 
+      # See balena-cloud-deploy's "Install bun" step for why this fetches
+      # install-bun.sh from the workflow's own ref instead of the
+      # tag-checked-out workspace.
       - name: Install bun
-        run: bash .github/workflows/scripts/install-bun.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/scripts/install-bun.sh?ref=${WORKFLOW_SHA}" \
+            --jq .content | base64 -d > /tmp/install-bun.sh
+          bash /tmp/install-bun.sh
 
       - name: Install balena CLI
         run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
