@@ -35,6 +35,7 @@ from anthias_server.lib.auth import (
     operator_username,
 )
 from anthias_common.internal_auth import is_internal_request
+from anthias_common.remote_video import dispatch_remote_video_download
 from anthias_common.youtube import dispatch_download
 from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.serializers.v2 import (
@@ -390,6 +391,17 @@ class AssetListViewV2(APIView):
         # title + duration once yt-dlp finishes.
         if serializer._pending_youtube_uri:
             dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+
+        # Generic remote video URLs get the same hand-off: the
+        # serializer pointed Asset.uri at a local destination path
+        # and flipped is_processing; the Celery task downloads via
+        # requests and chains into normalize_video_asset. Live
+        # streams (RTSP / HLS / DASH) are excluded by the
+        # serializer's ``is_downloadable_remote_video`` classify.
+        if serializer._pending_remote_video_uri:
+            dispatch_remote_video_download(
+                asset.asset_id, serializer._pending_remote_video_uri
+            )
 
         # Normalisation pipeline: HEIC/HEIF/TIFF → WebP, exotic video
         # → H.264 MP4. Dispatched after persistence (same pattern as
