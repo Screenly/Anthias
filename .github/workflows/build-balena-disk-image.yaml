@@ -175,7 +175,20 @@ jobs:
           bash /tmp/install-bun.sh
 
       - name: Install balena CLI
-        run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
+        run: |
+          bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
+          # balena-cli 25 parses docker-compose.yml via @balena/compose-parser,
+          # which ships a Go binary fetched by a postinstall script. Bun
+          # blocks lifecycle scripts by default, so without an explicit
+          # trust the binary is missing and `balena deploy` later fails
+          # with "Unexpected end of JSON input" on a perfectly valid
+          # compose file. Trust only compose-parser — `--trust` (all)
+          # also triggers @ronomon/direct-io's native build which fails
+          # on the runner without being needed for `balena deploy`.
+          (
+            cd "$HOME/.bun/install/global"
+            bun pm trust @balena/compose-parser
+          )
 
       - name: Login to balena
         env:
@@ -270,7 +283,20 @@ jobs:
           bash /tmp/install-bun.sh
 
       - name: Install balena CLI
-        run: bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
+        run: |
+          bun install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
+          # balena-cli 25 parses docker-compose.yml via @balena/compose-parser,
+          # which ships a Go binary fetched by a postinstall script. Bun
+          # blocks lifecycle scripts by default, so without an explicit
+          # trust the binary is missing and `balena deploy` later fails
+          # with "Unexpected end of JSON input" on a perfectly valid
+          # compose file. Trust only compose-parser — `--trust` (all)
+          # also triggers @ronomon/direct-io's native build which fails
+          # on the runner without being needed for `balena deploy`.
+          (
+            cd "$HOME/.bun/install/global"
+            bun pm trust @balena/compose-parser
+          )
 
       - name: Login to balena
         env:
