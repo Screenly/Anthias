@@ -337,6 +337,62 @@ def test_assets_delete_removes_row(client: Client, asset: Asset) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_delete_removes_local_file(
+    client: Client, tmp_path: Any
+) -> None:
+    """Regression for GH #2908: deleting an uploaded asset from the
+    UI form-post route must also remove the binary on disk. Before
+    the fix, ``assets_delete`` only ran ``Asset.objects.filter(...
+    ).delete()`` and left the file in ``settings['assetdir']``
+    forever — a Pi 4 with churn through uploads would fill its SD
+    card from operator-deleted assets that "looked" gone in the UI.
+    """
+    from anthias_server.settings import settings as anthias_settings
+
+    asset_path = (
+        tmp_path / anthias_settings['assetdir'].lstrip('/') / 'video.mp4'
+    )
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    asset_path.write_bytes(b'\x00\x01video-payload')
+
+    now = timezone.now()
+    asset = Asset.objects.create(
+        name='Local video',
+        uri=str(asset_path),
+        mimetype='video',
+        duration=10,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+
+    # ``settings['assetdir']`` is fixed at import time to
+    # ``<HOME>/anthias_assets``. Repoint it at the tmp_path mirror so
+    # the delete view's startswith() check matches the on-disk path.
+    with (
+        mock.patch.dict(
+            anthias_settings,
+            {'assetdir': str(asset_path.parent)},
+        ),
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_delete', args=[asset.asset_id])
+        )
+
+    assert response.status_code in (200, 302)
+    assert not Asset.objects.filter(asset_id=asset.asset_id).exists()
+    assert not asset_path.exists(), (
+        f'asset file {asset_path} survived UI delete'
+    )
+
+
+@pytest.mark.django_db
 def test_assets_order_persists_play_order(client: Client) -> None:
     a1 = Asset.objects.create(
         name='a1',

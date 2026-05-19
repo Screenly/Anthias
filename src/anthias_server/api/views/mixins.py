@@ -17,6 +17,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from anthias_server.app.helpers import delete_asset_with_file
 from anthias_server.app.models import Asset
 from anthias_server.api.helpers import save_active_assets_ordering
 from anthias_server.api.serializers.mixins import (
@@ -43,21 +44,7 @@ class DeleteAssetViewMixin:
     @authorized
     def delete(self, request: Request, asset_id: str) -> Response:
         asset = get_object_or_404(Asset, asset_id=asset_id)
-
-        try:
-            if asset.uri and asset.uri.startswith(settings['assetdir']):
-                remove(asset.uri)
-        except OSError:
-            pass
-
-        asset.delete()
-
-        # Wake the viewer so it can advance past the just-deleted asset
-        # instead of finishing its remaining ``duration`` on screen
-        # (issue #2430). The viewer's reload handler checks whether the
-        # currently-displayed asset is still active and skips if not.
-        ViewerPublisher.get_instance().send_to_viewer('reload')
-
+        delete_asset_with_file(asset)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
