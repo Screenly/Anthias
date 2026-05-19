@@ -333,10 +333,14 @@ jobs:
           esac
 
       - name: Download OS image
+        # `--version` accepts an explicit version, a semver range,
+        # `latest`, `menu`, or `menu-esr` in balena-cli 25.x; the
+        # `default` keyword that worked under balena-cli 22.x was
+        # removed ("Version default is not available for ...").
         run: |
           balena os download "$BALENA_IMAGE" \
             --output "$BALENA_IMAGE.img" \
-            --version default
+            --version latest
 
       - name: Preload OS image
         run: |
