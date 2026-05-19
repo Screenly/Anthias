@@ -1001,7 +1001,7 @@ def _fake_response(
     status_code: int = 200,
     chunk_size: int = 4,
 ) -> mock.MagicMock:
-    """Shape a fake ``requests.get`` response: context-manager-shaped,
+    """Shape a fake ``_session.get`` response: context-manager-shaped,
     streams ``body`` in fixed-size chunks via ``iter_content``."""
     resp = mock.MagicMock()
     resp.status_code = status_code
@@ -1047,7 +1047,10 @@ def test_download_remote_video_asset_success_chains_into_normalize(
     _make_remote_video_asset(remote_video_asset_dir)
     payload = b'mp4-bytes' * 100
     with (
-        mock.patch('requests.get', return_value=_fake_response(body=payload)),
+        mock.patch(
+            'anthias_server.celery_tasks._session.get',
+            return_value=_fake_response(body=payload),
+        ),
         mock.patch(
             'anthias_server.processing.dispatch_normalize_video'
         ) as mock_dispatch_normalize,
@@ -1091,7 +1094,9 @@ def test_download_remote_video_asset_size_cap_aborts(
     fake_resp = _fake_response(body=b'x' * 200, chunk_size=32)
     with (
         mock.patch.object(celery_tasks_module, 'REMOTE_VIDEO_MAX_BYTES', 100),
-        mock.patch('requests.get', return_value=fake_resp),
+        mock.patch(
+            'anthias_server.celery_tasks._session.get', return_value=fake_resp
+        ),
         mock.patch(
             'anthias_server.processing.dispatch_normalize_video'
         ) as mock_dispatch,
@@ -1117,7 +1122,7 @@ def test_download_remote_video_asset_http_404_propagates_for_on_failure(
     _make_remote_video_asset(remote_video_asset_dir)
     with (
         mock.patch(
-            'requests.get',
+            'anthias_server.celery_tasks._session.get',
             return_value=_fake_response(status_code=404, body=b''),
         ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
@@ -1141,7 +1146,7 @@ def test_download_remote_video_asset_manifest_content_type_aborts(
     _make_remote_video_asset(remote_video_asset_dir)
     with (
         mock.patch(
-            'requests.get',
+            'anthias_server.celery_tasks._session.get',
             return_value=_fake_response(
                 content_type='application/vnd.apple.mpegurl',
                 body=b'#EXTM3U\n',
@@ -1164,7 +1169,7 @@ def test_download_remote_video_asset_wrong_content_type_aborts(
     _make_remote_video_asset(remote_video_asset_dir)
     with (
         mock.patch(
-            'requests.get',
+            'anthias_server.celery_tasks._session.get',
             return_value=_fake_response(
                 content_type='text/html', body=b'<html>not here</html>'
             ),
@@ -1186,7 +1191,7 @@ def test_download_remote_video_asset_accepts_octet_stream(
     _make_remote_video_asset(remote_video_asset_dir)
     with (
         mock.patch(
-            'requests.get',
+            'anthias_server.celery_tasks._session.get',
             return_value=_fake_response(
                 content_type='application/octet-stream',
                 body=b'mp4-bytes' * 50,
@@ -1213,7 +1218,10 @@ def test_download_remote_video_asset_zero_bytes_aborts(
     operator's row."""
     _make_remote_video_asset(remote_video_asset_dir)
     with (
-        mock.patch('requests.get', return_value=_fake_response(body=b'')),
+        mock.patch(
+            'anthias_server.celery_tasks._session.get',
+            return_value=_fake_response(body=b''),
+        ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
     ):
@@ -1232,7 +1240,7 @@ def test_download_remote_video_asset_no_op_for_missing_row(
 ) -> None:
     """Row deleted between dispatch and pickup — task returns cleanly
     without hitting the network."""
-    with mock.patch('requests.get') as fake_get:
+    with mock.patch('anthias_server.celery_tasks._session.get') as fake_get:
         download_remote_video_asset(
             'does-not-exist', 'https://example.com/x.mp4'
         )
@@ -1247,19 +1255,26 @@ def test_download_remote_video_asset_no_op_when_row_already_finalized(
     cleared is_processing must not re-download or stomp on
     operator-edited state."""
     _make_remote_video_asset(remote_video_asset_dir, is_processing=False)
-    with mock.patch('requests.get') as fake_get:
+    with mock.patch('anthias_server.celery_tasks._session.get') as fake_get:
         download_remote_video_asset('rv-1', 'https://example.com/x.mp4')
     fake_get.assert_not_called()
 
 
 @pytest.mark.django_db
-def test_download_remote_video_asset_backfills_uri_when_row_uri_missing(
+def test_download_remote_video_asset_refuses_row_with_empty_uri(
     remote_video_asset_dir: str,
 ) -> None:
-    """Defensive: if the row landed without a uri (e.g. a custom caller
-    skipped the serializer's path-stamping), the task uses the
-    recomputed destination AND backfills the row so the viewer + API
-    can find the file."""
+    """The serializer is the source of truth for the destination path —
+    it stamps ``Asset.uri`` at ``<assetdir>/<id><ext>`` before
+    dispatching, picking the extension from the URL or the HEAD
+    probe's Content-Type.
+
+    A row reaching this task with an empty uri is a programming error
+    (broken dispatch site, hand-edited row, backup restore). The task
+    refuses rather than guessing an extension — recomputing here
+    would diverge from the serializer's choice for a HEAD-probed
+    extensionless URL (``video/webm`` → ``.webm`` at the serializer
+    vs. ``.mp4`` default here)."""
     Asset.objects.create(
         asset_id='rv-empty',
         name='https://example.com/x.mp4',
@@ -1271,18 +1286,18 @@ def test_download_remote_video_asset_backfills_uri_when_row_uri_missing(
         play_order=0,
     )
     with (
-        mock.patch(
-            'requests.get',
-            return_value=_fake_response(body=b'mp4-bytes'),
-        ),
+        mock.patch('anthias_server.celery_tasks._session.get') as fake_get,
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
     ):
-        download_remote_video_asset('rv-empty', 'https://example.com/x.mp4')
-    a = Asset.objects.get(asset_id='rv-empty')
-    expected = path.join(remote_video_asset_dir, 'rv-empty.mp4')
-    assert a.uri == expected
-    assert path.isfile(expected)
+        with pytest.raises(
+            RemoteVideoDownloadError, match='no destination uri'
+        ):
+            download_remote_video_asset(
+                'rv-empty', 'https://example.com/x.mp4'
+            )
+    # No network call attempted — the guard fires before the GET.
+    fake_get.assert_not_called()
 
 
 @pytest.mark.django_db

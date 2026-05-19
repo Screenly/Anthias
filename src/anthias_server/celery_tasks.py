@@ -41,9 +41,6 @@ from anthias_common.utils import (  # noqa: E402
     shutdown_via_balena_supervisor,
     url_fails,
 )
-from anthias_common.remote_video import (  # noqa: E402
-    remote_video_destination_path,
-)
 from anthias_common.youtube import youtube_destination_path  # noqa: E402
 from anthias_server.settings import settings  # noqa: E402
 
@@ -707,6 +704,14 @@ _REMOTE_VIDEO_MANIFEST_CONTENT_TYPES = frozenset(
 )
 
 
+# Module-level session — same UA convention as the HEAD probe in
+# ``anthias_common.remote_video``. Tests patch ``_session.get``.
+# Lazy import so the symbol resolves after Django's apps_ready.
+from anthias_common.http import AnthiasSession  # noqa: E402
+
+_session = AnthiasSession()
+
+
 class RemoteVideoDownloadError(Exception):
     """Raised by ``download_remote_video_asset`` for permanent
     failures the operator needs to see on the row.
@@ -796,9 +801,9 @@ def download_remote_video_asset(asset_id: str, uri: str) -> None:
     download doesn't linger as orphan content for the cleanup sweep
     to deal with an hour later.
     """
-    # Lazy import: keeps the requests dependency out of the
-    # serializer's hot path import graph and matches the
-    # download_youtube_asset pattern.
+    # Lazy import of ``requests`` for the exception type only;
+    # ``_session`` (module-level ``AnthiasSession``) is the actual
+    # client.
     import requests
 
     try:
@@ -811,18 +816,22 @@ def download_remote_video_asset(asset_id: str, uri: str) -> None:
         # edited. Don't re-download or clobber state.
         return
 
-    # Trust the row's persisted destination — same rationale as
-    # download_youtube_asset's ``location = asset.uri or …``: a
-    # mid-flight assetdir change would otherwise write the file to
-    # the new path while the row still points at the old one.
-    # ``remote_video_destination_path`` with the URL's extension is
-    # the defensive fallback when the row landed with an empty uri.
+    # The serializer stamps ``Asset.uri`` at the eventual local
+    # destination path before dispatching this task (the extension
+    # is picked from the URL or the HEAD probe's Content-Type).
+    # Trust that value rather than recomputing — recomputing the
+    # extension here from the URL alone would diverge from what
+    # the serializer chose for a HEAD-probed extensionless URL
+    # (``video/webm`` → ``.webm`` at the serializer vs. ``.mp4``
+    # default here). A row reaching this task with an empty uri is
+    # a programming error (broken dispatch site, hand-edited row),
+    # not something to paper over with a guess.
+    if not asset.uri:
+        raise RemoteVideoDownloadError(
+            f'asset {asset_id!r} has no destination uri — refusing '
+            'to download without a serializer-stamped path'
+        )
     location = asset.uri
-    if not location:
-        from urllib.parse import urlparse
-
-        ext = path.splitext(urlparse(uri).path)[1].lower() or '.mp4'
-        location = remote_video_destination_path(asset_id, ext, settings)
 
     staging = f'{location}.part'
 
@@ -850,9 +859,10 @@ def download_remote_video_asset(asset_id: str, uri: str) -> None:
         # 302s to a signed download URL. The ``(connect, read)``
         # tuple form is the requests convention for per-phase
         # timeouts; the read timeout is per-chunk so a stalled
-        # origin can't pin the worker for the full 15-minute
-        # task time_limit.
-        with requests.get(
+        # origin can't pin the worker for the full 15-minute task
+        # time_limit. The module-level ``_session`` injects the
+        # project-wide ``Anthias/<release>`` User-Agent (#2897).
+        with _session.get(
             uri,
             stream=True,
             allow_redirects=True,

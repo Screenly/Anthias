@@ -49,7 +49,7 @@ def test_classify_known_video_extension_returns_download(
     """A URL whose path ends in a known single-file video container
     auto-downloads with the matching local extension. No HEAD call
     fires — extension match is the fast path."""
-    with mock.patch('anthias_common.remote_video.requests.head') as head:
+    with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video(uri)
     assert ok is True
     assert ext == expected_ext
@@ -71,7 +71,7 @@ def test_classify_streaming_manifest_extensions_return_stream(
     """HLS / DASH / SmoothStreaming manifests never auto-download —
     they describe a stream, not a single file. No HEAD call (the
     extension match short-circuits)."""
-    with mock.patch('anthias_common.remote_video.requests.head') as head:
+    with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video(uri)
     assert ok is False
     assert ext == ''
@@ -92,7 +92,7 @@ def test_classify_streaming_schemes_return_stream(uri: str) -> None:
     """RTSP / RTMP / SRT / UDP / MMS are streaming-by-construction,
     even if the URL's path happens to end in ``.mp4``. The viewer
     plays them live via mpv's network stack."""
-    with mock.patch('anthias_common.remote_video.requests.head') as head:
+    with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video(uri)
     assert ok is False
     assert ext == ''
@@ -102,7 +102,7 @@ def test_classify_streaming_schemes_return_stream(uri: str) -> None:
 def test_classify_streaming_scheme_with_mp4_path_returns_stream() -> None:
     """``rtsp://camera/feed.mp4`` is RTSP. Path extension does not
     promote it to an http(s) download."""
-    with mock.patch('anthias_common.remote_video.requests.head') as head:
+    with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video('rtsp://camera/feed.mp4')
     assert ok is False
     assert ext == ''
@@ -113,7 +113,7 @@ def test_classify_non_http_scheme_returns_stream() -> None:
     """Non-http(s)/non-streaming schemes (file://, ftp://, ...) get
     the negative classify. The classifier deliberately refuses to
     download from anything but well-known network protocols."""
-    with mock.patch('anthias_common.remote_video.requests.head') as head:
+    with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video('file:///tmp/clip.mp4')
     assert ok is False
     assert ext == ''
@@ -144,7 +144,7 @@ def test_classify_bare_url_falls_back_to_head_probe_video() -> None:
     """No extension on the URL, but HEAD reports ``Content-Type:
     video/mp4`` → auto-download with the inferred extension."""
     with mock.patch(
-        'anthias_common.remote_video.requests.head',
+        'anthias_common.remote_video._session.head',
         return_value=_fake_head('video/mp4'),
     ) as head:
         ok, ext = is_downloadable_remote_video(
@@ -161,7 +161,7 @@ def test_classify_head_probe_html_returns_stream() -> None:
     URL. The download task would have stored the error page as the
     asset; we want the row to remain a literal-URL stream instead."""
     with mock.patch(
-        'anthias_common.remote_video.requests.head',
+        'anthias_common.remote_video._session.head',
         return_value=_fake_head('text/html; charset=utf-8'),
     ):
         ok, ext = is_downloadable_remote_video(
@@ -177,7 +177,7 @@ def test_classify_head_probe_manifest_content_type_returns_stream() -> None:
     probe — downloading the manifest as a single file would store
     the playlist, not the segments it points at."""
     with mock.patch(
-        'anthias_common.remote_video.requests.head',
+        'anthias_common.remote_video._session.head',
         return_value=_fake_head('application/vnd.apple.mpegurl'),
     ):
         ok, ext = is_downloadable_remote_video(
@@ -193,7 +193,7 @@ def test_classify_head_probe_http_error_returns_stream() -> None:
     stream-mode keeps the create call from failing — the viewer
     will play (or fail to play) the URL as a stream."""
     with mock.patch(
-        'anthias_common.remote_video.requests.head',
+        'anthias_common.remote_video._session.head',
         return_value=_fake_head('video/mp4', status_code=405),
     ):
         ok, ext = is_downloadable_remote_video(
@@ -219,7 +219,7 @@ def test_classify_head_probe_network_failure_returns_stream(
     URL. The classifier is best-effort; we never block the create
     call on a flaky origin."""
     with mock.patch(
-        'anthias_common.remote_video.requests.head',
+        'anthias_common.remote_video._session.head',
         side_effect=exc,
     ):
         ok, ext = is_downloadable_remote_video(
@@ -234,7 +234,7 @@ def test_classify_head_probe_uses_short_timeout() -> None:
     timeout — operators are blocking on the POST /assets call. Any
     drift in the timeout constant would slow create requests."""
     with mock.patch(
-        'anthias_common.remote_video.requests.head',
+        'anthias_common.remote_video._session.head',
         return_value=_fake_head('video/mp4'),
     ) as head:
         is_downloadable_remote_video('https://api.example.com/video/12345')

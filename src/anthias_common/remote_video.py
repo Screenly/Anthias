@@ -16,7 +16,6 @@ hot create-asset path twice. The dispatch helper does a lazy import of
 
 from __future__ import annotations
 
-import logging
 import mimetypes
 from os import path
 from typing import TYPE_CHECKING
@@ -24,8 +23,17 @@ from urllib.parse import urlparse
 
 import requests
 
+from anthias_common.http import AnthiasSession
+
 if TYPE_CHECKING:
     from anthias_server.settings import AnthiasSettings
+
+
+# Module-level shared session so the HEAD probe reuses one TCP/TLS
+# connection pool across the lifetime of the process. Pattern matches
+# ``anthias_server.lib.screenly_migration._session`` — tests patch
+# ``_session.head`` (or whichever method) directly.
+_session = AnthiasSession()
 
 
 # Single-file video containers we know how to download and that the
@@ -125,8 +133,12 @@ def _head_probe(uri: str) -> tuple[bool, str]:
     ``_VIDEO_CONTAINER_EXTS``. Falls back to ``.mp4`` on the (rare)
     case where guess_extension returns None for a video/* type.
     """
+    # Route through the module-level ``AnthiasSession`` so origins
+    # see a consistent ``Anthias/<release>`` UA (matches the project-
+    # wide outbound convention from #2897) and the connection pool
+    # is reused across probes.
     try:
-        resp = requests.head(
+        resp = _session.head(
             uri,
             allow_redirects=True,
             timeout=_HEAD_PROBE_TIMEOUT_S,
@@ -229,10 +241,3 @@ def dispatch_remote_video_download(asset_id: str, source_uri: str) -> None:
 
     stamp_processing_start(asset_id)
     download_remote_video_asset.delay(asset_id, source_uri)
-
-
-# Suppress noisy library-side logging during the HEAD probe — the
-# serializer caller already turns a failure into "stays as stream URL"
-# and we don't want a transient DNS hiccup to spew tracebacks into
-# every create-asset POST log line.
-logging.getLogger('urllib3').setLevel(logging.WARNING)
