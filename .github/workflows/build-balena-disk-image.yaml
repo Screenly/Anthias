@@ -274,11 +274,14 @@ jobs:
               echo "FLEET_SLUG=anthias-pi5" >> "$GITHUB_ENV"
               ;;
             x86)
-              # genericx86-64-ext is balena's UEFI-boot generic
-              # x86_64 device type — works on most modern PCs / NUCs.
-              # Users without UEFI need a different image; intel-nuc
-              # is the legacy alternative.
-              echo "BALENA_IMAGE=genericx86-64-ext" >> "$GITHUB_ENV"
+              # generic-amd64 is balena's GPT-boot generic x86_64
+              # device type (the screenly_ose/anthias-x86 fleet is
+              # provisioned for this slug, not the older MBR-boot
+              # genericx86-64-ext). Mismatching the two yields
+              # "The device type of the provided OS image …, does
+              # not match the expected device type …" at
+              # `balena os configure` time.
+              echo "BALENA_IMAGE=generic-amd64" >> "$GITHUB_ENV"
               echo "FLEET_SLUG=anthias-x86" >> "$GITHUB_ENV"
               ;;
           esac
