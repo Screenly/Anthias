@@ -6,6 +6,10 @@ from typing import Any
 from rest_framework.serializers import CharField, Serializer
 
 from anthias_server.api.errors import AssetCreationError
+from anthias_common.remote_video import (
+    is_downloadable_remote_video,
+    remote_video_destination_path,
+)
 from anthias_common.utils import (
     get_video_duration,
     url_fails,
@@ -30,6 +34,17 @@ class CreateAssetSerializerMixin:
     # choking on an unknown column. None means "not a YouTube asset"
     # and the view skips the dispatch.
     _pending_youtube_uri: str | None = None
+
+    # Source URL of an in-flight generic remote-video download, set by
+    # prepare_asset when ``mimetype == 'video'`` and the URI is an
+    # http(s) link whose extension or HEAD-probed Content-Type
+    # identifies it as a downloadable single-file container. Same
+    # hand-off shape as ``_pending_youtube_uri``: the view picks the
+    # field up after persistence and dispatches
+    # ``download_remote_video_asset``. None means "no auto-download
+    # needed" — either the URI is local, is a YouTube link, or is a
+    # live stream (RTSP / HLS / DASH) the viewer plays directly.
+    _pending_remote_video_uri: str | None = None
 
     # Set to ``'image'`` or ``'video'`` by ``prepare_asset`` when the
     # newly created row needs the normalisation pipeline to run before
@@ -103,6 +118,30 @@ class CreateAssetSerializerMixin:
             self._pending_youtube_uri = uri
             uri = youtube_destination_path(asset['asset_id'], settings)
 
+        # Generic remote-video URLs follow the YouTube lifecycle: the
+        # row lands with the eventual local path on disk, is_processing
+        # is flipped, and a Celery task downloads the file out of band
+        # before chaining into normalize_video_asset for the per-board
+        # codec gate. Live streams (RTSP / HLS / DASH) are filtered out
+        # by ``is_downloadable_remote_video`` — they reach the viewer
+        # as literal stream URLs the same way they always have.
+        is_remote_video_download = False
+        if (
+            not is_youtube
+            and not is_local_upload
+            and 'video' in (asset['mimetype'] or '')
+            and uri.startswith(('http://', 'https://'))
+        ):
+            should_download, source_ext = is_downloadable_remote_video(uri)
+            if should_download:
+                asset['is_processing'] = True if version == 'v2' else 1
+                asset['duration'] = 0
+                self._pending_remote_video_uri = uri
+                uri = remote_video_destination_path(
+                    asset['asset_id'], source_ext, settings
+                )
+                is_remote_video_download = True
+
         asset['uri'] = uri
 
         # Decide whether the new row needs the normalisation pipeline.
@@ -119,7 +158,11 @@ class CreateAssetSerializerMixin:
             and 'video' in (asset['mimetype'] or '')
         )
 
-        if 'video' in asset['mimetype'] and not is_youtube:
+        if (
+            'video' in asset['mimetype']
+            and not is_youtube
+            and not is_remote_video_download
+        ):
             duration_raw = data.get('duration')
             if duration_raw is not None and int(duration_raw) == 0:
                 if needs_video:
@@ -146,7 +189,7 @@ class CreateAssetSerializerMixin:
                 raise AssetCreationError(
                     'Duration must be zero for video assets.'
                 )
-        elif not is_youtube:
+        elif not is_youtube and not is_remote_video_download:
             # Crashes if it's not an int. We want that.
             duration = data.get('duration', settings['default_duration'])
 
@@ -175,13 +218,15 @@ class CreateAssetSerializerMixin:
             if field in data:
                 asset[field] = data[field]
 
-        # Skip the reachability probe for in-flight YouTube rows: the
-        # local mp4 path is the *future* destination, the file does
-        # not exist yet, and url_fails on a schemeless path is a
-        # silent no-op anyway. Asserting that explicitly prevents a
-        # future url_fails change from breaking the create flow.
+        # Skip the reachability probe for in-flight YouTube rows and
+        # generic remote-video downloads: in both cases the local
+        # path is the *future* destination, the file does not exist
+        # yet, and url_fails on a schemeless path is a silent no-op
+        # anyway. Asserting both flags explicitly prevents a future
+        # url_fails change from breaking either create flow.
         if (
             not is_youtube
+            and not is_remote_video_download
             and not asset['skip_asset_check']
             and url_fails(asset['uri'])
         ):

@@ -41,6 +41,9 @@ from anthias_common.utils import (  # noqa: E402
     shutdown_via_balena_supervisor,
     url_fails,
 )
+from anthias_common.remote_video import (  # noqa: E402
+    remote_video_destination_path,
+)
 from anthias_common.youtube import youtube_destination_path  # noqa: E402
 from anthias_server.settings import settings  # noqa: E402
 
@@ -634,6 +637,335 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     # Hand off to ``normalize_video_asset`` so the YouTube download
     # gets the same ffprobe metadata pass (codec / dims / fps /
     # duration written into ``metadata``) as a direct file upload.
+    dispatch_normalize_video(asset_id)
+
+
+# ---------------------------------------------------------------------------
+# download_remote_video_asset — generic http(s) single-file video URLs
+# ---------------------------------------------------------------------------
+#
+# Mirrors the YouTube lifecycle for any ``http(s)://…`` URL whose
+# extension or Content-Type identifies it as a downloadable video
+# container (mp4 / webm / mov / mkv / ...). The serializer flips the
+# row to ``is_processing=True`` and points ``Asset.uri`` at a local
+# destination path; this task fetches the file, stamps metadata, and
+# chains into ``normalize_video_asset`` for the per-board HW-codec
+# gate — the same path YouTube downloads already follow. The win is
+# uniformity: a 4K H.264 URL on a Pi 5 no longer silently SW-decodes
+# at rotation time, origin downtime no longer turns into mid-rotation
+# black-screen slots, and operators see codec/dims/fps in the asset
+# table.
+#
+# Live streams (HLS / DASH / RTSP) are excluded by the serializer's
+# classify step — they reach this task only via mis-routing, which
+# the explicit Content-Type guard below catches and rejects.
+
+
+# Wall-clock cap on a single download attempt. Matches
+# YOUTUBE_DOWNLOAD_TIME_LIMIT_S so an operator who pastes a 1080p
+# clip URL gets the same patience as a YouTube link.
+REMOTE_VIDEO_DOWNLOAD_TIME_LIMIT_S = 60 * 15
+
+# Hard ceiling on the downloaded file size. 5 GiB covers >99% of
+# legitimate signage content (a 2-hour 4K H.264 at 5 Mbps is ~4.5 GB;
+# typical 5-minute 1080p clips are ~150 MB). The cap is enforced
+# *during* the stream — a malicious or misconfigured origin can't
+# blow out the device's SD card by advertising a small file and then
+# serving terabytes. Exceeding the cap raises a hard error so the
+# operator sees the row land as Failed with a clear message, rather
+# than silently truncating to the cap.
+REMOTE_VIDEO_MAX_BYTES = 5 * 1024**3
+
+# Connect / read timeouts. The connect timeout is short because a
+# legitimate origin establishes the TCP + TLS handshake in well under
+# a second; a 15s ceiling tolerates a slow DNS resolver or a sleepy
+# CDN edge. The read timeout is per-chunk — a stalled stream that
+# doesn't send any bytes for 60s gets killed rather than tying up
+# the worker for the full 15-minute time_limit.
+REMOTE_VIDEO_CONNECT_TIMEOUT_S = 15
+REMOTE_VIDEO_READ_TIMEOUT_S = 60
+
+# Chunk size for the streaming download. 1 MiB is the sweet spot for
+# the Pi-class SD-card writer: smaller chunks add per-write syscall
+# overhead, larger chunks tie up RAM that could be feeding the
+# kernel page cache. Same value used elsewhere in the codebase for
+# bulk file IO.
+_REMOTE_VIDEO_CHUNK_BYTES = 1024 * 1024
+
+# Manifest Content-Types we explicitly reject at GET time even though
+# the upfront HEAD probe in the serializer should have caught them.
+# Some origins serve different headers on HEAD vs GET (HEAD returns
+# 200 with ``video/mp4``, GET returns 200 with
+# ``application/vnd.apple.mpegurl``) — defence in depth rather than
+# trust the serializer's upstream classify.
+_REMOTE_VIDEO_MANIFEST_CONTENT_TYPES = frozenset(
+    {
+        'application/vnd.apple.mpegurl',
+        'application/x-mpegurl',
+        'application/dash+xml',
+    }
+)
+
+
+class RemoteVideoDownloadError(Exception):
+    """Raised by ``download_remote_video_asset`` for permanent
+    failures the operator needs to see on the row.
+
+    Covers: non-2xx HTTP response, wrong Content-Type, file exceeded
+    the size cap, zero-byte response. All four are conditions where
+    retrying would just keep failing — the row lands on
+    ``on_failure`` and the operator sees the message on the Failed
+    pill's hover tooltip.
+    """
+
+
+class _DownloadRemoteVideoTask(Task):  # type: ignore[type-arg]
+    """Custom Task subclass that funnels failures through the same
+    metadata-error contract as ``_DownloadYoutubeTask`` and
+    ``_NormalizeAssetTask``.
+
+    Kept as a copy-paste of the YouTube task's failure handler rather
+    than refactored into a shared base — the failure body is 12 lines
+    and a shared base would obscure the per-task error contract that
+    each docstring documents inline. If a third download task ever
+    appears the refactor becomes worth doing.
+    """
+
+    def on_failure(
+        self,
+        exc: BaseException,
+        task_id: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        einfo: Any,
+    ) -> None:
+        asset_id = args[0] if args else kwargs.get('asset_id')
+        if not asset_id:
+            return
+        try:
+            from anthias_server.processing import (
+                _notify,
+                _set_processing_error,
+            )
+
+            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+            _notify(asset_id)
+        except Exception:
+            logging.exception(
+                'download_remote_video_asset on_failure cleanup failed for %s',
+                asset_id,
+            )
+
+
+@celery.task(
+    base=_DownloadRemoteVideoTask,
+    time_limit=REMOTE_VIDEO_DOWNLOAD_TIME_LIMIT_S,
+    # Transient network / IO hiccups retry; permanent classes
+    # (RemoteVideoDownloadError covers HTTP 4xx, content-type
+    # mismatch, size cap) bubble straight to on_failure.
+    autoretry_for=(OSError,),
+    retry_backoff=15,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=2,
+)
+def download_remote_video_asset(asset_id: str, uri: str) -> None:
+    """Fetch *uri* into the row's persisted ``Asset.uri`` and chain
+    into ``normalize_video_asset``.
+
+    The row is created upstream with ``mimetype='video'``,
+    ``is_processing=True``, and ``uri`` pointing at
+    ``<assetdir>/<asset_id>.<ext>`` (the eventual local path). On
+    success this task lands the file at that path, stamps
+    ``metadata['source']='remote_url'`` so the origin URL is
+    recoverable after a row edit, then dispatches
+    ``normalize_video_asset`` for the per-board HW-codec gate. The
+    row stays ``is_processing=True`` across the chain so the table
+    shows a single Processing → Done transition.
+
+    Failure surface:
+      * non-2xx response → ``RemoteVideoDownloadError`` → on_failure
+        writes ``metadata.error_message`` and clears the flag.
+      * wrong Content-Type on GET (manifest, HTML error page) →
+        same.
+      * downloaded bytes > ``REMOTE_VIDEO_MAX_BYTES`` → same.
+      * transient network / IO hiccup → ``autoretry_for`` retries
+        twice with backoff; persistent failure lands on on_failure.
+
+    Cleans up ``.part`` on every failure path so a partially-written
+    download doesn't linger as orphan content for the cleanup sweep
+    to deal with an hour later.
+    """
+    # Lazy import: keeps the requests dependency out of the
+    # serializer's hot path import graph and matches the
+    # download_youtube_asset pattern.
+    import requests
+
+    try:
+        asset = Asset.objects.get(asset_id=asset_id)
+    except Asset.DoesNotExist:
+        return
+
+    if not asset.is_processing:
+        # Already finalised by a previous invocation, or operator-
+        # edited. Don't re-download or clobber state.
+        return
+
+    # Trust the row's persisted destination — same rationale as
+    # download_youtube_asset's ``location = asset.uri or …``: a
+    # mid-flight assetdir change would otherwise write the file to
+    # the new path while the row still points at the old one.
+    # ``remote_video_destination_path`` with the URL's extension is
+    # the defensive fallback when the row landed with an empty uri.
+    location = asset.uri
+    if not location:
+        from urllib.parse import urlparse
+
+        ext = path.splitext(urlparse(uri).path)[1].lower() or '.mp4'
+        location = remote_video_destination_path(asset_id, ext, settings)
+
+    staging = f'{location}.part'
+
+    def _drop_staging() -> None:
+        """Best-effort removal of the partial download.
+
+        Mirrors the image-pipeline ``_drop_image_staging`` contract:
+        every failure path through the streaming download removes the
+        ``.part`` file before propagating, so a stalled or refused
+        download never leaves multi-GB debris behind. ``cleanup()``
+        would catch it eventually but only after the 1h freshness
+        window — inline cleanup is the difference between an
+        operator's next upload working and "disk full" appearing in
+        the logs.
+        """
+        try:
+            os.remove(staging)
+        except OSError:
+            pass
+
+    try:
+        # ``stream=True`` so the response body isn't materialised in
+        # RAM — important for the multi-GB cap. ``allow_redirects``
+        # follows the common CDN pattern where the canonical URL
+        # 302s to a signed download URL. The ``(connect, read)``
+        # tuple form is the requests convention for per-phase
+        # timeouts; the read timeout is per-chunk so a stalled
+        # origin can't pin the worker for the full 15-minute
+        # task time_limit.
+        with requests.get(
+            uri,
+            stream=True,
+            allow_redirects=True,
+            timeout=(
+                REMOTE_VIDEO_CONNECT_TIMEOUT_S,
+                REMOTE_VIDEO_READ_TIMEOUT_S,
+            ),
+        ) as resp:
+            if resp.status_code >= 400:
+                raise RemoteVideoDownloadError(
+                    f'HTTP {resp.status_code} fetching {uri!r}'
+                )
+            content_type = (resp.headers.get('Content-Type') or '').lower()
+            base_type = content_type.split(';', 1)[0].strip()
+            if base_type in _REMOTE_VIDEO_MANIFEST_CONTENT_TYPES:
+                # The serializer's HEAD probe should have caught this,
+                # but some origins lie on HEAD and serve a manifest on
+                # GET. Defence in depth.
+                raise RemoteVideoDownloadError(
+                    f'origin served streaming manifest '
+                    f'({base_type!r}) instead of a downloadable file; '
+                    'live streams are not auto-downloaded'
+                )
+            # Some misconfigured CDNs serve a video file as
+            # ``application/octet-stream``. Accept octet-stream and
+            # any ``video/*`` type; reject anything else (HTML error
+            # pages, JSON error envelopes, etc.) so we don't store
+            # a 200 OK error page as the asset.
+            if not (
+                base_type.startswith('video/')
+                or base_type == 'application/octet-stream'
+                or base_type == ''  # some origins omit Content-Type
+            ):
+                raise RemoteVideoDownloadError(
+                    f'unexpected Content-Type {base_type!r} from {uri!r}; '
+                    'expected video/* or application/octet-stream'
+                )
+
+            written = 0
+            with open(staging, 'wb') as fh:
+                for chunk in resp.iter_content(
+                    chunk_size=_REMOTE_VIDEO_CHUNK_BYTES
+                ):
+                    if not chunk:
+                        # iter_content yields empty bytes for
+                        # keep-alive padding on some servers. Skip
+                        # rather than treating as EOF.
+                        continue
+                    written += len(chunk)
+                    if written > REMOTE_VIDEO_MAX_BYTES:
+                        raise RemoteVideoDownloadError(
+                            f'download exceeded size cap of '
+                            f'{REMOTE_VIDEO_MAX_BYTES} bytes for {uri!r}'
+                        )
+                    fh.write(chunk)
+            if written == 0:
+                raise RemoteVideoDownloadError(
+                    f'origin returned zero bytes for {uri!r}'
+                )
+    except RemoteVideoDownloadError:
+        _drop_staging()
+        raise
+    except (OSError, requests.RequestException):
+        _drop_staging()
+        raise
+
+    # Atomic rename within assetdir — POSIX guarantees a single inode
+    # swap so the viewer never sees a half-written file under the
+    # final name. ``os.replace`` is the cross-platform spelling of
+    # ``rename`` that overwrites an existing destination (e.g. a
+    # second invocation on the same asset_id, or a re-download
+    # triggered by the reconciler).
+    try:
+        os.replace(staging, location)
+    except OSError:
+        _drop_staging()
+        raise
+
+    metadata = dict(asset.metadata or {})
+    metadata.update(
+        {
+            'source': 'remote_url',
+            'source_url': uri,
+        }
+    )
+    metadata.pop('error_message', None)
+
+    update: dict[str, Any] = {
+        # ``is_processing`` deliberately stays True — the chained
+        # normalize_video_asset below clears it once its probe
+        # finishes. Single Processing → Done transition reads
+        # better than the previous two-step.
+        'metadata': metadata,
+    }
+    # Same uri-backfill rule as download_youtube_asset: write the
+    # row's uri only if it was empty on entry, otherwise leave the
+    # operator-set value alone.
+    if not asset.uri:
+        update['uri'] = location
+    Asset.objects.filter(asset_id=asset_id).update(**update)
+
+    from anthias_server.processing import (
+        _notify,
+        dispatch_normalize_video,
+    )
+
+    # Dashboard nudge so the operator's table picks up the row's
+    # progress without waiting for the 5s poll. Viewer reload is
+    # deferred to the normalize chain (same as YouTube) — the row is
+    # still ``is_processing=True`` and the on-device viewer would
+    # just reload to a row it can't display.
+    _notify(asset_id, reload_viewer=False)
+
     dispatch_normalize_video(asset_id)
 
 

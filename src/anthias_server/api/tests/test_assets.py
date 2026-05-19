@@ -755,6 +755,200 @@ def test_create_heic_image_dispatches_normalize_task_on_v1_2_and_v2(
     mock_dispatch.assert_called_once_with(asset_id)
 
 
+# ---------------------------------------------------------------------------
+# Remote video URL auto-download (issue #2894)
+# ---------------------------------------------------------------------------
+#
+# Mirror of the YouTube dispatch tests above. v1.2 / v2 are the only
+# versions that detect http(s) video URLs and rewrite them into a
+# local-download row; v1 / v1.1 keep literal-URL semantics by design.
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1_2', 'v2'])
+def test_create_remote_video_url_dispatches_download_task(
+    api_client: APIClient, version: str
+) -> None:
+    """POSTing a http(s) URL pointing at a single-file video container
+    (.mp4 in this test) on v1.2 / v2 must rewrite the row to a local
+    destination path, flip ``is_processing=True``, and dispatch the
+    new ``download_remote_video_asset`` task with the source URL.
+
+    This is the core acceptance criterion for issue #2894: the row's
+    final state is a local download that runs through
+    ``normalize_video_asset``, not a streaming URL that bypasses the
+    per-board codec gate.
+    """
+    remote_url = 'https://example.com/test-clip.mp4'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': remote_url,
+        'mimetype': 'video',
+        'duration': 0,
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+    dispatch_target = (
+        f'anthias_server.api.views.{version}.dispatch_remote_video_download'
+    )
+    with (
+        mock.patch(dispatch_target) as mock_dispatch,
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    asset_id = response.data['asset_id']
+    # Row landed with is_processing=True (a boolean on v2, an int on
+    # v1.2) and the URI rewritten to the local destination so the
+    # viewer's filesystem check will pick up the file once the task
+    # finishes downloading.
+    assert response.data['is_processing'] in (True, 1)
+    assert response.data['uri'].endswith(f'{asset_id}.mp4')
+    mock_dispatch.assert_called_once_with(asset_id, remote_url)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1'])
+def test_create_remote_video_url_keeps_literal_uri_on_legacy_endpoints(
+    api_client: APIClient, version: str
+) -> None:
+    """v1 / v1.1 deliberately do NOT auto-download remote video URLs —
+    they preserve the literal-URL semantics older clients depend on,
+    matching how image normalisation stayed v1.2 / v2-only. The row
+    lands with the original URI intact and ``is_processing`` False.
+
+    Guards against a future "consistency" refactor accidentally
+    promoting auto-download onto the legacy surface.
+    """
+    remote_url = 'https://example.com/test-clip.mp4'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': remote_url,
+        'mimetype': 'video',
+        'duration': 0,
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+    with (
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.url_fails',
+            return_value=False,
+        ),
+        # The v1.1 serializer probes duration synchronously when 0
+        # is passed; mock that out so the test isn't dependent on an
+        # ffprobe-able fixture file.
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.get_video_duration',
+            return_value=__import__('datetime').timedelta(seconds=10),
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    # Literal URI preserved; no is_processing flag.
+    assert response.data['uri'] == remote_url
+    assert response.data['is_processing'] in (False, 0)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1_2', 'v2'])
+def test_create_remote_hls_manifest_stays_as_stream_url(
+    api_client: APIClient, version: str
+) -> None:
+    """HLS / DASH manifests must NOT be auto-downloaded — they describe
+    a stream rather than a single file. The serializer's classify
+    rejects them at the URL-extension check, so the row lands with
+    the manifest URL intact and the viewer plays it as a live stream.
+
+    Out-of-scope per the issue, but enshrining it as a test keeps a
+    future classifier change from silently breaking the stream
+    playback path.
+    """
+    manifest_url = 'https://example.com/live/stream.m3u8'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': manifest_url,
+        'mimetype': 'video',
+        'duration': 0,
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+    dispatch_target = (
+        f'anthias_server.api.views.{version}.dispatch_remote_video_download'
+    )
+    with (
+        mock.patch(dispatch_target) as mock_dispatch,
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+        # The mixin's stream-URL branch falls through to an inline
+        # ``get_video_duration`` ffprobe; the test must not actually
+        # shell out to ffprobe against ``example.com``.
+        mock.patch(
+            'anthias_server.api.serializers.mixins.get_video_duration',
+            return_value=__import__('datetime').timedelta(seconds=10),
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    # Manifest URL preserved verbatim; no download dispatch.
+    assert response.data['uri'] == manifest_url
+    assert response.data['is_processing'] in (False, 0)
+    mock_dispatch.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1_2', 'v2'])
+def test_create_rtsp_url_stays_as_stream_url(
+    api_client: APIClient, version: str
+) -> None:
+    """RTSP camera feeds are streaming-by-construction. Even though
+    ``mimetype='video'`` matches the auto-download branch's mimetype
+    filter, the scheme check inside ``is_downloadable_remote_video``
+    routes it through as a literal-URI stream.
+    """
+    rtsp_url = 'rtsp://camera.local/feed'
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': rtsp_url,
+        'mimetype': 'video',
+        'duration': 0,
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+    dispatch_target = (
+        f'anthias_server.api.views.{version}.dispatch_remote_video_download'
+    )
+    with (
+        mock.patch(dispatch_target) as mock_dispatch,
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+        # Same inline-ffprobe fallback as the HLS test: rtsp URLs
+        # go through the stream-URL branch with duration=0.
+        mock.patch(
+            'anthias_server.api.serializers.mixins.get_video_duration',
+            return_value=__import__('datetime').timedelta(seconds=10),
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED, response.data
+    assert response.data['uri'] == rtsp_url
+    mock_dispatch.assert_not_called()
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1'])
 def test_create_heic_image_does_not_dispatch_on_legacy_endpoints(

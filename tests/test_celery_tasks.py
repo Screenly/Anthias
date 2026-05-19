@@ -964,6 +964,355 @@ def test_download_youtube_asset_on_failure_writes_error_metadata() -> None:
 
 
 # ---------------------------------------------------------------------------
+# download_remote_video_asset — generic http(s) single-file video URLs
+# ---------------------------------------------------------------------------
+
+
+from anthias_server.celery_tasks import (  # noqa: E402
+    RemoteVideoDownloadError,
+    download_remote_video_asset,
+)
+
+
+def _make_remote_video_asset(
+    asset_dir: str,
+    asset_id: str = 'rv-1',
+    ext: str = '.mp4',
+    is_processing: bool = True,
+) -> Asset:
+    """A row in the state the serializer leaves behind for an
+    http(s) video URL: mimetype='video', is_processing=True, uri
+    pointing at the eventual local destination."""
+    return Asset.objects.create(
+        asset_id=asset_id,
+        name='https://example.com/clip' + ext,
+        uri=path.join(asset_dir, f'{asset_id}{ext}'),
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=is_processing,
+        play_order=0,
+    )
+
+
+def _fake_response(
+    body: bytes = b'fake mp4 bytes',
+    content_type: str = 'video/mp4',
+    status_code: int = 200,
+    chunk_size: int = 4,
+) -> mock.MagicMock:
+    """Shape a fake ``requests.get`` response: context-manager-shaped,
+    streams ``body`` in fixed-size chunks via ``iter_content``."""
+    resp = mock.MagicMock()
+    resp.status_code = status_code
+    resp.headers = {'Content-Type': content_type}
+
+    def _iter_content(chunk_size: int) -> Iterator[bytes]:
+        for i in range(0, len(body), chunk_size):
+            yield body[i : i + chunk_size]
+
+    resp.iter_content = _iter_content
+    resp.__enter__.return_value = resp
+    resp.__exit__.return_value = False
+    return resp
+
+
+@pytest.fixture
+def remote_video_asset_dir() -> Iterator[str]:
+    """Per-test temp directory pinned as settings['assetdir'] so the
+    download task writes inside it and we can inspect the on-disk
+    result without depending on the host filesystem."""
+    Asset.objects.all().delete()
+    tmp = tempfile.TemporaryDirectory()
+    original = settings['assetdir']
+    settings['assetdir'] = tmp.name
+    try:
+        yield tmp.name
+    finally:
+        settings['assetdir'] = original
+        tmp.cleanup()
+        Asset.objects.all().delete()
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_success_chains_into_normalize(
+    remote_video_asset_dir: str,
+) -> None:
+    """Happy path: requests streams a small payload to the row's
+    persisted ``uri``, metadata gets stamped with ``source='remote_url'``
+    and ``source_url``, the dashboard notify fires, and
+    ``normalize_video_asset`` is dispatched so the per-board codec
+    gate runs. ``is_processing`` stays True across the chain — the
+    chained normalize_video clears it once ffprobe finishes."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    payload = b'mp4-bytes' * 100
+    with (
+        mock.patch('requests.get', return_value=_fake_response(body=payload)),
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_dispatch_normalize,
+        mock.patch(
+            'anthias_server.app.consumers.notify_asset_update'
+        ) as mock_notify,
+    ):
+        download_remote_video_asset('rv-1', 'https://example.com/clip.mp4')
+
+    a = Asset.objects.get(asset_id='rv-1')
+    # File landed at the persisted destination, .part is gone.
+    dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
+    assert path.isfile(dest)
+    assert not path.exists(f'{dest}.part')
+    with open(dest, 'rb') as fh:
+        assert fh.read() == payload
+    # Origin URL is recoverable after future row edits.
+    assert a.metadata['source'] == 'remote_url'
+    assert a.metadata['source_url'] == 'https://example.com/clip.mp4'
+    # Row stays in-flight until normalize clears the flag — matches
+    # the YouTube lifecycle for a single Processing → Done arc.
+    assert a.is_processing is True
+    mock_dispatch_normalize.assert_called_once_with('rv-1')
+    mock_notify.assert_called_once_with('rv-1')
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_size_cap_aborts(
+    remote_video_asset_dir: str,
+) -> None:
+    """A payload that streams past ``REMOTE_VIDEO_MAX_BYTES`` raises
+    inside the task body. The ``.part`` file must be cleaned up so a
+    multi-GB partial download doesn't linger on the SD card waiting
+    for the cleanup() sweep an hour later.
+
+    Monkey-patch the cap down to 100 bytes so the test allocates a
+    tiny payload — actually writing 5 GiB of fake bytes would blow
+    out the test runner's tmpfs / disk quota.
+    """
+    _make_remote_video_asset(remote_video_asset_dir)
+    fake_resp = _fake_response(body=b'x' * 200, chunk_size=32)
+    with (
+        mock.patch.object(celery_tasks_module, 'REMOTE_VIDEO_MAX_BYTES', 100),
+        mock.patch('requests.get', return_value=fake_resp),
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_dispatch,
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        with pytest.raises(RemoteVideoDownloadError, match='size cap'):
+            download_remote_video_asset('rv-1', 'https://example.com/huge.mp4')
+    dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
+    assert not path.exists(dest)
+    assert not path.exists(f'{dest}.part')
+    mock_dispatch.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_http_404_propagates_for_on_failure(
+    remote_video_asset_dir: str,
+) -> None:
+    """A non-2xx response raises ``RemoteVideoDownloadError``. Celery
+    routes the exception through ``_DownloadRemoteVideoTask.on_failure``
+    which clears ``is_processing`` and writes
+    ``metadata.error_message`` — same shape as YouTube's permanent
+    failures."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with (
+        mock.patch(
+            'requests.get',
+            return_value=_fake_response(status_code=404, body=b''),
+        ),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        with pytest.raises(RemoteVideoDownloadError, match='HTTP 404'):
+            download_remote_video_asset(
+                'rv-1', 'https://example.com/missing.mp4'
+            )
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_manifest_content_type_aborts(
+    remote_video_asset_dir: str,
+) -> None:
+    """Defence in depth: even if the serializer's HEAD probe said the
+    URL was a single file, an origin that serves an HLS manifest on
+    GET must be rejected. Storing the playlist as the asset would
+    leave the viewer pointing at a file that references segments it
+    can't fetch."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with (
+        mock.patch(
+            'requests.get',
+            return_value=_fake_response(
+                content_type='application/vnd.apple.mpegurl',
+                body=b'#EXTM3U\n',
+            ),
+        ),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        with pytest.raises(RemoteVideoDownloadError, match='manifest'):
+            download_remote_video_asset('rv-1', 'https://example.com/sneaky')
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_wrong_content_type_aborts(
+    remote_video_asset_dir: str,
+) -> None:
+    """``Content-Type: text/html`` on the GET response — most likely
+    a 200-OK error page from a misbehaving origin. Reject rather than
+    store the HTML as the asset."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with (
+        mock.patch(
+            'requests.get',
+            return_value=_fake_response(
+                content_type='text/html', body=b'<html>not here</html>'
+            ),
+        ),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        with pytest.raises(RemoteVideoDownloadError, match='Content-Type'):
+            download_remote_video_asset('rv-1', 'https://example.com/error')
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_accepts_octet_stream(
+    remote_video_asset_dir: str,
+) -> None:
+    """Some CDNs serve video files as ``application/octet-stream``.
+    Accept it — ffprobe in the chained normalize step is the real
+    arbiter of container/codec, not the HTTP Content-Type."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with (
+        mock.patch(
+            'requests.get',
+            return_value=_fake_response(
+                content_type='application/octet-stream',
+                body=b'mp4-bytes' * 50,
+            ),
+        ),
+        mock.patch(
+            'anthias_server.processing.dispatch_normalize_video'
+        ) as mock_dispatch,
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        download_remote_video_asset('rv-1', 'https://example.com/clip.mp4')
+    dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
+    assert path.isfile(dest)
+    mock_dispatch.assert_called_once_with('rv-1')
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_zero_bytes_aborts(
+    remote_video_asset_dir: str,
+) -> None:
+    """A 200 OK with an empty body almost certainly means the origin
+    is broken; storing an empty file would just queue a row that the
+    viewer would refuse anyway. Surface it as a clear failure on the
+    operator's row."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with (
+        mock.patch('requests.get', return_value=_fake_response(body=b'')),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        with pytest.raises(RemoteVideoDownloadError, match='zero bytes'):
+            download_remote_video_asset(
+                'rv-1', 'https://example.com/empty.mp4'
+            )
+    dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
+    assert not path.exists(dest)
+    assert not path.exists(f'{dest}.part')
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_no_op_for_missing_row(
+    remote_video_asset_dir: str,
+) -> None:
+    """Row deleted between dispatch and pickup — task returns cleanly
+    without hitting the network."""
+    with mock.patch('requests.get') as fake_get:
+        download_remote_video_asset(
+            'does-not-exist', 'https://example.com/x.mp4'
+        )
+    fake_get.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_no_op_when_row_already_finalized(
+    remote_video_asset_dir: str,
+) -> None:
+    """A duplicate task firing for a row whose first invocation already
+    cleared is_processing must not re-download or stomp on
+    operator-edited state."""
+    _make_remote_video_asset(remote_video_asset_dir, is_processing=False)
+    with mock.patch('requests.get') as fake_get:
+        download_remote_video_asset('rv-1', 'https://example.com/x.mp4')
+    fake_get.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_backfills_uri_when_row_uri_missing(
+    remote_video_asset_dir: str,
+) -> None:
+    """Defensive: if the row landed without a uri (e.g. a custom caller
+    skipped the serializer's path-stamping), the task uses the
+    recomputed destination AND backfills the row so the viewer + API
+    can find the file."""
+    Asset.objects.create(
+        asset_id='rv-empty',
+        name='https://example.com/x.mp4',
+        uri='',
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+    )
+    with (
+        mock.patch(
+            'requests.get',
+            return_value=_fake_response(body=b'mp4-bytes'),
+        ),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        download_remote_video_asset('rv-empty', 'https://example.com/x.mp4')
+    a = Asset.objects.get(asset_id='rv-empty')
+    expected = path.join(remote_video_asset_dir, 'rv-empty.mp4')
+    assert a.uri == expected
+    assert path.isfile(expected)
+
+
+@pytest.mark.django_db
+def test_download_remote_video_asset_on_failure_writes_error_metadata(
+    remote_video_asset_dir: str,
+) -> None:
+    """When Celery declares the task failed, is_processing must flip
+    back to False AND ``metadata.error_message`` must carry the
+    exception class + message so the asset table renders the "Failed"
+    pill — same operator-visible contract as YouTube / normalize
+    failures."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with mock.patch(
+        'anthias_server.app.consumers.notify_asset_update'
+    ) as mock_notify:
+        download_remote_video_asset.on_failure(
+            RuntimeError('connection refused'),
+            task_id='t-1',
+            args=('rv-1',),
+            kwargs={},
+            einfo=None,
+        )
+    a = Asset.objects.get(asset_id='rv-1')
+    assert a.is_processing is False
+    assert 'RuntimeError' in a.metadata['error_message']
+    assert 'connection refused' in a.metadata['error_message']
+    mock_notify.assert_called_once_with('rv-1')
+
+
+# ---------------------------------------------------------------------------
 # reconcile_stuck_processing (periodic recovery for is_processing=True
 # rows that never finished — GH #2870 second-line defence)
 # ---------------------------------------------------------------------------
