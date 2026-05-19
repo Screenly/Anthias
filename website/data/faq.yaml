@@ -30,6 +30,12 @@
 
 - group: Installation & updates
   items:
+    - question: How do I install Anthias with Raspberry Pi Imager?
+      answer: |
+        Open [Raspberry Pi Imager](https://www.raspberrypi.com/software/) (v1.9.4 or newer), click **Choose OS** &rarr; **Other specific-purpose OS** &rarr; **Digital signage and kiosks** &rarr; **Anthias**, then pick the entry that matches your Pi (Pi 2, Pi 3, Pi 4, or Pi 5). Select your SD card under **Choose Storage** and click **Write**. When the flash finishes, insert the card into the Pi and power it on — Anthias boots straight into the dashboard.
+
+        Open `http://<device-ip>` in a browser on the same network to start adding assets. If you want shell access on the device, enable SSH via Raspberry Pi Imager's **OS customization** (gear icon) before flashing — the Anthias image doesn't ship with SSH on by default.
+
     - question: How do I update Anthias?
       answer: |
         If you installed via balenaHub, updates are applied automatically over the air. For command-line installations, re-run the installer (`$HOME/anthias/bin/run_upgrade.sh`) or pull the latest Docker images. Disk image installations are pinned to the version you downloaded.
@@ -48,8 +54,9 @@
       answer: |
         Whether SSH is enabled depends on the OS image, not on Anthias itself — the installer doesn't touch `sshd`.
 
-        * **Anthias Raspberry Pi Imager image** and **balenaHub fleets**: SSH is on out of the box.
-        * **Raspberry Pi OS Lite** (you flashed it yourself): use Raspberry Pi Imager's advanced options to pre-enable SSH and set a username, or drop an empty file named `ssh` into the `/boot` partition before first boot.
+        * **Anthias Raspberry Pi Imager image**: SSH is *not* on by default. Before flashing, click the gear icon in Raspberry Pi Imager ("OS customization") and check **Enable SSH**, set a username/password (or paste in a public key), and write the SD card. The same Imager dialog can preconfigure Wi-Fi, hostname, and locale.
+        * **balenaHub fleets**: SSH is on out of the box via the balena supervisor.
+        * **Raspberry Pi OS Lite** (you flashed it yourself): use Raspberry Pi Imager's OS customization to pre-enable SSH and set a username, or drop an empty file named `ssh` into the `/boot` partition before first boot.
         * **Debian on PC**: the Debian installer leaves SSH on if you selected the *SSH server* package during install.
 
         Then connect with `ssh <user>@<device-ip>`.
