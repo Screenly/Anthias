@@ -1209,6 +1209,35 @@ def test_download_remote_video_asset_accepts_octet_stream(
 
 
 @pytest.mark.django_db
+def test_download_remote_video_asset_empty_content_type_aborts(
+    remote_video_asset_dir: str,
+) -> None:
+    """A 200 OK with no Content-Type header is a stronger signal of a
+    misbehaving origin than evidence of a real video. Accepting it
+    would let an HTML error page land on disk as a multi-GB asset
+    that the cleanup sweep can't recover (the row still references
+    the file, so it isn't an orphan). Reject and let the operator
+    see the explicit Content-Type-missing failure on the row."""
+    _make_remote_video_asset(remote_video_asset_dir)
+    with (
+        mock.patch(
+            'anthias_server.celery_tasks._session.get',
+            return_value=_fake_response(content_type='', body=b'whatever'),
+        ),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+    ):
+        with pytest.raises(RemoteVideoDownloadError, match='Content-Type'):
+            download_remote_video_asset(
+                'rv-1', 'https://example.com/no-headers.mp4'
+            )
+    # Nothing landed on disk; the staging cleanup wiped the .part too.
+    dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
+    assert not path.exists(dest)
+    assert not path.exists(f'{dest}.part')
+
+
+@pytest.mark.django_db
 def test_download_remote_video_asset_zero_bytes_aborts(
     remote_video_asset_dir: str,
 ) -> None:
