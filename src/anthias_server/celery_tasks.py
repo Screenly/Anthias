@@ -377,25 +377,24 @@ def probe_video_duration(asset_id: str) -> None:
     notify_asset_update(asset_id)
 
 
-class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
-    """Custom Task subclass that funnels failures through the same
-    metadata-error contract as ``_NormalizeAssetTask``.
+class _DownloadAssetTask(Task):  # type: ignore[type-arg]
+    """Shared ``on_failure`` for the download tasks (YouTube +
+    generic remote video).
 
-    Sharing the failure path means a failed YouTube download lands in
-    the same operator-visible state as a failed HEIC conversion or
-    failed video transcode: ``is_processing=False`` *and* a populated
-    ``metadata.error_message`` that the asset table renders as a
-    "Failed" pill (with the message on the hover tooltip). Without
-    that unification, a yt-dlp DownloadError would clear the
-    Processing pill but leave no on-row diagnostic — the operator
-    couldn't tell a fresh download from a 404'd one.
+    Both surface a permanent failure to the operator the same way a
+    failed HEIC conversion does: ``is_processing=False`` and a
+    populated ``metadata.error_message`` that the asset table renders
+    as a "Failed" pill with the message on the hover tooltip. Without
+    that unification, a yt-dlp DownloadError (or a ``RemoteVideoDownload
+    Error``) would clear the Processing pill but leave no on-row
+    diagnostic — the operator couldn't tell a fresh download from a
+    404'd one.
 
-    The previous in-process daemon thread swallowed yt-dlp's exit
-    code, so a failed download silently left the row stuck at
-    "Processing" with an empty .mp4. Now any uncaught exception
-    (DownloadError, ExtractorError, ...) bubbles to celery and lands
-    here once retries are exhausted.
+    Subclasses override ``_failure_log_prefix`` so the worker log line
+    names the actual task that failed.
     """
+
+    _failure_log_prefix: str = 'download_asset'
 
     def on_failure(
         self,
@@ -409,11 +408,11 @@ class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
         if not asset_id:
             return
         try:
-            # Reuse the helpers in anthias_server.processing so the
-            # YouTube and normalize pipelines share the exact same
+            # Reuse the helpers in anthias_server.processing so every
+            # download / normalize task shares the exact same
             # "row failed" semantics — single source of truth for the
-            # error_message contract instead of two near-duplicate
-            # blocks that could drift.
+            # error_message contract instead of near-duplicate blocks
+            # that could drift.
             from anthias_server.processing import (
                 _notify,
                 _set_processing_error,
@@ -423,9 +422,24 @@ class _DownloadYoutubeTask(Task):  # type: ignore[type-arg]
             _notify(asset_id)
         except Exception:
             logging.exception(
-                'download_youtube_asset on_failure cleanup failed for %s',
+                '%s on_failure cleanup failed for %s',
+                self._failure_log_prefix,
                 asset_id,
             )
+
+
+class _DownloadYoutubeTask(_DownloadAssetTask):
+    """YouTube-specific download task. See ``_DownloadAssetTask`` for
+    the failure contract.
+
+    The previous in-process daemon thread swallowed yt-dlp's exit
+    code, so a failed download silently left the row stuck at
+    "Processing" with an empty .mp4. Now any uncaught exception
+    (DownloadError, ExtractorError, ...) bubbles to celery and lands
+    on the inherited ``on_failure`` once retries are exhausted.
+    """
+
+    _failure_log_prefix = 'download_youtube_asset'
 
 
 # Bound the wall-clock cost of a single download attempt. 1080p videos
@@ -806,42 +820,13 @@ def _stream_remote_video_to_file(uri: str, staging: str) -> None:
             )
 
 
-class _DownloadRemoteVideoTask(Task):  # type: ignore[type-arg]
-    """Custom Task subclass that funnels failures through the same
-    metadata-error contract as ``_DownloadYoutubeTask`` and
-    ``_NormalizeAssetTask``.
-
-    Kept as a copy-paste of the YouTube task's failure handler rather
-    than refactored into a shared base — the failure body is 12 lines
-    and a shared base would obscure the per-task error contract that
-    each docstring documents inline. If a third download task ever
-    appears the refactor becomes worth doing.
+class _DownloadRemoteVideoTask(_DownloadAssetTask):
+    """Generic remote-video download task. Inherits the failure
+    contract from ``_DownloadAssetTask`` — only the log prefix
+    differs.
     """
 
-    def on_failure(
-        self,
-        exc: BaseException,
-        task_id: str,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        einfo: Any,
-    ) -> None:
-        asset_id = args[0] if args else kwargs.get('asset_id')
-        if not asset_id:
-            return
-        try:
-            from anthias_server.processing import (
-                _notify,
-                _set_processing_error,
-            )
-
-            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
-            _notify(asset_id)
-        except Exception:
-            logging.exception(
-                'download_remote_video_asset on_failure cleanup failed for %s',
-                asset_id,
-            )
+    _failure_log_prefix = 'download_remote_video_asset'
 
 
 @celery.task(

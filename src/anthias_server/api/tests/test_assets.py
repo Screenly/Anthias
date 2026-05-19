@@ -857,23 +857,34 @@ def test_create_remote_video_url_keeps_literal_uri_on_legacy_endpoints(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    'stream_uri',
+    [
+        # HLS manifest: extension match short-circuits to "stream".
+        'https://example.com/live/stream.m3u8',
+        # RTSP scheme: streaming-by-construction even if the path
+        # ended in ``.mp4`` (which it doesn't here). Scheme check
+        # rejects before any HEAD probe.
+        'rtsp://camera.local/feed',
+    ],
+    ids=['hls_manifest', 'rtsp'],
+)
 @pytest.mark.parametrize('version', ['v1_2', 'v2'])
-def test_create_remote_hls_manifest_stays_as_stream_url(
-    api_client: APIClient, version: str
+def test_create_stream_uri_stays_as_literal(
+    api_client: APIClient, version: str, stream_uri: str
 ) -> None:
-    """HLS / DASH manifests must NOT be auto-downloaded — they describe
-    a stream rather than a single file. The serializer's classify
-    rejects them at the URL-extension check, so the row lands with
-    the manifest URL intact and the viewer plays it as a live stream.
+    """Stream URLs (HLS manifests, RTSP feeds, ...) must NOT be
+    auto-downloaded — they describe a live stream rather than a single
+    file. The serializer's classify routes both shapes through as
+    literal URIs and the viewer plays them live.
 
     Out-of-scope per the issue, but enshrining it as a test keeps a
     future classifier change from silently breaking the stream
     playback path.
     """
-    manifest_url = 'https://example.com/live/stream.m3u8'
     payload = {
         **ASSET_CREATION_DATA,
-        'uri': manifest_url,
+        'uri': stream_uri,
         'mimetype': 'video',
         'duration': 0,
     }
@@ -889,7 +900,7 @@ def test_create_remote_hls_manifest_stays_as_stream_url(
         ),
         # The mixin's stream-URL branch falls through to an inline
         # ``get_video_duration`` ffprobe; the test must not actually
-        # shell out to ffprobe against ``example.com``.
+        # shell out to ffprobe against the test URLs.
         mock.patch(
             'anthias_server.api.serializers.mixins.get_video_duration',
             return_value=__import__('datetime').timedelta(seconds=10),
@@ -900,52 +911,9 @@ def test_create_remote_hls_manifest_stays_as_stream_url(
         )
 
     assert response.status_code == status.HTTP_201_CREATED, response.data
-    # Manifest URL preserved verbatim; no download dispatch.
-    assert response.data['uri'] == manifest_url
+    # Stream URI preserved verbatim; no download dispatch.
+    assert response.data['uri'] == stream_uri
     assert response.data['is_processing'] in (False, 0)
-    mock_dispatch.assert_not_called()
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize('version', ['v1_2', 'v2'])
-def test_create_rtsp_url_stays_as_stream_url(
-    api_client: APIClient, version: str
-) -> None:
-    """RTSP camera feeds are streaming-by-construction. Even though
-    ``mimetype='video'`` matches the auto-download branch's mimetype
-    filter, the scheme check inside ``is_downloadable_remote_video``
-    routes it through as a literal-URI stream.
-    """
-    rtsp_url = 'rtsp://camera.local/feed'
-    payload = {
-        **ASSET_CREATION_DATA,
-        'uri': rtsp_url,
-        'mimetype': 'video',
-        'duration': 0,
-    }
-    asset_list_url = reverse(f'api:asset_list_{version}')
-    dispatch_target = (
-        f'anthias_server.api.views.{version}.dispatch_remote_video_download'
-    )
-    with (
-        mock.patch(dispatch_target) as mock_dispatch,
-        mock.patch(
-            'anthias_server.api.serializers.mixins.url_fails',
-            return_value=False,
-        ),
-        # Same inline-ffprobe fallback as the HLS test: rtsp URLs
-        # go through the stream-URL branch with duration=0.
-        mock.patch(
-            'anthias_server.api.serializers.mixins.get_video_duration',
-            return_value=__import__('datetime').timedelta(seconds=10),
-        ),
-    ):
-        response = api_client.post(
-            asset_list_url, data=get_request_data(payload, version)
-        )
-
-    assert response.status_code == status.HTTP_201_CREATED, response.data
-    assert response.data['uri'] == rtsp_url
     mock_dispatch.assert_not_called()
 
 
