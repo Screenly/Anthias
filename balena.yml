@@ -28,4 +28,4 @@ assets:
   logo:
     type: "blob.asset"
     data:
-      url: "https://raw.githubusercontent.com/Screenly/Anthias/master/static/img/square-dark.svg"
+      url: "https://anthias.screenly.io/img/anthias-icon.svg"
