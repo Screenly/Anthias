@@ -7,11 +7,11 @@ def parse_cpu_info() -> dict[str, int | str]:
 
     with open('/proc/cpuinfo', 'r') as cpuinfo:
         for line in cpuinfo:
-            try:
-                key = line.split(':')[0].strip()
-                value = line.split(':')[1].strip()
-            except Exception:
-                pass
+            parts = line.split(':', 1)
+            if len(parts) != 2:
+                continue
+            key = parts[0].strip()
+            value = parts[1].strip()
 
             if key == 'processor':
                 cpu_info['cpu_count'] = (

@@ -80,3 +80,4 @@ website/.hugo_build.lock
 
 # Linting
 .coffeelint.json
+.shoulder/
