@@ -398,6 +398,16 @@ function set_device_type() {
     elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
         export DEVICE_TYPE="pi4-64"
     elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
+        # Pi 3 moved from armhf to arm64 in #2906 Phase 2. Refuse to
+        # install on a 32-bit kernel and tell the operator to reflash
+        # — silently letting docker fail later with "no matching
+        # manifest" gives no actionable error.
+        if [ "$(uname -m)" != "aarch64" ]; then
+            echo "Pi 3 now requires the 64-bit Raspberry Pi OS image (arm64)." >&2
+            echo "Detected 32-bit kernel ($(uname -m)). Reflash with the" >&2
+            echo "64-bit Raspberry Pi OS Lite image from Raspberry Pi Imager." >&2
+            exit 1
+        fi
         export DEVICE_TYPE="pi3"
     elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
         export DEVICE_TYPE="pi2"

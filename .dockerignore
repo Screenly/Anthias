@@ -63,11 +63,6 @@ docker-compose.*
 .cursor
 .claude
 
-# Local Qt 5 cross-build output. Produced by bin/rebuild_qt5_toolchain.sh
-# (~1.5 GB of source + tarballs); without this entry, COPY . into the
-# viewer image bloats by the same amount and yields a multi-GB image.
-.qt5-toolchain-build
-
 # Build-time-only tooling. tools/raspberry_pi_imager/ is the
 # generator that turns the GitHub release's per-board JSON snippets
 # into rpi-imager.json; it never runs inside the runtime image.

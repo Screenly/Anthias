@@ -2,7 +2,7 @@
 // (htmx/Alpine/flatpickr) since the splash is a static page rendered
 // by the device's webview while no asset is scheduled. Keeping the
 // bundle small matters: the splash is the first paint after boot on
-// constrained devices (Pi 1 / Qt5 webview).
+// constrained devices (Pi 2 first-paint).
 
 import QRCode from 'qrcode'
 

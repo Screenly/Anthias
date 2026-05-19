@@ -2,11 +2,12 @@
 # vim: ft=dockerfile
 {% include 'uv-builder.j2' %}
 
-{% if is_qt6 %}
-{# Qt 6 boards (pi4-64, pi5, x86): Debian apt provides qt6-base-dev
-   and qt6-webengine-dev directly, so the builder stage runs at the
-   target platform (under QEMU on x86 build hosts) and just qmake's
-   the in-tree src/anthias_webview/ source. #}
+{# Single Qt 6 builder for every board. Debian Trixie ships
+   qt6-base-dev, qt6-multimedia-dev, qt6-webengine-dev on every
+   arch we target (incl. armhf for pi2), so the builder stage runs
+   at the target platform (under QEMU on x86 build hosts when
+   cross-building arm64/armhf) and qmake's the in-tree
+   src/anthias_webview/ source directly. #}
 FROM {{ base_image }}:{{ base_image_tag }} AS webview-builder
 USER root
 {% if disable_cache_mounts %}
@@ -43,9 +44,6 @@ RUN qmake6 && \
 RUN mkdir -p /out/bin /out/share/AnthiasViewer && \
     mv AnthiasViewer /out/bin/ && \
     cp -r /src/anthias_webview/res /out/share/AnthiasViewer/
-{% else %}
-{% include 'Dockerfile.qt5-webview-builder.j2' %}
-{% endif %}
 
 {% include 'Dockerfile.base.j2' %}
 
@@ -70,12 +68,6 @@ COPY --from=uv-builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 ENV VIRTUAL_ENV="/venv"
 
-{% if not is_qt6 %}
-# Qt 5 boards: copy the whole qt5pi tree to its configured runtime
-# prefix (-prefix /usr/local/qt5pi at toolchain build time). Qt 6
-# boards get their runtime libs from qt6-*-dev installed above.
-COPY --from=webview-builder /out/qt5pi /usr/local/qt5pi
-{% endif %}
 COPY --from=webview-builder /out/bin/AnthiasViewer /usr/local/bin/AnthiasViewer
 COPY --from=webview-builder /out/share/AnthiasViewer /usr/local/share/AnthiasViewer
 
@@ -86,18 +78,24 @@ ENV QT_QPA_EGLFS_FORCE888=1
 # the viewer in cage; this env var tells Qt to load the qt6-wayland
 # platform plugin so it renders into cage's surface.
 ENV QT_QPA_PLATFORM=wayland
-{% elif board == 'pi4-64' %}
-# Pi 4 switched from ``linuxfb`` to ``eglfs`` for issue #2904:
+{% else %}
+# Pi 2 / Pi 3 / Pi 4-64 land on ``eglfs`` (the Qt KMS/EGL platform).
+# The Pi 4 switched from ``linuxfb`` for issue #2904 because
 # QtMultimedia's video pipeline needs an OpenGL context for the
-# QGraphicsVideoItem painter, and ``linuxfb`` has none. ``eglfs``
-# (the Qt KMS/EGL platform) gives Qt a GL context paired with
-# KMS scanout. ``QT_QPA_EGLFS_KMS_CONFIG`` pins 1080p — the V3D
-# 6.0 can't composite Chromium + the video graphics view on top
-# of the connector's native 4K, and Qt's ``eglfs_kms``
-# integration reads this JSON at QPA init time. Validated on
-# real Pi 4 hardware: under eglfs QWebEngineProcess still spawns
-# its zygote + 2 renderers and loads pages, so the platform
-# switch doesn't regress web / image rendering.
+# QGraphicsVideoItem painter, and ``linuxfb`` has none; ``eglfs``
+# gives Qt a GL context paired with KMS scanout. Pi 2 / Pi 3 inherit
+# the same wiring in #2906 Phase 2 — their V3D IV / V3D 4.0
+# pipelines are weaker than Pi 4's V3D 6.0 (Pi 2 perf is gated on
+# real-hardware QA), so capping at 1080p via
+# ``QT_QPA_EGLFS_KMS_CONFIG`` is correct for all three.
+#
+# ``QT_QPA_EGLFS_KMS_CONFIG`` pins 1080p — the V3D 6.0 can't
+# composite Chromium + the video graphics view on top of the
+# connector's native 4K, and Qt's ``eglfs_kms`` integration reads
+# this JSON at QPA init time. Validated on real Pi 4 hardware:
+# under eglfs QWebEngineProcess still spawns its zygote + 2
+# renderers and loads pages, so the platform switch doesn't regress
+# web / image rendering.
 ENV QT_QPA_PLATFORM=eglfs
 ENV QT_QPA_EGLFS_KMS_CONFIG=/etc/anthias/eglfs-kms.json
 # bin/start_viewer.sh auto-detects QT_SCALE_FACTOR from
@@ -111,11 +109,6 @@ ENV QT_QPA_EGLFS_KMS_CONFIG=/etc/anthias/eglfs-kms.json
 ENV QT_SCALE_FACTOR=1
 RUN mkdir -p /etc/anthias
 COPY docker/eglfs-kms-pi4.json /etc/anthias/eglfs-kms.json
-{% else %}
-# Pi 2 / Pi 3 (Qt5) keep the classic linuxfb path — VLC paints
-# directly to the framebuffer and there's no libmpv embedding on
-# those boards.
-ENV QT_QPA_PLATFORM=linuxfb
 {% endif %}
 
 # Turn on debug logging for now

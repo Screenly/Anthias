@@ -1759,9 +1759,9 @@ $footer-height: 13rem;
 
 // -----------------------------------------------------------------------------
 // 17. Splash page — full-bleed gradient + elevated card with a QR slot.
-//     Kept conservative for the device webview: no backdrop-filter (Qt5
-//     on Pi 1-4 is on an older Chromium and silently no-ops it), no
-//     CSS variables that don't already exist in :root.
+//     Kept conservative for the device webview: no backdrop-filter
+//     (low-end Pi GPUs choke on it under QtWebEngine), no CSS
+//     variables that don't already exist in :root.
 // -----------------------------------------------------------------------------
 // `.splash-page` is the <body> element. The global body rule above adds
 // 4.5rem of top padding for the navbar that this page does not have —
@@ -1923,8 +1923,7 @@ $footer-height: 13rem;
 
 .splash-qr {
   // Set width AND height to the same clamp() so the slot is square
-  // without depending on `aspect-ratio` (Chromium 88+, not available
-  // in the Qt5 webview that runs on Pi 1-4). The child SVG fills the
+  // without depending on `aspect-ratio`. The child SVG fills the
   // slot, so a missing aspect-ratio implementation would otherwise
   // collapse this to height: 0.
   $size: clamp(8rem, 18vw, 12rem);

@@ -8,8 +8,9 @@ The viewer is tuned per-board (see `media_player.py` and `bin/start_viewer.sh`):
 
 | Device   | Qt platform | Compositor | mpv VO                          |
 |----------|-------------|-----------|---------------------------------|
-| Pi 2 / 3 | Qt5 linuxfb | none       | VLC                              |
-| Pi 4-64  | Qt6 linuxfb | none       | `--vo=gpu --gpu-context=drm`     |
+| Pi 2     | Qt6 eglfs   | none       | `--vo=gpu --gpu-context=drm`     |
+| Pi 3     | Qt6 eglfs   | none       | `--vo=gpu --gpu-context=drm`     |
+| Pi 4-64  | Qt6 eglfs   | none       | `--vo=gpu --gpu-context=drm`     |
 | Pi 5     | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
 | arm64    | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
 | x86      | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |

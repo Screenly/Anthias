@@ -173,9 +173,9 @@ fi
 # the container's /etc/group. Without membership the `viewer` user
 # can open card0 (group `video`, GID 44 — already a member) but
 # not the render node. mpv uses the render node for --vo=gpu on
-# every Qt 6 board, whether via wayland (cage path: x86 / arm64 /
-# pi5) or drm (linuxfb path: pi4-64). Mirror the host GID into
-# the container as a synthetic `host-render` group and add
+# every board, whether via wayland (cage path: x86 / arm64 / pi5)
+# or drm (eglfs path: pi2 / pi3 / pi4-64). Mirror the host GID
+# into the container as a synthetic `host-render` group and add
 # `viewer` to it; the supplementary group list `sudo -u viewer`
 # later resolves from /etc/group then includes render access.
 if [ -e /dev/dri/renderD128 ]; then
@@ -196,13 +196,13 @@ fi
 # viewer user; WAYLAND_DISPLAY has to be added to --preserve-env to
 # survive sudo's env scrub.
 #
-# Pi 4 falls through to the legacy direct-sudo path that runs under
-# QT_QPA_PLATFORM=linuxfb. The V3D 6.0 doesn't have the bandwidth
-# to composite cage on top of video at 4K (738 vo drops/30 s under
-# cage vs 3-6 on the linuxfb + --gpu-context=drm path), so Pi 4
-# stays on linuxfb until either a newer mpv with v4l2request hwdec
-# or a future Pi platform lets us re-evaluate. Qt5 boards (pi2/pi3)
-# share the same direct-sudo fallback path.
+# Pi 2 / Pi 3 / Pi 4-64 fall through to the direct-sudo path that
+# runs under QT_QPA_PLATFORM=eglfs. The V3D 6.0 (Pi 4) doesn't have
+# the bandwidth to composite cage on top of video at 4K (738 vo
+# drops/30 s under cage vs 3-6 on the eglfs + --gpu-context=drm
+# path), and V3D IV / V3D 4.0 on Pi 2 / Pi 3 has even less headroom,
+# so all three stay on eglfs until either a newer mpv with
+# v4l2request hwdec or a future Pi platform lets us re-evaluate.
 case "$DEVICE_TYPE" in
     x86|arm64|pi5)
     # libseat's default `logind` backend D-Buses into systemd-logind to

@@ -32,7 +32,7 @@
       x86: amd64
       pi5: arm64
       pi4-64: arm64
-      pi3: armhf
+      pi3: arm64
       pi2: armhf
       arm64: arm64
 

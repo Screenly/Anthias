@@ -98,17 +98,18 @@ def build_image(
         'sqlite3',
     ]
 
-    # The 32-bit Pi boards (pi2, pi3) link against Broadcom's legacy
+    # Pi 2 is the only 32-bit board left after #2906 Phase 2 (pi3
+    # moved to arm64). It still links against Broadcom's legacy
     # userland (libbcm_host, libmmal, libvchiq_arm) at runtime via
-    # libraspberrypi0. Pull it from archive.raspbian.org's `firmware`
-    # component — Trixie's archive.raspberrypi.org/main no longer
-    # ships it (replaced by raspi-utils, which doesn't cover the
-    # Qt 5 webview link path), and on archive.raspbian.org's trixie
-    # tree it's `firmware` not `rpi` that ships libraspberrypi0
-    # (verified via Packages.gz). 64-bit boards don't need it: their
-    # Qt 6 viewer uses KMS/DRM directly.
-    is_legacy_pi_armhf = board in ['pi2', 'pi3']
-    if is_legacy_pi_armhf:
+    # libraspberrypi0 — pulled from archive.raspbian.org's `firmware`
+    # component. Trixie's archive.raspberrypi.org/main no longer
+    # ships libraspberrypi0 (replaced by raspi-utils), and on
+    # archive.raspbian.org's trixie tree it's `firmware` not `rpi`
+    # that ships it (verified via Packages.gz). 64-bit Pi boards
+    # (pi3 / pi4-64 / pi5) don't need it: the Qt 6 viewer uses
+    # KMS/DRM directly through Mesa.
+    is_pi2_armhf = board == 'pi2'
+    if is_pi2_armhf:
         base_apt_dependencies.extend(['libraspberrypi0'])
 
     if service == 'viewer':
@@ -132,7 +133,7 @@ def build_image(
             'git_branch': git_branch,
             'git_hash': git_hash,
             'git_short_hash': git_short_hash,
-            'is_legacy_pi_armhf': is_legacy_pi_armhf,
+            'is_pi2_armhf': is_pi2_armhf,
             'service': service,
             'target_platform': target_platform,
             **context,

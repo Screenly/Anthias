@@ -2,14 +2,15 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
-from tools.image_builder.constants import BASE_IMAGE, GITHUB_REPO_URL
+from tools.image_builder.constants import BASE_IMAGE
 
 
 def get_build_parameters(build_target: str) -> dict[str, Any]:
-    # Every surviving board now lands on vanilla `debian:trixie`. The
-    # `pi2`/`pi3` armhf builds add the Raspberry Pi / Raspbian apt
-    # sources at image-build time (see Dockerfile.base.j2); 64-bit and
-    # x86 builds need nothing Pi-specific at all.
+    # Every surviving board now lands on vanilla `debian:trixie` with
+    # Qt 6 from Debian apt. Pi 2 (armhf) is the only 32-bit target
+    # left and adds the Raspberry Pi / Raspbian apt sources at
+    # image-build time for `libraspberrypi0` (see Dockerfile.base.j2);
+    # 64-bit and x86 builds need nothing Pi-specific at all.
     if build_target == 'pi5':
         return {
             'board': 'pi5',
@@ -34,12 +35,22 @@ def get_build_parameters(build_target: str) -> dict[str, Any]:
             'target_platform': 'linux/arm64/v8',
         }
     if build_target == 'pi3':
+        # Pi 3 dropped its Qt 5 armhf cross-build in Phase 2 of #2906
+        # and now ships an arm64 image. Existing 32-bit Pi 3
+        # deployments won't auto-upgrade — they require a reflash to
+        # 64-bit Raspberry Pi OS. The runtime wiring mirrors pi4-64
+        # (eglfs + libraspberrypi0).
         return {
             'board': 'pi3',
             'base_image': BASE_IMAGE,
-            'target_platform': 'linux/arm/v7',
+            'target_platform': 'linux/arm64/v8',
         }
     if build_target == 'pi2':
+        # Pi 2 stays armhf — the only 32-bit board left in the matrix.
+        # Qt 6 comes from Debian Trixie's `qt6-*-dev` packages (the
+        # same apt path the 64-bit boards use); the Cortex-A7 perf
+        # envelope under Qt 6 WebEngine is the open Phase 2 risk and
+        # is gated on real-hardware QA.
         return {
             'board': 'pi2',
             'base_image': BASE_IMAGE,
@@ -94,22 +105,20 @@ def get_uv_builder_context(
             'libdbus-glib-1-dev',
         ]
 
-    # Pillow / pillow-heif build deps for legacy 32-bit Pi boards.
-    # Pillow 11+ dropped armv7l manylinux wheels (its release notes
-    # spell this out), and pillow-heif likewise ships only x86_64 /
-    # aarch64 wheels. uv's resolution on a pi2 / pi3 image build
+    # Pillow / pillow-heif build deps for the only 32-bit board left
+    # (pi2). Pillow 11+ dropped armv7l manylinux wheels (its release
+    # notes spell this out), and pillow-heif likewise ships only
+    # x86_64 / aarch64 wheels. uv's resolution on a pi2 image build
     # therefore falls back to sdist, which requires the system
     # headers below to compile from source. Without them, the
-    # ``uv sync`` step in ``uv-builder`` would fail at gcc on every
-    # 32-bit Pi build.
+    # ``uv sync`` step in ``uv-builder`` would fail at gcc.
     #
-    # 64-bit boards (pi4-64 / pi5 / x86) and the test image
-    # (always built on amd64 in CI) get binary wheels and don't
-    # need any of this — adding the deps unconditionally would
-    # waste ~70 MB of layer space on every image we don't need
-    # them in.
-    armv7_boards = {'pi2', 'pi3'}
-    if uv_group == 'server' and board in armv7_boards:
+    # 64-bit boards (pi3 / pi4-64 / pi5 / arm64 / x86) and the test
+    # image (always built on amd64 in CI) get binary wheels and
+    # don't need any of this — adding the deps unconditionally
+    # would waste ~70 MB of layer space on every image we don't
+    # need them in.
+    if uv_group == 'server' and board == 'pi2':
         builder_extra_apt.extend(
             [
                 # Pillow's documented build-time deps. ``-dev``
@@ -153,44 +162,31 @@ def get_test_context() -> dict[str, Any]:
 
 
 def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
-    releases_url = f'{GITHUB_REPO_URL}/releases/download'
-
-    is_qt6 = board in ['pi5', 'pi4-64', 'x86', 'arm64']
-
-    # Qt version is only relevant for the Qt 5 path: pi2/pi3 pull the
-    # cross-built Qt 5 toolchain tarball at build time. Qt 5 is frozen
-    # for these boards, so the toolchain stays pinned to the
-    # WebView-v2026.04.1 release indefinitely. Qt 6 boards install Qt
-    # straight from Debian apt (qt6-*-dev in viewer_extra_apt below).
-    qt_version = '6.4.2' if is_qt6 else '5.15.14'
-    qt_major_version = qt_version.split('.')[0]
-    qt5_toolchain_url = f'{releases_url}/WebView-v2026.04.1'
-
     # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
     # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,
     # python3-gi, python3-pip, python3-setuptools, sqlite3, sudo,
-    # plus libraspberrypi0 on 32-bit Pi boards) is installed by
-    # Dockerfile.base.j2 in a layer that server (and test) also use,
-    # so it dedups across images. Anything listed here is unique to
-    # the viewer image.
+    # plus libraspberrypi0 on pi2 — the only armhf board left) is
+    # installed by Dockerfile.base.j2 in a layer that server (and
+    # test) also use, so it dedups across images. Anything listed
+    # here is unique to the viewer image.
     #
-    # The list below is the still-being-trimmed remainder of runtime
-    # libs the WebView binary links against; expect more to fall off
-    # as ldd-driven cleanup continues. (Qt itself is built in a
-    # multi-stage builder inside Dockerfile.viewer.j2, not installed
-    # from apt at runtime — except on Qt 6 boards where qt6-*-dev
-    # below also provides the runtime libs.)
+    # Qt is installed from Debian Trixie's apt — `qt6-base-dev`,
+    # `qt6-webengine-dev`, `qt6-multimedia-dev` — on every board.
+    # The viewer image's multi-stage builder qmake's the in-tree
+    # `src/anthias_webview/` source against those packages. The Qt 5
+    # cross-compile toolchain that pi2/pi3 used through #2906 Phase 1
+    # is gone (toolchain Dockerfile / `bin/rebuild_qt5_toolchain.sh`
+    # / `WebView-v2026.04.1` release pin all deleted in Phase 2).
     #
     # X11/XCB packages are intentionally absent. Two display tracks
-    # for the four image targets (no X code path on either):
+    # across the matrix (no X code path on either):
     #
-    # * Pi2 / Pi3 / Pi4-64: Qt linuxfb + mpv straight to KMS. Pi 2 /
-    #   Pi 3 use a custom -no-xcb -no-xcb-xlib -qpa eglfs Qt 5
-    #   WebView build (see src/anthias_webview/build_qt5.sh) with mpv
-    #   --vo=drm. Pi 4 is Qt 6 with the same
-    #   QT_QPA_PLATFORM=linuxfb plus mpv --vo=gpu --gpu-context=drm —
-    #   V3D-accelerated scaling without the cage composite pass the
-    #   V3D 6.0 can't keep up with.
+    # * Pi2 / Pi3 / Pi4-64: Qt eglfs + KMS/EGL via Mesa. mpv talks
+    #   straight to DRM/KMS (`--vo=gpu --gpu-context=drm`). Pi 4
+    #   needs eglfs anyway because QtMultimedia's video pipeline
+    #   wants an OpenGL context (#2904); pi2/pi3 inherit the same
+    #   wiring because the same QtMultimedia code path runs there
+    #   after the C++ AnthiasViewer port lands.
     # * Pi5 / x86 / arm64: cage (a kiosk wlroots compositor) with
     #   QT_QPA_PLATFORM=wayland and mpv --vo=gpu
     #   --gpu-context=wayland. The cage + qt6-wayland + wlr-randr
@@ -248,109 +244,98 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'libxkbcommon0',
         # The prebuilt WebView binary dlopens libharfbuzz-subset.so.0
         # (Chromium's font-subsetting path). It's pulled in
-        # transitively by qt6-webengine-dev on Qt6 boards but nothing
-        # on Qt5 brings it, so the lib was simply missing on pi2/pi3
-        # in production (pre-existing bug, not a regression here).
-        # 200 KB, easier to just install everywhere than gate on board.
+        # transitively by qt6-webengine-dev, but pinning it explicitly
+        # also documents the dlopen-not-DT_NEEDED nature so a future
+        # apt cleanup pass doesn't drop it.
         'libharfbuzz-subset0',
         'python3-netifaces',
         'fonts-wqy-zenhei',
     ]
 
-    if is_qt6:
-        # Shared Qt 6 runtime for every Qt6 board (pi4-64, pi5, x86,
-        # arm64). VideoView uses QMediaPlayer + QVideoWidget from
-        # qt6-multimedia. Qt 6.8 dropped its gstreamer backend
-        # upstream (only ``libffmpegmediaplugin.so`` ships in
-        # ``/usr/lib/.../qt6/plugins/multimedia/``); decode goes
-        # through libavcodec directly. The +rpt1 ``ffmpeg`` /
-        # ``libav*`` packages pinned in _rpt1-ffmpeg-pin.j2 carry
-        # ``--enable-v4l2-request`` + ``--enable-v4l2-m2m`` on
-        # Pi/arm64, so libavcodec engages the same rpi-hevc-dec +
-        # bcm2835-codec hardware that libmpv era used — no
-        # gstreamer plugin set needed. VLC is deliberately not
-        # installed because MediaPlayerProxy never routes Qt6
-        # boards to it.
+    # Shared Qt 6 runtime for every board. VideoView uses QMediaPlayer
+    # + QGraphicsVideoItem from qt6-multimedia. Qt 6.5 dropped the
+    # upstream gstreamer media backend, so Debian Trixie ships only
+    # the ffmpeg-backed ``libffmpegmediaplugin.so`` in
+    # ``/usr/lib/.../qt6/plugins/multimedia/`` — decode runs through
+    # libavcodec directly. The +rpt1 ``ffmpeg`` / ``libav*`` packages
+    # pinned in _rpt1-ffmpeg-pin.j2 carry ``--enable-v4l2-request`` +
+    # ``--enable-v4l2-m2m`` on Pi/arm64, so libavcodec engages the
+    # rpi-hevc-dec + bcm2835-codec hardware on Pi boards — no
+    # gstreamer plugin set needed.
+    viewer_extra_apt_dependencies.extend(
+        [
+            'libqt6multimedia6',
+            'libqt6multimediawidgets6',
+            'qt6-base-dev',
+            'qt6-image-formats-plugins',
+            'qt6-multimedia-dev',
+            'qt6-webengine-dev',
+        ]
+    )
+
+    if board in ('x86', 'arm64', 'pi5'):
+        # cage is a kiosk wlroots compositor that talks straight to
+        # KMS; qt6-wayland is the Qt platform plugin the viewer loads
+        # to render into cage's surface; mpv talks to the same
+        # Wayland socket via --vo=gpu --gpu-context=wayland (see
+        # MPVMediaPlayer.play in src/anthias_viewer/media_player.py).
+        # wlr-randr is how src/anthias_viewer/__init__.py applies the
+        # Settings page's "screen rotation" knob — Qt's wayland QPA
+        # has no rotation= equivalent, so the transform goes through
+        # the compositor for both Qt and mpv consistently.
+        #
+        # Pi 2 / Pi 3 / Pi 4-64 are intentionally NOT on this path:
+        # the V3D 6.0 (Pi 4) doesn't have the bandwidth to composite
+        # cage on top of video, and V3D IV / V3D 4.0 on Pi 2 / Pi 3
+        # has even less headroom. Those boards land on eglfs + mpv
+        # --vo=gpu --gpu-context=drm — see bin/start_viewer.sh and
+        # docker/Dockerfile.viewer.j2.
         viewer_extra_apt_dependencies.extend(
             [
-                'libqt6multimedia6',
-                'libqt6multimediawidgets6',
-                'qt6-base-dev',
-                'qt6-image-formats-plugins',
-                'qt6-multimedia-dev',
-                'qt6-webengine-dev',
+                'cage',
+                'qt6-wayland',
+                'wlr-randr',
             ]
         )
 
-        if board in ('x86', 'arm64', 'pi5'):
-            # cage is a kiosk wlroots compositor that talks straight
-            # to KMS; qt6-wayland is the Qt platform plugin the
-            # viewer loads to render into cage's surface; mpv talks
-            # to the same Wayland socket via --vo=gpu
-            # --gpu-context=wayland (see MPVMediaPlayer.play in
-            # src/anthias_viewer/media_player.py). wlr-randr is how
-            # src/anthias_viewer/__init__.py applies the Settings
-            # page's "screen rotation" knob — Qt's wayland QPA has
-            # no rotation= equivalent, so the transform goes through
-            # the compositor for both Qt and mpv consistently.
-            #
-            # Pi 4 is intentionally NOT on this path: the V3D 6.0
-            # doesn't have the bandwidth to composite cage on top of
-            # video. It stays on Qt linuxfb + mpv --vo=gpu
-            # --gpu-context=drm — see bin/start_viewer.sh and
-            # docker/Dockerfile.viewer.j2.
-            viewer_extra_apt_dependencies.extend(
-                [
-                    'cage',
-                    'qt6-wayland',
-                    'wlr-randr',
-                ]
-            )
-
-        if board == 'x86':
-            # va-driver-all is a Debian metapackage that pulls in
-            # intel-media-va-driver (modern Intel iHD), i965-va-driver
-            # (older Intel), and mesa-va-drivers (Gallium / AMD
-            # radeonsi etc.), so the image runs on any x86 GPU without
-            # per-vendor build variants — mpv's --hwdec=auto-safe
-            # picks whichever VAAPI driver matches the device at
-            # runtime.
-            #
-            # Deliberately NOT shipped on arm64/Pi: Rockchip
-            # (rkvdec/hantro), Allwinner (cedrus), Amlogic
-            # (meson-vdec), and the Pi V3D all expose hardware decode
-            # via V4L2 M2M / request API, not VAAPI; mesa-va-drivers
-            # only covers radeonsi/nouveau/etc., so on those SoCs
-            # va-driver-all would just be dead weight. Per-SoC hwdec
-            # for those boards is a Tier-2 follow-up.
-            viewer_extra_apt_dependencies.extend(
-                [
-                    'va-driver-all',
-                ]
-            )
-    else:
-        # libraspberrypi0 already comes in via base_apt_dependencies on
-        # 32-bit Pi boards (see __main__.py), so it's deliberately not
-        # repeated here. libssl1.1 is gone in trixie; the rebuilt Qt 5
-        # webview archive links against libssl3 from the base image.
-        # libgst-dev / libsqlite0-dev / libsrtp0-dev were dropped in
-        # trixie — libsqlite3-dev and libsrtp2-dev are already in the
-        # main viewer apt list above; libgstreamer1.0-dev is Qt 5-only
-        # and is added in the extend() below. VLC is Qt5-only because
-        # MediaPlayerProxy only routes pi2/pi3 to VLCMediaPlayer.
+    if board in ('pi2', 'pi3'):
+        # Pi 2 / Pi 3 still ship the Python viewer (the C++
+        # AnthiasViewer takes over the video path in #2906 Phase 3),
+        # and ``MediaPlayerProxy`` in ``src/anthias_viewer/media_player.py``
+        # routes those boards to ``VLCMediaPlayer``. Keep VLC and
+        # the gstreamer header set installed so the Python viewer
+        # boots; once Phase 3 lands they fall out alongside the
+        # Python package itself in Phase 5.
         viewer_extra_apt_dependencies.extend(
             [
                 'libgstreamer1.0-dev',
-                'qt5-image-formats-plugins',
                 'vlc',
+            ]
+        )
+
+    if board == 'x86':
+        # va-driver-all is a Debian metapackage that pulls in
+        # intel-media-va-driver (modern Intel iHD), i965-va-driver
+        # (older Intel), and mesa-va-drivers (Gallium / AMD
+        # radeonsi etc.), so the image runs on any x86 GPU without
+        # per-vendor build variants — mpv's --hwdec=auto-safe
+        # picks whichever VAAPI driver matches the device at
+        # runtime.
+        #
+        # Deliberately NOT shipped on arm64/Pi: Rockchip
+        # (rkvdec/hantro), Allwinner (cedrus), Amlogic
+        # (meson-vdec), and the Pi V3D all expose hardware decode
+        # via V4L2 M2M / request API, not VAAPI; mesa-va-drivers
+        # only covers radeonsi/nouveau/etc., so on those SoCs
+        # va-driver-all would just be dead weight. Per-SoC hwdec
+        # for those boards is a Tier-2 follow-up.
+        viewer_extra_apt_dependencies.extend(
+            [
+                'va-driver-all',
             ]
         )
 
     return {
         'viewer_extra_apt_dependencies': viewer_extra_apt_dependencies,
-        'qt_version': qt_version,
-        'qt_major_version': qt_major_version,
-        'qt5_toolchain_url': qt5_toolchain_url,
-        'is_qt6': is_qt6,
         'artifact_board': board,
     }

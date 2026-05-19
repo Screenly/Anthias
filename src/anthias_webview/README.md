@@ -16,16 +16,15 @@ The viewer binary is **compiled inside the viewer image** as a
 multi-stage build — there is no separate release tag, no
 curl-from-releases step, no version pin to bump. Editing source
 under `src/anthias_webview/src/` triggers a rebuild on the next
-viewer image build:
+viewer image build.
 
-* Qt 6 boards (`pi4-64`, `pi5`, `x86`) — Debian's `qt6-base-dev` +
-  `qt6-webengine-dev` packages, `qmake6 && make && make install`,
-  inline in `docker/Dockerfile.viewer.j2`.
-* Qt 5 boards (`pi2`, `pi3`) — cross-compiled against a pre-built
-  Qt 5 toolchain, all in
-  `docker/Dockerfile.qt5-webview-builder.j2`. Qt 5 is frozen for
-  these boards, so the toolchain itself is a permanent artifact at
-  the `WebView-v2026.04.1` GitHub release.
+Every board uses the same Qt 6 path: Debian Trixie's `qt6-base-dev`
++ `qt6-multimedia-dev` + `qt6-webengine-dev` packages, `qmake6 &&
+make && make install`, inline in `docker/Dockerfile.viewer.j2`. Pi 2
+(armhf) installs the same packages from Trixie's armhf apt tree;
+every other board is arm64 or amd64. The Qt 5 cross-compile path
+that previously served pi2 / pi3 was deleted in #2906 Phase 2 (pi3
+also moved to arm64 in that change).
 
 To rebuild a viewer image (which rebuilds the binary):
 
@@ -33,17 +32,6 @@ To rebuild a viewer image (which rebuilds the binary):
 uv run python -m tools.image_builder \
     --service viewer --build-target <board>
 ```
-
-## Qt 5 toolchain rebuilds (rare)
-
-If the Qt 5 toolchain itself needs to change (CVE patch, base image
-bump), `bin/rebuild_qt5_toolchain.sh` produces fresh
-`qt5-5.15.14-trixie-{pi2,pi3}.tar.gz` tarballs. Re-uploading them to
-the same `WebView-v2026.04.1` release tag means no source change is
-needed elsewhere; uploading to a new tag means bumping
-`qt5_toolchain_url` in `tools/image_builder/utils.py`. Runtime is
-~2-4 hours per board on a beefy x86 host (Qt 5 + QtWebEngine under
-qemu-arm); see the script header for memory caveats.
 
 ## D-Bus API
 

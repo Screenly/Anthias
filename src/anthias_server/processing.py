@@ -82,10 +82,10 @@ from anthias_server.app.models import Asset
 #   * JPEG 2000 (.jp2/.j2k/.jpx/.jpc/.jpf) — scanner output. No
 #     browser support.
 #   * AVIF — modern phone exports / Android camera output. Modern
-#     Chromium renders AVIF, but the Qt5 WebEngine on legacy Pi 2/3
-#     predates the AVIF support in Chromium 85, so converting on
-#     upload guarantees the viewer renders correctly across the
-#     fleet without per-board branching.
+#     Chromium renders AVIF, but converting on upload is cheap and
+#     gives every board the same WebP delivery path — useful for
+#     historical Anthias releases that pre-date the Qt 6 flip in
+#     #2906 Phase 2 and might still be in the field for a while.
 #
 # JPEG / PNG / WebP / GIF / SVG stay untouched — already
 # viewer-friendly *and* well-compressed.

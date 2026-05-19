@@ -1,12 +1,14 @@
 FROM {{ base_image }}:{{ base_image_tag }}
 
-{% if is_legacy_pi_armhf %}
-# 32-bit Pi boards (pi2, pi3) need libraspberrypi0 (legacy Broadcom
-# userland: libbcm_host, libmmal, libvchiq_arm) for the Qt 5 webview.
-# Trixie's archive.raspberrypi.org/main no longer ships it (replaced
-# by raspi-utils, which doesn't cover Qt's link path), so we pull it
-# from archive.raspbian.org's `firmware` component instead (verified:
-# libraspberrypi0 ships there on trixie/armhf, not in `rpi`).
+{% if is_pi2_armhf %}
+# Pi 2 (the only armhf board left after #2906 Phase 2) needs
+# libraspberrypi0 — legacy Broadcom userland (libbcm_host, libmmal,
+# libvchiq_arm) used by the Pi-side video stack. Trixie's
+# archive.raspberrypi.org/main no longer ships it (replaced by
+# raspi-utils, which doesn't cover the same link surface), so we
+# pull it from archive.raspbian.org's `firmware` component instead
+# (verified: libraspberrypi0 ships there on trixie/armhf, not in
+# `rpi`).
 #
 # Trixie's apt uses Sequoia (sqv) for signature verification and rejects
 # the standalone .public.key / .gpg.key files because their User ID

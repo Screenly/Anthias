@@ -25,7 +25,7 @@ Inter-service messaging is all Redis: WebSocket fan-out from Celery to browsers 
 - `api/` — REST API (views, serializers, URLs for v1, v1.1, v1.2, v2)
 - `static/src/` — TypeScript/React frontend (components, Redux store, hooks, tests)
 - `viewer/` — Viewer service (scheduling, media player, Redis pub/sub messaging)
-- `src/anthias_webview/` — C++ Qt-based WebView (Qt5 for Pi 1-4, Qt6 for Pi 5/x86)
+- `src/anthias_webview/` — C++ Qt 6 viewer (renamed binary `AnthiasViewer`; source-tree rename to `src/anthias_viewer/` follows the Python viewer deletion in #2906 Phase 5)
 - `lib/` — Shared Python utilities (auth, device helpers, diagnostics)
 - `docker/` — Dockerfile Jinja2 templates for each service
 - `tests/` — Python unit/integration tests
@@ -141,8 +141,8 @@ docker compose exec anthias-server python manage.py createsuperuser
 - Import order: built-in → third-party → local (alphabetically sorted, blank line between groups)
 - Use `rem` instead of `px` in SCSS
 
-### Qt/C++ (WebView)
-- Use macros for Qt5/Qt6 cross-version compatibility
+### Qt/C++ (Viewer)
+- Qt 6 only (Qt 5 cross-compile path deleted in #2906 Phase 2). No Qt5/Qt6 version-guard macros needed in new code.
 
 ### Django templates
 - `{# … #}` only comments out a single line. Anything that wraps to the next line renders verbatim in the page. Use `{% comment %}…{% endcomment %}` for any comment that does not fit on one line.

@@ -223,10 +223,6 @@ exclude = [
     "/static/",
     "^build/",
     "^dist/",
-    # Vendored verbatim from a pinned Yocto/poky upstream commit; see
-    # the file header. Adding type annotations would put the file
-    # off-pin and silently break the provenance comment.
-    "^src/anthias_webview/sysroot-relativelinks\\.py$",
 ]
 
 [[tool.mypy.overrides]]
