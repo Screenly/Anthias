@@ -24,11 +24,11 @@ region first; reusing the v3d overlay's own cma-512 param is the
 documented merge. Pi 4 already gets 512 MB CMA by default so the
 override is a no-op there; the Pi 5 conditional below keeps the
 extra arg local to the board that strictly needs it. #}
-{% if device_type == 'pi5' -%}
+{% if device_type == 'pi5' %}
 dtoverlay=vc4-kms-v3d,cma-512
-{%- else -%}
+{% else %}
 dtoverlay=vc4-kms-v3d
-{%- endif %}
+{% endif %}
 max_framebuffers=2
 
 # Don't have the firmware add a video= line to cmdline.txt — let the
