@@ -12,6 +12,8 @@ up alongside the celery/processing suites.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import cast
 from unittest import mock
 
 import pytest
@@ -21,6 +23,7 @@ from anthias_common.remote_video import (
     is_downloadable_remote_video,
     remote_video_destination_path,
 )
+from anthias_server.settings import AnthiasSettings
 
 
 # ---------------------------------------------------------------------------
@@ -248,11 +251,16 @@ def test_classify_head_probe_uses_short_timeout() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_remote_video_destination_path_uses_assetdir(tmp_path) -> None:
+def test_remote_video_destination_path_uses_assetdir(tmp_path: Path) -> None:
     """The local destination lives under settings['assetdir'] so
     cleanup() recognises the downloaded file as referenced and
     doesn't sweep it as an orphan."""
-    fake_settings = {'assetdir': str(tmp_path)}
+    # ``AnthiasSettings`` is a ``UserDict`` subclass whose real
+    # constructor reads ``~/.anthias/anthias.conf``; for the
+    # destination-path test we only need the ``assetdir`` key, so
+    # cast a minimal dict to the type to satisfy mypy without
+    # spinning up the full config layer.
+    fake_settings = cast(AnthiasSettings, {'assetdir': str(tmp_path)})
     result = remote_video_destination_path('abc123', '.mp4', fake_settings)
     assert result == f'{tmp_path}/abc123.mp4'
 
@@ -261,8 +269,7 @@ def test_remote_video_destination_path_preserves_extension() -> None:
     """The extension is the caller's responsibility — pass through
     verbatim. Allows webm/mkv/avi to land with their real container
     so ffprobe identifies them correctly."""
+    fake_settings = cast(AnthiasSettings, {'assetdir': '/data'})
     for ext in ('.mp4', '.webm', '.mkv', '.mov'):
-        result = remote_video_destination_path(
-            'asset-1', ext, {'assetdir': '/data'}
-        )
+        result = remote_video_destination_path('asset-1', ext, fake_settings)
         assert result == f'/data/asset-1{ext}'
