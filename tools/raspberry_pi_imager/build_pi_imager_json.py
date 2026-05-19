@@ -33,6 +33,11 @@ REQUIRED_FIELDS = {
     'image_download_sha256',
     'release_date',
     'url',
+    # Pi Imager filters the OS list by selected device. Pi 5 uses
+    # `matching_type: exclusive` in the upstream root JSON, so an image
+    # without `devices` is hidden when a user picks Pi 5. The same
+    # exclusive filter is being rolled out to older boards.
+    'devices',
 }
 
 

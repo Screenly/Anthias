@@ -395,6 +395,22 @@ jobs:
             printf '%s  %s\n' "$DOWNLOAD_SHA256" "$ARTIFACT.img.zst"
           } > "$ARTIFACT.sha256"
 
+          # Map our board slug to the Pi Imager `devices` tags. Without
+          # this annotation, Pi 5 (which uses `matching_type: exclusive`
+          # in the upstream root JSON) hides our image when a user picks
+          # Pi 5 in the device picker. Raspberry Pi has been rolling the
+          # same exclusive filter out to older boards, so we annotate
+          # all of them. x86 isn't a Pi Imager target — emit an empty
+          # array so the snippet still validates as schema-conformant.
+          case "$BOARD" in
+            pi2)    DEVICES='["pi2-32bit"]' ;;
+            pi3)    DEVICES='["pi3-64bit"]' ;;
+            pi4-64) DEVICES='["pi4-64bit"]' ;;
+            pi5)    DEVICES='["pi5-64bit"]' ;;
+            x86)    DEVICES='[]' ;;
+            *)      echo "::error::unknown board $BOARD for devices mapping" >&2; exit 1 ;;
+          esac
+
           # Per-board metadata snippet, uploaded to the release
           # alongside the .img.zst it describes.
           # build_pi_imager_json.py fetches it via the same base name
@@ -406,6 +422,7 @@ jobs:
             --arg DOWNLOAD_SHA256 "$DOWNLOAD_SHA256" \
             --argjson DOWNLOAD_SIZE "$DOWNLOAD_SIZE" \
             --arg RELEASE_DATE "$BUILD_DATE" \
+            --argjson DEVICES "$DEVICES" \
             '{
               "name": ("Anthias (" + $BOARD + ")"),
               "description": "Anthias, formerly known as Screenly OSE, is the most popular open source digital signage project in the world.",
@@ -415,7 +432,8 @@ jobs:
               "extract_sha256": $IMAGE_SHA256,
               "image_download_size": $DOWNLOAD_SIZE,
               "image_download_sha256": $DOWNLOAD_SHA256,
-              "release_date": $RELEASE_DATE
+              "release_date": $RELEASE_DATE,
+              "devices": $DEVICES
             }' > "$ARTIFACT.json"
 
       - name: Upload artifacts
