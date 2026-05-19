@@ -59,6 +59,14 @@ services:
       - LANG=${LANG}
       - LANGUAGE=${LANGUAGE}
       - LC_ALL=${LC_ALL}
+      # ``1`` on boards with < 1.5 GiB MemTotal. AnthiasViewer reads
+      # this to fall into single-QWebEngineView mode (no preloaded
+      # crossfade — the inactive renderer cost ~100 MB physical RAM
+      # per box, untenable on 1 GB SBCs). Derived from /proc/meminfo
+      # in bin/upgrade_containers.sh so the server side
+      # (host_agent → ``host:total_mem_kb`` in Redis) and the viewer
+      # side both observe the same total.
+      - ANTHIAS_LOW_RAM=${ANTHIAS_LOW_RAM}
     privileged: true
     restart: always
     # cage (the wlroots kiosk compositor used on Pi 5 / x86 /

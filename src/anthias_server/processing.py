@@ -61,7 +61,7 @@ import sh
 from celery import Task
 from PIL import Image, UnidentifiedImageError
 
-from anthias_common.board import resolve_device_key
+from anthias_common.board import is_low_ram_device, resolve_device_key
 from anthias_server.app.models import Asset
 
 
@@ -869,6 +869,36 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
 }
 
 
+# Pixel cap for low-RAM boards (< 1.5 GiB MemTotal — Pi 2/Pi 3 1GB,
+# Pi 4 1GB, Rock Pi 4 1GB, generic-arm64 1GB SKUs). 1080p = 2 073 600
+# pixels is the line where a 1 GB board can keep a QtWebEngine
+# renderer resident *and* play video without OOM-thrashing. 4K = 8 294
+# 400 pixels is 4× this and triggered an OOM-kill in on-device
+# testing (Rock Pi 4 1GB, dmesg: ``global_oom`` on the docker
+# container's bash process). Resolution above this cap is rejected
+# at upload — the operator gets the same "Failed" pill + recipe UX
+# the codec gate already uses.
+_LOW_RAM_MAX_PIXELS = 1920 * 1080
+
+
+def _exceeds_low_ram_pixel_cap(width: int | None, height: int | None) -> bool:
+    """``True`` when this board is low-RAM and the asset exceeds 1080p.
+
+    Returns ``False`` when the host's MemTotal couldn't be measured
+    (host_agent never ran, Redis down) — same "don't block on a
+    measurement gap" principle as ``is_low_ram_device`` itself.
+    Returns ``False`` when ffprobe couldn't read dimensions — that
+    upload already collapsed to ``video_codec='unknown'`` and the
+    codec gate will reject it; we don't pile on a second rejection
+    against a None dimension.
+    """
+    if not is_low_ram_device():
+        return False
+    if width is None or height is None or width <= 0 or height <= 0:
+        return False
+    return width * height > _LOW_RAM_MAX_PIXELS
+
+
 def _hw_decoded_codecs() -> frozenset[str]:
     """Codecs the *current* board can hardware-decode through mpv.
 
@@ -884,10 +914,11 @@ def _hw_decoded_codecs() -> frozenset[str]:
 def _ffmpeg_reencode_recipe(
     supported: frozenset[str],
     source_filename: str = '',
+    cap_to_1080p: bool = False,
 ) -> str:
     """Return an ``ffmpeg`` command line the operator can run on
     their workstation to transcode an unsupported upload into a
-    codec this board hardware-decodes.
+    codec (and, optionally, resolution) this board accepts.
 
     Prefers libx264 when H.264 is in the board's supported set —
     libx264 is roughly 5-10× faster than libx265 at comparable
@@ -901,16 +932,35 @@ def _ffmpeg_reencode_recipe(
     filename (no path) for the ``INPUT`` placeholder and reuses its
     stem for ``OUTPUT.mp4`` so the operator can copy the recipe
     verbatim into their terminal without hand-editing it.
+
+    ``cap_to_1080p`` injects ``-vf scale=1920:1080:force_original_aspect_ratio=decrease``
+    so the recipe also downscales an over-resolution source onto the
+    1920×1080 envelope. ``force_original_aspect_ratio=decrease``
+    means the output fits *inside* 1920×1080 (no padding, no
+    stretch) — a 4K 16:9 source becomes exactly 1920×1080, a 4K 21:9
+    ultrawide lands at 1920×823, a portrait 1080×1920 lands at
+    608×1080 (height-bound). Used by the low-RAM resolution gate;
+    omitted in the codec-only rejection path so we don't suggest a
+    needless re-encode when an HD codec swap is all that's wanted.
     """
+    scale_clause = (
+        '-vf scale=1920:1080:force_original_aspect_ratio=decrease '
+        if cap_to_1080p
+        else ''
+    )
     if 'h264' in supported:
         template = (
-            'ffmpeg -i {input} -c:v libx264 -preset medium -crf 23 '
+            'ffmpeg -i {input} '
+            + scale_clause
+            + '-c:v libx264 -preset medium -crf 23 '
             '-c:a aac -b:a 192k -movflags +faststart {output}'
         )
         target_suffix = 'h264'
     elif 'hevc' in supported:
         template = (
-            'ffmpeg -i {input} -c:v libx265 -preset medium -crf 28 '
+            'ffmpeg -i {input} '
+            + scale_clause
+            + '-c:v libx265 -preset medium -crf 28 '
             '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
             '{output}'
         )
@@ -993,7 +1043,41 @@ def _run_video_normalisation(asset: Asset) -> None:
 
     src_codec = (summary.get('video_codec') or '').lower()
     supported = _hw_decoded_codecs()
+    video_width = summary.get('video_width')
+    video_height = summary.get('video_height')
+    # ``upload_name`` is stashed by the dashboard / API at upload
+    # time — the on-disk file gets renamed to ``<uuid>.<ext>`` but
+    # the recipe wants a name the operator can paste straight into
+    # their workstation terminal. YouTube / pre-rebrand rows that
+    # don't carry the field fall through to a stable
+    # ``upload<ext>`` placeholder so the recipe still teaches the
+    # operator the input extension. Resolved once so both the codec-
+    # and the resolution-rejection paths share the same recipe stem.
+    upload_name = metadata.get('upload_name') or (
+        f'upload{path.splitext(src_uri)[1]}'
+    )
+
     if src_codec in supported:
+        if _exceeds_low_ram_pixel_cap(video_width, video_height):
+            # Codec is fine but resolution exceeds the 1080p envelope
+            # on this 1 GB-class board. On-device validation (Rock
+            # Pi 4 1GB, 4K HEVC) showed the docker viewer container
+            # OOM-loops the moment QtMultimedia tries to allocate the
+            # decode pipeline — kernel logs ``global_oom``. Reject at
+            # upload with a downscale recipe so the operator sees a
+            # clear failure and a copy-pasteable fix instead of a
+            # device stuck in an OOM cycle.
+            Asset.objects.filter(asset_id=asset_id).update(**update_dict)
+            recipe = _ffmpeg_reencode_recipe(
+                supported, upload_name, cap_to_1080p=True
+            )
+            message = (
+                f'Video resolution {video_width}x{video_height} '
+                'exceeds the 1080p cap on this device. Boards with '
+                'less than 1.5 GiB of RAM OOM when decoding above '
+                '1920x1080 alongside the web UI.'
+            )
+            raise UnsupportedVideoCodecError(message, recipe=recipe)
         update_dict['is_processing'] = False
         Asset.objects.filter(asset_id=asset_id).update(**update_dict)
         _notify(asset_id)
@@ -1008,17 +1092,13 @@ def _run_video_normalisation(asset: Asset) -> None:
     display_codec = (
         src_codec if src_codec and src_codec != 'unknown' else 'unknown'
     )
-    # ``upload_name`` is stashed by the dashboard / API at upload
-    # time — the on-disk file gets renamed to ``<uuid>.<ext>`` but
-    # the recipe wants a name the operator can paste straight into
-    # their workstation terminal. YouTube / pre-rebrand rows that
-    # don't carry the field fall through to a stable
-    # ``upload<ext>`` placeholder so the recipe still teaches the
-    # operator the input extension.
-    upload_name = metadata.get('upload_name') or (
-        f'upload{path.splitext(src_uri)[1]}'
-    )
-    recipe = _ffmpeg_reencode_recipe(supported, upload_name)
+    # If the upload would *also* fail the low-RAM 1080p gate, fold
+    # the downscale into the codec recipe so the operator doesn't
+    # have to re-upload twice (once for the codec swap, once for the
+    # resolution shrink). The message remains codec-focused because
+    # the codec is the strictly stronger rejection.
+    cap = _exceeds_low_ram_pixel_cap(video_width, video_height)
+    recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
     if supported:
         supported_str = ', '.join(sorted(supported))
         message = (

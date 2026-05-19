@@ -80,20 +80,83 @@ upstream of the upload.
 `bin/install.sh` sets `DEVICE_TYPE=arm64` for every aarch64 SBC it doesn't
 recognise as a Pi. `anthias_host_agent` runs on the host and reads
 `/proc/device-tree/model`; when it sees "Radxa ROCK Pi 4" it writes
-`host:board_subtype = 'rockpi4'` to Redis. The viewer reads that key to
-upgrade its `--hwdec=` choice from the catch-all `arm64` default to the
-RK3399-specific `--hwdec=drm-copy` (v4l2_request, served by `rkvdec` for HEVC
-and the Hantro VPU for H.264).
+`host:board_subtype = 'rockpi4'` to Redis. The server reads that key to
+pick the right entry in `processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4
+accepts H.264 + HEVC uploads, the catch-all `arm64` accepts nothing
+(because we can't certify a decoder on an unknown SBC).
 
 The arm64 viewer image pulls `ffmpeg` and the libav* family from
 `archive.raspberrypi.com` (the `+rpt1` build), which adds
 `--enable-v4l2-request --enable-libudev --enable-vout-drm` — the same package
-family Pi 4 / Pi 5 use, so the RK3399's stateless decoders are reachable via
-the same mpv flag. The `start_viewer.sh` entrypoint creates the `/dev/video-dec*`
-symlinks the v4l2_request decoder discovery code expects (privileged docker
-mounts its own /dev tmpfs without udev's symlinks). The `+rpt1` repo is pinned
-to only override ffmpeg + libav* + mpv on arm64; Pi userspace baseline is
-unaffected on every board.
+family Pi 4 / Pi 5 use. The `start_viewer.sh` entrypoint creates the
+`/dev/video-dec*` symlinks the v4l2_request decoder discovery code expects
+(privileged docker mounts its own /dev tmpfs without udev's symlinks). The
+`+rpt1` repo is pinned to only override ffmpeg + libav* on arm64; Pi
+userspace baseline is unaffected on every board.
+
+### Decode path (post-#2905)
+
+Playback runs through QtMultimedia (`QMediaPlayer` + `QGraphicsVideoItem`)
+embedded in `AnthiasViewer`. Qt 6.5 dropped the upstream gstreamer media
+backend, so Debian Trixie ships only the ffmpeg-backed
+`libffmpegmediaplugin.so`, which calls libavcodec internally. The libmpv
+subprocess and the per-codec `--hwdec=` dispatch the prior viewer revisions
+relied on are both gone — Anthias no longer hand-selects a decoder. **As a
+consequence: libavcodec's default decoder choice is what runs on this board.**
+
+### Known hardware-decode limitation on RK3399
+
+On-device validation against Armbian community 6.18 (`rkvdec` mainline driver)
+confirmed that QtMultimedia's libavcodec backend does **not** request a
+hwaccel — `ffmpeg -i sample.mp4 -f null -` picks `h264 (native)` / `hevc
+(native)` (software). Forcing `-hwaccel drm` engages rkvdec via
+`/dev/media0,/dev/video2` (the stateless v4l2_request entry point), but the
+Armbian 6.18 driver produces `frame_post_process: Decode fail` errors at
+0.77× real-time. The H.264 path (`rk3399-vpu-dec` / Hantro VPU) has no
+libavcodec `v4l2_request` binding in the `+rpt1` 7.1.3 build — it would have
+to ship through `h264_v4l2m2m`, but that wrapper is stateful and the RK3399
+nodes are stateless, so the M2M discovery fails with "Could not find a valid
+device".
+
+Practical state on Rock Pi 4 today:
+
+* H.264 1080p30 SW-decode delivers ~99 % of frames on the A72 (measured: 1
+  dropped per 14 s); below the threshold where HW would matter.
+* HEVC 1080p30 SW-decode drops ~22 % even with 5 idle cores — single-thread
+  libavcodec stall + paging on 1 GB SKUs.
+* 4K HEVC OOM-kills the viewer container on 1 GB SKUs and is rejected at
+  upload by the low-RAM resolution gate (see "Low-RAM mode" below).
+
+Fixing this requires either an upstream `rkvdec` driver fix landing in
+Debian-shipped Armbian kernels, or a v4l2_request H.264 binding in libavcodec
+that targets Hantro's stateless API. Both are outside the Anthias repo;
+Anthias does not maintain a custom kernel or distro
+(["we don't want to maintain our own Yocto distro"]). When that day comes,
+the QtMultimedia side will also need a hwaccel-selection hook — Qt 6.5+ has
+no public knob today.
+
+### Low-RAM mode
+
+Boards with less than 1.5 GiB MemTotal (Pi 2/Pi 3 1GB, Pi 4 1GB, Rock Pi 4
+1GB, generic-arm64 1GB SKUs) run in a degraded "low-RAM" mode:
+
+* `bin/upgrade_containers.sh` reads `/proc/meminfo` and exports
+  `ANTHIAS_LOW_RAM=1` to the viewer container.
+* `AnthiasViewer` instantiates one `QWebEngineView` instead of two — no
+  preloaded crossfade between URL assets; the page swaps in place with a
+  brief blank during load.
+* `anthias_host_agent` publishes `host:total_mem_kb` to Redis;
+  `anthias_server.processing` rejects uploads above 1920×1080 with the
+  existing recipe machinery (`-vf scale=1920:1080:force_original_aspect_ratio=decrease`).
+* The diagnostics page's Memory card surfaces a "Low-RAM mode" banner so
+  operators can see *why* the device degraded.
+
+The 1.5 GiB threshold cleanly separates 1 GB SKUs from 2 GB+ SKUs in the
+supported fleet. The cap was sized against on-device measurements: idle
+viewer + 2 QtWebEngine renderers + zygotes consume ~440 MB RSS on Rock Pi 4
+1GB, leaving roughly 500 MB for the kernel, host services, and decode
+pipeline. A 4K HEVC capture-buffer allocation pushes the container past the
+cgroup limit; the kernel logs `global_oom` and the container restart-loops.
 
 ## Sample pack
 

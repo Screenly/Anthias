@@ -50,6 +50,68 @@ def get_board_subtype() -> str | None:
     return None
 
 
+def get_total_mem_kb() -> int | None:
+    """Return the host's MemTotal in kibibytes from Redis, or ``None``.
+
+    ``anthias_host_agent`` publishes ``host:total_mem_kb`` at startup
+    by reading ``/proc/meminfo`` on the host. The server reads this
+    instead of opening ``/proc/meminfo`` itself so the value is
+    consistent across server and viewer (both observe whatever the
+    host_agent measured).
+
+    ``None`` means "unknown" — host_agent never ran, redis is down,
+    or the key was written empty because /proc/meminfo couldn't be
+    read. Callers treat unknown as "don't restrict" rather than
+    locking the operator out from uploads on a measurement gap.
+    """
+    try:
+        r = connect_to_redis()
+        value = r.get('host:total_mem_kb')
+    except Exception:
+        return None
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        try:
+            value = value.decode('utf-8')
+        except UnicodeDecodeError:
+            return None
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+# Boards with less than this much MemTotal can't keep two QtWebEngine
+# renderers resident *and* play 1080p+ video without OOM-thrashing
+# through swap (measured 1 GB Rock Pi 4: ~440 MB idle viewer RSS, OOM
+# loop on 4K HEVC load). 1.5 GiB is the cleanest cut between 1 GB and
+# 2 GB SKUs in the supported fleet — Pi 2/Pi 3 1GB, Pi 4 1GB, Rock Pi
+# 4 1GB fall below; every 2 GB+ SKU sits above. Tests can compare
+# against this directly rather than re-hardcoding the threshold.
+LOW_RAM_THRESHOLD_KB = 1_572_864  # 1.5 GiB in kibibytes
+
+
+def is_low_ram_device() -> bool:
+    """``True`` when the host has less than ``LOW_RAM_THRESHOLD_KB``.
+
+    Returns ``False`` when total RAM is unknown — uploading is the
+    operator action we'd rather over-accept than block on a missing
+    measurement. The codec gate keeps its existing per-codec
+    rejection regardless of this flag, so an "unknown RAM" device
+    still gets the codec safety net.
+    """
+    total = get_total_mem_kb()
+    if total is None:
+        return False
+    return total < LOW_RAM_THRESHOLD_KB
+
+
 def resolve_device_key() -> str:
     """Return ``DEVICE_TYPE`` upgraded via the host_agent's published
     board subtype when applicable.

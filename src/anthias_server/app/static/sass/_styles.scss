@@ -1297,6 +1297,15 @@ label { text-align: left; }
   }
   .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
   .stat-card__meta a:hover { text-decoration: underline; }
+  // Variant for advisory/warning text inside a stat card (e.g. the
+  // low-RAM degradation badge on Memory). Borrows the warning
+  // colour token already used by .loadavg-row--warn so the palette
+  // stays consistent and a future theme swap touches one token.
+  .stat-card__meta--warn {
+    color: var(--color-warning);
+    margin-top: 0.5rem;
+    line-height: 1.4;
+  }
 }
 
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }

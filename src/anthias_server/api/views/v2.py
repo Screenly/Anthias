@@ -875,8 +875,17 @@ class InfoViewV2(InfoViewMixin):
             'hours': round(system_uptime.seconds / 3600, 2),
         }
 
-    def get_memory(self) -> dict[str, int]:
+    def get_memory(self) -> dict[str, int | bool]:
+        from anthias_common.board import LOW_RAM_THRESHOLD_KB
+
         virtual_memory = psutil.virtual_memory()
+        # ``low_ram`` echoes the same gate that drives the viewer's
+        # single-QWebEngineView mode and the asset processor's
+        # 1080p upload cap. Exposed via /api/v2/info so external
+        # clients can render a "degraded mode" badge alongside the
+        # other memory fields. ``int | bool`` covers the field union;
+        # ``bool`` is a subclass of ``int`` in Python so static
+        # type-checkers don't flag the mixed dict.
         return {
             'total': virtual_memory.total >> 20,
             'used': virtual_memory.used >> 20,
@@ -884,6 +893,7 @@ class InfoViewV2(InfoViewMixin):
             'shared': virtual_memory.shared >> 20,
             'buff': virtual_memory.buffers >> 20,
             'available': virtual_memory.available >> 20,
+            'low_ram': virtual_memory.total < LOW_RAM_THRESHOLD_KB * 1024,
         }
 
     def get_ip_addresses(self) -> list[str]:
@@ -924,6 +934,7 @@ class InfoViewV2(InfoViewMixin):
                             'shared': {'type': 'integer'},
                             'buff': {'type': 'integer'},
                             'available': {'type': 'integer'},
+                            'low_ram': {'type': 'boolean'},
                         },
                     },
                     'ip_addresses': {

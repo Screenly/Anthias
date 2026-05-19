@@ -885,6 +885,258 @@ def test_video_arm64_with_rockpi4_subtype_accepts_h264(
     assert asset.metadata.get('video_codec') == 'h264'
 
 
+# ---------------------------------------------------------------------------
+# Low-RAM resolution gate (boards with < 1.5 GiB MemTotal). On-device
+# measurement on a 1 GB Rock Pi 4 showed 4K HEVC OOM-kills the viewer
+# container (dmesg ``global_oom`` on the docker container's bash); the
+# codec gate rejects above-1080p uploads on those boards so an operator
+# gets a clear failure pill + downscale recipe instead of a wedged
+# device.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_video_low_ram_rejects_4k_with_resolution_message(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 4K HEVC upload on a low-RAM board (codec is in the supported
+    set, but resolution exceeds 1920×1080) is rejected with a
+    resolution-specific message and a recipe that includes the
+    downscale ``-vf scale=`` clause. Validates the gate fires *only*
+    on the resolution leg — codec is otherwise fine."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'big.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-4k-lowram',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'beach-4k.mp4'},
+    )
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rockpi4'
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert '3840x2160' in msg
+    assert '1080p' in msg
+    assert '1.5 GiB' in msg
+    # Recipe carries the downscale clause + a board-appropriate
+    # codec. rockpi4 supports H.264 so libx264 is preferred.
+    recipe = excinfo.value.recipe
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert 'libx264' in recipe
+    # Metadata still captured (operator sees what they uploaded).
+    asset.refresh_from_db()
+    assert asset.metadata.get('video_width') == 3840
+
+
+@pytest.mark.django_db
+def test_video_low_ram_accepts_1080p(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1080p HEVC on the same low-RAM board passes the gate — exactly
+    the boundary the on-device measurement said survives."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'hd.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-1080-lowram', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 15,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rockpi4'
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'hevc'
+
+
+@pytest.mark.django_db
+def test_video_high_ram_accepts_4k(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 4K upload on a high-RAM board (Pi 5, Pi 4 4GB) is NOT gated
+    by resolution — the low-RAM cap only fires when MemTotal sits
+    below the threshold."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'big.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-4k-pi5', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        # High-RAM device — gate inactive.
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_width') == 3840
+
+
+@pytest.mark.django_db
+def test_video_low_ram_unsupported_codec_recipe_includes_downscale(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the upload fails BOTH the codec gate and the resolution
+    gate (e.g. 4K MPEG-2 on Rock Pi 4 1GB), the codec message wins
+    (codec is the strictly stronger rejection — operator has to
+    re-encode either way) but the recipe folds in the downscale so
+    the operator's re-encode also lands within the 1080p envelope.
+    Saves them an iteration of "re-encoded the codec, now it fails
+    the resolution gate too"."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'old.mpg')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-mpeg2-4k', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mpeg',
+        'video_codec': 'mpeg2video',  # Not in rockpi4's HW set.
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'mp2',
+        'duration_seconds': 60,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rockpi4'
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    # Codec message wins (strictly stronger rejection).
+    assert 'codec' in msg.lower()
+    assert "'mpeg2video'" in msg
+    # Recipe folds in the downscale so a single re-encode satisfies
+    # both gates.
+    recipe = excinfo.value.recipe
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+
+
+def test_ffmpeg_recipe_omits_scale_clause_by_default() -> None:
+    """The codec-only rejection path passes ``cap_to_1080p=False``
+    (the default). Recipe must NOT include a scale clause then — we
+    don't want to suggest a needless downscale when an HD codec
+    swap is all that's wanted."""
+    recipe = processing._ffmpeg_reencode_recipe(frozenset({'h264'}), 'foo.mkv')
+    assert '-vf scale' not in recipe
+    assert '-c:v libx264' in recipe
+
+
+def test_ffmpeg_recipe_includes_scale_clause_when_capping() -> None:
+    """``cap_to_1080p=True`` injects the
+    ``-vf scale=1920:1080:force_original_aspect_ratio=decrease`` clause
+    between the input and the codec arguments, so the operator's
+    re-encode lands inside the 1920×1080 envelope. The
+    ``force_original_aspect_ratio=decrease`` keeps the aspect ratio
+    intact for landscape, ultrawide, and portrait sources alike."""
+    recipe = processing._ffmpeg_reencode_recipe(
+        frozenset({'h264'}), 'foo.mkv', cap_to_1080p=True
+    )
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    # Order matters — scale must be before the encoder so the encoder
+    # sees the downscaled frames.
+    scale_idx = recipe.index('-vf')
+    encoder_idx = recipe.index('-c:v')
+    assert scale_idx < encoder_idx
+
+
+def test_exceeds_low_ram_pixel_cap_unknown_dims_returns_false() -> None:
+    """ffprobe-failed uploads (``video_width=None``) skip the
+    resolution gate — the codec gate already collapsed to ``unknown``
+    and will reject them; double-rejecting on dimensions we can't
+    measure would just be noise."""
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        assert processing._exceeds_low_ram_pixel_cap(None, None) is False
+        assert processing._exceeds_low_ram_pixel_cap(0, 0) is False
+        assert processing._exceeds_low_ram_pixel_cap(1920, None) is False
+
+
+def test_exceeds_low_ram_pixel_cap_high_ram_returns_false() -> None:
+    """High-RAM devices never hit the cap, even for >1080p sources."""
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=False
+    ):
+        assert processing._exceeds_low_ram_pixel_cap(3840, 2160) is False
+        assert processing._exceeds_low_ram_pixel_cap(1920, 1080) is False
+
+
 def test_format_subprocess_stderr_decodes_and_trims() -> None:
     """``_format_subprocess_stderr`` must produce operator-readable
     text: bytes decoded as UTF-8 (with replacement for malformed
