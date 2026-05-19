@@ -122,15 +122,16 @@ class CreateAssetSerializerMixin:
         # row lands with the eventual local path on disk, is_processing
         # is flipped, and a Celery task downloads the file out of band
         # before chaining into normalize_video_asset for the per-board
-        # codec gate. Live streams (RTSP / HLS / DASH) are filtered out
-        # by ``is_downloadable_remote_video`` — they reach the viewer
-        # as literal stream URLs the same way they always have.
+        # codec gate. Live streams (RTSP / HLS / DASH) and any non-
+        # http(s) scheme are filtered out inside
+        # ``is_downloadable_remote_video`` — they reach the viewer as
+        # literal stream URLs the same way they always have, so no
+        # extra scheme check is needed here.
         is_remote_video_download = False
         if (
             not is_youtube
             and not is_local_upload
             and 'video' in (asset['mimetype'] or '')
-            and uri.startswith(('http://', 'https://'))
         ):
             should_download, source_ext = is_downloadable_remote_video(uri)
             if should_download:

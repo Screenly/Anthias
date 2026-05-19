@@ -37,7 +37,10 @@ from anthias_server.settings import AnthiasSettings
         ('https://example.com/clip.mp4', '.mp4'),
         ('https://cdn.example.com/path/to/file.webm', '.webm'),
         ('https://example.com/movie.MOV', '.mov'),
-        ('http://example.com/x.mkv', '.mkv'),
+        # http (not https) is intentional — the classifier must accept
+        # both schemes so operators on internal LANs (where TLS isn't
+        # set up for the media server) can still auto-download.
+        ('http://example.com/x.mkv', '.mkv'),  # NOSONAR
         ('https://example.com/a.avi', '.avi'),
         ('https://example.com/short.m4v', '.m4v'),
         ('https://example.com/old.ogv', '.ogv'),
@@ -87,7 +90,7 @@ def test_classify_streaming_manifest_extensions_return_stream(
         'rtsp://camera.local/feed',
         'rtmp://media.example.com/live',
         'srt://stream.example.com:9000',
-        'udp://239.0.0.1:1234',
+        'udp://stream.example.test:1234',
         'mms://media.example.com/live',
     ],
 )

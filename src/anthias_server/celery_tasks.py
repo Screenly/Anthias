@@ -724,6 +724,88 @@ class RemoteVideoDownloadError(Exception):
     """
 
 
+def _validate_remote_video_response(resp: Any, uri: str) -> None:
+    """Reject non-2xx responses, manifest Content-Types, and anything
+    that isn't ``video/*`` / ``application/octet-stream`` / empty.
+
+    Extracted from ``download_remote_video_asset`` so the task body
+    stays under SonarCloud's cognitive-complexity ceiling. The serializer
+    pre-classifies via HEAD, but some origins return different headers
+    on HEAD vs GET — these checks are the second line of defence.
+    """
+    if resp.status_code >= 400:
+        raise RemoteVideoDownloadError(
+            f'HTTP {resp.status_code} fetching {uri!r}'
+        )
+    content_type = (resp.headers.get('Content-Type') or '').lower()
+    base_type = content_type.split(';', 1)[0].strip()
+    if base_type in _REMOTE_VIDEO_MANIFEST_CONTENT_TYPES:
+        raise RemoteVideoDownloadError(
+            f'origin served streaming manifest '
+            f'({base_type!r}) instead of a downloadable file; '
+            'live streams are not auto-downloaded'
+        )
+    # Accept ``video/*`` and ``application/octet-stream`` (some CDNs
+    # serve video files this way). An empty Content-Type also passes
+    # — a few origins omit it. Anything else (HTML error page, JSON
+    # error envelope) gets rejected so we don't store a 200 OK error
+    # page as the asset.
+    if (
+        base_type.startswith('video/')
+        or base_type == 'application/octet-stream'
+        or base_type == ''
+    ):
+        return
+    raise RemoteVideoDownloadError(
+        f'unexpected Content-Type {base_type!r} from {uri!r}; '
+        'expected video/* or application/octet-stream'
+    )
+
+
+def _stream_remote_video_to_file(uri: str, staging: str) -> None:
+    """Fetch *uri* with the module-level session and stream it to
+    *staging*, enforcing the size cap and validating the response
+    headers. Raises ``RemoteVideoDownloadError`` on permanent
+    failures and lets transient ``OSError`` /
+    ``requests.RequestException`` (a subclass of ``OSError``)
+    propagate for the caller's ``autoretry_for``.
+
+    Caller is responsible for cleaning up the partial staging file
+    on any exception path.
+    """
+    with _session.get(
+        uri,
+        stream=True,
+        allow_redirects=True,
+        timeout=(
+            REMOTE_VIDEO_CONNECT_TIMEOUT_S,
+            REMOTE_VIDEO_READ_TIMEOUT_S,
+        ),
+    ) as resp:
+        _validate_remote_video_response(resp, uri)
+        written = 0
+        with open(staging, 'wb') as fh:
+            for chunk in resp.iter_content(
+                chunk_size=_REMOTE_VIDEO_CHUNK_BYTES
+            ):
+                if not chunk:
+                    # iter_content yields empty bytes for keep-alive
+                    # padding on some servers; skip rather than
+                    # treating as EOF.
+                    continue
+                written += len(chunk)
+                if written > REMOTE_VIDEO_MAX_BYTES:
+                    raise RemoteVideoDownloadError(
+                        f'download exceeded size cap of '
+                        f'{REMOTE_VIDEO_MAX_BYTES} bytes for {uri!r}'
+                    )
+                fh.write(chunk)
+        if written == 0:
+            raise RemoteVideoDownloadError(
+                f'origin returned zero bytes for {uri!r}'
+            )
+
+
 class _DownloadRemoteVideoTask(Task):  # type: ignore[type-arg]
     """Custom Task subclass that funnels failures through the same
     metadata-error contract as ``_DownloadYoutubeTask`` and
@@ -801,11 +883,6 @@ def download_remote_video_asset(asset_id: str, uri: str) -> None:
     download doesn't linger as orphan content for the cleanup sweep
     to deal with an hour later.
     """
-    # Lazy import of ``requests`` for the exception type only;
-    # ``_session`` (module-level ``AnthiasSession``) is the actual
-    # client.
-    import requests
-
     try:
         asset = Asset.objects.get(asset_id=asset_id)
     except Asset.DoesNotExist:
@@ -832,113 +909,25 @@ def download_remote_video_asset(asset_id: str, uri: str) -> None:
             'to download without a serializer-stamped path'
         )
     location = asset.uri
-
     staging = f'{location}.part'
 
-    def _drop_staging() -> None:
-        """Best-effort removal of the partial download.
-
-        Mirrors the image-pipeline ``_drop_image_staging`` contract:
-        every failure path through the streaming download removes the
-        ``.part`` file before propagating, so a stalled or refused
-        download never leaves multi-GB debris behind. ``cleanup()``
-        would catch it eventually but only after the 1h freshness
-        window — inline cleanup is the difference between an
-        operator's next upload working and "disk full" appearing in
-        the logs.
-        """
+    # Stream the response, then atomically swap into place. Both
+    # phases share the cleanup contract: a partial ``.part`` left
+    # behind would otherwise wait for the hourly ``cleanup()`` sweep
+    # to clear — meanwhile an operator's next upload could trip a
+    # "disk full" if the partial was multi-GB. ``OSError`` covers
+    # both filesystem failures and ``requests.RequestException``
+    # (which is an ``IOError``/``OSError`` subclass), so the single
+    # ``except OSError`` re-raise is sufficient for the
+    # ``autoretry_for`` to pick up.
+    try:
+        _stream_remote_video_to_file(uri, staging)
+        os.replace(staging, location)
+    except (OSError, RemoteVideoDownloadError):
         try:
             os.remove(staging)
         except OSError:
             pass
-
-    try:
-        # ``stream=True`` so the response body isn't materialised in
-        # RAM — important for the multi-GB cap. ``allow_redirects``
-        # follows the common CDN pattern where the canonical URL
-        # 302s to a signed download URL. The ``(connect, read)``
-        # tuple form is the requests convention for per-phase
-        # timeouts; the read timeout is per-chunk so a stalled
-        # origin can't pin the worker for the full 15-minute task
-        # time_limit. The module-level ``_session`` injects the
-        # project-wide ``Anthias/<release>`` User-Agent (#2897).
-        with _session.get(
-            uri,
-            stream=True,
-            allow_redirects=True,
-            timeout=(
-                REMOTE_VIDEO_CONNECT_TIMEOUT_S,
-                REMOTE_VIDEO_READ_TIMEOUT_S,
-            ),
-        ) as resp:
-            if resp.status_code >= 400:
-                raise RemoteVideoDownloadError(
-                    f'HTTP {resp.status_code} fetching {uri!r}'
-                )
-            content_type = (resp.headers.get('Content-Type') or '').lower()
-            base_type = content_type.split(';', 1)[0].strip()
-            if base_type in _REMOTE_VIDEO_MANIFEST_CONTENT_TYPES:
-                # The serializer's HEAD probe should have caught this,
-                # but some origins lie on HEAD and serve a manifest on
-                # GET. Defence in depth.
-                raise RemoteVideoDownloadError(
-                    f'origin served streaming manifest '
-                    f'({base_type!r}) instead of a downloadable file; '
-                    'live streams are not auto-downloaded'
-                )
-            # Some misconfigured CDNs serve a video file as
-            # ``application/octet-stream``. Accept octet-stream and
-            # any ``video/*`` type; reject anything else (HTML error
-            # pages, JSON error envelopes, etc.) so we don't store
-            # a 200 OK error page as the asset.
-            if not (
-                base_type.startswith('video/')
-                or base_type == 'application/octet-stream'
-                or base_type == ''  # some origins omit Content-Type
-            ):
-                raise RemoteVideoDownloadError(
-                    f'unexpected Content-Type {base_type!r} from {uri!r}; '
-                    'expected video/* or application/octet-stream'
-                )
-
-            written = 0
-            with open(staging, 'wb') as fh:
-                for chunk in resp.iter_content(
-                    chunk_size=_REMOTE_VIDEO_CHUNK_BYTES
-                ):
-                    if not chunk:
-                        # iter_content yields empty bytes for
-                        # keep-alive padding on some servers. Skip
-                        # rather than treating as EOF.
-                        continue
-                    written += len(chunk)
-                    if written > REMOTE_VIDEO_MAX_BYTES:
-                        raise RemoteVideoDownloadError(
-                            f'download exceeded size cap of '
-                            f'{REMOTE_VIDEO_MAX_BYTES} bytes for {uri!r}'
-                        )
-                    fh.write(chunk)
-            if written == 0:
-                raise RemoteVideoDownloadError(
-                    f'origin returned zero bytes for {uri!r}'
-                )
-    except RemoteVideoDownloadError:
-        _drop_staging()
-        raise
-    except (OSError, requests.RequestException):
-        _drop_staging()
-        raise
-
-    # Atomic rename within assetdir — POSIX guarantees a single inode
-    # swap so the viewer never sees a half-written file under the
-    # final name. ``os.replace`` is the cross-platform spelling of
-    # ``rename`` that overwrites an existing destination (e.g. a
-    # second invocation on the same asset_id, or a re-download
-    # triggered by the reconciler).
-    try:
-        os.replace(staging, location)
-    except OSError:
-        _drop_staging()
         raise
 
     metadata = dict(asset.metadata or {})
