@@ -20,29 +20,29 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt6-builder-apt-{{ artifact_boar
         qt6-base-dev \
         qt6-multimedia-dev \
         qt6-webengine-dev
-# qt6-multimedia-dev: AnthiasWebview's VideoView wraps QMediaPlayer +
+# qt6-multimedia-dev: AnthiasViewer's VideoView wraps QMediaPlayer +
 # QGraphicsVideoItem (issue #2904, see
-# ``src/anthias_webview/AnthiasWebview.pro``). Qt 6.5 dropped the
+# ``src/anthias_webview/AnthiasViewer.pro``). Qt 6.5 dropped the
 # upstream gstreamer media backend, so Debian Trixie ships only the
 # ffmpeg-backed ``libffmpegmediaplugin.so`` — decode runs through
 # libavcodec directly against the +rpt1 ``libav*`` packages pinned in
 # ``_rpt1-ffmpeg-pin.j2`` (which carry ``--enable-v4l2-request`` /
 # ``--enable-v4l2-m2m`` so libavcodec can drive the Pi-family
 # hardware decoders).
-COPY src/anthias_webview/AnthiasWebview.pro /src/anthias_webview/AnthiasWebview.pro
+COPY src/anthias_webview/AnthiasViewer.pro /src/anthias_webview/AnthiasViewer.pro
 COPY src/anthias_webview/src /src/anthias_webview/src
 COPY src/anthias_webview/res /src/anthias_webview/res
 WORKDIR /src/anthias_webview
-# webview is 4 .cpp files (~6s on x86 native, ~30s under arm64 QEMU);
+# viewer is 4 .cpp files (~6s on x86 native, ~30s under arm64 QEMU);
 # adding ccache would only save a couple of seconds on incremental
 # rebuilds and the cache mount + apt install + PATH wiring would
 # outweigh the saving.
 RUN qmake6 && \
     make -j"$(nproc)" && \
     make install
-RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
-    mv AnthiasWebview /out/bin/ && \
-    cp -r /src/anthias_webview/res /out/share/AnthiasWebview/
+RUN mkdir -p /out/bin /out/share/AnthiasViewer && \
+    mv AnthiasViewer /out/bin/ && \
+    cp -r /src/anthias_webview/res /out/share/AnthiasViewer/
 {% else %}
 {% include 'Dockerfile.qt5-webview-builder.j2' %}
 {% endif %}
@@ -76,8 +76,8 @@ ENV VIRTUAL_ENV="/venv"
 # boards get their runtime libs from qt6-*-dev installed above.
 COPY --from=webview-builder /out/qt5pi /usr/local/qt5pi
 {% endif %}
-COPY --from=webview-builder /out/bin/AnthiasWebview /usr/local/bin/AnthiasWebview
-COPY --from=webview-builder /out/share/AnthiasWebview /usr/local/share/AnthiasWebview
+COPY --from=webview-builder /out/bin/AnthiasViewer /usr/local/bin/AnthiasViewer
+COPY --from=webview-builder /out/share/AnthiasViewer /usr/local/share/AnthiasViewer
 
 ENV QT_QPA_EGLFS_FORCE888=1
 {% if board in ('x86', 'arm64', 'pi5') %}

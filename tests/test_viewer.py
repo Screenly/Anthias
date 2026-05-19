@@ -142,7 +142,7 @@ def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
     finally:
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
-    viewer_fixtures.m_cmd.assert_called_once_with('AnthiasWebview')
+    viewer_fixtures.m_cmd.assert_called_once_with('AnthiasViewer')
 
 
 def test_load_browser_raises_when_process_exits_before_handshake(
@@ -232,7 +232,7 @@ def test_view_webpage_default_zero_interval(
 @pytest.mark.parametrize(
     'error_message,expected_call_count',
     [
-        # An older AnthiasWebview without setReloadInterval raises
+        # An older AnthiasViewer without setReloadInterval raises
         # UnknownMethod — viewer must latch the capability flag off
         # so the next rotation skips the D-Bus hop instead of
         # refilling journald.
@@ -1023,7 +1023,7 @@ def test_handle_reload_queues_bounce_on_linuxfb_rotation_change(
     reset_rotation_state: None,
 ) -> None:
     """linuxfb only reads :rotation=N at QPA init, so the live-rotation
-    path has to bounce AnthiasWebview. _handle_reload runs on the
+    path has to bounce AnthiasViewer. _handle_reload runs on the
     subscriber thread and MUST NOT terminate the browser directly —
     that would race a concurrent view_*() call mid-D-Bus on the main
     thread (Copilot review of #2882). It only sets a flag; the main

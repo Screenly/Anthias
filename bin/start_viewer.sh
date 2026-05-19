@@ -61,14 +61,17 @@ done
 chown -f viewer /dev/snd/*
 chown -f viewer /data/.anthias/latest_anthias_sha
 
-# Fixes caching in QTWebEngine
-mkdir -p /data/.local/share/AnthiasWebview/QtWebEngine \
-    /data/.cache/AnthiasWebview \
+# QtWebEngine state dirs. On upgraded devices the old AnthiasWebview
+# tree is left in place — a fresh AnthiasViewer cache is cheap to
+# repopulate (the next page load refetches), so we don't bother
+# migrating cookies / local-storage across the rename.
+mkdir -p /data/.local/share/AnthiasViewer/QtWebEngine \
+    /data/.cache/AnthiasViewer \
     /data/.cache/fontconfig \
     /data/.pki
 
-chown -Rf viewer /data/.local/share/AnthiasWebview
-chown -Rf viewer /data/.cache/AnthiasWebview/
+chown -Rf viewer /data/.local/share/AnthiasViewer
+chown -Rf viewer /data/.cache/AnthiasViewer/
 chown -Rf viewer /data/.cache/fontconfig
 chown -Rf viewer /data/.pki
 

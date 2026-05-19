@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and run AnthiasWebview's QtTest unit tests.
+# Build and run AnthiasViewer's QtTest unit tests.
 #
 # Requires Qt 6 (qt6-base-dev, qt6-multimedia-dev). The viewer
 # Docker image already ships those for the per-board builder stage
@@ -33,6 +33,6 @@ make -j"$(nproc)"
 # server / framebuffer — the tests don't render, they exercise
 # the QMediaPlayer / QGraphicsVideoItem API surface plus the
 # rotation transform.
-QT_QPA_PLATFORM=offscreen ./AnthiasWebviewTests
+QT_QPA_PLATFORM=offscreen ./AnthiasViewerTests
 
 popd >/dev/null

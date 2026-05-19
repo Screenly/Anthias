@@ -20,7 +20,7 @@ _browser_bus: Any = None
 
 
 def set_browser_bus(bus: Any) -> None:
-    """Inject the AnthiasWebview D-Bus proxy.
+    """Inject the AnthiasViewer D-Bus proxy.
 
     Called from ``anthias_viewer/__init__.py`` after the webview's
     ``Anthias service start`` handshake. ``MPVMediaPlayer`` reads
@@ -236,7 +236,7 @@ class MediaPlayer:
 def _marshal_dbus_options(options: dict[str, Any]) -> dict[str, Any]:
     """Wrap each value as a ``GLib.Variant`` for pydbus.
 
-    AnthiasWebview's ``playVideo`` slot is declared with
+    AnthiasViewer's ``playVideo`` slot is declared with
     ``QVariantMap`` (Qt's ``a{sv}`` D-Bus signature) so the dict
     values are *variant-typed* across the wire. pydbus refuses to
     auto-coerce a plain Python scalar to ``GLib.Variant`` ("Expected
@@ -262,7 +262,7 @@ def _marshal_dbus_options(options: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_video_options(uri: str) -> dict[str, Any]:
-    """Build the per-file option dict sent over D-Bus to AnthiasWebview.
+    """Build the per-file option dict sent over D-Bus to AnthiasViewer.
 
     Qt 6.5 dropped the upstream gstreamer media backend, so the
     runtime path is QtMultimedia → libavcodec (the ffmpeg-backed
@@ -313,7 +313,7 @@ class MPVMediaPlayer(MediaPlayer):
         MediaPlayer.__init__(self)
         self.uri: str = ''
         # No mpv subprocess any more — playback runs inside
-        # AnthiasWebview via QtMultimedia (``QMediaPlayer`` +
+        # AnthiasViewer via QtMultimedia (``QMediaPlayer`` +
         # ``QGraphicsVideoItem``), reached over D-Bus. Track local
         # playback state so ``is_playing()`` (called only by tests
         # today; the asset_loop sleeps for ``duration``) can still
@@ -334,7 +334,7 @@ class MPVMediaPlayer(MediaPlayer):
         bus = get_browser_bus()
         if bus is None:
             logging.error(
-                'MPVMediaPlayer.play: AnthiasWebview D-Bus proxy not '
+                'MPVMediaPlayer.play: AnthiasViewer D-Bus proxy not '
                 'set — call set_browser_bus() after the webview '
                 'handshake (src/anthias_viewer/__init__.py).'
             )
@@ -346,7 +346,7 @@ class MPVMediaPlayer(MediaPlayer):
         except Exception as exc:
             # pydbus surfaces transport / signature errors as
             # generic exceptions. Log + clear local state so a
-            # transient AnthiasWebview crash doesn't leave the
+            # transient AnthiasViewer crash doesn't leave the
             # player thinking a video is on screen.
             logging.error('MPVMediaPlayer.play failed: %s', exc)
             self._playing = False

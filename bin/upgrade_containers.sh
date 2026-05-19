@@ -103,7 +103,7 @@ set -e
 
 # Pull the host's configured locale into our shell env so envsubst can
 # substitute LANG/LANGUAGE into the viewer service block (issue #480 —
-# AnthiasWebview reads QLocale::system() to set Accept-Language). The
+# AnthiasViewer reads QLocale::system() to set Accept-Language). The
 # `locales` package writes LANG=... into /etc/default/locale when the
 # operator runs `raspi-config` or `update-locale`; sourcing it here is
 # how those settings reach the viewer container. No-op if the file is

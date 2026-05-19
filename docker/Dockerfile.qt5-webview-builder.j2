@@ -215,12 +215,12 @@ RUN mkdir -p /src/{{ artifact_board }} && \
     tar -xzf "${QT5_TARBALL}" -C /src/{{ artifact_board }} && \
     rm "${QT5_TARBALL}" "${QT5_TARBALL}.sha256"
 
-COPY src/anthias_webview/AnthiasWebview.pro /src/{{ artifact_board }}/anthias_webview/AnthiasWebview.pro
+COPY src/anthias_webview/AnthiasViewer.pro /src/{{ artifact_board }}/anthias_webview/AnthiasViewer.pro
 COPY src/anthias_webview/src /src/{{ artifact_board }}/anthias_webview/src
 COPY src/anthias_webview/res /src/{{ artifact_board }}/anthias_webview/res
 WORKDIR /src/{{ artifact_board }}/anthias_webview
 
-# webview is 3 .cpp files; ccache wiring through Linaro's cross-gcc
+# viewer is 3 .cpp files; ccache wiring through Linaro's cross-gcc
 # would save seconds at most, so plain make.
 RUN /src/{{ artifact_board }}/qt5pi/bin/qmake && \
     make -j"$(nproc)" && \
@@ -229,7 +229,7 @@ RUN /src/{{ artifact_board }}/qt5pi/bin/qmake && \
 # Stage outputs for the runtime COPY --from=webview-builder. The
 # qt5pi tree lands at /usr/local/qt5pi in the final image — the
 # install prefix Qt 5 was originally configured against.
-RUN mkdir -p /out/bin /out/share/AnthiasWebview && \
-    mv AnthiasWebview /out/bin/ && \
-    cp -r /src/{{ artifact_board }}/anthias_webview/res /out/share/AnthiasWebview/ && \
+RUN mkdir -p /out/bin /out/share/AnthiasViewer && \
+    mv AnthiasViewer /out/bin/ && \
+    cp -r /src/{{ artifact_board }}/anthias_webview/res /out/share/AnthiasViewer/ && \
     cp -r /src/{{ artifact_board }}/qt5pi /out/qt5pi

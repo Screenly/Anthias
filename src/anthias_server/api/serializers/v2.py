@@ -103,7 +103,16 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_active(self, obj: Asset) -> bool:
-        return obj.is_active()
+        # When the caller has already evaluated activeness against a
+        # shared ``now`` (e.g. ViewerPlaylistViewV2 freezes it once so
+        # the filter and the deadline computation can't disagree
+        # across a window-boundary tick), accept the same timestamp
+        # via context so this field renders against the same instant
+        # rather than re-reading ``timezone.now()`` a few ms later.
+        # Default path (no context['now']) preserves the previous
+        # "evaluate at render time" behaviour for every other caller.
+        now = self.context.get('now')
+        return obj.is_active(now=now)
 
     @extend_schema_field({'type': 'array', 'items': {'type': 'integer'}})
     def get_play_days(self, obj: Asset) -> list[int]:
@@ -335,6 +344,39 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
         ],
     )
     current_password = CharField(required=False, allow_blank=True)
+
+
+class ViewerPlaylistSerializerV2(Serializer[Any]):
+    """Server-evaluated playlist for the C++ viewer.
+
+    The deadline is the soonest UTC moment at which the viewer should
+    re-fetch this endpoint — derived from asset start/end boundaries
+    plus a 60s cap when any returned asset has a day-of-week or
+    time-of-day window. ``now`` is the server's notion of the
+    evaluation timestamp; clients use it to compute deadline-relative
+    sleeps without trusting their own clock.
+    """
+
+    assets = AssetSerializerV2(many=True)
+    deadline = DateTimeField(allow_null=True)
+    now = DateTimeField()
+
+
+class ViewerSettingsSerializerV2(Serializer[Any]):
+    """Viewer-relevant subset of device settings.
+
+    Intentionally narrower than ``DeviceSettingsSerializerV2``: only
+    the keys the viewer actually consults at runtime are exposed, so
+    the C++ viewer's internal-auth path doesn't pull operator fields
+    (``username``, ``auth_backend``, ``player_name``, …) it never
+    needs to read.
+    """
+
+    shuffle_playlist = BooleanField()
+    show_splash = BooleanField()
+    screen_rotation = ChoiceField(choices=SCREEN_ROTATION_CHOICES)
+    audio_output = CharField()
+    debug_logging = BooleanField()
 
 
 class IntegrationsSerializerV2(Serializer[Any]):

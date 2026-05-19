@@ -27,7 +27,7 @@ def mpv() -> Iterator[_MPVFixtures]:
     fixtures.player = MPVMediaPlayer()
 
     # MPVMediaPlayer now hands play() / stop() through a pydbus
-    # proxy of the AnthiasWebview C++ process (issue #2904 —
+    # proxy of the AnthiasViewer C++ process (issue #2904 —
     # libmpv lives inside the webview). Inject a Mock so tests
     # can assert on the options dict shipped over D-Bus without
     # standing up a real D-Bus session.
@@ -253,7 +253,7 @@ def test_marshal_dbus_options_wraps_in_glib_variant() -> None:
 
 def test_set_browser_bus_injects_module_state() -> None:
     # Smoke test the injection hook the viewer uses after the
-    # AnthiasWebview D-Bus handshake. Re-injecting a fresh proxy
+    # AnthiasViewer D-Bus handshake. Re-injecting a fresh proxy
     # (post-webview-restart) must replace the previous one rather
     # than appending.
     import anthias_viewer.media_player as mp

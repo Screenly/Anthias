@@ -61,7 +61,7 @@ __license__ = 'Dual License: GPLv2 and Commercial License'
 
 current_browser_url: str | None = None
 # Latched True->False on the first failure of ``setReloadInterval`` —
-# version skew between the running viewer and the AnthiasWebview
+# version skew between the running viewer and the AnthiasViewer
 # binary persists for the lifetime of the viewer process, so once we
 # know the slot isn't there we don't need to keep paying the D-Bus
 # round-trip or flooding journald with warnings every rotation.
@@ -80,7 +80,7 @@ scheduler: Any = None
 
 # Rotation last applied to the display, in degrees (0/90/180/270). On
 # linuxfb boards this is what we baked into QT_QPA_PLATFORM the last
-# time AnthiasWebview launched; on Wayland boards it's the wlr-randr
+# time AnthiasViewer launched; on Wayland boards it's the wlr-randr
 # transform we last pushed. ``_handle_reload`` compares this to the
 # freshly-loaded ``settings['screen_rotation']`` to decide whether the
 # operator changed rotation from the UI and we need to re-apply.
@@ -146,7 +146,7 @@ def _set_qpa_rotation(qpa: str, rotation: int) -> str:
 
 
 def _build_webview_env() -> dict[str, str]:
-    """Compose the env to pass when spawning AnthiasWebview.
+    """Compose the env to pass when spawning AnthiasViewer.
 
     Sets ``rotation=N`` inside QT_QPA_PLATFORM on linuxfb boards so
     the Qt linuxfb plugin rotates the framebuffer for us at no perf
@@ -376,12 +376,12 @@ def load_browser() -> None:
     else:
         _last_applied_rotation = rotation
 
-    browser = sh.Command('AnthiasWebview')(
+    browser = sh.Command('AnthiasViewer')(
         _bg=True, _err_to_out=True, _env=_build_webview_env()
     )
 
     # Bound the wait so we don't hang the viewer indefinitely if
-    # AnthiasWebview fails to register on D-Bus (missing binary, broken
+    # AnthiasViewer fails to register on D-Bus (missing binary, broken
     # library link, handshake-line drift, etc.). The string here must
     # match `qInfo() << "Anthias service start"` in
     # src/anthias_webview/src/main.cpp.
@@ -391,14 +391,14 @@ def load_browser() -> None:
             return
         if not browser.is_alive():
             raise RuntimeError(
-                'AnthiasWebview exited before emitting D-Bus handshake; '
+                'AnthiasViewer exited before emitting D-Bus handshake; '
                 'stdout: '
                 + browser.process.stdout.decode('utf-8', errors='replace')
             )
         sleep(1)
 
     raise TimeoutError(
-        f'AnthiasWebview did not emit "{BROWSER_HANDSHAKE_LINE}" within '
+        f'AnthiasViewer did not emit "{BROWSER_HANDSHAKE_LINE}" within '
         f'{BROWSER_STARTUP_TIMEOUT_SECONDS}s'
     )
 
@@ -427,7 +427,7 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
         browser_bus.loadPage(uri)
         current_browser_url = uri
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
-    # against an older AnthiasWebview (version skew across a fleet
+    # against an older AnthiasViewer (version skew across a fleet
     # rollout, where the viewer container has rotated to a newer image
     # but the webview process hasn't been restarted yet) would raise
     # here and abort the asset loop, taking the screen down.
@@ -547,7 +547,7 @@ def _maybe_reapply_rotation() -> None:
 
     * linuxfb (every Pi board): the Qt linuxfb plugin only reads
       ``QT_QPA_PLATFORM=linuxfb:rotation=N`` at QPA init, so a live
-      angle change requires a fresh AnthiasWebview process. Terminate
+      angle change requires a fresh AnthiasViewer process. Terminate
       it; the next ``asset_loop`` tick sees ``browser.is_alive()`` as
       false and calls ``load_browser()``, which spawns it with the
       updated env.
@@ -625,7 +625,7 @@ def _retry_wayland_rotation_if_pending() -> None:
     """Main-thread retry for an unsuccessful Wayland rotation apply.
 
     load_browser() at viewer startup tries to push the wlr-randr
-    transform before AnthiasWebview spawns, but cage may not have
+    transform before AnthiasViewer spawns, but cage may not have
     fully come up at that point — its wayland socket can be missing
     or its compositor not yet listing outputs. The first apply
     returns False, load_browser() latches ``_last_applied_rotation
@@ -653,7 +653,7 @@ def _consume_pending_rotation_bounce() -> None:
 
     Called from ``asset_loop`` at the top of each tick. If the
     subscriber set ``_rotation_bounce_pending``, terminate the
-    AnthiasWebview process here — on the same thread that owns it —
+    AnthiasViewer process here — on the same thread that owns it —
     so the next view_image/view_webpage sees ``browser.is_alive()``
     return false and respawns it via ``load_browser()`` with the
     updated rotation env. Clearing ``current_browser_url`` defeats
@@ -670,7 +670,7 @@ def _consume_pending_rotation_bounce() -> None:
             browser.terminate()
         except Exception as exc:
             logging.warning(
-                'Could not terminate AnthiasWebview for rotation change: %s',
+                'Could not terminate AnthiasViewer for rotation change: %s',
                 exc,
             )
     current_browser_url = None
@@ -907,11 +907,11 @@ def setup() -> None:
     load_browser()
 
     bus = pydbus.SessionBus()
-    browser_bus = bus.get('anthias.webview', '/Anthias')
-    # MPVMediaPlayer calls AnthiasWebview's playVideo / stopVideo
+    browser_bus = bus.get('anthias.viewer', '/Anthias')
+    # MPVMediaPlayer calls AnthiasViewer's playVideo / stopVideo
     # slots via this same proxy now that video lives in-process
     # (issue #2904). Inject after load_browser so the proxy is
-    # already bound to the running AnthiasWebview; load_browser
+    # already bound to the running AnthiasViewer; load_browser
     # would otherwise race the D-Bus name registration.
     _media_player_module.set_browser_bus(browser_bus)
 
