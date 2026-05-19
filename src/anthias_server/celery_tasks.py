@@ -760,14 +760,16 @@ def _validate_remote_video_response(resp: Any, uri: str) -> None:
             'live streams are not auto-downloaded'
         )
     # Accept ``video/*`` and ``application/octet-stream`` (some CDNs
-    # serve video files this way). An empty Content-Type also passes
-    # — a few origins omit it. Anything else (HTML error page, JSON
-    # error envelope) gets rejected so we don't store a 200 OK error
-    # page as the asset.
+    # serve video files this way). Reject everything else, including
+    # an empty Content-Type. Well-behaved origins always send one; a
+    # missing header is a stronger signal of a misbehaving origin
+    # than evidence of a real video — and accepting it would let an
+    # HTML error page land on disk as a multi-GB asset, where the
+    # row stays orphaned because the cleanup() sweep won't touch a
+    # file that's still referenced by an (errored) row.
     if (
         base_type.startswith('video/')
         or base_type == 'application/octet-stream'
-        or base_type == ''
     ):
         return
     raise RemoteVideoDownloadError(
