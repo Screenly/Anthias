@@ -213,7 +213,13 @@ def get_alsa_audio_device() -> str:
         elif device_type in ['pi1', 'pi2', 'pi3']:
             return 'sysdefault:CARD=vc4hdmi'
         else:
-            return 'sysdefault:CARD=HID'
+            # x86 fallback: ALSA card names vary across Intel/AMD/Nvidia
+            # HDA chipsets, so there is no portable per-SoC name we can
+            # hard-code. Defer to ALSA's `default` device and let
+            # operators override via ~/.asoundrc (already bind-mounted
+            # into the viewer container — see docker-compose.yml.tmpl),
+            # mirroring the ARM64 path above.
+            return 'default'
 
 
 class MediaPlayer:
