@@ -32,7 +32,7 @@ dev-host = [
     "types-python-dateutil==2.9.0.20260408",
     "types-pytz==2026.2.0.20260506",
     "types-PyYAML==6.0.12.20260408",
-    "types-requests==2.33.0.20260408",
+    "types-requests==2.33.0.20260518",
 ]
 docker-image-builder = [
     "click==8.1.7",
