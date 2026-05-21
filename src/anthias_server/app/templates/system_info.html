@@ -84,6 +84,14 @@
             </li>
           </ul>
         </div>
+        {% if low_ram.active %}
+        <p class="stat-card__meta stat-card__meta--warn">
+          <i class="ti ti-alert-triangle mr-1"></i>
+          <strong>Low-RAM mode:</strong> single-QWebEngineView (no
+          preloaded crossfade), 1080p upload cap on video. Engages
+          below {{ low_ram.threshold_mib|intcomma }} MiB MemTotal.
+        </p>
+        {% endif %}
       </div>
 
       <div class="stat-card stat-card--span-2">

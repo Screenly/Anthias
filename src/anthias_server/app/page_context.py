@@ -15,6 +15,7 @@ import psutil
 from django.template.defaultfilters import filesizeformat
 
 from anthias_common import device_helper
+from anthias_common.board import LOW_RAM_THRESHOLD_KB
 from anthias_common.utils import (
     clamp_screen_rotation,
     connect_to_redis,
@@ -145,6 +146,19 @@ def system_info() -> dict[str, Any]:
             'used_pct': _pct(mem_used, mem_total),
             'cache_pct': _pct(mem_cache, mem_total),
             'free_pct': _pct(mem_free, mem_total),
+        },
+        # Surface the low-RAM gate alongside Memory so an operator
+        # whose 4K HEVC upload was rejected (or who notices an asset
+        # crossfade has degraded into a hard cut) can see *why* on
+        # the same screen. ``threshold_mib`` is the same cutoff
+        # ``is_low_ram_device`` consults — exposing it keeps the
+        # operator from having to spelunk the codebase to learn what
+        # qualifies. Compares against psutil's measurement (same
+        # /proc/meminfo source host_agent reads) so the page is
+        # accurate even if host_agent hasn't published yet.
+        'low_ram': {
+            'active': virtual_memory.total < LOW_RAM_THRESHOLD_KB * 1024,
+            'threshold_mib': LOW_RAM_THRESHOLD_KB >> 10,
         },
         # Uptime as "2 days, 3 hours" via Django's timesince — pass the
         # boot-time so timesince computes against now(). Pass depth=2 so

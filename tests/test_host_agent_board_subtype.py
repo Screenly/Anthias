@@ -19,7 +19,12 @@ from unittest import mock
 
 import pytest
 
-from anthias_host_agent.__main__ import detect_board_subtype, set_board_subtype
+from anthias_host_agent.__main__ import (
+    detect_board_subtype,
+    detect_total_mem_kb,
+    set_board_subtype,
+    set_total_mem_kb,
+)
 
 
 @pytest.mark.parametrize(
@@ -123,10 +128,12 @@ def test_subscriber_loop_calls_set_board_subtype(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The ``subscriber_loop`` orchestration must call
-    ``set_board_subtype`` before flipping ``host_agent_ready``
-    — otherwise a consumer that polls for ``host_agent_ready=true``
-    and immediately reads ``host:board_subtype`` could observe
-    the stale (or empty) value."""
+    ``set_board_subtype`` *and* ``set_total_mem_kb`` before flipping
+    ``host_agent_ready`` — otherwise a consumer that polls for
+    ``host_agent_ready=true`` and immediately reads either
+    ``host:board_subtype`` or ``host:total_mem_kb`` could observe a
+    stale (or empty) value. The two host-shape publishers run before
+    readiness; the order between them doesn't matter for consumers."""
     from anthias_host_agent import __main__ as ha
 
     fake_redis = mock.MagicMock()
@@ -134,6 +141,9 @@ def test_subscriber_loop_calls_set_board_subtype(
 
     def fake_set_subtype(rdb: Any) -> None:
         call_order.append('subtype')
+
+    def fake_set_total_mem(rdb: Any) -> None:
+        call_order.append('total_mem')
 
     def fake_set(key: str, value: Any) -> None:
         if key == 'host_agent_ready':
@@ -148,10 +158,110 @@ def test_subscriber_loop_calls_set_board_subtype(
 
     monkeypatch.setattr(redis_pkg, 'Redis', lambda **kw: fake_redis)
     monkeypatch.setattr(ha, 'set_board_subtype', fake_set_subtype)
+    monkeypatch.setattr(ha, 'set_total_mem_kb', fake_set_total_mem)
 
     ha.subscriber_loop()
 
-    assert call_order == ['subtype', 'ready'], (
-        'set_board_subtype must complete before host_agent_ready '
-        'flips, otherwise consumers race the publish'
+    assert call_order[-1] == 'ready', (
+        'host_agent_ready must flip last so consumers polling on it '
+        'never observe a stale host:* publish'
     )
+    assert set(call_order[:-1]) == {'subtype', 'total_mem'}, (
+        'subscriber_loop must call both publishers exactly once '
+        'before flipping readiness'
+    )
+
+
+@pytest.mark.parametrize(
+    ('meminfo_body', 'expected'),
+    [
+        # Pi 4 4 GB: typical /proc/meminfo on a healthy box. The
+        # function reads the kB count, not the trailing unit token.
+        (
+            b'MemTotal:        3947648 kB\nMemFree:          200000 kB\n',
+            3947648,
+        ),
+        # Rock Pi 4 1 GB: the on-device measurement that motivated
+        # the low-RAM mode.
+        (
+            b'MemTotal:         990044 kB\nMemFree:           32500 kB\n',
+            990044,
+        ),
+        # Tab whitespace instead of spaces — split() handles both.
+        (b'MemTotal:\t8123456\tkB\n', 8123456),
+        # Pre-MemTotal junk lines (e.g. kernel writes a leading
+        # comment on some boards) — the loop scans until it finds
+        # the line, so prefix garbage is tolerated.
+        (b'Garbage: 0 kB\nMemTotal:    1572864 kB\n', 1572864),
+    ],
+)
+def test_detect_total_mem_kb(meminfo_body: bytes, expected: int) -> None:
+    """The kB count from /proc/meminfo is the source of truth for
+    low-RAM gating. Tests pin the parsing against the kernel's actual
+    formats (space- and tab-separated, decoy lines, …)."""
+    mocked_open = mock.mock_open(read_data=meminfo_body.decode('utf-8'))
+    with mock.patch(
+        'anthias_host_agent.__main__.open', mocked_open, create=True
+    ):
+        assert detect_total_mem_kb() == expected
+
+
+def test_detect_total_mem_kb_missing_line() -> None:
+    """A truncated /proc/meminfo without a MemTotal line returns
+    ``None`` so the caller treats RAM as unknown — same recovery
+    path as a missing /proc/meminfo or unparseable value."""
+    mocked_open = mock.mock_open(read_data='MemFree: 100000 kB\n')
+    with mock.patch(
+        'anthias_host_agent.__main__.open', mocked_open, create=True
+    ):
+        assert detect_total_mem_kb() is None
+
+
+def test_detect_total_mem_kb_unparseable_value() -> None:
+    """A non-integer in the MemTotal field returns ``None`` rather
+    than crashing the host_agent unit."""
+    mocked_open = mock.mock_open(
+        read_data='MemTotal:        not-a-number kB\n'
+    )
+    with mock.patch(
+        'anthias_host_agent.__main__.open', mocked_open, create=True
+    ):
+        assert detect_total_mem_kb() is None
+
+
+def test_detect_total_mem_kb_unreadable_proc() -> None:
+    """A host where /proc/meminfo can't be opened (container, balena
+    restricted /proc) returns ``None``."""
+    with mock.patch(
+        'anthias_host_agent.__main__.open',
+        side_effect=OSError('no such file'),
+        create=True,
+    ):
+        assert detect_total_mem_kb() is None
+
+
+def test_set_total_mem_kb_writes_value() -> None:
+    """A successful detect publishes the integer as a string —
+    redis-py serialises bytes/str natively; integers go through
+    ``str(int)`` for round-trip parity with the get-side parser."""
+    fake_redis = mock.MagicMock()
+    with mock.patch(
+        'anthias_host_agent.__main__.detect_total_mem_kb',
+        return_value=990044,
+    ):
+        set_total_mem_kb(fake_redis)
+    fake_redis.set.assert_called_once_with('host:total_mem_kb', '990044')
+
+
+def test_set_total_mem_kb_writes_empty_string_on_unknown() -> None:
+    """Mirrors set_board_subtype: "unknown RAM" is the empty string,
+    distinguishable from "key never set" but treated identically by
+    the server-side reader (``get_total_mem_kb`` returns ``None``
+    for both)."""
+    fake_redis = mock.MagicMock()
+    with mock.patch(
+        'anthias_host_agent.__main__.detect_total_mem_kb',
+        return_value=None,
+    ):
+        set_total_mem_kb(fake_redis)
+    fake_redis.set.assert_called_once_with('host:total_mem_kb', '')

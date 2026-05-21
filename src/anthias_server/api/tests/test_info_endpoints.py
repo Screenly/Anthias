@@ -201,6 +201,10 @@ def test_info_v2_endpoint(
             'shared': 0,
             'buff': 1024,
             'available': 7168,
+            # mock total=8 GiB is well above the 1.5 GiB low-RAM
+            # cutoff, so the gate is inactive on this synthetic
+            # device.
+            'low_ram': False,
         },
         'ip_addresses': ['http://192.168.1.100', 'http://10.0.0.50'],
         'mac_address': '00:11:22:33:44:55',

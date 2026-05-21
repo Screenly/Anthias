@@ -178,6 +178,63 @@ def detect_board_subtype() -> str | None:
     return None
 
 
+def detect_total_mem_kb() -> int | None:
+    """Return the host's ``MemTotal`` (kibibytes) from ``/proc/meminfo``.
+
+    Anthias's codec gate uses this to refuse 1080p+ uploads on devices
+    that can't keep them in physical RAM alongside a QtWebEngine
+    renderer. Returning ``None`` for an unreadable / unparseable
+    ``/proc/meminfo`` is treated by the consumer as "unknown, don't
+    restrict" — the gate would rather over-accept than reject a
+    legitimate upload on a host where we can't measure RAM.
+
+    The host_agent runs on the host (outside the container) so it
+    reads the *physical* host's MemTotal, not a per-container cgroup
+    limit. Inside a container, ``/proc/meminfo`` reports the same
+    host-wide value too (cgroup memory accounting doesn't rewrite it),
+    so we could read this from the server, but routing through the
+    host_agent + Redis keeps the existing pattern: anything board /
+    host-shape-related lives in host_agent and lands in Redis under
+    ``host:*``.
+    """
+    try:
+        with open('/proc/meminfo') as f:
+            for line in f:
+                if not line.startswith('MemTotal:'):
+                    continue
+                # Format: ``MemTotal:       12345678 kB``
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        return int(parts[1])
+                    except ValueError:
+                        return None
+    except OSError:
+        return None
+    return None
+
+
+def set_total_mem_kb(rdb: 'redis.Redis') -> None:
+    """Publish the host's MemTotal (kibibytes) to Redis.
+
+    Written before ``host_agent_ready`` flips so a consumer waiting on
+    readiness never observes a stale missing key. An unreadable
+    ``/proc/meminfo`` writes the empty string — the server-side
+    reader (``anthias_common.board.get_total_mem_kb``) treats empty
+    / missing identically as "unknown".
+    """
+    value = detect_total_mem_kb()
+    rdb.set('host:total_mem_kb', '' if value is None else str(value))
+    if value is None:
+        logging.warning(
+            'Could not read MemTotal from /proc/meminfo; low-RAM '
+            'detection will fall back to "unknown" and not enforce '
+            'the resolution cap.'
+        )
+    else:
+        logging.info('Published host total_mem_kb=%s to redis', value)
+
+
 def set_board_subtype(rdb: 'redis.Redis') -> None:
     """Publish the host's board subtype to Redis.
 
@@ -226,6 +283,7 @@ def subscriber_loop() -> None:
             pubsub = rdb.pubsub(ignore_subscribe_messages=True)
             pubsub.subscribe(CHANNEL_NAME)
     set_board_subtype(rdb)
+    set_total_mem_kb(rdb)
     rdb.set('host_agent_ready', 'true')
     logging.info(
         'Subscribed to channel %s, ready to process messages', CHANNEL_NAME

@@ -96,12 +96,46 @@ QString detectAcceptLanguage()
 }
 
 
+namespace {
+// ``ANTHIAS_LOW_RAM=1`` is exported by bin/upgrade_containers.sh when
+// the host has < 1.5 GiB MemTotal (Pi 2/Pi 3 1GB, Pi 4 1GB, Rock Pi
+// 4 1GB, generic-arm64 1GB SKUs). On those boards we collapse the
+// double-buffer ``webView1`` / ``webView2`` design to a single shared
+// QWebEngineView — the inactive Chromium renderer cost ~100 MB
+// physical RAM per device and was the leading edge of the OOM
+// cascade measured on a Rock Pi 4 1GB. UX trade-off: loadPage
+// switches to in-place (brief blank during navigation), no
+// preloaded-then-swap crossfade. Documented in
+// docs/board-enablement.md.
+bool isLowRamMode()
+{
+    const QByteArray value = qgetenv("ANTHIAS_LOW_RAM");
+    return value == "1";
+}
+}
+
 View::View(QWidget* parent) : QWidget(parent)
 {
     webView1 = new QWebEngineView(this);
-    webView2 = new QWebEngineView(this);
     configureWebView(webView1);
-    configureWebView(webView2);
+    if (isLowRamMode()) {
+        // Single-view mode: alias the second pointer onto the first
+        // so the rest of the file's dual-buffer logic still compiles
+        // and runs — every operation that would have targeted the
+        // off-screen ``webView2`` now lands on the same widget, and
+        // the visibility swap in switchToNextWebView() becomes a
+        // no-op. The net effect for the operator: a loadPage call
+        // shows the page's own ``page()->backgroundColor()`` (black)
+        // during the load, then the page itself; no smooth fade
+        // between assets. Acceptable degradation; the alternative
+        // is the box OOM-cycling on 1 GB.
+        webView2 = webView1;
+        qInfo() << "View: ANTHIAS_LOW_RAM=1 — single-QWebEngineView "
+                << "mode (no preloaded crossfade).";
+    } else {
+        webView2 = new QWebEngineView(this);
+        configureWebView(webView2);
+    }
 
     // Both webViews share the default profile, so the HTTP-cache setup
     // is per-process, not per-view. Use in-memory only — the default
@@ -129,8 +163,13 @@ View::View(QWidget* parent) : QWidget(parent)
 
     connect(webView1->page(), &QWebEnginePage::authenticationRequired,
             this, &View::handleAuthRequest);
-    connect(webView2->page(), &QWebEnginePage::authenticationRequired,
-            this, &View::handleAuthRequest);
+    if (webView2 != webView1) {
+        // Skip the duplicate connect when low-RAM aliased webView2
+        // onto webView1 — Qt's connect would otherwise fire the auth
+        // handler twice per challenge.
+        connect(webView2->page(), &QWebEnginePage::authenticationRequired,
+                this, &View::handleAuthRequest);
+    }
 
     // QtMultimedia-backed video surface. Created hidden — only
     // made visible when ``playVideo`` fires. The QMediaPlayer +
