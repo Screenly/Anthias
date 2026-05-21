@@ -404,7 +404,7 @@ jobs:
           # array so the snippet still validates as schema-conformant.
           case "$BOARD" in
             pi2)    DEVICES='["pi2-32bit"]' ;;
-            pi3)    DEVICES='["pi3-64bit"]' ;;
+            pi3)    DEVICES='["pi3-32bit"]' ;;
             pi4-64) DEVICES='["pi4-64bit"]' ;;
             pi5)    DEVICES='["pi5-64bit"]' ;;
             x86)    DEVICES='[]' ;;

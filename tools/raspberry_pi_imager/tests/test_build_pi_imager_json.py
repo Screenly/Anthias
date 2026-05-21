@@ -64,7 +64,7 @@ MOCK_RELEASE_ASSETS = {
 
 BOARD_DEVICES = {
     'pi2': ['pi2-32bit'],
-    'pi3': ['pi3-64bit'],
+    'pi3': ['pi3-32bit'],
     'pi4-64': ['pi4-64bit'],
     'pi5': ['pi5-64bit'],
 }
