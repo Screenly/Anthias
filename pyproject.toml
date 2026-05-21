@@ -54,7 +54,7 @@ server = [
     "drf-spectacular==0.29.0",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
-    "packaging==26.1",
+    "packaging==26.2",
     # Pillow + pillow-heif power the upload-time image normalisation
     # pipeline (HEIC / HEIF / TIFF → lossless WebP). pillow-heif
     # registers a libheif-backed Pillow plugin at import time; the
