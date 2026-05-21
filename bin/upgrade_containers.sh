@@ -106,12 +106,16 @@ fi
 #     so the old container (still pointing at the deleted celery image)
 #     must be removed first or the server-image-backed replacement
 #     can't take its name.
+#   * srly-ose-redis — pre-rebrand Redis container. Still bound to
+#     127.0.0.1:6379, so the new anthias-redis can't claim the port
+#     until it's gone (forum.screenly.io/t/6688).
 # Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
     anthias-nginx anthias-websocket anthias-wifi-connect \
     srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
     anthias-celery srly-ose-celery \
+    srly-ose-redis \
     >/dev/null 2>&1
 set -e
 
