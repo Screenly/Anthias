@@ -137,10 +137,32 @@ cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml
 
-if [[ "$DEVICE_TYPE" =~ ^(x86|pi5|arm64)$ ]]; then
-    sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-        /home/${USER}/anthias/docker-compose.yml
-fi
+# CEC device routing. Pi 1-4 reaches libcec via /dev/vchiq
+# (closed-firmware VideoCore IV), which is what the template's
+# `devices:` block bind-mounts. Pi 5 and mainline-KMS x86/arm64 boards
+# expose v4l2 CEC adapters at /dev/cec0 instead (Pi 5 also exposes
+# /dev/cec1 for the second HDMI output, so we map both). docker
+# compose's `devices:` fails container start if a listed host node is
+# missing, so we surgically rewrite the rendered mount per device
+# type — and on x86/arm64 we only swap in /dev/cec0 if the host
+# actually has it (a box without an HDMI-CEC adapter keeps the
+# pre-fix behaviour of dropping the bind mount entirely). Fixes
+# the "CEC error" toast on Pi 5 reported in issue #2863.
+case "$DEVICE_TYPE" in
+    pi5)
+        sed -i 's|^\([[:space:]]*\)- "/dev/vchiq:/dev/vchiq"$|\1- "/dev/cec0:/dev/cec0"\n\1- "/dev/cec1:/dev/cec1"|' \
+            /home/${USER}/anthias/docker-compose.yml
+        ;;
+    x86|arm64)
+        if [ -e /dev/cec0 ]; then
+            sed -i 's|/dev/vchiq:/dev/vchiq|/dev/cec0:/dev/cec0|g' \
+                /home/${USER}/anthias/docker-compose.yml
+        else
+            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+                /home/${USER}/anthias/docker-compose.yml
+        fi
+        ;;
+esac
 
 COMPOSE_FILES=(-f /home/${USER}/anthias/docker-compose.yml)
 SSL_OVERRIDE=/home/${USER}/anthias/docker-compose.ssl.override.yml
