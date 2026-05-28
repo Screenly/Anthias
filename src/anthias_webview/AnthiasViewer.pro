@@ -1,6 +1,6 @@
 TEMPLATE = app
 
-QT += webenginecore webenginewidgets dbus multimedia multimediawidgets
+QT += webenginecore webenginewidgets dbus
 CONFIG += c++17
 
 # QtMultimedia is the in-process video pipeline (issue #2904). An
@@ -18,16 +18,29 @@ CONFIG += c++17
 # (``QVideoWidget`` has no rotation property; reviewing PR #2905
 # caught the prior ``setProperty("rotation", …)`` shortcut as a
 # silent no-op on Pi 4).
+#
+# VideoView only builds against Qt 6. The Qt 5 boards (Pi 2 /
+# Pi 3) route video through VLCMediaPlayer on the Python side
+# (see ``src/anthias_viewer/media_player.py::MediaPlayerProxy``)
+# which paints straight to the framebuffer and never talks to the
+# AnthiasViewer ``playVideo`` D-Bus slot — so the Qt5 build skips
+# both the QtMultimedia modules and the videoview translation
+# unit. QAudioDevice / QMediaPlayer pulled in by videoview.h don't
+# exist in Qt 5.15.
 
 SOURCES += src/main.cpp \
     src/mainwindow.cpp \
-    src/videoview.cpp \
     src/view.cpp
-
-# Default rules for deployment.
-include(src/deployment.pri)
 
 HEADERS += \
     src/mainwindow.h \
-    src/videoview.h \
     src/view.h
+
+greaterThan(QT_MAJOR_VERSION, 5) {
+    QT += multimedia multimediawidgets
+    SOURCES += src/videoview.cpp
+    HEADERS += src/videoview.h
+}
+
+# Default rules for deployment.
+include(src/deployment.pri)

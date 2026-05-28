@@ -171,14 +171,17 @@ View::View(QWidget* parent) : QWidget(parent)
                 this, &View::handleAuthRequest);
     }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // QtMultimedia-backed video surface. Created hidden — only
     // made visible when ``playVideo`` fires. The QMediaPlayer +
     // QGraphicsVideoItem live for the lifetime of this widget so
     // repeated plays don't pay pipeline-rebuild cost on every
-    // asset.
+    // asset. Qt 5 boards (Pi 2 / Pi 3) skip this — video plays via
+    // VLCMediaPlayer painting straight to the framebuffer.
     videoView = new VideoView(this);
     videoView->setVisible(false);
     connect(videoView, &VideoView::videoEnded, this, &View::videoEnded);
+#endif
 
     networkManager = new QNetworkAccessManager(this);
     movie = nullptr;
@@ -222,11 +225,13 @@ void View::loadPage(const QString &uri)
     qDebug() << "Type: Webpage";
 
     const quint64 requestId = ++loadGenerationId;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Drop back to the web/image surface in case the previous asset
     // was a video. Stops the QMediaPlayer (frees its decoder
     // pipeline + audio device) and hides the graphics view so the
     // QWebEngineView paints are visible.
     hideVideoSurface();
+#endif
     currentImage = QImage();
     stopAnimation();
     // Drop any per-asset reload timer left over from the previous
@@ -299,9 +304,11 @@ void View::loadImage(const QString &preUri)
     // the full 60 s asset_loop window. For a real image URI the
     // prior video must still be torn down, so the call is
     // preserved there.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     if (preUri != QLatin1String("null")) {
         hideVideoSurface();
     }
+#endif
 
     // Cancel any pending page load so we don't keep streaming a web
     // page in the background after the user has switched to image
@@ -460,11 +467,14 @@ void View::resizeEvent(QResizeEvent* event)
     QWidget::resizeEvent(event);
     webView1->setGeometry(rect());
     webView2->setGeometry(rect());
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     if (videoView) {
         videoView->setGeometry(rect());
     }
+#endif
 }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 void View::playVideo(const QString &uri, const QVariantMap &options)
 {
     qDebug() << "Type: Video";
@@ -514,6 +524,7 @@ void View::hideVideoSurface()
     videoView->stop();
     videoView->setVisible(false);
 }
+#endif
 
 void View::handleAuthRequest(const QUrl& requestUrl, QAuthenticator*)
 {

@@ -9,11 +9,13 @@ MainWindow::MainWindow() : QMainWindow()
 {
     view = new View(this);
     setCentralWidget(view);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Re-emit VideoView's EOF up to MainWindow so D-Bus
     // ExportAllSignals exposes a single ``videoEnded`` signal on
     // ``/Anthias`` (the same object path Python subscribes to for
     // the existing slots).
     connect(view, &View::videoEnded, this, &MainWindow::videoEnded);
+#endif
 
     showFullScreen();
 }
@@ -33,6 +35,7 @@ void MainWindow::setReloadInterval(int seconds)
     view->setReloadInterval(seconds);
 }
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 void MainWindow::playVideo(const QString &uri, const QVariantMap &options)
 {
     view->playVideo(uri, options);
@@ -42,3 +45,4 @@ void MainWindow::stopVideo()
 {
     view->stopVideo();
 }
+#endif

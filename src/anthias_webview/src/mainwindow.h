@@ -17,13 +17,17 @@ class MainWindow : public QMainWindow
         void loadPage(const QString &uri);
         void loadImage(const QString &uri);
         void setReloadInterval(int seconds);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
         // libmpv-in-Qt video playback (issue #2904). Replaces the
         // external mpv subprocess MPVMediaPlayer used to launch from
         // src/anthias_viewer/media_player.py. ``options`` mirrors the
         // mpv option set the subprocess path used to assemble as
         // argv: ``hwdec``, ``audio-device``, ``video-sync``,
         // ``vd-lavc-threads``, ``video-rotate``. Values are coerced
-        // to UTF-8 strings via QVariant::toString().
+        // to UTF-8 strings via QVariant::toString(). Qt 5 boards
+        // (Pi 2 / Pi 3) route video through VLCMediaPlayer on the
+        // Python side and never call these slots, so they're
+        // compiled out below the Qt-version gate.
         void playVideo(const QString &uri, const QVariantMap &options);
         void stopVideo();
 
@@ -33,6 +37,7 @@ class MainWindow : public QMainWindow
         // Python can subscribe in a future revision (the asset_loop
         // currently just sleeps for ``duration``).
         void videoEnded();
+#endif
 
     private:
         View *view = nullptr;
