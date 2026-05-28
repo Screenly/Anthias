@@ -10,7 +10,9 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 #include "videoview.h"
+#endif
 
 class View : public QWidget
 {
@@ -23,16 +25,24 @@ public:
     void loadPage(const QString &uri);
     void loadImage(const QString &uri);
     void setReloadInterval(int seconds);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Hands the URI + option dict to VideoView (QtMultimedia
     // QMediaPlayer + QGraphicsVideoItem) and switches visibility
     // so the video surface is on top of the QWebEngineView pair /
     // image canvas. Pauses background URL loads so a parked
     // QWebEngineView doesn't keep streaming while video plays.
+    //
+    // Qt 5 boards (Pi 2 / Pi 3) route video through VLCMediaPlayer
+    // painting straight to the framebuffer (see
+    // ``MediaPlayerProxy.get_instance`` in
+    // ``src/anthias_viewer/media_player.py``), so the in-process
+    // playback surface and its EOF signal are Qt6-only.
     void playVideo(const QString &uri, const QVariantMap &options);
     void stopVideo();
 
 signals:
     void videoEnded();
+#endif
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -48,11 +58,13 @@ private:
     void loadAsStaticImage(const QByteArray& data);
     void setupAnimation();
     void switchToNextWebView();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Hides VideoView and re-enables the web/image surface. Called
     // by loadPage / loadImage so a switch from video back to a web
     // page or image doesn't leave the GL widget on top of the
     // QWebEngineView.
     void hideVideoSurface();
+#endif
 
     QNetworkAccessManager* networkManager;
     QImage currentImage;
@@ -61,11 +73,13 @@ private:
     bool isAnimatedImage;
     quint64 loadGenerationId;
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // QtMultimedia-backed video widget (issue #2904). Sibling of
     // the web / image widgets — visibility is toggled rather than
     // re-parented so the QMediaPlayer + QGraphicsVideoItem survive
     // across plays (no pipeline rebuild per asset).
     VideoView* videoView;
+#endif
 
     // Dual web view system
     QWebEngineView* webView1;
