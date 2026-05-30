@@ -31,30 +31,25 @@ alone.
 Since [#2905](https://github.com/Screenly/Anthias/pull/2905) the Pi 4 viewer
 renders through Qt's `eglfs_kms` platform (and Pi 5 / x86 through `cage` /
 wlroots). Both require the **full-KMS** atomic driver `vc4-kms-v3d`. Under
-firmware-KMS (`vc4-fkms-v3d`) or a missing/unparseable overlay, the display
-never comes up and the device hangs on the boot splash. Before #2905 the Pi 4
-used `linuxfb`, which worked over the firmware framebuffer and masked this
-dependency.
+firmware-KMS (`vc4-fkms-v3d`), or if the overlay value is malformed (e.g. stray
+quotes that the firmware can't parse), the display never comes up and the device
+hangs on the boot splash. Codifying the overlay here is what keeps that value
+correct and identical across the fleet — exactly the kind of dashboard typo that
+caused [#2947](https://github.com/Screenly/Anthias/issues/2947).
 
-## Audit (2026-05-30)
+## Settings reference
 
-State pulled from the live fleets with
-`balena env list --fleet <slug> --config --json`.
+Why each key is set the way it is in `balena-host-config.json`:
 
-| Board   | Setting (live)                                   | Verdict | Action |
-| ------- | ------------------------------------------------ | ------- | ------ |
-| pi4-64  | `dtoverlay="vc4-kms-v3d"` (RESIN_, **quoted**)   | **Broken** — stray quotes stop the overlay loading → fkms fallback → eglfs can't start → boot-splash hang ([#2947](https://github.com/Screenly/Anthias/issues/2947)) | Fixed: clean `vc4-kms-v3d`, BALENA_ prefix |
-| pi4-64  | `dtparam=...,"vc4-kms-v3d"`                       | **Bug** — `vc4-kms-v3d` is an overlay, not a dtparam | Dropped; kept `i2c_arm=on,spi=on,audio=on` |
-| pi2/pi3 | `dtoverlay=vc4-kms-v3d` on `RESIN_` prefix        | Works, legacy prefix | Standardized to `BALENA_` |
-| pi5     | `gpu_mem=1024`                                    | **No-op** — Pi 5 (BCM2712) has no firmware memory split; CMA-only | Dropped |
-| pi5     | `dtoverlay=vc4-kms-v3d` (no `cma`)                | Suboptimal — `docs/board-enablement.md` documents `cma-512` as required for 4K HEVC HW decode | Changed to `vc4-kms-v3d,cma-512` |
-| pi2/3/4 | `framebuffer_depth=32`, `framebuffer_ignore_alpha=1` | Inert — legacy firmware-framebuffer knobs ignored by full KMS | Retained (harmless), not churned |
-| ≤ pi4   | `gpu_mem` (128 / 256)                             | Useful — backs the VideoCore HW video decoders (bcm2835-codec / V4L2 M2M) | Retained |
-| x86     | (none)                                            | Correct — `config.txt` is Pi-only | — |
-
-The Pi 4 corruption was repaired on the live fleet immediately; every other
-change above is encoded in `balena-host-config.json` and converges on the next
-release build.
+| Key | Boards | Rationale |
+| --- | ------ | --------- |
+| `dtoverlay=vc4-kms-v3d` | pi2, pi3, pi4-64 | Full-KMS driver required by the viewer's display stack (see above). |
+| `dtoverlay=vc4-kms-v3d,cma-512` | pi5 | Full KMS plus a 512 MB CMA pool, which `docs/board-enablement.md` documents as required for 4K HEVC hardware decode. |
+| `dtparam=i2c_arm=on,spi=on,audio=on` | pi4-64 | Enable the I²C/SPI buses and onboard audio. |
+| `gpu_mem` (128 / 256) | pi2, pi3, pi4-64 | Backs the VideoCore hardware video decoders (`bcm2835-codec` / V4L2 M2M). **Not set on pi5** — the BCM2712 has no firmware memory split and ignores `gpu_mem` (it is CMA-only). |
+| `disable_overscan=1` | pi2, pi3, pi4-64 | Drop the default overscan border so the image fills the panel. |
+| `framebuffer_depth=32`, `framebuffer_ignore_alpha=1` | pi2, pi3, pi4-64 | Legacy firmware-framebuffer hints. Inert under full KMS but retained to avoid changing long-standing fleet config; safe to drop if the fleets are ever re-baselined. |
+| _(none)_ | x86 | `config.txt` is Raspberry-Pi-only; the x86 fleet has no host config. |
 
 ## Editing
 
