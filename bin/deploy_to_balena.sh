@@ -79,9 +79,15 @@ export DEFAULT_SHM_SIZE='256mb'
 # Single source of truth for the release version: pyproject's
 # [project].version (CalVer YYYY.M.MICRO). render_balena_yml.sh
 # normalizes it to balena-compliant semver before stamping balena.yml.
+# `|| true` keeps a failed grep (line missing/reformatted) from aborting
+# under pipefail with no message; the explicit check below fails clearly.
 RELEASE_VERSION="$(
-    grep -m1 '^version = ' pyproject.toml | sed -E 's/^version = "(.*)"$/\1/'
+    grep -m1 '^version = ' pyproject.toml | sed -E 's/^version = "(.*)"$/\1/' || true
 )"
+if [[ -z "$RELEASE_VERSION" ]]; then
+    echo "Could not read [project].version from pyproject.toml" >&2
+    exit 1
+fi
 
 if [[ -z "${SHM_SIZE+x}" ]]; then
     echo "Using default /dev/shm size of $DEFAULT_SHM_SIZE for the viewer service"

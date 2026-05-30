@@ -18,17 +18,25 @@ DEST_DIR="${1:?usage: render_balena_yml.sh <dest-dir> <raw-version>}"
 RAW_VERSION="${2:?usage: render_balena_yml.sh <dest-dir> <raw-version>}"
 SRC_YML="${SRC_YML:-balena.yml}"
 
-# Drop leading zeros per segment via base-10 arithmetic. The 10# prefix
-# is mandatory: a bare $((05)) is parsed as octal and errors out. Empty
-# segments default to 0 so a malformed input fails as 0.0.0 rather than
-# crashing mid-deploy.
+# Strip leading zeros per segment via base-10 arithmetic (2026.05.1 ->
+# 2026.5.1). Reject anything that isn't three dot-separated decimal
+# integers up front: a non-numeric segment (a pre-release tag like
+# 2026.05.1-rc1, or a stray branch name from a manual dispatch) would
+# otherwise make the `10#` arithmetic abort with a cryptic "unbound
+# variable" / "value too great for base" under `set -u`. Failing loudly
+# here beats both that crash and silently stamping a bogus 0.0.0 — which
+# would reintroduce the default-version bug this script exists to fix.
 normalize_semver() {
-    local raw="$1" major minor patch
-    IFS='.' read -r major minor patch _ <<< "$raw"
-    printf '%d.%d.%d\n' \
-        "$((10#${major:-0}))" \
-        "$((10#${minor:-0}))" \
-        "$((10#${patch:-0}))"
+    local raw="$1"
+    if [[ ! "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "render_balena_yml.sh: '$raw' is not a 3-segment numeric" \
+             "semver (expected MAJOR.MINOR.PATCH, e.g. 2026.5.1)" >&2
+        exit 1
+    fi
+    local major minor patch
+    IFS='.' read -r major minor patch <<< "$raw"
+    # The 10# prefix is mandatory: a bare $((05)) is parsed as octal.
+    printf '%d.%d.%d\n' "$((10#$major))" "$((10#$minor))" "$((10#$patch))"
 }
 
 VERSION="$(normalize_semver "$RAW_VERSION")"
