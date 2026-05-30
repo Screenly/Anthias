@@ -188,9 +188,14 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Render balena docker-compose
+        env:
+          # Strip the leading `v` so the release tag (v2026.05.1) becomes
+          # the raw CalVer; render_balena_yml.sh normalizes it to balena
+          # semver and stamps balena.yml so the fleet's Releases page
+          # shows our real version instead of 0.0.0+revN.
+          TAG: ${{ needs.resolve-context.outputs.tag }}
         run: |
-          mkdir -p balena-deploy
-          cp balena.yml balena-deploy/
+          bin/render_balena_yml.sh balena-deploy "${TAG#v}"
           envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
 
           # Pi 5 and x86 don't expose /dev/vchiq; strip the bind mount.
