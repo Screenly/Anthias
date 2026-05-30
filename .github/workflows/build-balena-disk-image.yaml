@@ -363,13 +363,6 @@ jobs:
             --output "$BALENA_IMAGE.img" \
             --version latest
 
-      # `--commit latest` seeds the image with the current release's
-      # container images so a freshly flashed device boots fully offline.
-      # We deliberately do NOT pass `--pin-device-to-release`: pinning
-      # (added in #2098) froze flashed devices to the downloaded release,
-      # so they never received OTA fixes. Anthias balena devices should
-      # track the fleet's latest stable release, so the device joins the
-      # fleet unpinned and auto-updates from here on.
       - name: Preload OS image
         run: |
           balena preload \
