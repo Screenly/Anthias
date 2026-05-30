@@ -71,7 +71,7 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zst`. T
 >
 > Then select the extracted `.img` in Raspberry Pi Imager (or [balenaEtcher](https://etcher.balena.io/)), which skips the on-the-fly decompression path that trips the bug.
 
-Starting with [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), devices installed using this option will be pinned to the version that you've downloaded. This means that the devices will still be in the same version even if a new release (e.g., v0.19.1, etc.) is available.
+Devices installed from a disk image join the balena fleet and track the latest stable release. The image ships preloaded with the release it was built from, so the device boots and runs fully offline out of the box, then receives later releases automatically over the air once it has connectivity.
 
 # Installing on Raspberry Pi OS Lite or Debian
 

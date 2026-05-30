@@ -48,15 +48,15 @@ We'll be doing the initial fleet configuration via CLI. Open your terminal and
 run the following commands:
 
 ```bash
-$ balena env add BALENA_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
-$ balena env add BALENA_HOST_CONFIG_dtoverlay vc4-kms-v3d --fleet $FLEET_NAME
+$ balena env set BALENA_HOST_CONFIG_gpu_mem $GPU_MEM_VALUE --fleet $FLEET_NAME
+$ balena env set BALENA_HOST_CONFIG_dtoverlay vc4-kms-v3d --fleet $FLEET_NAME
 ```
 
 If your display does have overscan issues like having a black border around the
 screen, you can disable overscan by running the following command:
 
 ```bash
-$ balena env add BALENA_HOST_CONFIG_disable_overscan 1 --fleet $FLEET_NAME
+$ balena env set BALENA_HOST_CONFIG_disable_overscan 1 --fleet $FLEET_NAME
 ```
 
 Replace `$GPU_MEM_VALUE` with the GPU memory value you want to use, as long as

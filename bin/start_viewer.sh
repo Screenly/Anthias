@@ -57,9 +57,19 @@ for dev_node in /dev/video*; do
     esac
 done
 
-# Set permission for sha file
 chown -f viewer /dev/snd/*
-chown -f viewer /data/.anthias/latest_anthias_sha
+
+# The viewer runs unprivileged (sudo -u viewer below), and Django settings
+# init writes anthias.conf when it can't stat an existing one
+# (AnthiasSettings.__init__ -> save()). On devices upgraded from an older
+# release the config dir and its files (anthias.conf, latest_anthias_sha,
+# …) were created by a root-running container, so the viewer user can't
+# read or write them and crash-loops on
+# `PermissionError: '/data/.anthias/anthias.conf'`. Recursively give the
+# viewer ownership of the config dir (root server/celery are unaffected —
+# root ignores ownership). -f stays quiet on a fresh install where the dir
+# doesn't exist yet (the viewer creates its own on first run).
+chown -Rf viewer /data/.anthias
 
 # QtWebEngine state dirs. On upgraded devices the old AnthiasWebview
 # tree is left in place — a fresh AnthiasViewer cache is cheap to
@@ -186,6 +196,51 @@ if [ -e /dev/dri/renderD128 ]; then
         fi
         host_render_group=$(getent group "$render_gid" | cut -d: -f1)
         usermod -aG "$host_render_group" viewer
+    fi
+fi
+
+# Pi 4 renders through Qt's eglfs_kms platform (see Dockerfile.viewer.j2),
+# whose JSON config pins the DRM card device. The vc4-drm (display) and
+# v3d (render-only) nodes race during probe, so the *display* card is
+# /dev/dri/card1 on some boots/images and /dev/dri/card0 on others — the
+# v3d node carries no connectors. A hardcoded device (issue #2947) points
+# eglfs at the render-only node on the boots where vc4 loses the race; Qt
+# then finds no connectors, never takes DRM master, and the device hangs
+# on the balena splash forever. Detect the card that actually owns
+# connectors at runtime and rewrite the device path before launch.
+if [ "$DEVICE_TYPE" = "pi4-64" ] && [ -n "${QT_QPA_EGLFS_KMS_CONFIG:-}" ]; then
+    kms_card=""
+    # Prefer a card with a *connected* connector; otherwise fall back to
+    # any card that exposes connectors at all. The render-only v3d node
+    # has no `cardN-<connector>` entries, so this excludes it even on a
+    # headless boot where nothing reads as "connected".
+    for status_file in /sys/class/drm/card*-*/status; do
+        [ -r "$status_file" ] || continue
+        connector=$(basename "$(dirname "$status_file")")  # e.g. card1-HDMI-A-1
+        card="${connector%%-*}"                            # e.g. card1
+        [ -e "/dev/dri/$card" ] || continue
+        [ -n "$kms_card" ] || kms_card="$card"
+        if [ "$(cat "$status_file" 2>/dev/null)" = "connected" ]; then
+            kms_card="$card"
+            break
+        fi
+    done
+    if [ -n "$kms_card" ]; then
+        echo "start_viewer: eglfs DRM device = /dev/dri/$kms_card"
+        # Connector names stay HDMI1/HDMI2 — Qt derives those from the
+        # connector type + type-id (the `-N` suffix in sysfs), which is
+        # stable on Pi 4 regardless of which card number vc4 landed on.
+        cat > "$QT_QPA_EGLFS_KMS_CONFIG" <<EOF
+{
+  "device": "/dev/dri/$kms_card",
+  "hwcursor": false,
+  "pbuffers": true,
+  "outputs": [
+    { "name": "HDMI1", "mode": "1920x1080" },
+    { "name": "HDMI2", "mode": "1920x1080" }
+  ]
+}
+EOF
     fi
 fi
 
