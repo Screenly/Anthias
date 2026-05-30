@@ -69,6 +69,18 @@
 
         If you instead reinstall Debian and leave the root password blank, the Debian installer wires your regular user up as a `sudo` user automatically and you can skip this step.
 
+    - question: Raspberry Pi Imager fails with "Error writing to storage device" on macOS — what's wrong?
+      answer: |
+        This is a bug in **Raspberry Pi Imager 2.0.2–2.0.7 on macOS**, not in the Anthias image or your SD card. Those versions abort mid-write with *"Error writing to storage device. Some writes failed to complete."* whenever the image is decompressed on the fly — it affects our `.zst` images as well as `.img.xz` and even plain `.img` files (rpi-imager [#1605](https://github.com/raspberrypi/rpi-imager/issues/1605), [#1489](https://github.com/raspberrypi/rpi-imager/issues/1489)).
+
+        The fix was merged upstream in [rpi-imager#1621](https://github.com/raspberrypi/rpi-imager/pull/1621) (May 2026), so the cleanest fix is to **update Raspberry Pi Imager to a release newer than 2.0.7**. If you can't update yet, decompress the image yourself and flash the resulting `.img`:
+
+        ```bash
+        zstd -d <yyyy>-<mm>-<dd>-raspberry<version>.zst
+        ```
+
+        Then point Raspberry Pi Imager (or [balenaEtcher](https://etcher.balena.io/)) at the extracted `.img` — flashing an already-decompressed file skips the code path that trips the bug.
+
 - group: Display & playback
   items:
     - question: How do I rotate the screen for portrait orientation?
