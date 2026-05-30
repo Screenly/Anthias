@@ -53,13 +53,23 @@ The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zst`. T
 >
 > We started to release the images in `.zst` format in [v0.20.0](https://github.com/Screenly/Anthias/releases/tag/v0.20.0) so that the images are smaller in size. Using `zip` with the `-9` flag won't make the each of the images smaller than 2 GB.
 >
-> At the moment, only the Raspberry Pi Imager&mdash;starting from version [v1.9.4](https://github.com/raspberrypi/rpi-imager/releases/tag/v1.9.4)&mdash;supports the `.zst` format.
->
-> For those who are using [balenaEtcher](https://etcher.balena.io/), you can use the `zstd` command to decompress the image file.
+> Raspberry Pi Imager supports the `.zst` format from version [v1.9.4](https://github.com/raspberrypi/rpi-imager/releases/tag/v1.9.4) onwards. For those who are using [balenaEtcher](https://etcher.balena.io/), you can use the `zstd` command to decompress the image file first:
 >
 > ```
 > zstd -d <yyyy>-<mm>-<dd>-raspberry<version>.zst
 > ```
+
+> **macOS: "Error writing to storage device"**
+>
+> Raspberry Pi Imager **2.0.2 through at least 2.0.7** has a macOS bug that aborts mid-write with *"Error writing to storage device. Some writes failed to complete."* It is triggered by writing any image that is decompressed on the fly &mdash; not just our `.zst` images, but also `.img.xz` and even uncompressed `.img` files (see rpi-imager [#1605](https://github.com/raspberrypi/rpi-imager/issues/1605) and [#1489](https://github.com/raspberrypi/rpi-imager/issues/1489)). The card itself is fine.
+>
+> The fix was merged upstream in [rpi-imager#1621](https://github.com/raspberrypi/rpi-imager/pull/1621) (May 2026), so the simplest solution is to **update Raspberry Pi Imager to a release newer than 2.0.7**. If you can't update, work around it by decompressing the image yourself and flashing the resulting `.img`:
+>
+> ```
+> zstd -d <yyyy>-<mm>-<dd>-raspberry<version>.zst
+> ```
+>
+> Then select the extracted `.img` in Raspberry Pi Imager (or [balenaEtcher](https://etcher.balena.io/)), which skips the on-the-fly decompression path that trips the bug.
 
 Starting with [v0.19.0](https://github.com/Screenly/Anthias/releases/tag/v0.19.0), devices installed using this option will be pinned to the version that you've downloaded. This means that the devices will still be in the same version even if a new release (e.g., v0.19.1, etc.) is available.
 
