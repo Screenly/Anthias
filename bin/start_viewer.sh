@@ -57,9 +57,19 @@ for dev_node in /dev/video*; do
     esac
 done
 
-# Set permission for sha file
 chown -f viewer /dev/snd/*
-chown -f viewer /data/.anthias/latest_anthias_sha
+
+# The viewer runs unprivileged (sudo -u viewer below), and Django settings
+# init writes anthias.conf when it can't stat an existing one
+# (AnthiasSettings.__init__ -> save()). On devices upgraded from an older
+# release the config dir and its files (anthias.conf, latest_anthias_sha,
+# …) were created by a root-running container, so the viewer user can't
+# read or write them and crash-loops on
+# `PermissionError: '/data/.anthias/anthias.conf'`. Recursively give the
+# viewer ownership of the config dir (root server/celery are unaffected —
+# root ignores ownership). -f stays quiet on a fresh install where the dir
+# doesn't exist yet (the viewer creates its own on first run).
+chown -Rf viewer /data/.anthias
 
 # QtWebEngine state dirs. On upgraded devices the old AnthiasWebview
 # tree is left in place — a fresh AnthiasViewer cache is cheap to
