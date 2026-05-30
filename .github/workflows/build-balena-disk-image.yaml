@@ -187,6 +187,73 @@ jobs:
             echo "SHM_SIZE=256mb"
           } >> "$GITHUB_ENV"
 
+      # Reconcile the fleet's config.txt knobs to balena-host-config.json.
+      # This is the IAC home for settings previously hand-edited in the
+      # dashboard, and the file is authoritative: we upsert every listed key
+      # under the canonical BALENA_ prefix, then prune any config var not in
+      # the file (including legacy RESIN_HOST_CONFIG_* duplicates). That is
+      # what fixes issue #2947 — the Pi 4 fleet had a malformed, quote-
+      # wrapped `dtoverlay="vc4-kms-v3d"` that stopped full KMS loading, so
+      # the viewer's eglfs_kms renderer (since #2905) couldn't start the
+      # display. Supervisor vars (RESIN_SUPERVISOR_*) are not config.txt and
+      # are deliberately left untouched. `balena env set` is idempotent.
+      - name: Apply fleet host configuration
+        run: |
+          set -euo pipefail
+          slug="screenly_ose/$FLEET_SLUG"
+
+          # Resolve this board's desired config in one shot, and HARD-FAIL if
+          # the board key is absent or the file doesn't parse. Without this,
+          # an empty desired set makes the prune below delete every config
+          # var on the fleet (incl. dtoverlay=vc4-kms-v3d) — a fleet-wide
+          # #2947. `jq -e` exits non-zero on null (missing board) or a parse
+          # error; the command substitution under `set -e` then aborts. A
+          # board declared as `{}` (e.g. x86) is a truthy object, so it
+          # passes the guard and correctly reconciles to "no config.txt".
+          if ! board_json=$(jq -ec --arg b "$BOARD" '.boards[$b]' \
+              balena-host-config.json); then
+            echo "::error::balena-host-config.json: board '$BOARD' is not declared (or the file is invalid) — refusing to reconcile, the prune would wipe the fleet" >&2
+            exit 1
+          fi
+
+          mapfile -t desired < <(printf '%s' "$board_json" | jq -r 'keys[]')
+          is_desired() {
+            local k="$1" d
+            for d in "${desired[@]}"; do [ "$d" = "$k" ] && return 0; done
+            return 1
+          }
+
+          # 1) Upsert each desired key under the canonical BALENA_ prefix.
+          while IFS=$'\t' read -r key value; do
+            [ -n "$key" ] || continue
+            echo "set BALENA_HOST_CONFIG_$key=$value on $slug"
+            balena env set "BALENA_HOST_CONFIG_$key" "$value" --fleet "$slug"
+          done < <(printf '%s' "$board_json" \
+            | jq -r 'to_entries[] | "\(.key)\t\(.value)"')
+
+          # 2) Prune so the file is authoritative: drop every legacy
+          #    RESIN_HOST_CONFIG_* and any BALENA_HOST_CONFIG_* whose key is
+          #    not in the file. The regex is ANCHORED so only true config.txt
+          #    vars match — a var merely containing "HOST_CONFIG" (or
+          #    supervisor vars) is never touched. Capture the listing into a
+          #    var first so a balena/jq failure aborts the step (pipefail
+          #    does not propagate out of a process substitution) rather than
+          #    silently skipping the prune and leaving a stale duplicate.
+          host_vars=$(balena env list --fleet "$slug" --config --json \
+            | jq -r '.[] | select(.name|test("^(BALENA|RESIN)_HOST_CONFIG_"))
+                     | "\(.id)\t\(.name)"')
+          while IFS=$'\t' read -r id name; do
+            [ -n "$id" ] || continue
+            suffix="${name#*_HOST_CONFIG_}"
+            if [[ "$name" == RESIN_HOST_CONFIG_* ]]; then
+              echo "rm legacy $name (id $id) on $slug"
+              balena env rm "$id" --config --yes
+            elif ! is_desired "$suffix"; then
+              echo "rm unmanaged $name (id $id) on $slug"
+              balena env rm "$id" --config --yes
+            fi
+          done <<< "$host_vars"
+
       - name: Render balena docker-compose
         run: |
           mkdir -p balena-deploy
@@ -301,7 +368,6 @@ jobs:
           balena preload \
             "$BALENA_IMAGE.img" \
             --fleet "screenly_ose/$FLEET_SLUG" \
-            --pin-device-to-release \
             --splash-image ansible/roles/splashscreen/files/splashscreen.png \
             --commit latest
 
