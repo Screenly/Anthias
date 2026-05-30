@@ -52,11 +52,13 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          # Accept either "2026.05.1" or "v2026.05.1".
-          version="${VERSION#v}"
+          # Accept either "2026.05.1" or "v2026.05.1". `ver` (not
+          # `version`) avoids shellcheck SC2153 flagging the $VERSION env
+          # var as a misspelling of a same-named local.
+          ver="${VERSION#v}"
           {
-            echo "version=$version"
-            echo "tag=v$version"
+            echo "version=$ver"
+            echo "tag=v$ver"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build board matrix
