@@ -47,6 +47,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from typing import Any
 
 # fleet slug -> balenaOS device-type slug (matches the matrix in
 # .github/workflows/build-balena-disk-image.yaml).
@@ -61,7 +62,9 @@ FLEET_DEVICE_TYPE = {
 MAINTENANCE_TAG = 'anthias_maintenance'
 
 
-def run_balena(args: list[str], parse_json: bool = False):
+def run_balena(
+    args: list[str], parse_json: bool = False
+) -> tuple[bool, Any, str]:
     """Run a balena CLI command. Returns (ok, stdout, stderr).
 
     balena prints Node/CLI warnings to stderr, so stdout stays clean for
@@ -87,7 +90,7 @@ def run_balena(args: list[str], parse_json: bool = False):
     return proc.returncode == 0, out, proc.stderr.strip()
 
 
-def parse_os_version(raw: str) -> tuple:
+def parse_os_version(raw: str) -> tuple[int, int, int, int]:
     """Normalize 'balenaOS 6.1.24+rev4' / 'v6.12.3+rev4' to a comparable
     tuple (major, minor, patch, rev). Unparseable -> all zeros (treated as
     oldest)."""
@@ -122,7 +125,7 @@ def latest_os_version(device_type: str) -> str | None:
             file=sys.stderr,
         )
         return None
-    versions = [
+    versions: list[str] = [
         line.strip().lstrip('v')
         for line in out.splitlines()
         if line.strip().lstrip('v')[:1].isdigit()
