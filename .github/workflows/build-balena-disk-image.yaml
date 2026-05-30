@@ -202,9 +202,21 @@ jobs:
           set -euo pipefail
           slug="screenly_ose/$FLEET_SLUG"
 
-          # Desired config.txt keys for this board.
-          mapfile -t desired < <(jq -r --arg b "$BOARD" \
-            '.boards[$b] // {} | keys[]' balena-host-config.json)
+          # Resolve this board's desired config in one shot, and HARD-FAIL if
+          # the board key is absent or the file doesn't parse. Without this,
+          # an empty desired set makes the prune below delete every config
+          # var on the fleet (incl. dtoverlay=vc4-kms-v3d) — a fleet-wide
+          # #2947. `jq -e` exits non-zero on null (missing board) or a parse
+          # error; the command substitution under `set -e` then aborts. A
+          # board declared as `{}` (e.g. x86) is a truthy object, so it
+          # passes the guard and correctly reconciles to "no config.txt".
+          if ! board_json=$(jq -ec --arg b "$BOARD" '.boards[$b]' \
+              balena-host-config.json); then
+            echo "::error::balena-host-config.json: board '$BOARD' is not declared (or the file is invalid) — refusing to reconcile, the prune would wipe the fleet" >&2
+            exit 1
+          fi
+
+          mapfile -t desired < <(printf '%s' "$board_json" | jq -r 'keys[]')
           is_desired() {
             local k="$1" d
             for d in "${desired[@]}"; do [ "$d" = "$k" ] && return 0; done
@@ -216,14 +228,20 @@ jobs:
             [ -n "$key" ] || continue
             echo "set BALENA_HOST_CONFIG_$key=$value on $slug"
             balena env set "BALENA_HOST_CONFIG_$key" "$value" --fleet "$slug"
-          done < <(jq -r --arg b "$BOARD" \
-            '.boards[$b] // {} | to_entries[] | "\(.key)\t\(.value)"' \
-            balena-host-config.json)
+          done < <(printf '%s' "$board_json" \
+            | jq -r 'to_entries[] | "\(.key)\t\(.value)"')
 
           # 2) Prune so the file is authoritative: drop every legacy
           #    RESIN_HOST_CONFIG_* and any BALENA_HOST_CONFIG_* whose key is
-          #    not in the file. Match only *_HOST_CONFIG_* so supervisor
-          #    vars are never removed.
+          #    not in the file. The regex is ANCHORED so only true config.txt
+          #    vars match — a var merely containing "HOST_CONFIG" (or
+          #    supervisor vars) is never touched. Capture the listing into a
+          #    var first so a balena/jq failure aborts the step (pipefail
+          #    does not propagate out of a process substitution) rather than
+          #    silently skipping the prune and leaving a stale duplicate.
+          host_vars=$(balena env list --fleet "$slug" --config --json \
+            | jq -r '.[] | select(.name|test("^(BALENA|RESIN)_HOST_CONFIG_"))
+                     | "\(.id)\t\(.name)"')
           while IFS=$'\t' read -r id name; do
             [ -n "$id" ] || continue
             suffix="${name#*_HOST_CONFIG_}"
@@ -234,9 +252,7 @@ jobs:
               echo "rm unmanaged $name (id $id) on $slug"
               balena env rm "$id" --config --yes
             fi
-          done < <(balena env list --fleet "$slug" --config --json \
-            | jq -r '.[] | select(.name|test("HOST_CONFIG"))
-                     | "\(.id)\t\(.name)"')
+          done <<< "$host_vars"
 
       - name: Render balena docker-compose
         run: |
