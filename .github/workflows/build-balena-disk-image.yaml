@@ -187,6 +187,57 @@ jobs:
             echo "SHM_SIZE=256mb"
           } >> "$GITHUB_ENV"
 
+      # Reconcile the fleet's config.txt knobs to balena-host-config.json.
+      # This is the IAC home for settings previously hand-edited in the
+      # dashboard, and the file is authoritative: we upsert every listed key
+      # under the canonical BALENA_ prefix, then prune any config var not in
+      # the file (including legacy RESIN_HOST_CONFIG_* duplicates). That is
+      # what fixes issue #2947 — the Pi 4 fleet had a malformed, quote-
+      # wrapped `dtoverlay="vc4-kms-v3d"` that stopped full KMS loading, so
+      # the viewer's eglfs_kms renderer (since #2905) couldn't start the
+      # display. Supervisor vars (RESIN_SUPERVISOR_*) are not config.txt and
+      # are deliberately left untouched. `balena env set` is idempotent.
+      - name: Apply fleet host configuration
+        run: |
+          set -euo pipefail
+          slug="screenly_ose/$FLEET_SLUG"
+
+          # Desired config.txt keys for this board.
+          mapfile -t desired < <(jq -r --arg b "$BOARD" \
+            '.boards[$b] // {} | keys[]' balena-host-config.json)
+          is_desired() {
+            local k="$1" d
+            for d in "${desired[@]}"; do [ "$d" = "$k" ] && return 0; done
+            return 1
+          }
+
+          # 1) Upsert each desired key under the canonical BALENA_ prefix.
+          while IFS=$'\t' read -r key value; do
+            [ -n "$key" ] || continue
+            echo "set BALENA_HOST_CONFIG_$key=$value on $slug"
+            balena env set "BALENA_HOST_CONFIG_$key" "$value" --fleet "$slug"
+          done < <(jq -r --arg b "$BOARD" \
+            '.boards[$b] // {} | to_entries[] | "\(.key)\t\(.value)"' \
+            balena-host-config.json)
+
+          # 2) Prune so the file is authoritative: drop every legacy
+          #    RESIN_HOST_CONFIG_* and any BALENA_HOST_CONFIG_* whose key is
+          #    not in the file. Match only *_HOST_CONFIG_* so supervisor
+          #    vars are never removed.
+          while IFS=$'\t' read -r id name; do
+            [ -n "$id" ] || continue
+            suffix="${name#*_HOST_CONFIG_}"
+            if [[ "$name" == RESIN_HOST_CONFIG_* ]]; then
+              echo "rm legacy $name (id $id) on $slug"
+              balena env rm "$id" --config --yes
+            elif ! is_desired "$suffix"; then
+              echo "rm unmanaged $name (id $id) on $slug"
+              balena env rm "$id" --config --yes
+            fi
+          done < <(balena env list --fleet "$slug" --config --json \
+            | jq -r '.[] | select(.name|test("HOST_CONFIG"))
+                     | "\(.id)\t\(.name)"')
+
       - name: Render balena docker-compose
         run: |
           mkdir -p balena-deploy
@@ -296,12 +347,18 @@ jobs:
             --output "$BALENA_IMAGE.img" \
             --version latest
 
+      # `--commit latest` seeds the image with the current release's
+      # container images so a freshly flashed device boots fully offline.
+      # We deliberately do NOT pass `--pin-device-to-release`: pinning
+      # (added in #2098) froze flashed devices to the downloaded release,
+      # so they never received OTA fixes. Anthias balena devices should
+      # track the fleet's latest stable release, so the device joins the
+      # fleet unpinned and auto-updates from here on.
       - name: Preload OS image
         run: |
           balena preload \
             "$BALENA_IMAGE.img" \
             --fleet "screenly_ose/$FLEET_SLUG" \
-            --pin-device-to-release \
             --splash-image ansible/roles/splashscreen/files/splashscreen.png \
             --commit latest
 

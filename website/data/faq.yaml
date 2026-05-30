@@ -32,7 +32,7 @@
   items:
     - question: How do I update Anthias?
       answer: |
-        If you installed via balenaHub, updates are applied automatically over the air. For command-line installations, re-run the installer (`$HOME/anthias/bin/run_upgrade.sh`) or pull the latest Docker images. Disk image installations are pinned to the version you downloaded.
+        If you installed from a disk image or via balenaHub, updates are applied automatically over the air — the device tracks the latest stable release. For command-line installations, re-run the installer (`$HOME/anthias/bin/run_upgrade.sh`) or pull the latest Docker images.
 
     - question: How do I configure Wi-Fi or change networks?
       answer: |
