@@ -169,9 +169,9 @@ jobs:
           BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
         run: balena login --token "$BALENA_TOKEN"
 
+      # FLEET_SLUG + BOARD feed the host-config reconcile below; the
+      # deploy step derives the fleet itself inside balena_ota_deploy.sh.
       - name: Resolve fleet slug + env vars
-        env:
-          SHORT_HASH: ${{ needs.resolve-context.outputs.short-hash }}
         run: |
           case "${{ matrix.board }}" in
             pi2)    FLEET=anthias-pi2 ;;
@@ -182,9 +182,7 @@ jobs:
           esac
           {
             echo "FLEET_SLUG=$FLEET"
-            echo "GIT_SHORT_HASH=$SHORT_HASH"
             echo "BOARD=${{ matrix.board }}"
-            echo "SHM_SIZE=256mb"
           } >> "$GITHUB_ENV"
 
       # Reconcile the fleet's config.txt knobs to balena-host-config.json.
@@ -254,37 +252,22 @@ jobs:
             fi
           done <<< "$host_vars"
 
-      - name: Render balena docker-compose
-        run: |
-          mkdir -p balena-deploy
-          cp balena.yml balena-deploy/
-          envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
-
-          # Pi 5 and x86 don't expose /dev/vchiq; strip the bind mount.
-          case "${{ matrix.board }}" in
-            pi5|x86)
-              sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-                balena-deploy/docker-compose.yml
-              ;;
-          esac
-
-      # `balena deploy` (vs `balena push`) takes the rendered compose
-      # file and points the fleet at the existing GHCR images — no
-      # remote build. Wrapped in a 3-attempt retry because balena
-      # cloud routinely 5xx/ESOCKETTIMEDOUTs the upload step.
+      # `balena deploy` (vs `balena push`) points the fleet at the
+      # existing <short-hash>-<board> GHCR images — no remote build.
+      # bin/balena_ota_deploy.sh owns the fleet mapping, compose render
+      # (incl. the pi5/x86 vchiq strip), version stamping, and retry;
+      # the manual deploy hook (deploy-balena-manual.yaml) calls the same
+      # script. `${TAG#v}` strips the leading `v` so the release tag
+      # (v2026.05.1) becomes the raw CalVer the script normalizes and
+      # stamps into balena.yml — so the fleet's Releases page shows our
+      # real version instead of 0.0.0+revN.
       - name: Deploy to balena fleet
+        env:
+          TAG: ${{ needs.resolve-context.outputs.tag }}
+          SHORT_HASH: ${{ needs.resolve-context.outputs.short-hash }}
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if balena deploy "screenly_ose/$FLEET_SLUG" \
-                --source balena-deploy; then
-              exit 0
-            fi
-            echo "balena deploy attempt $attempt failed; backing off"
-            sleep $((30 + RANDOM % 120))
-          done
-          echo "::error::balena deploy failed for $FLEET_SLUG after 3 attempts"
-          exit 1
+          bin/balena_ota_deploy.sh \
+            "${{ matrix.board }}" "${TAG#v}" "$SHORT_HASH"
 
   # Download balena OS, preload with the fleet's `latest` (the commit
   # we just pushed in balena-cloud-deploy), package as .img.zst, and

@@ -1,0 +1,139 @@
+name: Deploy to Balena (manual)
+
+# Manually push an OTA release to one (or all) balena fleets, without
+# rebuilding disk images. Use this to re-deploy an already-released
+# version — balena auto-appends +rev1, +rev2, ... each time the same
+# version is deployed, so the Releases page tracks the redeploys.
+#
+# The full release pipeline (build-balena-disk-image.yaml) already does
+# this deploy on `release: published`; this workflow is the standalone
+# "just deploy" hook for re-runs and out-of-band pushes. Both call
+# bin/balena_ota_deploy.sh so the deploy behaviour stays identical.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Released version to deploy, e.g. 2026.05.1. Must match an
+          existing tag v<version> whose <short-hash>-<board> images are
+          in GHCR.
+        required: true
+        type: string
+      board:
+        description: Board fleet to deploy (or all of them).
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - pi2
+          - pi3
+          - pi4-64
+          - pi5
+          - x86
+
+env:
+  BALENA_CLI_VERSION: '25.1.3'
+
+jobs:
+  # Normalize the version into a tag and expand the board choice into a
+  # JSON array the deploy matrix can fan out over (one entry, or all
+  # five when `all` is selected).
+  resolve:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      boards: ${{ steps.matrix.outputs.boards }}
+    steps:
+      - name: Normalize version + tag
+        id: tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          # Accept either "2026.05.1" or "v2026.05.1". `ver` (not
+          # `version`) avoids shellcheck SC2153 flagging the $VERSION env
+          # var as a misspelling of a same-named local.
+          ver="${VERSION#v}"
+          {
+            echo "version=$ver"
+            echo "tag=v$ver"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build board matrix
+        id: matrix
+        env:
+          BOARD: ${{ inputs.board }}
+        run: |
+          if [[ "$BOARD" == "all" ]]; then
+            echo 'boards=["pi2","pi3","pi4-64","pi5","x86"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "boards=[\"$BOARD\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJSON(needs.resolve.outputs.boards) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read   # actions/checkout
+      packages: read   # docker login ghcr.io for the image-existence check
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: Compute short hash
+        id: hash
+        run: |
+          # --short=7 matches the tag length docker-build.yaml publishes
+          # (<7-char>-<board>); see build-balena-disk-image.yaml.
+          echo "short-hash=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Fail before touching the fleet if the release commit's images
+      # for this board aren't in GHCR (e.g. wrong tag, or a build that
+      # never finished). Mirrors the release pipeline's preflight.
+      - name: Verify GHCR images exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHORT_HASH: ${{ steps.hash.outputs.short-hash }}
+          BOARD: ${{ matrix.board }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
+          missing=()
+          for service in server viewer redis; do
+            ref="ghcr.io/screenly/anthias-${service}:${SHORT_HASH}-${BOARD}"
+            if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
+              missing+=("$ref")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing GHCR images for ${SHORT_HASH}-${BOARD}:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+      # See build-balena-disk-image.yaml's "Install balena CLI" step for
+      # why this uses npm rather than bun.
+      - name: Install balena CLI
+        run: npm install -g "balena-cli@${{ env.BALENA_CLI_VERSION }}"
+
+      - name: Login to balena
+        env:
+          BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
+        run: balena login --token "$BALENA_TOKEN"
+
+      - name: Deploy to balena fleet
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          SHORT_HASH: ${{ steps.hash.outputs.short-hash }}
+        run: |
+          bin/balena_ota_deploy.sh \
+            "${{ matrix.board }}" "$VERSION" "$SHORT_HASH"
