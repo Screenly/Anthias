@@ -244,6 +244,76 @@ EOF
     fi
 fi
 
+# Release the Plymouth boot splash before launching the display.
+#
+# On a normal systemd host — including our Debian/apt install —
+# `plymouth-quit.service` runs once boot completes and tells Plymouth to
+# drop the display, so whatever takes over (cage's KMS backend, Qt's
+# eglfs) finds DRM master free. balenaOS deliberately disables that:
+# it ships a `plymouth-disable-containerized.conf` drop-in gating
+# plymouth-quit on `ConditionVirtualization=!container`, expecting the
+# application to own the handoff. So on balena Plymouth keeps running.
+# On x86 that's fatal: efifb->i915 hands Plymouth an early KMS device,
+# so it takes DRM *master*; cage then can't (libseat logs "Could not
+# make device fd drm master: Device or resource busy"), runs as a
+# non-master client, and every atomic commit is rejected — the screen
+# freezes on the splash while the scheduler keeps cycling assets
+# (the "Swapchain for output 'DP-1' failed test" spam). On Pi/arm64
+# Plymouth draws to /dev/fb0 and never takes DRM master, so this is a
+# harmless early splash teardown there.
+#
+# Reproduce what systemd does for us on Debian: ask the *host* systemd
+# to start plymouth-quit.service over the host system bus (mounted by
+# the `io.balena.features.dbus` label at DBUS_SYSTEM_BUS_ADDRESS). Two
+# constraints force this here rather than inside the viewer process:
+#   * Authorisation — balenaOS has no polkit, so host systemd grants
+#     Manager.StartUnit to uid 0 only. start_viewer.sh runs as root;
+#     the `viewer` user the viewer later drops to would be denied.
+#   * Ordering — cage takes (or fails to take) DRM master at its own
+#     startup and the viewer is cage's child, so quitting Plymouth any
+#     later is too late to matter.
+# No-op on the Debian/apt install: DBUS_SYSTEM_BUS_ADDRESS is unset and
+# the socket is absent, so the guard below short-circuits (and
+# plymouth-quit already ran at boot there).
+release_boot_splash() {
+    local bus="${DBUS_SYSTEM_BUS_ADDRESS#unix:path=}"
+    [ -n "${DBUS_SYSTEM_BUS_ADDRESS:-}" ] && [ -S "$bus" ] || return 0
+
+    echo "start_viewer: quitting Plymouth via host systemd to free DRM master"
+    if ! dbus-send --system --print-reply \
+        --dest=org.freedesktop.systemd1 \
+        /org/freedesktop/systemd1 \
+        org.freedesktop.systemd1.Manager.StartUnit \
+        string:"plymouth-quit.service" string:"replace" >/dev/null 2>&1; then
+        echo "start_viewer: StartUnit plymouth-quit failed; continuing"
+        return 0
+    fi
+
+    # StartUnit is asynchronous (it returns a job path, not a result).
+    # plymouth-quit's ExecStart (`plymouth quit`) blocks until plymouthd
+    # has exited and dropped DRM master, so poll the unit until the
+    # oneshot reaches a terminal state before we hand the display to
+    # cage. Bounded so a board where the unit is condition-skipped (the
+    # master was never held) can't stall startup.
+    local unit state _
+    unit=$(dbus-send --system --print-reply --dest=org.freedesktop.systemd1 \
+        /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager.GetUnit \
+        string:"plymouth-quit.service" 2>/dev/null \
+        | awk -F'"' '/object path/{print $2}')
+    [ -n "$unit" ] || return 0
+    for _ in $(seq 1 15); do
+        state=$(dbus-send --system --print-reply --dest=org.freedesktop.systemd1 \
+            "$unit" org.freedesktop.DBus.Properties.Get \
+            string:"org.freedesktop.systemd1.Unit" string:"ActiveState" 2>/dev/null \
+            | awk -F'"' '/string/{print $2}')
+        case "$state" in
+            active|failed) return 0 ;;
+        esac
+        sleep 0.2
+    done
+}
+release_boot_splash
+
 # Qt's linuxfb platform (pi2/pi3) opens /dev/fb0 at startup and cannot
 # recover if it is absent. Under full KMS (dtoverlay=vc4-kms-v3d) the
 # framebuffer only exists while a display is connected, so a headless
