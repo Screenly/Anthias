@@ -40,6 +40,11 @@ services:
       - PORT=8080
       - NOREFRESH=1
       - LISTEN=anthias-server
+      # See docker-compose.balena.yml.tmpl: lets start_viewer.sh quit the
+      # Plymouth boot splash over the host system bus (mounted by
+      # io.balena.features.dbus below) so it releases DRM master before
+      # cage starts. See release_boot_splash() in bin/start_viewer.sh.
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
     privileged: true
     restart: always
     shm_size: ${SHM_SIZE}
@@ -47,6 +52,7 @@ services:
       - resin-data:/data
     labels:
       io.balena.features.supervisor-api: '1'
+      io.balena.features.dbus: '1'
 
   anthias-celery:
     # Runs on the same image as anthias-server with a CMD override.

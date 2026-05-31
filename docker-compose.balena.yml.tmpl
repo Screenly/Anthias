@@ -37,6 +37,12 @@ services:
       - PORT=8080
       - NOREFRESH=1
       - LISTEN=anthias-server
+      # Lets start_viewer.sh reach the host systemd over the host system
+      # bus (mounted by io.balena.features.dbus below) to quit the
+      # Plymouth boot splash before launching the display. balenaOS
+      # leaves Plymouth running and on x86 it holds DRM master, which
+      # blocks cage. See release_boot_splash() in bin/start_viewer.sh.
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
     privileged: true
     restart: always
     shm_size: ${SHM_SIZE}
@@ -44,6 +50,7 @@ services:
       - resin-data:/data
     labels:
       io.balena.features.supervisor-api: '1'
+      io.balena.features.dbus: '1'
 
   anthias-celery:
     # Runs on the same image as anthias-server with a CMD override.
