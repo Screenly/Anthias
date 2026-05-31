@@ -131,7 +131,10 @@ ENV DJANGO_SETTINGS_MODULE="anthias_server.django_project.settings"
 ENV PYTHONPATH="/usr/src/app/src"
 ENV ANTHIAS_SERVICE="viewer"
 
-RUN useradd -g video viewer
+# The `viewer` user is created with a pinned UID/GID in Dockerfile.base.j2
+# (shared by viewer, server and celery) so ownership under /data is
+# identical across containers. It is added to the `video` group there for
+# the DRM/ALSA device nodes this image's compositor opens.
 
 RUN rm -f /etc/localtime
 
