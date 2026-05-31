@@ -14,43 +14,66 @@ from anthias_common import device_helper, utils
 from anthias_common.version import get_anthias_release as get_anthias_release
 
 
+# Never let this probe reach normal interpreter teardown. On hardware
+# without a usable CEC adapter (e.g. Raspberry Pi 5) libcec's adapter
+# thread aborts as it is torn down ("FATAL: exception not rethrown",
+# SIGABRT), which dumps a multi-MB core every run and eventually fills
+# the disk. The answer is already on stdout by then, so the helper
+# flushes and os._exit(0)s to skip Python/libcec teardown entirely.
 _CEC_QUERY_SCRIPT = """
+import os
 import sys
+
+
+def _done(text):
+    sys.stdout.write(text)
+    sys.stdout.flush()
+    os._exit(0)
+
+
 try:
     import cec
     cec.init()
     tv = cec.Device(cec.CECDEVICE_TV)
 except Exception:
-    sys.stdout.write('CEC error')
-    sys.exit(0)
+    _done('CEC error')
 try:
-    sys.stdout.write('True' if tv.is_on() else 'False')
+    _done('True' if tv.is_on() else 'False')
 except IOError:
-    sys.stdout.write('Unknown')
+    _done('Unknown')
 """
 
 # Issued from the settings page / REST endpoint, *not* from a celery
 # worker, so a hung libcec call would block the request thread until
 # the subprocess timeout fires. Same subprocess+timeout shape as
 # `_CEC_QUERY_SCRIPT` for the same reason: libcec C calls don't
-# honour Python signals.
+# honour Python signals. Same os._exit(0) on the way out, too, to
+# avoid the teardown abort + core dump described above.
 _CEC_SET_SCRIPT = """
+import os
 import sys
+
+
+def _done(text):
+    sys.stdout.write(text)
+    sys.stdout.flush()
+    os._exit(0)
+
+
 try:
     import cec
     cec.init()
     tv = cec.Device(cec.CECDEVICE_TV)
 except Exception as exc:
-    sys.stdout.write('ERROR: ' + (str(exc) or 'CEC stack unavailable'))
-    sys.exit(0)
+    _done('ERROR: ' + (str(exc) or 'CEC stack unavailable'))
 try:
     if {on}:
         tv.power_on()
     else:
         tv.standby()
-    sys.stdout.write('OK')
+    _done('OK')
 except Exception as exc:
-    sys.stdout.write('ERROR: ' + (str(exc) or 'CEC command failed'))
+    _done('ERROR: ' + (str(exc) or 'CEC command failed'))
 """
 
 

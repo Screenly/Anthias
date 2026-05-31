@@ -314,6 +314,40 @@ release_boot_splash() {
 }
 release_boot_splash
 
+# Qt's linuxfb platform (pi2/pi3) opens /dev/fb0 at startup and cannot
+# recover if it is absent. Under full KMS (dtoverlay=vc4-kms-v3d) the
+# framebuffer only exists while a display is connected, so a headless
+# box, a powered-off panel, or a TV slow to negotiate HDMI at boot leaves
+# no /dev/fb0 — and Qt doesn't fail cleanly there: it logs "Unable to
+# figure out framebuffer device / no screens available" and aborts with
+# heap corruption ("malloc(): unaligned tcache chunk detected"). The
+# container then crash-loops, spamming the logs, and never settles.
+#
+# Wait for the framebuffer instead of launching into a guaranteed crash.
+# No assumptions about which connector the panel is on or its resolution:
+# when a display is (re)connected the KMS driver creates /dev/fb0 and we
+# proceed; a genuinely headless device idles here quietly and self-heals
+# on hotplug. Only the linuxfb path needs this — the cage (wayland) and
+# eglfs (KMS) boards render straight to /dev/dri with no /dev/fb0
+# dependency, so the QT_QPA_PLATFORM guard makes this a no-op there.
+wait_for_framebuffer() {
+    [ "${QT_QPA_PLATFORM:-}" = 'linuxfb' ] || return 0
+    [ -e /dev/fb0 ] && return 0
+
+    echo "start_viewer: no framebuffer (/dev/fb0) yet — waiting for a display." \
+        "Connect or power on the screen; the viewer starts automatically once one is present."
+    local waited=0
+    until [ -e /dev/fb0 ]; do
+        sleep 5
+        waited=$((waited + 5))
+        if [ "$((waited % 60))" -eq 0 ]; then
+            echo "start_viewer: still no /dev/fb0 after ${waited}s; waiting for a display."
+        fi
+    done
+    echo "start_viewer: /dev/fb0 present after ${waited}s — starting the viewer."
+}
+wait_for_framebuffer
+
 # x86 / arm64 / pi5 run under `cage`, a kiosk wlroots compositor.
 # cage acquires DRM master as root, exports WAYLAND_DISPLAY for its
 # child, and exits when the child exits — so the existing kill -0

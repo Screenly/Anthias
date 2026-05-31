@@ -62,3 +62,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     {% endfor %}
 
 {% include 'labels.j2' %}
+
+# Pin the unprivileged runtime user to a fixed UID/GID so ownership of
+# files under /data — notably ~/.anthias, the config dir shared by the
+# viewer, server and celery containers — is identical in every image.
+# Without an explicit id `useradd` picks the next free uid per image (it
+# happened to land on 1000), so the uid a file is written as in one
+# container and a `chown viewer …` in another could silently disagree —
+# the class of bug behind the upgraded-device config-permission
+# crash-loop. The viewer process drops to this user; server/celery run as
+# root but the user must still exist and resolve to the same id for chowns
+# to be deterministic wherever they run. `video` (the DRM/ALSA device
+# nodes the viewer opens) is kept as a supplementary group.
+ARG ANTHIAS_UID=1000
+ARG ANTHIAS_GID=1000
+RUN groupadd -g ${ANTHIAS_GID} viewer && \
+    useradd -u ${ANTHIAS_UID} -g viewer -G video viewer
