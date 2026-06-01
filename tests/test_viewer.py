@@ -145,57 +145,63 @@ def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
     viewer_fixtures.m_cmd.assert_called_once_with('AnthiasViewer')
 
 
-def test_load_browser_raises_when_process_exits_before_handshake(
+def test_spawn_webview_once_raises_on_early_exit(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
-    # Pin a single spawn attempt so the retry loop doesn't re-spawn —
-    # this asserts the per-launch early-exit detection still surfaces
-    # as a WebviewLaunchError (a RuntimeError subclass).
+    """A process that exits before the handshake surfaces as a
+    WebviewLaunchError (a RuntimeError subclass) and does NOT terminate
+    (it's already dead)."""
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
-    # The error message also reads stdout, so use the static stub
-    # that returns the same value on every access rather than a
-    # one-shot side_effect.
+    # The error message also reads stdout, so use the static stub.
     _stub_browser_stdout_static(browser_proc, b'')
     browser_proc.is_alive.return_value = False
     viewer_fixtures.p_cmd.start()
     viewer_fixtures.p_sleep.start()
     try:
-        with mock.patch.object(
-            viewer_fixtures.u, 'BROWSER_SPAWN_MAX_ATTEMPTS', 1
-        ):
-            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
-                viewer_fixtures.u.load_browser()
+        with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
+            viewer_fixtures.u._spawn_webview_once(30)
     finally:
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
+    browser_proc.terminate.assert_not_called()
 
 
-def test_load_browser_times_out_when_handshake_never_arrives(
+def test_spawn_webview_once_terminates_on_timeout(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
+    """When the handshake never arrives, the half-started process is
+    torn down (terminate) before the error is raised — otherwise a retry
+    would leak a second AnthiasViewer contending for the framebuffer /
+    D-Bus name."""
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
     _stub_browser_stdout_static(browser_proc, b'irrelevant noise')
-    browser_proc.is_alive.return_value = True
-    # Three monotonic() reads: deadline init, one loop iteration
-    # below the deadline, one above it.
-    monotonic_values = iter([0.0, 0.0, 100.0])
+    # is_alive False so _terminate_webview reaps immediately without a
+    # busy-wait; the 0s timeout drives the deadline straight past.
+    browser_proc.is_alive.return_value = False
     viewer_fixtures.p_cmd.start()
     viewer_fixtures.p_sleep.start()
     try:
-        with (
-            mock.patch.object(
-                viewer_fixtures.u, 'BROWSER_SPAWN_MAX_ATTEMPTS', 1
-            ),
-            mock.patch.object(
-                viewer_fixtures.u,
-                'monotonic',
-                side_effect=lambda: next(monotonic_values),
-            ),
-        ):
-            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
-                viewer_fixtures.u.load_browser()
+        with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
+            viewer_fixtures.u._spawn_webview_once(0)
     finally:
         viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+    browser_proc.terminate.assert_called_once()
+
+
+def test_spawn_webview_once_missing_binary(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A missing AnthiasViewer binary raises WebviewBinaryMissingError
+    (permanent), which the retry loop must short-circuit on."""
+    viewer_fixtures.m_cmd.side_effect = viewer_fixtures.u.sh.CommandNotFound(
+        'AnthiasViewer'
+    )
+    viewer_fixtures.p_cmd.start()
+    try:
+        with pytest.raises(viewer_fixtures.u.WebviewBinaryMissingError):
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
         viewer_fixtures.p_cmd.stop()
 
 
@@ -204,10 +210,11 @@ def test_load_browser_retries_then_succeeds(
 ) -> None:
     """A board that crashes the webview on the first launches but comes
     up on a later one must self-heal in-process — the whole point of the
-    spawn retry (the pi3 Qt5/WebEngine heap-corruption crash)."""
+    spawn retry (the pi3 Qt5/WebEngine heap-corruption crash). Also
+    asserts the backoff actually grows (1s then 2s) rather than hammering."""
     attempts = {'n': 0}
 
-    def fake_spawn() -> mock.Mock:
+    def fake_spawn(_startup_timeout: float) -> mock.Mock:
         attempts['n'] += 1
         if attempts['n'] < 3:
             raise viewer_fixtures.u.WebviewLaunchError('init crash')
@@ -224,6 +231,12 @@ def test_load_browser_retries_then_succeeds(
 
     assert attempts['n'] == 3
     assert viewer_fixtures.u.browser is not None
+    # The two failed attempts must have slept with growing backoff —
+    # guards against a regression that drops the sleep (tight loop).
+    backoff_sleeps = [
+        c.args[0] for c in viewer_fixtures.m_sleep.call_args_list if c.args
+    ]
+    assert backoff_sleeps == [1, 2]
 
 
 def test_load_browser_raises_after_exhausting_retries(
@@ -248,6 +261,57 @@ def test_load_browser_raises_after_exhausting_retries(
                 viewer_fixtures.u.load_browser()
     finally:
         viewer_fixtures.p_sleep.stop()
+
+
+def test_load_browser_missing_binary_short_circuits(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A permanent failure (missing binary) must NOT consume the retry
+    budget — it raises on the first attempt with no backoff."""
+    calls = {'n': 0}
+
+    def fake_spawn(_startup_timeout: float) -> mock.Mock:
+        calls['n'] += 1
+        raise viewer_fixtures.u.WebviewBinaryMissingError('nope')
+
+    viewer_fixtures.p_sleep.start()
+    try:
+        with mock.patch.object(
+            viewer_fixtures.u, '_spawn_webview_once', side_effect=fake_spawn
+        ):
+            with pytest.raises(viewer_fixtures.u.WebviewBinaryMissingError):
+                viewer_fixtures.u.load_browser()
+    finally:
+        viewer_fixtures.p_sleep.stop()
+
+    assert calls['n'] == 1
+
+
+def test_load_browser_inline_budget_limits_attempts(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The mid-playback respawn path passes a small budget so a
+    persistent failure can't freeze the asset_loop for minutes — the
+    explicit max_attempts caps the spawn count."""
+    calls = {'n': 0}
+
+    def fake_spawn(_startup_timeout: float) -> mock.Mock:
+        calls['n'] += 1
+        raise viewer_fixtures.u.WebviewLaunchError('crash')
+
+    viewer_fixtures.p_sleep.start()
+    try:
+        with mock.patch.object(
+            viewer_fixtures.u, '_spawn_webview_once', side_effect=fake_spawn
+        ):
+            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
+                viewer_fixtures.u.load_browser(
+                    max_attempts=2, backoff_cap=2, startup_timeout=5
+                )
+    finally:
+        viewer_fixtures.p_sleep.stop()
+
+    assert calls['n'] == 2
 
 
 def test_view_webpage_arms_reload_interval(

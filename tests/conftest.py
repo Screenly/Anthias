@@ -211,10 +211,7 @@ _SESSION_FAKE_REDIS = _make_fake_redis()
 def _patch_connect_to_redis() -> None:
     import anthias_common.utils as _lib_utils
 
-    # Accept the optional socket-timeout kwargs that real
-    # connect_to_redis() now takes (e.g. the viewer's webview-status
-    # beacon client) so every caller still resolves to the fake.
-    _lib_utils.connect_to_redis = lambda *args, **kwargs: _SESSION_FAKE_REDIS
+    _lib_utils.connect_to_redis = lambda: _SESSION_FAKE_REDIS
 
 
 _patch_connect_to_redis()
@@ -285,13 +282,7 @@ def _mock_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     directly — that takes precedence inside the per-test setup chain.
     """
     fake = _make_fake_redis()
-    # ``*args, **kwargs`` so the fake tolerates the optional
-    # socket-timeout kwargs real connect_to_redis() now accepts (e.g. the
-    # viewer's webview-status beacon client).
-    monkeypatch.setattr(
-        'anthias_common.utils.connect_to_redis',
-        lambda *args, **kwargs: fake,
-    )
+    monkeypatch.setattr('anthias_common.utils.connect_to_redis', lambda: fake)
 
     # Replace already-bound ``r`` attributes on modules that called
     # connect_to_redis() at import time. Only modules already in

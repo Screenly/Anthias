@@ -180,16 +180,28 @@ loaned 64-bit Pi 3B+ running the armv7 `anthias-viewer:*-pi3` image:
   disabling glibc's tcache check (which just turns the abort into a raw
   `SIGSEGV`) all still crash.
 
-Because a retry usually succeeds within a handful of attempts, the viewer
-**retries the spawn in-process with capped exponential backoff**
-(`BROWSER_SPAWN_MAX_ATTEMPTS` / `BROWSER_SPAWN_BACKOFF_CAP_SECONDS` in
-`src/anthias_viewer/__init__.py`) instead of letting the exception escape
-`main()` into a tight container restart loop (which floods journald and makes
-no faster progress). While retrying, it publishes `viewer:webview_status` to
-Redis (`retrying`/`failed`) so a stuck board is distinguishable from one that
-is merely showing an empty playlist; the key is cleared on success. This is a
-**stop-gap** — the clean fix is to run 64-bit-capable Pi 3 hardware on a
-64-bit OS + the arm64/Qt6 viewer, which sidesteps the entire 32-bit Qt5 stack.
+Because each spawn is a fresh process and a retry usually succeeds within a
+handful of attempts, `load_browser()` in `src/anthias_viewer/__init__.py`
+**retries the spawn in-process with capped exponential backoff** (one throttled
+log line per attempt) instead of letting the exception escape `main()` into a
+tight container restart loop (which floods journald and makes no faster
+progress). The budget differs by where it runs:
+
+* **At startup** (`setup()`): a generous budget
+  (`BROWSER_SPAWN_MAX_ATTEMPTS` / `BROWSER_SPAWN_BACKOFF_CAP_SECONDS`) — nothing
+  is on screen yet, so it's worth spending time to bring the webview up.
+* **Mid-playback** (`view_image` / `view_webpage` respawn): a small, short
+  budget (`BROWSER_SPAWN_INLINE_*`). These run on the single `asset_loop`
+  thread, so a long retry here would freeze the whole viewer — no rotations,
+  no skips, no standby, and `watchdog()` starved. A persistent failure raises
+  instead, and the container restart re-rolls from a clean process.
+
+A missing/unlinkable binary raises `WebviewBinaryMissingError` and
+short-circuits the retry (it's permanent, so burning the backoff budget would
+only hide a packaging regression). Operator-visible status is the throttled
+`logging.warning` output (`balena logs` / journald). This is a **stop-gap** —
+the clean fix is to run 64-bit-capable Pi 3 hardware on a 64-bit OS + the
+arm64/Qt6 viewer, which sidesteps the entire 32-bit Qt5 stack.
 
 ## Sample pack
 
