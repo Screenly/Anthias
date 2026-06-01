@@ -1,24 +1,37 @@
 #!/bin/bash
 #
-# Idempotent host-side migration from the legacy `screenly` directory
-# names to `anthias`:
+# Idempotent screenly -> anthias data-path migration.
 #
+# HOST mode (no argument) — apt/ansible installs, operating on the user's
+# home dir:
 #   ~/screenly/         -> ~/anthias/         (the cloned repo)
 #   ~/screenly_assets/  -> ~/anthias_assets/  (user media)
 #   ~/.screenly/        -> ~/.anthias/        (config + DB + dbbackup)
 #   ~/.anthias/screenly.db   -> ~/.anthias/anthias.db
 #   ~/.anthias/screenly.conf -> ~/.anthias/anthias.conf
+# Invoked from bin/install.sh (before clone_repo) and
+# bin/upgrade_containers.sh.
+#
+# DATA mode (explicit base dir, e.g. `/data`) — balena, where there is no
+# host install step to run this. Runs the same config / asset / DB
+# migration against <base>, minus the host-only repo rename and sudoers
+# cleanup. bin/migrate_in_container_paths.sh calls it as
+# `migrate_legacy_paths.sh /data` from start_server.sh, so the balena
+# upgrade path folds into this one canonical migration instead of a
+# parallel reimplementation.
 #
 # After renaming, legacy locations are left as symlinks to the new
 # locations so external scripts keep working and a one-version downgrade
 # can still find its bind-mount sources.
 #
-# Safe to run multiple times. Exits 0 when nothing to do (fresh install).
+# DATA mode additionally RECOVERS the already-broken state: a balena
+# device that booted a post-rebrand release before this migration shipped
+# created an empty <base>/.anthias/anthias.db (a fresh `migrate`) while
+# its real data stayed in <base>/.screenly/screenly.db. We detect the
+# empty db (and empty anthias_assets) and adopt the legacy data, keeping
+# the empty db as a .emptybak.
 #
-# Invoked from bin/install.sh (before clone_repo) and from
-# bin/upgrade_containers.sh (near the top), so both the curl-piped
-# installer flow and a direct upgrade_containers.sh invocation perform
-# the migration.
+# Safe to run multiple times. Exits 0 when nothing to do (fresh install).
 
 set -euo pipefail
 
@@ -26,12 +39,23 @@ set -euo pipefail
 # invoked under sudo).
 USER_HOME="${USER_HOME:-/home/${USER}}"
 
+# HOST mode (no arg) operates on $USER_HOME and additionally does the repo
+# rename + sudoers cleanup. DATA mode (explicit base dir) does only the
+# config / assets / DB migration + the balena broken-state recovery.
+if [ "$#" -ge 1 ]; then
+    BASE_DIR="$1"
+    HOST_MODE=false
+else
+    BASE_DIR="${USER_HOME}"
+    HOST_MODE=true
+fi
+
 OLD_REPO_DIR="${USER_HOME}/screenly"
 NEW_REPO_DIR="${USER_HOME}/anthias"
-OLD_ASSETS_DIR="${USER_HOME}/screenly_assets"
-NEW_ASSETS_DIR="${USER_HOME}/anthias_assets"
-OLD_CONFIG_DIR="${USER_HOME}/.screenly"
-NEW_CONFIG_DIR="${USER_HOME}/.anthias"
+OLD_ASSETS_DIR="${BASE_DIR}/screenly_assets"
+NEW_ASSETS_DIR="${BASE_DIR}/anthias_assets"
+OLD_CONFIG_DIR="${BASE_DIR}/.screenly"
+NEW_CONFIG_DIR="${BASE_DIR}/.anthias"
 
 log() {
     echo "[migrate_legacy_paths] $*"
@@ -39,7 +63,7 @@ log() {
 
 # If we were started from inside ~/screenly and need to rename it, copy
 # ourselves to /tmp and re-exec from there. Otherwise the `mv` would
-# pull the running script's directory out from under us.
+# pull the running script's directory out from under us. (HOST mode only.)
 self_relocate_if_needed() {
     local script_path
     script_path="$(readlink -f "$0")"
@@ -123,6 +147,54 @@ migrate_assets_dir() {
     fi
 }
 
+# Recover a balena device that already booted a post-rebrand release
+# before this migration shipped: the rename above is a no-op there
+# (NEW_CONFIG_DIR already exists, created empty), so explicitly adopt the
+# legacy data the empty new paths are shadowing. DATA mode only.
+recover_broken_data() {
+    # DB: an empty anthias.db sitting next to a populated legacy
+    # screenly.db. Keep the empty db as a timestamped .emptybak.
+    if [ -f "${NEW_CONFIG_DIR}/anthias.db" ] \
+        && [ ! -L "${NEW_CONFIG_DIR}/anthias.db" ] \
+        && [ -f "${OLD_CONFIG_DIR}/screenly.db" ]; then
+        python3 - "${NEW_CONFIG_DIR}/anthias.db" "${OLD_CONFIG_DIR}/screenly.db" <<'PY' || true
+import shutil
+import sqlite3
+import sys
+import time
+
+new_db, legacy_db = sys.argv[1], sys.argv[2]
+
+
+def asset_count(path):
+    try:
+        return sqlite3.connect(path).execute(
+            'SELECT COUNT(*) FROM assets').fetchone()[0]
+    except Exception:
+        return -1
+
+
+if asset_count(new_db) == 0 and asset_count(legacy_db) > 0:
+    shutil.copy2(new_db, f'{new_db}.emptybak.{int(time.time())}')
+    shutil.copy2(legacy_db, new_db)
+    print('[migrate_legacy_paths] recovered playlist from legacy '
+          'screenly.db (empty anthias.db replaced)')
+PY
+    fi
+
+    # Assets: an empty anthias_assets dir next to populated legacy media.
+    # The asset rows reference /…/screenly_assets paths, so exposing the
+    # legacy media under the new dir keeps both the rows and any new
+    # uploads resolving to one place.
+    if [ -d "${NEW_ASSETS_DIR}" ] && [ ! -L "${NEW_ASSETS_DIR}" ] \
+        && [ -z "$(ls -A "${NEW_ASSETS_DIR}" 2>/dev/null)" ] \
+        && [ -d "${OLD_ASSETS_DIR}" ] && [ ! -L "${OLD_ASSETS_DIR}" ] \
+        && [ -n "$(ls -A "${OLD_ASSETS_DIR}" 2>/dev/null)" ]; then
+        log "Linking empty ${NEW_ASSETS_DIR} -> ${OLD_ASSETS_DIR} (legacy media)"
+        rmdir "${NEW_ASSETS_DIR}" && ln -s "${OLD_ASSETS_DIR}" "${NEW_ASSETS_DIR}"
+    fi
+}
+
 # Leave one-version-back compatibility symlinks at the old paths so:
 #   - users who SSH in and reference ~/.screenly directly keep working
 #   - cron jobs / rsync / backup scripts targeting old paths keep working
@@ -132,7 +204,8 @@ migrate_assets_dir() {
 # These will be removed in a future release once the rename has been out
 # in the field for one cycle.
 create_back_compat_symlinks() {
-    if [ -d "${NEW_REPO_DIR}" ] && [ ! -e "${OLD_REPO_DIR}" ]; then
+    if [ "${HOST_MODE}" = true ] \
+        && [ -d "${NEW_REPO_DIR}" ] && [ ! -e "${OLD_REPO_DIR}" ]; then
         log "Creating compat symlink ${OLD_REPO_DIR} -> ${NEW_REPO_DIR}"
         ln -s "${NEW_REPO_DIR}" "${OLD_REPO_DIR}"
     fi
@@ -161,14 +234,22 @@ remove_legacy_sudoers() {
 }
 
 main() {
-    self_relocate_if_needed "$@"
+    if [ "${HOST_MODE}" = true ]; then
+        self_relocate_if_needed "$@"
+        migrate_repo_dir
+    fi
 
-    migrate_repo_dir
     migrate_config_dir
     migrate_assets_dir
+
+    if [ "${HOST_MODE}" != true ]; then
+        recover_broken_data
+    fi
+
     create_back_compat_symlinks
 
-    if [ "$(id -u)" -eq 0 ] || command -v sudo >/dev/null 2>&1; then
+    if [ "${HOST_MODE}" = true ] \
+        && { [ "$(id -u)" -eq 0 ] || command -v sudo >/dev/null 2>&1; }; then
         remove_legacy_sudoers
     fi
 }
