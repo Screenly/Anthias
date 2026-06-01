@@ -211,7 +211,10 @@ _SESSION_FAKE_REDIS = _make_fake_redis()
 def _patch_connect_to_redis() -> None:
     import anthias_common.utils as _lib_utils
 
-    _lib_utils.connect_to_redis = lambda: _SESSION_FAKE_REDIS
+    # Accept the optional socket-timeout kwargs that real
+    # connect_to_redis() now takes (e.g. the viewer's webview-status
+    # beacon client) so every caller still resolves to the fake.
+    _lib_utils.connect_to_redis = lambda *args, **kwargs: _SESSION_FAKE_REDIS
 
 
 _patch_connect_to_redis()

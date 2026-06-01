@@ -169,9 +169,10 @@ loaned 64-bit Pi 3B+ running the armv7 `anthias-viewer:*-pi3` image:
 * It is **genuine heap corruption in Chromium/WebEngine init**, not a font
   bug. The font-database enumeration is only where the corruption *surfaces*
   (the heaviest main-thread `malloc` activity at that instant — the abort
-  always trails the synthetic `Monospace … StyleOblique` line). Disabling
-  WebEngine init (no `--no-sandbox`) lets the font DB build cleanly every
-  time; only enabling WebEngine init makes it corrupt.
+  always trails the synthetic `Monospace … StyleOblique` line). A build that
+  stops before WebEngine actually initializes enumerates the same fonts
+  cleanly every time; only letting WebEngine init proceed triggers the
+  corruption.
 * It is **heap-layout dependent**, firing on ~75–90 % of launches — so a
   *fresh* launch clears it ~10–25 % of the time. No userspace mitigation
   fixes it: trimming the CJK fonts, `--single-process`, `--no-zygote`, a

@@ -371,19 +371,30 @@ class WebviewLaunchError(RuntimeError):
     """
 
 
+# Dedicated short-timeout client for the health beacon below. The main
+# client ``r`` keeps its blocking semantics for the pub/sub bus, but the
+# beacon runs inside the startup spawn-retry loop, so a Redis stall here
+# must not hang the viewer from ever coming up — bound it explicitly.
+_status_redis = connect_to_redis(socket_connect_timeout=1, socket_timeout=1)
+
+
 def _publish_webview_status(state: str, detail: str = '') -> None:
     """Best-effort webview health beacon written to Redis.
 
-    ``state`` is one of 'ok' | 'retrying' | 'failed'. Never raises — a
-    Redis hiccup must not take the viewer down on top of whatever
-    webview problem we are already reporting.
+    ``state`` is one of 'ok' | 'retrying' | 'failed'. Never raises and
+    never blocks for long — a Redis hiccup must not take the viewer down
+    (or stall its startup) on top of whatever webview problem we are
+    already reporting; the dedicated ``_status_redis`` client carries
+    short socket timeouts so a stall surfaces as a caught exception.
     """
     try:
         if state == 'ok':
-            r.delete(WEBVIEW_STATUS_KEY)
+            _status_redis.delete(WEBVIEW_STATUS_KEY)
         else:
             payload = state if not detail else f'{state}: {detail}'
-            r.set(WEBVIEW_STATUS_KEY, payload, ex=WEBVIEW_STATUS_TTL_S)
+            _status_redis.set(
+                WEBVIEW_STATUS_KEY, payload, ex=WEBVIEW_STATUS_TTL_S
+            )
     except Exception:
         logging.debug('Could not publish webview status', exc_info=True)
 
@@ -399,9 +410,18 @@ def _spawn_webview_once() -> Any:
     ``qInfo() << "Anthias service start"`` in
     src/anthias_webview/src/main.cpp.
     """
-    candidate = sh.Command('AnthiasViewer')(
-        _bg=True, _err_to_out=True, _env=_build_webview_env()
-    )
+    try:
+        candidate = sh.Command('AnthiasViewer')(
+            _bg=True, _err_to_out=True, _env=_build_webview_env()
+        )
+    except sh.CommandNotFound as exc:
+        # A missing binary is permanent, not flaky — but funnel it through
+        # WebviewLaunchError anyway so it is reported (status beacon) and
+        # handled on the same path as every other launch failure rather
+        # than escaping the retry loop unannounced.
+        raise WebviewLaunchError(
+            f'AnthiasViewer binary not found: {exc}'
+        ) from exc
 
     deadline = monotonic() + BROWSER_STARTUP_TIMEOUT_SECONDS
     while monotonic() < deadline:

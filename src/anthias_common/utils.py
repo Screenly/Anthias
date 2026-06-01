@@ -701,8 +701,22 @@ def generate_perfect_paper_password(
     )
 
 
-def connect_to_redis() -> 'redis.Redis':
-    return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+def connect_to_redis(
+    socket_connect_timeout: float | None = None,
+    socket_timeout: float | None = None,
+) -> 'redis.Redis':
+    # Timeouts default to None (blocking, the historical behaviour) so
+    # existing callers are unaffected. Pass short values for best-effort,
+    # non-critical traffic that must never wedge its caller if Redis
+    # stalls — e.g. the viewer's webview health beacon.
+    return redis.Redis(
+        host='redis',
+        decode_responses=True,
+        port=6379,
+        db=0,
+        socket_connect_timeout=socket_connect_timeout,
+        socket_timeout=socket_timeout,
+    )
 
 
 def is_docker() -> bool:
