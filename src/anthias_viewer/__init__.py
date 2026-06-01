@@ -478,6 +478,10 @@ def load_browser(
         backoff_cap = BROWSER_SPAWN_BACKOFF_CAP_SECONDS
     if startup_timeout is None:
         startup_timeout = BROWSER_STARTUP_TIMEOUT_SECONDS
+    # Always make at least one real spawn attempt — a non-positive
+    # max_attempts would otherwise skip the loop entirely and raise a
+    # confusing "0 attempts; last error: None".
+    max_attempts = max(1, max_attempts)
 
     # Re-probe the setReloadInterval capability against the freshly
     # launched binary. The flag latches OFF on UnknownMethod, but a
@@ -518,9 +522,10 @@ def load_browser(
 
     # Retry the spawn with capped exponential backoff so a board that
     # intermittently crashes during Qt/WebEngine init self-heals on a
-    # later launch instead of propagating out into a restart loop. One
-    # log line per attempt (capped by max_attempts) — not a per-second
-    # flood. A missing binary is permanent and short-circuits.
+    # later launch instead of propagating out into a restart loop.
+    # Bounded, throttled logging — the first failure logs its full reason
+    # and each retry logs a one-liner (capped by max_attempts), not a
+    # per-second flood. A missing binary is permanent and short-circuits.
     last_error: WebviewLaunchError | None = None
     backoff = 1
     for attempt in range(1, max_attempts + 1):
