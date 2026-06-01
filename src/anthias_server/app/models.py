@@ -53,12 +53,17 @@ def repair_mojibake(text: str | None) -> str | None:
 
     The repair is deliberately conservative and deterministic: it only
     fires when *every* character is in the Latin-1 range (so
-    ``encode('latin-1')`` round-trips) **and** those bytes form a valid,
-    *different* UTF-8 string. That combination is the unambiguous
-    signature of double-encoded UTF-8 — a correctly-stored
-    ``Formulários``, ``Café``, or ``日本語`` raises on one of the two
-    steps and is returned untouched, so this can't corrupt good data.
-    Idempotent: re-running on already-repaired text is a no-op.
+    ``encode('latin-1')`` round-trips) **and** those bytes form a valid
+    UTF-8 string, which is then returned only if it actually differs from
+    the input. That is a strong heuristic for double-encoded UTF-8, but
+    not a proof: a name that is *genuinely* Latin-1 yet whose bytes also
+    happen to be valid UTF-8 (e.g. ``Â©`` → ``©``) is indistinguishable
+    from mojibake and gets rewritten too. Such collisions are vanishingly
+    rare in real asset filenames, and the alternative — leaving every
+    ``FormulÃ¡rios`` garbled — is worse, so we accept the trade-off.
+    Correctly-stored ``Formulários``, ``Café``, or ``日本語`` raise on the
+    encode or decode step and are returned untouched. Idempotent:
+    re-running on already-repaired text is a no-op.
     """
     if not text:
         return text
@@ -66,7 +71,7 @@ def repair_mojibake(text: str | None) -> str | None:
         repaired = text.encode('latin-1').decode('utf-8')
     except (UnicodeEncodeError, UnicodeDecodeError):
         return text
-    return repaired
+    return repaired if repaired != text else text
 
 
 def generate_asset_id() -> str:

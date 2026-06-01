@@ -35,6 +35,11 @@ GARBLED = 'Formulários'.encode('utf-8').decode('latin-1')
         # A lone Latin-1 lead byte is not valid UTF-8 once re-decoded,
         # so it is left alone rather than mangled.
         ('Ã', 'Ã'),
+        # Documented false positive: a genuinely Latin-1 ``Â©`` (U+00C2
+        # U+00A9) has bytes that are also valid UTF-8 (``©``), so it is
+        # indistinguishable from mojibake and gets rewritten. Accepted
+        # trade-off — see ``repair_mojibake``'s docstring.
+        ('Â©', '©'),
     ],
 )
 def test_repair_mojibake(given: str | None, expected: str | None) -> None:

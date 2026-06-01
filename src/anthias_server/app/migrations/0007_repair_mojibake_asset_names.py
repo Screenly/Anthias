@@ -13,11 +13,14 @@ The repair logic is inlined rather than imported from
 snapshots of intent, and a future change to the model helper must not
 retroactively alter what this one-time data fix did.
 
-Idempotent and safe: a name is rewritten only when every character is
-in the Latin-1 range *and* those bytes form a valid, different UTF-8
-string — the unambiguous signature of double-encoded UTF-8. Correctly
-stored names (``Formulários``, ``Café``, ``日本語``) raise on one of the
-two steps and are left untouched, so a re-run changes nothing.
+Idempotent: a name is rewritten only when every character is in the
+Latin-1 range *and* those bytes form a valid UTF-8 string that differs
+from the input — a strong heuristic for double-encoded UTF-8, though not
+a proof (a genuinely Latin-1 name whose bytes are also valid UTF-8, e.g.
+``Â©`` → ``©``, is indistinguishable and gets rewritten too; such
+collisions are vanishingly rare in real filenames). Correctly stored
+names (``Formulários``, ``Café``, ``日本語``) raise on the encode or
+decode step and are left untouched, so a re-run changes nothing.
 """
 
 from __future__ import annotations
@@ -32,12 +35,19 @@ def _repair_mojibake(text):  # type: ignore[no-untyped-def]
         repaired = text.encode('latin-1').decode('utf-8')
     except (UnicodeEncodeError, UnicodeDecodeError):
         return text
-    return repaired
+    return repaired if repaired != text else text
 
 
 def _repair_names(apps, schema_editor):  # type: ignore[no-untyped-def]
     asset_model = apps.get_model('anthias_app', 'Asset')
-    for asset in asset_model.objects.exclude(name__isnull=True):
+    # ``.only()`` + ``.iterator()`` streams rows in chunks instead of
+    # caching the whole table in memory; per-row ``save`` still works.
+    rows = (
+        asset_model.objects.exclude(name__isnull=True)
+        .only('asset_id', 'name')
+        .iterator()
+    )
+    for asset in rows:
         repaired = _repair_mojibake(asset.name)
         if repaired != asset.name:
             asset.name = repaired
