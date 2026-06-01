@@ -543,7 +543,7 @@ def load_browser() -> None:
     raise WebviewLaunchError(
         'AnthiasViewer did not start after '
         f'{BROWSER_SPAWN_MAX_ATTEMPTS} attempts; last error: {last_error}'
-    )
+    ) from last_error
 
 
 def view_webpage(uri: str, reload_interval_s: int = 0) -> None:

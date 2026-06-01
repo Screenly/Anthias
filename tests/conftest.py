@@ -285,7 +285,13 @@ def _mock_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     directly — that takes precedence inside the per-test setup chain.
     """
     fake = _make_fake_redis()
-    monkeypatch.setattr('anthias_common.utils.connect_to_redis', lambda: fake)
+    # ``*args, **kwargs`` so the fake tolerates the optional
+    # socket-timeout kwargs real connect_to_redis() now accepts (e.g. the
+    # viewer's webview-status beacon client).
+    monkeypatch.setattr(
+        'anthias_common.utils.connect_to_redis',
+        lambda *args, **kwargs: fake,
+    )
 
     # Replace already-bound ``r`` attributes on modules that called
     # connect_to_redis() at import time. Only modules already in
