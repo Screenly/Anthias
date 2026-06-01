@@ -199,6 +199,47 @@ if [ -e /dev/dri/renderD128 ]; then
     fi
 fi
 
+# Pi 4 (and any future eglfs_kms board) aborts at startup with "no
+# screens available" when no display is attached: under full KMS a DRM
+# connector only reads "connected" while a panel is present, so Qt's
+# eglfs plugin finds no usable screen and exits — before the viewer emits
+# its D-Bus handshake, so the container crash-loops on a headless or
+# not-yet-negotiated board. This is the eglfs analogue of the linuxfb
+# /dev/fb0 wait below; eglfs has no /dev/fb0, so gate on connector status
+# instead. Wait here, before the KMS-card detection, so the detection
+# sees the connected connector once a display appears; a genuinely
+# headless device idles quietly and self-heals on hotplug.
+eglfs_has_display() {
+    local status_file
+    for status_file in /sys/class/drm/card*-*/status; do
+        [ -r "$status_file" ] || continue
+        # Treat "connected" — and the occasional bridge that reports
+        # "unknown" — as present; only an all-"disconnected" board waits.
+        case "$(cat "$status_file" 2>/dev/null)" in
+            disconnected | '') ;;
+            *) return 0 ;;
+        esac
+    done
+    return 1
+}
+wait_for_eglfs_display() {
+    [ "${QT_QPA_PLATFORM:-}" = 'eglfs' ] || return 0
+    eglfs_has_display && return 0
+
+    echo "start_viewer: no display connected yet — waiting. Connect or" \
+        "power on the screen; the viewer starts automatically once one is present."
+    local waited=0
+    until eglfs_has_display; do
+        sleep 5
+        waited=$((waited + 5))
+        if [ "$((waited % 60))" -eq 0 ]; then
+            echo "start_viewer: still no display connected after ${waited}s; waiting for a display."
+        fi
+    done
+    echo "start_viewer: display connected after ${waited}s — starting the viewer."
+}
+wait_for_eglfs_display
+
 # Pi 4 renders through Qt's eglfs_kms platform (see Dockerfile.viewer.j2),
 # whose JSON config pins the DRM card device. The vc4-drm (display) and
 # v3d (render-only) nodes race during probe, so the *display* card is
@@ -327,9 +368,10 @@ release_boot_splash
 # No assumptions about which connector the panel is on or its resolution:
 # when a display is (re)connected the KMS driver creates /dev/fb0 and we
 # proceed; a genuinely headless device idles here quietly and self-heals
-# on hotplug. Only the linuxfb path needs this — the cage (wayland) and
-# eglfs (KMS) boards render straight to /dev/dri with no /dev/fb0
-# dependency, so the QT_QPA_PLATFORM guard makes this a no-op there.
+# on hotplug. Only the linuxfb path needs the /dev/fb0 wait — eglfs has
+# no /dev/fb0 and is guarded by wait_for_eglfs_display above instead,
+# while cage (wayland) tolerates a missing display without crashing — so
+# the QT_QPA_PLATFORM guard makes this a no-op for those paths.
 wait_for_framebuffer() {
     [ "${QT_QPA_PLATFORM:-}" = 'linuxfb' ] || return 0
     [ -e /dev/fb0 ] && return 0
@@ -355,13 +397,14 @@ wait_for_framebuffer
 # viewer user; WAYLAND_DISPLAY has to be added to --preserve-env to
 # survive sudo's env scrub.
 #
-# Pi 4 falls through to the legacy direct-sudo path that runs under
-# QT_QPA_PLATFORM=linuxfb. The V3D 6.0 doesn't have the bandwidth
+# Pi 4 falls through to the direct-sudo path (no cage) under
+# QT_QPA_PLATFORM=eglfs (#2904: eglfs gives QGraphicsVideoItem a GL
+# painter that linuxfb lacks). The V3D 6.0 doesn't have the bandwidth
 # to composite cage on top of video at 4K (738 vo drops/30 s under
-# cage vs 3-6 on the linuxfb + --gpu-context=drm path), so Pi 4
-# stays on linuxfb until either a newer mpv with v4l2request hwdec
-# or a future Pi platform lets us re-evaluate. Qt5 boards (pi2/pi3)
-# share the same direct-sudo fallback path.
+# cage vs 3-6 on the eglfs + --gpu-context=drm path), so Pi 4 stays off
+# cage until either a newer mpv with v4l2request hwdec or a future Pi
+# platform lets us re-evaluate. Qt5 boards (pi2/pi3) share the same
+# direct-sudo fallback path under linuxfb.
 case "$DEVICE_TYPE" in
     x86|arm64|pi5)
     # libseat's default `logind` backend D-Buses into systemd-logind to
