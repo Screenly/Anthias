@@ -158,6 +158,38 @@ viewer + 2 QtWebEngine renderers + zygotes consume ~440 MB RSS on Rock Pi 4
 pipeline. A 4K HEVC capture-buffer allocation pushes the container past the
 cgroup limit; the kernel logs `global_oom` and the container restart-loops.
 
+### armv7 (Pi 2 / Pi 3) WebEngine-init crash + spawn retry
+
+On the 32-bit (armv7) Qt5 viewer build — Pi 2 and Pi 3 — `AnthiasViewer`
+intermittently aborts during Qt/WebEngine initialization with
+`malloc(): unaligned tcache chunk detected`, dying before it emits the
+`Anthias service start` D-Bus handshake. Reproduced and root-caused on a
+loaned 64-bit Pi 3B+ running the armv7 `anthias-viewer:*-pi3` image:
+
+* It is **genuine heap corruption in Chromium/WebEngine init**, not a font
+  bug. The font-database enumeration is only where the corruption *surfaces*
+  (the heaviest main-thread `malloc` activity at that instant — the abort
+  always trails the synthetic `Monospace … StyleOblique` line). Disabling
+  WebEngine init (no `--no-sandbox`) lets the font DB build cleanly every
+  time; only enabling WebEngine init makes it corrupt.
+* It is **heap-layout dependent**, firing on ~75–90 % of launches — so a
+  *fresh* launch clears it ~10–25 % of the time. No userspace mitigation
+  fixes it: trimming the CJK fonts, `--single-process`, `--no-zygote`, a
+  single `QWebEngineView` (`ANTHIAS_LOW_RAM=1`), a jemalloc preload, and
+  disabling glibc's tcache check (which just turns the abort into a raw
+  `SIGSEGV`) all still crash.
+
+Because a retry usually succeeds within a handful of attempts, the viewer
+**retries the spawn in-process with capped exponential backoff**
+(`BROWSER_SPAWN_MAX_ATTEMPTS` / `BROWSER_SPAWN_BACKOFF_CAP_SECONDS` in
+`src/anthias_viewer/__init__.py`) instead of letting the exception escape
+`main()` into a tight container restart loop (which floods journald and makes
+no faster progress). While retrying, it publishes `viewer:webview_status` to
+Redis (`retrying`/`failed`) so a stuck board is distinguishable from one that
+is merely showing an empty playlist; the key is cleared on success. This is a
+**stop-gap** — the clean fix is to run 64-bit-capable Pi 3 hardware on a
+64-bit OS + the arm64/Qt6 viewer, which sidesteps the entire 32-bit Qt5 stack.
+
 ## Sample pack
 
 Run `bin/generate_board_enablement_testbed.sh` on a workstation

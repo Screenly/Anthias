@@ -148,6 +148,9 @@ def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
 def test_load_browser_raises_when_process_exits_before_handshake(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
+    # Pin a single spawn attempt so the retry loop doesn't re-spawn —
+    # this asserts the per-launch early-exit detection still surfaces
+    # as a WebviewLaunchError (a RuntimeError subclass).
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
     # The error message also reads stdout, so use the static stub
     # that returns the same value on every access rather than a
@@ -155,10 +158,15 @@ def test_load_browser_raises_when_process_exits_before_handshake(
     _stub_browser_stdout_static(browser_proc, b'')
     browser_proc.is_alive.return_value = False
     viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
     try:
-        with pytest.raises(RuntimeError):
-            viewer_fixtures.u.load_browser()
+        with mock.patch.object(
+            viewer_fixtures.u, 'BROWSER_SPAWN_MAX_ATTEMPTS', 1
+        ):
+            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
+                viewer_fixtures.u.load_browser()
     finally:
+        viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
 
 
@@ -174,16 +182,72 @@ def test_load_browser_times_out_when_handshake_never_arrives(
     viewer_fixtures.p_cmd.start()
     viewer_fixtures.p_sleep.start()
     try:
-        with mock.patch.object(
-            viewer_fixtures.u,
-            'monotonic',
-            side_effect=lambda: next(monotonic_values),
+        with (
+            mock.patch.object(
+                viewer_fixtures.u, 'BROWSER_SPAWN_MAX_ATTEMPTS', 1
+            ),
+            mock.patch.object(
+                viewer_fixtures.u,
+                'monotonic',
+                side_effect=lambda: next(monotonic_values),
+            ),
         ):
-            with pytest.raises(TimeoutError):
+            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
                 viewer_fixtures.u.load_browser()
     finally:
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
+
+
+def test_load_browser_retries_then_succeeds(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A board that crashes the webview on the first launches but comes
+    up on a later one must self-heal in-process — the whole point of the
+    spawn retry (the pi3 Qt5/WebEngine heap-corruption crash)."""
+    attempts = {'n': 0}
+
+    def fake_spawn() -> mock.Mock:
+        attempts['n'] += 1
+        if attempts['n'] < 3:
+            raise viewer_fixtures.u.WebviewLaunchError('init crash')
+        return mock.Mock(name='browser')
+
+    viewer_fixtures.p_sleep.start()
+    try:
+        with mock.patch.object(
+            viewer_fixtures.u, '_spawn_webview_once', side_effect=fake_spawn
+        ):
+            viewer_fixtures.u.load_browser()
+    finally:
+        viewer_fixtures.p_sleep.stop()
+
+    assert attempts['n'] == 3
+    assert viewer_fixtures.u.browser is not None
+
+
+def test_load_browser_raises_after_exhausting_retries(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """When every attempt fails, load_browser still raises — but only
+    after spending the retry budget, so the fall-through to a container
+    restart is slow, not a tight loop."""
+    viewer_fixtures.p_sleep.start()
+    try:
+        with (
+            mock.patch.object(
+                viewer_fixtures.u,
+                '_spawn_webview_once',
+                side_effect=viewer_fixtures.u.WebviewLaunchError('crash'),
+            ),
+            mock.patch.object(
+                viewer_fixtures.u, 'BROWSER_SPAWN_MAX_ATTEMPTS', 4
+            ),
+        ):
+            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
+                viewer_fixtures.u.load_browser()
+    finally:
+        viewer_fixtures.p_sleep.stop()
 
 
 def test_view_webpage_arms_reload_interval(
