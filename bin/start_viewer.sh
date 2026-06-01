@@ -210,9 +210,20 @@ fi
 # sees the connected connector once a display appears; a genuinely
 # headless device idles quietly and self-heals on hotplug.
 eglfs_has_display() {
-    local status_file
+    local status_file connector
     for status_file in /sys/class/drm/card*-*/status; do
         [ -r "$status_file" ] || continue
+        connector=$(basename "$(dirname "$status_file")")  # e.g. card0-HDMI-A-1
+        # Skip virtual / non-display connectors. The KMS "Writeback"
+        # connector is not a real output and always reports "unknown";
+        # counting it as a display defeats the headless wait and sends
+        # eglfs into a "no screens available" crash-loop on a screenless
+        # board. balenaOS 2026.x exposes card0-Writeback-1, which is what
+        # broke this on Pi 4 (both HDMI ports disconnected, yet the
+        # writeback connector kept the guard from ever waiting).
+        case "$connector" in
+            *[Ww]riteback*) continue ;;
+        esac
         # Treat "connected" — and the occasional bridge that reports
         # "unknown" — as present; only an all-"disconnected" board waits.
         case "$(cat "$status_file" 2>/dev/null)" in
