@@ -287,24 +287,18 @@ def _build_video_options(uri: str) -> dict[str, Any]:
     but a future codec-specific tuning may re-introduce it.
     """
     del uri  # see docstring; kept for signature compatibility.
-    device_type = os.environ.get('DEVICE_TYPE', '')
 
     options: dict[str, Any] = {
         'audio-device': f'alsa/{get_alsa_audio_device()}',
     }
 
-    # Rotation: cage/wlroots boards rotate via wlr-randr (issue
-    # #2856, wired in src/anthias_viewer/__init__.py) and Qt's
-    # wayland QPA inherits the transform — passing video-rotate
-    # on top would double-rotate. On Pi 4 (eglfs, no compositor)
-    # Qt has no transform plumbing, so the video pipeline has to
-    # apply the rotation itself (via QGraphicsVideoItem::setRotation
-    # in VideoView). Sent as int so the C++ side parses it cleanly
-    # via ``QVariant::toInt`` without a string round-trip.
-    rotation = _screen_rotation()
-    if rotation and device_type == 'pi4-64':
-        options['video-rotate'] = rotation
-
+    # No per-video rotation here. Every Qt6 board now rotates at the
+    # platform layer and the QGraphicsVideoItem inherits the transform:
+    # cage/wlroots (x86) via wlr-randr (issue #2856) and eglfs (pi4-64)
+    # via QT_QPA_EGLFS_ROTATION (set in _build_webview_env). Sending
+    # ``video-rotate`` on top of either would double-rotate the frames.
+    # linuxfb VLC boards (pi1/2/3) apply rotation through the
+    # ``--transform`` filter in VLCMediaPlayer.__init__ instead.
     return options
 
 

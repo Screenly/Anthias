@@ -811,6 +811,63 @@ def test_build_webview_env_removes_stale_rotation_when_dialed_to_zero() -> (
     assert env['QT_QPA_PLATFORM'] == 'linuxfb:fb=/dev/fb1'
 
 
+@pytest.mark.parametrize('rotation', [90, 180, 270])
+def test_build_webview_env_sets_eglfs_rotation(rotation: int) -> None:
+    """Pi 4 runs eglfs, which ignores the linuxfb ``:rotation=N`` plugin
+    option (that silent no-op was the 2026.06.0 bug). eglfs reads
+    QT_QPA_EGLFS_ROTATION at QPA init instead, so we set that and leave
+    QT_QPA_PLATFORM untouched."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': rotation}),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi4-64', 'QT_QPA_PLATFORM': 'eglfs'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_EGLFS_ROTATION'] == str(rotation)
+    # The platform string must stay a bare plugin — appending
+    # ``:rotation=N`` here is exactly the no-op that broke Pi 4.
+    assert env['QT_QPA_PLATFORM'] == 'eglfs'
+
+
+def test_build_webview_env_eglfs_zero_omits_rotation() -> None:
+    """Default orientation must not set QT_QPA_EGLFS_ROTATION at all."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 0}),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi4-64', 'QT_QPA_PLATFORM': 'eglfs'},
+            clear=False,
+        ),
+    ):
+        # Guard against a stray value leaking in from the real env.
+        os.environ.pop('QT_QPA_EGLFS_ROTATION', None)
+        env = viewer._build_webview_env()
+    assert 'QT_QPA_EGLFS_ROTATION' not in env
+    assert env['QT_QPA_PLATFORM'] == 'eglfs'
+
+
+def test_build_webview_env_eglfs_clears_stale_rotation() -> None:
+    """Dialling back to 0° after a rotated launch must drop a stale
+    QT_QPA_EGLFS_ROTATION so the respawned webview un-rotates."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 0}),
+        mock.patch.dict(
+            os.environ,
+            {
+                'DEVICE_TYPE': 'pi4-64',
+                'QT_QPA_PLATFORM': 'eglfs',
+                'QT_QPA_EGLFS_ROTATION': '270',
+            },
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert 'QT_QPA_EGLFS_ROTATION' not in env
+
+
 def test_apply_wlr_transform_skipped_on_linuxfb() -> None:
     """The wlr-randr binary isn't even shipped on Pi boards — make
     sure we never call it from a non-wayland viewer."""
