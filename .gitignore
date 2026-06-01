@@ -80,3 +80,6 @@ website/.hugo_build.lock
 
 # Linting
 .coffeelint.json
+
+# balena fleet maintenance roller state (bin/balena_fleet_maintenance.py)
+.balena-maint-state.tsv
