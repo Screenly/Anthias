@@ -126,12 +126,17 @@ class Asset(models.Model):
         the web form, all four API versions, and the legacy Screenly
         import — stores a clean name regardless of an upstream client
         that double-encoded the filename. See ``repair_mojibake`` for
-        why this is safe (no-op on correctly-encoded text). The repair
-        is cheap and idempotent, so running it on every save (including
-        reachability/processing-flag updates that leave ``name``
-        unchanged) costs nothing.
+        why this is safe (no-op on correctly-encoded text).
+
+        Skipped when ``update_fields`` is passed without ``name`` (e.g.
+        the metadata-only and reachability saves): those writes don't
+        touch the column, so repairing ``self.name`` there would mutate
+        the in-memory instance without persisting it — diverging from
+        the stored row while leaving the DB value unrepaired.
         """
-        self.name = repair_mojibake(self.name)
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or 'name' in update_fields:
+            self.name = repair_mojibake(self.name)
         super().save(*args, **kwargs)
 
     def get_play_days(self) -> list[int]:

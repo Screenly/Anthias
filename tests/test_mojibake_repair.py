@@ -66,6 +66,28 @@ def test_save_leaves_clean_name_untouched() -> None:
 
 
 @pytest.mark.django_db
+def test_save_skips_repair_when_name_not_in_update_fields() -> None:
+    """A metadata-only save must not silently rewrite ``name``.
+
+    With ``update_fields`` excluding ``name`` the column isn't written,
+    so repairing ``self.name`` would only diverge the in-memory instance
+    from the stored row. The repair is skipped and the stored value is
+    left as-is.
+    """
+    asset = Asset.objects.create(name='placeholder', mimetype='image')
+    Asset.objects.filter(pk=asset.pk).update(name=GARBLED)
+    asset.refresh_from_db()
+
+    asset.metadata = {'foo': 'bar'}
+    asset.save(update_fields=['metadata'])
+
+    # In-memory name untouched, and the DB still holds the raw value.
+    assert asset.name == GARBLED
+    asset.refresh_from_db()
+    assert asset.name == GARBLED
+
+
+@pytest.mark.django_db
 def test_migration_repairs_existing_rows() -> None:
     """The migration's repair pass fixes pre-existing garbled rows.
 
