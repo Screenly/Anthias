@@ -31,8 +31,10 @@ make -j"$(nproc)"
 # QTEST_MAIN's generated binary exits non-zero on any test failure.
 # ``QT_QPA_PLATFORM=offscreen`` skips connecting to a real display
 # server / framebuffer — the tests don't render, they exercise
-# the QMediaPlayer / QGraphicsVideoItem API surface plus the
-# rotation transform.
-QT_QPA_PLATFORM=offscreen ./AnthiasViewerTests
+# the QMediaPlayer / VideoOutput API surface plus the option
+# plumbing. ``QT_QUICK_BACKEND=software`` keeps the QQuickWidget's
+# scene graph off the GPU so the QML scene loads on hosts whose
+# offscreen platform has no usable GL context.
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./AnthiasViewerTests
 
 popd >/dev/null

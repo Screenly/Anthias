@@ -131,13 +131,16 @@ userspace baseline is unaffected on every board.
 
 ### Decode path (post-#2905)
 
-Playback runs through QtMultimedia (`QMediaPlayer` + `QGraphicsVideoItem`)
-embedded in `AnthiasViewer`. Qt 6.5 dropped the upstream gstreamer media
-backend, so Debian Trixie ships only the ffmpeg-backed
-`libffmpegmediaplugin.so`, which calls libavcodec internally. The libmpv
-subprocess and the per-codec `--hwdec=` dispatch the prior viewer revisions
-relied on are both gone — Anthias no longer hand-selects a decoder. **As a
-consequence: libavcodec's default decoder choice is what runs on this board.**
+Playback runs through QtMultimedia (`QMediaPlayer` rendering into a QML
+`VideoOutput` hosted in a `QQuickWidget` — issue #2967 replaced the original
+`QGraphicsVideoItem` substrate, whose per-frame `toImage()` GPU→CPU readback
+capped presentation at 8–12 fps) embedded in `AnthiasViewer`. Qt 6.5 dropped
+the upstream gstreamer media backend, so Debian Trixie ships only the
+ffmpeg-backed `libffmpegmediaplugin.so`, which calls libavcodec internally.
+The libmpv subprocess and the per-codec `--hwdec=` dispatch the prior viewer
+revisions relied on are both gone — Anthias no longer hand-selects a decoder.
+**As a consequence: libavcodec's default decoder choice is what runs on this
+board.**
 
 ### Known hardware-decode limitation on RK3399
 
