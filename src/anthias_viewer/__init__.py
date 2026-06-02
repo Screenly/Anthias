@@ -482,6 +482,13 @@ def load_browser(
     # max_attempts would otherwise skip the loop entirely and raise a
     # confusing "0 attempts; last error: None".
     max_attempts = max(1, max_attempts)
+    # Keep the backoff sane for any call site: a cap below 1s would
+    # devolve into a tight retry loop, and a negative one would turn
+    # ``backoff`` negative on the second retry, making ``sleep()`` raise
+    # ValueError and mask the real launch error. A negative timeout is
+    # clamped to 0 (an immediate-timeout attempt, same as passing 0).
+    backoff_cap = max(1, backoff_cap)
+    startup_timeout = max(0.0, startup_timeout)
 
     # Re-probe the setReloadInterval capability against the freshly
     # launched binary. The flag latches OFF on UnknownMethod, but a
