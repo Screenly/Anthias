@@ -939,12 +939,20 @@ def test_build_webview_env_removes_stale_rotation_when_dialed_to_zero() -> (
     assert env['QT_QPA_PLATFORM'] == 'linuxfb:fb=/dev/fb1'
 
 
-@pytest.mark.parametrize('rotation', [90, 180, 270])
-def test_build_webview_env_sets_eglfs_rotation(rotation: int) -> None:
+@pytest.mark.parametrize(
+    ('rotation', 'expected'),
+    [(90, '90'), (180, '180'), (270, '-90')],
+)
+def test_build_webview_env_sets_eglfs_rotation(
+    rotation: int, expected: str
+) -> None:
     """Pi 4 runs eglfs, which ignores the linuxfb ``:rotation=N`` plugin
     option (that silent no-op was the 2026.06.0 bug). eglfs reads
     QT_QPA_EGLFS_ROTATION at QPA init instead, so we set that and leave
-    QT_QPA_PLATFORM untouched."""
+    QT_QPA_PLATFORM untouched. eglfs only accepts 180/90/-90 — a literal
+    270 rotates the content without swapping the screen geometry to
+    portrait, rendering everything stretched (issue #2970) — so 270°
+    must be emitted as -90."""
     with (
         mock.patch.dict(settings, {'screen_rotation': rotation}),
         mock.patch.dict(
@@ -954,7 +962,7 @@ def test_build_webview_env_sets_eglfs_rotation(rotation: int) -> None:
         ),
     ):
         env = viewer._build_webview_env()
-    assert env['QT_QPA_EGLFS_ROTATION'] == str(rotation)
+    assert env['QT_QPA_EGLFS_ROTATION'] == expected
     # The platform string must stay a bare plugin — appending
     # ``:rotation=N`` here is exactly the no-op that broke Pi 4.
     assert env['QT_QPA_PLATFORM'] == 'eglfs'
