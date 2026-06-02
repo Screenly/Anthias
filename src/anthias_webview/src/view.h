@@ -32,7 +32,7 @@ public:
     // image canvas. Pauses background URL loads so a parked
     // QWebEngineView doesn't keep streaming while video plays.
     //
-    // Qt 5 boards (Pi 2 / Pi 3) route video through VLCMediaPlayer
+    // Qt 5 boards (Pi 1 / Pi 2 / Pi 3) route video through GstFbdevMediaPlayer
     // painting straight to the framebuffer (see
     // ``MediaPlayerProxy.get_instance`` in
     // ``src/anthias_viewer/media_player.py``), so the in-process

@@ -176,8 +176,8 @@ View::View(QWidget* parent) : QWidget(parent)
     // made visible when ``playVideo`` fires. The QMediaPlayer +
     // QGraphicsVideoItem live for the lifetime of this widget so
     // repeated plays don't pay pipeline-rebuild cost on every
-    // asset. Qt 5 boards (Pi 2 / Pi 3) skip this — video plays via
-    // VLCMediaPlayer painting straight to the framebuffer.
+    // asset. Qt 5 boards (Pi 1 / Pi 2 / Pi 3) skip this — video plays via
+    // GstFbdevMediaPlayer painting straight to the framebuffer.
     videoView = new VideoView(this);
     videoView->setVisible(false);
     connect(videoView, &VideoView::videoEnded, this, &View::videoEnded);

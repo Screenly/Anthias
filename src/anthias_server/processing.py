@@ -845,13 +845,14 @@ _VIDEO_METADATA_KEYS = (
 )
 
 
-# Per-board hardware-decode codec set. Mirrors
-# ``anthias_viewer.media_player._PI_HWDEC_BY_CODEC`` — the two tables
-# must list the same codecs for each board, because the upload-side
-# gate decides what to accept and the playback-side dispatch decides
-# how to play. If they drift, an asset accepted at upload will fail
-# at the viewer with mpv's silent SW-decode fallback (which the gate
-# exists to prevent).
+# Per-board hardware-decode codec set. This upload-side gate must
+# stay in sync with what each board's player can actually decode in
+# hardware: pi2/pi3 through GStreamer's V4L2 elements
+# (``GstFbdevMediaPlayer`` — bcm2835 codec, H.264 only), every other
+# board through mpv/QtMultimedia + libavcodec. If the gate accepts a
+# codec the board can't HW-decode, playback falls back to a silent
+# software decode at the viewer (drops / black screen) — which this
+# gate exists to prevent.
 #
 # Empty / missing entry means "no codec on this device decodes in
 # hardware" — every video upload is rejected. The catch-all ``arm64``

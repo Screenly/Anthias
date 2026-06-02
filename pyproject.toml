@@ -86,7 +86,6 @@ viewer = [
     "netifaces==0.11.0",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
-    "python-vlc==3.0.21203",
     "pytz==2026.2",
     "redis==7.4.0",
     "requests==2.33.1",
@@ -145,7 +144,7 @@ mypy = [
     # to type-check the upload-time normalisation pipeline.
     # pillow-heif is intentionally not pinned here — it's listed in
     # tool.mypy.overrides above so its missing-import error is
-    # ignored, mirroring the cec / pydbus / sh / vlc pattern.
+    # ignored, mirroring the cec / pydbus / sh pattern.
     "Pillow==12.2.0",
     "pytz==2026.2",
     "whitenoise==6.12.0",
@@ -242,7 +241,6 @@ module = [
     "pillow_heif",
     "pydbus",
     "sh",
-    "vlc",
     "yt_dlp",
     "yt_dlp.*",
 ]

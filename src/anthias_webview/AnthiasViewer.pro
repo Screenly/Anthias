@@ -19,8 +19,8 @@ CONFIG += c++17
 # caught the prior ``setProperty("rotation", …)`` shortcut as a
 # silent no-op on Pi 4).
 #
-# VideoView only builds against Qt 6. The Qt 5 boards (Pi 2 /
-# Pi 3) route video through VLCMediaPlayer on the Python side
+# VideoView only builds against Qt 6. The Qt 5 boards (Pi 1 /
+# Pi 2 / Pi 3) route video through GstFbdevMediaPlayer on the Python side
 # (see ``src/anthias_viewer/media_player.py::MediaPlayerProxy``)
 # which paints straight to the framebuffer and never talks to the
 # AnthiasViewer ``playVideo`` D-Bus slot — so the Qt5 build skips
