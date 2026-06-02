@@ -259,9 +259,21 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
 
     if is_qt6:
         # Shared Qt 6 runtime for every Qt6 board (pi4-64, pi5, x86,
-        # arm64). VideoView uses QMediaPlayer + QVideoWidget from
-        # qt6-multimedia. Qt 6.8 dropped its gstreamer backend
-        # upstream (only ``libffmpegmediaplugin.so`` ships in
+        # arm64). VideoView plays through QMediaPlayer into a QML
+        # ``VideoOutput`` hosted in a QQuickWidget (issue #2967:
+        # frames stay on the GPU as scene-graph textures — the prior
+        # QGraphicsVideoItem raster path presented at 8–12 fps).
+        # That needs the declarative runtime (QQuickWidget links
+        # libQt6QuickWidgets, pulled by qt6-declarative-dev) plus the
+        # two QML *plugin* modules the scene imports at runtime —
+        # qml6-module-qtquick (Rectangle et al.) and
+        # qml6-module-qtmultimedia (VideoOutput). The QML modules
+        # are runtime-only plugins: the build succeeds without them
+        # and the viewer then black-screens with "module not
+        # installed" QML errors in the container log, so they must
+        # ship in the image even though nothing links them.
+        # Qt 6.5 dropped its gstreamer backend upstream (only
+        # ``libffmpegmediaplugin.so`` ships in
         # ``/usr/lib/.../qt6/plugins/multimedia/``); decode goes
         # through libavcodec directly. The +rpt1 ``ffmpeg`` /
         # ``libav*`` packages pinned in _rpt1-ffmpeg-pin.j2 carry
@@ -274,8 +286,10 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         viewer_extra_apt_dependencies.extend(
             [
                 'libqt6multimedia6',
-                'libqt6multimediawidgets6',
+                'qml6-module-qtmultimedia',
+                'qml6-module-qtquick',
                 'qt6-base-dev',
+                'qt6-declarative-dev',
                 'qt6-image-formats-plugins',
                 'qt6-multimedia-dev',
                 'qt6-webengine-dev',

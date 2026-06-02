@@ -174,7 +174,7 @@ View::View(QWidget* parent) : QWidget(parent)
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // QtMultimedia-backed video surface. Created hidden — only
     // made visible when ``playVideo`` fires. The QMediaPlayer +
-    // QGraphicsVideoItem live for the lifetime of this widget so
+    // QML VideoOutput live for the lifetime of this widget so
     // repeated plays don't pay pipeline-rebuild cost on every
     // asset. Qt 5 boards (Pi 1 / Pi 2 / Pi 3) skip this — video plays via
     // GstFbdevMediaPlayer painting straight to the framebuffer.

@@ -12,12 +12,13 @@ CONFIG += c++17
 # ffmpeg-backed ``libffmpegmediaplugin.so``; libavcodec engages
 # the v4l2_request / v4l2_m2m decoders directly via the +rpt1
 # packages pinned in ``docker/_rpt1-ffmpeg-pin.j2`` — no
-# gstreamer plugin set needed. VideoView builds the render path
-# from ``QMediaPlayer`` → ``QGraphicsVideoItem`` so the
-# ``video-rotate`` option actually rotates the displayed frames
-# (``QVideoWidget`` has no rotation property; reviewing PR #2905
-# caught the prior ``setProperty("rotation", …)`` shortcut as a
-# silent no-op on Pi 4).
+# gstreamer plugin set needed. VideoView renders through a QML
+# ``VideoOutput`` hosted in a ``QQuickWidget`` (quickwidgets):
+# frames stay on the GPU as scene-graph textures with shader
+# YUV→RGB. The prior ``QMediaPlayer`` → ``QGraphicsVideoItem``
+# path presented at 8–12 fps because ``QVideoFrame::toImage``
+# does an RHI offscreen render + GPU→CPU readback per frame
+# (issue #2967) — see videoview.h for the full history.
 #
 # VideoView only builds against Qt 6. The Qt 5 boards (Pi 1 /
 # Pi 2 / Pi 3) route video through GstFbdevMediaPlayer on the Python side
@@ -37,9 +38,10 @@ HEADERS += \
     src/view.h
 
 greaterThan(QT_MAJOR_VERSION, 5) {
-    QT += multimedia multimediawidgets
+    QT += multimedia quickwidgets
     SOURCES += src/videoview.cpp
     HEADERS += src/videoview.h
+    RESOURCES += src/videoview.qrc
 }
 
 # Default rules for deployment.

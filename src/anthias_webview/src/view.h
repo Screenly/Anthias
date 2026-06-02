@@ -27,10 +27,11 @@ public:
     void setReloadInterval(int seconds);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Hands the URI + option dict to VideoView (QtMultimedia
-    // QMediaPlayer + QGraphicsVideoItem) and switches visibility
-    // so the video surface is on top of the QWebEngineView pair /
-    // image canvas. Pauses background URL loads so a parked
-    // QWebEngineView doesn't keep streaming while video plays.
+    // QMediaPlayer rendering into a QML VideoOutput) and switches
+    // visibility so the video surface is on top of the
+    // QWebEngineView pair / image canvas. Pauses background URL
+    // loads so a parked QWebEngineView doesn't keep streaming while
+    // video plays.
     //
     // Qt 5 boards (Pi 1 / Pi 2 / Pi 3) route video through GstFbdevMediaPlayer
     // painting straight to the framebuffer (see
@@ -76,7 +77,7 @@ private:
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // QtMultimedia-backed video widget (issue #2904). Sibling of
     // the web / image widgets — visibility is toggled rather than
-    // re-parented so the QMediaPlayer + QGraphicsVideoItem survive
+    // re-parented so the QMediaPlayer + Quick scene survive
     // across plays (no pipeline rebuild per asset).
     VideoView* videoView;
 #endif

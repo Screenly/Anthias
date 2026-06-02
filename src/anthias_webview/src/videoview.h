@@ -13,9 +13,8 @@
 #include <QWidget>
 
 class QAudioOutput;
-class QGraphicsScene;
-class QGraphicsVideoItem;
-class QGraphicsView;
+class QQuickItem;
+class QQuickWidget;
 class QVideoSink;
 
 // VideoView owns the Qt 6 multimedia playback pipeline for the Qt6
@@ -40,18 +39,26 @@ class QVideoSink;
 // on Pi 5, rkvdec on Rock Pi 4) without any per-codec dispatch
 // from the application.
 //
-// QGraphicsView + QGraphicsScene + QGraphicsVideoItem is the
-// rendering substrate (not QVideoWidget). The graphics-item path
-// is what lets ``video-rotate`` actually rotate the displayed
-// frames — ``QGraphicsItem::setRotation`` is honoured by the
-// painter, whereas QVideoWidget has no rotation property and a
-// dynamic property attached via ``setProperty`` is read by
-// nothing (review of PR #2905 caught this as a silent Pi 4
-// regression for any operator whose Settings page screen_rotation
-// was non-zero). All three boards run the same path so the
-// transformation is testable in CI; the cage boards still inherit
-// rotation from wlr-randr at the compositor level and so ignore
-// the option dict's ``video-rotate`` value.
+// The rendering substrate is a QML ``VideoOutput`` hosted in a
+// ``QQuickWidget`` (issue #2967). The previous substrate —
+// ``QGraphicsVideoItem`` on a default (raster) ``QGraphicsView``
+// viewport — hardware-decoded perfectly but presented at 8–12 fps:
+// every frame went ``QVideoFrame::toImage()`` → ``qImageFromVideoFrame``
+// (an RHI offscreen render **plus GPU→CPU readback**), then a
+// smooth-scaled CPU raster blit into the widget backing store,
+// which eglfs/wayland re-uploaded to the GPU to composite. Two
+// GPU/CPU crossings per frame saturated the GUI thread (~80% on
+// Pi 4) while ``playback-stats.log`` — which counts sink
+// deliveries, not paints — still read "dropped≈0". VideoOutput's
+// frames stay on the GPU: the scene graph samples the decoded
+// planes as textures and converts YUV→RGB in a fragment shader at
+// composite time. QQuickWidget renders through QQuickRenderControl
+// into an FBO inside the app's single native window — the same
+// machinery QWebEngineView already uses here, so it is proven on
+// eglfs (single-native-window constraint) and proven to inherit
+// QT_QPA_EGLFS_ROTATION / wlr-randr whole-screen rotation (#2971).
+// A ``QVideoWidget`` would NOT satisfy the eglfs constraint: it
+// wraps a ``QVideoWindow`` — a second native window.
 //
 // The MainWindow D-Bus surface (``playVideo`` / ``stopVideo`` /
 // ``videoEnded``) and the Python option-dict contract are
@@ -71,12 +78,11 @@ public:
     //   * ``audio-device`` — ALSA device name (the same string the
     //     mpv era used; QAudioDevice consumes the ``CARD=<name>``
     //     portion).
-    //   * ``video-rotate`` — int as string (0/90/180/270), Pi 4 only
-    //     (cage / wayland boards inherit rotation from wlr-randr).
-    //     Applied to the QGraphicsVideoItem so the painter rotates
-    //     the visible frames; the rotated bounding box is mapped
-    //     back to the viewport so a 90° rotation of 1920x1080 fits
-    //     inside the 1080-tall surface without clipping.
+    //   * ``video-rotate`` — int as string (0/90/180/270). Defensive
+    //     no-op: no board sends it any more (every platform rotates
+    //     the whole screen at the compositor / QPA layer). Applied
+    //     to the VideoOutput item's ``orientation`` property so an
+    //     old caller still gets rotated frames instead of an error.
     //
     // ``hwdec`` / ``vd-lavc-threads`` / ``video-sync`` from the
     // libmpv option set are deliberately ignored — libavcodec
@@ -88,9 +94,6 @@ public:
     // the next ``play()`` is a cheap setSource + play, not a
     // pipeline rebuild.
     void stop();
-
-protected:
-    void resizeEvent(QResizeEvent* event) override;
 
 signals:
     // Fires on ``QMediaPlayer::EndOfMedia``. Re-emitted by
@@ -112,10 +115,28 @@ private slots:
     // Counts frames delivered to QVideoSink so the SAMPLE / END_FILE
     // log lines can compare ``actually displayed`` against
     // ``decoder-expected`` and report a dropped-frame estimate.
-    // ``videoFrameChanged`` fires per display tick on the
-    // QGraphicsVideoItem's underlying sink; counting those is the
-    // most direct measurement QtMultimedia exposes.
+    // ``videoFrameChanged`` fires once per frame the pipeline hands
+    // to the sink — i.e. the *decode-side* rate.
     void onVideoFrameDelivered();
+
+    // Counts scene-graph render passes
+    // (``QQuickWindow::afterRendering``). The Quick scene only
+    // re-renders on damage, and during video playback the
+    // VideoOutput's frame updates are the damage — so this is the
+    // *presentation-side* rate. Issue #2967 existed precisely
+    // because the stats log had no such counter: sink deliveries
+    // read "dropped≈0" while ~70% of frames never reached the
+    // screen. SAMPLE / END_FILE now log both ends of the pipe.
+    void onSceneRendered();
+
+private:
+    // Wire onSceneRendered to the VideoOutput item's QQuickWindow.
+    // Idempotent; called from the constructor and re-tried from
+    // play() so a hypothetical late item→window attachment can't
+    // leave the presentation counter permanently at 0 (which would
+    // read as a total presentation failure — the inverse of the
+    // #2967 blind spot).
+    void connectRenderCounter();
 
 private:
     // Resolve an ALSA device name (``alsa/sysdefault:CARD=vc4hdmi0``,
@@ -130,10 +151,12 @@ private:
     // boards; this routine extracts ``CARD=`` and matches that
     // segment specifically).
     QAudioDevice resolveAlsaDevice(const QString& alsaSpec) const;
-    // Apply (or clear) the rotation on the QGraphicsVideoItem and
-    // resize the viewport so the rotated frame fills the surface
-    // without clipping. ``angle`` is normalised to {0, 90, 180, 270};
-    // anything else snaps to 0.
+    // Apply (or clear) the rotation on the VideoOutput item's
+    // ``orientation`` property. ``angle`` is normalised to
+    // {0, 90, 180, 270}; anything else snaps to 0. VideoOutput
+    // handles the 90/270 bounding-box swap itself (the property
+    // exists for camera-orientation use), so there is no manual
+    // transform-origin / transpose bookkeeping here.
     void applyRotation(int angle);
     // Append ``ISO-8601 KIND detail`` to
     // ``/data/.anthias/playback-stats.log``. Renamed from the
@@ -149,20 +172,27 @@ private:
     // called per-line — the cost-per-line stays an append + flush.
     void openStatsLog();
 
-    // Rotation is applied around the centre so 90/270 swap the
-    // bounding box around the same on-screen midpoint as 0/180.
-    void positionVideoItem();
-
     QMediaPlayer* player = nullptr;
     QAudioOutput* audioOutput = nullptr;
-    QGraphicsView* graphicsView = nullptr;
-    QGraphicsScene* graphicsScene = nullptr;
-    QGraphicsVideoItem* videoItem = nullptr;
+    QQuickWidget* quickWidget = nullptr;
+    // The QML VideoOutput item (owned by the QQuickWidget's root
+    // object) and its sink. Both are guaranteed non-null past the
+    // constructor: a failed QML load (missing qml6-module-* runtime
+    // packages) is a qFatal there, because decode-but-render-nowhere
+    // is a silent black screen on a kiosk while crash-respawn is
+    // loud and supervised.
+    QQuickItem* videoOutputItem = nullptr;
+    QVideoSink* videoSink = nullptr;
     QHBoxLayout* videoLayout = nullptr;
+    QMetaObject::Connection renderCounterConnection;
     int currentRotation = 0;
 
-    // Stats state. Same shape as the libmpv version so log
-    // consumers don't have to change schemas. ``playStartedAt`` is
+    // Stats state. Extends the libmpv-era line shape with a
+    // ``frames-rendered=`` field (the presentation-side counter
+    // #2967 was missing); all fields are key=value tagged, so
+    // consumers must key on field names, not positions —
+    // positional parsers of STOP/SAMPLE/END_FILE lines break on
+    // this revision. ``playStartedAt`` is
     // restarted on ``LoadedMedia`` (not in play()) so the elapsed
     // window measures real playback wall-clock, not decoder init —
     // review of #2905 flagged that the init delay inflated drop
@@ -173,6 +203,7 @@ private:
     QString currentUri;
     QElapsedTimer playStartedAt;
     qint64 framesDelivered = 0;
+    qint64 framesRendered = 0;
     qreal containerFps = 0.0;
 
     // Cap on /data/.anthias/playback-stats.log size. 8 MB ≈ a full

@@ -5,13 +5,13 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
-#include <QGraphicsScene>
-#include <QGraphicsVideoItem>
-#include <QGraphicsView>
 #include <QMediaDevices>
 #include <QMediaMetaData>
+#include <QQmlError>
+#include <QQuickItem>
+#include <QQuickWidget>
+#include <QQuickWindow>
 #include <QRegularExpression>
-#include <QSizeF>
 #include <QVariant>
 #include <QVideoFrame>
 #include <QVideoSink>
@@ -20,38 +20,66 @@
 
 VideoView::VideoView(QWidget* parent) : QWidget(parent)
 {
-    // Black background so the surface doesn't flash white at the
-    // start of playback while libavcodec's V4L2 decoder negotiates
-    // its first capture buffer.
-    setAutoFillBackground(true);
-    QPalette pal = palette();
-    pal.setColor(QPalette::Window, Qt::black);
-    setPalette(pal);
-
     videoLayout = new QHBoxLayout(this);
     videoLayout->setContentsMargins(0, 0, 0, 0);
     videoLayout->setSpacing(0);
 
-    graphicsScene = new QGraphicsScene(this);
-    graphicsScene->setBackgroundBrush(Qt::black);
-    graphicsView = new QGraphicsView(graphicsScene, this);
-    graphicsView->setFrameShape(QFrame::NoFrame);
-    graphicsView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    graphicsView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    graphicsView->setRenderHint(QPainter::SmoothPixmapTransform);
-    graphicsView->setAlignment(Qt::AlignCenter);
-    videoLayout->addWidget(graphicsView);
+    // QML VideoOutput in a QQuickWidget: frames render through the
+    // RHI scene graph (shader YUV→RGB at composite time) instead of
+    // the QGraphicsVideoItem toImage()-readback-blit chain that
+    // capped presentation at 8–12 fps (issue #2967, see videoview.h).
+    // Black backdrop is two layers with distinct jobs: ``clearColor``
+    // covers the pre-QML-load window, the QML Rectangle provides the
+    // steady-state letterbox fill around PreserveAspectFit. (No
+    // widget-palette layer on top — the QQuickWidget fills the whole
+    // layout, so a palette would be permanently occluded.)
+    quickWidget = new QQuickWidget(this);
+    quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quickWidget->setClearColor(Qt::black);
+    quickWidget->setSource(QUrl(QStringLiteral("qrc:/videoview.qml")));
+    if (quickWidget->status() == QQuickWidget::Error) {
+        const auto errors = quickWidget->errors();
+        for (const QQmlError& error : errors) {
+            qWarning() << "VideoView: QML load error:" << error.toString();
+        }
+    }
+    videoLayout->addWidget(quickWidget);
 
-    videoItem = new QGraphicsVideoItem;
-    // Aspect-ratio behaviour: keep the source ratio so a 16:9 clip
-    // on a 16:9 display fills the surface without stretching.
-    videoItem->setAspectRatioMode(Qt::KeepAspectRatio);
-    graphicsScene->addItem(videoItem);
+    if (quickWidget->rootObject()) {
+        videoOutputItem = quickWidget->rootObject()
+                              ->findChild<QQuickItem*>(
+                                  QStringLiteral("videoOutput"));
+    }
+    if (videoOutputItem) {
+        // VideoOutput exposes its sink as a property; resolving it
+        // here (rather than player->setVideoOutput(item)) keeps an
+        // explicit QVideoSink* around for the frame-delivery counter.
+        videoSink = qvariant_cast<QVideoSink*>(
+            videoOutputItem->property("videoSink"));
+    }
+    if (!videoOutputItem || !videoSink) {
+        // Fail hard rather than limp into decode-but-render-nowhere:
+        // a kiosk that silently black-screens every video while its
+        // logs read "playing" is the exact failure mode the VLC/mmal
+        // era shipped (docs/board-enablement.md, "rendered to
+        // nowhere"). Aborting hands the device to the existing
+        // spawn-retry / container-restart supervision, which is loud
+        // in fleet telemetry. Most likely cause on a device image:
+        // qml6-module-qtquick / qml6-module-qtmultimedia missing —
+        // the QML import fails at runtime, not the C++ link (see
+        // tools/image_builder/utils.py).
+        qFatal("VideoView: QML video scene unavailable (videoOutput "
+               "item or its videoSink missing — check the QML load "
+               "errors above and the qml6-module-qtquick / "
+               "qml6-module-qtmultimedia packages). Aborting so the "
+               "supervisor restarts the viewer instead of decoding "
+               "video to nowhere.");
+    }
 
     player = new QMediaPlayer(this);
     audioOutput = new QAudioOutput(this);
     player->setAudioOutput(audioOutput);
-    player->setVideoOutput(videoItem);
+    player->setVideoSink(videoSink);
 
     connect(player, &QMediaPlayer::playbackStateChanged,
             this, &VideoView::onPlaybackStateChanged);
@@ -62,21 +90,24 @@ VideoView::VideoView(QWidget* parent) : QWidget(parent)
 
     // Count frames delivered to the sink so SAMPLE / END_FILE lines
     // can report a "frames delivered" → "frames expected" delta.
-    // QVideoSink::videoFrameChanged fires once per displayed frame
-    // (after libavcodec / V4L2 drops happen upstream), which is the
-    // metric we care about — frames that reached the display.
-    if (videoItem->videoSink()) {
-        connect(videoItem->videoSink(), &QVideoSink::videoFrameChanged,
-                this, &VideoView::onVideoFrameDelivered);
-    }
+    // QVideoSink::videoFrameChanged fires once per decoded frame
+    // (after libavcodec / V4L2 drops happen upstream) — the
+    // decode-side rate.
+    connect(videoSink, &QVideoSink::videoFrameChanged,
+            this, &VideoView::onVideoFrameDelivered);
+
+    // Presentation-side counter. Retried from play() in case the
+    // item→window attachment ever lands later than this constructor
+    // (qrc setSource is synchronous on Qt 6.8, but a dead counter
+    // would silently report frames-rendered=0 — the inverse of the
+    // #2967 blind spot — so don't bet the diagnostic on it).
+    connectRenderCounter();
 
     openStatsLog();
 
     statsTimer = new QTimer(this);
     statsTimer->setInterval(1000);
     connect(statsTimer, &QTimer::timeout, this, &VideoView::sampleStats);
-
-    positionVideoItem();
 }
 
 VideoView::~VideoView()
@@ -122,8 +153,8 @@ void VideoView::openStatsLog()
         writeStats(
             QStringLiteral("INIT"),
             QStringLiteral(
-                "backend=qtmultimedia/ffmpeg qt=%1 "
-                "audio_default=%2")
+                "backend=qtmultimedia/ffmpeg sink=quick-videooutput "
+                "qt=%1 audio_default=%2")
                 .arg(QStringLiteral(QT_VERSION_STR),
                      QMediaDevices::defaultAudioOutput().description()));
     } else {
@@ -153,14 +184,14 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
         summary << QStringLiteral("audio-device=%1").arg(alsaSpec);
     }
 
-    // Optional per-item rotation of the QGraphicsVideoItem. No board
+    // Optional per-item rotation of the VideoOutput item. No board
     // sends ``video-rotate`` any more: every platform now rotates the
     // whole screen (eglfs via QT_QPA_EGLFS_ROTATION on Pi 4, wlroots
-    // via wlr-randr on x86) and the video item inherits that transform,
-    // so applying it again here would double-rotate. The parse is kept
-    // as a defensive no-op (default 0 = applyRotation(0)) so an old
-    // viewer that still passes the option degrades gracefully rather
-    // than erroring on an unknown key.
+    // via wlr-randr on x86) and the Quick scene inherits that
+    // transform, so applying it again here would double-rotate. The
+    // parse is kept as a defensive no-op (default 0 = applyRotation(0))
+    // so an old viewer that still passes the option degrades
+    // gracefully rather than erroring on an unknown key.
     int rotation = 0;
     if (options.contains(QStringLiteral("video-rotate"))) {
         bool ok = false;
@@ -173,13 +204,18 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
     }
     applyRotation(rotation);
 
+    // Backstop for the constructor-time connection — see
+    // connectRenderCounter().
+    connectRenderCounter();
+
     currentUri = uri;
     // playStartedAt is RESTARTED on LoadedMedia (not here) so the
     // elapsed-ms window measures real playback time, not decoder
-    // init. Reset framesDelivered now so the very first frame
-    // count is clean.
+    // init. Reset both frame counters now so the very first counts
+    // are clean.
     playStartedAt.invalidate();
     framesDelivered = 0;
+    framesRendered = 0;
     containerFps = 0.0;
     writeStats(
         QStringLiteral("LOADFILE"),
@@ -218,10 +254,11 @@ void VideoView::stop()
             QStringLiteral("STOP"),
             QStringLiteral(
                 "uri=%1 elapsed_ms=%2 frames-delivered=%3 "
-                "position-ms=%4")
+                "frames-rendered=%4 position-ms=%5")
                 .arg(currentUri)
                 .arg(elapsedMs)
                 .arg(framesDelivered)
+                .arg(framesRendered)
                 .arg(player->position()));
     }
     player->stop();
@@ -282,10 +319,11 @@ void VideoView::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
             playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
         // Compare ``frames-delivered`` against the decoder-expected
         // count (container_fps × elapsed_s). The gap = frames
-        // dropped on the way to the display, the same number mpv
-        // exposed as ``frame-drop-count``. Reported with the raw
-        // delivered count so the consumer can recompute if they
-        // disagree with the fps source.
+        // dropped on the way to the sink — the same number mpv
+        // exposed as ``frame-drop-count``. ``frames-rendered`` is
+        // the presentation-side count (scene-graph renders); a
+        // rendered count far below delivered = paint-bound, the
+        // #2967 failure mode the old log could not see.
         const qreal expected =
             containerFps > 0.0 ? containerFps * (elapsedMs / 1000.0) : -1.0;
         const qint64 dropped =
@@ -296,10 +334,11 @@ void VideoView::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
             QStringLiteral("END_FILE"),
             QStringLiteral(
                 "uri=%1 elapsed_ms=%2 frames-delivered=%3 "
-                "expected=%4 dropped=%5")
+                "frames-rendered=%4 expected=%5 dropped=%6")
                 .arg(currentUri)
                 .arg(elapsedMs)
                 .arg(framesDelivered)
+                .arg(framesRendered)
                 .arg(qRound(expected))
                 .arg(dropped));
         if (statsTimer) {
@@ -341,9 +380,11 @@ void VideoView::sampleStats()
     writeStats(
         QStringLiteral("SAMPLE"),
         QStringLiteral(
-            "position-ms=%1 frames-delivered=%2 expected=%3 dropped=%4")
+            "position-ms=%1 frames-delivered=%2 frames-rendered=%3 "
+            "expected=%4 dropped=%5")
             .arg(posMs)
             .arg(framesDelivered)
+            .arg(framesRendered)
             .arg(qRound(expected))
             .arg(dropped));
 }
@@ -351,6 +392,33 @@ void VideoView::sampleStats()
 void VideoView::onVideoFrameDelivered()
 {
     ++framesDelivered;
+}
+
+void VideoView::onSceneRendered()
+{
+    ++framesRendered;
+}
+
+void VideoView::connectRenderCounter()
+{
+    // Count scene-graph renders — the presentation-side rate. The
+    // Quick scene re-renders only on damage, and during playback the
+    // VideoOutput frame updates are the damage, so renders/s ≈
+    // frames actually composited to the screen. This is the counter
+    // whose absence let #2967's 8 fps presentation ship while the
+    // sink-side log read "dropped≈0". Idempotent: no-op once the
+    // connection is made (constructor normally succeeds; play()
+    // retries as a backstop against late item→window attachment).
+    if (renderCounterConnection || !videoOutputItem) {
+        return;
+    }
+    QQuickWindow* window = videoOutputItem->window();
+    if (!window) {
+        return;
+    }
+    renderCounterConnection =
+        connect(window, &QQuickWindow::afterRendering,
+                this, &VideoView::onSceneRendered);
 }
 
 QAudioDevice VideoView::resolveAlsaDevice(const QString& alsaSpec) const
@@ -421,52 +489,15 @@ void VideoView::applyRotation(int angle)
         normalised = 0;
     }
     currentRotation = normalised;
-    if (!videoItem) {
+    if (!videoOutputItem) {
         return;
     }
-    // ``QGraphicsItem::setRotation`` rotates around the item's
-    // transformOrigin (we set this in positionVideoItem). Unlike
-    // the prior ``QVideoWidget::setProperty("rotation", …)`` this
-    // is actually consumed by the painter, so the operator sees
-    // a rotated video instead of an unrotated one.
-    videoItem->setRotation(currentRotation);
-    positionVideoItem();
-}
-
-void VideoView::positionVideoItem()
-{
-    if (!videoItem || !graphicsView || !graphicsScene) {
-        return;
-    }
-    const QSizeF viewport(graphicsView->viewport()->width(),
-                          graphicsView->viewport()->height());
-    if (viewport.isEmpty()) {
-        return;
-    }
-    // 90/270 rotations swap the bounding box, so the item's native
-    // size becomes the viewport's height × width (rotated). 0/180
-    // use the viewport directly. The QGraphicsVideoItem then maps
-    // the source frame into this size, honouring the
-    // KeepAspectRatio mode.
-    QSizeF itemSize = viewport;
-    if (currentRotation == 90 || currentRotation == 270) {
-        itemSize.transpose();
-    }
-    videoItem->setSize(itemSize);
-    // Centre the item in the scene so setRotation rotates around
-    // the visible mid-point.
-    const QRectF bounds(QPointF(0, 0), itemSize);
-    videoItem->setTransformOriginPoint(bounds.center());
-    videoItem->setPos(
-        (viewport.width() - itemSize.width()) / 2.0,
-        (viewport.height() - itemSize.height()) / 2.0);
-    graphicsScene->setSceneRect(0, 0, viewport.width(), viewport.height());
-}
-
-void VideoView::resizeEvent(QResizeEvent* event)
-{
-    QWidget::resizeEvent(event);
-    positionVideoItem();
+    // VideoOutput consumes ``orientation`` natively (it exists for
+    // camera-orientation use): the scene graph rotates the frames
+    // and swaps the fit box for 90/270 — no manual transform-origin
+    // or viewport-transpose bookkeeping like the QGraphicsVideoItem
+    // era needed.
+    videoOutputItem->setProperty("orientation", normalised);
 }
 
 void VideoView::writeStats(const QString& kind, const QString& detail)

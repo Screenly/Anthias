@@ -18,11 +18,14 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt6-builder-apt-{{ artifact_boar
     apt-get install -y --no-install-recommends \
         build-essential \
         qt6-base-dev \
+        qt6-declarative-dev \
         qt6-multimedia-dev \
         qt6-webengine-dev
-# qt6-multimedia-dev: AnthiasViewer's VideoView wraps QMediaPlayer +
-# QGraphicsVideoItem (issue #2904, see
-# ``src/anthias_webview/AnthiasViewer.pro``). Qt 6.5 dropped the
+# qt6-multimedia-dev: AnthiasViewer's VideoView wraps QMediaPlayer
+# rendering into a QML ``VideoOutput`` (issue #2904, render path
+# reworked for #2967 — see ``src/anthias_webview/videoview.h``).
+# qt6-declarative-dev: the QQuickWidget that hosts the VideoOutput
+# scene (QT += quickwidgets). Qt 6.5 dropped the
 # upstream gstreamer media backend, so Debian Trixie ships only the
 # ffmpeg-backed ``libffmpegmediaplugin.so`` — decode runs through
 # libavcodec directly against the +rpt1 ``libav*`` packages pinned in
@@ -89,7 +92,7 @@ ENV QT_QPA_PLATFORM=wayland
 {% elif board == 'pi4-64' %}
 # Pi 4 switched from ``linuxfb`` to ``eglfs`` for issue #2904:
 # QtMultimedia's video pipeline needs an OpenGL context for the
-# QGraphicsVideoItem painter, and ``linuxfb`` has none. ``eglfs``
+# VideoOutput scene graph, and ``linuxfb`` has none. ``eglfs``
 # (the Qt KMS/EGL platform) gives Qt a GL context paired with
 # KMS scanout. ``QT_QPA_EGLFS_KMS_CONFIG`` pins 1080p — the V3D
 # 6.0 can't composite Chromium + the video graphics view on top
