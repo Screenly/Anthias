@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anthias"
-version = "2026.06.0"
+version = "2026.06.1"
 description = "The world's most popular open source digital signage project."
 readme = "README.md"
 requires-python = ">=3.13"
