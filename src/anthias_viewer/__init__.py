@@ -176,7 +176,15 @@ def _build_webview_env() -> dict[str, str]:
     qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')
     if qpa.partition(':')[0] == 'eglfs':
         if rotation:
-            env['QT_QPA_EGLFS_ROTATION'] = str(rotation)
+            # eglfs only understands 180, 90 and -90. A literal 270
+            # hits the "Invalid rotation" default branch in
+            # QEglFSScreen::geometry(), so the QOpenGLCompositor still
+            # rotates the content but the screen geometry never swaps
+            # to portrait — the window lays out landscape and renders
+            # stretched (issue #2970). Spell 270° as -90 instead.
+            env['QT_QPA_EGLFS_ROTATION'] = str(
+                -90 if rotation == 270 else rotation
+            )
         else:
             # Drop a stale value so dialling back to 0 actually
             # un-rotates on the respawned process.
