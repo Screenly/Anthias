@@ -272,7 +272,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # and the viewer then black-screens with "module not
         # installed" QML errors in the container log, so they must
         # ship in the image even though nothing links them.
-        # Qt 6.8 dropped its gstreamer backend upstream (only
+        # Qt 6.5 dropped its gstreamer backend upstream (only
         # ``libffmpegmediaplugin.so`` ships in
         # ``/usr/lib/.../qt6/plugins/multimedia/``); decode goes
         # through libavcodec directly. The +rpt1 ``ffmpeg`` /
