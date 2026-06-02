@@ -428,6 +428,31 @@ case "$DEVICE_TYPE" in
     export LIBSEAT_BACKEND=builtin
     export WLR_LIBINPUT_NO_DEVICES=1
 
+    # x86 (Intel i915 in particular) can wedge cage's display pipeline
+    # under heavy QtWebEngine GPU load (issue #2976): wlroots 0.18's
+    # non-blocking atomic page-flip commit gets EBUSY from the kernel
+    # while the previous commit is still fence-blocked behind the web
+    # render, and the trixie cage 0.2 / wlroots 0.18 failure path
+    # doesn't always recover — the screen freezes on the last frame
+    # until the container restarts, even though the viewer keeps
+    # cycling assets. The legacy KMS interface (drmModePageFlip) has
+    # no shallow-queue EBUSY semantics, so it tolerates GPU fence
+    # backpressure; a single-output kiosk uses none of the atomic
+    # extras (VRR, overlay planes, multi-output modeset queueing).
+    # WLR_DRM_NO_MODIFIERS pairs with it: the same trixie wlroots
+    # 0.18.2 + i915 stack has a second documented freeze in the
+    # modifier-fallback swapchain realloc (Debian bug 1112158), and
+    # legacy flips reject scan-out buffers whose modifiers change
+    # between frames — modifier-less allocation keeps the legacy path
+    # maximally reliable. ${VAR:-1} keeps both user-overridable via a
+    # compose override (wlroots parses 0 as false). Scoped to x86:
+    # arm64/pi5 run vc4/rockchip where atomic is the well-exercised
+    # path and no freeze has been observed.
+    if [ "$DEVICE_TYPE" = 'x86' ]; then
+        export WLR_DRM_NO_ATOMIC="${WLR_DRM_NO_ATOMIC:-1}"
+        export WLR_DRM_NO_MODIFIERS="${WLR_DRM_NO_MODIFIERS:-1}"
+    fi
+
     # cage default `-m extend` spans all enumerated DRM outputs,
     # including ones that are physically disconnected — so a Pi user
     # who plugs into the second micro-HDMI port (HDMI-A-2 instead of
