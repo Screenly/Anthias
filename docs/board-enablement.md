@@ -182,8 +182,9 @@ loaned 64-bit Pi 3B+ running the armv7 `anthias-viewer:*-pi3` image:
 
 Because each spawn is a fresh process and a retry usually succeeds within a
 handful of attempts, `load_browser()` in `src/anthias_viewer/__init__.py`
-**retries the spawn in-process with capped exponential backoff** (one throttled
-log line per attempt) instead of letting the exception escape `main()` into a
+**retries the spawn in-process with capped exponential backoff** (bounded,
+throttled logging: the first failure logs its full reason plus a retry line,
+each later retry a one-liner) instead of letting the exception escape `main()` into a
 tight container restart loop (which floods journald and makes no faster
 progress). The budget differs by where it runs:
 
@@ -196,9 +197,11 @@ progress). The budget differs by where it runs:
   no skips, no standby, and `watchdog()` starved. A persistent failure raises
   instead, and the container restart re-rolls from a clean process.
 
-A missing/unlinkable binary raises `WebviewBinaryMissingError` and
+A missing binary (not on `PATH`) raises `WebviewBinaryMissingError` and
 short-circuits the retry (it's permanent, so burning the backoff budget would
-only hide a packaging regression). Operator-visible status is the throttled
+only hide a packaging regression). A binary that spawns but can't run (e.g.
+missing shared libraries) exits before the handshake and is retried like any
+other launch failure. Operator-visible status is the throttled
 `logging.warning` output (`balena logs` / journald). This is a **stop-gap** —
 the clean fix is to run 64-bit-capable Pi 3 hardware on a 64-bit OS + the
 arm64/Qt6 viewer, which sidesteps the entire 32-bit Qt5 stack.
