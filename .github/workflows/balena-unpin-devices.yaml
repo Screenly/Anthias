@@ -16,9 +16,12 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
+        # Defaults to true so a casual "Run workflow" click only
+        # reports; untick to unpin immediately instead of waiting for
+        # the next scheduled run (which always applies).
         description: Only report pinned devices; do not unpin.
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
