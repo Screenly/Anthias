@@ -1,0 +1,60 @@
+name: Balena unpin devices
+
+# Devices flashed from pre-#2098 disk images provision themselves
+# pinned to the release baked into the image, so they never receive
+# OTA updates — and new ones keep appearing as people flash old
+# images. This hourly job clears the pin on every pinned device
+# (minus the `anthias_keep_pinned` tag opt-out) so they track their
+# fleet's latest release. All the logic lives in
+# bin/balena_unpin_devices.py.
+
+on:
+  schedule:
+    # Hourly at :43 — offset from the top-of-hour cron stampede that
+    # GitHub-hosted runners see (cf. mirror-bun-image.yaml).
+    - cron: '43 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only report pinned devices; do not unpin.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: balena-unpin-devices
+  cancel-in-progress: false
+
+jobs:
+  unpin:
+    # Scheduled workflows are disabled on forks by default, but guard
+    # anyway so a fork that enables Actions doesn't fail hourly on the
+    # missing BALENA_TOKEN secret.
+    if: github.repository == 'Screenly/Anthias'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      # The script is stdlib-only — no dependency install needed; 3.13
+      # matches the repo's requires-python.
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.13'
+
+      - name: Unpin pinned devices
+        env:
+          BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
+          # Empty on schedule events, "true"/"false" on dispatch.
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$DRY_RUN" == "true" ]]; then
+            python3 bin/balena_unpin_devices.py
+          else
+            python3 bin/balena_unpin_devices.py --apply
+          fi
