@@ -121,11 +121,6 @@ COPY docker/eglfs-kms-pi4.json /etc/anthias/eglfs-kms.json
 ENV QT_QPA_PLATFORM=linuxfb
 {% endif %}
 
-# Turn on debug logging for now
-#ENV QT_LOGGING_RULES=qt.qpa.*=true
-ENV QT_LOGGING_RULES=*.debug=true
-ENV QT_QPA_DEBUG=1
-
 ENV GIT_HASH={{ git_hash }}
 ENV GIT_SHORT_HASH={{ git_short_hash }}
 ENV GIT_BRANCH={{ git_branch }}
