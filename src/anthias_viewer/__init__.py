@@ -362,11 +362,157 @@ commands = {
 BROWSER_STARTUP_TIMEOUT_SECONDS = 30
 BROWSER_HANDSHAKE_LINE = 'Anthias service start'
 
+# AnthiasViewer can abort during Qt/WebEngine initialization and die
+# before the D-Bus handshake. The worst offender is the 32-bit (armv7)
+# Qt5 build on Raspberry Pi 2/3: Chromium's init intermittently corrupts
+# the heap (`malloc(): unaligned tcache chunk detected`), crashing the
+# process. The fault is heap-layout-dependent and every spawn is a fresh
+# OS process, so a later launch clears it ~10-25% of the time — we retry
+# the spawn so a flaky board self-heals within a few attempts instead of
+# the exception escaping main() into a tight container restart loop
+# (which floods journald and makes no faster progress).
+#
+# Two budgets, because load_browser() runs in two very different places:
+#   * AT STARTUP (setup): nothing is on screen yet, so spend a generous
+#     budget bringing the webview up.
+#   * MID-PLAYBACK (view_image / view_webpage respawn): this runs on the
+#     single asset_loop thread, so a long retry here would FREEZE the
+#     whole viewer — no rotations, no skips, no standby, and watchdog()
+#     starved (risking a hardware-watchdog reboot). Keep it short and let
+#     a persistent failure raise: the container restart then re-rolls
+#     from a clean process. Documented in docs/board-enablement.md.
+BROWSER_SPAWN_MAX_ATTEMPTS = 30
+BROWSER_SPAWN_BACKOFF_CAP_SECONDS = 15
+BROWSER_SPAWN_INLINE_MAX_ATTEMPTS = 3
+BROWSER_SPAWN_INLINE_BACKOFF_CAP_SECONDS = 2
+BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS = 10
 
-def load_browser() -> None:
+# Poll cadence while waiting for a just-spawned process to handshake or
+# die. Sub-second so an init crash (which is what we're retrying past) is
+# noticed promptly rather than after a full second spent sleeping on an
+# already-dead process.
+BROWSER_POLL_INTERVAL_SECONDS = 0.25
+# Grace period to let a SIGTERM'd webview exit before we SIGKILL it.
+BROWSER_TERMINATE_GRACE_SECONDS = 3
+
+
+class WebviewLaunchError(RuntimeError):
+    """A single AnthiasViewer launch exited or never handshook.
+
+    Subclasses ``RuntimeError`` so existing callers (and tests) that
+    catch ``RuntimeError`` keep working after the retry wrapper landed.
+    """
+
+
+class WebviewBinaryMissingError(WebviewLaunchError):
+    """AnthiasViewer is not on PATH.
+
+    A permanent failure (bad image build / packaging regression), so the
+    retry loop must NOT burn its backoff budget on it — surface it at
+    once instead of hiding it behind minutes of silence.
+    """
+
+
+def _terminate_webview(proc: Any) -> None:
+    """Best-effort: stop an AnthiasViewer process and confirm it's gone.
+
+    SIGTERM, wait up to ``BROWSER_TERMINATE_GRACE_SECONDS``, then SIGKILL
+    if still alive. Reaping before a retry matters so the old process has
+    released the framebuffer and the ``anthias.viewer`` D-Bus name before
+    the next one starts — otherwise the retry contends with a zombie and
+    times out too. Never raises.
+    """
+    try:
+        proc.terminate()
+    except Exception:
+        logging.debug('Could not SIGTERM AnthiasViewer', exc_info=True)
+        return
+    deadline = monotonic() + BROWSER_TERMINATE_GRACE_SECONDS
+    while monotonic() < deadline:
+        if not proc.is_alive():
+            return
+        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    try:
+        proc.kill()
+    except Exception:
+        logging.debug('Could not SIGKILL AnthiasViewer', exc_info=True)
+
+
+def _spawn_webview_once(startup_timeout: float) -> Any:
+    """Spawn AnthiasViewer once and block until it registers on D-Bus.
+
+    Returns the live ``sh`` background command on success. Raises
+    ``WebviewBinaryMissingError`` (permanent) if the binary is absent, or
+    ``WebviewLaunchError`` (retry-worthy) if the process exits before the
+    handshake or fails to emit it within ``startup_timeout``. The matched
+    string must stay in lockstep with ``qInfo() << "Anthias service
+    start"`` in src/anthias_webview/src/main.cpp.
+    """
+    try:
+        candidate = sh.Command('AnthiasViewer')(
+            _bg=True, _err_to_out=True, _env=_build_webview_env()
+        )
+    except sh.CommandNotFound as exc:
+        raise WebviewBinaryMissingError(
+            f'AnthiasViewer binary not found: {exc}'
+        ) from exc
+
+    deadline = monotonic() + startup_timeout
+    while monotonic() < deadline:
+        if BROWSER_HANDSHAKE_LINE in candidate.process.stdout.decode(
+            'utf-8', errors='replace'
+        ):
+            return candidate
+        if not candidate.is_alive():
+            raise WebviewLaunchError(
+                'AnthiasViewer exited before emitting D-Bus handshake; '
+                'stdout: '
+                + candidate.process.stdout.decode('utf-8', errors='replace')
+            )
+        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+
+    # Timed out waiting for the handshake. Tear the half-started process
+    # down AND confirm it is gone so a retry can't leave two AnthiasViewers
+    # contending for the framebuffer / the ``anthias.viewer`` D-Bus name.
+    _terminate_webview(candidate)
+    raise WebviewLaunchError(
+        f'AnthiasViewer did not emit "{BROWSER_HANDSHAKE_LINE}" within '
+        f'{startup_timeout:g}s'
+    )
+
+
+def load_browser(
+    max_attempts: int | None = None,
+    backoff_cap: int | None = None,
+    startup_timeout: float | None = None,
+) -> None:
+    """Launch AnthiasViewer, retrying the spawn past the flaky init crash.
+
+    Defaults use the generous startup budget. Mid-playback respawns
+    (view_image / view_webpage) pass the smaller inline budget so a
+    persistent failure can't freeze the asset_loop thread for minutes.
+    """
     global browser, _webview_supports_set_reload_interval
     global _last_applied_rotation
     logging.info('Loading browser...')
+
+    if max_attempts is None:
+        max_attempts = BROWSER_SPAWN_MAX_ATTEMPTS
+    if backoff_cap is None:
+        backoff_cap = BROWSER_SPAWN_BACKOFF_CAP_SECONDS
+    if startup_timeout is None:
+        startup_timeout = BROWSER_STARTUP_TIMEOUT_SECONDS
+    # Always make at least one real spawn attempt — a non-positive
+    # max_attempts would otherwise skip the loop entirely and raise a
+    # confusing "0 attempts; last error: None".
+    max_attempts = max(1, max_attempts)
+    # Keep the backoff sane for any call site: a cap below 1s would
+    # devolve into a tight retry loop, and a negative one would turn
+    # ``backoff`` negative on the second retry, making ``sleep()`` raise
+    # ValueError and mask the real launch error. A negative timeout is
+    # clamped to 0 (an immediate-timeout attempt, same as passing 0).
+    backoff_cap = max(1, backoff_cap)
+    startup_timeout = max(0.0, startup_timeout)
 
     # Re-probe the setReloadInterval capability against the freshly
     # launched binary. The flag latches OFF on UnknownMethod, but a
@@ -400,31 +546,59 @@ def load_browser() -> None:
     else:
         _last_applied_rotation = rotation
 
-    browser = sh.Command('AnthiasViewer')(
-        _bg=True, _err_to_out=True, _env=_build_webview_env()
-    )
+    # Drop any stale handle from a previous (now-dead) webview so callers
+    # and diagnostics never see a live-looking ``browser`` while we are
+    # between processes; it is reassigned on a successful spawn below.
+    browser = None
 
-    # Bound the wait so we don't hang the viewer indefinitely if
-    # AnthiasViewer fails to register on D-Bus (missing binary, broken
-    # library link, handshake-line drift, etc.). The string here must
-    # match `qInfo() << "Anthias service start"` in
-    # src/anthias_webview/src/main.cpp.
-    deadline = monotonic() + BROWSER_STARTUP_TIMEOUT_SECONDS
-    while monotonic() < deadline:
-        if BROWSER_HANDSHAKE_LINE in browser.process.stdout.decode('utf-8'):
-            return
-        if not browser.is_alive():
-            raise RuntimeError(
-                'AnthiasViewer exited before emitting D-Bus handshake; '
-                'stdout: '
-                + browser.process.stdout.decode('utf-8', errors='replace')
+    # Retry the spawn with capped exponential backoff so a board that
+    # intermittently crashes during Qt/WebEngine init self-heals on a
+    # later launch instead of propagating out into a restart loop.
+    # Bounded, throttled logging — the first failure logs its full reason
+    # and each retry logs a one-liner (capped by max_attempts), not a
+    # per-second flood. A missing binary is permanent and short-circuits.
+    last_error: WebviewLaunchError | None = None
+    backoff = 1
+    for attempt in range(1, max_attempts + 1):
+        try:
+            browser = _spawn_webview_once(startup_timeout)
+        except WebviewBinaryMissingError:
+            raise
+        except WebviewLaunchError as exc:
+            last_error = exc
+            if attempt == 1:
+                logging.warning(
+                    'AnthiasViewer failed to start (attempt %d/%d): %s',
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
+            if attempt < max_attempts:
+                logging.warning(
+                    'Retrying AnthiasViewer in %ds (attempt %d/%d)',
+                    backoff,
+                    attempt,
+                    max_attempts,
+                )
+                sleep(backoff)
+                backoff = min(backoff * 2, backoff_cap)
+            continue
+
+        if attempt > 1:
+            logging.info(
+                'AnthiasViewer started on attempt %d/%d',
+                attempt,
+                max_attempts,
             )
-        sleep(1)
+        return
 
-    raise TimeoutError(
-        f'AnthiasViewer did not emit "{BROWSER_HANDSHAKE_LINE}" within '
-        f'{BROWSER_STARTUP_TIMEOUT_SECONDS}s'
-    )
+    # Every attempt failed — surface the last error (the caller, and the
+    # container restart as a last resort, react to it). Reached only after
+    # the backoff budget is spent, so this is slow, not a tight loop.
+    raise WebviewLaunchError(
+        f'AnthiasViewer did not start after {max_attempts} attempts; '
+        f'last error: {last_error}'
+    ) from last_error
 
 
 def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
@@ -442,7 +616,14 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     global current_browser_url
 
     if browser is None or not browser.is_alive():
-        load_browser()
+        # Mid-playback respawn on the asset_loop thread: small, short
+        # budget so a persistent crash can't freeze the loop for minutes
+        # — let it raise and have the container restart re-roll instead.
+        load_browser(
+            max_attempts=BROWSER_SPAWN_INLINE_MAX_ATTEMPTS,
+            backoff_cap=BROWSER_SPAWN_INLINE_BACKOFF_CAP_SECONDS,
+            startup_timeout=BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS,
+        )
     # ``!=`` (value comparison): an ``is not`` identity check would
     # only short-circuit when the asset_loop happens to pass the same
     # str object on consecutive ticks, which a JSON-reconstructed URL
@@ -495,7 +676,14 @@ def view_image(uri: str) -> None:
     global current_browser_url
 
     if browser is None or not browser.is_alive():
-        load_browser()
+        # Mid-playback respawn on the asset_loop thread: small, short
+        # budget so a persistent crash can't freeze the loop for minutes
+        # — let it raise and have the container restart re-roll instead.
+        load_browser(
+            max_attempts=BROWSER_SPAWN_INLINE_MAX_ATTEMPTS,
+            backoff_cap=BROWSER_SPAWN_INLINE_BACKOFF_CAP_SECONDS,
+            startup_timeout=BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS,
+        )
     # Value comparison (matches view_webpage): an ``is not`` identity
     # check would only short-circuit when the asset_loop happens to
     # pass the same str object on consecutive ticks, which a JSON-

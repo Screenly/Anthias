@@ -158,6 +158,51 @@ viewer + 2 QtWebEngine renderers + zygotes consume ~440 MB RSS on Rock Pi 4
 pipeline. A 4K HEVC capture-buffer allocation pushes the container past the
 cgroup limit; the kernel logs `global_oom` and the container restart-loops.
 
+### armv7 (Pi 2 / Pi 3) WebEngine-init crash + spawn retry
+
+On the 32-bit (armv7) Qt5 viewer build — Pi 2 and Pi 3 — `AnthiasViewer`
+intermittently aborts during Qt/WebEngine initialization with
+`malloc(): unaligned tcache chunk detected`, dying before it emits the
+`Anthias service start` D-Bus handshake. Reproduced and root-caused on a
+loaned 64-bit Pi 3B+ running the armv7 `anthias-viewer:*-pi3` image:
+
+* It is **genuine heap corruption in Chromium/WebEngine init**, not a font
+  bug. The font-database enumeration is only where the corruption *surfaces*
+  (the heaviest main-thread `malloc` activity at that instant — the abort
+  always trails the synthetic `Monospace … StyleOblique` line). A build that
+  stops before WebEngine actually initializes enumerates the same fonts
+  cleanly every time; only letting WebEngine init proceed triggers the
+  corruption.
+* It is **heap-layout dependent**, firing on ~75–90 % of launches — so a
+  *fresh* launch clears it ~10–25 % of the time. No userspace mitigation
+  fixes it: trimming the CJK fonts, `--single-process`, `--no-zygote`, a
+  single `QWebEngineView` (`ANTHIAS_LOW_RAM=1`), a jemalloc preload, and
+  disabling glibc's tcache check (which just turns the abort into a raw
+  `SIGSEGV`) all still crash.
+
+Because each spawn is a fresh process and a retry usually succeeds within a
+handful of attempts, `load_browser()` in `src/anthias_viewer/__init__.py`
+**retries the spawn in-process with capped exponential backoff** (one throttled
+log line per attempt) instead of letting the exception escape `main()` into a
+tight container restart loop (which floods journald and makes no faster
+progress). The budget differs by where it runs:
+
+* **At startup** (`setup()`): a generous budget
+  (`BROWSER_SPAWN_MAX_ATTEMPTS` / `BROWSER_SPAWN_BACKOFF_CAP_SECONDS`) — nothing
+  is on screen yet, so it's worth spending time to bring the webview up.
+* **Mid-playback** (`view_image` / `view_webpage` respawn): a small, short
+  budget (`BROWSER_SPAWN_INLINE_*`). These run on the single `asset_loop`
+  thread, so a long retry here would freeze the whole viewer — no rotations,
+  no skips, no standby, and `watchdog()` starved. A persistent failure raises
+  instead, and the container restart re-rolls from a clean process.
+
+A missing/unlinkable binary raises `WebviewBinaryMissingError` and
+short-circuits the retry (it's permanent, so burning the backoff budget would
+only hide a packaging regression). Operator-visible status is the throttled
+`logging.warning` output (`balena logs` / journald). This is a **stop-gap** —
+the clean fix is to run 64-bit-capable Pi 3 hardware on a 64-bit OS + the
+arm64/Qt6 viewer, which sidesteps the entire 32-bit Qt5 stack.
+
 ## Sample pack
 
 Run `bin/generate_board_enablement_testbed.sh` on a workstation
