@@ -1,4 +1,5 @@
 import logging
+import signal
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -6,11 +7,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from anthias_viewer.media_player import (
+    GstFbdevMediaPlayer,
     MPVMediaPlayer,
     MediaPlayerProxy,
-    VLCMediaPlayer,
     get_alsa_audio_device,
 )
+from anthias_viewer import media_player as media_player_module
 
 logging.disable(logging.CRITICAL)
 
@@ -536,45 +538,162 @@ def test_detect_hdmi_falls_back_on_oserror() -> None:
         assert _detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
 
 
-class _VLCFixtures:
-    player: VLCMediaPlayer
-    mock_media: Any
-    mock_vlc_player: Any
+class _GstFixtures:
+    player: GstFbdevMediaPlayer
     mock_settings: Any
 
 
 @pytest.fixture
-def vlc() -> Iterator[_VLCFixtures]:
-    fixtures = _VLCFixtures()
-    with patch.object(VLCMediaPlayer, '__init__', return_value=None):
-        fixtures.player = VLCMediaPlayer()
-
-    fixtures.mock_media = MagicMock()
-    fixtures.mock_vlc_player = MagicMock()
-    fixtures.mock_vlc_player.get_media.return_value = fixtures.mock_media
-    fixtures.player.player = fixtures.mock_vlc_player
+def gstfb() -> Iterator[_GstFixtures]:
+    fixtures = _GstFixtures()
+    # Pin the framebuffer geometry/format so the test doesn't depend on
+    # the host's /sys/class/graphics/fb0.
+    with patch(
+        'anthias_viewer.media_player._fb_geometry',
+        return_value=(1920, 1080, 'RGB16'),
+    ):
+        fixtures.player = GstFbdevMediaPlayer()
 
     patch_settings = patch('anthias_viewer.media_player.settings')
-    patch_device_type = patch(
-        'anthias_viewer.media_player.get_device_type', return_value='pi4'
+    patch_rotation = patch(
+        'anthias_viewer.media_player._screen_rotation', return_value=0
     )
-
+    patch_alsa = patch(
+        'anthias_viewer.media_player.get_alsa_audio_device',
+        return_value='sysdefault:CARD=vc4hdmi0',
+    )
     fixtures.mock_settings = patch_settings.start()
-    fixtures.mock_settings.__getitem__.return_value = 'hdmi'
-    patch_device_type.start()
-
+    patch_rotation.start()
+    patch_alsa.start()
     try:
         yield fixtures
     finally:
         patch_settings.stop()
-        patch_device_type.stop()
+        patch_rotation.stop()
+        patch_alsa.stop()
 
 
-def test_set_asset_invokes_parse(vlc: _VLCFixtures) -> None:
-    vlc.player.set_asset('file:///test/video.mp4', 30)
+def test_set_asset_stores_uri_and_reloads_settings(
+    gstfb: _GstFixtures,
+) -> None:
+    gstfb.player.set_asset('file:///test/video.mp4', 30)
+    assert gstfb.player.uri == 'file:///test/video.mp4'
+    gstfb.mock_settings.load.assert_called_once()
 
-    vlc.mock_vlc_player.get_media.assert_called_once()
-    vlc.mock_media.parse.assert_called_once()
+
+def test_build_command_uses_playbin_hw_pipeline(gstfb: _GstFixtures) -> None:
+    gstfb.player.uri = 'file:///test/video.mp4'
+    cmd = gstfb.player._build_command()
+    assert cmd[0] == 'gst-launch-1.0'
+    assert 'playbin' in cmd
+    assert 'uri=file:///test/video.mp4' in cmd
+    video_sink = next(a for a in cmd if a.startswith('video-sink='))
+    # HW decode (playbin auto-plugs v4l2h264dec) + HW scale/convert via
+    # the bcm2835 ISP (v4l2convert) → framebuffer, no DRM/X.
+    assert 'v4l2convert' in video_sink
+    assert 'fbdevsink device=/dev/fb0' in video_sink
+    assert 'format=RGB16,width=1920,height=1080' in video_sink
+    # Unrotated panel → no videoflip, pipeline stays fully hardware.
+    assert 'videoflip' not in video_sink
+    audio_sink = next(a for a in cmd if a.startswith('audio-sink='))
+    assert 'alsasink device=sysdefault:CARD=vc4hdmi0' in audio_sink
+
+
+def test_build_command_wraps_bare_path_as_file_uri(
+    gstfb: _GstFixtures,
+) -> None:
+    # Local assets store a bare absolute path; playbin's uri property
+    # rejects anything without a scheme, so it must be file://-wrapped
+    # (regression: a bare path black-screened every local video).
+    gstfb.player.uri = '/data/.anthias/assets/abc123'
+    cmd = gstfb.player._build_command()
+    assert 'uri=file:///data/.anthias/assets/abc123' in cmd
+
+
+def test_build_command_passes_through_scheme_uris(
+    gstfb: _GstFixtures,
+) -> None:
+    for uri in (
+        # NOSONAR: the http:// case is the point — _as_gst_uri must pass
+        # any already-schemed URI through untouched; no connection is made.
+        'http://example.com/v.mp4',  # NOSONAR
+        'https://host/v.mp4',
+        'file:///already/a/uri.mp4',
+    ):
+        gstfb.player.uri = uri
+        cmd = gstfb.player._build_command()
+        assert f'uri={uri}' in cmd
+
+
+def test_build_command_quotes_spaces_in_bare_path(
+    gstfb: _GstFixtures,
+) -> None:
+    gstfb.player.uri = '/data/.anthias/assets/my clip.mp4'
+    cmd = gstfb.player._build_command()
+    assert 'uri=file:///data/.anthias/assets/my%20clip.mp4' in cmd
+
+
+def test_build_command_rotation_adds_videoflip(gstfb: _GstFixtures) -> None:
+    gstfb.player.uri = 'file:///test/video.mp4'
+    with patch(
+        'anthias_viewer.media_player._screen_rotation', return_value=90
+    ):
+        cmd = gstfb.player._build_command()
+    video_sink = next(a for a in cmd if a.startswith('video-sink='))
+    assert 'videoflip method=clockwise' in video_sink
+
+
+def test_play_spawns_gst_loop_and_is_playing(gstfb: _GstFixtures) -> None:
+    gstfb.player.uri = 'file:///test/video.mp4'
+    fake_proc = MagicMock()
+    fake_proc.poll.return_value = None  # alive
+    with patch(
+        'anthias_viewer.media_player.subprocess.Popen', return_value=fake_proc
+    ) as mock_popen:
+        gstfb.player.play()
+    mock_popen.assert_called_once()
+    argv = mock_popen.call_args.args[0]
+    # Looping wrapper re-launches playbin on EOS; gst argv passed via
+    # "$@" so the video-sink bin survives without shell re-splitting.
+    assert argv[0] == 'bash'
+    assert 'gst-launch-1.0' in argv and 'playbin' in argv
+    # New session group so stop() can kill bash + gst-launch together.
+    assert mock_popen.call_args.kwargs['start_new_session'] is True
+    assert gstfb.player.is_playing() is True
+
+
+def test_stop_kills_process_group(gstfb: _GstFixtures) -> None:
+    fake_proc = MagicMock()
+    fake_proc.poll.return_value = None
+    fake_proc.pid = 4242
+    gstfb.player._proc = fake_proc
+    with (
+        patch('anthias_viewer.media_player.os.getpgid', return_value=4242),
+        patch('anthias_viewer.media_player.os.killpg') as mock_killpg,
+    ):
+        gstfb.player.stop()
+    mock_killpg.assert_called_once_with(4242, signal.SIGTERM)
+    assert gstfb.player._proc is None
+
+
+def test_is_playing_false_when_process_exited(gstfb: _GstFixtures) -> None:
+    fake_proc = MagicMock()
+    fake_proc.poll.return_value = 0  # exited
+    gstfb.player._proc = fake_proc
+    assert gstfb.player.is_playing() is False
+
+
+def test_fb_geometry_parses_sysfs() -> None:
+    def fake_open(path: str, *a: Any, **k: Any) -> Any:
+        data = '1280,720\n' if 'virtual_size' in path else '32\n'
+        return MagicMock(
+            __enter__=lambda s: MagicMock(read=lambda: data),
+            __exit__=lambda *a: None,
+        )
+
+    with patch('builtins.open', side_effect=fake_open):
+        w, h, fb_fmt = media_player_module._fb_geometry()
+    assert (w, h, fb_fmt) == (1280, 720, 'BGRx')
 
 
 @pytest.fixture
@@ -586,8 +705,8 @@ def reset_media_proxy() -> Iterator[None]:
         MediaPlayerProxy.INSTANCE = None
 
 
-@pytest.mark.parametrize('device_type', ['pi1', 'pi2', 'pi3', 'pi4'])
-def test_get_instance_returns_vlc_for_pi_devices(
+@pytest.mark.parametrize('device_type', ['pi1', 'pi2', 'pi3'])
+def test_get_instance_returns_gst_fbdev_for_pi_devices(
     reset_media_proxy: None, device_type: str
 ) -> None:
     MediaPlayerProxy.INSTANCE = None
@@ -597,10 +716,28 @@ def test_get_instance_returns_vlc_for_pi_devices(
             return_value=device_type,
         ),
         patch.dict('os.environ', {'DEVICE_TYPE': device_type}),
+        patch.object(GstFbdevMediaPlayer, '__init__', return_value=None),
     ):
-        with patch.object(VLCMediaPlayer, '__init__', return_value=None):
-            instance = MediaPlayerProxy.get_instance()
-    assert isinstance(instance, VLCMediaPlayer)
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, GstFbdevMediaPlayer)
+
+
+def test_get_instance_pi4_never_routes_to_fbdev(
+    reset_media_proxy: None,
+) -> None:
+    # A Pi 4 reports device_type 'pi4' (Qt6/eglfs). Even when DEVICE_TYPE
+    # is missing/mis-set (here: not the 'pi4-64' the override looks for,
+    # so force_mpv is False), it must NOT fall to the linuxfb fbdev
+    # player — 'pi4' is deliberately absent from the dispatch list.
+    MediaPlayerProxy.INSTANCE = None
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='pi4'
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi4'}),
+    ):
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, MPVMediaPlayer)
 
 
 @pytest.mark.parametrize('device_type', ['pi5', 'x86'])

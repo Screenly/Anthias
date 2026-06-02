@@ -336,13 +336,36 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # libgst-dev / libsqlite0-dev / libsrtp0-dev were dropped in
         # trixie — libsqlite3-dev and libsrtp2-dev are already in the
         # main viewer apt list above; libgstreamer1.0-dev is Qt 5-only
-        # and is added in the extend() below. VLC is Qt5-only because
-        # MediaPlayerProxy only routes pi2/pi3 to VLCMediaPlayer.
+        # and is added in the extend() below.
+        #
+        # GstFbdevMediaPlayer (src/anthias_viewer/media_player.py)
+        # plays pi1/pi2/pi3 video by shelling out to ``gst-launch-1.0
+        # playbin`` with a fully-hardware sink: v4l2h264dec (bcm2835
+        # codec) decodes, v4l2convert (bcm2835 ISP) HW-scales + converts
+        # YUV→framebuffer-format, fbdevsink paints /dev/fb0 (no DRM
+        # master / compositor needed). The +rpt1 GStreamer stack from
+        # archive.raspberrypi.org (added in base for libraspberrypi0)
+        # supplies the runtime pieces:
+        #   * gstreamer1.0-tools — the gst-launch-1.0 binary
+        #   * -plugins-base — playbin, videoconvert
+        #   * -plugins-good — the V4L2 elements (v4l2h264dec /
+        #     v4l2convert) + qtdemux
+        #   * -plugins-bad — fbdevsink
+        #   * -alsa — alsasink (Debian ships the ALSA sink in its own
+        #     package, NOT in -plugins-base; the player's
+        #     ``audio-sink=alsasink device=...`` fails pipeline
+        #     construction without it, black-screening *all* video).
+        # VLC was dropped when GstFbdevMediaPlayer replaced
+        # VLCMediaPlayer — nothing on pi1/pi2/pi3 links it anymore.
         viewer_extra_apt_dependencies.extend(
             [
+                'gstreamer1.0-alsa',
+                'gstreamer1.0-plugins-bad',
+                'gstreamer1.0-plugins-base',
+                'gstreamer1.0-plugins-good',
+                'gstreamer1.0-tools',
                 'libgstreamer1.0-dev',
                 'qt5-image-formats-plugins',
-                'vlc',
             ]
         )
 

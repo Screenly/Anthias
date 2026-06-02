@@ -1,13 +1,15 @@
 import logging
 import os
+import re
+import signal
+import subprocess
 from typing import Any, ClassVar
+from urllib.parse import quote
 
 from anthias_common.board import ARM64_DEVICE_TYPES
 from anthias_common.device_helper import get_device_type
 from anthias_common.utils import clamp_screen_rotation
 from anthias_server.settings import settings
-
-VIDEO_TIMEOUT = 20  # secs
 
 
 # Lazy import for the pydbus proxy: the viewer service hands
@@ -15,7 +17,7 @@ VIDEO_TIMEOUT = 20  # secs
 # loadPage / loadImage (created in src/anthias_viewer/__init__.py
 # during load_browser()). Tests inject a mock; importing pydbus at
 # module load time would force every test to have pydbus available
-# even when only exercising VLCMediaPlayer.
+# even when only exercising GstFbdevMediaPlayer.
 _browser_bus: Any = None
 
 
@@ -297,8 +299,8 @@ def _build_video_options(uri: str) -> dict[str, Any]:
     # cage/wlroots (x86) via wlr-randr (issue #2856) and eglfs (pi4-64)
     # via QT_QPA_EGLFS_ROTATION (set in _build_webview_env). Sending
     # ``video-rotate`` on top of either would double-rotate the frames.
-    # linuxfb VLC boards (pi1/2/3) apply rotation through the
-    # ``--transform`` filter in VLCMediaPlayer.__init__ instead.
+    # linuxfb boards (pi1/2/3) apply rotation through the GStreamer
+    # ``videoflip`` element in GstFbdevMediaPlayer instead.
     return options
 
 
@@ -320,7 +322,7 @@ class MPVMediaPlayer(MediaPlayer):
     def play(self) -> None:
         # Re-read settings each play so the audio_output dropdown
         # takes effect without a viewer restart, matching the prior
-        # subprocess path and VLCMediaPlayer.
+        # subprocess path and GstFbdevMediaPlayer.
         settings.load()
 
         options = _build_video_options(self.uri)
@@ -359,61 +361,203 @@ class MPVMediaPlayer(MediaPlayer):
         return self._playing
 
 
-class VLCMediaPlayer(MediaPlayer):
+FB_DEVICE = '/dev/fb0'
+
+
+def _fb_geometry(
+    fb_sys: str = '/sys/class/graphics/fb0',
+) -> tuple[int, int, str]:
+    """Read the framebuffer resolution + GStreamer pixel format.
+
+    Returns (width, height, gst_format). 16bpp → RGB16 (the Pi vc4 fbcon
+    rgb565 default), 32bpp → BGRx. Falls back to 1920x1080/RGB16 if the
+    sysfs nodes are unreadable so playback degrades rather than crashes.
+    The format pins the ``v4l2convert`` (bcm2835 ISP) output so the
+    hardware color-convert lands in the framebuffer's pixel layout.
+    """
+    width, height = 1920, 1080
+    try:
+        with open(f'{fb_sys}/virtual_size') as handle:
+            width, height = (int(x) for x in handle.read().strip().split(','))
+    except (OSError, ValueError):
+        pass
+    bpp = 16
+    try:
+        with open(f'{fb_sys}/bits_per_pixel') as handle:
+            bpp = int(handle.read().strip())
+    except (OSError, ValueError):
+        pass
+    return width, height, 'BGRx' if bpp >= 32 else 'RGB16'
+
+
+# Operator screen_rotation → GStreamer ``videoflip`` method. None for an
+# unrotated panel (the common case) so the videoflip element is omitted
+# entirely and the pipeline stays fully hardware.
+_GST_VIDEOFLIP_METHODS = {
+    90: 'clockwise',
+    180: 'rotate-180',
+    270: 'counterclockwise',
+}
+
+# A bare URI scheme: ``http``, ``https``, ``file``, ``rtsp`` …
+_URI_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://')
+
+
+def _as_gst_uri(uri: str) -> str:
+    """Coerce an asset URI into one ``playbin`` accepts.
+
+    Local assets store a bare absolute path
+    (``settings['assetdir']/<asset_id>`` — see the API serializers), and
+    ``playbin``'s ``uri`` property rejects anything without a scheme, so
+    a bare path is wrapped as ``file://`` (``quote`` so a path with
+    spaces stays a valid URI; ``/`` is left intact). A URI that already
+    carries a scheme (``http(s)://`` streaming, ``file://``) is passed
+    through unchanged. Without this, ``gst-launch ... uri=/data/...``
+    fails with "Invalid URI" and the clip black-screens — the same
+    failure this player exists to fix.
+    """
+    if _URI_SCHEME_RE.match(uri):
+        return uri
+    return 'file://' + quote(uri)
+
+
+class GstFbdevMediaPlayer(MediaPlayer):
+    """Pi 1/2/3 (Qt5 linuxfb) video player: GStreamer HW pipeline → fb.
+
+    Spawns ``gst-launch-1.0 playbin`` with a custom video sink that
+    hardware-decodes through the board's V4L2 M2M decoder
+    (``v4l2h264dec`` → /dev/video10, bcm2835-codec; auto-selected by
+    decodebin at PRIMARY rank), hardware scales + color-converts through
+    the bcm2835 ISP (``v4l2convert``), and paints straight to the
+    framebuffer (``fbdevsink`` → /dev/fb0). fbdev needs no DRM master /
+    X / Wayland — exactly what a bare uid-1000 viewer with no compositor
+    cannot acquire (the python viewer holds card0's DRM master, so VLC's
+    ``kms`` vout and mpv's ``--vo=drm`` both fail with EBUSY/EPERM here).
+
+    This restores hardware-decoded video on these boards after #1980
+    (the Bookworm upgrade) dropped the Broadcom ``mmal_vout`` VLC path —
+    mmal did HW decode *and* HW scale/convert/scanout with no DRM master,
+    and once it was gone VLC was left with only compositor/DRM outputs
+    that render to nowhere on linuxfb. The VPU + ISP this pipeline drives
+    is the same silicon mmal used: on a Pi 3 it sustains 1080p30 → rgb565
+    at ~40 fps with zero dropped frames, where a CPU color-convert path
+    (ffmpeg → fbdev) managed only ~6 fps because swscale's YUV→rgb565 has
+    no NEON path and CPU scaling is unaccelerated. Documented in
+    docs/board-enablement.md.
+
+    ``playbin`` is used rather than a hand-built pipeline so demux is
+    container-agnostic, the HW decoder is auto-plugged, and a missing
+    audio track degrades gracefully (no audio pad → audio sink simply
+    unused) instead of dead-locking an explicitly-linked branch.
+    """
+
     def __init__(self) -> None:
         MediaPlayer.__init__(self)
-
-        # Imported here so Qt6 boards (which route to MPVMediaPlayer
-        # via MediaPlayerProxy) don't need libvlc available just to
-        # load this module.
-        import vlc
-
-        self._vlc = vlc
-        options = [f'--alsa-audio-device={get_alsa_audio_device()}']
-        # Issue #2856. Pi 1/2/3 fall through to VLC and write directly
-        # to the framebuffer — no compositor or KMS transform in the
-        # path — so any screen rotation has to be applied inside the
-        # pipeline. The transform filter is software-rotation but the
-        # SD-class boards on this branch only play SD-class assets, so
-        # the cost is bearable. VLC requires the filter to be in the
-        # chain at instance-init time; if the operator changes rotation
-        # from the UI, MediaPlayerProxy.reset() drops the singleton so
-        # we re-init with the new option list on the next play.
-        self._rotation = _screen_rotation()
-        if self._rotation:
-            options.extend(
-                [
-                    '--video-filter=transform',
-                    f'--transform-type={self._rotation}',
-                ]
-            )
-        self.instance = vlc.Instance(options)
-        self.player = self.instance.media_player_new()
-
-        self.player.audio_output_set('alsa')
+        self.uri: str = ''
+        self._proc: subprocess.Popen[bytes] | None = None
+        self._fb_w, self._fb_h, self._fb_fmt = _fb_geometry()
 
     def set_asset(self, uri: str, duration: int | str) -> None:
-        self.player.set_mrl(uri)
+        del duration  # the asset_loop owns the on-screen duration
+        self.uri = uri
         settings.load()
-        self.player.audio_output_device_set('alsa', get_alsa_audio_device())
-        # Use synchronous parse() to pre-load file metadata before play() is
-        # called. parse_with_options() is async and returns before metadata is
-        # ready, which negates the pre-loading benefit and causes the same
-        # startup gap we're trying to reduce.
-        self.player.get_media().parse()
+
+    def _video_sink(self) -> str:
+        """playbin ``video-sink`` bin: HW scale + color-convert → fb.
+
+        ``v4l2convert`` (bcm2835 ISP) does the YUV→fb-format conversion
+        and any scale to the framebuffer geometry in hardware. Rotation
+        rides ``videoflip`` ahead of it, and only when the operator
+        actually rotated the screen — an unrotated panel keeps the bin
+        fully hardware.
+        """
+        parts: list[str] = []
+        flip = _GST_VIDEOFLIP_METHODS.get(_screen_rotation())
+        if flip:
+            parts.append(f'videoflip method={flip}')
+        parts.append('v4l2convert')
+        parts.append(
+            f'video/x-raw,format={self._fb_fmt},'
+            f'width={self._fb_w},height={self._fb_h}'
+        )
+        parts.append(f'fbdevsink device={FB_DEVICE}')
+        return ' ! '.join(parts)
+
+    def _build_command(self) -> list[str]:
+        return [
+            'gst-launch-1.0',
+            '-q',
+            'playbin',
+            f'uri={_as_gst_uri(self.uri)}',
+            f'video-sink={self._video_sink()}',
+            f'audio-sink=alsasink device={get_alsa_audio_device()}',
+        ]
 
     def play(self) -> None:
-        self.player.play()
+        self.stop()  # never leave a previous pipeline holding the fb
+        gst = self._build_command()
+        logging.info('GstFbdev play: %s', ' '.join(gst))
+        # Loop the clip for the whole on-screen slot (the asset_loop
+        # sleeps for ``duration`` then stop()s us). gst-launch can't loop
+        # a single playbin, so re-launch on clean EOS; break on a pipeline
+        # error so a persistent failure doesn't spin. Pass the argv as
+        # ``"$@"`` so the video-sink bin string (with spaces and ``!``)
+        # survives without shell re-splitting. start_new_session puts the
+        # bash + gst-launch child in their own group so stop() can kill
+        # both — terminate()ing only bash would orphan gst-launch on the
+        # framebuffer.
+        argv = [
+            'bash',
+            '-c',
+            'while true; do "$@" || break; done',
+            'gstloop',
+            *gst,
+        ]
+        try:
+            self._proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                # Inherit stderr (not DEVNULL): with playbin's ``-q`` the
+                # pipeline is silent except for errors, so a device-side
+                # failure (caps negotiation, missing /dev/fb0, decoder
+                # busy) surfaces in the viewer's container log instead of
+                # vanishing — the silent-failure mode this player exists
+                # to escape.
+                stderr=None,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            logging.error('GstFbdev: failed to spawn gst-launch: %s', exc)
+            self._proc = None
 
     def stop(self) -> None:
-        self.player.stop()
+        if self._proc is None:
+            return
+        if self._proc.poll() is None:
+            try:
+                pgid = os.getpgid(self._proc.pid)
+                os.killpg(pgid, signal.SIGTERM)
+                self._proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                # SIGTERM didn't take in time — SIGKILL the group, then
+                # wait() to reap the bash leader so we don't leak a
+                # zombie before dropping the handle.
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                    self._proc.wait(timeout=3)
+                except (
+                    ProcessLookupError,
+                    OSError,
+                    subprocess.TimeoutExpired,
+                ):
+                    pass
+            except (ProcessLookupError, OSError):
+                pass
+        self._proc = None
 
     def is_playing(self) -> bool:
-        return self.player.get_state() in [
-            self._vlc.State.Playing,
-            self._vlc.State.Buffering,
-            self._vlc.State.Opening,
-        ]
+        return self._proc is not None and self._proc.poll() is None
 
 
 class MediaPlayerProxy:
@@ -422,28 +566,28 @@ class MediaPlayerProxy:
     @classmethod
     def get_instance(cls) -> MediaPlayer:
         if cls.INSTANCE is None:
-            # Force MPV (over VLC) on the device_types that otherwise
-            # match the Pi-name dispatch below:
+            # The Qt5 linuxfb boards (pi1/pi2/pi3) use
+            # GstFbdevMediaPlayer: HW decode + HW scale/convert via V4L2
+            # (bcm2835 codec + ISP) → fbdevsink. Every other board is
+            # Qt6 + in-process QtMultimedia (MPVMediaPlayer over D-Bus).
+            # Pi 4 is intentionally NOT in the dispatch list: it reports
+            # device_type 'pi4' (eglfs/Qt6), so it falls straight to the
+            # else → mpv, even if DEVICE_TYPE is missing/mis-set.
             #
-            #   * pi4-64 — Qt6 + linuxfb like pi5/x86, so VLC's
-            #     GL/GLES2/XCB outputs have no parent window to draw
-            #     into. MPV renders straight to KMS via --vo=drm.
-            #   * arm64 / generic-arm64 —
-            #     device_helper.get_device_type() falls back to
-            #     'pi1' on any aarch64 host whose
-            #     /proc/device-tree/model isn't a Pi regex match
-            #     (Rock Pi, Orange Pi, Banana Pi, …); without this
-            #     override they'd silently route to VLC, which has
-            #     no working backend on those boards (no vc4 KMS,
-            #     no XCB under cage). ``generic-arm64`` covers
-            #     pre-rename images still in the wild.
+            # force_mpv guards only the masquerade case:
+            # get_device_type() falls back to 'pi1' for any host whose
+            # /proc/device-tree/model doesn't match a Pi regex — a non-Pi
+            # aarch64 SBC (Rock Pi, Orange Pi, …) or a Pi whose model node
+            # is unreadable. DEVICE_TYPE is authoritative there, so an
+            # image built for a Qt6 board overrides the 'pi1' fallback
+            # back to mpv:
+            #   * pi4-64 — the 64-bit Pi 4 image (Qt6/eglfs).
+            #   * arm64 / generic-arm64 — non-Pi aarch64 SBCs
+            #     (``generic-arm64`` covers pre-rename images).
             device_env = os.environ.get('DEVICE_TYPE')
             force_mpv = device_env in ('pi4-64', 'arm64', 'generic-arm64')
-            if (
-                get_device_type() in ['pi1', 'pi2', 'pi3', 'pi4']
-                and not force_mpv
-            ):
-                cls.INSTANCE = VLCMediaPlayer()
+            if get_device_type() in ['pi1', 'pi2', 'pi3'] and not force_mpv:
+                cls.INSTANCE = GstFbdevMediaPlayer()
             else:
                 cls.INSTANCE = MPVMediaPlayer()
 
@@ -453,11 +597,12 @@ class MediaPlayerProxy:
     def reset(cls) -> None:
         """Drop the cached player so the next ``get_instance`` rebuilds it.
 
-        VLC bakes the transform filter into ``vlc.Instance(options)``
-        at init time, so a rotation change from the Settings page only
-        takes effect on the next play after we re-init. mpv re-reads
-        rotation per play and is unaffected, but calling reset() is
-        cheap and harmless either way.
+        Both players now re-read ``screen_rotation`` per play()
+        (GstFbdevMediaPlayer composes the ``videoflip`` element in
+        _video_sink; MPVMediaPlayer sends it over D-Bus), so a
+        rotation change from the Settings page takes effect on the next
+        play without a rebuild — but calling reset() is cheap and
+        harmless, and it also re-probes the framebuffer geometry.
         """
         if cls.INSTANCE is not None:
             try:

@@ -25,7 +25,7 @@ class MainWindow : public QMainWindow
         // argv: ``hwdec``, ``audio-device``, ``video-sync``,
         // ``vd-lavc-threads``, ``video-rotate``. Values are coerced
         // to UTF-8 strings via QVariant::toString(). Qt 5 boards
-        // (Pi 2 / Pi 3) route video through VLCMediaPlayer on the
+        // (Pi 1 / Pi 2 / Pi 3) route video through GstFbdevMediaPlayer on the
         // Python side and never call these slots, so they're
         // compiled out below the Qt-version gate.
         void playVideo(const QString &uri, const QVariantMap &options);

@@ -224,7 +224,6 @@ test = [
     { name = "pytest-playwright" },
     { name = "pytest-xdist" },
     { name = "python-dateutil" },
-    { name = "python-vlc" },
     { name = "pytz" },
     { name = "pyyaml" },
     { name = "redis" },
@@ -245,7 +244,6 @@ viewer = [
     { name = "netifaces" },
     { name = "pydbus" },
     { name = "python-dateutil" },
-    { name = "python-vlc" },
     { name = "pytz" },
     { name = "redis" },
     { name = "requests" },
@@ -391,7 +389,6 @@ test = [
     { name = "pytest-playwright", specifier = "==0.8.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
-    { name = "python-vlc", specifier = "==3.0.21203" },
     { name = "pytz", specifier = "==2026.2" },
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "redis", specifier = "==7.4.0" },
@@ -412,7 +409,6 @@ viewer = [
     { name = "netifaces", specifier = "==0.11.0" },
     { name = "pydbus", specifier = "==0.6.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
-    { name = "python-vlc", specifier = "==3.0.21203" },
     { name = "pytz", specifier = "==2026.2" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
@@ -1832,15 +1828,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/87/c7/5e1547c44e31da50a460df93af11a535ace568ef89d7a811069ead340c4a/python-slugify-8.0.4.tar.gz", hash = "sha256:59202371d1d05b54a9e7720c5e038f928f45daaffe41dd10822f3907b937c856", size = 10921, upload-time = "2024-02-08T18:32:45.488Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/62/02da182e544a51a5c3ccf4b03ab79df279f9c60c5e82d5e8bec7ca26ac11/python_slugify-8.0.4-py2.py3-none-any.whl", hash = "sha256:276540b79961052b66b7d116620b36518847f52d5fd9e3a70164fc8c50faa6b8", size = 10051, upload-time = "2024-02-08T18:32:43.911Z" },
-]
-
-[[package]]
-name = "python-vlc"
-version = "3.0.21203"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4b/5b/f9ce6f0c9877b6fe5eafbade55e0dcb6b2b30f1c2c95837aef40e390d63b/python_vlc-3.0.21203.tar.gz", hash = "sha256:52d0544b276b11e58b6c0b748c3e0518f94f74b1b4cd328c83a59eacabead1ec", size = 162211, upload-time = "2024-10-07T14:39:54.755Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/ee/7d76eb3b50ccb1397621f32ede0fb4d17aa55a9aa2251bc34e6b9929fdce/python_vlc-3.0.21203-py3-none-any.whl", hash = "sha256:1613451a31b692ec276296ceeae0c0ba82bfc2d094dabf9aceb70f58944a6320", size = 87651, upload-time = "2024-10-07T14:39:50.021Z" },
 ]
 
 [[package]]

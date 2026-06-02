@@ -6,9 +6,9 @@ stack, or `src/anthias_viewer/media_player.py`.
 
 The viewer is tuned per-board (see `media_player.py` and `bin/start_viewer.sh`):
 
-| Device   | Qt platform | Compositor | mpv VO                          |
-|----------|-------------|-----------|---------------------------------|
-| Pi 2 / 3 | Qt5 linuxfb | none       | VLC                              |
+| Device   | Qt platform | Compositor | video output                     |
+|----------|-------------|-----------|----------------------------------|
+| Pi 1/2/3 | Qt5 linuxfb | none       | GStreamer `v4l2h264dec ! v4l2convert ! fbdevsink` |
 | Pi 4-64  | Qt6 linuxfb | none       | `--vo=gpu --gpu-context=drm`     |
 | Pi 5     | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
 | arm64    | Qt6 wayland | cage       | `--vo=gpu --gpu-context=wayland` |
@@ -17,6 +17,41 @@ The viewer is tuned per-board (see `media_player.py` and `bin/start_viewer.sh`):
 Each combination has different hwdec, scaling, and compositing characteristics,
 so a regression on one board can hide behind a clean run on another. Run the
 same asset rotation everywhere and compare drop counts.
+
+### Pi 1 / 2 / 3 video: GStreamer V4L2 → fbdev (`GstFbdevMediaPlayer`)
+
+The Qt5 linuxfb boards play video by spawning `gst-launch-1.0 playbin` with a
+fully-hardware sink: `v4l2h264dec` (auto-plugged by decodebin at PRIMARY rank)
+decodes on the `bcm2835-codec` (`/dev/video10`), `v4l2convert` hardware-scales
+and color-converts (YUV→framebuffer format) on the bcm2835 ISP, and `fbdevsink`
+paints frames straight to the framebuffer (`/dev/fb0`). This is deliberate: on a
+bare linuxfb console with no compositor, a uid-1000 process **cannot acquire DRM
+master** (the viewer's python process already holds `card0`), so every
+DRM/KMS-master video output fails — VLC's `kms` vout and mpv's `--vo=drm` both
+return `EBUSY`/`EPERM`, and the rpidistro VLC `drm_vout` only knows how to lease
+a connector from a Wayland/X compositor (`Failed to get xlease`). fbdev needs
+none of that.
+
+History: these boards used to play video with VLC's Broadcom `--vout=mmal_vout`
+(HW decode **and** HW scale/convert/scanout, no DRM master). The Bookworm
+upgrade (#1980) dropped `mmal`, and nothing replaced the vout, so VLC silently
+rendered to nowhere — `Showing asset … (video)` was logged but the screen
+stayed black on *every* OS version. `GstFbdevMediaPlayer` is the modern
+equivalent and drives the **same VPU + ISP silicon** mmal used: decode, scale,
+and color-convert all stay in hardware, only the final fbdev write is a CPU
+memcpy. On a Pi 3 it sustains 1080p30 → rgb565 at ~40 fps with zero dropped
+frames. (An interim `ffmpeg → fbdev` attempt was abandoned: the bcm2835 HW
+*decode* worked, but doing the YUV→RGB convert + scale on the ARM CPU via
+swscale managed only ~6 fps to rgb565 — swscale has no NEON rgb565 path and CPU
+scaling is unaccelerated. `v4l2convert` moves that work back onto the ISP.)
+`playbin` is used so demux is container-agnostic, the HW decoder is auto-plugged,
+and a clip with no audio track degrades gracefully. Validate with the BBB sample
+pack below and confirm `dropped: 0` at the source framerate.
+
+> **Note:** validated on a Pi 3 (the only linuxfb board in the testbed pool).
+> Pi 1 / Pi 2 share the same VideoCore IV decode + ISP block, so the hardware
+> path is identical; their slower ARM cores only affect demux/parse + the fb
+> memcpy, not the offloaded decode/scale/convert.
 
 ## Goal: hardware-accelerated playback on every board
 
