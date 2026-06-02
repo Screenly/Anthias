@@ -153,9 +153,14 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
         summary << QStringLiteral("audio-device=%1").arg(alsaSpec);
     }
 
-    // Rotation on QGraphicsVideoItem. Pi 4 (eglfs) is the only
-    // board that passes ``video-rotate`` — cage / wlroots boards
-    // get the transform from wlr-randr at the compositor level.
+    // Optional per-item rotation of the QGraphicsVideoItem. No board
+    // sends ``video-rotate`` any more: every platform now rotates the
+    // whole screen (eglfs via QT_QPA_EGLFS_ROTATION on Pi 4, wlroots
+    // via wlr-randr on x86) and the video item inherits that transform,
+    // so applying it again here would double-rotate. The parse is kept
+    // as a defensive no-op (default 0 = applyRotation(0)) so an old
+    // viewer that still passes the option degrades gracefully rather
+    // than erroring on an unknown key.
     int rotation = 0;
     if (options.contains(QStringLiteral("video-rotate"))) {
         bool ok = false;

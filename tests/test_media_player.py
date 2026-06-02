@@ -734,19 +734,19 @@ def test_mpv_never_passes_video_rotate_under_cage(
     assert 'video-rotate' not in options
 
 
-@pytest.mark.parametrize('rotation', [90, 180, 270])
+@pytest.mark.parametrize('rotation', [0, 90, 180, 270])
 @patch(
     'anthias_viewer.media_player._detect_hdmi_audio_device',
     return_value='sysdefault:CARD=vc4hdmi0',
 )
-def test_mpv_passes_video_rotate_on_pi4_64(
+def test_mpv_never_passes_video_rotate_on_pi4_64(
     _mock_detect: Any, rotation: int
 ) -> None:
-    """Pi 4 (eglfs, no compositor) has no transform plumbing — the
-    video pipeline has to apply rotation itself via the
-    ``video-rotate`` option (forwarded to
-    ``QGraphicsVideoItem::setRotation`` on the C++ side; sent as an
-    ``int``, marshalled to ``Variant('i', …)``)."""
+    """Pi 4 (eglfs) rotates the whole screen via QT_QPA_EGLFS_ROTATION
+    (set in src/anthias_viewer/__init__.py:_build_webview_env), and the
+    QGraphicsVideoItem inherits that transform. Emitting ``video-rotate``
+    on top would double-rotate the frames, so the option must be omitted
+    at every angle — including 0°."""
     player = MPVMediaPlayer()
     mock_bus = MagicMock()
     with (
@@ -758,42 +758,6 @@ def test_mpv_passes_video_rotate_on_pi4_64(
         patch(
             'anthias_viewer.media_player.settings',
             _rotated_mpv_settings(rotation),
-        ),
-        patch(
-            'anthias_viewer.media_player.get_device_type',
-            return_value='pi5',
-        ),
-        patch.dict('os.environ', {'DEVICE_TYPE': 'pi4-64'}),
-    ):
-        player.set_asset('file:///test/video.mp4', 30)
-        player.play()
-    options = _last_play_options(mock_bus)
-    assert options['video-rotate'] == rotation
-    assert isinstance(options['video-rotate'], int)
-
-
-@patch(
-    'anthias_viewer.media_player._detect_hdmi_audio_device',
-    return_value='sysdefault:CARD=vc4hdmi0',
-)
-def test_mpv_skips_video_rotate_at_zero_on_pi4_64(
-    _mock_detect: Any,
-) -> None:
-    """0° must NOT emit ``video-rotate=0`` — keeps the D-Bus surface
-    unchanged for the 99% of operators who never touch the dropdown,
-    so the video pipeline falls back to its own default rather than
-    being told to rotate by zero."""
-    player = MPVMediaPlayer()
-    mock_bus = MagicMock()
-    with (
-        patch('anthias_viewer.media_player._browser_bus', mock_bus),
-        patch(
-            'anthias_viewer.media_player._marshal_dbus_options',
-            side_effect=lambda opts: opts,
-        ),
-        patch(
-            'anthias_viewer.media_player.settings',
-            _rotated_mpv_settings(0),
         ),
         patch(
             'anthias_viewer.media_player.get_device_type',

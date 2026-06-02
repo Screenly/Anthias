@@ -148,17 +148,41 @@ def _set_qpa_rotation(qpa: str, rotation: int) -> str:
 def _build_webview_env() -> dict[str, str]:
     """Compose the env to pass when spawning AnthiasViewer.
 
-    Sets ``rotation=N`` inside QT_QPA_PLATFORM on linuxfb boards so
-    the Qt linuxfb plugin rotates the framebuffer for us at no perf
-    cost. On Wayland (x86) the QPA has no rotation= option — the
-    compositor owns transforms — so the env is left alone and
-    ``_apply_wlr_transform`` handles rotation separately.
+    Rotation is applied differently per platform plugin:
+
+    * Wayland (x86 under cage): the compositor owns transforms, so the
+      env is left alone and ``_apply_wlr_transform`` handles rotation
+      with ``wlr-randr`` separately.
+
+    * eglfs (pi4-64): the linuxfb ``:rotation=N`` plugin option is NOT
+      understood by eglfs (it's silently ignored — issue #2882's
+      original code wrongly assumed Pi 4 was still linuxfb, which is
+      why the rotation menu was a no-op there). eglfs reads
+      ``QT_QPA_EGLFS_ROTATION`` at QPA init and applies the transform
+      to every top-level window through its QOpenGLCompositor;
+      AnthiasViewer is a QWidget app, so webpages, images and video
+      all rotate uniformly — no per-content rotation needed (and the
+      old ``video-rotate`` path in media_player must stay off here or
+      the video double-rotates).
+
+    * linuxfb (pi2/pi3, Qt5): the plugin reads ``:rotation=N`` from
+      QT_QPA_PLATFORM once at QPA init and rotates the framebuffer for
+      us at no perf cost.
     """
     env = dict(os.environ)
     rotation = _rotation_value()
+    if _is_wayland_board():
+        return env
     qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')
-    if not _is_wayland_board():
-        env['QT_QPA_PLATFORM'] = _set_qpa_rotation(qpa, rotation)
+    if qpa.partition(':')[0] == 'eglfs':
+        if rotation:
+            env['QT_QPA_EGLFS_ROTATION'] = str(rotation)
+        else:
+            # Drop a stale value so dialling back to 0 actually
+            # un-rotates on the respawned process.
+            env.pop('QT_QPA_EGLFS_ROTATION', None)
+        return env
+    env['QT_QPA_PLATFORM'] = _set_qpa_rotation(qpa, rotation)
     return env
 
 
