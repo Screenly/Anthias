@@ -7,6 +7,11 @@ name: Balena unpin devices
 # (minus the `anthias_keep_pinned` tag opt-out) so they track their
 # fleet's latest release. All the logic lives in
 # bin/balena_unpin_devices.py.
+#
+# PRIVACY: this repo is public, so these workflow logs are
+# world-readable. The script's default output is aggregate-only
+# (counts + release histogram) by design — never pass --verbose here,
+# it prints per-device uuids.
 
 on:
   schedule:

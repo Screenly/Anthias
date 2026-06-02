@@ -35,7 +35,11 @@ Notes:
     excluded in the PATCH filter itself, so deliberately pinned
     canaries/testbeds survive;
   * a failure on one fleet is logged and counted, never aborting the
-    remaining fleets.
+    remaining fleets;
+  * output is aggregate-only (per-fleet counts and a pinned-release
+    histogram) because the hourly workflow's logs are world-readable —
+    this is a public repo. Per-device uuid lines need --verbose, which
+    must stay out of CI.
 
 Requires a balena API token in $BALENA_TOKEN (the same secret the
 deploy workflows use). Examples:
@@ -76,9 +80,8 @@ KEEP_PINNED_TAG = 'anthias_keep_pinned'
 # huge response body.
 PAGE_SIZE = 500
 
-# Per-device log lines printed per fleet before collapsing into the
-# release histogram — the initial backlog is tens of thousands of
-# devices and an hourly CI log doesn't need one line for each.
+# Per-device log lines printed per fleet under --verbose before
+# collapsing into the release histogram.
 DETAIL_CAP = 25
 
 
@@ -198,22 +201,33 @@ def pinned_version(device: dict[str, Any]) -> str:
     return '?'
 
 
-def report_fleet(devices: list[dict[str, Any]], apply: bool) -> None:
-    """Per-device lines up to DETAIL_CAP, then a release histogram."""
-    for dev in devices[:DETAIL_CAP]:
-        uuid = str(dev.get('uuid', ''))[:12]
-        online = 'online' if dev.get('is_online') else 'offline'
-        release = pinned_version(dev)
-        if is_keep_pinned(dev):
-            print(
-                f'  [keep] {uuid} {online} pinned to {release} '
-                f'({KEEP_PINNED_TAG} tag)'
-            )
-        else:
-            verb = 'unpin' if apply else 'plan'
-            print(f'  [{verb}] {uuid} {online} pinned to {release}')
-    if len(devices) > DETAIL_CAP:
-        print(f'  ... and {len(devices) - DETAIL_CAP} more; by release:')
+def report_fleet(
+    devices: list[dict[str, Any]], apply: bool, verbose: bool
+) -> None:
+    """Pinned-release histogram; per-device lines only under --verbose.
+
+    The default output deliberately carries no device identifiers —
+    the hourly workflow's logs are world-readable on this public repo,
+    so uuids (correlatable customer device data) must never reach
+    stdout there.
+    """
+    if verbose:
+        for dev in devices[:DETAIL_CAP]:
+            uuid = str(dev.get('uuid', ''))[:12]
+            online = 'online' if dev.get('is_online') else 'offline'
+            release = pinned_version(dev)
+            if is_keep_pinned(dev):
+                print(
+                    f'  [keep] {uuid} {online} pinned to {release} '
+                    f'({KEEP_PINNED_TAG} tag)'
+                )
+            else:
+                verb = 'unpin' if apply else 'plan'
+                print(f'  [{verb}] {uuid} {online} pinned to {release}')
+        if len(devices) > DETAIL_CAP:
+            print(f'  ... and {len(devices) - DETAIL_CAP} more')
+    if devices:
+        print('  by pinned release:')
         histogram = Counter(pinned_version(dev) for dev in devices)
         for release, count in histogram.most_common():
             print(f'    {count:6d} x {release}')
@@ -236,6 +250,12 @@ def main() -> int:
         '--apply',
         action='store_true',
         help='actually perform changes (default: dry-run)',
+    )
+    ap.add_argument(
+        '--verbose',
+        action='store_true',
+        help='print per-device uuid lines — local use only, NEVER in '
+        'CI (the public repo publishes the workflow logs)',
     )
     args = ap.parse_args()
 
@@ -263,7 +283,7 @@ def main() -> int:
         totals['pinned'] += len(devices)
         totals['kept'] += kept
         print(f'\n# {fleet}: pinned={len(devices)} keep-tagged={kept}')
-        report_fleet(devices, args.apply)
+        report_fleet(devices, args.apply, args.verbose)
         if not args.apply or len(devices) == kept:
             continue
         try:
