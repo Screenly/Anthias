@@ -16,8 +16,9 @@ MainWindow::MainWindow() : QMainWindow()
     // the existing slots).
     connect(view, &View::videoEnded, this, &MainWindow::videoEnded);
 #endif
-
-    showFullScreen();
+    // NOTE: the window is shown (showFullScreen) by main() after
+    // construction, not here — showing in both places double-committed
+    // the surface and tripped a wlroots xdg_surface warning under cage.
 }
 
 void MainWindow::loadPage(const QString &uri)

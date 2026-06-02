@@ -11,7 +11,12 @@ int main(int argc, char *argv[])
     QApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
     MainWindow *window = new MainWindow();
-    window->show();
+    // Show fullscreen exactly once, here, after the window is fully
+    // constructed. Previously the MainWindow ctor also called
+    // showFullScreen(), so the window was shown twice — under
+    // cage/wayland that double-commit triggered wlroots' "A configure
+    // is scheduled for an uninitialized xdg_surface" warning at startup.
+    window->showFullScreen();
 
     QDBusConnection connection = QDBusConnection::sessionBus();
 

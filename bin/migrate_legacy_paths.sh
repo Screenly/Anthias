@@ -36,8 +36,12 @@
 set -euo pipefail
 
 # Resolve the user's home dir without trusting $HOME (this script may be
-# invoked under sudo).
-USER_HOME="${USER_HOME:-/home/${USER}}"
+# invoked under sudo). $USER is unset when run inside the viewer
+# container (DATA mode, via migrate_in_container_paths.sh), so fall back
+# to `id -un` rather than letting `set -u` abort the whole migration on
+# an unbound $USER. USER_HOME is only actually used in HOST mode; in
+# DATA mode it just needs to resolve without erroring.
+USER_HOME="${USER_HOME:-/home/${USER:-$(id -un)}}"
 
 # HOST mode (no arg) operates on $USER_HOME and additionally does the repo
 # rename + sudoers cleanup. DATA mode (explicit base dir) does only the
