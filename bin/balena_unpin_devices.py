@@ -620,6 +620,8 @@ def run_os_update_phase(
         f'  os-update -> {target_os}: online={len(devices)} '
         f'eligible={len(eligible)} tranche={len(tranche)}'
     )
+    started = 0
+    failed = 0
     for dev in tranche:
         cur = normalize_os(dev.get('os_version') or '') or '?'
         if verbose:
@@ -631,7 +633,7 @@ def run_os_update_phase(
             continue
         try:
             start_os_update(token, base, dev['uuid'], target_os)
-            totals['os_started'] += 1
+            started += 1
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode(errors='replace')[:120]
             if verbose:
@@ -640,11 +642,14 @@ def run_os_update_phase(
                     f' HTTP {exc.code}: {detail}',
                     file=sys.stderr,
                 )
-            totals['os_failed'] += 1
+            failed += 1
         except OSError:
-            totals['os_failed'] += 1
-    if apply and not verbose and totals['os_started']:
-        print(f'  started {len(tranche)} OS update(s) (this fleet+run)')
+            failed += 1
+    totals['os_started'] += started
+    totals['os_failed'] += failed
+    if apply and (started or failed):
+        # Transient busy/offline failures retry on the next hourly run.
+        print(f'  started {started}, failed {failed} (transient; retried)')
 
 
 def run_supervisor_phase(
