@@ -19,7 +19,9 @@ selectable on its own:
      device's CPU architecture. Restricted to devices already on the
      target balenaOS so the supervisor/OS pairing stays compatible
      (devices still mid-OS-update get their matching supervisor from the
-     HUP itself).
+     HUP itself), and skipped entirely for device types frozen on a
+     legacy balenaOS line (e.g. pi2 tops out at 5.1.x and runs
+     supervisor 15.x — the newest supervisor isn't built for it).
 
 bin/balena_fleet_maintenance.py (the CLI-driven staged OS roller) does
 the same OS-update + unpin but cannot target the pinned population:
@@ -120,6 +122,18 @@ KEEP_PINNED_TAG = 'anthias_keep_pinned'
 # don't apply — a device on >= 2.14.0 can go straight to the latest.
 HUP_MIN_SOURCE = (2, 14, 0, 0)
 HUP_MIN_TARGET = (2, 16, 0, 0)
+
+# `getSupervisorReleasesForCpuArchitecture` returns the newest supervisor
+# for an architecture regardless of OS — but the newest supervisor is
+# built for the current calendar-versioned balenaOS line and is NOT safe
+# on a device type frozen on a legacy OS (e.g. raspberry-pi2 tops out at
+# balenaOS 5.1.x, whose devices run supervisor 15.x; pushing 17.x there
+# would likely break them). So only bump the supervisor on fleets whose
+# target OS is on the calendar-versioned line (major >= 2025). balenaOS
+# switched from semver (2.x .. 7.x) to YYYY.M.P calendar versioning, so a
+# major in the thousands cleanly marks "still getting current OS+
+# supervisor builds"; legacy-OS fleets keep their OS-matched supervisor.
+SUPERVISOR_MIN_TARGET_OS_MAJOR = 2025
 
 # Defensive pagination: the API returns the full set by default, but a
 # bounded page keeps one pathological fleet listing from becoming one
@@ -635,6 +649,16 @@ def run_supervisor_phase(
     apply: bool,
     totals: dict[str, int],
 ) -> None:
+    if parse_version(target_os)[0] < SUPERVISOR_MIN_TARGET_OS_MAJOR:
+        # Frozen legacy-OS device type (e.g. pi2 on balenaOS 5.1.x): the
+        # newest supervisor isn't built for it, so leave its OS-matched
+        # supervisor alone.
+        print(
+            f'  supervisor: skipped — {fleet} is on the legacy balenaOS '
+            f'{target_os} line; latest supervisor targets calendar-'
+            f'versioned OS'
+        )
+        return
     arch = cpu_architecture(token, device_type)
     if not arch:
         print(
