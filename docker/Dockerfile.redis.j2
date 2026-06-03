@@ -16,10 +16,33 @@ ENV GIT_HASH={{ git_hash }}
 ENV GIT_SHORT_HASH={{ git_short_hash }}
 ENV GIT_BRANCH={{ git_branch }}
 
-RUN sed -i 's/^bind.*/bind 0.0.0.0/g' /etc/redis/redis.conf
-RUN sed -i 's/^protected-mode.*/protected-mode no/g' /etc/redis/redis.conf
-
 {% include 'labels.j2' %}
 
-CMD ["redis-server", "--protected-mode", "no"]
+# redis-server is started with explicit flags rather than the distro's
+# /etc/redis/redis.conf so behaviour is deterministic regardless of the
+# base image's packaged defaults, and so we control exactly where data
+# lands.
+#
+# Persistence matters: the device's telemetry identity (the `device_id`
+# used as the GA4 client_id) and its 24h telemetry cooldown live only in
+# Redis. The redis-data volume is mounted at /var/lib/redis in both the
+# non-balena (docker-compose.yml.tmpl) and balena
+# (docker-compose.balena.yml.tmpl) deployments, but the previous CMD
+# loaded no config, so `dir` defaulted to the process CWD (/) and the
+# RDB snapshot was written to the container's ephemeral writable layer —
+# never the volume. Every container recreation (a version deploy, image
+# update, or `compose down`) therefore wiped the device_id, and GA
+# counted the same physical device as a brand-new one on every upgrade.
+#
+# --dir pins data onto the mounted volume; --appendonly yes persists the
+# (rare) device_id write within ~1s via the AOF (default fsync everysec),
+# which RDB save points alone wouldn't catch if the container is recreated
+# inside a save window; the RDB save points are kept as a belt-and-braces
+# snapshot. --protected-mode no preserves the existing cross-container
+# access (other services connect over the `redis` service network).
+CMD ["redis-server", \
+     "--protected-mode", "no", \
+     "--dir", "/var/lib/redis", \
+     "--appendonly", "yes", \
+     "--save", "3600 1 300 100 60 10000"]
 
