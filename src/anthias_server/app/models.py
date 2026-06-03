@@ -39,6 +39,41 @@ def clamp_refresh_interval(value: Any) -> int:
     return max(0, min(interval, REFRESH_INTERVAL_S_MAX))
 
 
+def repair_mojibake(text: str | None) -> str | None:
+    """Undo the classic ``UTF-8 bytes decoded as Latin-1`` mojibake.
+
+    A misbehaving uploader that double-encodes a filename turns
+    ``Formulários`` into ``FormulÃ¡rios`` (the UTF-8 bytes ``\\xc3\\xa1``
+    of ``á`` read back as the two Latin-1 chars ``Ã`` + ``¡``). Anthias
+    itself never does this — Django's multipart parser and DRF both
+    decode as UTF-8 — but the corrupted text arrives already mangled in
+    the request body and we would otherwise store it verbatim, so the
+    operator sees garbled asset names in the UI and in the viewer's
+    ``Showing asset …`` log line.
+
+    The repair is deliberately conservative and deterministic: it only
+    fires when *every* character is in the Latin-1 range (so
+    ``encode('latin-1')`` round-trips) **and** those bytes form a valid
+    UTF-8 string, which is then returned only if it actually differs from
+    the input. That is a strong heuristic for double-encoded UTF-8, but
+    not a proof: a name that is *genuinely* Latin-1 yet whose bytes also
+    happen to be valid UTF-8 (e.g. ``Â©`` → ``©``) is indistinguishable
+    from mojibake and gets rewritten too. Such collisions are vanishingly
+    rare in real asset filenames, and the alternative — leaving every
+    ``FormulÃ¡rios`` garbled — is worse, so we accept the trade-off.
+    Correctly-stored ``Formulários``, ``Café``, or ``日本語`` raise on the
+    encode or decode step and are returned untouched. Idempotent:
+    re-running on already-repaired text is a no-op.
+    """
+    if not text:
+        return text
+    try:
+        repaired = text.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+    return repaired if repaired != text else text
+
+
 def generate_asset_id() -> str:
     return uuid.uuid4().hex
 
@@ -83,6 +118,26 @@ class Asset(models.Model):
 
     def __str__(self) -> str:
         return str(self.name)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Repair double-encoded UTF-8 in ``name`` before persisting.
+
+        A single write-side chokepoint so every create/update path —
+        the web form, all four API versions, and the legacy Screenly
+        import — stores a clean name regardless of an upstream client
+        that double-encoded the filename. See ``repair_mojibake`` for
+        why this is safe (no-op on correctly-encoded text).
+
+        Skipped when ``update_fields`` is passed without ``name`` (e.g.
+        the metadata-only and reachability saves): those writes don't
+        touch the column, so repairing ``self.name`` there would mutate
+        the in-memory instance without persisting it — diverging from
+        the stored row while leaving the DB value unrepaired.
+        """
+        update_fields = kwargs.get('update_fields')
+        if update_fields is None or 'name' in update_fields:
+            self.name = repair_mojibake(self.name)
+        super().save(*args, **kwargs)
 
     def get_play_days(self) -> list[int]:
         """Parse play_days into a sorted, deduped list of ints 1-7.
