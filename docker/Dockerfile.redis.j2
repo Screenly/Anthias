@@ -44,5 +44,7 @@ CMD ["redis-server", \
      "--protected-mode", "no", \
      "--dir", "/var/lib/redis", \
      "--appendonly", "yes", \
-     "--save", "3600 1 300 100 60 10000"]
+     "--save", "3600 1", \
+     "--save", "300 100", \
+     "--save", "60 10000"]
 
