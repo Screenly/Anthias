@@ -156,7 +156,7 @@ def current_esr_version(device_type: str) -> str | None:
         return None
     for line in out.splitlines():
         if '(current)' in line:
-            token = line.strip().split()[0].lstrip('v')
+            token: str = line.strip().split()[0].lstrip('v')
             if token[:1].isdigit():
                 return token
     return None

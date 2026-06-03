@@ -19,6 +19,7 @@ _SCRIPT = (
 _spec = importlib.util.spec_from_file_location(
     'balena_fleet_maintenance', _SCRIPT
 )
+assert _spec is not None and _spec.loader is not None
 fm = importlib.util.module_from_spec(_spec)
 # Register before exec so @dataclass can resolve the module by name.
 sys.modules[_spec.name] = fm
@@ -38,7 +39,7 @@ _spec.loader.exec_module(fm)
         ('balenaOS 2.113.4', False),
     ],
 )
-def test_is_calver(version, expected):
+def test_is_calver(version: str, expected: bool) -> None:
     assert fm.is_calver(version) is expected
 
 
@@ -46,7 +47,7 @@ def test_is_calver(version, expected):
     'current',
     ['balenaOS 2.113.4', '5.1.54', '5.3.22', '6.0.36', '6.1.24+rev2'],
 )
-def test_old_classic_lines_can_reach_esr(current):
+def test_old_classic_lines_can_reach_esr(current: str) -> None:
     # The genuinely old (2.x .. 6.1) lines are valid HUP sources for ESR.
     assert fm.unreachable_for_target(current, '2025.7.0') is False
 
@@ -55,16 +56,16 @@ def test_old_classic_lines_can_reach_esr(current):
     'current',
     ['2026.1.0', 'balenaOS 2026.1.0', '2025.7.0'],
 )
-def test_calver_devices_are_at_or_ahead_of_esr_target(current):
+def test_calver_devices_are_at_or_ahead_of_esr_target(current: str) -> None:
     # Already on the ESR/CalVer track -> no downward/sideways HUP path.
     assert fm.unreachable_for_target(current, '2025.7.0') is True
 
 
-def test_regular_seven_cannot_reach_esr():
+def test_regular_seven_cannot_reach_esr() -> None:
     assert fm.unreachable_for_target('7.2.0', '2025.7.0') is True
 
 
-def test_no_filter_for_regular_target():
+def test_no_filter_for_regular_target() -> None:
     # raspberrypi2 falls back to a regular target; the ESR pre-filter must
     # not suppress an otherwise-eligible device there.
     assert fm.unreachable_for_target('5.1.54', '5.1.20') is False
