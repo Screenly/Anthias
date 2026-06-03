@@ -251,16 +251,18 @@ wait_for_eglfs_display() {
 }
 wait_for_eglfs_display
 
-# Pi 4 renders through Qt's eglfs_kms platform (see Dockerfile.viewer.j2),
-# whose JSON config pins the DRM card device. The vc4-drm (display) and
-# v3d (render-only) nodes race during probe, so the *display* card is
-# /dev/dri/card1 on some boots/images and /dev/dri/card0 on others — the
-# v3d node carries no connectors. A hardcoded device (issue #2947) points
-# eglfs at the render-only node on the boots where vc4 loses the race; Qt
-# then finds no connectors, never takes DRM master, and the device hangs
-# on the balena splash forever. Detect the card that actually owns
-# connectors at runtime and rewrite the device path before launch.
-if [ "$DEVICE_TYPE" = "pi4-64" ] && [ -n "${QT_QPA_EGLFS_KMS_CONFIG:-}" ]; then
+# Pi 4 / Pi 3-64 render through Qt's eglfs_kms platform (see
+# Dockerfile.viewer.j2), whose JSON config pins the DRM card device. The
+# vc4-drm (display) and v3d (render-only) nodes race during probe, so the
+# *display* card is /dev/dri/card1 on some boots/images and /dev/dri/card0
+# on others — the v3d node carries no connectors. A hardcoded device
+# (issue #2947) points eglfs at the render-only node on the boots where
+# vc4 loses the race; Qt then finds no connectors, never takes DRM master,
+# and the device hangs on the balena splash forever. Detect the card that
+# actually owns connectors at runtime and rewrite the device path before
+# launch. Both Qt6 Pi boards share this; pi3-64 is the 64-bit Pi 3 stream.
+if { [ "$DEVICE_TYPE" = "pi4-64" ] || [ "$DEVICE_TYPE" = "pi3-64" ]; } \
+    && [ -n "${QT_QPA_EGLFS_KMS_CONFIG:-}" ]; then
     kms_card=""
     # Prefer a card with a *connected* connector; otherwise fall back to
     # any card that exposes connectors at all. The render-only v3d node
@@ -408,13 +410,14 @@ wait_for_framebuffer
 # viewer user; WAYLAND_DISPLAY has to be added to --preserve-env to
 # survive sudo's env scrub.
 #
-# Pi 4 falls through to the direct-sudo path (no cage) under
-# QT_QPA_PLATFORM=eglfs (#2904: eglfs gives QGraphicsVideoItem a GL
+# Pi 4 (and pi3-64) fall through to the direct-sudo path (no cage)
+# under QT_QPA_PLATFORM=eglfs (#2904: eglfs gives QtMultimedia a GL
 # painter that linuxfb lacks). The V3D 6.0 doesn't have the bandwidth
 # to composite cage on top of video at 4K (738 vo drops/30 s under
 # cage vs 3-6 on the eglfs + --gpu-context=drm path), so Pi 4 stays off
 # cage until either a newer mpv with v4l2request hwdec or a future Pi
-# platform lets us re-evaluate. Qt5 boards (pi2/pi3) share the same
+# platform lets us re-evaluate; the weaker Pi 3-64 VideoCore IV stays
+# off cage for the same reason. Qt5 boards (pi2/pi3) share the same
 # direct-sudo fallback path under linuxfb.
 case "$DEVICE_TYPE" in
     x86|arm64|pi5)

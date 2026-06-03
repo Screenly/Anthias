@@ -574,18 +574,30 @@ class MediaPlayerProxy:
             # device_type 'pi4' (eglfs/Qt6), so it falls straight to the
             # else → mpv, even if DEVICE_TYPE is missing/mis-set.
             #
-            # force_mpv guards only the masquerade case:
-            # get_device_type() falls back to 'pi1' for any host whose
-            # /proc/device-tree/model doesn't match a Pi regex — a non-Pi
-            # aarch64 SBC (Rock Pi, Orange Pi, …) or a Pi whose model node
-            # is unreadable. DEVICE_TYPE is authoritative there, so an
-            # image built for a Qt6 board overrides the 'pi1' fallback
-            # back to mpv:
+            # force_mpv (legacy name — the player it selects is
+            # MPVMediaPlayer, which despite the name drives in-process
+            # QtMultimedia playback over D-Bus, no mpv binary) overrides
+            # get_device_type() with the authoritative baked DEVICE_TYPE
+            # whenever the model string alone would route a Qt6 image to
+            # the Qt5 Gst player:
             #   * pi4-64 — the 64-bit Pi 4 image (Qt6/eglfs).
-            #   * arm64 / generic-arm64 — non-Pi aarch64 SBCs
-            #     (``generic-arm64`` covers pre-rename images).
+            #   * pi3-64 — the 64-bit Pi 3 image (Qt6/eglfs). The model
+            #     node still reads "Raspberry Pi 3", so get_device_type()
+            #     returns 'pi3' and would otherwise pick the armhf/Qt5
+            #     Gst player; the pi3-64 image has no GStreamer fbdev
+            #     stack, so the env override is what keeps it on the
+            #     QtMultimedia path.
+            #   * arm64 / generic-arm64 — non-Pi aarch64 SBCs whose
+            #     unreadable/unmatched model node makes get_device_type()
+            #     fall back to 'pi1' (``generic-arm64`` covers pre-rename
+            #     images).
             device_env = os.environ.get('DEVICE_TYPE')
-            force_mpv = device_env in ('pi4-64', 'arm64', 'generic-arm64')
+            force_mpv = device_env in (
+                'pi4-64',
+                'pi3-64',
+                'arm64',
+                'generic-arm64',
+            )
             if get_device_type() in ['pi1', 'pi2', 'pi3'] and not force_mpv:
                 cls.INSTANCE = GstFbdevMediaPlayer()
             else:

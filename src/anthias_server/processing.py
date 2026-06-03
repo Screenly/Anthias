@@ -863,6 +863,11 @@ _VIDEO_METADATA_KEYS = (
 _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     'pi2': frozenset({'h264'}),
     'pi3': frozenset({'h264'}),
+    # pi3-64: 64-bit Qt6 image on the same VideoCore IV silicon as pi3 —
+    # H.264-only HW decode (no HEVC). Decoded in-process by
+    # AnthiasViewer's QtMultimedia pipeline (ffmpeg/libavcodec backend →
+    # V4L2 bcm2835-codec), not the Qt5 GStreamer fbdev path.
+    'pi3-64': frozenset({'h264'}),
     'pi4-64': frozenset({'h264', 'hevc'}),
     'pi5': frozenset({'hevc'}),
     'rockpi4': frozenset({'h264', 'hevc'}),

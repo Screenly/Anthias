@@ -398,7 +398,17 @@ function set_device_type() {
     elif grep -qF "Raspberry Pi 4" /proc/device-tree/model || grep -qF "Compute Module 4" /proc/device-tree/model; then
         export DEVICE_TYPE="pi4-64"
     elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
-        export DEVICE_TYPE="pi3"
+        # A Pi 3 reports the same model string on both a 32-bit and a
+        # 64-bit OS — the split is the running kernel/userland arch. On
+        # a 64-bit OS use the arm64 Qt 6 viewer (`pi3-64`, the
+        # recommended stream); a 32-bit OS gets the legacy armhf/Qt5
+        # `pi3` image. There's no in-place arch switch: a device only
+        # changes streams by reflashing to a different-arch OS.
+        if [ "$(uname -m)" = "aarch64" ]; then
+            export DEVICE_TYPE="pi3-64"
+        else
+            export DEVICE_TYPE="pi3"
+        fi
     elif grep -qF "Raspberry Pi 2" /proc/device-tree/model; then
         export DEVICE_TYPE="pi2"
     elif [ "$(uname -m)" = "aarch64" ]; then

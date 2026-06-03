@@ -35,7 +35,8 @@ here are the links to the images:
 
 * [Raspberry Pi 5](https://hub.balena.io/fleets-for-good/2209774/anthias-pi5)
 * [Raspberry Pi 4](https://hub.balena.io/fleets-for-good/1971389/anthias-pi4)
-* [Raspberry Pi 3](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3)
+* Raspberry Pi 3 (64-bit) — recommended for Pi 3 hardware (Qt 6 viewer); available from the [pre-built release images](#using-the-images-from-the-releases) as `anthias-pi3-64`
+* [Raspberry Pi 3 (32-bit)](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3) — legacy; consider the 64-bit image above
 * [Raspberry Pi 2](https://hub.balena.io/fleets-for-good/1971385/anthias-pi2)
 
 Go to one of the links above and click the *Join* button, then select either *Ethernet only* or *Wifi + Ethernet* for Network options.

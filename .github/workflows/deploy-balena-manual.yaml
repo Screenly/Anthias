@@ -29,6 +29,7 @@ on:
           - all
           - pi2
           - pi3
+          - pi3-64
           - pi4-64
           - pi5
           - x86
@@ -39,7 +40,7 @@ env:
 jobs:
   # Normalize the version into a tag and expand the board choice into a
   # JSON array the deploy matrix can fan out over (one entry, or all
-  # five when `all` is selected).
+  # six when `all` is selected).
   resolve:
     runs-on: ubuntu-24.04
     outputs:
@@ -67,7 +68,7 @@ jobs:
           BOARD: ${{ inputs.board }}
         run: |
           if [[ "$BOARD" == "all" ]]; then
-            echo 'boards=["pi2","pi3","pi4-64","pi5","x86"]' >> "$GITHUB_OUTPUT"
+            echo 'boards=["pi2","pi3","pi3-64","pi4-64","pi5","x86"]' >> "$GITHUB_OUTPUT"
           else
             echo "boards=[\"$BOARD\"]" >> "$GITHUB_OUTPUT"
           fi

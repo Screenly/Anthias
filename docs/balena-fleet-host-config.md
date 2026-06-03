@@ -1,6 +1,7 @@
 # Balena fleet host configuration (IAC)
 
-Anthias's official balena fleets (`screenly_ose/anthias-{pi2,pi3,pi4,pi5,x86}`)
+Anthias's official balena fleets
+(`screenly_ose/anthias-{pi2,pi3,pi3-64,pi4,pi5,x86}`)
 need a handful of `config.txt`-level device settings — most importantly the
 graphics driver overlay. These used to be set by hand in the balena dashboard,
 which drifted per fleet and was easy to corrupt. They are now declared as code
@@ -43,12 +44,12 @@ Why each key is set the way it is in `balena-host-config.json`:
 
 | Key | Boards | Rationale |
 | --- | ------ | --------- |
-| `dtoverlay=vc4-kms-v3d` | pi2, pi3, pi4-64 | Full-KMS driver required by the viewer's display stack (see above). |
+| `dtoverlay=vc4-kms-v3d` | pi2, pi3, pi3-64, pi4-64 | Full-KMS driver required by the viewer's display stack (see above). On pi3-64 it is required for the same reason as pi4-64: the arm64 Qt 6 viewer renders through eglfs_kms. |
 | `dtoverlay=vc4-kms-v3d,cma-512` | pi5 | Full KMS plus a 512 MB CMA pool, which `docs/board-enablement.md` documents as required for 4K HEVC hardware decode. |
 | `dtparam=i2c_arm=on,spi=on,audio=on` | pi4-64 | Enable the I²C/SPI buses and onboard audio. |
-| `gpu_mem` (128 / 256) | pi2, pi3, pi4-64 | Backs the VideoCore hardware video decoders (`bcm2835-codec` / V4L2 M2M). **Not set on pi5** — the BCM2712 has no firmware memory split and ignores `gpu_mem` (it is CMA-only). |
-| `disable_overscan=1` | pi2, pi3, pi4-64 | Drop the default overscan border so the image fills the panel. |
-| `framebuffer_depth=32`, `framebuffer_ignore_alpha=1` | pi2, pi3, pi4-64 | Legacy firmware-framebuffer hints. Inert under full KMS but retained to avoid changing long-standing fleet config; safe to drop if the fleets are ever re-baselined. |
+| `gpu_mem` (128 / 256) | pi2, pi3, pi3-64, pi4-64 | Backs the VideoCore hardware video decoders (`bcm2835-codec` / V4L2 M2M). **Not set on pi5** — the BCM2712 has no firmware memory split and ignores `gpu_mem` (it is CMA-only). |
+| `disable_overscan=1` | pi2, pi3, pi3-64, pi4-64 | Drop the default overscan border so the image fills the panel. |
+| `framebuffer_depth=32`, `framebuffer_ignore_alpha=1` | pi2, pi3, pi3-64, pi4-64 | Legacy firmware-framebuffer hints. Inert under full KMS but retained to avoid changing long-standing fleet config; safe to drop if the fleets are ever re-baselined. |
 | _(none)_ | x86 | `config.txt` is Raspberry-Pi-only; the x86 fleet has no host config. |
 
 ## Editing

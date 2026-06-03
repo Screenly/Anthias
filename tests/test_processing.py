@@ -731,6 +731,16 @@ def test_video_unsupported_codec_h264_board_recipe(
     assert 'libx265' not in recipe
 
 
+def test_pi3_64_hw_decode_set_is_h264_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The 64-bit Qt6 Pi 3 board (``pi3-64``) runs the same VideoCore IV
+    silicon as the 32-bit ``pi3`` — H.264-only HW decode, no HEVC. The
+    gate must reject HEVC for it just like the armhf stream."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi3-64')
+    assert processing._hw_decoded_codecs() == frozenset({'h264'})
+
+
 @pytest.mark.parametrize(
     'filename',
     [

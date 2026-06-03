@@ -13,7 +13,7 @@
 # safe: balena auto-appends +rev1, +rev2, ... to the release version.
 #
 # Usage: balena_ota_deploy.sh <board> <version> <git-short-hash>
-#   board   one of pi2 | pi3 | pi4-64 | pi5 | x86
+#   board   one of pi2 | pi3 | pi3-64 | pi4-64 | pi5 | x86
 #   version raw CalVer, e.g. 2026.05.1 (render_balena_yml.sh normalizes it)
 
 set -euo pipefail
@@ -27,6 +27,7 @@ export SHM_SIZE="${SHM_SIZE:-256mb}"
 case "$BOARD" in
     pi2)    FLEET=anthias-pi2 ;;
     pi3)    FLEET=anthias-pi3 ;;
+    pi3-64) FLEET=anthias-pi3-64 ;;
     pi4-64) FLEET=anthias-pi4 ;;
     pi5)    FLEET=anthias-pi5 ;;
     x86)    FLEET=anthias-x86 ;;

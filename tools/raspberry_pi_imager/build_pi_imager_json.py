@@ -16,7 +16,10 @@ GITHUB_HEADERS = {
 # website-deploy job indefinitely. The job runs on every push to master
 # and CI's overall budget is in the minutes, not hours.
 HTTP_TIMEOUT = 30
-SUPPORTED_BOARDS = {'pi2', 'pi3', 'pi4-64', 'pi5'}
+SUPPORTED_BOARDS = {'pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5'}
+# Boards surfaced with the maintenance/legacy suffix. The 32-bit
+# armhf/Qt5 streams (pi2, pi3) are frozen; the 64-bit Qt6 `pi3-64`
+# stream is the current recommendation and is NOT a maintenance board.
 MAINTENANCE_BOARDS = {'pi2', 'pi3'}
 MAINTENANCE_SUFFIX = (
     ' [Maintenance mode - consider upgrading to Pi 4 or later]'
