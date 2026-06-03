@@ -22,6 +22,16 @@ def get_build_parameters(build_target: str) -> dict[str, Any]:
             'base_image': BASE_IMAGE,
             'target_platform': 'linux/arm64/v8',
         }
+    if build_target == 'pi3-64':
+        # 64-bit (arm64) Raspberry Pi 3 stream. Same Qt 6 / eglfs image
+        # shape as pi4-64 — the VideoCore IV is weaker (H.264-only HW
+        # decode, 1080p) but the display + decode plumbing is identical.
+        # The legacy 32-bit `pi3` armhf/Qt5 board is kept separately.
+        return {
+            'board': 'pi3-64',
+            'base_image': BASE_IMAGE,
+            'target_platform': 'linux/arm64/v8',
+        }
     if build_target == 'arm64':
         # Generic 64-bit ARM SBC fallback (Orange Pi, Rock Pi, Banana Pi, …).
         # Effectively a thinner pi5 variant: Qt 6, arm64, no libraspberrypi0
@@ -155,7 +165,7 @@ def get_test_context() -> dict[str, Any]:
 def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     releases_url = f'{GITHUB_REPO_URL}/releases/download'
 
-    is_qt6 = board in ['pi5', 'pi4-64', 'x86', 'arm64']
+    is_qt6 = board in ['pi5', 'pi4-64', 'pi3-64', 'x86', 'arm64']
 
     # Qt version is only relevant for the Qt 5 path: pi2/pi3 pull the
     # cross-built Qt 5 toolchain tarball at build time. Qt 5 is frozen
@@ -181,16 +191,19 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # from apt at runtime — except on Qt 6 boards where qt6-*-dev
     # below also provides the runtime libs.)
     #
-    # X11/XCB packages are intentionally absent. Two display tracks
-    # for the four image targets (no X code path on either):
+    # X11/XCB packages are intentionally absent. Three display tracks
+    # across the image targets (no X code path on any):
     #
-    # * Pi2 / Pi3 / Pi4-64: Qt linuxfb + mpv straight to KMS. Pi 2 /
-    #   Pi 3 use a custom -no-xcb -no-xcb-xlib -qpa eglfs Qt 5
-    #   WebView build (see src/anthias_webview/build_qt5.sh) with mpv
-    #   --vo=drm. Pi 4 is Qt 6 with the same
-    #   QT_QPA_PLATFORM=linuxfb plus mpv --vo=gpu --gpu-context=drm —
-    #   V3D-accelerated scaling without the cage composite pass the
-    #   V3D 6.0 can't keep up with.
+    # * Pi2 / Pi3 (32-bit, Qt5): Qt linuxfb + a custom -no-xcb
+    #   -no-xcb-xlib -qpa eglfs Qt 5 WebView build (see
+    #   src/anthias_webview/build_qt5.sh) with the GStreamer fbdev
+    #   media player straight to /dev/fb0. The legacy armhf stream.
+    # * Pi3-64 / Pi4-64 (Qt6): Qt eglfs (KMS/EGL) + mpv --vo=gpu
+    #   --gpu-context=drm — V3D/VideoCore-accelerated scanout without
+    #   the cage composite pass the V3D can't keep up with. eglfs
+    #   gives QtMultimedia's VideoOutput the GL context linuxfb lacks
+    #   (issue #2904). Pi 3-64 is the weaker sibling (VideoCore IV,
+    #   H.264-only HW decode) on the identical image shape.
     # * Pi5 / x86 / arm64: cage (a kiosk wlroots compositor) with
     #   QT_QPA_PLATFORM=wayland and mpv --vo=gpu
     #   --gpu-context=wayland. The cage + qt6-wayland + wlr-randr
@@ -258,8 +271,8 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     ]
 
     if is_qt6:
-        # Shared Qt 6 runtime for every Qt6 board (pi4-64, pi5, x86,
-        # arm64). VideoView plays through QMediaPlayer into a QML
+        # Shared Qt 6 runtime for every Qt6 board (pi3-64, pi4-64, pi5,
+        # x86, arm64). VideoView plays through QMediaPlayer into a QML
         # ``VideoOutput`` hosted in a QQuickWidget (issue #2967:
         # frames stay on the GPU as scene-graph textures — the prior
         # QGraphicsVideoItem raster path presented at 8–12 fps).

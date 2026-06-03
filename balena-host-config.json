@@ -24,6 +24,11 @@
     "    (the installer sets only `dtparam=audio=on`); i2c_arm/spi are unused",
     "    by the viewer. Single-value form is canary-verified to converge.",
     "  * pi2 / pi3 dtoverlay was on the legacy RESIN_ prefix -> standardized.",
+    "  * pi3-64 is the 64-bit-OS variant of Pi 3 hardware (same BCM2837",
+    "    SoC, balenaOS device-type raspberrypi3-64). config.txt is",
+    "    arch-independent, so it mirrors the pi3 entry; the viewer runs the",
+    "    arm64 Qt6/eglfs_kms image, which is why vc4-kms-v3d (full KMS) is",
+    "    required exactly as on pi4-64.",
     "  * pi5 carried `gpu_mem=1024`, which a Pi 5 ignores entirely (BCM2712",
     "    has no firmware memory split; it is CMA-only) -> dropped. Added",
     "    `cma-512` to the overlay, which docs/board-enablement.md documents as",
@@ -45,6 +50,13 @@
       "framebuffer_ignore_alpha": "1"
     },
     "pi3": {
+      "dtoverlay": "vc4-kms-v3d",
+      "gpu_mem": "128",
+      "disable_overscan": "1",
+      "framebuffer_depth": "32",
+      "framebuffer_ignore_alpha": "1"
+    },
+    "pi3-64": {
       "dtoverlay": "vc4-kms-v3d",
       "gpu_mem": "128",
       "disable_overscan": "1",

@@ -241,6 +241,17 @@ only hide a packaging regression). Operator-visible status is the throttled
 the clean fix is to run 64-bit-capable Pi 3 hardware on a 64-bit OS + the
 arm64/Qt6 viewer, which sidesteps the entire 32-bit Qt5 stack.
 
+That clean fix now ships as its own board target: **`pi3-64`** — the arm64
+Qt 6 image stream for Pi 3 hardware booted on a 64-bit OS. It folds into the
+same Qt 6 / eglfs_kms display path as `pi4-64` (the VideoCore IV is weaker, so
+hardware decode is H.264-only — see the per-board codec set in
+`src/anthias_server/processing.py`), and has its own balena fleet
+(`screenly_ose/anthias-pi3-64`, device type `raspberrypi3-64`) and disk image.
+`bin/install.sh` and `bin/upgrade_containers.sh` select it automatically when a
+Pi 3 is running a 64-bit (`aarch64`) OS; the legacy 32-bit armhf/Qt5 `pi3`
+stream stays for devices still on a 32-bit OS and is flagged as maintenance/
+legacy in the Raspberry Pi Imager listing.
+
 ## Sample pack
 
 Run `bin/generate_board_enablement_testbed.sh` on a workstation

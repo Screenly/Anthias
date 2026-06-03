@@ -154,7 +154,7 @@ def _build_webview_env() -> dict[str, str]:
       env is left alone and ``_apply_wlr_transform`` handles rotation
       with ``wlr-randr`` separately.
 
-    * eglfs (pi4-64): the linuxfb ``:rotation=N`` plugin option is NOT
+    * eglfs (pi4-64, pi3-64): the linuxfb ``:rotation=N`` plugin option is NOT
       understood by eglfs (it's silently ignored — issue #2882's
       original code wrongly assumed Pi 4 was still linuxfb, which is
       why the rotation menu was a no-op there). eglfs reads

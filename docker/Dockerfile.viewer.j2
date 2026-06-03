@@ -89,7 +89,7 @@ ENV QT_QPA_EGLFS_FORCE888=1
 # the viewer in cage; this env var tells Qt to load the qt6-wayland
 # platform plugin so it renders into cage's surface.
 ENV QT_QPA_PLATFORM=wayland
-{% elif board == 'pi4-64' %}
+{% elif board in ('pi4-64', 'pi3-64') %}
 # Pi 4 switched from ``linuxfb`` to ``eglfs`` for issue #2904:
 # QtMultimedia's video pipeline needs an OpenGL context for the
 # VideoOutput scene graph, and ``linuxfb`` has none. ``eglfs``
@@ -101,6 +101,12 @@ ENV QT_QPA_PLATFORM=wayland
 # real Pi 4 hardware: under eglfs QWebEngineProcess still spawns
 # its zygote + 2 renderers and loads pages, so the platform
 # switch doesn't regress web / image rendering.
+#
+# pi3-64 (64-bit Raspberry Pi 3, Qt6) shares this exact path. The
+# VideoCore IV is weaker than the Pi 4 V3D 6.0, but it maxes out at
+# 1080p HDMI anyway, so the same KMS config + scale pin applies. The
+# DRM card device is detected at runtime by bin/start_viewer.sh on
+# both boards.
 ENV QT_QPA_PLATFORM=eglfs
 ENV QT_QPA_EGLFS_KMS_CONFIG=/etc/anthias/eglfs-kms.json
 # bin/start_viewer.sh auto-detects QT_SCALE_FACTOR from
@@ -113,11 +119,11 @@ ENV QT_QPA_EGLFS_KMS_CONFIG=/etc/anthias/eglfs-kms.json
 # px, the same end-state the linuxfb+4K-with-scale=2 path produced.
 ENV QT_SCALE_FACTOR=1
 RUN mkdir -p /etc/anthias
-COPY docker/eglfs-kms-pi4.json /etc/anthias/eglfs-kms.json
+COPY docker/eglfs-kms.json /etc/anthias/eglfs-kms.json
 {% else %}
-# Pi 2 / Pi 3 (Qt5) keep the classic linuxfb path — VLC paints
-# directly to the framebuffer and there's no libmpv embedding on
-# those boards.
+# Pi 2 / Pi 3 (32-bit, Qt5) keep the classic linuxfb path — the
+# GStreamer fbdev player paints directly to the framebuffer and
+# there's no libmpv embedding on those boards.
 ENV QT_QPA_PLATFORM=linuxfb
 {% endif %}
 

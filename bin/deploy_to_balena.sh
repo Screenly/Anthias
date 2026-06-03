@@ -6,7 +6,7 @@ print_help() {
     echo "Usage: deploy_to_balena.sh [options]"
     echo "Options:"
     echo "  -h, --help            show this help message and exit"
-    echo "  -b, --board BOARD     specify the board to build for (pi2, pi3, pi4-64, pi5, x86)"
+    echo "  -b, --board BOARD     specify the board to build for (pi2, pi3, pi3-64, pi4-64, pi5, x86)"
     echo "  -f, --fleet FLEET     specify the fleet name to deploy to"
     echo "  -s, --short-hash HASH specify the short hash to use for the image tag"
     echo "  -d, --dev             run in dev mode"
@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
         -b|--board)
             export BOARD="$2"
 
-            if [[ $BOARD =~ ^(pi2|pi3|pi4-64|pi5|x86)$ ]]; then
+            if [[ $BOARD =~ ^(pi2|pi3|pi3-64|pi4-64|pi5|x86)$ ]]; then
                 echo "Building for $BOARD"
             else
                 echo "Invalid board $BOARD"
