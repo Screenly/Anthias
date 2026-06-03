@@ -116,6 +116,13 @@ FLEET_DEVICE_TYPE = {
 
 KEEP_PINNED_TAG = 'anthias_keep_pinned'
 
+# The device-actions host (actions.balena-devices.com) sits behind
+# Cloudflare, which 403s the default `Python-urllib/x.y` User-Agent as a
+# banned client signature (error 1010). A descriptive UA passes, so set
+# one on every request (api.balena-cloud.com doesn't need it, but it's
+# harmless there and keeps the calls identifiable in balena's logs).
+USER_AGENT = 'anthias-fleet-maintenance/1.0'
+
 # A balenaOS HUP (resinhup) is only allowed from >= 2.14.0 to >= 2.16.0
 # (balena-hup-action-utils `actionsConfig`). None of the Anthias device
 # types are jetson-* boards, so the takeover/major-version special cases
@@ -173,6 +180,7 @@ def api_request(
         headers={
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json',
+            'User-Agent': USER_AGENT,
         },
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -453,6 +461,7 @@ def start_os_update(
         headers={
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json',
+            'User-Agent': USER_AGENT,
         },
     )
     with urllib.request.urlopen(req, timeout=timeout):
