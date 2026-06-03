@@ -5,7 +5,16 @@ A lot of field devices were flashed from pre-#2098 images that pinned them
 to the downloaded release, and many sit on years-old balenaOS / supervisor
 versions. This rolls them forward in tranches: per device it unpins the
 release (so it tracks the fleet's latest stable) and starts a host OS update
-to the latest balenaOS (which also carries the matching supervisor).
+to the target balenaOS (which also carries the matching supervisor).
+
+The default target is the (current)/GA balenaOS **ESR** version per device
+type — the same track our disk images flash (see the ESR resolution in
+.github/workflows/build-balena-disk-image.yaml). ESR is reachable by HUP from
+the old classic-track lines; devices already on the ESR/CalVer track or on
+regular 7.x are skipped (no HUP path), and recent 6.x that only reach a newer
+ESR than the GA target are skipped fault-tolerantly. Use `--track regular`
+or an explicit `--os-version` to override. raspberrypi2 has no ESR track and
+falls back to regular `latest`.
 
 It is deliberately cautious:
 
@@ -137,6 +146,50 @@ def latest_os_version(device_type: str) -> str | None:
     return versions[0]
 
 
+def current_esr_version(device_type: str) -> str | None:
+    """The GA '(current)'-tagged balenaOS ESR version for a device type,
+    e.g. '2025.7.0'. Returns None when the device type has no ESR track
+    (e.g. raspberrypi2) or the lookup fails — callers fall back to
+    latest_os_version()."""
+    ok, out, _ = run_balena(['os', 'versions', device_type, '--esr'])
+    if not ok:
+        return None
+    for line in out.splitlines():
+        if '(current)' in line:
+            token = line.strip().split()[0].lstrip('v')
+            if token[:1].isdigit():
+                return token
+    return None
+
+
+def is_calver(version: str) -> bool:
+    """True for the CalVer ESR scheme (2024.x and up), False for the
+    classic semver regular track (2.x .. 7.x). The two share an integer
+    namespace at the major position, so parse_os_version() alone can't tell
+    them apart — this guard does."""
+    return parse_os_version(version)[0] >= 2000
+
+
+def unreachable_for_target(current: str, target: str) -> bool:
+    """Cheap, conservative pre-filter for devices that balena's HUP matrix
+    will not move to *target*, so we can skip them without a per-device API
+    round-trip (the bulk device list has tens of thousands of rows).
+
+    Only consulted for an ESR target. ESR is reachable by HUP from the old
+    classic-track lines (2.x .. ~6.1) but NOT from devices already on the
+    CalVer/ESR track (they are at or ahead of target) nor from regular 7.x.
+    Some recent 6.x (6.5+, 6.10+) also only reach a *newer* ESR than a GA
+    target; those are left as candidates and handled fault-tolerantly (one
+    logged 'no path' skip) rather than hard-coding a fuzzy 6.x cutoff."""
+    if not is_calver(target):
+        return False
+    if is_calver(current):
+        return True  # already on the ESR/CalVer track (at or ahead)
+    if parse_os_version(current)[0] >= 7:
+        return True  # regular 7.x has no HUP path onto ESR
+    return False
+
+
 @dataclass
 class Device:
     uuid: str
@@ -205,6 +258,7 @@ def select_tranche(
         and d.uuid not in done
         and (include_offline or d.is_online)
         and normalize_os(d.os_version) != target_os
+        and not unreachable_for_target(d.os_version, target_os)
     ]
     if order == 'oldest':
         eligible.sort(key=lambda d: parse_os_version(d.os_version))
@@ -286,7 +340,16 @@ def main() -> int:
     ap.add_argument(
         '--os-version',
         default=None,
-        help='target balenaOS version (default: latest per device type)',
+        help='explicit target balenaOS version; overrides --track',
+    )
+    ap.add_argument(
+        '--track',
+        choices=['esr', 'regular'],
+        default='esr',
+        help='which balenaOS track to target when --os-version is not '
+        'given: esr = the (current)/GA ESR (default), regular = newest '
+        'regular release. Device types without an ESR track (raspberrypi2) '
+        'fall back to regular automatically.',
     )
     ap.add_argument(
         '--order',
@@ -354,7 +417,18 @@ def main() -> int:
         if device_type is None:
             print(f'\n# {fleet}: unknown fleet, skipping', file=sys.stderr)
             continue
-        target_os = args.os_version or latest_os_version(device_type)
+        if args.os_version:
+            target_os = args.os_version
+        elif args.track == 'esr':
+            target_os = current_esr_version(device_type)
+            if not target_os:
+                target_os = latest_os_version(device_type)
+                print(
+                    f'\n# {fleet}: no ESR track for {device_type}, '
+                    f'falling back to regular latest'
+                )
+        else:
+            target_os = latest_os_version(device_type)
         if not target_os:
             print(
                 f'\n# {fleet}: cannot resolve target OS, skipping',

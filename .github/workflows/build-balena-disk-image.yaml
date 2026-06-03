@@ -337,14 +337,32 @@ jobs:
           esac
 
       - name: Download OS image
-        # `--version` accepts an explicit version, a semver range,
-        # `latest`, `menu`, or `menu-esr` in balena-cli 25.x; the
-        # `default` keyword that worked under balena-cli 22.x was
-        # removed ("Version default is not available for ...").
+        # We flash the balenaOS ESR (Extended Support Release) track —
+        # its long support window suits field signage and it is balena's
+        # default-going-forward track. `balena os versions <type> --esr`
+        # lists ESR builds tagged by support phase; we take the
+        # `(current)` (GA) line. We can't use the `menu-esr` keyword that
+        # `--version` accepts in balena-cli 25.x because it is interactive
+        # only, and plain `latest` resolves to the *regular* (non-ESR)
+        # track — hence resolving the explicit ESR version here.
+        #
+        # raspberry-pi2 has no ESR track at all, so it falls back to the
+        # regular `latest` (5.1.x is its architectural ceiling anyway).
         run: |
+          set -euo pipefail
+          os_version=$(
+            balena os versions "$BALENA_IMAGE" --esr 2>/dev/null \
+              | grep -m1 '(current)' \
+              | grep -oE 'v[0-9][^ ]*' | head -1 | sed 's/^v//'
+          ) || true
+          if [ -z "${os_version:-}" ]; then
+            echo "No (current) ESR for $BALENA_IMAGE; using regular latest."
+            os_version=latest
+          fi
+          echo "Selected balenaOS version for $BALENA_IMAGE: $os_version"
           balena os download "$BALENA_IMAGE" \
             --output "$BALENA_IMAGE.img" \
-            --version latest
+            --version "$os_version"
 
       - name: Preload OS image
         run: |
