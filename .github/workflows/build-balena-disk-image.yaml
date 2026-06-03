@@ -350,14 +350,34 @@ jobs:
         # regular `latest` (5.1.x is its architectural ceiling anyway).
         run: |
           set -euo pipefail
-          os_version=$(
-            balena os versions "$BALENA_IMAGE" --esr 2>/dev/null \
-              | grep -m1 '(current)' \
-              | grep -oE 'v[0-9][^ ]*' | head -1 | sed 's/^v//'
-          ) || true
-          if [ -z "${os_version:-}" ]; then
-            echo "No (current) ESR for $BALENA_IMAGE; using regular latest."
+          if [ "$BALENA_IMAGE" = "raspberry-pi2" ]; then
+            # raspberry-pi2 is the one device type with no ESR track, so
+            # it legitimately uses the regular `latest` (5.1.x ceiling).
             os_version=latest
+            echo "raspberry-pi2 has no ESR track; using regular latest."
+          else
+            # `balena os versions --esr` lists ESR builds tagged by support
+            # phase; we take the `(current)` (GA) line. Any failure to
+            # resolve it (CLI error, auth, an unexpectedly empty list) is a
+            # hard error — we must NOT silently fall back to the regular
+            # track and ship a non-ESR image. `set -e` aborts on a non-zero
+            # balena exit; the explicit check catches a clean-but-empty list.
+            # No `|| true` here: a non-zero balena exit (auth, rate limit)
+            # must abort the build via `set -e`, surfacing balena's error.
+            esr_list=$(balena os versions "$BALENA_IMAGE" --esr)
+            # `|| true` only on the parse: a missing `(current)` line trips
+            # pipefail, and we want our explicit message below, not an
+            # abrupt abort.
+            os_version=$(
+              printf '%s\n' "$esr_list" \
+                | grep -m1 '(current)' \
+                | grep -oE 'v[0-9][^ ]*' | head -1 | sed 's/^v//'
+            ) || true
+            if [ -z "$os_version" ]; then
+              echo "::error::No (current) ESR version for $BALENA_IMAGE" >&2
+              printf '%s\n' "$esr_list" >&2
+              exit 1
+            fi
           fi
           echo "Selected balenaOS version for $BALENA_IMAGE: $os_version"
           balena os download "$BALENA_IMAGE" \
