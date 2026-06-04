@@ -68,7 +68,7 @@ server = [
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
     "pytz==2026.2",
-    "PyYAML==6.0.2",
+    "PyYAML==6.0.3",
     "redis==7.4.0",
     "requests==2.33.1",
     "tenacity==9.1.4",
