@@ -176,10 +176,11 @@ def _log_arm64_alsa_default_once() -> None:
     except OSError as exc:
         listing = f'<could not read /proc/asound/cards: {exc}>'
     logging.info(
-        'arm64: using ALSA "default" device for HDMI audio. '
-        'If audio is silent, override via ~/.asoundrc (bind-mounted '
-        'into the viewer container — see docker-compose.yml.tmpl). '
-        'Registered ALSA cards:\n%s',
+        'arm64: using the default audio device for HDMI audio '
+        '(resolves to the PulseAudio default sink — see '
+        'start_pulseaudio in bin/start_viewer.sh). If audio is '
+        'silent, check `pactl list short sinks` in the viewer '
+        'container. Registered ALSA cards:\n%s',
         listing,
     )
 
@@ -193,13 +194,13 @@ def get_alsa_audio_device() -> str:
     # through to the Pi-name dispatch when we're actually on a Pi.
     if os.environ.get('DEVICE_TYPE') in ARM64_DEVICE_TYPES:
         # No portable per-SoC HDMI card name across Rockchip /
-        # Allwinner / Amlogic, so defer to ALSA's `default` device.
-        # Operators with a non-standard HDMI sink can override via
-        # ~/.asoundrc (already bind-mounted into the viewer container
-        # — see docker-compose.yml.tmpl). Log the chosen ALSA card
-        # at INFO once per process so a silent-HDMI report carries
-        # enough breadcrumbs to debug from journalctl alone (the
-        # `aplay -l` enumeration also lands in the same log).
+        # Allwinner / Amlogic, so defer to the `default` device —
+        # which VideoView::resolveAlsaDevice resolves to the
+        # PulseAudio default sink (the daemon start_viewer.sh runs;
+        # Debian's Qt 6 Multimedia only has a PulseAudio backend).
+        # Log the chosen device at INFO once per process so a
+        # silent-HDMI report carries enough breadcrumbs to debug
+        # from journalctl alone.
         _log_arm64_alsa_default_once()
         return 'default'
 

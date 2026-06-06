@@ -94,6 +94,79 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 chown viewer:video "${XDG_RUNTIME_DIR}"
 chmod 700 "${XDG_RUNTIME_DIR}"
 
+# Qt 6 boards play video through QtMultimedia (QMediaPlayer →
+# QAudioOutput), and Debian's Qt 6 Multimedia is compiled with
+# PulseAudio as its ONLY audio backend — libQt6Multimedia.so.6 links
+# libpulse and has no ALSA code. Without a running PulseAudio server
+# QMediaDevices enumerates zero audio outputs, QAudioOutput keeps a
+# null device, and every video plays silent (issue #3000). The
+# pre-#2905 mpv path talked ALSA directly and needed no sound server,
+# which is why this only bit after the QtMultimedia migration.
+#
+# Run a minimal per-container daemon as the viewer user. The config
+# is generated instead of using Debian's default.pa because the stock
+# config detects cards via module-udev-detect, which finds nothing in
+# a container without udevd (only the auto_null sink appears). One
+# module-alsa-card per /proc/asound/cards entry, loaded with
+# name=<alsa card id>, names the pulse sinks after the ALSA card
+# (e.g. alsa_output.vc4hdmi0.hdmi-stereo) — exactly the CARD=<name>
+# discriminator VideoView::resolveAlsaDevice matches the Python
+# side's get_alsa_audio_device() spec against, so the existing
+# HDMI-port auto-detection and the hdmi/local audio_output setting
+# keep working unchanged on top of pulse.
+start_pulseaudio() {
+    # Qt 5 boards (pi2/pi3) don't ship pulseaudio: GstFbdevMediaPlayer
+    # drives alsasink directly.
+    command -v pulseaudio > /dev/null || return 0
+
+    # PulseAudio keeps its state (auth cookie) under
+    # ~viewer/.config/pulse. On upgraded devices /data/.config was
+    # created by a root-running container, so pre-create the subdir
+    # and hand it to the viewer — same pattern as the /data/.anthias
+    # chown above. (The daemon refuses to start when it can't write
+    # its state dir.)
+    mkdir -p /data/.config/pulse
+    chown -Rf viewer /data/.config/pulse
+
+    pa_config=/tmp/anthias-pulse.pa
+    {
+        echo '.fail'
+        echo 'load-module module-native-protocol-unix'
+        # .nofail: a card whose profile can't open right now (e.g.
+        # the vc4hdmi of an unplugged HDMI port) must not abort
+        # daemon startup — the other cards still have to load.
+        echo '.nofail'
+        sed -n 's/^ *\([0-9][0-9]*\) \[\([^ ]*\) *\].*/\1 \2/p' \
+            /proc/asound/cards \
+            | while read -r card_index card_id; do
+                echo "load-module module-alsa-card" \
+                    "device_id=${card_index} name=${card_id}"
+            done
+        echo '.fail'
+        # Suspend idle sinks so the ALSA PCM is released between
+        # videos instead of held open by the daemon for the
+        # container's whole lifetime (same as Debian's default.pa).
+        echo 'load-module module-suspend-on-idle'
+        # Guarantee a default sink (auto_null) even when no card
+        # loaded, so clients still connect cleanly instead of
+        # erroring — same silent outcome as today, but recoverable
+        # by a container restart once audio hardware shows up.
+        echo 'load-module module-always-sink'
+    } > "$pa_config"
+
+    # --daemonize blocks until the daemon is initialised, so the
+    # socket is guaranteed to exist before AnthiasViewer's
+    # QMediaDevices first looks for a server. exit-idle-time=-1
+    # keeps the daemon alive across the long client-less gaps
+    # between videos.
+    if ! sudo --preserve-env=XDG_RUNTIME_DIR -E -u viewer \
+        pulseaudio --daemonize=yes --exit-idle-time=-1 -nF "$pa_config"; then
+        echo "start_viewer: pulseaudio failed to start —" \
+            "video will play without audio"
+    fi
+}
+start_pulseaudio
+
 # Drop empty locale env vars so they don't override defaults that the
 # container image (or downstream consumers like Python's `locale`
 # module) would otherwise inherit. docker-compose.yml.tmpl wires
