@@ -1069,7 +1069,10 @@ def test_edit_availability_window_with_12_hour_datetime_picker(
     # footer's Save button — click a neutral spot to dismiss it.
     page.get_by_role('heading', name='Edit asset').click()
     expect(page.locator('.flatpickr-calendar.open')).to_have_count(0)
-    # Flatpickr must not have rewritten the typed values on close.
+    # Flatpickr re-formats to its h:i K mask on close (leading-zero
+    # hour drops: '09:00 AM' → '9:00 AM') but must keep the typed
+    # date/time semantics intact — no month/day swap, no reset to
+    # the seeded values.
     expect(page.locator('#edit-start')).to_have_value('06/15/2026 9:00 AM')
     expect(page.locator('#edit-end')).to_have_value('12/24/2026 11:30 PM')
 
