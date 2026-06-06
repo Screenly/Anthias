@@ -693,6 +693,152 @@ def test_edit_changes_duration(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
+def test_edit_renames_asset(reset_assets: None, page: Page) -> None:
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+
+    page.locator('#edit-name').fill('TPS Reports — Final Notice')
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500
+
+    _wait_db(
+        lambda: Asset.objects.get(asset_id=asset_active['asset_id']).name
+        == 'TPS Reports — Final Notice',
+        description='rename persisted',
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_save_shows_success_toast(reset_assets: None, page: Page) -> None:
+    """Whichever submit path fires (htmx HX-Trigger or full-page
+    redirect + Django messages), a success toast must surface."""
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+
+    page.locator('#edit-name').fill('Toast check')
+    _submit_edit_form(page, asset_active['asset_id'])
+
+    toast = page.locator('.app-toast--success').first
+    expect(toast).to_be_visible()
+    expect(toast).to_contain_text('Changes saved')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_toggles_nocache_and_skip_asset_check(
+    reset_assets: None, page: Page
+) -> None:
+    """The two Advanced switches post hidden-false/checkbox-true pairs
+    that _checkbox() resolves — both directions must persist."""
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+    _open_advanced_section(page)
+
+    for box_id in ('edit-nocache', 'edit-skip'):
+        box = page.locator(f'#{box_id}')
+        expect(box).not_to_be_checked()
+        page.locator(f'label[for="{box_id}"]').click()
+        expect(box).to_be_checked()
+
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500
+
+    def _flags_set() -> bool:
+        a = Asset.objects.get(asset_id=asset_active['asset_id'])
+        return a.nocache is True and a.skip_asset_check is True
+
+    _wait_db(_flags_set, description='advanced switches persisted')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_webpage_refresh_interval_persists(
+    reset_assets: None, page: Page
+) -> None:
+    """The auto-refresh field renders for webpage assets only and
+    lands in metadata.refresh_interval_s — feature #2813's UI path."""
+    Asset.objects.create(**{**asset_active, 'mimetype': 'webpage'})
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+    _open_advanced_section(page)
+
+    refresh = page.locator('#edit-refresh-interval')
+    expect(refresh).to_be_visible()
+    refresh.fill('120')
+
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500
+
+    _wait_db(
+        lambda: (
+            Asset.objects.get(asset_id=asset_active['asset_id']).metadata or {}
+        ).get('refresh_interval_s')
+        == 120,
+        description='refresh interval persisted',
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_refresh_interval_hidden_for_non_webpage(
+    reset_assets: None, page: Page
+) -> None:
+    Asset.objects.create(**asset_active)  # image asset
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+    _open_advanced_section(page)
+    expect(page.locator('#edit-refresh-interval')).to_have_count(0)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_duration_disabled_for_video(
+    reset_assets: None, page: Page
+) -> None:
+    """Video duration is owned by the ffprobe pipeline; the edit form
+    must render it disabled so the probed value can't be clobbered."""
+    Asset.objects.create(
+        **{**asset_active, 'mimetype': 'video', 'duration': 42}
+    )
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+    expect(page.locator('#edit-duration')).to_be_disabled()
+
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500
+
+    # The POST is awaited by _submit_edit_form, so the server has
+    # already processed the save — the probed duration must survive.
+    assert Asset.objects.get(asset_id=asset_active['asset_id']).duration == 42
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_modal_cancel_discards_changes(
+    reset_assets: None, page: Page
+) -> None:
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+
+    page.locator('#edit-name').fill('Never saved')
+    page.locator('form[action*="/update"] button:has-text("Cancel")').click()
+    _wait_alpine(page, 'state.mode', None)
+
+    # Cancel fires no POST; once Alpine dropped the modal the DB can
+    # be asserted directly.
+    assert (
+        Asset.objects.get(asset_id=asset_active['asset_id']).name
+        == asset_active['name']
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
 def test_preview_modal_opens(reset_assets: None, page: Page) -> None:
     Asset.objects.create(**asset_active)
     page.goto(BASE_URL)
@@ -710,6 +856,38 @@ def test_preview_modal_opens(reset_assets: None, page: Page) -> None:
         'state.previewAsset && state.previewAsset.asset_id',
         asset_active['asset_id'],
     )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_preview_modal_renders_image_and_done_closes(
+    reset_assets: None, page: Page
+) -> None:
+    """An image asset previews via /assets/<id>/preview inside the
+    modal; the Done button drops the Alpine state again."""
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Preview"]'
+    ).click()
+    _wait_alpine(
+        page,
+        'state.previewAsset && state.previewAsset.asset_id',
+        asset_active['asset_id'],
+    )
+    img = page.locator('img.preview-media')
+    expect(img).to_be_visible()
+    src = img.get_attribute('src')
+    assert src and f'/assets/{asset_active["asset_id"]}/preview' in src
+
+    page.get_by_role('button', name='Done').click()
+    _wait_alpine(page, 'state.previewAsset', None)
 
 
 @pytest.mark.integration
@@ -752,6 +930,271 @@ def test_delete_confirm_removes_asset(reset_assets: None, page: Page) -> None:
         lambda: Asset.objects.count() == 0,
         description='asset removed from DB',
     )
+
+
+# ---------------------------------------------------------------------------
+# 4b. Advanced schedule (day-parting) — issue #2988
+# ---------------------------------------------------------------------------
+
+
+def _open_edit_modal(page: Page, asset_id: str) -> None:
+    """Click a row's Edit button and wait for the modal's Alpine state."""
+    expect(page.locator(f'tr[data-asset-id="{asset_id}"]')).to_be_visible()
+    _disable_asset_poll(page)
+    page.locator(
+        f'tr[data-asset-id="{asset_id}"] button[title="Edit"]'
+    ).click()
+    _wait_alpine(page, 'state.mode', 'edit')
+
+
+def _open_advanced_section(page: Page) -> None:
+    """Expand the collapsible Advanced disclosure inside the edit
+    modal (closed by default when the asset has no advanced values)."""
+    toggle = page.locator('.modal-section__toggle')
+    if toggle.get_attribute('aria-expanded') != 'true':
+        toggle.click()
+    expect(page.locator('#edit-play-from')).to_be_visible()
+
+
+def _set_flatpickr_time(
+    page: Page, input_id: str, hour: int, minute: int, meridiem: str | None
+) -> None:
+    """Drive a Flatpickr time picker the way an operator does: click
+    the input so the picker pops open, type into its hour/minute
+    spinners, click the AM/PM toggle into the requested state, then
+    click a neutral spot to commit. (NOT Escape — the modal overlay
+    listens for ``keydown.escape.window`` and would close the whole
+    edit modal.) ``meridiem=None`` for 24-hour mode."""
+    page.locator(f'#{input_id}').click()
+    picker = page.locator('.flatpickr-calendar.open')
+    expect(picker).to_have_count(1)
+    expect(picker).to_be_visible()
+    # Real keystrokes, not fill(): Flatpickr's spinners select-all on
+    # focus and reformat on key input, so programmatic value-setting
+    # gets clobbered by its own normalisation pass.
+    picker.locator('input.flatpickr-hour').click()
+    page.keyboard.type(str(hour), delay=50)
+    picker.locator('input.flatpickr-minute').click()
+    page.keyboard.type(f'{minute:02d}', delay=50)
+    # Flatpickr only writes the spinner state back to the bound input
+    # on blur of the spinner — Tab commits it.
+    page.keyboard.press('Tab')
+    if meridiem is not None:
+        ampm = picker.locator('.flatpickr-am-pm')
+        expect(ampm).to_be_visible()
+        # The toggle flips on click; at most one flip needed.
+        if ampm.inner_text().strip().upper() != meridiem.upper():
+            ampm.click()
+        expect(ampm).to_have_text(meridiem.upper())
+    page.get_by_role('heading', name='Edit asset').click()
+    expect(picker).not_to_be_visible()
+
+
+def _submit_edit_form(page: Page, asset_id: str) -> int:
+    """Submit the edit form and return the HTTP status of the
+    assets_update POST it fires. Either submission path is fine —
+    an htmx hx-post answers 200 with the table partial, a native
+    form submit answers 302 back to home — the regression assertions
+    only care that the POST didn't 5xx."""
+    with page.expect_response(
+        lambda r: f'/assets/{asset_id}/update/' in r.url
+        and r.request.method == 'POST'
+    ) as resp_info:
+        page.locator('form[action*="/update"] button[type="submit"]').click()
+    return resp_info.value.status
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_play_window_with_12_hour_time_picker(
+    reset_assets: None, page: Page
+) -> None:
+    """Regression for issue #2988: with the default 12-hour clock,
+    the Play from / Play until Flatpickr pickers post "02:30 PM"-shaped
+    values, which assets_update used to crash on (int('30 PM') →
+    ValueError → HTTP 500). Picking times through the real picker UI
+    must save cleanly and persist the 24-hour equivalents."""
+    from datetime import time as time_of_day
+
+    assert settings['use_24_hour_clock'] is False, (
+        'precondition: this test exercises the 12-hour clock default'
+    )
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+    _open_advanced_section(page)
+
+    _set_flatpickr_time(page, 'edit-play-from', 2, 30, 'PM')
+    _set_flatpickr_time(page, 'edit-play-to', 11, 45, 'PM')
+
+    # The pickers must have produced 12-hour strings — that's the
+    # exact shape the original bug choked on.
+    expect(page.locator('#edit-play-from')).to_have_value('2:30 PM')
+    expect(page.locator('#edit-play-to')).to_have_value('11:45 PM')
+
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500, (
+        f'assets_update returned HTTP {status} for a 12-hour play window'
+    )
+
+    def _persisted() -> bool:
+        a = Asset.objects.get(asset_id=asset_active['asset_id'])
+        return a.play_time_from == time_of_day(14, 30) and (
+            a.play_time_to == time_of_day(23, 45)
+        )
+
+    _wait_db(_persisted, description='12-hour play window persisted')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_availability_window_with_12_hour_datetime_picker(
+    reset_assets: None, page: Page
+) -> None:
+    """The Start / End availability pickers post the full
+    "06/15/2026 02:30 PM" shape under the default 12-hour clock —
+    saving must succeed and land the right aware datetimes."""
+    assert settings['use_24_hour_clock'] is False, (
+        'precondition: this test exercises the 12-hour clock default'
+    )
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+
+    # Type the full datetime strings (allowInput is on; this is the
+    # same wire format the picker itself produces for m/d/Y h:i K).
+    page.locator('#edit-start').fill('06/15/2026 09:00 AM')
+    page.locator('#edit-end').fill('12/24/2026 11:30 PM')
+    # Focusing the inputs pops the calendar panel, which overlays the
+    # footer's Save button — click a neutral spot to dismiss it.
+    page.get_by_role('heading', name='Edit asset').click()
+    expect(page.locator('.flatpickr-calendar.open')).to_have_count(0)
+    # Flatpickr re-formats to its h:i K mask on close (leading-zero
+    # hour drops: '09:00 AM' → '9:00 AM') but must keep the typed
+    # date/time semantics intact — no month/day swap, no reset to
+    # the seeded values.
+    expect(page.locator('#edit-start')).to_have_value('06/15/2026 9:00 AM')
+    expect(page.locator('#edit-end')).to_have_value('12/24/2026 11:30 PM')
+
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500, (
+        f'assets_update returned HTTP {status} for 12-hour datetimes'
+    )
+
+    def _persisted() -> bool:
+        a = Asset.objects.get(asset_id=asset_active['asset_id'])
+        if a.start_date is None or a.end_date is None:
+            return False
+        start = a.start_date
+        end = a.end_date
+        return (start.month, start.day, start.hour, start.minute) == (
+            6,
+            15,
+            9,
+            0,
+        ) and (end.month, end.day, end.hour, end.minute) == (12, 24, 23, 30)
+
+    _wait_db(_persisted, description='12-hour availability window persisted')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_edit_play_days_and_clear_play_window(
+    reset_assets: None, page: Page
+) -> None:
+    """The weekday picker persists a play_days subset, and clearing
+    both time fields resets the day-parting window to all-day."""
+    Asset.objects.create(
+        **{
+            **asset_active,
+            'play_time_from': '09:00:00',
+            'play_time_to': '17:00:00',
+        }
+    )
+    page.goto(BASE_URL)
+    _open_edit_modal(page, asset_active['asset_id'])
+    # Asset has a non-default play window, so Advanced auto-expands.
+    expect(page.locator('#edit-play-from')).to_be_visible()
+
+    # Uncheck Sat (6) + Sun (7). The checkboxes are visually hidden
+    # behind the chip-styled labels, so click the label like a user.
+    for day in (6, 7):
+        box = page.locator(f'input[name="play_days"][value="{day}"]')
+        expect(box).to_be_checked()
+        page.locator(
+            f'label.weekday:has(input[name="play_days"][value="{day}"])'
+        ).click()
+        expect(box).not_to_be_checked()
+
+    # Clear both time fields → "play all day".
+    page.locator('#edit-play-from').fill('')
+    page.locator('#edit-play-to').fill('')
+    # Dismiss the time picker the focus popped open so it doesn't
+    # overlay the Save button.
+    page.get_by_role('heading', name='Edit asset').click()
+    expect(page.locator('.flatpickr-calendar.open')).to_have_count(0)
+
+    status = _submit_edit_form(page, asset_active['asset_id'])
+    assert status < 500
+
+    def _persisted() -> bool:
+        a = Asset.objects.get(asset_id=asset_active['asset_id'])
+        return (
+            a.get_play_days() == [1, 2, 3, 4, 5]
+            and a.play_time_from is None
+            and a.play_time_to is None
+        )
+
+    _wait_db(_persisted, description='weekday subset + cleared window')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_delete_cancel_keeps_asset(reset_assets: None, page: Page) -> None:
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Delete"]'
+    ).click()
+    _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
+    page.get_by_role('button', name='Cancel').click()
+    _wait_alpine(page, 'state.pendingDeleteId', None)
+
+    # Cancel fires no POST — assert the row survived directly.
+    assert Asset.objects.filter(asset_id=asset_active['asset_id']).exists()
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_day_parted_asset_renders_schedule_chips(
+    reset_assets: None, page: Page
+) -> None:
+    """A weekday-filtered, day-parted asset must render its weekday
+    and time-window chips on the table row (12-hour clock default)."""
+    Asset.objects.create(
+        **{
+            **asset_active,
+            'play_days': '[1, 3, 5]',
+            'play_time_from': '09:00:00',
+            'play_time_to': '17:30:00',
+        }
+    )
+    page.goto(BASE_URL)
+    row = page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    expect(row).to_be_visible()
+    for label in ('Mon', 'Wed', 'Fri'):
+        expect(row.locator('.schedule-chip', has_text=label)).to_be_visible()
+    expect(
+        row.locator('.schedule-chip', has_text='9:00 AM – 5:30 PM')
+    ).to_be_visible()
+    # No 'Everyday' chip when a weekday subset is active.
+    expect(row.locator('.schedule-chip', has_text='Everyday')).to_have_count(0)
 
 
 # ---------------------------------------------------------------------------
@@ -905,6 +1348,166 @@ def test_settings_form_persists_default_duration(
         _post_default_duration(new_value)
     finally:
         _post_default_duration(original)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_navbar_links_navigate(reset_assets: None, page: Page) -> None:
+    """The top-nav tabs must reach their pages (Integrations is
+    balena-gated and absent in the test container)."""
+    page.goto(BASE_URL)
+    page.get_by_role('link', name='Settings').click()
+    expect(
+        page.get_by_role('heading', name='Settings', exact=True)
+    ).to_be_visible()
+    page.get_by_role('link', name='System info').click()
+    expect(page.get_by_role('heading', name='System Info')).to_be_visible()
+    # Not exact=True: the tabler icon's ::before glyph joins the
+    # link's accessible name.
+    page.get_by_role('link', name='Schedule').click()
+    expect(
+        page.get_by_role('heading', name='Schedule Overview')
+    ).to_be_visible()
+
+
+def _save_settings_form(page: Page) -> None:
+    page.locator('form[action*="settings/save"] button[type="submit"]').click()
+    # The save handler redirects back to /settings.
+    expect(
+        page.get_by_role('heading', name='Settings', exact=True)
+    ).to_be_visible()
+
+
+def _set_clock_toggle(page: Page, use_24h: bool) -> None:
+    """Flip the 'Use 24-hour clock' switch through the browser and
+    save. Goes through uvicorn (not settings.save() in this process)
+    because the server keeps its own AnthiasSettings singleton."""
+    page.goto(SETTINGS_URL)
+    box = page.locator('#use_24_hour_clock')
+    if box.is_checked() != use_24h:
+        page.locator('label[for="use_24_hour_clock"]').click()
+    if use_24h:
+        expect(box).to_be_checked()
+    else:
+        expect(box).not_to_be_checked()
+    _save_settings_form(page)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_24_hour_clock_play_window_end_to_end(
+    reset_assets: None, page: Page
+) -> None:
+    """Counterpart to the 12-hour regression: with the 24-hour clock
+    enabled in Settings, the play-window pickers run without an AM/PM
+    toggle, post H:i values, and persist. Restores the 12-hour
+    default afterwards so sibling tests keep their precondition."""
+    from datetime import time as time_of_day
+
+    Asset.objects.create(**asset_active)
+    try:
+        _set_clock_toggle(page, use_24h=True)
+
+        page.goto(BASE_URL)
+        _open_edit_modal(page, asset_active['asset_id'])
+        _open_advanced_section(page)
+
+        page.locator('#edit-play-from').click()
+        picker = page.locator('.flatpickr-calendar.open')
+        expect(picker).to_be_visible()
+        # 24-hour mode renders no AM/PM toggle.
+        expect(picker.locator('.flatpickr-am-pm')).to_have_count(0)
+        picker.locator('input.flatpickr-hour').click()
+        page.keyboard.type('14', delay=50)
+        picker.locator('input.flatpickr-minute').click()
+        page.keyboard.type('30', delay=50)
+        page.keyboard.press('Tab')
+        page.get_by_role('heading', name='Edit asset').click()
+        expect(page.locator('#edit-play-from')).to_have_value('14:30')
+
+        _set_flatpickr_time(page, 'edit-play-to', 23, 45, None)
+        expect(page.locator('#edit-play-to')).to_have_value('23:45')
+
+        status = _submit_edit_form(page, asset_active['asset_id'])
+        assert status < 500
+
+        def _persisted() -> bool:
+            a = Asset.objects.get(asset_id=asset_active['asset_id'])
+            return a.play_time_from == time_of_day(14, 30) and (
+                a.play_time_to == time_of_day(23, 45)
+            )
+
+        _wait_db(_persisted, description='24-hour play window persisted')
+    finally:
+        _set_clock_toggle(page, use_24h=False)
+
+
+def _set_date_format(page: Page, value: str) -> None:
+    page.goto(SETTINGS_URL)
+    page.locator('#date_format').select_option(value)
+    _save_settings_form(page)
+    expect(page.locator('#date_format')).to_have_value(value)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_date_format_round_trip_in_edit_modal(
+    reset_assets: None, page: Page
+) -> None:
+    """Switch the device to dd/mm/yyyy: the availability pickers must
+    format AND parse in that shape, so saving a typed d/m/Y datetime
+    lands the right calendar day (not a swapped month/day)."""
+    Asset.objects.create(**asset_active)
+    try:
+        _set_date_format(page, 'dd/mm/yyyy')
+
+        page.goto(BASE_URL)
+        _open_edit_modal(page, asset_active['asset_id'])
+        page.locator('#edit-end').fill('24/12/2026 11:30 PM')
+        page.get_by_role('heading', name='Edit asset').click()
+        expect(page.locator('.flatpickr-calendar.open')).to_have_count(0)
+        expect(page.locator('#edit-end')).to_have_value('24/12/2026 11:30 PM')
+
+        status = _submit_edit_form(page, asset_active['asset_id'])
+        assert status < 500
+
+        def _persisted() -> bool:
+            a = Asset.objects.get(asset_id=asset_active['asset_id'])
+            if a.end_date is None:
+                return False
+            return (
+                a.end_date.day,
+                a.end_date.month,
+                a.end_date.year,
+                a.end_date.hour,
+                a.end_date.minute,
+            ) == (24, 12, 2026, 23, 30)
+
+        _wait_db(_persisted, description='d/m/Y end date persisted')
+    finally:
+        _set_date_format(page, 'mm/dd/yyyy')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_settings_player_name_round_trip(
+    reset_assets: None, page: Page
+) -> None:
+    """Player name is the simplest free-text setting — save, reload,
+    value sticks, then restore."""
+    page.goto(SETTINGS_URL)
+    original = page.locator('#player_name').input_value()
+
+    def _set_name(value: str) -> None:
+        page.goto(SETTINGS_URL)
+        page.locator('#player_name').fill(value)
+        _save_settings_form(page)
+        expect(page.locator('#player_name')).to_have_value(value)
+
+    try:
+        _set_name('Initech Lobby Screen')
+    finally:
+        _set_name(original)
 
 
 # Inlined into the system-info marketing capture below. Lives at

@@ -2,7 +2,7 @@ import logging
 import re
 import tarfile
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from mimetypes import guess_extension, guess_type
 from os import path, remove
 from urllib.parse import urlparse, urlunparse
@@ -82,6 +82,27 @@ def _parse_local_datetime(value: str) -> datetime:
         except ValueError:
             continue
     return timezone.make_aware(datetime.fromisoformat(value))
+
+
+def _parse_local_time(value: str) -> time:
+    """Parse a time-of-day the edit-form posts back from Flatpickr.
+
+    The Play from / Play until pickers format with 'H:i' when the
+    24-hour clock is on and 'h:i K' (e.g. "02:30 PM") otherwise —
+    issue #2988 was this function's predecessor splitting on ':' and
+    int()-ing "30 PM". Try both formats regardless of the active
+    setting (a form rendered before a clock-format change still has
+    the old shape), fall back to ISO fromisoformat() so API-side /
+    pre-existing "HH:MM:SS" values parse too. Raises ValueError on
+    garbage — the caller turns that into an error toast, not a 500.
+    """
+    value = value.strip()
+    for fmt in ('%H:%M', '%I:%M %p'):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    return time.fromisoformat(value)
 
 
 def _prettify_upload_name(filename: str) -> str:
@@ -530,10 +551,19 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
         )
     start = request.POST.get('start_date')
     end = request.POST.get('end_date')
-    if start:
-        asset.start_date = _parse_local_datetime(start)
-    if end:
-        asset.end_date = _parse_local_datetime(end)
+    try:
+        if start:
+            asset.start_date = _parse_local_datetime(start)
+        if end:
+            asset.end_date = _parse_local_datetime(end)
+    except ValueError:
+        # The pickers run with allowInput, so a hand-typed value can
+        # be anything. A parse failure is operator input error, not a
+        # server fault — surface a toast instead of a 500.
+        return _asset_table_response(
+            request,
+            toast=('error', 'Could not read the start/end date — not saved'),
+        )
     asset.nocache = _checkbox(request, 'nocache')
     asset.skip_asset_check = _checkbox(request, 'skip_asset_check')
 
@@ -558,16 +588,35 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     )
 
     # Time-of-day window. Reject partial windows (only one endpoint
-    # set) the same way _validate_time_window does on the API path.
+    # set) the same way _validate_time_window does on the API path —
+    # clearing both on a half-filled form would silently wipe an
+    # existing window. Both empty means "play all day".
     play_from = (request.POST.get('play_time_from') or '').strip()
     play_to = (request.POST.get('play_time_to') or '').strip()
     if play_from and play_to:
-        from datetime import time as _time
-
-        h1, m1 = play_from.split(':')[:2]
-        h2, m2 = play_to.split(':')[:2]
-        asset.play_time_from = _time(int(h1), int(m1))
-        asset.play_time_to = _time(int(h2), int(m2))
+        try:
+            asset.play_time_from = _parse_local_time(play_from)
+            asset.play_time_to = _parse_local_time(play_to)
+        except ValueError:
+            # Issue #2988: the 12-hour picker posts "02:30 PM"-shaped
+            # values; anything unparseable (including hand-typed junk
+            # via allowInput) must toast, never 500.
+            return _asset_table_response(
+                request,
+                toast=(
+                    'error',
+                    'Could not read the play from/until times — not saved',
+                ),
+            )
+    elif play_from or play_to:
+        return _asset_table_response(
+            request,
+            toast=(
+                'error',
+                'Set both play from and until times, or clear both '
+                '— not saved',
+            ),
+        )
     else:
         asset.play_time_from = None
         asset.play_time_to = None
