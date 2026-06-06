@@ -588,7 +588,9 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     )
 
     # Time-of-day window. Reject partial windows (only one endpoint
-    # set) the same way _validate_time_window does on the API path.
+    # set) the same way _validate_time_window does on the API path —
+    # clearing both on a half-filled form would silently wipe an
+    # existing window. Both empty means "play all day".
     play_from = (request.POST.get('play_time_from') or '').strip()
     play_to = (request.POST.get('play_time_to') or '').strip()
     if play_from and play_to:
@@ -606,6 +608,15 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
                     'Could not read the play from/until times — not saved',
                 ),
             )
+    elif play_from or play_to:
+        return _asset_table_response(
+            request,
+            toast=(
+                'error',
+                'Set both play from and until times, or clear both '
+                '— not saved',
+            ),
+        )
     else:
         asset.play_time_from = None
         asset.play_time_to = None

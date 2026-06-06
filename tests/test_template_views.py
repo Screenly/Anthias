@@ -832,6 +832,74 @@ def test_assets_update_invalid_play_time_toasts_instead_of_500(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('play_from', 'play_to'),
+    [('09:00', ''), ('', '17:00')],
+)
+def test_assets_update_partial_play_window_toasts_and_keeps_existing(
+    client: Client, asset: Asset, play_from: str, play_to: str
+) -> None:
+    """Only one endpoint set is a validation error (mirrors the v2
+    API's _validate_time_window) — it must NOT silently wipe an
+    existing window."""
+    asset.play_time_from = time(8, 0)
+    asset.play_time_to = time(18, 0)
+    asset.save(update_fields=['play_time_from', 'play_time_to'])
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'play_time_from': play_from,
+                'play_time_to': play_to,
+            },
+            headers={'HX-Request': 'true'},
+        )
+    assert response.status_code == 200
+    assert 'error' in response.headers.get('HX-Trigger', '')
+    asset.refresh_from_db()
+    assert asset.play_time_from == time(8, 0)
+    assert asset.play_time_to == time(18, 0)
+
+
+@pytest.mark.django_db
+def test_assets_update_clears_play_window_when_both_empty(
+    client: Client, asset: Asset
+) -> None:
+    """Both endpoints cleared = deliberate "play all day" reset."""
+    asset.play_time_from = time(8, 0)
+    asset.play_time_to = time(18, 0)
+    asset.save(update_fields=['play_time_from', 'play_time_to'])
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'play_time_from': '',
+                'play_time_to': '',
+            },
+        )
+    assert response.status_code in (200, 302)
+    asset.refresh_from_db()
+    assert asset.play_time_from is None
+    assert asset.play_time_to is None
+
+
+@pytest.mark.django_db
 def test_assets_update_parses_12_hour_start_end_dates(
     client: Client, asset: Asset
 ) -> None:
