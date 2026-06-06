@@ -283,9 +283,22 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # gstreamer plugin set needed. VLC is deliberately not
         # installed because MediaPlayerProxy never routes Qt6
         # boards to it.
+        # pulseaudio: Debian's Qt 6 Multimedia is compiled with
+        # PulseAudio as its ONLY audio backend — libQt6Multimedia.so.6
+        # links libpulse and contains no libasound/ALSA code at all —
+        # so without a running PulseAudio server QMediaDevices
+        # enumerates zero audio outputs, QAudioOutput holds a null
+        # device, and every video plays silent (issue #3000; the
+        # pre-#2905 mpv path talked ALSA directly and needed no sound
+        # server). bin/start_viewer.sh starts a minimal per-container
+        # daemon as the viewer user. pulseaudio-utils ships pactl so
+        # a silent-audio field report can be debugged from a shell
+        # (list sinks / sink-inputs) without modifying the image.
         viewer_extra_apt_dependencies.extend(
             [
                 'libqt6multimedia6',
+                'pulseaudio',
+                'pulseaudio-utils',
                 'qml6-module-qtmultimedia',
                 'qml6-module-qtquick',
                 'qt6-base-dev',
