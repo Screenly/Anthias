@@ -220,12 +220,17 @@ private:
     QVideoSink* pacingSink = nullptr;
     // True when the scene graph has rendered since the last frame
     // was forwarded — i.e. the VideoOutput is ready for new damage.
-    // Starts true so the first frame always shows. Both touch points
+    // Starts true so the first frame always shows. All touch points
     // (onSceneRendered, onVideoFrameDelivered) run on the GUI thread:
     // QQuickWidget renders via QQuickRenderControl on the GUI thread
     // and the queued videoFrameChanged delivery lands there too, so
-    // a plain bool is race-free.
+    // plain members are race-free.
     bool sceneReadyForFrame = true;
+    // Single-slot mailbox: the newest frame that arrived while the
+    // scene was still rendering. Forwarded (and cleared) from
+    // onSceneRendered() so renders chain back-to-back at capacity
+    // instead of idling until the next sink delivery.
+    QVideoFrame pendingFrame;
 
     // Cap on /data/.anthias/playback-stats.log size. 8 MB ≈ a full
     // 24 h burn-in's worth of SAMPLE lines at 1 Hz; past that we

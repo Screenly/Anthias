@@ -123,7 +123,8 @@ private slots:
         QTRY_COMPARE(itemSink->videoFrame(), first);
         player->videoSink()->setVideoFrame(second);
         // Queued delivery: give the event loop a spin, then confirm
-        // the second frame was dropped (scene never rendered).
+        // the second frame was parked
+        // in the mailbox, not forwarded (scene never rendered).
         QTest::qWait(50);
         QCOMPARE(itemSink->videoFrame(), first);
     }

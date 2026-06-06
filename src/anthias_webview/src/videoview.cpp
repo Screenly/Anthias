@@ -230,6 +230,7 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
     framesRendered = 0;
     containerFps = 0.0;
     sceneReadyForFrame = true;
+    pendingFrame = QVideoFrame();
     writeStats(
         QStringLiteral("LOADFILE"),
         QStringLiteral("uri=%1 options={%2}")
@@ -416,6 +417,7 @@ void VideoView::onVideoFrameDelivered(const QVideoFrame& frame)
     if (!frame.isValid()) {
         // Stream end / source change marker — always forward so the
         // VideoOutput clears instead of freezing on the last frame.
+        pendingFrame = QVideoFrame();
         videoSink->setVideoFrame(frame);
         return;
     }
@@ -425,6 +427,15 @@ void VideoView::onVideoFrameDelivered(const QVideoFrame& frame)
     // (shouldn't-happen) state, fall back to unpaced forwarding —
     // the pre-#2987 behaviour.
     if (renderCounterConnection && !sceneReadyForFrame) {
+        // Scene busy — park the frame in the single-slot mailbox
+        // (replacing any older parked frame) so onSceneRendered()
+        // can forward the freshest one the moment the render
+        // finishes. Without the mailbox the gate was stop-and-wait:
+        // render (~21 ms) → re-arm → idle until the NEXT delivery
+        // (≤16 ms at 60 fps) → render, which measured only ~23
+        // presented fps on a GUI thread that renders ~45/s when
+        // back-to-back.
+        pendingFrame = frame;
         return;
     }
     sceneReadyForFrame = false;
@@ -435,6 +446,14 @@ void VideoView::onVideoFrameDelivered(const QVideoFrame& frame)
 void VideoView::onSceneRendered()
 {
     ++framesRendered;
+    if (pendingFrame.isValid() && videoSink) {
+        // Chain straight into the next render with the freshest
+        // parked frame — keeps the gate closed.
+        ++framesForwarded;
+        videoSink->setVideoFrame(pendingFrame);
+        pendingFrame = QVideoFrame();
+        return;
+    }
     sceneReadyForFrame = true;
 }
 
