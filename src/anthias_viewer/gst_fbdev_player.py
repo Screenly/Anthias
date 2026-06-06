@@ -1,7 +1,9 @@
 """Looping GStreamer video player for the Qt5 linuxfb boards (pi1/2/3).
 
 Spawned by ``GstFbdevMediaPlayer`` (media_player.py) as
-``python3 -m anthias_viewer.gst_fbdev_player --uri <asset> ...`` and
+``python3 <path-to>/gst_fbdev_player.py --uri <asset> ...`` — by file
+path, not ``-m``, so the ``anthias_viewer`` package ``__init__``
+(Django settings, redis, D-Bus) never imports in the child — and
 killed (process group SIGTERM) when the asset's slot ends. It replaces
 the previous ``bash -c 'while true; do gst-launch-1.0 ...; done'``
 wrapper, which rebuilt the whole pipeline — decoder open, demux,
@@ -150,8 +152,13 @@ def clear_framebuffer(
             stride = int(handle.read().strip())
         with open(f'{fb_sys}/virtual_size') as handle:
             _, height = (int(x) for x in handle.read().strip().split(','))
+        # Write scanline-sized chunks: a single buffer for the whole
+        # fb would peak at ~33 MB on a 4K/32bpp console — real memory
+        # on a 512 MB Pi 1.
+        zeros = b'\x00' * stride
         with open(fb_device, 'wb') as fb:
-            fb.write(b'\x00' * (stride * height))
+            for _ in range(height):
+                fb.write(zeros)
         return True
     except (OSError, ValueError) as exc:
         logging.warning('could not clear %s: %s', fb_device, exc)
@@ -208,10 +215,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parse_args(argv if argv is not None else sys.argv[1:])
 
-    import gi
+    try:
+        import gi
 
-    gi.require_version('Gst', '1.0')
-    from gi.repository import GLib, Gst
+        gi.require_version('Gst', '1.0')
+        from gi.repository import GLib, Gst
+    except (ImportError, ValueError) as exc:
+        # python3-gi / gir1.2-gstreamer-1.0 ship in the pi1/2/3 viewer
+        # image; fail fast with a greppable line rather than a bare
+        # traceback if a future image regression drops them.
+        logging.error('GStreamer python bindings unavailable: %s', exc)
+        return 1
 
     Gst.init(None)
 
