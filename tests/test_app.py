@@ -811,8 +811,8 @@ def test_edit_duration_disabled_for_video(
     status = _submit_edit_form(page, asset_active['asset_id'])
     assert status < 500
 
-    # Saving must leave the probed duration untouched.
-    sleep(1.0)
+    # The POST is awaited by _submit_edit_form, so the server has
+    # already processed the save — the probed duration must survive.
     assert Asset.objects.get(asset_id=asset_active['asset_id']).duration == 42
 
 
@@ -829,7 +829,8 @@ def test_edit_modal_cancel_discards_changes(
     page.locator('form[action*="/update"] button:has-text("Cancel")').click()
     _wait_alpine(page, 'state.mode', None)
 
-    sleep(1.0)
+    # Cancel fires no POST; once Alpine dropped the modal the DB can
+    # be asserted directly.
     assert (
         Asset.objects.get(asset_id=asset_active['asset_id']).name
         == asset_active['name']
@@ -1162,7 +1163,7 @@ def test_delete_cancel_keeps_asset(reset_assets: None, page: Page) -> None:
     page.get_by_role('button', name='Cancel').click()
     _wait_alpine(page, 'state.pendingDeleteId', None)
 
-    sleep(1.0)
+    # Cancel fires no POST — assert the row survived directly.
     assert Asset.objects.filter(asset_id=asset_active['asset_id']).exists()
 
 
