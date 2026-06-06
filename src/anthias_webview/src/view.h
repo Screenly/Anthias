@@ -59,6 +59,18 @@ private:
     void loadAsStaticImage(const QByteArray& data);
     void setupAnimation();
     void switchToNextWebView();
+    // Issues a (re)load of ``uri`` into nextWebView: detaches any
+    // stale loadFinished handler, cancels the in-flight navigation,
+    // attaches a fresh one-shot handler tagged with ``requestId``,
+    // and (re)arms the page-load watchdog. Called by loadPage for
+    // the initial attempt and by handlePageLoadTimeout for retries.
+    void startPageLoad(const QString &uri, quint64 requestId);
+    // Issue #2999 — runs when a webpage navigation has neither
+    // finished nor been superseded within the watchdog interval
+    // (e.g. stalled mid-fetch by a network dropout). Cancels the
+    // wedged load and retries the same URI so the device self-heals
+    // once connectivity returns.
+    void handlePageLoadTimeout();
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Hides VideoView and re-enables the web/image surface. Called
     // by loadPage / loadImage so a switch from video back to a web
@@ -93,6 +105,27 @@ private:
     // we can drop it before issuing stop() on the next loadPage and
     // avoid a synchronous loadFinished(false) racing into a stale slot.
     QMetaObject::Connection pageLoadConnection;
+
+    // Issue #2999 — page-load watchdog. QtWebEngine has no built-in
+    // navigation timeout: a fetch interrupted mid-flight (WiFi AP
+    // drop, no FIN/RST) leaves the request pending forever, so
+    // loadFinished never fires, the dual-view swap never happens and
+    // the screen freezes on the previous asset until the container is
+    // restarted. Single-shot; armed by startPageLoad, stopped on a
+    // successful load and by every path that cancels the pending
+    // navigation (loadImage / playVideo). On timeout — or after a
+    // *failed* load, where the handler deliberately leaves it running
+    // as a delayed-retry tick — handlePageLoadTimeout stops the wedged
+    // navigation and re-issues the same URI. The retry matters: the
+    // viewer's view_webpage() only sends loadPage when the URL
+    // *changes*, so with a single-webpage playlist no further D-Bus
+    // call would ever arrive to unwedge a stalled load.
+    QTimer* pageLoadWatchdog;
+
+    // URI of the loadPage navigation currently in flight (empty when
+    // none). Read by handlePageLoadTimeout to retry; cleared whenever
+    // the pending navigation is cancelled in favor of an image/video.
+    QString pendingPageUri;
 
     // Per-asset auto-refresh timer. When non-null and active, fires
     // currentWebView->reload() every ``pendingReloadIntervalS`` seconds.

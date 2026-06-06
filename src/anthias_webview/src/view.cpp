@@ -112,6 +112,34 @@ bool isLowRamMode()
     const QByteArray value = qgetenv("ANTHIAS_LOW_RAM");
     return value == "1";
 }
+
+// Issue #2999 — page-load watchdog interval. Chromium has no overall
+// navigation timeout, so a fetch whose packets stop arriving (WiFi
+// dropout mid-load; the TCP socket stays ESTABLISHED with no FIN/RST)
+// keeps the navigation pending indefinitely. 30 s is deliberately
+// more generous than the asset-rotation cadence and the old
+// VIDEO_TIMEOUT=20 the Python side used for stalled videos: a complex
+// dashboard on a slow uplink may legitimately take 15–20 s, and a
+// too-eager watchdog would cancel loads that were about to succeed.
+// Operators can tune it via ANTHIAS_WEBPAGE_TIMEOUT_S on the viewer
+// container. Clamped so a garbage value can't disable the watchdog
+// entirely (the whole point is that there's always *some* timeout)
+// or overflow the QTimer's millisecond int.
+constexpr int kDefaultPageLoadTimeoutS = 30;
+constexpr int kMinPageLoadTimeoutS = 5;
+constexpr int kMaxPageLoadTimeoutS = 3600;
+
+int pageLoadTimeoutMs()
+{
+    bool ok = false;
+    int seconds =
+        qEnvironmentVariableIntValue("ANTHIAS_WEBPAGE_TIMEOUT_S", &ok);
+    if (!ok || seconds <= 0) {
+        seconds = kDefaultPageLoadTimeoutS;
+    }
+    return qBound(kMinPageLoadTimeoutS, seconds, kMaxPageLoadTimeoutS)
+        * 1000;
+}
 }
 
 View::View(QWidget* parent) : QWidget(parent)
@@ -189,6 +217,14 @@ View::View(QWidget* parent) : QWidget(parent)
     loadGenerationId = 0;
     reloadTimer = nullptr;
     pendingReloadIntervalS = 0;
+
+    // Issue #2999 — see the member's comment in view.h. Connected
+    // once here; startPageLoad re-arms it per attempt.
+    pageLoadWatchdog = new QTimer(this);
+    pageLoadWatchdog->setSingleShot(true);
+    pageLoadWatchdog->setInterval(pageLoadTimeoutMs());
+    connect(pageLoadWatchdog, &QTimer::timeout,
+            this, &View::handlePageLoadTimeout);
 }
 
 View::~View()
@@ -243,6 +279,13 @@ void View::loadPage(const QString &uri)
     pendingReloadIntervalS = 0;
     nextWebViewReady = false;
 
+    startPageLoad(uri, requestId);
+
+    qDebug() << "Loading web page in background web view:" << uri;
+}
+
+void View::startPageLoad(const QString &uri, quint64 requestId)
+{
     // Drop any prior loadFinished handler before stop() — a synchronous
     // loadFinished(false) emission from the previous in-flight load
     // would otherwise reach the (still-attached) handler and run with
@@ -250,9 +293,12 @@ void View::loadPage(const QString &uri)
     // detached, stop() can fire whatever it likes harmlessly.
     if (pageLoadConnection) {
         QObject::disconnect(pageLoadConnection);
+        pageLoadConnection = QMetaObject::Connection{};
     }
 
     nextWebView->stop();
+
+    pendingPageUri = uri;
 
     pageLoadConnection = connect(
         nextWebView->page(),
@@ -272,19 +318,54 @@ void View::loadPage(const QString &uri)
             }
 
             if (ok) {
+                pageLoadWatchdog->stop();
+                pendingPageUri.clear();
                 qDebug() << "Background web page loaded successfully";
                 nextWebViewReady = true;
                 switchToNextWebView();
             } else {
+                // Deliberately leave the watchdog running: when it
+                // fires, handlePageLoadTimeout re-issues this URI. A
+                // load that failed fast (DNS / connection refused
+                // while the network is down) thereby gets a paced
+                // retry, which is the only retry a single-webpage
+                // playlist will ever see — view_webpage() skips the
+                // loadPage D-Bus call when the URL hasn't changed
+                // (issue #2999).
                 qDebug() << "Background web page failed to load";
                 nextWebViewReady = false;
             }
         }
     );
 
-    nextWebView->load(QUrl(uri));
+    // (Re)arm the watchdog for this attempt — single-shot, so each
+    // retry gets a full interval.
+    pageLoadWatchdog->start();
 
-    qDebug() << "Loading web page in background web view:" << uri;
+    nextWebView->load(QUrl(uri));
+}
+
+void View::handlePageLoadTimeout()
+{
+    // Defensive: every path that cancels the pending navigation
+    // (loadImage / playVideo / a successful load) stops the watchdog
+    // and clears the URI, but if a stray timeout slips through an
+    // empty URI means there is nothing to recover.
+    if (pendingPageUri.isEmpty()) {
+        return;
+    }
+
+    qWarning() << "Webpage load did not finish within"
+               << pageLoadWatchdog->interval() / 1000
+               << "seconds — cancelling and retrying:" << pendingPageUri;
+
+    // startPageLoad stop()s the wedged navigation (cancelling its
+    // pending network I/O so stuck sockets don't pile up in
+    // Chromium's connection pool), re-issues the URI on a fresh
+    // request, and re-arms the watchdog. The generation ID is
+    // unchanged — this is still the same asset; any later asset
+    // bumps the generation and supersedes the retry's handler.
+    startPageLoad(pendingPageUri, loadGenerationId);
 }
 
 void View::loadImage(const QString &preUri)
@@ -319,6 +400,10 @@ void View::loadImage(const QString &preUri)
         QObject::disconnect(pageLoadConnection);
         pageLoadConnection = QMetaObject::Connection{};
     }
+    // ...and its watchdog, so a stale timeout doesn't retry a webpage
+    // the playlist has rotated away from (issue #2999).
+    pageLoadWatchdog->stop();
+    pendingPageUri.clear();
     // Webpage auto-refresh only applies while a webpage is on screen;
     // killing the timer (and clearing the pending interval) here keeps
     // a stale reload from firing into the (now hidden) QWebEngineView
@@ -487,6 +572,8 @@ void View::playVideo(const QString &uri, const QVariantMap &options)
         QObject::disconnect(pageLoadConnection);
         pageLoadConnection = QMetaObject::Connection{};
     }
+    pageLoadWatchdog->stop();
+    pendingPageUri.clear();
     stopReloadTimer();
     pendingReloadIntervalS = 0;
     webView1->stop();
