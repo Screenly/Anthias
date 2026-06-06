@@ -3,7 +3,7 @@ import os
 import sys
 import tarfile
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator
 from datetime import datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
@@ -77,7 +77,7 @@ def backup_archive_name(name: str = default_archive_name) -> str:
     )
 
 
-def stream_backup() -> Iterator[bytes]:
+def stream_backup() -> Generator[bytes, None, None]:
     """Yield a backup tar.gz as it is being built.
 
     The download path used to write the whole archive to disk before
@@ -92,10 +92,14 @@ def stream_backup() -> Iterator[bytes]:
     A producer thread feeds ``tarfile`` through a pipe; the generator
     reads the other end. A consumer that disconnects mid-download
     closes the read end, the producer hits ``BrokenPipeError`` and
-    stops — no orphaned thread keeps taring.
+    stops — no orphaned thread keeps taring. A producer failure
+    (missing directory, unreadable file) is re-raised here once the
+    stream drains, so the response aborts mid-transfer instead of
+    completing 200 with a silently truncated archive.
     """
     home = getenv('HOME') or ''
     read_fd, write_fd = os.pipe()
+    produce_error: list[BaseException] = []
 
     def produce() -> None:
         try:
@@ -109,19 +113,27 @@ def stream_backup() -> Iterator[bytes]:
                         tar.add(path.join(home, directory), arcname=directory)
         except BrokenPipeError:
             logging.info('backup download cancelled by the client')
-        except OSError:
+        except Exception as exc:
             logging.exception('backup stream failed')
+            produce_error.append(exc)
 
     producer = threading.Thread(
         target=produce, name='backup-stream', daemon=True
     )
     producer.start()
+    drained = False
     try:
         with os.fdopen(read_fd, 'rb') as read_file:
             while chunk := read_file.read(_STREAM_CHUNK_BYTES):
                 yield chunk
+        drained = True
     finally:
         producer.join(timeout=5)
+        # Only surface producer failures on the drained path: a
+        # GeneratorExit (client went away) shouldn't morph into a
+        # spurious error.
+        if drained and produce_error:
+            raise produce_error[0]
 
 
 def create_backup(name: str = default_archive_name) -> str:
