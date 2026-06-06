@@ -3,6 +3,7 @@ import os
 import re
 import signal
 import subprocess
+import sys
 from typing import Any, ClassVar
 from urllib.parse import quote
 
@@ -362,9 +363,6 @@ class MPVMediaPlayer(MediaPlayer):
         return self._playing
 
 
-FB_DEVICE = '/dev/fb0'
-
-
 def _fb_geometry(
     fb_sys: str = '/sys/class/graphics/fb0',
 ) -> tuple[int, int, str]:
@@ -391,15 +389,6 @@ def _fb_geometry(
     return width, height, 'BGRx' if bpp >= 32 else 'RGB16'
 
 
-# Operator screen_rotation → GStreamer ``videoflip`` method. None for an
-# unrotated panel (the common case) so the videoflip element is omitted
-# entirely and the pipeline stays fully hardware.
-_GST_VIDEOFLIP_METHODS = {
-    90: 'clockwise',
-    180: 'rotate-180',
-    270: 'counterclockwise',
-}
-
 # A bare URI scheme: ``http``, ``https``, ``file``, ``rtsp`` …
 _URI_SCHEME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://')
 
@@ -425,13 +414,14 @@ def _as_gst_uri(uri: str) -> str:
 class GstFbdevMediaPlayer(MediaPlayer):
     """Pi 1/2/3 (Qt5 linuxfb) video player: GStreamer HW pipeline → fb.
 
-    Spawns ``gst-launch-1.0 playbin`` with a custom video sink that
-    hardware-decodes through the board's V4L2 M2M decoder
-    (``v4l2h264dec`` → /dev/video10, bcm2835-codec; auto-selected by
-    decodebin at PRIMARY rank), hardware scales + color-converts through
-    the bcm2835 ISP (``v4l2convert``), and paints straight to the
-    framebuffer (``fbdevsink`` → /dev/fb0). fbdev needs no DRM master /
-    X / Wayland — exactly what a bare uid-1000 viewer with no compositor
+    Spawns the ``anthias_viewer.gst_fbdev_player`` helper, which runs a
+    ``playbin`` with a custom video sink that hardware-decodes through
+    the board's V4L2 M2M decoder (``v4l2h264dec`` → /dev/video10,
+    bcm2835-codec; auto-selected by decodebin at PRIMARY rank),
+    hardware scales + color-converts through the bcm2835 ISP
+    (``v4l2convert``), and paints straight to the framebuffer
+    (``fbdevsink`` → /dev/fb0). fbdev needs no DRM master / X /
+    Wayland — exactly what a bare uid-1000 viewer with no compositor
     cannot acquire (the python viewer holds card0's DRM master, so VLC's
     ``kms`` vout and mpv's ``--vo=drm`` both fail with EBUSY/EPERM here).
 
@@ -446,10 +436,14 @@ class GstFbdevMediaPlayer(MediaPlayer):
     no NEON path and CPU scaling is unaccelerated. Documented in
     docs/board-enablement.md.
 
-    ``playbin`` is used rather than a hand-built pipeline so demux is
-    container-agnostic, the HW decoder is auto-plugged, and a missing
-    audio track degrades gracefully (no audio pad → audio sink simply
-    unused) instead of dead-locking an explicitly-linked branch.
+    The helper (rather than ``gst-launch-1.0`` in a bash relaunch
+    loop, the original #2972 shape) exists for issue #2987: looping by
+    re-spawning the whole pipeline froze the last frame for seconds
+    per iteration while the slot's fixed duration kept ticking, and
+    the fb-sized caps it forced stretched portrait videos. The helper
+    loops gaplessly in-process (playbin ``about-to-finish``) and pins
+    aspect-fit dimensions discovered from the decoder's CAPS event —
+    see gst_fbdev_player.py for the full rationale.
     """
 
     def __init__(self) -> None:
@@ -463,73 +457,57 @@ class GstFbdevMediaPlayer(MediaPlayer):
         self.uri = uri
         settings.load()
 
-    def _video_sink(self) -> str:
-        """playbin ``video-sink`` bin: HW scale + color-convert → fb.
-
-        ``v4l2convert`` (bcm2835 ISP) does the YUV→fb-format conversion
-        and any scale to the framebuffer geometry in hardware. Rotation
-        rides ``videoflip`` ahead of it, and only when the operator
-        actually rotated the screen — an unrotated panel keeps the bin
-        fully hardware.
-        """
-        parts: list[str] = []
-        flip = _GST_VIDEOFLIP_METHODS.get(_screen_rotation())
-        if flip:
-            parts.append(f'videoflip method={flip}')
-        parts.append('v4l2convert')
-        parts.append(
-            f'video/x-raw,format={self._fb_fmt},'
-            f'width={self._fb_w},height={self._fb_h}'
-        )
-        parts.append(f'fbdevsink device={FB_DEVICE}')
-        return ' ! '.join(parts)
-
     def _build_command(self) -> list[str]:
+        # The helper is executed by path, not ``-m`` — running it as a
+        # module would import the ``anthias_viewer`` package __init__
+        # (Django settings, redis, D-Bus) in the child, which costs
+        # seconds on a Pi 3 and would eat into the slot the same way
+        # the old per-loop gst-launch respawn did.
+        helper = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'gst_fbdev_player.py',
+        )
         return [
-            'gst-launch-1.0',
-            '-q',
-            'playbin',
-            f'uri={_as_gst_uri(self.uri)}',
-            f'video-sink={self._video_sink()}',
-            f'audio-sink=alsasink device={get_alsa_audio_device()}',
+            sys.executable,
+            helper,
+            '--uri',
+            _as_gst_uri(self.uri),
+            '--fb-width',
+            str(self._fb_w),
+            '--fb-height',
+            str(self._fb_h),
+            '--fb-format',
+            self._fb_fmt,
+            '--rotation',
+            str(_screen_rotation()),
+            '--audio-device',
+            get_alsa_audio_device(),
         ]
 
     def play(self) -> None:
         self.stop()  # never leave a previous pipeline holding the fb
-        gst = self._build_command()
-        logging.info('GstFbdev play: %s', ' '.join(gst))
-        # Loop the clip for the whole on-screen slot (the asset_loop
-        # sleeps for ``duration`` then stop()s us). gst-launch can't loop
-        # a single playbin, so re-launch on clean EOS; break on a pipeline
-        # error so a persistent failure doesn't spin. Pass the argv as
-        # ``"$@"`` so the video-sink bin string (with spaces and ``!``)
-        # survives without shell re-splitting. start_new_session puts the
-        # bash + gst-launch child in their own group so stop() can kill
-        # both — terminate()ing only bash would orphan gst-launch on the
-        # framebuffer.
-        argv = [
-            'bash',
-            '-c',
-            'while true; do "$@" || break; done',
-            'gstloop',
-            *gst,
-        ]
+        argv = self._build_command()
+        logging.info('GstFbdev play: %s', ' '.join(argv))
+        # The helper loops the clip for the whole on-screen slot (the
+        # asset_loop sleeps for ``duration`` then stop()s us) and exits
+        # non-zero on a pipeline error so a persistent failure doesn't
+        # spin. start_new_session puts it in its own process group so
+        # stop() kills the GStreamer threads with it.
         try:
             self._proc = subprocess.Popen(
                 argv,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                # Inherit stderr (not DEVNULL): with playbin's ``-q`` the
-                # pipeline is silent except for errors, so a device-side
-                # failure (caps negotiation, missing /dev/fb0, decoder
-                # busy) surfaces in the viewer's container log instead of
-                # vanishing — the silent-failure mode this player exists
-                # to escape.
+                # Inherit stderr (not DEVNULL): the helper logs there,
+                # so a device-side failure (caps negotiation, missing
+                # /dev/fb0, decoder busy) surfaces in the viewer's
+                # container log instead of vanishing — the
+                # silent-failure mode this player exists to escape.
                 stderr=None,
                 start_new_session=True,
             )
         except OSError as exc:
-            logging.error('GstFbdev: failed to spawn gst-launch: %s', exc)
+            logging.error('GstFbdev: failed to spawn player: %s', exc)
             self._proc = None
 
     def stop(self) -> None:

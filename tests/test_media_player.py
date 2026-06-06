@@ -1,5 +1,6 @@
 import logging
 import signal
+import sys
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -581,22 +582,29 @@ def test_set_asset_stores_uri_and_reloads_settings(
     gstfb.mock_settings.load.assert_called_once()
 
 
-def test_build_command_uses_playbin_hw_pipeline(gstfb: _GstFixtures) -> None:
+def _flag(cmd: list[str], name: str) -> str:
+    return cmd[cmd.index(name) + 1]
+
+
+def test_build_command_spawns_looping_player_module(
+    gstfb: _GstFixtures,
+) -> None:
     gstfb.player.uri = 'file:///test/video.mp4'
     cmd = gstfb.player._build_command()
-    assert cmd[0] == 'gst-launch-1.0'
-    assert 'playbin' in cmd
-    assert 'uri=file:///test/video.mp4' in cmd
-    video_sink = next(a for a in cmd if a.startswith('video-sink='))
-    # HW decode (playbin auto-plugs v4l2h264dec) + HW scale/convert via
-    # the bcm2835 ISP (v4l2convert) → framebuffer, no DRM/X.
-    assert 'v4l2convert' in video_sink
-    assert 'fbdevsink device=/dev/fb0' in video_sink
-    assert 'format=RGB16,width=1920,height=1080' in video_sink
-    # Unrotated panel → no videoflip, pipeline stays fully hardware.
-    assert 'videoflip' not in video_sink
-    audio_sink = next(a for a in cmd if a.startswith('audio-sink='))
-    assert 'alsasink device=sysdefault:CARD=vc4hdmi0' in audio_sink
+    # The helper module loops gaplessly in-process and pins aspect-fit
+    # caps from the decoder's CAPS event (issue #2987) — the fb
+    # geometry and audio device are resolved here and handed over.
+    assert cmd[0] == sys.executable
+    # Direct-by-path execution: ``-m`` would import the package
+    # __init__ (Django settings, redis) in the child and stall the
+    # slot start on a Pi 3.
+    assert cmd[1].endswith('anthias_viewer/gst_fbdev_player.py')
+    assert _flag(cmd, '--uri') == 'file:///test/video.mp4'
+    assert _flag(cmd, '--fb-width') == '1920'
+    assert _flag(cmd, '--fb-height') == '1080'
+    assert _flag(cmd, '--fb-format') == 'RGB16'
+    assert _flag(cmd, '--rotation') == '0'
+    assert _flag(cmd, '--audio-device') == 'sysdefault:CARD=vc4hdmi0'
 
 
 def test_build_command_wraps_bare_path_as_file_uri(
@@ -607,7 +615,7 @@ def test_build_command_wraps_bare_path_as_file_uri(
     # (regression: a bare path black-screened every local video).
     gstfb.player.uri = '/data/.anthias/assets/abc123'
     cmd = gstfb.player._build_command()
-    assert 'uri=file:///data/.anthias/assets/abc123' in cmd
+    assert _flag(cmd, '--uri') == 'file:///data/.anthias/assets/abc123'
 
 
 def test_build_command_passes_through_scheme_uris(
@@ -622,7 +630,7 @@ def test_build_command_passes_through_scheme_uris(
     ):
         gstfb.player.uri = uri
         cmd = gstfb.player._build_command()
-        assert f'uri={uri}' in cmd
+        assert _flag(cmd, '--uri') == uri
 
 
 def test_build_command_quotes_spaces_in_bare_path(
@@ -630,20 +638,19 @@ def test_build_command_quotes_spaces_in_bare_path(
 ) -> None:
     gstfb.player.uri = '/data/.anthias/assets/my clip.mp4'
     cmd = gstfb.player._build_command()
-    assert 'uri=file:///data/.anthias/assets/my%20clip.mp4' in cmd
+    assert _flag(cmd, '--uri') == 'file:///data/.anthias/assets/my%20clip.mp4'
 
 
-def test_build_command_rotation_adds_videoflip(gstfb: _GstFixtures) -> None:
+def test_build_command_passes_rotation(gstfb: _GstFixtures) -> None:
     gstfb.player.uri = 'file:///test/video.mp4'
     with patch(
         'anthias_viewer.media_player._screen_rotation', return_value=90
     ):
         cmd = gstfb.player._build_command()
-    video_sink = next(a for a in cmd if a.startswith('video-sink='))
-    assert 'videoflip method=clockwise' in video_sink
+    assert _flag(cmd, '--rotation') == '90'
 
 
-def test_play_spawns_gst_loop_and_is_playing(gstfb: _GstFixtures) -> None:
+def test_play_spawns_player_and_is_playing(gstfb: _GstFixtures) -> None:
     gstfb.player.uri = 'file:///test/video.mp4'
     fake_proc = MagicMock()
     fake_proc.poll.return_value = None  # alive
@@ -653,11 +660,8 @@ def test_play_spawns_gst_loop_and_is_playing(gstfb: _GstFixtures) -> None:
         gstfb.player.play()
     mock_popen.assert_called_once()
     argv = mock_popen.call_args.args[0]
-    # Looping wrapper re-launches playbin on EOS; gst argv passed via
-    # "$@" so the video-sink bin survives without shell re-splitting.
-    assert argv[0] == 'bash'
-    assert 'gst-launch-1.0' in argv and 'playbin' in argv
-    # New session group so stop() can kill bash + gst-launch together.
+    assert argv[1].endswith('gst_fbdev_player.py')
+    # New session group so stop() can kill the player's whole group.
     assert mock_popen.call_args.kwargs['start_new_session'] is True
     assert gstfb.player.is_playing() is True
 
