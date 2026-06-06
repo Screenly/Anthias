@@ -32,6 +32,8 @@
 #include <QTest>
 #include <QUrl>
 #include <QVariantMap>
+#include <QVideoFrame>
+#include <QVideoFrameFormat>
 #include <QVideoSink>
 
 #include "videoview.h"
@@ -58,22 +60,72 @@ private slots:
                  "qml6-module-qtmultimedia on this host?)");
     }
 
-    // The player must render into the VideoOutput's sink — that's
-    // the whole point of the #2967 rework. Guard against a silent
-    // regression where the QML loads but the sink wiring is dropped
-    // (video would decode to nowhere, exactly the failure mode the
-    // VLC/mmal era shipped for years).
-    void playerUsesVideoOutputSink()
+    // The player must render into VideoView's pacing sink (issue
+    // #2987), and frames set on it must reach the VideoOutput's own
+    // sink — guard against a silent regression where the QML loads
+    // but the forwarding chain is dropped (video would decode to
+    // nowhere, exactly the failure mode the VLC/mmal era shipped
+    // for years).
+    void playerUsesPacingSinkChainedToVideoOutput()
     {
         VideoView view;
         QMediaPlayer* player = view.findChild<QMediaPlayer*>();
         QQuickItem* item = findVideoOutput(view);
         QVERIFY(player != nullptr);
         QVERIFY(item != nullptr);
+        QVideoSink* itemSink =
+            qvariant_cast<QVideoSink*>(item->property("videoSink"));
+        QVERIFY(itemSink != nullptr);
         QVERIFY(player->videoSink() != nullptr);
-        QCOMPARE(
-            player->videoSink(),
-            qvariant_cast<QVideoSink*>(item->property("videoSink")));
+        // The player renders into the intermediate sink, not the QML
+        // item's own.
+        QVERIFY(player->videoSink() != itemSink);
+
+        // A frame set on the player's sink must arrive at the item
+        // sink via the pacing gate (first frame always forwards).
+        QVideoFrame frame(
+            QVideoFrameFormat(QSize(64, 36),
+                              QVideoFrameFormat::Format_RGBA8888));
+        QVERIFY(frame.isValid());
+        player->videoSink()->setVideoFrame(frame);
+        QTRY_COMPARE(itemSink->videoFrame(), frame);
+    }
+
+    // The pacing gate must drop deliveries that arrive before the
+    // scene graph composited the previous frame: under the offscreen
+    // platform the QQuickWidget never renders, so afterRendering
+    // never fires and only the FIRST frame may pass. This is the
+    // issue #2987 behaviour — a 60 fps source can't pile renders
+    // onto a GUI thread that hasn't finished the previous one.
+    void pacingGateDropsFramesUntilSceneRenders()
+    {
+        VideoView view;
+        QMediaPlayer* player = view.findChild<QMediaPlayer*>();
+        QQuickItem* item = findVideoOutput(view);
+        QVERIFY(player != nullptr);
+        QVERIFY(item != nullptr);
+        QVideoSink* itemSink =
+            qvariant_cast<QVideoSink*>(item->property("videoSink"));
+        QVERIFY(itemSink != nullptr);
+
+        // The gate only arms once the render counter is wired; the
+        // offscreen QQuickWidget still exposes a window, so the
+        // constructor connection succeeds. If this ever changes the
+        // gate deliberately falls back to unpaced forwarding and
+        // this test would need the fallback asserted instead.
+        QVideoFrame first(
+            QVideoFrameFormat(QSize(64, 36),
+                              QVideoFrameFormat::Format_RGBA8888));
+        QVideoFrame second(
+            QVideoFrameFormat(QSize(128, 72),
+                              QVideoFrameFormat::Format_RGBA8888));
+        player->videoSink()->setVideoFrame(first);
+        QTRY_COMPARE(itemSink->videoFrame(), first);
+        player->videoSink()->setVideoFrame(second);
+        // Queued delivery: give the event loop a spin, then confirm
+        // the second frame was dropped (scene never rendered).
+        QTest::qWait(50);
+        QCOMPARE(itemSink->videoFrame(), first);
     }
 
     // ``stop()`` must be callable on a freshly-built VideoView
