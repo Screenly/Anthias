@@ -72,6 +72,7 @@ FLEETS = [
     'screenly_ose/anthias-pi4',
     'screenly_ose/anthias-pi5',
     'screenly_ose/anthias-x86',
+    'screenly_ose/anthias-rockpi4',
 ]
 
 KEEP_PINNED_TAG = 'anthias_keep_pinned'

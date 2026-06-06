@@ -110,7 +110,9 @@ jobs:
         run: |
           set -euo pipefail
           missing=()
-          for board in pi2 pi3 pi3-64 pi4-64 pi5 x86; do
+          # `arm64` has no fleet of its own but the rockpi4 fleet
+          # deploys the <short-hash>-arm64 images, so they must exist.
+          for board in pi2 pi3 pi3-64 pi4-64 pi5 x86 arm64; do
             for service in server viewer redis; do
               ref="ghcr.io/screenly/anthias-${service}:${SHORT_HASH}-${board}"
               if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
@@ -143,7 +145,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ['pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5', 'x86']
+        board: ['pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5', 'x86', 'rockpi4']
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout at tag
@@ -174,12 +176,13 @@ jobs:
       - name: Resolve fleet slug + env vars
         run: |
           case "${{ matrix.board }}" in
-            pi2)    FLEET=anthias-pi2 ;;
-            pi3)    FLEET=anthias-pi3 ;;
-            pi3-64) FLEET=anthias-pi3-64 ;;
-            pi4-64) FLEET=anthias-pi4 ;;
-            pi5)    FLEET=anthias-pi5 ;;
-            x86)    FLEET=anthias-x86 ;;
+            pi2)     FLEET=anthias-pi2 ;;
+            pi3)     FLEET=anthias-pi3 ;;
+            pi3-64)  FLEET=anthias-pi3-64 ;;
+            pi4-64)  FLEET=anthias-pi4 ;;
+            pi5)     FLEET=anthias-pi5 ;;
+            x86)     FLEET=anthias-x86 ;;
+            rockpi4) FLEET=anthias-rockpi4 ;;
           esac
           {
             echo "FLEET_SLUG=$FLEET"
@@ -278,7 +281,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: ['pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5', 'x86']
+        board: ['pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5', 'x86', 'rockpi4']
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -341,6 +344,14 @@ jobs:
               # `balena os configure` time.
               echo "BALENA_IMAGE=generic-amd64" >> "$GITHUB_ENV"
               echo "FLEET_SLUG=anthias-x86" >> "$GITHUB_ENV"
+              ;;
+            rockpi4)
+              # Radxa ROCK Pi 4B (RK3399). The fleet runs the generic
+              # arm64 containers (balena-cloud-deploy pins them via
+              # bin/balena_ota_deploy.sh); only the balenaOS device
+              # type is board-specific.
+              echo "BALENA_IMAGE=rockpi-4b-rk3399" >> "$GITHUB_ENV"
+              echo "FLEET_SLUG=anthias-rockpi4" >> "$GITHUB_ENV"
               ;;
           esac
 

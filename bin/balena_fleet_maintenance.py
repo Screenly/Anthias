@@ -58,6 +58,7 @@ FLEET_DEVICE_TYPE = {
     'screenly_ose/anthias-pi4': 'raspberrypi4-64',
     'screenly_ose/anthias-pi5': 'raspberrypi5',
     'screenly_ose/anthias-x86': 'generic-amd64',
+    'screenly_ose/anthias-rockpi4': 'rockpi-4b-rk3399',
 }
 
 MAINTENANCE_TAG = 'anthias_maintenance'

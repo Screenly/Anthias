@@ -144,3 +144,41 @@ def get_device_type() -> str:
                 return 'pi1'
     except FileNotFoundError:
         return 'x86'
+
+
+def detect_board_subtype() -> str | None:
+    """Identify a non-Pi SBC by reading ``/proc/device-tree/model``.
+
+    Returns a stable short token (e.g. ``'rockpi4'``) when the model
+    string matches a known board, or ``None`` for unknown boards /
+    hosts without a device tree.
+
+    ``bin/install.sh`` writes ``DEVICE_TYPE=arm64`` for every aarch64
+    SBC it doesn't recognise as a Pi. Most such boards have no
+    profiled HW-decode envelope, but a few (Rock Pi 4 — RK3399) do;
+    the subtype lets the asset processor's codec gate pick the
+    board-specific set instead of the conservative empty arm64 one.
+
+    Two callers share this single source of truth:
+
+    * ``anthias_host_agent`` (docker-compose installs) detects on the
+      host and publishes the token to Redis at ``host:board_subtype``.
+    * ``anthias_common.board.get_board_subtype`` falls back to calling
+      this directly when Redis has no value — the device tree is
+      kernel-global, so it reads identically inside containers (this
+      is the same mechanism ``get_device_type`` above relies on). That
+      covers balena, where no host_agent service exists.
+    """
+    try:
+        with open('/proc/device-tree/model', 'rb') as f:
+            # Kernel writes a null-terminated UTF-8 string.
+            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+    except OSError:
+        return None
+    if not model:
+        return None
+    model_low = model.lower()
+    # "Radxa ROCK Pi 4B" (and 4A / 4C variants — all RK3399).
+    if 'rock pi 4' in model_low:
+        return 'rockpi4'
+    return None

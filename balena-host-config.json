@@ -35,6 +35,11 @@
     "    required for 4K HEVC hardware decode.",
     "",
     "Notes:",
+    "  * rockpi4 (device type rockpi-4b-rk3399) and x86 are declared as {}:",
+    "    config.txt is Raspberry-Pi-firmware-only, so those fleets have no",
+    "    host config. The empty object is still required — the reconcile",
+    "    step hard-fails on a missing board key to keep the prune from",
+    "    wiping a fleet.",
     "  * gpu_mem is retained on Pi <=4: it still backs the VideoCore hardware",
     "    video decoders (bcm2835-codec / V4L2 M2M) used for playback.",
     "  * framebuffer_depth / framebuffer_ignore_alpha are legacy firmware-",
@@ -74,6 +79,7 @@
     "pi5": {
       "dtoverlay": "vc4-kms-v3d,cma-512"
     },
-    "x86": {}
+    "x86": {},
+    "rockpi4": {}
   }
 }

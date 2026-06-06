@@ -113,12 +113,28 @@ upstream of the upload.
 ## Rock Pi 4 / arm64
 
 `bin/install.sh` sets `DEVICE_TYPE=arm64` for every aarch64 SBC it doesn't
-recognise as a Pi. `anthias_host_agent` runs on the host and reads
-`/proc/device-tree/model`; when it sees "Radxa ROCK Pi 4" it writes
-`host:board_subtype = 'rockpi4'` to Redis. The server reads that key to
-pick the right entry in `processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4
-accepts H.264 + HEVC uploads, the catch-all `arm64` accepts nothing
-(because we can't certify a decoder on an unknown SBC).
+recognise as a Pi. The board subtype that upgrades that catch-all comes
+from `anthias_common.device_helper.detect_board_subtype` (the single
+source of the model-string table — "Radxa ROCK Pi 4" → `'rockpi4'`),
+consumed through two paths:
+
+* on docker-compose installs, `anthias_host_agent` runs on the host,
+  detects the subtype, and publishes `host:board_subtype` to Redis;
+* when Redis has no value — the `screenly_ose/anthias-rockpi4` balena
+  fleet ships no host_agent service — `anthias_common.board` reads
+  `/proc/device-tree/model` directly from inside the container (the
+  device tree is kernel-global, the same mechanism `get_device_type`
+  relies on for Pi detection).
+
+The server uses the resolved key to pick the right entry in
+`processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4 accepts H.264 + HEVC
+uploads, the catch-all `arm64` accepts nothing (because we can't certify
+a decoder on an unknown SBC).
+
+The balena fleet (`screenly_ose/anthias-rockpi4`, device type
+`rockpi-4b-rk3399`) deploys the generic **arm64** container images — there
+is no rockpi4-specific image build; only the balenaOS device type and the
+fleet are board-specific. `bin/balena_ota_deploy.sh` owns that mapping.
 
 The arm64 viewer image pulls `ffmpeg` and the libav* family from
 `archive.raspberrypi.com` (the `+rpt1` build), which adds

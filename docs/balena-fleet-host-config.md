@@ -1,7 +1,7 @@
 # Balena fleet host configuration (IAC)
 
 Anthias's official balena fleets
-(`screenly_ose/anthias-{pi2,pi3,pi3-64,pi4,pi5,x86}`)
+(`screenly_ose/anthias-{pi2,pi3,pi3-64,pi4,pi5,x86,rockpi4}`)
 need a handful of `config.txt`-level device settings — most importantly the
 graphics driver overlay. These used to be set by hand in the balena dashboard,
 which drifted per fleet and was easy to corrupt. They are now declared as code
@@ -50,7 +50,7 @@ Why each key is set the way it is in `balena-host-config.json`:
 | `gpu_mem` (128 / 256) | pi2, pi3, pi3-64, pi4-64 | Backs the VideoCore hardware video decoders (`bcm2835-codec` / V4L2 M2M). **Not set on pi5** — the BCM2712 has no firmware memory split and ignores `gpu_mem` (it is CMA-only). |
 | `disable_overscan=1` | pi2, pi3, pi3-64, pi4-64 | Drop the default overscan border so the image fills the panel. |
 | `framebuffer_depth=32`, `framebuffer_ignore_alpha=1` | pi2, pi3, pi3-64, pi4-64 | Legacy firmware-framebuffer hints. Inert under full KMS but retained to avoid changing long-standing fleet config; safe to drop if the fleets are ever re-baselined. |
-| _(none)_ | x86 | `config.txt` is Raspberry-Pi-only; the x86 fleet has no host config. |
+| _(none)_ | x86, rockpi4 | `config.txt` is Raspberry-Pi-only; the x86 and Rock Pi 4 fleets have no host config (both are still declared as `{}` in the JSON — the reconcile hard-fails on a missing board key). |
 
 ## Editing
 
