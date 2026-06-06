@@ -278,6 +278,17 @@ void VideoView::stop()
                 .arg(player->position()));
     }
     player->stop();
+    // Reset the pacing gate: a frame parked mid-render must not be
+    // forwarded by a later afterRendering (stale-frame flash on the
+    // next reveal), nor keep its decoder buffer alive between
+    // assets. Pushing an empty frame to the VideoOutput releases the
+    // last displayed buffer too — black beats a stale frame when the
+    // widget is next shown.
+    pendingFrame = QVideoFrame();
+    sceneReadyForFrame = true;
+    if (videoSink) {
+        videoSink->setVideoFrame(QVideoFrame());
+    }
 }
 
 void VideoView::onPlaybackStateChanged(QMediaPlayer::PlaybackState state)
