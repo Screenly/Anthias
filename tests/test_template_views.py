@@ -10,7 +10,7 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import time, timedelta
 from typing import Any
 from unittest import mock
 
@@ -750,6 +750,214 @@ def test_assets_update_clamps_oversize_refresh_interval(
         )
     asset.refresh_from_db()
     assert asset.metadata.get('refresh_interval_s') == 86400
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('play_from', 'play_to', 'expected_from', 'expected_to'),
+    [
+        # 12-hour AM/PM shapes — issue #2988: the default
+        # use_24_hour_clock=False makes Flatpickr post these, and
+        # assets_update used to 500 on int('30 PM').
+        ('02:30 PM', '11:45 PM', time(14, 30), time(23, 45)),
+        ('2:30 PM', '11:45 PM', time(14, 30), time(23, 45)),
+        ('12:00 AM', '12:30 PM', time(0, 0), time(12, 30)),
+        # 24-hour shapes keep working.
+        ('09:15', '17:45', time(9, 15), time(17, 45)),
+        # ISO TimeField round-trip (API-side writes re-posted).
+        ('09:15:00', '17:45:00', time(9, 15), time(17, 45)),
+    ],
+)
+def test_assets_update_parses_play_time_formats(
+    client: Client,
+    asset: Asset,
+    play_from: str,
+    play_to: str,
+    expected_from: time,
+    expected_to: time,
+) -> None:
+    """Regression for issue #2988: every clock format the Play from /
+    Play until pickers can post must parse and persist."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'play_time_from': play_from,
+                'play_time_to': play_to,
+            },
+        )
+    assert response.status_code in (200, 302)
+    asset.refresh_from_db()
+    assert asset.play_time_from == expected_from
+    assert asset.play_time_to == expected_to
+
+
+@pytest.mark.django_db
+def test_assets_update_invalid_play_time_toasts_instead_of_500(
+    client: Client, asset: Asset
+) -> None:
+    """allowInput lets the operator type anything into the time
+    fields — junk must come back as an error toast, never a 500, and
+    must not half-save the window."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': 'Should not stick',
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'play_time_from': 'half past nope',
+                'play_time_to': '17:00',
+            },
+            headers={'HX-Request': 'true'},
+        )
+    assert response.status_code == 200
+    assert 'HX-Trigger' in response.headers
+    assert 'error' in response.headers['HX-Trigger']
+    asset.refresh_from_db()
+    assert asset.play_time_from is None
+    assert asset.play_time_to is None
+    assert asset.name != 'Should not stick'
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('play_from', 'play_to'),
+    [('09:00', ''), ('', '17:00')],
+)
+def test_assets_update_partial_play_window_toasts_and_keeps_existing(
+    client: Client, asset: Asset, play_from: str, play_to: str
+) -> None:
+    """Only one endpoint set is a validation error (mirrors the v2
+    API's _validate_time_window) — it must NOT silently wipe an
+    existing window."""
+    asset.play_time_from = time(8, 0)
+    asset.play_time_to = time(18, 0)
+    asset.save(update_fields=['play_time_from', 'play_time_to'])
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'play_time_from': play_from,
+                'play_time_to': play_to,
+            },
+            headers={'HX-Request': 'true'},
+        )
+    assert response.status_code == 200
+    assert 'error' in response.headers.get('HX-Trigger', '')
+    asset.refresh_from_db()
+    assert asset.play_time_from == time(8, 0)
+    assert asset.play_time_to == time(18, 0)
+
+
+@pytest.mark.django_db
+def test_assets_update_clears_play_window_when_both_empty(
+    client: Client, asset: Asset
+) -> None:
+    """Both endpoints cleared = deliberate "play all day" reset."""
+    asset.play_time_from = time(8, 0)
+    asset.play_time_to = time(18, 0)
+    asset.save(update_fields=['play_time_from', 'play_time_to'])
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'play_time_from': '',
+                'play_time_to': '',
+            },
+        )
+    assert response.status_code in (200, 302)
+    asset.refresh_from_db()
+    assert asset.play_time_from is None
+    assert asset.play_time_to is None
+
+
+@pytest.mark.django_db
+def test_assets_update_parses_12_hour_start_end_dates(
+    client: Client, asset: Asset
+) -> None:
+    """The Start / End availability pickers post 'm/d/Y h:i K' under
+    the default 12-hour clock + mm/dd/yyyy date format."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': '06/15/2026 9:00 AM',
+                'end_date': '12/24/2026 11:30 PM',
+            },
+        )
+    assert response.status_code in (200, 302)
+    asset.refresh_from_db()
+    assert asset.start_date is not None and asset.end_date is not None
+    assert (
+        asset.start_date.month,
+        asset.start_date.day,
+        asset.start_date.hour,
+        asset.start_date.minute,
+    ) == (6, 15, 9, 0)
+    assert (
+        asset.end_date.month,
+        asset.end_date.day,
+        asset.end_date.hour,
+        asset.end_date.minute,
+    ) == (12, 24, 23, 30)
+
+
+@pytest.mark.django_db
+def test_assets_update_invalid_start_date_toasts_instead_of_500(
+    client: Client, asset: Asset
+) -> None:
+    original_start = asset.start_date
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'duration': '20',
+                'start_date': 'sometime soon',
+                'end_date': '2027-01-01T00:00',
+            },
+            headers={'HX-Request': 'true'},
+        )
+    assert response.status_code == 200
+    assert 'error' in response.headers.get('HX-Trigger', '')
+    asset.refresh_from_db()
+    assert asset.start_date == original_start
 
 
 @pytest.mark.django_db
