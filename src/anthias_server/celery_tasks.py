@@ -257,7 +257,8 @@ def wait_for_migrations(**kwargs: Any) -> None:
         if waited >= next_log_at:
             logging.warning(
                 'Database is not migrated yet; delaying celery worker '
-                'startup (%ss elapsed)',
+                'startup (%ss elapsed; probe errors are logged at '
+                'DEBUG)',
                 waited,
             )
             next_log_at = waited + MIGRATION_WAIT_LOG_EVERY_S
