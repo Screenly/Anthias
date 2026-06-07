@@ -3,10 +3,14 @@ name: Balena unpin devices
 # Devices flashed from pre-#2098 disk images provision themselves
 # pinned to the release baked into the image, so they never receive
 # OTA updates — and new ones keep appearing as people flash old
-# images. This hourly job clears the pin on every pinned device
-# (minus the `anthias_keep_pinned` tag opt-out) so they track their
-# fleet's latest release. All the logic lives in
-# bin/balena_unpin_devices.py.
+# images. This hourly job brings them current: it clears the pin on
+# every pinned device (minus the `anthias_keep_pinned` opt-out tag),
+# starts a staged-tranche balenaOS update (--os-update) on online
+# devices still on an old OS, and bumps the supervisor (--supervisor)
+# on devices already on the target OS. All the logic lives in
+# bin/balena_unpin_devices.py; the OS-update/supervisor phases are
+# bounded to a small per-run tranche so the backlog walks forward a
+# slice at a time rather than stampeding the fleet.
 #
 # PRIVACY: this repo is public, so these workflow logs are
 # world-readable. The script's default output is aggregate-only
@@ -45,7 +49,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       # The script is stdlib-only — no dependency install needed; 3.13
       # matches the repo's requires-python.
@@ -54,15 +58,19 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Unpin pinned devices
+      - name: Unpin + OS-update + supervisor
         env:
           BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
           # Empty on schedule events, "true"/"false" on dispatch.
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
+          # --os-update + --supervisor each move only a small tranche
+          # per run (script default 5%); the hourly cadence ramps the
+          # backlog. Never pass --verbose — these logs are public.
           if [[ "$DRY_RUN" == "true" ]]; then
-            python3 bin/balena_unpin_devices.py
+            python3 bin/balena_unpin_devices.py --os-update --supervisor
           else
-            python3 bin/balena_unpin_devices.py --apply
+            python3 bin/balena_unpin_devices.py \
+              --os-update --supervisor --apply
           fi

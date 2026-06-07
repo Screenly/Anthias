@@ -159,6 +159,7 @@ mypy = [
     { name = "pytz" },
     { name = "requests" },
     { name = "ruff" },
+    { name = "sentry-sdk" },
     { name = "tenacity" },
     { name = "types-gunicorn" },
     { name = "types-netifaces" },
@@ -191,6 +192,7 @@ server = [
     { name = "pyyaml" },
     { name = "redis" },
     { name = "requests" },
+    { name = "sentry-sdk" },
     { name = "sh" },
     { name = "tenacity" },
     { name = "urllib3" },
@@ -228,6 +230,7 @@ test = [
     { name = "pyyaml" },
     { name = "redis" },
     { name = "requests" },
+    { name = "sentry-sdk" },
     { name = "sh" },
     { name = "tenacity" },
     { name = "time-machine" },
@@ -247,6 +250,7 @@ viewer = [
     { name = "pytz" },
     { name = "redis" },
     { name = "requests" },
+    { name = "sentry-sdk" },
     { name = "sh" },
     { name = "tenacity" },
     { name = "urllib3" },
@@ -324,6 +328,7 @@ mypy = [
     { name = "pytz", specifier = "==2026.2" },
     { name = "requests", specifier = "==2.33.1" },
     { name = "ruff", specifier = "==0.14.10" },
+    { name = "sentry-sdk", specifier = "==2.61.1" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "types-gunicorn", specifier = "==26.0.0.20260518" },
     { name = "types-netifaces", specifier = "==0.11.0.20260408" },
@@ -356,6 +361,7 @@ server = [
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
+    { name = "sentry-sdk", specifier = "==2.61.1" },
     { name = "sh", specifier = "==2.2.2" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "urllib3", specifier = "==2.7.0" },
@@ -393,6 +399,7 @@ test = [
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
+    { name = "sentry-sdk", specifier = "==2.61.1" },
     { name = "sh", specifier = "==2.2.2" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "time-machine", specifier = "==3.2.0" },
@@ -412,6 +419,7 @@ viewer = [
     { name = "pytz", specifier = "==2026.2" },
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
+    { name = "sentry-sdk", specifier = "==2.61.1" },
     { name = "sh", specifier = "==2.2.2" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "urllib3", specifier = "==2.7.0" },
@@ -2053,6 +2061,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f2/1c/d7b67ab43f30013b47c12b42d1acd354c195351a3f7a1d67f59e54227ede/ruff-0.14.10-py3-none-win32.whl", hash = "sha256:104c49fc7ab73f3f3a758039adea978869a918f31b73280db175b43a2d9b51d6", size = 13196187, upload-time = "2025-12-18T19:29:19.006Z" },
     { url = "https://files.pythonhosted.org/packages/fb/9c/896c862e13886fae2af961bef3e6312db9ebc6adc2b156fe95e615dee8c1/ruff-0.14.10-py3-none-win_amd64.whl", hash = "sha256:466297bd73638c6bdf06485683e812db1c00c7ac96d4ddd0294a338c62fdc154", size = 14661283, upload-time = "2025-12-18T19:29:30.16Z" },
     { url = "https://files.pythonhosted.org/packages/74/31/b0e29d572670dca3674eeee78e418f20bdf97fa8aa9ea71380885e175ca0/ruff-0.14.10-py3-none-win_arm64.whl", hash = "sha256:e51d046cf6dda98a4633b8a8a771451107413b0f07183b2bef03f075599e44e6", size = 13729839, upload-time = "2025-12-18T19:28:48.636Z" },
+]
+
+[[package]]
+name = "sentry-sdk"
+version = "2.61.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/63/3b/4bc6b348bbd331daa14d4babe9f2b99bc854f4da41560eefb9488d78481d/sentry_sdk-2.61.1.tar.gz", hash = "sha256:9c6adccb3feefa9ba032c8d295ca477575c2f11896046a2b0ad686c47c4af555", size = 459429, upload-time = "2026-06-01T07:24:18.875Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/54/c9218db183846e08efaf68534889ef42e499dde432778881104a42f7071b/sentry_sdk-2.61.1-py3-none-any.whl", hash = "sha256:fa36eaf4b8ad708f718500d4bdcc1532637526a22beb874d88cbc0a46458b5ae", size = 483735, upload-time = "2026-06-01T07:24:17.027Z" },
 ]
 
 [[package]]
