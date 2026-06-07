@@ -9,6 +9,7 @@ from typing import Any
 import django
 import sh
 from celery import Celery, Task
+from celery.exceptions import SoftTimeLimitExceeded
 from django.apps import apps as _django_apps
 from PIL import UnidentifiedImageError
 from tenacity import Retrying, stop_after_attempt, wait_fixed
@@ -111,12 +112,35 @@ RECONCILE_STUCK_LOCK_KEY = 'celery:reconcile_stuck_processing:lock'
 # back-to-back ffprobe runs (each up to 15s wall-clock under url_fails).
 RECHECK_COOLDOWN_S = 60
 
+# Time budget for a single on-demand probe. A legitimate worst case
+# under url_fails comfortably exceeds the previous 30s hard limit: a
+# hanging getaddrinfo against a broken resolver (no timeout knob
+# exists for it), then an HTTP HEAD (10s) plus the GET fallback
+# (10s). Tripping the *hard* limit SIGKILLs the pool child, which
+# Sentry reported as three separate issues per occurrence — the
+# "Hard time limit exceeded" error, the TimeLimitExceeded raise, and
+# the "ForkPoolWorker exited with signal 9" billiard log (ANTHIAS-A /
+# ANTHIAS-9 / ANTHIAS-B). The soft limit raises
+# ``SoftTimeLimitExceeded`` *inside* the task instead, which the task
+# records as an ordinary failed probe; the hard limit stays as the
+# backstop for a probe stuck in C code where the soft signal can't be
+# delivered.
+ASSET_RECHECK_SOFT_TIME_LIMIT_S = 60
+ASSET_RECHECK_TIME_LIMIT_S = 90
+
 # Hard ceiling on how long a single sweep is allowed to run. Set above
 # the periodic interval so a sweep that's running long doesn't get
 # guillotined while the next beat tick races to start a new one — the
 # Redis lock below is the primary overlap guard, the time_limit just
 # bounds pathological cases (broken DNS resolver, a stuck ffprobe).
 ASSET_REVALIDATION_TIME_LIMIT_S = 60 * 30
+
+# Soft companion to the sweep's hard limit: raise
+# ``SoftTimeLimitExceeded`` inside the loop a minute early so the
+# sweep can abort cleanly (release its lock, keep the rows updated so
+# far) instead of being SIGKILLed by the hard limit — the same
+# kill-versus-catch rationale as the on-demand probe limits above.
+ASSET_REVALIDATION_SOFT_TIME_LIMIT_S = ASSET_REVALIDATION_TIME_LIMIT_S - 60
 
 # Redis key for the sweep singleton lock. Whoever sets it first runs
 # the sweep; later beat ticks observe the key and exit. The TTL matches
@@ -1002,7 +1026,10 @@ def _check_asset_reachability(asset: Asset) -> bool:
     return not url_fails(uri)
 
 
-@celery.task(time_limit=ASSET_REVALIDATION_TIME_LIMIT_S)
+@celery.task(
+    time_limit=ASSET_REVALIDATION_TIME_LIMIT_S,
+    soft_time_limit=ASSET_REVALIDATION_SOFT_TIME_LIMIT_S,
+)
 def revalidate_asset_urls() -> None:
     """Refresh ``Asset.is_reachable`` for every enabled asset.
 
@@ -1060,6 +1087,12 @@ def revalidate_asset_urls() -> None:
                 continue
             try:
                 reachable = _check_asset_reachability(asset)
+            except SoftTimeLimitExceeded:
+                # Out of budget for the whole sweep — handled by the
+                # outer except below. Re-raise past the blanket
+                # Exception arm that would otherwise swallow it and
+                # keep the sweep running into the hard limit.
+                raise
             except Exception:
                 # url_fails should swallow its own exceptions, but a
                 # surprise from sh/requests shouldn't kill the whole sweep.
@@ -1072,6 +1105,19 @@ def revalidate_asset_urls() -> None:
                 is_reachable=reachable,
                 last_reachability_check=timezone.now(),
             )
+    except SoftTimeLimitExceeded:
+        # The soft signal is delivered asynchronously, so it can fire
+        # anywhere in the loop — during a probe or during the DB
+        # update — which is why the whole sweep body is covered, not
+        # just _check_asset_reachability. Abort cleanly (the
+        # ``finally`` below releases the lock; rows updated so far
+        # keep their fresh state) instead of letting the hard limit
+        # SIGKILL the pool child. The next beat tick starts over.
+        logging.warning(
+            'revalidate_asset_urls: sweep exceeded %ss; '
+            'aborting until the next beat tick',
+            ASSET_REVALIDATION_SOFT_TIME_LIMIT_S,
+        )
     finally:
         # Compare-and-delete: only release if the lock still holds
         # *our* token. If the TTL expired and someone else acquired
@@ -1255,7 +1301,10 @@ def reconcile_stuck_processing() -> None:
         r.eval(_LOCK_RELEASE_LUA, 1, RECONCILE_STUCK_LOCK_KEY, token)
 
 
-@celery.task(time_limit=30)
+@celery.task(
+    time_limit=ASSET_RECHECK_TIME_LIMIT_S,
+    soft_time_limit=ASSET_RECHECK_SOFT_TIME_LIMIT_S,
+)
 def revalidate_asset_url(asset_id: str) -> None:
     """On-demand probe for a single asset.
 
@@ -1304,17 +1353,43 @@ def revalidate_asset_url(asset_id: str) -> None:
     ):
         return
 
+    # The soft-limit signal is delivered asynchronously, so the outer
+    # try covers the DB update as well as the probe — a delivery
+    # landing between the probe returning and the UPDATE committing
+    # must not escape as a task failure (that's the SIGKILL-adjacent
+    # noise this task's limits exist to avoid).
     try:
-        reachable = _check_asset_reachability(asset)
-    except Exception:
-        logging.exception(
-            'revalidate_asset_url: probe crashed for %s', asset_id
+        try:
+            reachable = _check_asset_reachability(asset)
+        except SoftTimeLimitExceeded:
+            # A probe that can't finish inside the soft budget gets
+            # the same verdict url_fails gives an HTTP timeout:
+            # unreachable. Recording the verdict (rather than
+            # bailing) keeps the viewer's _asset_is_displayable in
+            # sync with reality and the cooldown lock prevents an
+            # immediate re-probe storm.
+            logging.warning(
+                'revalidate_asset_url: probe for %s exceeded %ss; '
+                'marking unreachable',
+                asset_id,
+                ASSET_RECHECK_SOFT_TIME_LIMIT_S,
+            )
+            reachable = False
+        except Exception:
+            logging.exception(
+                'revalidate_asset_url: probe crashed for %s', asset_id
+            )
+            return
+        Asset.objects.filter(asset_id=asset_id).update(
+            is_reachable=reachable,
+            last_reachability_check=timezone.now(),
         )
-        return
-    Asset.objects.filter(asset_id=asset_id).update(
-        is_reachable=reachable,
-        last_reachability_check=timezone.now(),
-    )
+    except SoftTimeLimitExceeded:
+        logging.warning(
+            'revalidate_asset_url: soft time limit hit while '
+            'finalising the probe for %s; giving up this recheck',
+            asset_id,
+        )
 
 
 # ---------------------------------------------------------------------------
