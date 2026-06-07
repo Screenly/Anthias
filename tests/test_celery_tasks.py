@@ -3,6 +3,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from os import path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -1745,3 +1746,82 @@ class TestProbeTimeLimits:
         # The finally block must have released the singleton lock so
         # the next beat tick can run.
         assert celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY) is None
+
+
+class TestWaitForMigrations:
+    """Startup gate for Sentry ANTHIAS-1 — the worker must not consume
+    tasks while the server's migrate/dbrestore pass is still rewriting
+    the shared SQLite schema."""
+
+    def _patch_executor(self) -> tuple[mock.MagicMock, Any]:
+        fake_conn = mock.MagicMock()
+        connections_patch = mock.patch(
+            'django.db.connections', {'default': fake_conn}
+        )
+        executor_patch = mock.patch(
+            'django.db.migrations.executor.MigrationExecutor'
+        )
+        return fake_conn, (connections_patch, executor_patch)
+
+    def test_ready_when_plan_is_empty(self) -> None:
+        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
+        with connections_patch, executor_patch as executor_cls:
+            executor_cls.return_value.migration_plan.return_value = []
+            assert celery_tasks_module._migrations_ready() is True
+        # The probe connection must not leak into the prefork children.
+        fake_conn.close.assert_called_once()
+
+    def test_not_ready_with_unapplied_migrations(self) -> None:
+        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
+        with connections_patch, executor_patch as executor_cls:
+            executor_cls.return_value.migration_plan.return_value = [
+                (mock.sentinel.migration, False)
+            ]
+            assert celery_tasks_module._migrations_ready() is False
+        fake_conn.close.assert_called_once()
+
+    def test_not_ready_when_db_is_locked(self) -> None:
+        # The window that produced ANTHIAS-1: the server's
+        # dbbackup/dbrestore holds the SQLite file (or the
+        # django_migrations table is mid-recreate) and the probe
+        # raises instead of returning a plan.
+        from django.db.utils import OperationalError
+
+        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
+        with connections_patch, executor_patch as executor_cls:
+            executor_cls.side_effect = OperationalError('database is locked')
+            assert celery_tasks_module._migrations_ready() is False
+        fake_conn.close.assert_called_once()
+
+    def test_non_database_errors_fail_fast(self) -> None:
+        # A programming bug in the probe must not be mistaken for
+        # "database not ready" — that would park the worker in an
+        # infinite startup wait with no failing signal.
+        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
+        with connections_patch, executor_patch as executor_cls:
+            executor_cls.side_effect = TypeError('probe bug')
+            with pytest.raises(TypeError, match='probe bug'):
+                celery_tasks_module._migrations_ready()
+        fake_conn.close.assert_called_once()
+
+    def test_worker_init_returns_immediately_when_ready(self) -> None:
+        with (
+            mock.patch.object(
+                celery_tasks_module, '_migrations_ready', return_value=True
+            ),
+            mock.patch('anthias_server.celery_tasks.time.sleep') as sleep,
+        ):
+            celery_tasks_module.wait_for_migrations()
+        sleep.assert_not_called()
+
+    def test_worker_init_blocks_until_ready(self) -> None:
+        with (
+            mock.patch.object(
+                celery_tasks_module,
+                '_migrations_ready',
+                side_effect=[False, False, True],
+            ),
+            mock.patch('anthias_server.celery_tasks.time.sleep') as sleep,
+        ):
+            celery_tasks_module.wait_for_migrations()
+        assert sleep.call_count == 2
