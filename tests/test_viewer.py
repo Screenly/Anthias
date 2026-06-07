@@ -498,7 +498,7 @@ def test_view_image_respawns_webview_on_mid_call_death(
     ``loadImage`` D-Bus call must be reaped, respawned with the inline
     budget, and sent the image again — not crash the viewer process
     (Sentry 58040ab3)."""
-    uri = 'http://example.com/a.png'
+    uri = 'https://example.com/a.png'
     fake_bus = mock.Mock()
     fake_bus.loadImage.side_effect = [RuntimeError(error_message), None]
     fake_browser = mock.Mock()
@@ -570,7 +570,7 @@ def test_view_image_reraises_unrelated_dbus_error(
         mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
     ):
         with pytest.raises(RuntimeError, match='Disconnected'):
-            viewer_fixtures.u.view_image('http://example.com/a.png')
+            viewer_fixtures.u.view_image('https://example.com/a.png')
         # The failed send must not latch the URL or trigger a respawn.
         assert viewer_fixtures.u.current_browser_url is None
 
@@ -617,7 +617,7 @@ def test_load_browser_resets_current_browser_url(
         with mock.patch.object(
             viewer_fixtures.u,
             'current_browser_url',
-            'http://example.com/stale.png',
+            'https://example.com/stale.png',
         ):
             viewer_fixtures.u.load_browser()
             assert viewer_fixtures.u.current_browser_url is None
