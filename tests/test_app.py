@@ -606,10 +606,29 @@ def test_add_asset_via_video_upload(reset_assets: None, page: Page) -> None:
     assert asset is not None
     assert asset.name == 'Video'
     assert asset.mimetype == 'video'
-    # Video uploads land with the placeholder default_duration while
-    # probe_video_duration runs ffprobe out-of-band on Celery.
-    assert asset.duration == settings['default_duration']
-    assert asset.is_processing is True
+    # Video uploads land with the placeholder default_duration and
+    # is_processing=True, then normalize_video_asset ffprobes the
+    # file out-of-band on Celery. Wait for the worker's terminal
+    # write instead of asserting the transient placeholder — racing
+    # the worker either way is flaky, and the wait doubles as the
+    # regression guard for the worker reading the wrong DB (it used
+    # to die with "no such table: assets", leaving the row stuck on
+    # "Processing" forever).
+    _wait_db(
+        lambda: Asset.objects.filter(is_processing=False).count() == 1,
+        timeout=30.0,
+        description='video normalisation reached terminal state',
+    )
+    asset = Asset.objects.first()
+    assert asset is not None
+    # ffprobe-d duration of tests/assets/asset.mov (5.57 s, floored),
+    # committed by the worker on both the accept and reject paths.
+    assert asset.duration == 5
+    # The test container sets no DEVICE_TYPE → empty HW-decode set →
+    # the mpeg4 source is rejected by the codec gate: on_failure
+    # writes the operator-facing error and disables the row.
+    assert asset.is_enabled is False
+    assert (asset.metadata or {}).get('error_message')
 
 
 @pytest.mark.integration
