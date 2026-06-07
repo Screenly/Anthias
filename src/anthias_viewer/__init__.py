@@ -1251,6 +1251,11 @@ def setup() -> None:
     # already bound to the running AnthiasViewer; load_browser
     # would otherwise race the D-Bus name registration.
     _media_player_module.set_browser_bus(browser_bus)
+    # Give the media player the same webview-gone respawn wrapper the
+    # image/page paths use, so a video-play D-Bus call hitting a
+    # crashed webview self-heals instead of logging ERROR and leaving
+    # the screen dark (#3027 / Sentry ANTHIAS-1A).
+    _media_player_module.set_send_to_webview(_send_to_webview)
 
 
 def start_loop() -> None:
