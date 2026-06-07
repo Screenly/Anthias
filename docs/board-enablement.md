@@ -20,11 +20,21 @@ same asset rotation everywhere and compare drop counts.
 
 ### Pi 1 / 2 / 3 video: GStreamer V4L2 → fbdev (`GstFbdevMediaPlayer`)
 
-The Qt5 linuxfb boards play video by spawning `gst-launch-1.0 playbin` with a
-fully-hardware sink: `v4l2h264dec` (auto-plugged by decodebin at PRIMARY rank)
-decodes on the `bcm2835-codec` (`/dev/video10`), `v4l2convert` hardware-scales
-and color-converts (YUV→framebuffer format) on the bcm2835 ISP, and `fbdevsink`
-paints frames straight to the framebuffer (`/dev/fb0`). This is deliberate: on a
+The Qt5 linuxfb boards play video by spawning the
+`anthias_viewer/gst_fbdev_player.py` helper, which runs a GStreamer `playbin`
+with a fully-hardware sink: `v4l2h264dec` (auto-plugged by decodebin at PRIMARY
+rank) decodes on the `bcm2835-codec` (`/dev/video10`), `v4l2convert`
+hardware-scales and color-converts (YUV→framebuffer format) on the bcm2835 ISP,
+and `fbdevsink` paints frames straight to the framebuffer (`/dev/fb0`). The
+helper loops the clip gaplessly in-process (playbin `about-to-finish` — issue
+#2987: the original `gst-launch` relaunch-on-EOS loop froze the last frame for
+seconds of pipeline rebuild per iteration), pins aspect-fit output caps
+discovered from the decoder's CAPS event so portrait/4:3 content letterboxes
+instead of stretching (`fbdevsink` ignores pixel-aspect-ratio and centers
+smaller-than-fb frames), and caps the sink-side frame rate at 30 fps
+(`videorate drop-only=true` — the decode→ISP→memcpy chain sustains ~40 fps at
+1080p, so 50/60 fps sources drop to an even half-cadence instead of juddering
+on irregular late-frame drops). This is deliberate: on a
 bare linuxfb console with no compositor, a uid-1000 process **cannot acquire DRM
 master** (the viewer's python process already holds `card0`), so every
 DRM/KMS-master video output fails — VLC's `kms` vout and mpv's `--vo=drm` both
