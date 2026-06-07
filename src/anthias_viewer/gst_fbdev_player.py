@@ -315,10 +315,19 @@ def main(argv: list[str] | None = None) -> int:
         # plugins-ugly, which the image doesn't ship) — must degrade
         # to silent video, not a black slot. The old gst-launch
         # incarnation died wholesale on either case.
+        #
+        # Clearing the flag alone is not enough: a sink element set
+        # on the ``audio-sink`` property stays a child of playsink
+        # and is still state-synced with the pipeline, so a failing
+        # alsasink keeps failing the retry (observed live on the
+        # testbed). Swap it for a fakesink as well.
         nonlocal audio_disabled
         audio_disabled = True
         flags = int(playbin.get_property('flags'))
         playbin.set_property('flags', flags & ~0x2)
+        fakesink = Gst.ElementFactory.make('fakesink')
+        if fakesink is not None:
+            playbin.set_property('audio-sink', fakesink)
 
     def on_bus_message(bus: Any, message: Any) -> bool:
         nonlocal exit_code
