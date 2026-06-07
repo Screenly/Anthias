@@ -50,7 +50,9 @@ def handle_github_error(
     if exc.response is not None:
         errdesc = exc.response.content
     else:
-        errdesc = 'no data'
+        # Surface the exception detail — a bare 'no data' hid the
+        # host/timeout info str(exc) carries (e.g. 'read timed out').
+        errdesc = str(exc) or 'no data'
 
     # Warning, not error: a signage device that can't reach
     # api.github.com (offline installs, locked-down networks, GitHub
