@@ -403,7 +403,8 @@ def test_github_module_never_logs_at_error_level() -> None:
     gracefully (backoff + cached verdict), so none of it belongs at
     ERROR level or above — that's what the Sentry logging integration
     turns into an event (ANTHIAS-8). Pin that with an AST walk over
-    the module's direct ``logging.error/exception/critical`` calls,
+    the module's direct ``logging.error/exception/critical/fatal``
+    calls,
     so comments and docstrings can't false-positive the check. (The
     module logs via the root ``logging`` module only; a named-logger
     refactor would need this test updated.)
@@ -417,7 +418,7 @@ def test_github_module_never_logs_at_error_level() -> None:
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
-        and node.func.attr in ('error', 'exception', 'critical')
+        and node.func.attr in ('error', 'exception', 'critical', 'fatal')
         and isinstance(node.func.value, ast.Name)
         and node.func.value.id == 'logging'
     ]
