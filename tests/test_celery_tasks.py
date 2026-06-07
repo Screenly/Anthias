@@ -1670,3 +1670,78 @@ def test_reconcile_lock_released_after_clean_run(
         reconcile_stuck_processing.apply()
 
     assert celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) is None
+
+
+# ---------------------------------------------------------------------------
+# Soft time limits (Sentry ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B)
+# ---------------------------------------------------------------------------
+
+
+class TestProbeTimeLimits:
+    """A probe that outlives its budget must be caught via the soft
+    limit and recorded as a failed probe — tripping the hard limit
+    SIGKILLs the pool child instead."""
+
+    def test_recheck_task_has_soft_limit_headroom(self) -> None:
+        assert (
+            revalidate_asset_url.soft_time_limit
+            == celery_tasks_module.ASSET_RECHECK_SOFT_TIME_LIMIT_S
+        )
+        assert (
+            revalidate_asset_url.time_limit
+            == celery_tasks_module.ASSET_RECHECK_TIME_LIMIT_S
+        )
+        # The soft limit must fire with room to spare before the
+        # SIGKILL backstop, and must cover the documented worst-case
+        # legitimate probe (HEAD 10s + GET 10s + DNS stall).
+        assert (
+            revalidate_asset_url.soft_time_limit
+            < revalidate_asset_url.time_limit
+        )
+        assert revalidate_asset_url.soft_time_limit >= 30
+
+    def test_sweep_task_has_soft_limit_headroom(self) -> None:
+        assert (
+            revalidate_asset_urls.soft_time_limit
+            == celery_tasks_module.ASSET_REVALIDATION_SOFT_TIME_LIMIT_S
+        )
+        assert (
+            revalidate_asset_urls.soft_time_limit
+            < revalidate_asset_urls.time_limit
+        )
+
+    @pytest.mark.django_db
+    def test_recheck_soft_limit_marks_unreachable(
+        self, eager_celery_recheck: None
+    ) -> None:
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        asset = _make_recheck_asset(is_reachable=True)
+        assert asset.last_reachability_check is None
+        with mock.patch(
+            'anthias_server.celery_tasks.url_fails',
+            side_effect=SoftTimeLimitExceeded,
+        ):
+            revalidate_asset_url.apply(args=('a1',))
+        refreshed = Asset.objects.get(asset_id='a1')
+        assert refreshed.is_reachable is False
+        assert refreshed.last_reachability_check is not None
+
+    @pytest.mark.django_db
+    def test_sweep_soft_limit_aborts_and_releases_lock(
+        self, eager_celery: None
+    ) -> None:
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        _make_revalidation_asset()
+        with mock.patch(
+            'anthias_server.celery_tasks.url_fails',
+            side_effect=SoftTimeLimitExceeded,
+        ):
+            result = revalidate_asset_urls.apply()
+        # Caught inside the task — no exception propagates (an
+        # uncaught one would mean the SIGKILL path in production).
+        assert result.successful()
+        # The finally block must have released the singleton lock so
+        # the next beat tick can run.
+        assert celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY) is None
