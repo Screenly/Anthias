@@ -77,6 +77,31 @@ class TestBeforeSendTransientNoise:
             }
         assert _sentry_before_send({'event_id': 'x'}, hint) is None
 
+    def test_keeps_wrapper_when_context_is_suppressed(self) -> None:
+        # ``raise ... from None`` detaches the causal chain — a redis
+        # error that merely *preceded* the wrapper must not drop it.
+        import redis.exceptions
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        try:
+            try:
+                raise redis.exceptions.ConnectionError('refused')
+            except redis.exceptions.ConnectionError:
+                raise RuntimeError('a real bug') from None
+        except RuntimeError as wrapper:
+            hint = {
+                'exc_info': (
+                    type(wrapper),
+                    wrapper,
+                    wrapper.__traceback__,
+                )
+            }
+        event: Event = {'event_id': 'x'}
+        assert _sentry_before_send(event, hint) == event
+
     def test_drops_cancelled_error(self) -> None:
         import asyncio
 

@@ -87,7 +87,13 @@ def _exception_chain(exc: BaseException | None) -> Iterator[BaseException]:
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
         yield exc
-        exc = exc.__cause__ or exc.__context__
+        # Mirror traceback rendering: an explicit ``raise ... from
+        # None`` sets __suppress_context__, meaning the author
+        # deliberately detached the causal chain — don't let a
+        # suppressed redis error hide the wrapper exception.
+        exc = exc.__cause__ or (
+            None if exc.__suppress_context__ else exc.__context__
+        )
 
 
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
