@@ -404,16 +404,6 @@ BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS = 10
 BROWSER_POLL_INTERVAL_SECONDS = 0.25
 # Grace period to let a SIGTERM'd webview exit before we SIGKILL it.
 BROWSER_TERMINATE_GRACE_SECONDS = 3
-# How long to wait for cage's Wayland socket before spawning the webview
-# on a Wayland board. cage exports WAYLAND_DISPLAY and creates the socket
-# before exec'ing the Python viewer, so at first launch it's already
-# there and this returns immediately; the wait matters for a respawn that
-# races a moment when the socket is briefly absent (cage restarting),
-# which otherwise has every attempt die with Qt's "Failed to create
-# wl_display (Connection refused)" and burns the whole inline budget
-# (Sentry ANTHIAS-19). Bounded so a genuinely dead compositor still falls
-# through to the existing spawn-failure handling rather than hanging.
-BROWSER_WAYLAND_SOCKET_WAIT_SECONDS = 10
 
 
 class WebviewLaunchError(RuntimeError):
@@ -464,9 +454,13 @@ def _wayland_socket_path() -> str | None:
 
     cage exports both ``XDG_RUNTIME_DIR`` and ``WAYLAND_DISPLAY`` to
     the viewer before exec'ing it; the socket lives at their join.
-    ``WAYLAND_DISPLAY`` may itself be an absolute path (rare), in
-    which case it's used verbatim. Returns ``None`` when either piece
-    is missing so the caller can skip the wait rather than guess.
+    This env signal — not ``_is_wayland_board()`` — is what gates the
+    wait: cage sets WAYLAND_DISPLAY and nothing else does, on x86,
+    arm64 AND pi5 alike, whereas ``_is_wayland_board()`` is x86-only
+    and would skip the wait on exactly the Pi 5 where ANTHIAS-19
+    fired. ``WAYLAND_DISPLAY`` may itself be an absolute path (rare),
+    used verbatim then. Returns ``None`` when either piece is missing
+    — a non-cage (linuxfb/eglfs) board with no socket to wait for.
     """
     wayland_display = getenv('WAYLAND_DISPLAY')
     if not wayland_display:
@@ -479,40 +473,34 @@ def _wayland_socket_path() -> str | None:
     return os.path.join(runtime_dir, wayland_display)
 
 
-def _wait_for_wayland_socket(
-    timeout: float = BROWSER_WAYLAND_SOCKET_WAIT_SECONDS,
-) -> None:
-    """Block until cage's Wayland socket exists, on Wayland boards.
+def _wait_for_wayland_socket(deadline: float) -> None:
+    """Block until cage's Wayland socket exists, until ``deadline``
+    (a ``monotonic()`` timestamp).
 
-    No-op on linuxfb/eglfs boards and when the env names no socket.
-    Bounded by ``timeout``: a compositor that never comes back still
-    falls through, so the spawn fails the normal way and the retry
-    loop / container restart handles it — we never hang the
-    asset_loop thread waiting on a dead cage.
+    No-op on non-cage boards (the env names no socket) and when the
+    socket is already up — the common case, returns at once.
+    ``deadline`` is the *shared* spawn-attempt budget, so this wait
+    and the D-Bus handshake wait that follows together can't exceed
+    ``startup_timeout``; a compositor that never returns falls through
+    and the spawn fails the normal way rather than hanging the
+    asset_loop thread.
     """
-    if not _is_wayland_board():
-        return
     socket_path = _wayland_socket_path()
-    if socket_path is None:
+    if socket_path is None or os.path.exists(socket_path):
         return
-    if os.path.exists(socket_path):
-        return
-    deadline = monotonic() + max(0.0, timeout)
     logging.warning(
-        'Wayland socket %s not present yet; waiting up to %gs before '
-        'spawning the webview',
+        'Wayland socket %s not present yet; waiting (within the spawn '
+        'budget) before launching the webview',
         socket_path,
-        timeout,
     )
     while monotonic() < deadline:
         if os.path.exists(socket_path):
             return
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
     logging.warning(
-        'Wayland socket %s still absent after %gs; spawning anyway '
-        '(the launch will fail and retry if cage is truly down)',
+        'Wayland socket %s still absent; launching anyway (the launch '
+        'will fail and retry if cage is truly down)',
         socket_path,
-        timeout,
     )
 
 
@@ -525,12 +513,18 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     handshake or fails to emit it within ``startup_timeout``. The matched
     string must stay in lockstep with ``qInfo() << "Anthias service
     start"`` in src/anthias_webview/src/main.cpp.
+
+    ``startup_timeout`` is the total budget for the attempt: on a cage
+    board one shared deadline covers both the wait for the Wayland
+    socket and the handshake, so the socket wait can't pile on top of
+    ``startup_timeout``.
     """
-    # On Wayland boards, don't race cage's socket — a spawn before it
-    # exists dies instantly with "Failed to create wl_display" and
+    deadline = monotonic() + startup_timeout
+    # On cage boards, don't race the Wayland socket — a spawn before
+    # it exists dies instantly with "Failed to create wl_display" and
     # wastes a retry attempt (Sentry ANTHIAS-19). No-op elsewhere and
     # when the socket is already up (the common case).
-    _wait_for_wayland_socket()
+    _wait_for_wayland_socket(deadline)
     try:
         # _bg_exc=False: with the default (True), sh re-raises the exit
         # error (e.g. SignalException_SIGABRT on a Qt init crash, or
@@ -550,7 +544,9 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
             f'AnthiasViewer binary not found: {exc}'
         ) from exc
 
-    deadline = monotonic() + startup_timeout
+    # Reuse the same ``deadline`` the Wayland-socket wait above shares,
+    # so the whole attempt — socket wait plus handshake — is bounded by
+    # ``startup_timeout`` rather than the two stacking.
     while monotonic() < deadline:
         if BROWSER_HANDSHAKE_LINE in candidate.process.stdout.decode(
             'utf-8', errors='replace'
