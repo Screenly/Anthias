@@ -22,6 +22,8 @@ from collections.abc import Iterator
 
 from whitenoise.middleware import WhiteNoiseMiddleware
 
+logger = logging.getLogger(__name__)
+
 _SKIP_LOG_EXAMPLES = 3
 
 
@@ -36,10 +38,17 @@ class ResilientWhiteNoiseMiddleware(WhiteNoiseMiddleware):
     """
 
     def update_files_dictionary(self, root: str, prefix: str) -> None:
+        # Stock whitenoise computes the URL as ``prefix +
+        # path[len(root):]`` and relies on its caller having appended
+        # a trailing separator to ``root``. Don't depend on that:
+        # normalise here so a ``root`` without the trailing sep can't
+        # yield a ``/static//css/app.css`` double-slash URL that then
+        # fails to match incoming requests.
+        root_with_sep = os.path.join(root, '')
         skipped: list[tuple[str, OSError]] = []
-        stat_cache = dict(self._scantree_tolerant(root, skipped))
+        stat_cache = dict(self._scantree_tolerant(root_with_sep, skipped))
         for path in stat_cache:
-            relative_path = path[len(root) :]
+            relative_path = path[len(root_with_sep) :]
             relative_url = relative_path.replace('\\', '/')
             url = prefix + relative_url
             self.add_file_to_dictionary(url, path, stat_cache=stat_cache)
@@ -47,7 +56,7 @@ class ResilientWhiteNoiseMiddleware(WhiteNoiseMiddleware):
             examples = '; '.join(
                 f'{path}: {exc}' for path, exc in skipped[:_SKIP_LOG_EXAMPLES]
             )
-            logging.error(
+            logger.error(
                 'Skipped %d unreadable static file(s)/dir(s) under %s — '
                 'the filesystem reported errors (%s). The device storage '
                 'likely needs attention (fsck/reflash); serving the '

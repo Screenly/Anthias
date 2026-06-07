@@ -135,8 +135,10 @@ class TestMiddlewareDegradesGracefully:
         ):
             middleware = self._middleware(tmp_path)
 
-        # No exception escaped, the healthy file is served...
-        assert any('app.css' in url for url in middleware.files)
+        # No exception escaped, the healthy file is served under
+        # its canonical /static/ URL (no double-slash from a root
+        # without a trailing separator)...
+        assert '/static/css/app.css' in middleware.files
         # ...and exactly one ERROR records the storage fault.
         errors = [r for r in caplog.records if r.levelno == logging.ERROR]
         assert len(errors) == 1
