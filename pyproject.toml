@@ -71,6 +71,7 @@ server = [
     "PyYAML==6.0.3",
     "redis==7.4.0",
     "requests==2.33.1",
+    "sentry-sdk==2.61.1",
     "tenacity==9.1.4",
     "sh==2.2.2",
     "urllib3==2.7.0",
@@ -89,6 +90,7 @@ viewer = [
     "pytz==2026.2",
     "redis==7.4.0",
     "requests==2.33.1",
+    "sentry-sdk==2.61.1",
     "tenacity==9.1.4",
     "sh==2.2.2",
     "urllib3==2.7.0",
@@ -147,6 +149,7 @@ mypy = [
     # ignored, mirroring the cec / pydbus / sh pattern.
     "Pillow==12.2.0",
     "pytz==2026.2",
+    "sentry-sdk==2.61.1",
     "whitenoise==6.12.0",
 ]
 
