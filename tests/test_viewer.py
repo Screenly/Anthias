@@ -101,6 +101,71 @@ def test_setup(viewer_fixtures: _ViewerFixtures) -> None:
         viewer_fixtures.p_loadb.stop()
 
 
+def test_setup_respawns_webview_when_busget_finds_name_gone(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The armv7 init crash can strike between the D-Bus handshake
+    (which made load_browser() return) and setup()'s bus.get — the
+    name is released again and pydbus raises ServiceUnknown. setup()
+    must reap, respawn, and retry the bus.get instead of letting the
+    error escape main() (Sentry ANTHIAS-3)."""
+    proxy = mock.Mock(name='browser_bus_proxy')
+    fake_bus = mock.Mock()
+    fake_bus.get.side_effect = [
+        RuntimeError(
+            'GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The '
+            'name anthias.viewer was not provided by any .service files'
+        ),
+        proxy,
+    ]
+    dead_browser = mock.Mock(name='dead_browser')
+    dead_browser.is_alive.return_value = False
+
+    viewer_fixtures.p_loadb.start()
+    try:
+        with (
+            mock.patch('pydbus.SessionBus', mock.Mock(return_value=fake_bus)),
+            mock.patch.object(viewer_fixtures.u, 'browser', dead_browser),
+        ):
+            viewer_fixtures.u.setup()
+    finally:
+        viewer_fixtures.p_loadb.stop()
+
+    assert fake_bus.get.call_count == 2
+    dead_browser.terminate.assert_called_once()
+    # Once before bus.get, once for the respawn — both with the
+    # generous startup budget (no inline kwargs).
+    assert viewer_fixtures.m_loadb.call_count == 2
+    assert viewer_fixtures.m_loadb.call_args_list[1] == mock.call()
+    assert viewer_fixtures.u.browser_bus is proxy
+
+
+def test_setup_reraises_unrelated_busget_error(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A dead session bus (Disconnected) is not respawn-worthy — the
+    container restart has to bring up a whole fresh bus."""
+    fake_bus = mock.Mock()
+    fake_bus.get.side_effect = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.Disconnected: '
+        'The connection is closed'
+    )
+
+    viewer_fixtures.p_loadb.start()
+    try:
+        with (
+            mock.patch('pydbus.SessionBus', mock.Mock(return_value=fake_bus)),
+            mock.patch.object(viewer_fixtures.u, 'browser', None),
+        ):
+            with pytest.raises(RuntimeError, match='Disconnected'):
+                viewer_fixtures.u.setup()
+    finally:
+        viewer_fixtures.p_loadb.stop()
+
+    assert fake_bus.get.call_count == 1
+    assert viewer_fixtures.m_loadb.call_count == 1
+
+
 def _stub_browser_stdout_static(
     browser_proc: mock.Mock,
     value: bytes,
