@@ -97,12 +97,14 @@ def get_board_model(model_file: str = '/proc/device-tree/model') -> str:
     ``/proc/device-tree`` resolves to ``/sys/firmware/devicetree/base``,
     which Docker exposes read-only inside every container — no bind
     mount needed. x86 hosts have no device tree; boards that have one
-    expose the model as a NUL-terminated UTF-8 string (decoded the
-    same way device_helper's board detection does).
+    expose the model as a NUL-terminated UTF-8 string, decoded and
+    trimmed with the same idiom as device_helper's board detection.
     """
     try:
         with open(model_file, 'rb') as f:
-            return f.read().decode('utf-8', errors='replace').rstrip('\x00 \n')
+            # Kernel writes a null-terminated UTF-8 string — decode
+            # and trim exactly like device_helper's board detection.
+            return f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
     except OSError:
         return ''
 
