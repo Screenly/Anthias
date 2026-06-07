@@ -2,6 +2,7 @@ import os
 import shutil
 import tarfile
 import tempfile
+import threading
 from collections.abc import Iterator
 from datetime import datetime
 from os import path
@@ -10,9 +11,11 @@ from unittest import mock
 import pytest
 
 from anthias_server.lib.backup_helper import (
+    backup_archive_name,
     create_backup,
     recover,
     static_dir,
+    stream_backup,
 )
 
 
@@ -57,6 +60,67 @@ def test_recover(backup_home: str) -> None:
     assert path.isfile(file_path)
     recover(file_path)
     assert not path.isfile(file_path)
+
+
+def test_backup_archive_name_falls_back_on_empty_name() -> None:
+    dt = datetime(2016, 7, 19, 12, 42, 12)
+    with mock.patch(
+        'anthias_server.lib.backup_helper.datetime'
+    ) as mock_datetime:
+        mock_datetime.now.return_value = dt
+        assert (
+            backup_archive_name('')
+            == 'anthias-backup-2016-07-19T12-42-12.tar.gz'
+        )
+        assert (
+            backup_archive_name('lobby') == 'lobby-2016-07-19T12-42-12.tar.gz'
+        )
+
+
+def test_stream_backup_round_trips_through_recover(
+    backup_home: str,
+) -> None:
+    # The settings page download streams the archive as it is built
+    # (issue #2987: the staged-file path produced no response bytes
+    # for minutes and browsers gave up). The streamed bytes must be a
+    # well-formed tar.gz that recover() accepts unchanged.
+    marker = path.join(backup_home, '.anthias', 'anthias.conf')
+    with open(marker, 'w') as f:
+        f.write('[viewer]\n')
+
+    chunks = list(stream_backup())
+    assert chunks
+
+    os.makedirs(path.join(backup_home, static_dir), exist_ok=True)
+    file_path = path.join(backup_home, static_dir, 'streamed.tar.gz')
+    with open(file_path, 'wb') as f:
+        f.write(b''.join(chunks))
+
+    with tarfile.open(file_path, 'r:gz') as tar:
+        names = tar.getnames()
+    assert '.anthias' in names
+    assert 'anthias_assets' in names
+    assert '.anthias/anthias.conf' in names
+
+    os.remove(marker)
+    recover(file_path)
+    assert path.isfile(marker)
+
+
+def test_stream_backup_stops_when_consumer_disconnects(
+    backup_home: str,
+) -> None:
+    # A closed browser connection must not leave the producer thread
+    # taring forever — the generator's pipe close propagates as
+    # BrokenPipeError and the thread exits.
+    stream = stream_backup()
+    assert next(stream)
+    stream.close()  # GeneratorExit → read end closed
+    main_thread = threading.main_thread()
+    for thread in threading.enumerate():
+        if thread.name == 'backup-stream' and thread is not main_thread:
+            thread.join(timeout=5)
+            assert not thread.is_alive()
 
 
 @pytest.fixture

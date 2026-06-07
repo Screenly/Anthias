@@ -2,6 +2,8 @@ import logging
 import os
 import sys
 import tarfile
+import threading
+from collections.abc import Generator
 from datetime import datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
@@ -53,12 +55,90 @@ class BackupRecoverError(Exception):
     """Raised when a backup archive cannot be safely recovered."""
 
 
-def create_backup(name: str = default_archive_name) -> str:
-    home = getenv('HOME') or ''
-    archive_name = '{}-{}.tar.gz'.format(
+# gzip level for backup archives. The bulk of a backup is video/image
+# assets that are already compressed, so the default level 9 burns
+# minutes of single-core CPU on an SBC for ~no size win — measured
+# 98 s for 355 MB on a Pi 4 (~3.6 MB/s); a multi-GB library on a Pi 3
+# runs well past the browser's request timeout (issue #2987, the
+# "Get backup never downloads" report). Level 1 is ~4-5x faster and
+# within a couple of percent on size for this content mix.
+BACKUP_COMPRESSLEVEL = 1
+
+# Chunk size for stream_backup(). 64 KiB matches the pipe capacity on
+# Linux so the tar producer thread and the HTTP writer interleave
+# without either side stalling on tiny reads.
+_STREAM_CHUNK_BYTES = 64 * 1024
+
+
+def backup_archive_name(name: str = default_archive_name) -> str:
+    return '{}-{}.tar.gz'.format(
         name if name else default_archive_name,
         datetime.now().strftime('%Y-%m-%dT%H-%M-%S'),
     )
+
+
+def stream_backup() -> Generator[bytes, None, None]:
+    """Yield a backup tar.gz as it is being built.
+
+    The download path used to write the whole archive to disk before
+    sending the first byte. tar+gzip of a multi-GB asset library takes
+    minutes on an SBC, and a browser kills a request that has produced
+    no response bytes for ~5 minutes — so "Get backup" simply never
+    completed on devices with a real content library (issue #2987).
+    Streaming starts the response immediately, keeps bytes flowing for
+    the whole build, and as a bonus never needs staging space on the
+    (often nearly full) SD card.
+
+    A producer thread feeds ``tarfile`` through a pipe; the generator
+    reads the other end. A consumer that disconnects mid-download
+    closes the read end, the producer hits ``BrokenPipeError`` and
+    stops — no orphaned thread keeps taring. A producer failure
+    (missing directory, unreadable file) is re-raised here once the
+    stream drains, so the response aborts mid-transfer instead of
+    completing 200 with a silently truncated archive.
+    """
+    home = getenv('HOME') or ''
+    read_fd, write_fd = os.pipe()
+    produce_error: list[BaseException] = []
+
+    def produce() -> None:
+        try:
+            with os.fdopen(write_fd, 'wb') as write_file:
+                with tarfile.open(
+                    fileobj=write_file,
+                    mode='w|gz',
+                    compresslevel=BACKUP_COMPRESSLEVEL,
+                ) as tar:
+                    for directory in directories:
+                        tar.add(path.join(home, directory), arcname=directory)
+        except BrokenPipeError:
+            logging.info('backup download cancelled by the client')
+        except Exception as exc:
+            logging.exception('backup stream failed')
+            produce_error.append(exc)
+
+    producer = threading.Thread(
+        target=produce, name='backup-stream', daemon=True
+    )
+    producer.start()
+    drained = False
+    try:
+        with os.fdopen(read_fd, 'rb') as read_file:
+            while chunk := read_file.read(_STREAM_CHUNK_BYTES):
+                yield chunk
+        drained = True
+    finally:
+        producer.join(timeout=5)
+        # Only surface producer failures on the drained path: a
+        # GeneratorExit (client went away) shouldn't morph into a
+        # spurious error.
+        if drained and produce_error:
+            raise produce_error[0]
+
+
+def create_backup(name: str = default_archive_name) -> str:
+    home = getenv('HOME') or ''
+    archive_name = backup_archive_name(name)
     file_path = path.join(home, static_dir, archive_name)
 
     if not path.exists(path.join(home, static_dir)):
@@ -68,7 +148,9 @@ def create_backup(name: str = default_archive_name) -> str:
         remove(file_path)
 
     try:
-        with tarfile.open(file_path, 'w:gz') as tar:
+        with tarfile.open(
+            file_path, 'w:gz', compresslevel=BACKUP_COMPRESSLEVEL
+        ) as tar:
             for directory in directories:
                 path_to_dir = path.join(home, directory)
                 tar.add(path_to_dir, arcname=directory)

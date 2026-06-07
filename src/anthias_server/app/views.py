@@ -10,12 +10,20 @@ from urllib.parse import urlparse, urlunparse
 from django.contrib import messages
 from django.contrib.auth import authenticate
 from django.contrib.auth import login as django_login
-from django.http import FileResponse, HttpRequest, HttpResponse
+from django.http import (
+    FileResponse,
+    HttpRequest,
+    HttpResponse,
+    StreamingHttpResponse,
+)
 from django.http.response import HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import (
+    content_disposition_header,
+    url_has_allowed_host_and_scheme,
+)
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
@@ -966,25 +974,30 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['POST'])
 def settings_backup(request: HttpRequest) -> HttpResponseBase:
-    """Same as api.views.mixins.BackupViewMixin.post but streams the
-    archive back inline instead of returning the filename + relying
-    on a follow-up /static_with_mime/ fetch."""
-    from os import getenv
+    """Stream the backup archive as it is being built.
 
-    filename = backup_helper.create_backup(name=settings['player_name'])
-    # backup_helper.create_backup writes to $HOME/anthias/staticfiles/.
-    # Reach for the same base here so we serve the archive from the
-    # path it was actually written to. The pre-fix path.join('static',
-    # filename) was relative to CWD and would FileNotFoundError in
-    # production where uvicorn runs out of /usr/src/app.
-    archive_path = path.join(
-        getenv('HOME') or '', 'anthias/staticfiles', filename
-    )
-    response = FileResponse(
-        open(archive_path, 'rb'),
-        as_attachment=True,
-        filename=filename,
+    The pre-#2987 shape — create_backup() to a staging file, then a
+    FileResponse — sent zero response bytes while tar+gzip ran, and
+    that build takes minutes on an SBC with a real content library.
+    Browsers abort a request that has produced no bytes for ~5
+    minutes, so on devices like the reporter's Pi 3 "Get backup"
+    spun and then silently failed every time. stream_backup() puts
+    the first tar block on the wire immediately and keeps bytes
+    flowing for the whole build (and needs no staging space on the
+    SD card). The iterator is synchronous — Django adapts it under
+    ASGI via its thread executor, which is fine for an operation
+    this rare.
+    """
+    filename = backup_helper.backup_archive_name(settings['player_name'])
+    response = StreamingHttpResponse(
+        backup_helper.stream_backup(),
         content_type='application/x-tgz',
+    )
+    # content_disposition_header() RFC-8187-escapes the filename —
+    # player_name is operator-controlled, so it must not be able to
+    # smuggle quotes/control chars into the header.
+    response['Content-Disposition'] = content_disposition_header(
+        as_attachment=True, filename=filename
     )
     return response
 
