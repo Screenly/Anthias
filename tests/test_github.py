@@ -390,21 +390,37 @@ def test_handle_github_error_logs_at_warning_not_error(
     exc = requests_exceptions.ConnectionError()
     exc.response = None
     with (
-        mock.patch.object(github.logging, 'warning') as warning_mock,
-        mock.patch.object(github.logging, 'error') as error_mock,
+        mock.patch('anthias_server.lib.github.logging.warning') as m_warning,
+        mock.patch('anthias_server.lib.github.logging.error') as m_error,
     ):
         github.handle_github_error(exc, 'latest release')
-    warning_mock.assert_called_once()
-    error_mock.assert_not_called()
+    m_warning.assert_called_once()
+    m_error.assert_not_called()
 
 
 def test_github_module_never_logs_at_error_level() -> None:
     """Every failure path in this module is degraded through
     gracefully (backoff + cached verdict), so none of it belongs at
-    ERROR level. Pin that by source inspection so a future path
-    doesn't quietly reintroduce Sentry noise."""
+    ERROR level or above — that's what the Sentry logging integration
+    turns into an event (ANTHIAS-8). Pin that with an AST walk over
+    the module's actual logging calls, so comments/docstrings can't
+    false-positive and renamed-but-still-ERROR calls can't slip by.
+    """
+    import ast
     import inspect
 
-    source = inspect.getsource(github)
-    assert 'logging.error' not in source
-    assert 'logging.exception' not in source
+    tree = ast.parse(inspect.getsource(github))
+    error_level_calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ('error', 'exception', 'critical')
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == 'logging'
+    ]
+    assert not error_level_calls, (
+        f'ERROR-level logging calls found in lib/github.py at lines '
+        f'{error_level_calls} — these become Sentry events on every '
+        f'offline device'
+    )
