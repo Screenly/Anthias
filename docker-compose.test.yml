@@ -14,7 +14,14 @@ services:
     build: &test_build
       context: .
       dockerfile: docker/Dockerfile.test
-    environment:
+    # Shared with anthias-celery via the anchor: the worker MUST see
+    # the same ENVIRONMENT/ANTHIAS_TEST_DB_PATH as the server. Without
+    # ENVIRONMENT=test, settings.py takes the production branch on the
+    # worker — it reads the (empty) /data/.anthias/anthias.db instead
+    # of the test DB ("no such table: assets" on every task) and, with
+    # no DSN override, ships those errors to the production Sentry
+    # project tagged environment=production.
+    environment: &test_env
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -46,10 +53,7 @@ services:
         condition: service_started
       redis:
         condition: service_started
-    environment:
-      - HOME=/data
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    environment: *test_env
     restart: always
     volumes:
       - .:/usr/src/app
