@@ -10,7 +10,9 @@ and capture calls are dropped.
 """
 
 from pathlib import Path
+from unittest import mock
 
+import pytest
 import sentry_sdk
 from sentry_sdk.types import Event
 
@@ -163,3 +165,77 @@ class TestGetBoardModel:
         from anthias_server.django_project.settings import get_board_model
 
         assert get_board_model(str(tmp_path / 'missing')) == ''
+
+
+class TestGetSentryRelease:
+    """Release stamping — CalVer + the image's git short hash, so
+    pre- and post-deploy builds of the same CalVer are
+    distinguishable (the 2026.6.2 audit gap)."""
+
+    def test_appends_short_hash_when_env_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.setenv('GIT_SHORT_HASH', 'abc1234')
+        with mock.patch.object(
+            s, 'get_anthias_release', return_value='2026.6.2'
+        ):
+            assert s.get_sentry_release() == '2026.6.2+abc1234'
+
+    def test_bare_calver_without_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.delenv('GIT_SHORT_HASH', raising=False)
+        with mock.patch.object(
+            s, 'get_anthias_release', return_value='2026.6.2'
+        ):
+            assert s.get_sentry_release() == '2026.6.2'
+
+    def test_none_when_version_unknown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # No bogus '+hash'-only release when the CalVer itself is
+        # missing — Sentry should see no release at all.
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.setenv('GIT_SHORT_HASH', 'abc1234')
+        with mock.patch.object(s, 'get_anthias_release', return_value=''):
+            assert s.get_sentry_release() is None
+
+
+class TestIsBalenaDeploy:
+    """The balena tag's decision logic — must match what
+    anthias_common.utils.is_balena_app derives from the BALENA env
+    var the balena supervisor injects."""
+
+    def test_true_under_balena(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.setenv('BALENA', '1')
+        assert s.is_balena_deploy() is True
+
+    def test_false_on_compose_installs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.delenv('BALENA', raising=False)
+        assert s.is_balena_deploy() is False
+
+    def test_agrees_with_the_canonical_helper(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The settings copy is inlined for import-weight reasons —
+        # pin it against the canonical helper so they can't drift.
+        from anthias_common.utils import is_balena_app
+        from anthias_server.django_project import settings as s
+
+        for value in (None, '1'):
+            if value is None:
+                monkeypatch.delenv('BALENA', raising=False)
+            else:
+                monkeypatch.setenv('BALENA', value)
+            assert s.is_balena_deploy() == is_balena_app()

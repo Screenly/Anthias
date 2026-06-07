@@ -138,6 +138,31 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
 ignore_logger('celery.worker.consumer.consumer')
 ignore_logger('celery.beat')
 
+
+def get_sentry_release() -> str | None:
+    """CalVer release, postfixed with the build's short git hash.
+
+    The CalVer alone proved ambiguous in the field: a balena OTA
+    deploy from master ships new code while pyproject still carries
+    the last tagged version, so events from pre- and post-deploy
+    builds were indistinguishable in the 2026.6.2 audit.
+    ``GIT_SHORT_HASH`` is baked into every image by
+    tools/image_builder (the same hash the docker tag carries), which
+    pins each event to the exact build. ``+`` is semver
+    build-metadata syntax and Sentry handles it natively. Falls back
+    to the bare CalVer when the env is absent (host/dev runs), or
+    ``None`` when the version itself is unknown so Sentry doesn't
+    record a bogus '' release.
+    """
+    release = get_anthias_release()
+    if not release:
+        return None
+    git_short_hash = getenv('GIT_SHORT_HASH')
+    if git_short_hash:
+        return f'{release}+{git_short_hash}'
+    return release
+
+
 sentry_sdk.init(
     dsn=getenv('SENTRY_DSN', _default_sentry_dsn),
     before_send=_sentry_before_send,
@@ -146,12 +171,10 @@ sentry_sdk.init(
     # in Sentry. (Test runs don't send at all — see the DSN default
     # above.)
     environment=getenv('ENVIRONMENT', 'production'),
-    # CalVer release from pyproject.toml's [project].version, via the
-    # same helper the System Info page and v2 info API use (handles
-    # the `uv sync --no-install-project` Docker layout). Empty string
-    # means both sources failed — pass None so Sentry doesn't record
-    # a bogus '' release.
-    release=get_anthias_release() or None,
+    # CalVer (pyproject [project].version, via the same helper the
+    # System Info page and v2 info API use) plus the image's git
+    # short hash — see get_sentry_release above.
+    release=get_sentry_release(),
     # Request headers and user IPs are PII. Attach them only when the
     # operator hasn't opted out of analytics in anthias.conf — the
     # same knob that gates GA telemetry (see lib/telemetry.py). Crash
@@ -192,6 +215,26 @@ def get_board_model(model_file: str = '/proc/device-tree/model') -> str:
 sentry_sdk.set_tag('device_type', getenv('DEVICE_TYPE') or 'unknown')
 sentry_sdk.set_tag('kernel_release', platform.release())
 sentry_sdk.set_tag('kernel_machine', platform.machine())
+
+
+def is_balena_deploy() -> bool:
+    """True when running under balenaOS.
+
+    Same check as ``anthias_common.utils.is_balena_app`` (the BALENA
+    env var the balena supervisor injects), inlined rather than
+    imported: pulling anthias_common.utils into this module would
+    drag sh/requests/redis into every Django settings load, which the
+    slim environment django-stubs' mypy plugin runs under can't
+    satisfy.
+    """
+    return bool(getenv('BALENA'))
+
+
+# balena vs plain docker-compose installs differ operationally
+# (supervisor-managed restarts, no depends_on conditions, journald
+# unavailable) — segmenting by deployment kind tells the triage
+# which playbook applies.
+sentry_sdk.set_tag('balena', 'true' if is_balena_deploy() else 'false')
 _board_model = get_board_model()
 if _board_model:
     sentry_sdk.set_tag('board_model', _board_model)
