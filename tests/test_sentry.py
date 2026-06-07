@@ -163,4 +163,3 @@ class TestGetBoardModel:
         from anthias_server.django_project.settings import get_board_model
 
         assert get_board_model(str(tmp_path / 'missing')) == ''
-
