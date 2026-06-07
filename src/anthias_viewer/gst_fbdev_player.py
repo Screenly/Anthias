@@ -250,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
         if sink is None:
             return False
         sink.set_property('device', device)
-        usable = (
+        usable = bool(
             sink.set_state(Gst.State.READY) != Gst.StateChangeReturn.FAILURE
         )
         sink.set_state(Gst.State.NULL)
@@ -435,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if state['playbin'] is not None:
             teardown(state['playbin'])
-    return state['exit']
+    return int(state['exit'])
 
 
 if __name__ == '__main__':
