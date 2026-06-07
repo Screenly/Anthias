@@ -378,3 +378,52 @@ def test_handle_github_error_without_response(
     exc.response = None
     github.handle_github_error(exc, 'no-resp-action')
     assert redis_data['github-api-error'] == 'no-resp-action'
+
+
+def test_handle_github_error_logs_at_warning_not_error(
+    github_env: None,
+) -> None:
+    """An unreachable api.github.com is a routine condition on a
+    signage device (offline installs, locked-down networks) — it must
+    not log at ERROR, which would land in Sentry on every offline
+    device (ANTHIAS-8)."""
+    exc = requests_exceptions.ConnectionError()
+    exc.response = None
+    with (
+        mock.patch('anthias_server.lib.github.logging.warning') as m_warning,
+        mock.patch('anthias_server.lib.github.logging.error') as m_error,
+    ):
+        github.handle_github_error(exc, 'latest release')
+    m_warning.assert_called_once()
+    m_error.assert_not_called()
+
+
+def test_github_module_never_logs_at_error_level() -> None:
+    """Every failure path in this module is degraded through
+    gracefully (backoff + cached verdict), so none of it belongs at
+    ERROR level or above — that's what the Sentry logging integration
+    turns into an event (ANTHIAS-8). Pin that with an AST walk over
+    the module's direct ``logging.error/exception/critical/fatal``
+    calls,
+    so comments and docstrings can't false-positive the check. (The
+    module logs via the root ``logging`` module only; a named-logger
+    refactor would need this test updated.)
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(github))
+    error_level_calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in ('error', 'exception', 'critical', 'fatal')
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == 'logging'
+    ]
+    assert not error_level_calls, (
+        f'ERROR-level logging calls found in lib/github.py at lines '
+        f'{error_level_calls} — these become Sentry events on every '
+        f'offline device'
+    )

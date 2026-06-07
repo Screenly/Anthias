@@ -52,7 +52,13 @@ def handle_github_error(
     else:
         errdesc = 'no data'
 
-    logging.error(
+    # Warning, not error: a signage device that can't reach
+    # api.github.com (offline installs, locked-down networks, GitHub
+    # outages, rate limits) is a routine condition the caller already
+    # degrades through gracefully — backoff above, cached verdict
+    # fallback in is_up_to_date(). An ERROR-level log would land in
+    # Sentry on every offline device (ANTHIAS-8).
+    logging.warning(
         '%s fetching %s from GitHub: %s', type(exc).__name__, action, errdesc
     )
 
@@ -88,13 +94,13 @@ def _fetch_latest_release_tag() -> str | None:
     try:
         payload = resp.json()
     except ValueError:
-        logging.error('Malformed JSON from GitHub /releases/latest')
+        logging.warning('Malformed JSON from GitHub /releases/latest')
         _set_github_error_backoff('latest release: malformed JSON')
         return None
 
     tag = payload.get('tag_name') if isinstance(payload, dict) else None
     if not isinstance(tag, str) or not tag:
-        logging.error('Missing tag_name in /releases/latest response')
+        logging.warning('Missing tag_name in /releases/latest response')
         _set_github_error_backoff('latest release: missing tag_name')
         return None
 
@@ -103,7 +109,7 @@ def _fetch_latest_release_tag() -> str | None:
     # for 24h, locking is_up_to_date() into the fallback verdict for
     # the full TTL even after upstream corrects the tag.
     if _parse_version(tag) is None:
-        logging.error('Unparseable tag_name from GitHub: %r', tag)
+        logging.warning('Unparseable tag_name from GitHub: %r', tag)
         _set_github_error_backoff('latest release: unparseable tag_name')
         return None
 
@@ -162,7 +168,7 @@ def is_up_to_date() -> bool:
 
     latest_version = _parse_version(latest_tag)
     if latest_version is None:
-        logging.error('Malformed tag_name from GitHub: %r', latest_tag)
+        logging.warning('Malformed tag_name from GitHub: %r', latest_tag)
         return _fallback_verdict(local_release)
 
     verdict = local_version >= latest_version
