@@ -231,21 +231,35 @@ def main(argv: list[str] | None = None) -> int:
 
     clear_framebuffer(args.fb_device)
 
-    playbin = Gst.ElementFactory.make('playbin')
-    if playbin is None:
-        logging.error('playbin element unavailable')
-        return 1
+    loop = GLib.MainLoop()
+    # ``playbin`` is the live pipeline; ``audio`` records whether it
+    # was built with an audio branch; ``exit`` is the process result.
+    state: dict[str, Any] = {'playbin': None, 'audio': False, 'exit': 0}
 
-    sink_description = build_sink_description(args)
-    logging.info('video sink: %s', sink_description)
-    try:
-        video_sink = Gst.parse_bin_from_description(sink_description, True)
-    except GLib.Error as exc:
-        logging.error('could not build video sink: %s', exc)
-        return 1
+    def audio_device_usable(device: str) -> bool:
+        """Pre-flight the ALSA device before wiring it into playbin.
 
-    convert = video_sink.get_by_name('fit_convert')
-    fit_caps = video_sink.get_by_name('fit_caps')
+        ``alsasink`` opens the PCM on NULL→READY, so a missing card
+        (HDMI audio disabled in config.txt → no vc4hdmi) is
+        detectable synchronously here. Wiring a doomed alsasink into
+        playbin instead fails the *whole* sink activation, and a
+        playbin that failed activation can't simply be restarted —
+        both observed live on the testbed.
+        """
+        sink = Gst.ElementFactory.make('alsasink')
+        if sink is None:
+            return False
+        sink.set_property('device', device)
+        usable = (
+            sink.set_state(Gst.State.READY) != Gst.StateChangeReturn.FAILURE
+        )
+        sink.set_state(Gst.State.NULL)
+        if not usable:
+            logging.warning(
+                'audio device %r unusable — playing without audio',
+                device,
+            )
+        return usable
 
     def on_convert_event(pad: Any, info: Any) -> Any:
         """Pin the capsfilter to aspect-fit dims from the CAPS event.
@@ -279,21 +293,10 @@ def main(argv: list[str] | None = None) -> int:
             par_d,
             caps_str,
         )
-        fit_caps.set_property('caps', Gst.Caps.from_string(caps_str))
+        pad.get_parent_element().get_parent().get_by_name(
+            'fit_caps'
+        ).set_property('caps', Gst.Caps.from_string(caps_str))
         return Gst.PadProbeReturn.OK
-
-    convert.get_static_pad('sink').add_probe(
-        Gst.PadProbeType.EVENT_DOWNSTREAM, on_convert_event
-    )
-
-    playbin.set_property('uri', args.uri)
-    playbin.set_property('video-sink', video_sink)
-
-    if args.audio_device:
-        audio_sink = Gst.ElementFactory.make('alsasink')
-        if audio_sink is not None:
-            audio_sink.set_property('device', args.audio_device)
-            playbin.set_property('audio-sink', audio_sink)
 
     def on_about_to_finish(element: Any) -> None:
         # Gapless loop: re-queue the same URI while the tail of the
@@ -301,55 +304,99 @@ def main(argv: list[str] | None = None) -> int:
         # thread — property set only, no state changes here.
         element.set_property('uri', args.uri)
 
-    playbin.connect('about-to-finish', on_about_to_finish)
+    def teardown(playbin: Any) -> None:
+        playbin.get_bus().remove_signal_watch()
+        playbin.set_state(Gst.State.NULL)
 
-    loop = GLib.MainLoop()
-    exit_code = 0
-    audio_disabled = False
+    def build_and_start(with_audio: bool) -> bool:
+        """Build a fresh playbin and set it PLAYING.
 
-    def disable_audio() -> None:
-        # Clear GST_PLAY_FLAG_AUDIO (0x2) so playbin neither decodes
-        # nor sinks the audio stream. A broken audio branch — ALSA
-        # card missing (HDMI audio disabled in config.txt) or an
-        # undecodable audio codec (e.g. AC3: a52dec lives in
-        # plugins-ugly, which the image doesn't ship) — must degrade
-        # to silent video, not a black slot. The old gst-launch
-        # incarnation died wholesale on either case.
-        #
-        # Clearing the flag alone is not enough: a sink element set
-        # on the ``audio-sink`` property stays a child of playsink
-        # and is still state-synced with the pipeline, so a failing
-        # alsasink keeps failing the retry (observed live on the
-        # testbed). Swap it for a fakesink as well.
-        nonlocal audio_disabled
-        audio_disabled = True
-        flags = int(playbin.get_property('flags'))
-        playbin.set_property('flags', flags & ~0x2)
-        fakesink = Gst.ElementFactory.make('fakesink')
-        if fakesink is not None:
-            playbin.set_property('audio-sink', fakesink)
+        Always a fresh element: a playbin whose sink activation failed
+        (or that posted an ERROR) does not reliably restart after
+        NULL — the integrated testbed run had the video-only retry
+        fail instantly on a reused element with no new GStreamer
+        error logged.
+        """
+        playbin = Gst.ElementFactory.make('playbin')
+        if playbin is None:
+            logging.error('playbin element unavailable')
+            return False
+
+        sink_description = build_sink_description(args)
+        logging.info('video sink: %s', sink_description)
+        try:
+            video_sink = Gst.parse_bin_from_description(sink_description, True)
+        except GLib.Error as exc:
+            logging.error('could not build video sink: %s', exc)
+            return False
+
+        video_sink.get_by_name('fit_convert').get_static_pad('sink').add_probe(
+            Gst.PadProbeType.EVENT_DOWNSTREAM, on_convert_event
+        )
+
+        playbin.set_property('uri', args.uri)
+        playbin.set_property('video-sink', video_sink)
+
+        if with_audio:
+            audio_sink = Gst.ElementFactory.make('alsasink')
+            if audio_sink is not None:
+                audio_sink.set_property('device', args.audio_device)
+                playbin.set_property('audio-sink', audio_sink)
+        else:
+            # Clear GST_PLAY_FLAG_AUDIO (0x2): no audio decode, no
+            # audio sink. A broken audio branch — missing ALSA card
+            # or an undecodable codec (e.g. AC3: a52dec lives in
+            # plugins-ugly, which the image doesn't ship) — degrades
+            # to silent video instead of a black slot (the old
+            # gst-launch incarnation died wholesale on either case).
+            flags = int(playbin.get_property('flags'))
+            playbin.set_property('flags', flags & ~0x2)
+
+        playbin.connect('about-to-finish', on_about_to_finish)
+        bus = playbin.get_bus()
+        bus.add_signal_watch()
+        bus.connect('message', on_bus_message)
+
+        state['playbin'] = playbin
+        state['audio'] = with_audio
+        if (
+            playbin.set_state(Gst.State.PLAYING)
+            == Gst.StateChangeReturn.FAILURE
+        ):
+            logging.warning(
+                'could not start playback for %s (audio=%s)',
+                args.uri,
+                with_audio,
+            )
+            teardown(playbin)
+            state['playbin'] = None
+            return False
+        return True
 
     def on_bus_message(bus: Any, message: Any) -> bool:
-        nonlocal exit_code
+        playbin = state['playbin']
+        if playbin is None or message.src is None:
+            return True
         if message.type == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
-            if not audio_disabled:
-                # First error: assume the audio branch and retry
-                # video-only (covers async failures like a missing
-                # audio decoder mid-preroll). A genuine video error
-                # recurs on the retry and exits below — one extra
-                # attempt, bounded.
+            if state['audio']:
+                # First error with audio enabled: assume the audio
+                # branch (covers async failures like a missing audio
+                # decoder mid-preroll) and rebuild video-only. A
+                # genuine video error recurs on the rebuilt pipeline
+                # and exits below — one extra attempt, bounded.
                 logging.warning(
-                    'pipeline error: %s (%s) — retrying without audio',
+                    'pipeline error: %s (%s) — rebuilding without audio',
                     err,
                     debug,
                 )
-                disable_audio()
-                playbin.set_state(Gst.State.NULL)
-                playbin.set_state(Gst.State.PLAYING)
+                teardown(playbin)
+                if not build_and_start(False):
+                    state['exit'] = 1
+                    loop.quit()
                 return True
             logging.error('pipeline error: %s (%s)', err, debug)
-            exit_code = 1
+            state['exit'] = 1
             loop.quit()
         elif message.type == Gst.MessageType.EOS:
             # about-to-finish normally pre-queues the next loop and
@@ -367,39 +414,28 @@ def main(argv: list[str] | None = None) -> int:
                 playbin.set_state(Gst.State.PLAYING)
         return True
 
-    bus = playbin.get_bus()
-    bus.add_signal_watch()
-    bus.connect('message', on_bus_message)
-
     def on_sigterm(signum: int, frame: Any) -> None:
         loop.quit()
 
     signal.signal(signal.SIGTERM, on_sigterm)
     signal.signal(signal.SIGINT, on_sigterm)
 
-    if playbin.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-        # Synchronous start failure — most commonly alsasink failing
-        # READY because the requested ALSA card doesn't exist. Retry
-        # video-only before giving the slot up.
-        logging.warning(
-            'could not start playback for %s — retrying without audio',
-            args.uri,
-        )
-        disable_audio()
-        playbin.set_state(Gst.State.NULL)
-        if (
-            playbin.set_state(Gst.State.PLAYING)
-            == Gst.StateChangeReturn.FAILURE
-        ):
+    with_audio = bool(args.audio_device) and audio_device_usable(
+        args.audio_device
+    )
+    if not build_and_start(with_audio):
+        # Exotic sync failure with audio still enabled (pre-flight
+        # passed but activation failed) — one fresh video-only try.
+        if not (with_audio and build_and_start(False)):
             logging.error('could not start playback for %s', args.uri)
-            playbin.set_state(Gst.State.NULL)
             return 1
 
     try:
         loop.run()
     finally:
-        playbin.set_state(Gst.State.NULL)
-    return exit_code
+        if state['playbin'] is not None:
+            teardown(state['playbin'])
+    return state['exit']
 
 
 if __name__ == '__main__':
