@@ -107,6 +107,9 @@ class TestBeforeSendTransientNoise:
     def test_celery_reconnect_logger_is_ignored(self) -> None:
         # celery's consumer retries broker connections on its own but
         # logs each attempt at ERROR; the logger is silenced at init.
+        # The ignore_logger call happens at settings-module import —
+        # import it explicitly so this test passes in isolation too.
+        import anthias_server.django_project.settings  # noqa: F401
         from sentry_sdk.integrations.logging import _IGNORED_LOGGERS
 
         assert 'celery.worker.consumer.consumer' in _IGNORED_LOGGERS
