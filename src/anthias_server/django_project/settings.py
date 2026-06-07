@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any
 
 import pytz
+import sentry_sdk
 
+from anthias_common.version import get_anthias_release
 from anthias_server.settings import settings as device_settings
 
 # django_stubs_ext.monkeypatch() makes Django generic classes
@@ -35,6 +37,34 @@ except ModuleNotFoundError as exc:
 
 # Repo root: src/anthias_server/django_project/settings.py → up 3 to repo root.
 BASE_DIR = Path(__file__).resolve().parents[3]
+
+# Operators can point crash reporting at their own Sentry project by
+# setting SENTRY_DSN, or disable it entirely by setting it to an
+# empty string (sentry_sdk treats a falsy DSN as "don't send").
+sentry_sdk.init(
+    dsn=getenv(
+        'SENTRY_DSN',
+        'https://da18c7bdab65c9adc4afcd311f5b6f09'
+        '@o4511522371534848.ingest.us.sentry.io/4511522375794688',
+    ),
+    # Same value the DEBUG flag below keys off: 'development', 'test',
+    # or 'production' (the default) — lets dev/CI events be filtered
+    # out in Sentry without suppressing them at the source.
+    environment=getenv('ENVIRONMENT', 'production'),
+    # CalVer release from pyproject.toml's [project].version, via the
+    # same helper the System Info page and v2 info API use (handles
+    # the `uv sync --no-install-project` Docker layout). Empty string
+    # means both sources failed — pass None so Sentry doesn't record
+    # a bogus '' release.
+    release=get_anthias_release() or None,
+    # Request headers and user IPs are PII. Attach them only when the
+    # operator hasn't opted out of analytics in anthias.conf — the
+    # same knob that gates GA telemetry (see lib/telemetry.py). Crash
+    # events themselves still flow; this gates only the PII
+    # enrichment. See
+    # https://docs.sentry.io/platforms/python/data-management/data-collected/
+    send_default_pii=not device_settings['analytics_opt_out'],
+)
 
 
 # Quick-start development settings - unsuitable for production
