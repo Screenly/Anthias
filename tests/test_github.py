@@ -378,3 +378,25 @@ def test_handle_github_error_without_response(
     exc.response = None
     github.handle_github_error(exc, 'no-resp-action')
     assert redis_data['github-api-error'] == 'no-resp-action'
+
+
+def test_handle_github_error_logs_warning_not_error(
+    github_env: None,
+) -> None:
+    """The update check is best-effort and its failures are routine on
+    device networks (timeouts, rate limits). Sentry's logging
+    integration turns error-level logs into events, so logging these
+    at error fires a fleet-wide Sentry event per network blip."""
+    exc = requests_exceptions.ReadTimeout('read timed out')
+    exc.response = None
+    with (
+        mock.patch.object(github.logging, 'warning') as warning_mock,
+        mock.patch.object(github.logging, 'error') as error_mock,
+    ):
+        github.handle_github_error(exc, 'latest release')
+    error_mock.assert_not_called()
+    warning_mock.assert_called_once()
+    # The no-response branch must surface the exception detail, not a
+    # bare 'no data' (Sentry showed 'ReadTimeout … : no data', which
+    # hid the host/timeout info str(exc) carries).
+    assert warning_mock.call_args.args[3] == 'read timed out'

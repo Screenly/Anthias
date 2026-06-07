@@ -50,9 +50,14 @@ def handle_github_error(
     if exc.response is not None:
         errdesc = exc.response.content
     else:
-        errdesc = 'no data'
+        errdesc = str(exc) or 'no data'
 
-    logging.error(
+    # Warning, not error: the update check is best-effort (5-minute
+    # backoff + cached-verdict fallback), and timeouts / rate limits
+    # are routine on device networks. Sentry's logging integration
+    # turns error-level logs into events, so logging these at error
+    # fires a fleet-wide Sentry event for every network blip.
+    logging.warning(
         '%s fetching %s from GitHub: %s', type(exc).__name__, action, errdesc
     )
 
@@ -84,17 +89,20 @@ def _fetch_latest_release_tag() -> str | None:
     # Trip the same 5-minute backoff for malformed bodies as for
     # transport failures. Without this, a bad JSON body or missing
     # tag_name from a 200 response would re-fire the GitHub call on
-    # every page render until upstream fixed the payload.
+    # every page render until upstream fixed the payload. Warning
+    # level for the same reason as handle_github_error — a captive
+    # portal answering 200 with an HTML body lands here, and that's
+    # an environmental condition, not an application error.
     try:
         payload = resp.json()
     except ValueError:
-        logging.error('Malformed JSON from GitHub /releases/latest')
+        logging.warning('Malformed JSON from GitHub /releases/latest')
         _set_github_error_backoff('latest release: malformed JSON')
         return None
 
     tag = payload.get('tag_name') if isinstance(payload, dict) else None
     if not isinstance(tag, str) or not tag:
-        logging.error('Missing tag_name in /releases/latest response')
+        logging.warning('Missing tag_name in /releases/latest response')
         _set_github_error_backoff('latest release: missing tag_name')
         return None
 
@@ -103,7 +111,7 @@ def _fetch_latest_release_tag() -> str | None:
     # for 24h, locking is_up_to_date() into the fallback verdict for
     # the full TTL even after upstream corrects the tag.
     if _parse_version(tag) is None:
-        logging.error('Unparseable tag_name from GitHub: %r', tag)
+        logging.warning('Unparseable tag_name from GitHub: %r', tag)
         _set_github_error_backoff('latest release: unparseable tag_name')
         return None
 
@@ -162,7 +170,7 @@ def is_up_to_date() -> bool:
 
     latest_version = _parse_version(latest_tag)
     if latest_version is None:
-        logging.error('Malformed tag_name from GitHub: %r', latest_tag)
+        logging.warning('Malformed tag_name from GitHub: %r', latest_tag)
         return _fallback_verdict(local_release)
 
     verdict = local_version >= latest_version
