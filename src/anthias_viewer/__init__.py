@@ -12,6 +12,7 @@ from typing import Any
 
 import django
 import pydbus
+import redis.exceptions
 import requests
 import sh as sh
 
@@ -1269,6 +1270,36 @@ DISPLAY_RESOLUTION_INTERVAL_S = 60
 DISPLAY_RESOLUTION_TTL_S = 180
 
 
+def _publish_display_resolution_once() -> None:
+    """One reporter tick — detect the resolution and write it to Redis.
+
+    Never raises: the reporter thread must survive any single failed
+    tick and try again on the next one.
+    """
+    try:
+        value = detect_screen_resolution()
+        if value:
+            r.set(
+                DISPLAY_RESOLUTION_KEY,
+                value,
+                ex=DISPLAY_RESOLUTION_TTL_S,
+            )
+    except redis.exceptions.ConnectionError as exc:
+        # Redis being briefly unreachable (container recycle, compose
+        # startup before its DNS name resolves) is an expected state,
+        # not a crash — the next tick retries and the key's TTL
+        # semantics already make the System Info card fall back
+        # gracefully. Warning, not exception: an ERROR-level log with
+        # a traceback would land in Sentry (ANTHIAS-M / ANTHIAS-H).
+        logging.warning(
+            'publish_display_resolution skipped, redis unreachable '
+            '(will retry): %s',
+            exc,
+        )
+    except Exception:
+        logging.exception('publish_display_resolution failed')
+
+
 def _publish_display_resolution_loop() -> None:
     """Background reporter — write the active display resolution to
     Redis on a 1-minute cadence with a 3-minute TTL.
@@ -1282,16 +1313,7 @@ def _publish_display_resolution_loop() -> None:
 
     def tick() -> None:
         while True:
-            try:
-                value = detect_screen_resolution()
-                if value:
-                    r.set(
-                        DISPLAY_RESOLUTION_KEY,
-                        value,
-                        ex=DISPLAY_RESOLUTION_TTL_S,
-                    )
-            except Exception:
-                logging.exception('publish_display_resolution failed')
+            _publish_display_resolution_once()
             sleep(DISPLAY_RESOLUTION_INTERVAL_S)
 
     t = threading.Thread(

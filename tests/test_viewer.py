@@ -1643,3 +1643,62 @@ def test_handle_reload_linuxfb_idempotent_under_repeat(
     fake_browser.terminate.assert_not_called()
     skip.set.assert_called_once()
     assert viewer._rotation_bounce_pending is True
+
+
+class TestPublishDisplayResolutionOnce:
+    """The reporter tick must treat a redis blip as a retryable state
+    (warning), not a crash (Sentry ANTHIAS-M / ANTHIAS-H)."""
+
+    def test_redis_down_logs_warning_not_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import redis.exceptions
+
+        with (
+            mock.patch.object(
+                viewer, 'detect_screen_resolution', return_value='1920x1080'
+            ),
+            mock.patch.object(
+                viewer.r,
+                'set',
+                side_effect=redis.exceptions.ConnectionError('refused'),
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            viewer._publish_display_resolution_once()
+        assert any(
+            record.levelno == logging.WARNING
+            and 'redis unreachable' in record.message
+            for record in caplog.records
+        )
+        assert all(record.levelno < logging.ERROR for record in caplog.records)
+
+    def test_other_failures_still_log_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with (
+            mock.patch.object(
+                viewer,
+                'detect_screen_resolution',
+                side_effect=RuntimeError('boom'),
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            viewer._publish_display_resolution_once()
+        assert any(
+            record.levelno == logging.ERROR for record in caplog.records
+        )
+
+    def test_writes_resolution_with_ttl(self) -> None:
+        with (
+            mock.patch.object(
+                viewer, 'detect_screen_resolution', return_value='1280x720'
+            ),
+            mock.patch.object(viewer.r, 'set') as set_mock,
+        ):
+            viewer._publish_display_resolution_once()
+        set_mock.assert_called_once_with(
+            viewer.DISPLAY_RESOLUTION_KEY,
+            '1280x720',
+            ex=viewer.DISPLAY_RESOLUTION_TTL_S,
+        )
