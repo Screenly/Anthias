@@ -102,7 +102,7 @@ def get_board_model(model_file: str = '/proc/device-tree/model') -> str:
     """
     try:
         with open(model_file, 'rb') as f:
-            return f.read().decode('utf-8', errors='replace').strip('\x00 \n')
+            return f.read().decode('utf-8', errors='replace').rstrip('\x00 \n')
     except OSError:
         return ''
 
