@@ -143,6 +143,14 @@ def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
     viewer_fixtures.m_cmd.assert_called_once_with('AnthiasViewer')
+    # _bg_exc must stay False: with sh's default (True), a webview crash
+    # (or our own SIGTERM on teardown) re-raises the exit error inside
+    # sh's daemon monitor thread, where nothing can catch it — every
+    # crash the retry loop already handles would still surface as an
+    # unhandled-in-thread error in Sentry.
+    launch_kwargs = viewer_fixtures.m_cmd.return_value.call_args.kwargs
+    assert launch_kwargs['_bg'] is True
+    assert launch_kwargs['_bg_exc'] is False
 
 
 def test_spawn_webview_once_raises_on_early_exit(

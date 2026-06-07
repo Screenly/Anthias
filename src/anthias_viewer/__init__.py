@@ -457,8 +457,18 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     start"`` in src/anthias_webview/src/main.cpp.
     """
     try:
+        # _bg_exc=False: with the default (True), sh re-raises the exit
+        # error (e.g. SignalException_SIGABRT on a Qt init crash, or
+        # SIGTERM from our own _terminate_webview) inside its daemon
+        # monitor thread, where nothing can catch it — Sentry then
+        # reports an unhandled error for a failure the handshake watch
+        # below already detects and the caller's retry loop already
+        # handles. We never call .wait(), so no exception is deferred.
         candidate = sh.Command('AnthiasViewer')(
-            _bg=True, _err_to_out=True, _env=_build_webview_env()
+            _bg=True,
+            _bg_exc=False,
+            _err_to_out=True,
+            _env=_build_webview_env(),
         )
     except sh.CommandNotFound as exc:
         raise WebviewBinaryMissingError(
