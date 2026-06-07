@@ -390,8 +390,8 @@ def test_handle_github_error_logs_warning_not_error(
     exc = requests_exceptions.ReadTimeout('read timed out')
     exc.response = None
     with (
-        mock.patch.object(github.logging, 'warning') as warning_mock,
-        mock.patch.object(github.logging, 'error') as error_mock,
+        mock.patch.object(logging, 'warning') as warning_mock,
+        mock.patch.object(logging, 'error') as error_mock,
     ):
         github.handle_github_error(exc, 'latest release')
     error_mock.assert_not_called()
