@@ -9,6 +9,8 @@ behaviour: under pytest the client has no DSN, builds no transport,
 and capture calls are dropped.
 """
 
+from pathlib import Path
+
 import sentry_sdk
 
 
@@ -19,3 +21,25 @@ def test_sentry_does_not_send_under_pytest() -> None:
     # capture_message returns the event id when an event is queued
     # for sending; None means the event was dropped client-side.
     assert sentry_sdk.capture_message('must not be sent') is None
+
+
+class TestGetBoardModel:
+    """Board-model detection feeding the fleet-triage Sentry tags."""
+
+    def test_reads_and_strips_nul_terminated_model(
+        self, tmp_path: Path
+    ) -> None:
+        from anthias_server.django_project.settings import get_board_model
+
+        model_file = tmp_path / 'model'
+        model_file.write_bytes(b'Raspberry Pi 3 Model B Rev 1.2\x00')
+        assert (
+            get_board_model(str(model_file))
+            == 'Raspberry Pi 3 Model B Rev 1.2'
+        )
+
+    def test_returns_empty_when_no_device_tree(self, tmp_path: Path) -> None:
+        # x86 hosts have no /proc/device-tree at all.
+        from anthias_server.django_project.settings import get_board_model
+
+        assert get_board_model(str(tmp_path / 'missing')) == ''

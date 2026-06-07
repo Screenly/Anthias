@@ -8,6 +8,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import platform
 import secrets
 import sys
 import zoneinfo
@@ -88,6 +89,41 @@ sentry_sdk.init(
     # https://docs.sentry.io/platforms/python/data-management/data-collected/
     send_default_pii=not device_settings['analytics_opt_out'],
 )
+
+
+def get_board_model(model_file: str = '/proc/device-tree/model') -> str:
+    """Host board model from the device tree, '' when unavailable.
+
+    ``/proc/device-tree`` resolves to ``/sys/firmware/devicetree/base``,
+    which Docker exposes read-only inside every container — no bind
+    mount needed. x86 hosts have no device tree; boards that have one
+    expose the model as a NUL-terminated UTF-8 string, decoded and
+    trimmed with the same idiom as device_helper's board detection.
+    """
+    try:
+        with open(model_file, 'rb') as f:
+            # Kernel writes a null-terminated UTF-8 string — decode
+            # and trim exactly like device_helper's board detection.
+            return f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+    except OSError:
+        return ''
+
+
+# Board / kernel context for fleet triage. Events are sent from inside
+# a container, so Sentry's stock OS detection never sees the host —
+# which made the armv7 webview-crash cohort (ANTHIAS-D / ANTHIAS-F)
+# impossible to segment: the same Qt5/armhf viewer image behaves
+# differently under a 32-bit and a 64-bit host kernel, and nothing on
+# the event said which one the device boots. A container shares the
+# host kernel, so platform.release()/machine() report the host
+# values; DEVICE_TYPE is baked into the image at build time (pi1 /
+# pi2 / pi3 / pi3-64 / pi4-64 / x86 / ...).
+sentry_sdk.set_tag('device_type', getenv('DEVICE_TYPE') or 'unknown')
+sentry_sdk.set_tag('kernel_release', platform.release())
+sentry_sdk.set_tag('kernel_machine', platform.machine())
+_board_model = get_board_model()
+if _board_model:
+    sentry_sdk.set_tag('board_model', _board_model)
 
 
 # Quick-start development settings - unsuitable for production
