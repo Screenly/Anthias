@@ -1649,6 +1649,18 @@ class TestPublishDisplayResolutionOnce:
     """The reporter tick must treat a redis blip as a retryable state
     (warning), not a crash (Sentry ANTHIAS-M / ANTHIAS-H)."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_logging(self) -> Iterator[None]:
+        # This module calls logging.disable(logging.CRITICAL) at
+        # import time, which would make the caplog assertions below
+        # vacuous (no records ever emitted). Lift the disable for
+        # these tests and restore it afterwards.
+        logging.disable(logging.NOTSET)
+        try:
+            yield
+        finally:
+            logging.disable(logging.CRITICAL)
+
     def test_redis_down_logs_warning_not_error(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
