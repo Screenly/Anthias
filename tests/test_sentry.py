@@ -113,6 +113,9 @@ class TestBeforeSendTransientNoise:
         from sentry_sdk.integrations.logging import _IGNORED_LOGGERS
 
         assert 'celery.worker.consumer.consumer' in _IGNORED_LOGGERS
+        # The embedded beat scheduler retries broker connections the
+        # same way and logs each attempt at ERROR too.
+        assert 'celery.beat' in _IGNORED_LOGGERS
 
 
 class TestGetBoardModel:
@@ -135,3 +138,4 @@ class TestGetBoardModel:
         from anthias_server.django_project.settings import get_board_model
 
         assert get_board_model(str(tmp_path / 'missing')) == ''
+
