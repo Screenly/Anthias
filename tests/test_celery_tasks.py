@@ -1793,6 +1793,17 @@ class TestWaitForMigrations:
             assert celery_tasks_module._migrations_ready() is False
         fake_conn.close.assert_called_once()
 
+    def test_non_database_errors_fail_fast(self) -> None:
+        # A programming bug in the probe must not be mistaken for
+        # "database not ready" — that would park the worker in an
+        # infinite startup wait with no failing signal.
+        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
+        with connections_patch, executor_patch as executor_cls:
+            executor_cls.side_effect = TypeError('probe bug')
+            with pytest.raises(TypeError, match='probe bug'):
+                celery_tasks_module._migrations_ready()
+        fake_conn.close.assert_called_once()
+
     def test_worker_init_returns_immediately_when_ready(self) -> None:
         with (
             mock.patch.object(

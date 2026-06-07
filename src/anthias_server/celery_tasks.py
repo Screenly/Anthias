@@ -200,22 +200,25 @@ def _migrations_ready() -> bool:
     """True when the shared SQLite schema is fully migrated.
 
     Computes the same unapplied-migration plan ``manage.py migrate
-    --check`` does. Any error getting there (``OperationalError:
-    database is locked`` while the server's dbbackup/dbrestore holds
-    the file, a missing ``django_migrations`` table on a
-    first-boot/empty DB) means the schema is not ready either, so
-    report not-ready rather than raising. The error is still logged
-    at DEBUG so a persistent non-transient cause (bad volume mount,
-    corrupted DB file) can be identified from the device logs.
+    --check`` does. A database-side error getting there
+    (``OperationalError: database is locked`` while the server's
+    dbbackup/dbrestore holds the file, a missing
+    ``django_migrations`` table on a first-boot/empty DB) means the
+    schema is not ready either, so report not-ready rather than
+    raising; the underlying error is kept visible at DEBUG for runs
+    with ``--loglevel=debug``. Anything that is NOT a database error
+    (a programming bug in the probe itself) propagates so the worker
+    fails fast instead of waiting forever.
     """
     from django.db import connections
+    from django.db.utils import DatabaseError
     from django.db.migrations.executor import MigrationExecutor
 
     connection = connections['default']
     try:
         executor = MigrationExecutor(connection)
         plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
-    except Exception:
+    except DatabaseError:
         logging.debug(
             'Migration-readiness probe failed; treating as not ready',
             exc_info=True,
