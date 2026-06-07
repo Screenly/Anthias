@@ -10,11 +10,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import secrets
 import sys
+import zoneinfo
 from os import getenv
 from pathlib import Path
 from typing import Any
 
-import pytz
 import sentry_sdk
 
 from anthias_common.version import get_anthias_release
@@ -297,12 +297,37 @@ USE_I18N = True
 
 USE_TZ = True
 
-try:
-    with open('/etc/timezone', 'r') as f:
-        TIME_ZONE = f.read().strip()
-        pytz.timezone(TIME_ZONE)  # Checks if the timezone is valid.
-except (pytz.exceptions.UnknownTimeZoneError, FileNotFoundError):
-    TIME_ZONE = 'UTC'
+
+def get_host_time_zone(
+    timezone_file: str = '/etc/timezone',
+    zoneinfo_root: Path = Path('/usr/share/zoneinfo'),
+) -> str:
+    """Read the host's /etc/timezone, falling back to UTC.
+
+    /etc/timezone is bind-mounted from the host, so its value is
+    whatever the host distro wrote there. Validate it the same way
+    Django does in django.conf.Settings.__init__ — a zoneinfo lookup
+    PLUS the /usr/share/zoneinfo file check. Validating with a bundled
+    database alone (the old pytz check) is not enough: it accepts
+    names like `US/Central` that the image's tzdata may not ship on
+    disk, and Django then raises ValueError at startup, crash-looping
+    every Django process on the device.
+    """
+    try:
+        with open(timezone_file, 'r') as f:
+            time_zone = f.read().strip()
+        zoneinfo.ZoneInfo(time_zone)
+        if (
+            zoneinfo_root.exists()
+            and not zoneinfo_root.joinpath(*time_zone.split('/')).exists()
+        ):
+            raise zoneinfo.ZoneInfoNotFoundError(time_zone)
+        return time_zone
+    except (OSError, ValueError, zoneinfo.ZoneInfoNotFoundError):
+        return 'UTC'
+
+
+TIME_ZONE = get_host_time_zone()
 
 
 # Static files (CSS, JavaScript, Images)

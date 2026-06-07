@@ -96,6 +96,13 @@ def build_image(
         'python-is-python3',
         'sudo',
         'sqlite3',
+        # The host's /etc/timezone is bind-mounted into the
+        # containers, and hosts in the wild still use legacy aliases
+        # like `US/Central`. Trixie moved those out of tzdata into
+        # tzdata-legacy; without it Django's startup check against
+        # /usr/share/zoneinfo rejects the host's timezone and the
+        # device would fall back to UTC.
+        'tzdata-legacy',
     ]
 
     # The 32-bit Pi boards (pi2, pi3) link against Broadcom's legacy
