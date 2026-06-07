@@ -18,7 +18,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=development
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: always
     volumes:
       - anthias-data:/data
@@ -33,7 +34,7 @@ services:
       anthias-server:
         condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
     command: >
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
@@ -51,6 +52,12 @@ services:
   redis:
     platform: "linux/amd64"
     image: mirror.gcr.io/library/redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
 volumes:
     anthias-data:

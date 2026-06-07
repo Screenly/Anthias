@@ -15,8 +15,16 @@ services:
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    # Gate startup on redis actually answering PING (see the
+    # healthcheck on the redis service below) — plain service_started
+    # only orders container creation, so uvicorn's first Channels /
+    # Celery touch could still race a redis that hadn't finished
+    # loading its RDB. NOTE: docker-compose only; the balena
+    # supervisor doesn't support depends_on conditions, so fleet
+    # devices rely on each consumer's own reconnect logic instead.
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     devices:
       - "/dev/vchiq:/dev/vchiq"
     restart: always
@@ -39,8 +47,15 @@ services:
       context: .
       dockerfile: docker/Dockerfile.viewer
     mem_limit: ${VIEWER_MEMORY_LIMIT_KB}k
+    # redis: the viewer subscribes to the anthias.viewer pub/sub
+    # channel and publishes the display resolution; wait for a PING
+    # so neither hits "connection refused" at boot. (compose-only —
+    # see the note on anthias-server's depends_on.)
     depends_on:
-      - anthias-server
+      anthias-server:
+        condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       - HOME=/data
       - PORT=8080
@@ -122,9 +137,14 @@ services:
       nice -n 19 ionice -c 3
       celery -A anthias_server.celery_tasks.celery worker -B -n worker@anthias
       --loglevel=info --scheduler celery.beat.Scheduler
+    # redis is both the broker and the beat heartbeat; gate on a PING
+    # so the worker doesn't burn its first connection retries during
+    # compose startup. (compose-only — see anthias-server's note.)
     depends_on:
-      - anthias-server
-      - redis
+      anthias-server:
+        condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -152,6 +172,16 @@ services:
       dockerfile: docker/Dockerfile.redis
     ports:
       - 127.0.0.1:6379:6379
+    # Lets the depends_on conditions above hold service startup until
+    # redis actually answers, covering the RDB-load window after a
+    # restart on a slow SD card. start_period keeps the early probes
+    # from counting against the retry budget.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     restart: always
     volumes:
       - redis-data:/var/lib/redis

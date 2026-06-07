@@ -12,6 +12,7 @@ and capture calls are dropped.
 from pathlib import Path
 
 import sentry_sdk
+from sentry_sdk.types import Event
 
 
 def test_sentry_does_not_send_under_pytest() -> None:
@@ -21,6 +22,125 @@ def test_sentry_does_not_send_under_pytest() -> None:
     # capture_message returns the event id when an event is queued
     # for sending; None means the event was dropped client-side.
     assert sentry_sdk.capture_message('must not be sent') is None
+
+
+class TestBeforeSendTransientNoise:
+    """The before_send hook must drop expected transient states
+    (redis restarting, an HTTP client hanging up) and nothing else.
+    Regression coverage for Sentry ANTHIAS-M / ANTHIAS-K / ANTHIAS-H /
+    ANTHIAS-J (redis blips) and ANTHIAS-N (client disconnect)."""
+
+    @staticmethod
+    def _hint_for(exc: BaseException) -> dict[str, object]:
+        # Build the exc_info triple directly instead of raise/except —
+        # before_send only inspects exc_info[1] and its
+        # __cause__/__context__ chain, and not catching BaseException
+        # keeps Sonar S5754 happy.
+        return {'exc_info': (type(exc), exc, None)}
+
+    def test_drops_redis_connection_error(self) -> None:
+        import redis.exceptions
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(
+            redis.exceptions.ConnectionError(
+                'Error 111 connecting to redis:6379. Connection refused.'
+            )
+        )
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_drops_wrapped_redis_connection_error(self) -> None:
+        # channels-redis / kombu re-raise the underlying redis error
+        # wrapped in their own exception types — the chain has to be
+        # walked, not just the head.
+        import redis.exceptions
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        try:
+            try:
+                raise redis.exceptions.ConnectionError('refused')
+            except redis.exceptions.ConnectionError as inner:
+                raise RuntimeError('channel layer send failed') from inner
+        except RuntimeError as wrapper:
+            hint = {
+                'exc_info': (
+                    type(wrapper),
+                    wrapper,
+                    wrapper.__traceback__,
+                )
+            }
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_keeps_wrapper_when_context_is_suppressed(self) -> None:
+        # ``raise ... from None`` detaches the causal chain — a redis
+        # error that merely *preceded* the wrapper must not drop it.
+        import redis.exceptions
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        try:
+            try:
+                raise redis.exceptions.ConnectionError('refused')
+            except redis.exceptions.ConnectionError:
+                raise RuntimeError('a real bug') from None
+        except RuntimeError as wrapper:
+            hint = {
+                'exc_info': (
+                    type(wrapper),
+                    wrapper,
+                    wrapper.__traceback__,
+                )
+            }
+        event: Event = {'event_id': 'x'}
+        assert _sentry_before_send(event, hint) == event
+
+    def test_drops_cancelled_error(self) -> None:
+        import asyncio
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(asyncio.CancelledError())
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_keeps_ordinary_exceptions(self) -> None:
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        event: Event = {'event_id': 'x'}
+        hint = self._hint_for(ValueError('a real bug'))
+        assert _sentry_before_send(event, hint) == event
+
+    def test_keeps_events_without_exc_info(self) -> None:
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        event: Event = {'event_id': 'x'}
+        assert _sentry_before_send(event, {}) == event
+
+    def test_celery_reconnect_logger_is_ignored(self) -> None:
+        # celery's consumer retries broker connections on its own but
+        # logs each attempt at ERROR; the logger is silenced at init.
+        # The ignore_logger call happens at settings-module import —
+        # import it explicitly so this test passes in isolation too.
+        import anthias_server.django_project.settings  # noqa: F401
+        from sentry_sdk.integrations.logging import _IGNORED_LOGGERS
+
+        assert 'celery.worker.consumer.consumer' in _IGNORED_LOGGERS
+        # The embedded beat scheduler retries broker connections the
+        # same way and logs each attempt at ERROR too.
+        assert 'celery.beat' in _IGNORED_LOGGERS
 
 
 class TestGetBoardModel:

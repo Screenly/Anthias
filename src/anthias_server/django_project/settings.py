@@ -8,15 +8,20 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import asyncio
 import platform
 import secrets
 import sys
 import zoneinfo
+from collections.abc import Iterator
 from os import getenv
 from pathlib import Path
 from typing import Any
 
+import redis.exceptions
 import sentry_sdk
+from sentry_sdk.integrations.logging import ignore_logger
+from sentry_sdk.types import Event, Hint
 
 from anthias_common.version import get_anthias_release
 from anthias_server.settings import settings as device_settings
@@ -68,8 +73,74 @@ _default_sentry_dsn = (
         '@o4511522371534848.ingest.us.sentry.io/4511522375794688'
     )
 )
+
+
+def _exception_chain(exc: BaseException | None) -> Iterator[BaseException]:
+    """Walk ``exc`` and everything it was raised from.
+
+    Wrappers matter here: channels-redis and kombu re-raise the
+    underlying ``redis.exceptions.ConnectionError`` wrapped in their
+    own types, so the transient-noise check below has to look at the
+    whole ``__cause__``/``__context__`` chain, not just the head.
+    """
+    seen: set[int] = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        yield exc
+        # Mirror traceback rendering: an explicit ``raise ... from
+        # None`` sets __suppress_context__, meaning the author
+        # deliberately detached the causal chain — don't let a
+        # suppressed redis error hide the wrapper exception.
+        exc = exc.__cause__ or (
+            None if exc.__suppress_context__ else exc.__context__
+        )
+
+
+def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
+    """Drop events that report expected transient states, not bugs.
+
+    Two classes of noise, both observed fleet-wide on day one:
+
+      * ``redis.exceptions.ConnectionError`` (and subclasses, plus
+        anything raised from one) — redis restarts after its
+        container recycles or before its DNS name resolves during
+        compose startup. Every consumer already self-heals: celery's
+        consumer reconnects with backoff, the viewer's reporter loop
+        retries on its next tick, and Channels re-establishes on the
+        next WebSocket frame. A *persistent* redis outage still
+        surfaces — the device stops working and the watchdog restart
+        loop is visible in balena — but a 5-second blip is not worth
+        an event per process (Sentry ANTHIAS-M / ANTHIAS-K /
+        ANTHIAS-H / ANTHIAS-J).
+      * ``asyncio.CancelledError`` — an HTTP client hanging up
+        mid-request under ASGI; Django/uvicorn cancel the handler by
+        design (Sentry ANTHIAS-N).
+    """
+    exc_info = hint.get('exc_info')
+    if not exc_info:
+        return event
+    for exc in _exception_chain(exc_info[1]):
+        if isinstance(exc, asyncio.CancelledError):
+            return None
+        if isinstance(exc, redis.exceptions.ConnectionError):
+            return None
+    return event
+
+
+# celery's consumer and the embedded beat scheduler both log every
+# broker reconnect attempt at ERROR ("consumer: Cannot connect to
+# redis://..., Trying again in 6.00 seconds" / "beat: Connection
+# error: ..., Trying again in 2.0 seconds") while they retry on
+# their own — same expected-transient rationale as the before_send
+# filter above, but these arrive as log messages rather than
+# exceptions, so they have to be silenced at the logger.
+# (Sentry ANTHIAS-K and ANTHIAS-P.)
+ignore_logger('celery.worker.consumer.consumer')
+ignore_logger('celery.beat')
+
 sentry_sdk.init(
     dsn=getenv('SENTRY_DSN', _default_sentry_dsn),
+    before_send=_sentry_before_send,
     # Same value the DEBUG flag below keys off: 'development', 'test',
     # or 'production' (the default) — lets dev events be filtered out
     # in Sentry. (Test runs don't send at all — see the DSN default
