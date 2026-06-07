@@ -10,7 +10,9 @@ and capture calls are dropped.
 """
 
 from pathlib import Path
+from unittest import mock
 
+import pytest
 import sentry_sdk
 from sentry_sdk.types import Event
 
@@ -163,3 +165,54 @@ class TestGetBoardModel:
         from anthias_server.django_project.settings import get_board_model
 
         assert get_board_model(str(tmp_path / 'missing')) == ''
+
+
+class TestGetSentryRelease:
+    """Release stamping — CalVer + the image's git short hash, so
+    pre- and post-deploy builds of the same CalVer are
+    distinguishable (the 2026.6.2 audit gap)."""
+
+    def test_appends_short_hash_when_env_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.setenv('GIT_SHORT_HASH', 'abc1234')
+        with mock.patch.object(
+            s, 'get_anthias_release', return_value='2026.6.2'
+        ):
+            assert s.get_sentry_release() == '2026.6.2+abc1234'
+
+    def test_bare_calver_without_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.delenv('GIT_SHORT_HASH', raising=False)
+        with mock.patch.object(
+            s, 'get_anthias_release', return_value='2026.6.2'
+        ):
+            assert s.get_sentry_release() == '2026.6.2'
+
+    def test_none_when_version_unknown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # No bogus '+hash'-only release when the CalVer itself is
+        # missing — Sentry should see no release at all.
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.setenv('GIT_SHORT_HASH', 'abc1234')
+        with mock.patch.object(s, 'get_anthias_release', return_value=''):
+            assert s.get_sentry_release() is None
+
+
+def test_balena_tag_reflects_is_balena_app() -> None:
+    """The balena tag must come from the same helper the
+    reboot/shutdown tasks rely on, so the two can't disagree."""
+    import inspect
+
+    from anthias_server.django_project import settings as s
+
+    source = inspect.getsource(s)
+    assert "set_tag('balena'" in source
+    assert 'is_balena_app()' in source
