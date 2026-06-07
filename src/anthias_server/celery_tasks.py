@@ -1088,17 +1088,11 @@ def revalidate_asset_urls() -> None:
             try:
                 reachable = _check_asset_reachability(asset)
             except SoftTimeLimitExceeded:
-                # Out of budget for the whole sweep — abort cleanly
-                # (the ``finally`` below releases the lock; rows
-                # updated so far keep their fresh state) instead of
-                # letting the hard limit SIGKILL the pool child. The
-                # next beat tick starts over.
-                logging.warning(
-                    'revalidate_asset_urls: sweep exceeded %ss; '
-                    'aborting until the next beat tick',
-                    ASSET_REVALIDATION_SOFT_TIME_LIMIT_S,
-                )
-                return
+                # Out of budget for the whole sweep — handled by the
+                # outer except below. Re-raise past the blanket
+                # Exception arm that would otherwise swallow it and
+                # keep the sweep running into the hard limit.
+                raise
             except Exception:
                 # url_fails should swallow its own exceptions, but a
                 # surprise from sh/requests shouldn't kill the whole sweep.
@@ -1111,6 +1105,19 @@ def revalidate_asset_urls() -> None:
                 is_reachable=reachable,
                 last_reachability_check=timezone.now(),
             )
+    except SoftTimeLimitExceeded:
+        # The soft signal is delivered asynchronously, so it can fire
+        # anywhere in the loop — during a probe or during the DB
+        # update — which is why the whole sweep body is covered, not
+        # just _check_asset_reachability. Abort cleanly (the
+        # ``finally`` below releases the lock; rows updated so far
+        # keep their fresh state) instead of letting the hard limit
+        # SIGKILL the pool child. The next beat tick starts over.
+        logging.warning(
+            'revalidate_asset_urls: sweep exceeded %ss; '
+            'aborting until the next beat tick',
+            ASSET_REVALIDATION_SOFT_TIME_LIMIT_S,
+        )
     finally:
         # Compare-and-delete: only release if the lock still holds
         # *our* token. If the TTL expired and someone else acquired
@@ -1346,30 +1353,43 @@ def revalidate_asset_url(asset_id: str) -> None:
     ):
         return
 
+    # The soft-limit signal is delivered asynchronously, so the outer
+    # try covers the DB update as well as the probe — a delivery
+    # landing between the probe returning and the UPDATE committing
+    # must not escape as a task failure (that's the SIGKILL-adjacent
+    # noise this task's limits exist to avoid).
     try:
-        reachable = _check_asset_reachability(asset)
+        try:
+            reachable = _check_asset_reachability(asset)
+        except SoftTimeLimitExceeded:
+            # A probe that can't finish inside the soft budget gets
+            # the same verdict url_fails gives an HTTP timeout:
+            # unreachable. Recording the verdict (rather than
+            # bailing) keeps the viewer's _asset_is_displayable in
+            # sync with reality and the cooldown lock prevents an
+            # immediate re-probe storm.
+            logging.warning(
+                'revalidate_asset_url: probe for %s exceeded %ss; '
+                'marking unreachable',
+                asset_id,
+                ASSET_RECHECK_SOFT_TIME_LIMIT_S,
+            )
+            reachable = False
+        except Exception:
+            logging.exception(
+                'revalidate_asset_url: probe crashed for %s', asset_id
+            )
+            return
+        Asset.objects.filter(asset_id=asset_id).update(
+            is_reachable=reachable,
+            last_reachability_check=timezone.now(),
+        )
     except SoftTimeLimitExceeded:
-        # A probe that can't finish inside the soft budget gets the
-        # same verdict url_fails gives an HTTP timeout: unreachable.
-        # Recording the verdict (rather than bailing) keeps the
-        # viewer's _asset_is_displayable in sync with reality and the
-        # cooldown lock prevents an immediate re-probe storm.
         logging.warning(
-            'revalidate_asset_url: probe for %s exceeded %ss; '
-            'marking unreachable',
+            'revalidate_asset_url: soft time limit hit while '
+            'finalising the probe for %s; giving up this recheck',
             asset_id,
-            ASSET_RECHECK_SOFT_TIME_LIMIT_S,
         )
-        reachable = False
-    except Exception:
-        logging.exception(
-            'revalidate_asset_url: probe crashed for %s', asset_id
-        )
-        return
-    Asset.objects.filter(asset_id=asset_id).update(
-        is_reachable=reachable,
-        last_reachability_check=timezone.now(),
-    )
 
 
 # ---------------------------------------------------------------------------

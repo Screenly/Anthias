@@ -1694,21 +1694,20 @@ class TestProbeTimeLimits:
         # The soft limit must fire with room to spare before the
         # SIGKILL backstop, and must cover the documented worst-case
         # legitimate probe (HEAD 10s + GET 10s + DNS stall).
-        assert (
-            revalidate_asset_url.soft_time_limit
-            < revalidate_asset_url.time_limit
-        )
-        assert revalidate_asset_url.soft_time_limit >= 30
+        soft = revalidate_asset_url.soft_time_limit
+        hard = revalidate_asset_url.time_limit
+        assert soft is not None
+        assert hard is not None
+        assert soft < hard
+        assert soft >= 30
 
     def test_sweep_task_has_soft_limit_headroom(self) -> None:
-        assert (
-            revalidate_asset_urls.soft_time_limit
-            == celery_tasks_module.ASSET_REVALIDATION_SOFT_TIME_LIMIT_S
-        )
-        assert (
-            revalidate_asset_urls.soft_time_limit
-            < revalidate_asset_urls.time_limit
-        )
+        soft = revalidate_asset_urls.soft_time_limit
+        hard = revalidate_asset_urls.time_limit
+        assert soft == celery_tasks_module.ASSET_REVALIDATION_SOFT_TIME_LIMIT_S
+        assert soft is not None
+        assert hard is not None
+        assert soft < hard
 
     @pytest.mark.django_db
     def test_recheck_soft_limit_marks_unreachable(
@@ -1739,8 +1738,9 @@ class TestProbeTimeLimits:
             side_effect=SoftTimeLimitExceeded,
         ):
             result = revalidate_asset_urls.apply()
-        # Caught inside the task — no exception propagates (an
-        # uncaught one would mean the SIGKILL path in production).
+        # Caught inside the task — no exception propagates, so the
+        # sweep ends as a clean success instead of a task failure
+        # that error monitoring would report.
         assert result.successful()
         # The finally block must have released the singleton lock so
         # the next beat tick can run.
