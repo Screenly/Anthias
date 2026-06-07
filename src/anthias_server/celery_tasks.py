@@ -10,6 +10,7 @@ import django
 import sh
 from celery import Celery, Task
 from celery.exceptions import SoftTimeLimitExceeded
+from celery.signals import worker_init
 from django.apps import apps as _django_apps
 from PIL import UnidentifiedImageError
 from tenacity import Retrying, stop_after_attempt, wait_fixed
@@ -186,6 +187,63 @@ def asset_recheck_queue_key(asset_id: str) -> str:
 def asset_recheck_lock_key(asset_id: str) -> str:
     """Task-side cooldown lock key (TTL = RECHECK_COOLDOWN_S)."""
     return f'recheck:{asset_id}:lock'
+
+
+# Poll cadence while the worker waits for the server's startup
+# ``migrate`` pass to finish (see ``wait_for_migrations`` below).
+MIGRATION_WAIT_POLL_S = 5
+
+
+def _migrations_ready() -> bool:
+    """True when the shared SQLite schema is fully migrated.
+
+    Computes the same unapplied-migration plan ``manage.py migrate
+    --check`` does. Any error getting there (``OperationalError:
+    database is locked`` while the server's dbbackup/dbrestore holds
+    the file, a missing ``django_migrations`` table on a
+    first-boot/empty DB) means the schema is not ready either, so
+    report not-ready rather than raising.
+    """
+    from django.db import connections
+    from django.db.migrations.executor import MigrationExecutor
+
+    connection = connections['default']
+    try:
+        executor = MigrationExecutor(connection)
+        plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
+    except Exception:
+        return False
+    finally:
+        # Don't leak the probe connection into the prefork children —
+        # SQLite handles must not be shared across fork().
+        connection.close()
+    return not plan
+
+
+@worker_init.connect
+def wait_for_migrations(**kwargs: Any) -> None:
+    """Block worker startup until the server has applied migrations.
+
+    The celery container starts in parallel with anthias-server, whose
+    start script is still running its dbbackup → migrate pass (or the
+    dbrestore fallback, which drops and re-creates every table). A
+    task replayed off the Redis broker in that window dies with
+    ``OperationalError: no such table: assets`` (Sentry ANTHIAS-1 —
+    one burst per device on every upgrade/first boot). Tasks stay
+    queued in the broker while we wait, so nothing is lost — they run
+    as soon as the schema is in place. Deliberately unbounded: a
+    worker without a database can do no useful work, and the log line
+    below keeps the wait observable.
+    """
+    waited = 0
+    while not _migrations_ready():
+        logging.warning(
+            'Database is not migrated yet; delaying celery worker '
+            'startup (%ss elapsed)',
+            waited,
+        )
+        time.sleep(MIGRATION_WAIT_POLL_S)
+        waited += MIGRATION_WAIT_POLL_S
 
 
 @celery.on_after_configure.connect
