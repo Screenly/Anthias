@@ -378,3 +378,33 @@ def test_handle_github_error_without_response(
     exc.response = None
     github.handle_github_error(exc, 'no-resp-action')
     assert redis_data['github-api-error'] == 'no-resp-action'
+
+
+def test_handle_github_error_logs_at_warning_not_error(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """An unreachable api.github.com is a routine condition on a
+    signage device (offline installs, locked-down networks) — it must
+    not log at ERROR, which would land in Sentry on every offline
+    device (ANTHIAS-8)."""
+    exc = requests_exceptions.ConnectionError()
+    exc.response = None
+    with (
+        mock.patch.object(github.logging, 'warning') as warning_mock,
+        mock.patch.object(github.logging, 'error') as error_mock,
+    ):
+        github.handle_github_error(exc, 'latest release')
+    warning_mock.assert_called_once()
+    error_mock.assert_not_called()
+
+
+def test_github_module_never_logs_at_error_level() -> None:
+    """Every failure path in this module is degraded through
+    gracefully (backoff + cached verdict), so none of it belongs at
+    ERROR level. Pin that by source inspection so a future path
+    doesn't quietly reintroduce Sentry noise."""
+    import inspect
+
+    source = inspect.getsource(github)
+    assert 'logging.error' not in source
+    assert 'logging.exception' not in source
