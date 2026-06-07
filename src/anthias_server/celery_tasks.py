@@ -247,17 +247,20 @@ def wait_for_migrations(**kwargs: Any) -> None:
     below keeps the wait observable.
     """
     waited = 0
+    next_log_at = 0
     while not _migrations_ready():
         # First miss logs immediately, then repeat every
         # MIGRATION_WAIT_LOG_EVERY_S — a multi-minute migrate/restore
         # on a slow SD card shouldn't drown the device log in a
-        # warning per poll.
-        if waited % MIGRATION_WAIT_LOG_EVERY_S == 0:
+        # warning per poll. Tracked as an explicit next-log threshold
+        # so the cadence holds whatever the two constants are set to.
+        if waited >= next_log_at:
             logging.warning(
                 'Database is not migrated yet; delaying celery worker '
                 'startup (%ss elapsed)',
                 waited,
             )
+            next_log_at = waited + MIGRATION_WAIT_LOG_EVERY_S
         time.sleep(MIGRATION_WAIT_POLL_S)
         waited += MIGRATION_WAIT_POLL_S
 
