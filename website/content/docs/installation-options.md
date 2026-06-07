@@ -35,8 +35,10 @@ here are the links to the images:
 
 * [Raspberry Pi 5](https://hub.balena.io/fleets-for-good/2209774/anthias-pi5)
 * [Raspberry Pi 4](https://hub.balena.io/fleets-for-good/1971389/anthias-pi4)
-* [Raspberry Pi 3](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3)
+* [Raspberry Pi 3 (64-bit)](#using-the-images-from-the-releases) — recommended for Pi 3 hardware (Qt 6 viewer); ships as `anthias-pi3-64` in the pre-built release images
+* [Raspberry Pi 3 (32-bit)](https://hub.balena.io/fleets-for-good/1971388/anthias-pi3) — legacy; consider the 64-bit image above
 * [Raspberry Pi 2](https://hub.balena.io/fleets-for-good/1971385/anthias-pi2)
+* [Rock Pi 4 (Model B)](#using-the-images-from-the-releases) — ships as `anthias-rockpi4` in the pre-built release images
 
 Go to one of the links above and click the *Join* button, then select either *Ethernet only* or *Wifi + Ethernet* for Network options.
 You can either click the *Flash* button to open balenaEtcher (make sure that it's installed) or download the image file and flash it using your preferred imager.

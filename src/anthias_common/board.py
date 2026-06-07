@@ -4,21 +4,33 @@
 device (``pi4-64``, ``pi5``, ``x86``, or the catch-all ``arm64`` /
 ``generic-arm64`` for every aarch64 SBC it doesn't recognise as a
 Pi). For SoCs whose silicon offers HW decode that the catch-all
-image can address (Rock Pi 4 → RK3399 via v4l2_request), the
-``anthias_host_agent`` process publishes a more specific subtype to
-Redis at ``host:board_subtype`` (e.g. ``'rockpi4'``) by reading
-``/proc/device-tree/model`` on the host.
+image can address (Rock Pi 4 → RK3399 via v4l2_request), a more
+specific subtype (e.g. ``'rockpi4'``) upgrades the key. Two sources,
+in order:
+
+* the ``anthias_host_agent`` process (docker-compose installs)
+  publishes it to Redis at ``host:board_subtype`` by reading
+  ``/proc/device-tree/model`` on the host;
+* when Redis has no value — balena fleets ship no host_agent
+  service, or the agent is down — ``get_board_subtype`` falls back
+  to reading the device tree directly via the shared
+  ``anthias_common.device_helper.detect_board_subtype``. The device
+  tree is kernel-global, so the in-container read returns the same
+  model string the host sees (the mechanism
+  ``device_helper.get_device_type`` has always relied on). This is
+  what lets the ``screenly_ose/anthias-rockpi4`` balena fleet's
+  codec gate work without a host-side daemon.
 
 Both the server's asset processor (deciding whether to accept a
-codec) and the viewer's hwdec dispatch (deciding which mpv
-``--hwdec=`` value to ask for) need the same upgraded key. This
-module owns the resolution so the two sides don't drift.
+codec) and the viewer need the same upgraded key. This module owns
+the resolution so the two sides don't drift.
 """
 
 from __future__ import annotations
 
 import os
 
+from anthias_common.device_helper import detect_board_subtype
 from anthias_common.utils import connect_to_redis
 
 # DEVICE_TYPE values that trigger the host_agent subtype lookup.
@@ -29,25 +41,31 @@ ARM64_DEVICE_TYPES = frozenset({'arm64', 'generic-arm64'})
 
 
 def get_board_subtype() -> str | None:
-    """Return the host_agent-published board subtype, or ``None``.
+    """Return the board subtype, or ``None``.
 
-    Any failure (Redis down, key missing, decode error) returns
-    ``None`` so the caller falls back to the raw DEVICE_TYPE.
+    Redis (the host_agent-published value) is authoritative when
+    present. When it yields nothing — key missing or empty, Redis
+    down, decode error — fall back to reading the device tree
+    directly via ``detect_board_subtype``: balena fleets have no
+    host_agent service, and a compose install whose agent died
+    mid-upgrade shouldn't lose its codec envelope either. Both
+    sources share the same model-string table, so they can't
+    disagree; an unknown board returns ``None`` from both and the
+    caller falls back to the raw DEVICE_TYPE.
     """
+    value: object = None
     try:
         r = connect_to_redis()
         value = r.get('host:board_subtype')
     except Exception:
-        return None
+        value = None
     if isinstance(value, bytes):
         try:
-            decoded = value.decode('utf-8')
+            value = value.decode('utf-8')
         except UnicodeDecodeError:
-            return None
-        return decoded.strip().lower() or None
-    if isinstance(value, str):
-        return value.strip().lower() or None
-    return None
+            value = None
+    subtype = value.strip().lower() if isinstance(value, str) else None
+    return subtype or detect_board_subtype()
 
 
 def get_total_mem_kb() -> int | None:

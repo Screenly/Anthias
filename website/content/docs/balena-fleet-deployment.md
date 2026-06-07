@@ -106,7 +106,9 @@ $ ./bin/deploy_to_balena.sh \
     --fleet $FLEET_NAME \
 ```
 
-`$BOARD_TYPE` is one of `pi2`, `pi3`, `pi4-64`, or `pi5`. Run
+`$BOARD_TYPE` is one of `pi2`, `pi3`, `pi3-64`, `pi4-64`, or `pi5` (`pi3`
+is the legacy 32-bit Raspberry Pi 3 image; `pi3-64` is the recommended
+64-bit/Qt 6 image for Pi 3 hardware). Run
 `./bin/deploy_to_balena.sh --help` for the current list of supported boards.
 
 Running the command above will pull the latest Docker images from GHCR and

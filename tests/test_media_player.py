@@ -804,6 +804,23 @@ def test_get_instance_returns_mpv_for_pi4_64(reset_media_proxy: None) -> None:
     assert isinstance(instance, MPVMediaPlayer)
 
 
+def test_get_instance_returns_mpv_for_pi3_64(reset_media_proxy: None) -> None:
+    # A 64-bit Pi 3 still reports model 'Raspberry Pi 3', so
+    # get_device_type() returns 'pi3' — which is in the Gst-fbdev
+    # dispatch list. The baked DEVICE_TYPE='pi3-64' env override is the
+    # only signal that this is the Qt6/eglfs image (which ships no
+    # GStreamer fbdev stack), so it must force MPV.
+    MediaPlayerProxy.INSTANCE = None
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='pi3'
+        ),
+        patch.dict('os.environ', {'DEVICE_TYPE': 'pi3-64'}),
+    ):
+        instance = MediaPlayerProxy.get_instance()
+    assert isinstance(instance, MPVMediaPlayer)
+
+
 @patch('anthias_viewer.media_player.get_device_type', return_value='pi5')
 def test_get_instance_returns_same_instance(
     _: Any, reset_media_proxy: None

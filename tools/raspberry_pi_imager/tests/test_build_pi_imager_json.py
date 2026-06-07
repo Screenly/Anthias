@@ -40,6 +40,11 @@ MOCK_RELEASE_ASSETS = {
         },
         {
             'browser_download_url': (
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi3-64.img.zst'
+            )
+        },
+        {
+            'browser_download_url': (
                 f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi4-64.img.zst'
             )
         },
@@ -146,6 +151,7 @@ def test_get_latest_tag_honours_release_tag_env(
         ('2025-01-01-anthias-pi1.img.zst', 'pi1'),
         ('2025-01-01-anthias-pi2.img.zst', 'pi2'),
         ('2025-01-01-anthias-pi3.img.zst', 'pi3'),
+        ('2025-01-01-anthias-pi3-64.img.zst', 'pi3-64'),
         ('2025-01-01-anthias-pi4-64.img.zst', 'pi4-64'),
         ('2025-01-01-anthias-pi5.img.zst', 'pi5'),
     ],
@@ -244,7 +250,7 @@ def test_retrieve_and_patch_json_marks_maintenance_boards(
     assert result['description'].endswith(MAINTENANCE_SUFFIX)
 
 
-@pytest.mark.parametrize('board', ['pi4-64', 'pi5'])
+@pytest.mark.parametrize('board', ['pi3-64', 'pi4-64', 'pi5'])
 def test_retrieve_and_patch_json_skips_maintenance_for_modern_boards(
     mock_requests_get: MagicMock, board: str
 ) -> None:

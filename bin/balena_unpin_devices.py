@@ -98,9 +98,11 @@ API_BASE = f'{API_ROOT}/v7'
 FLEETS = [
     'screenly_ose/anthias-pi2',
     'screenly_ose/anthias-pi3',
+    'screenly_ose/anthias-pi3-64',
     'screenly_ose/anthias-pi4',
     'screenly_ose/anthias-pi5',
     'screenly_ose/anthias-x86',
+    'screenly_ose/anthias-rockpi4',
 ]
 
 # fleet slug -> balenaOS device-type slug (for OS-release + CPU-arch
@@ -728,7 +730,7 @@ def main() -> int:
         dest='fleets',
         metavar='SLUG',
         help='fleet slug, e.g. screenly_ose/anthias-pi4 (repeatable; '
-        'default: all five anthias fleets)',
+        'default: all anthias fleets)',
     )
     ap.add_argument(
         '--os-update',

@@ -3,13 +3,17 @@
 ``host_agent`` runs on the host (outside any container) and writes
 the resolved board subtype to Redis at ``host:board_subtype``.
 Server + viewer read it to upgrade the catch-all ``arm64``
-DEVICE_TYPE into a board-specific envelope / hwdec dispatch when
-the silicon supports it. We pin:
+DEVICE_TYPE into a board-specific envelope when the silicon
+supports it. The detection table itself lives in
+``anthias_common.device_helper.detect_board_subtype`` — shared with
+``anthias_common.board``'s in-container fallback (used on balena,
+where no host_agent service runs). We pin:
 
 * the device-tree → subtype mapping for known boards (Rock Pi 4);
 * unknown / empty / missing device-tree all collapse to ``None``;
 * the Redis publish writes the resolved subtype (or empty string)
-  exactly once per host_agent start.
+  exactly once per host_agent start;
+* ``get_board_subtype``'s Redis-then-device-tree fallback order.
 """
 
 from __future__ import annotations
@@ -19,8 +23,9 @@ from unittest import mock
 
 import pytest
 
+from anthias_common.board import get_board_subtype
+from anthias_common.device_helper import detect_board_subtype
 from anthias_host_agent.__main__ import (
-    detect_board_subtype,
     detect_total_mem_kb,
     set_board_subtype,
     set_total_mem_kb,
@@ -60,7 +65,7 @@ def test_detect_board_subtype(
     """
     mocked_open = mock.mock_open(read_data=model_bytes)
     with mock.patch(
-        'anthias_host_agent.__main__.open', mocked_open, create=True
+        'anthias_common.device_helper.open', mocked_open, create=True
     ):
         assert detect_board_subtype() == expected
 
@@ -72,11 +77,70 @@ def test_detect_board_subtype_no_devicetree() -> None:
     started by systemd so an uncaught exception here would loop
     the unit and starve every other host-side feature."""
     with mock.patch(
-        'anthias_host_agent.__main__.open',
+        'anthias_common.device_helper.open',
         side_effect=FileNotFoundError(),
         create=True,
     ):
         assert detect_board_subtype() is None
+
+
+def test_get_board_subtype_prefers_redis_value() -> None:
+    """A host_agent-published value wins; the device tree is not
+    consulted when Redis already answers."""
+    fake_redis = mock.MagicMock()
+    fake_redis.get.return_value = b'rockpi4'
+    with (
+        mock.patch(
+            'anthias_common.board.connect_to_redis',
+            return_value=fake_redis,
+        ),
+        mock.patch(
+            'anthias_common.board.detect_board_subtype'
+        ) as mocked_detect,
+    ):
+        assert get_board_subtype() == 'rockpi4'
+    mocked_detect.assert_not_called()
+
+
+@pytest.mark.parametrize('redis_value', [None, b'', b'   '])
+def test_get_board_subtype_falls_back_to_device_tree(
+    redis_value: bytes | None,
+) -> None:
+    """No host_agent (balena fleets) or an empty publish falls back
+    to reading the device tree in-container — this is what upgrades
+    the ``anthias-rockpi4`` balena fleet's codec gate from the empty
+    arm64 envelope without a host-side daemon."""
+    fake_redis = mock.MagicMock()
+    fake_redis.get.return_value = redis_value
+    mocked_open = mock.mock_open(read_data=b'Radxa ROCK Pi 4B\x00')
+    with (
+        mock.patch(
+            'anthias_common.board.connect_to_redis',
+            return_value=fake_redis,
+        ),
+        mock.patch(
+            'anthias_common.device_helper.open', mocked_open, create=True
+        ),
+    ):
+        assert get_board_subtype() == 'rockpi4'
+
+
+def test_get_board_subtype_unknown_everywhere_returns_none() -> None:
+    """Redis empty + unknown device tree → ``None`` (caller keeps the
+    raw DEVICE_TYPE and the conservative empty arm64 codec set)."""
+    fake_redis = mock.MagicMock()
+    fake_redis.get.return_value = None
+    mocked_open = mock.mock_open(read_data=b'OrangePi 3 LTS\x00')
+    with (
+        mock.patch(
+            'anthias_common.board.connect_to_redis',
+            return_value=fake_redis,
+        ),
+        mock.patch(
+            'anthias_common.device_helper.open', mocked_open, create=True
+        ),
+    ):
+        assert get_board_subtype() is None
 
 
 def test_set_board_subtype_writes_resolved_value() -> None:

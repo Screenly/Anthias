@@ -54,9 +54,11 @@ from typing import Any
 FLEET_DEVICE_TYPE = {
     'screenly_ose/anthias-pi2': 'raspberry-pi2',
     'screenly_ose/anthias-pi3': 'raspberrypi3',
+    'screenly_ose/anthias-pi3-64': 'raspberrypi3-64',
     'screenly_ose/anthias-pi4': 'raspberrypi4-64',
     'screenly_ose/anthias-pi5': 'raspberrypi5',
     'screenly_ose/anthias-x86': 'generic-amd64',
+    'screenly_ose/anthias-rockpi4': 'rockpi-4b-rk3399',
 }
 
 MAINTENANCE_TAG = 'anthias_maintenance'
@@ -268,7 +270,7 @@ def main() -> int:
         help='fleet slug, e.g. screenly_ose/anthias-pi4 (repeatable)',
     )
     group.add_argument(
-        '--all', action='store_true', help='operate on all five anthias fleets'
+        '--all', action='store_true', help='operate on all anthias fleets'
     )
     ap.add_argument(
         '--percent',
