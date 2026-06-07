@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any
 
 import pytz
+import sentry_sdk
 
+from anthias_common.version import get_anthias_release
 from anthias_server.settings import settings as device_settings
 
 # django_stubs_ext.monkeypatch() makes Django generic classes
@@ -35,6 +37,57 @@ except ModuleNotFoundError as exc:
 
 # Repo root: src/anthias_server/django_project/settings.py → up 3 to repo root.
 BASE_DIR = Path(__file__).resolve().parents[3]
+
+# Detect "running under tests" without depending solely on the
+# ENVIRONMENT env var. The root conftest.py sets ENVIRONMENT=test via
+# os.environ.setdefault, but pytest-django's plugin-time settings load
+# can fire before that conftest executes — leaving getenv() blank and
+# this module pointed at the production /data path on local pytest
+# runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
+# `python -m pytest ...`, and `uv run pytest ...`) so the test branch
+# is taken regardless of import order. Used by both the Sentry DSN
+# default here and the DATABASES test branch further down.
+_running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
+
+# Operators can point crash reporting at their own Sentry project by
+# setting SENTRY_DSN, or disable it entirely by setting it to an
+# empty string (sentry_sdk treats a falsy DSN as "don't send").
+#
+# Test runs default to the empty DSN: the unit suite is built to run
+# with no external network dependencies (conftest.py force-mocks
+# Redis for the same reason), and exceptions raised on purpose by
+# failing tests must not land in the production Sentry project. An
+# explicit SENTRY_DSN still wins so the integration stack can opt in
+# deliberately.
+_default_sentry_dsn = (
+    ''
+    if getenv('ENVIRONMENT') == 'test' or _running_under_pytest
+    else (
+        'https://da18c7bdab65c9adc4afcd311f5b6f09'
+        '@o4511522371534848.ingest.us.sentry.io/4511522375794688'
+    )
+)
+sentry_sdk.init(
+    dsn=getenv('SENTRY_DSN', _default_sentry_dsn),
+    # Same value the DEBUG flag below keys off: 'development', 'test',
+    # or 'production' (the default) — lets dev events be filtered out
+    # in Sentry. (Test runs don't send at all — see the DSN default
+    # above.)
+    environment=getenv('ENVIRONMENT', 'production'),
+    # CalVer release from pyproject.toml's [project].version, via the
+    # same helper the System Info page and v2 info API use (handles
+    # the `uv sync --no-install-project` Docker layout). Empty string
+    # means both sources failed — pass None so Sentry doesn't record
+    # a bogus '' release.
+    release=get_anthias_release() or None,
+    # Request headers and user IPs are PII. Attach them only when the
+    # operator hasn't opted out of analytics in anthias.conf — the
+    # same knob that gates GA telemetry (see lib/telemetry.py). Crash
+    # events themselves still flow; this gates only the PII
+    # enrichment. See
+    # https://docs.sentry.io/platforms/python/data-management/data-collected/
+    send_default_pii=not device_settings['analytics_opt_out'],
+)
 
 
 # Quick-start development settings - unsuitable for production
@@ -176,16 +229,6 @@ CHANNEL_LAYERS = {
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-#
-# Detect "running under tests" without depending solely on the
-# ENVIRONMENT env var. The root conftest.py sets ENVIRONMENT=test via
-# os.environ.setdefault, but pytest-django's plugin-time settings load
-# can fire before that conftest executes — leaving getenv() blank and
-# this module pointed at the production /data path on local pytest
-# runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
-# `python -m pytest ...`, and `uv run pytest ...`) so the test branch
-# is taken regardless of import order.
-_running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
 
 # In test mode the DB path defaults to a repo-local file so the suite
 # runs without Docker / without writable `/data`. CI containers can
