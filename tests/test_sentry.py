@@ -54,6 +54,26 @@ class TestBeforeSendTransientNoise:
         )
         assert _sentry_before_send({'event_id': 'x'}, hint) is None
 
+    def test_drops_redis_timeout_error(self) -> None:
+        # redis-py's TimeoutError is a *sibling* of ConnectionError
+        # under RedisError, not a subclass — the same transient outage
+        # when the socket hangs instead of refusing. A post-deploy
+        # event slipped through on this branch (Sentry ANTHIAS-1B).
+        import redis.exceptions
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        assert not issubclass(
+            redis.exceptions.TimeoutError,
+            redis.exceptions.ConnectionError,
+        )
+        hint = self._hint_for(
+            redis.exceptions.TimeoutError('Timeout connecting to server')
+        )
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
     def test_drops_wrapped_redis_connection_error(self) -> None:
         # channels-redis / kombu re-raise the underlying redis error
         # wrapped in their own exception types — the chain has to be

@@ -101,17 +101,23 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
 
     Two classes of noise, both observed fleet-wide on day one:
 
-      * ``redis.exceptions.ConnectionError`` (and subclasses, plus
+      * ``redis.exceptions.ConnectionError`` AND
+        ``redis.exceptions.TimeoutError`` (plus subclasses and
         anything raised from one) — redis restarts after its
         container recycles or before its DNS name resolves during
-        compose startup. Every consumer already self-heals: celery's
-        consumer reconnects with backoff, the viewer's reporter loop
-        retries on its next tick, and Channels re-establishes on the
-        next WebSocket frame. A *persistent* redis outage still
-        surfaces — the device stops working and the watchdog restart
-        loop is visible in balena — but a 5-second blip is not worth
-        an event per process (Sentry ANTHIAS-M / ANTHIAS-K /
-        ANTHIAS-H / ANTHIAS-J).
+        compose startup. ``ConnectionError`` is a refusal/reset;
+        ``TimeoutError`` is the same outage when the socket hangs
+        instead of refusing, and in redis-py the two are *siblings*
+        under ``RedisError``, not parent/child — so both must be
+        named explicitly (a post-deploy event slipped through on the
+        TimeoutError branch: Sentry ANTHIAS-1B). Every consumer
+        already self-heals: celery's consumer reconnects with
+        backoff, the viewer's reporter loop retries on its next tick,
+        and Channels re-establishes on the next WebSocket frame. A
+        *persistent* redis outage still surfaces — the device stops
+        working and the watchdog restart loop is visible in balena —
+        but a 5-second blip is not worth an event per process (Sentry
+        ANTHIAS-M / ANTHIAS-K / ANTHIAS-H / ANTHIAS-J / ANTHIAS-1B).
       * ``asyncio.CancelledError`` — an HTTP client hanging up
         mid-request under ASGI; Django/uvicorn cancel the handler by
         design (Sentry ANTHIAS-N).
@@ -119,10 +125,14 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     exc_info = hint.get('exc_info')
     if not exc_info:
         return event
+    transient_redis = (
+        redis.exceptions.ConnectionError,
+        redis.exceptions.TimeoutError,
+    )
     for exc in _exception_chain(exc_info[1]):
         if isinstance(exc, asyncio.CancelledError):
             return None
-        if isinstance(exc, redis.exceptions.ConnectionError):
+        if isinstance(exc, transient_redis):
             return None
     return event
 
