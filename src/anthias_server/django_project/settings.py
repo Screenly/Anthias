@@ -23,7 +23,6 @@ import sentry_sdk
 from sentry_sdk.integrations.logging import ignore_logger
 from sentry_sdk.types import Event, Hint
 
-from anthias_common.utils import is_balena_app
 from anthias_common.version import get_anthias_release
 from anthias_server.settings import settings as device_settings
 
@@ -216,12 +215,26 @@ def get_board_model(model_file: str = '/proc/device-tree/model') -> str:
 sentry_sdk.set_tag('device_type', getenv('DEVICE_TYPE') or 'unknown')
 sentry_sdk.set_tag('kernel_release', platform.release())
 sentry_sdk.set_tag('kernel_machine', platform.machine())
+
+
+def is_balena_deploy() -> bool:
+    """True when running under balenaOS.
+
+    Same check as ``anthias_common.utils.is_balena_app`` (the BALENA
+    env var the balena supervisor injects), inlined rather than
+    imported: pulling anthias_common.utils into this module would
+    drag sh/requests/redis into every Django settings load, which the
+    slim environment django-stubs' mypy plugin runs under can't
+    satisfy.
+    """
+    return bool(getenv('BALENA'))
+
+
 # balena vs plain docker-compose installs differ operationally
 # (supervisor-managed restarts, no depends_on conditions, journald
 # unavailable) — segmenting by deployment kind tells the triage
-# which playbook applies. Same is_balena_app() helper the
-# reboot/shutdown tasks use (the BALENA env var balenaOS injects).
-sentry_sdk.set_tag('balena', 'true' if is_balena_app() else 'false')
+# which playbook applies.
+sentry_sdk.set_tag('balena', 'true' if is_balena_deploy() else 'false')
 _board_model = get_board_model()
 if _board_model:
     sentry_sdk.set_tag('board_model', _board_model)

@@ -206,13 +206,36 @@ class TestGetSentryRelease:
             assert s.get_sentry_release() is None
 
 
-def test_balena_tag_reflects_is_balena_app() -> None:
-    """The balena tag must come from the same helper the
-    reboot/shutdown tasks rely on, so the two can't disagree."""
-    import inspect
+class TestIsBalenaDeploy:
+    """The balena tag's decision logic — must match what
+    anthias_common.utils.is_balena_app derives from the BALENA env
+    var the balena supervisor injects."""
 
-    from anthias_server.django_project import settings as s
+    def test_true_under_balena(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from anthias_server.django_project import settings as s
 
-    source = inspect.getsource(s)
-    assert "set_tag('balena'" in source
-    assert 'is_balena_app()' in source
+        monkeypatch.setenv('BALENA', '1')
+        assert s.is_balena_deploy() is True
+
+    def test_false_on_compose_installs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from anthias_server.django_project import settings as s
+
+        monkeypatch.delenv('BALENA', raising=False)
+        assert s.is_balena_deploy() is False
+
+    def test_agrees_with_the_canonical_helper(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The settings copy is inlined for import-weight reasons —
+        # pin it against the canonical helper so they can't drift.
+        from anthias_common.utils import is_balena_app
+        from anthias_server.django_project import settings as s
+
+        for value in (None, '1'):
+            if value is None:
+                monkeypatch.delenv('BALENA', raising=False)
+            else:
+                monkeypatch.setenv('BALENA', value)
+            assert s.is_balena_deploy() == is_balena_app()
