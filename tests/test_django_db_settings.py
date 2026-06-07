@@ -9,6 +9,7 @@ fail-immediately rollback-journal behaviour.
 """
 
 import sqlite3
+from pathlib import Path
 
 from django.conf import settings
 
@@ -27,7 +28,7 @@ class TestSqliteConnectionOptions:
         options = settings.DATABASES['default']['OPTIONS']
         assert options['transaction_mode'] == 'IMMEDIATE'
 
-    def test_init_command_is_valid_sqlite(self, tmp_path) -> None:
+    def test_init_command_is_valid_sqlite(self, tmp_path: Path) -> None:
         # Execute the exact configured init_command against a scratch
         # database the way Django does on connect — a typo'd pragma
         # would otherwise only surface at service startup on-device.
