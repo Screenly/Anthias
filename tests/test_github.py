@@ -381,7 +381,7 @@ def test_handle_github_error_without_response(
 
 
 def test_handle_github_error_logs_at_warning_not_error(
-    github_env: None, redis_data: dict[str, str]
+    github_env: None,
 ) -> None:
     """An unreachable api.github.com is a routine condition on a
     signage device (offline installs, locked-down networks) — it must
@@ -403,8 +403,10 @@ def test_github_module_never_logs_at_error_level() -> None:
     gracefully (backoff + cached verdict), so none of it belongs at
     ERROR level or above — that's what the Sentry logging integration
     turns into an event (ANTHIAS-8). Pin that with an AST walk over
-    the module's actual logging calls, so comments/docstrings can't
-    false-positive and renamed-but-still-ERROR calls can't slip by.
+    the module's direct ``logging.error/exception/critical`` calls,
+    so comments and docstrings can't false-positive the check. (The
+    module logs via the root ``logging`` module only; a named-logger
+    refactor would need this test updated.)
     """
     import ast
     import inspect
