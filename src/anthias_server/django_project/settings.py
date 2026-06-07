@@ -338,7 +338,11 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
 # closing bracket where S4502 actually raises its issue.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Fault-tolerant subclass of whitenoise's middleware: its startup
+    # scan of STATIC_ROOT survives unreadable entries (a corrupted SD
+    # card raising EUCLEAN bricked a device into a uvicorn crash-loop
+    # — Sentry ANTHIAS-Y). See anthias_server/lib/whitenoise.py.
+    'anthias_server.lib.whitenoise.ResilientWhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
