@@ -305,11 +305,40 @@ def main(argv: list[str] | None = None) -> int:
 
     loop = GLib.MainLoop()
     exit_code = 0
+    audio_disabled = False
+
+    def disable_audio() -> None:
+        # Clear GST_PLAY_FLAG_AUDIO (0x2) so playbin neither decodes
+        # nor sinks the audio stream. A broken audio branch — ALSA
+        # card missing (HDMI audio disabled in config.txt) or an
+        # undecodable audio codec (e.g. AC3: a52dec lives in
+        # plugins-ugly, which the image doesn't ship) — must degrade
+        # to silent video, not a black slot. The old gst-launch
+        # incarnation died wholesale on either case.
+        nonlocal audio_disabled
+        audio_disabled = True
+        flags = int(playbin.get_property('flags'))
+        playbin.set_property('flags', flags & ~0x2)
 
     def on_bus_message(bus: Any, message: Any) -> bool:
         nonlocal exit_code
         if message.type == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
+            if not audio_disabled:
+                # First error: assume the audio branch and retry
+                # video-only (covers async failures like a missing
+                # audio decoder mid-preroll). A genuine video error
+                # recurs on the retry and exits below — one extra
+                # attempt, bounded.
+                logging.warning(
+                    'pipeline error: %s (%s) — retrying without audio',
+                    err,
+                    debug,
+                )
+                disable_audio()
+                playbin.set_state(Gst.State.NULL)
+                playbin.set_state(Gst.State.PLAYING)
+                return True
             logging.error('pipeline error: %s (%s)', err, debug)
             exit_code = 1
             loop.quit()
@@ -340,9 +369,22 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, on_sigterm)
 
     if playbin.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-        logging.error('could not start playback for %s', args.uri)
+        # Synchronous start failure — most commonly alsasink failing
+        # READY because the requested ALSA card doesn't exist. Retry
+        # video-only before giving the slot up.
+        logging.warning(
+            'could not start playback for %s — retrying without audio',
+            args.uri,
+        )
+        disable_audio()
         playbin.set_state(Gst.State.NULL)
-        return 1
+        if (
+            playbin.set_state(Gst.State.PLAYING)
+            == Gst.StateChangeReturn.FAILURE
+        ):
+            logging.error('could not start playback for %s', args.uri)
+            playbin.set_state(Gst.State.NULL)
+            return 1
 
     try:
         loop.run()
