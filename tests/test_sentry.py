@@ -12,6 +12,7 @@ and capture calls are dropped.
 from pathlib import Path
 
 import sentry_sdk
+from sentry_sdk.types import Event
 
 
 def test_sentry_does_not_send_under_pytest() -> None:
@@ -30,11 +31,12 @@ class TestBeforeSendTransientNoise:
     ANTHIAS-J (redis blips) and ANTHIAS-N (client disconnect)."""
 
     @staticmethod
-    def _hint_for(exc: BaseException) -> dict:
-        try:
-            raise exc
-        except BaseException as caught:  # noqa: BLE001 — CancelledError
-            return {'exc_info': (type(caught), caught, caught.__traceback__)}
+    def _hint_for(exc: BaseException) -> dict[str, object]:
+        # Build the exc_info triple directly instead of raise/except —
+        # before_send only inspects exc_info[1] and its
+        # __cause__/__context__ chain, and not catching BaseException
+        # keeps Sonar S5754 happy.
+        return {'exc_info': (type(exc), exc, None)}
 
     def test_drops_redis_connection_error(self) -> None:
         import redis.exceptions
@@ -90,17 +92,17 @@ class TestBeforeSendTransientNoise:
             _sentry_before_send,
         )
 
-        event = {'event_id': 'x'}
+        event: Event = {'event_id': 'x'}
         hint = self._hint_for(ValueError('a real bug'))
-        assert _sentry_before_send(event, hint) is event
+        assert _sentry_before_send(event, hint) == event
 
     def test_keeps_events_without_exc_info(self) -> None:
         from anthias_server.django_project.settings import (
             _sentry_before_send,
         )
 
-        event = {'event_id': 'x'}
-        assert _sentry_before_send(event, {}) is event
+        event: Event = {'event_id': 'x'}
+        assert _sentry_before_send(event, {}) == event
 
     def test_celery_reconnect_logger_is_ignored(self) -> None:
         # celery's consumer retries broker connections on its own but

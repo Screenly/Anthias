@@ -1668,7 +1668,7 @@ class TestPublishDisplayResolutionOnce:
             viewer._publish_display_resolution_once()
         assert any(
             record.levelno == logging.WARNING
-            and 'redis unreachable' in record.message
+            and 'redis unreachable' in record.getMessage()
             for record in caplog.records
         )
         assert all(record.levelno < logging.ERROR for record in caplog.records)

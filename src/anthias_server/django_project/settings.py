@@ -21,6 +21,7 @@ from typing import Any
 import redis.exceptions
 import sentry_sdk
 from sentry_sdk.integrations.logging import ignore_logger
+from sentry_sdk.types import Event, Hint
 
 from anthias_common.version import get_anthias_release
 from anthias_server.settings import settings as device_settings
@@ -89,9 +90,7 @@ def _exception_chain(exc: BaseException | None) -> Iterator[BaseException]:
         exc = exc.__cause__ or exc.__context__
 
 
-def _sentry_before_send(
-    event: dict[str, Any], hint: dict[str, Any]
-) -> dict[str, Any] | None:
+def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     """Drop events that report expected transient states, not bugs.
 
     Two classes of noise, both observed fleet-wide on day one:
