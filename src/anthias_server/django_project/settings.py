@@ -259,9 +259,41 @@ else:
 # `:memory:` DB, which is what we want for unit runs.
 # .github/workflows/test-runner.yml exports ANTHIAS_INTEGRATION_TEST=1
 # only for the `pytest -m integration` step.
+# Three processes share this SQLite file across containers (uvicorn,
+# the celery worker, the viewer — they bind-mount the same
+# ~/.anthias). The stock rollback journal allows exactly one writer
+# and blocks readers while a write transaction is open, and the stock
+# busy timeout is 0 — so a celery sweep UPDATE landing while the
+# viewer reads its asset list raised ``OperationalError: database is
+# locked`` immediately instead of waiting (Sentry ANTHIAS-C/E/G).
+#
+#   * ``timeout`` — sqlite's busy handler: wait up to 20s for a lock
+#     instead of failing on the spot. Longer than any transaction
+#     Anthias runs (the writes are single-row UPDATEs; the longest
+#     holder is the startup ``migrate``/``dbbackup`` pass).
+#   * ``journal_mode=WAL`` — readers no longer block the writer and
+#     vice versa; persists in the DB file but is re-asserted each
+#     connect so restored backups / legacy DBs get upgraded too.
+#   * ``synchronous=NORMAL`` — the recommended pairing with WAL;
+#     FULL's per-commit fsync cost buys nothing extra under WAL on
+#     a power-loss-prone SD card (WAL commits are crash-safe at
+#     NORMAL; worst case is losing the very last commit).
+#   * ``transaction_mode=IMMEDIATE`` — take the write lock at
+#     transaction start so two writers queue on the busy handler
+#     instead of deadlocking mid-transaction on the read→write lock
+#     upgrade (those fail instantly, ignoring the busy timeout).
+#
+# Unit runs (pytest-django's per-worker ``:memory:`` DBs) accept the
+# same pragmas harmlessly: ``journal_mode=WAL`` is a no-op that
+# reports ``memory`` on in-memory databases.
 _db_default: dict[str, Any] = {
     'ENGINE': 'django.db.backends.sqlite3',
     'NAME': db_path,
+    'OPTIONS': {
+        'timeout': 20,
+        'init_command': ('PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;'),
+        'transaction_mode': 'IMMEDIATE',
+    },
 }
 if getenv('ANTHIAS_INTEGRATION_TEST') == '1':
     _db_default['TEST'] = {'NAME': db_path}
