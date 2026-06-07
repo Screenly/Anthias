@@ -621,7 +621,7 @@ def test_add_asset_via_video_upload(reset_assets: None, page: Page) -> None:
     )
     asset = Asset.objects.first()
     assert asset is not None
-    # ffprobe-d duration of tests/assets/asset.mov (5.57 s, floored),
+    # ffprobe'd duration of tests/assets/asset.mov (5.57 s, floored),
     # committed by the worker on both the accept and reject paths.
     assert asset.duration == 5
     # The test container sets no DEVICE_TYPE → empty HW-decode set →
