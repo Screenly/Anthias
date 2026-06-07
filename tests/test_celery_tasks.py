@@ -1798,7 +1798,7 @@ class TestWaitForMigrations:
             mock.patch.object(
                 celery_tasks_module, '_migrations_ready', return_value=True
             ),
-            mock.patch.object(celery_tasks_module.time, 'sleep') as sleep,
+            mock.patch('anthias_server.celery_tasks.time.sleep') as sleep,
         ):
             celery_tasks_module.wait_for_migrations()
         sleep.assert_not_called()
@@ -1810,7 +1810,7 @@ class TestWaitForMigrations:
                 '_migrations_ready',
                 side_effect=[False, False, True],
             ),
-            mock.patch.object(celery_tasks_module.time, 'sleep') as sleep,
+            mock.patch('anthias_server.celery_tasks.time.sleep') as sleep,
         ):
             celery_tasks_module.wait_for_migrations()
         assert sleep.call_count == 2

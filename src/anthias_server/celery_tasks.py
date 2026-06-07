@@ -190,8 +190,10 @@ def asset_recheck_lock_key(asset_id: str) -> str:
 
 
 # Poll cadence while the worker waits for the server's startup
-# ``migrate`` pass to finish (see ``wait_for_migrations`` below).
+# ``migrate`` pass to finish, and how often a waiting worker repeats
+# its log line (see ``wait_for_migrations`` below).
 MIGRATION_WAIT_POLL_S = 5
+MIGRATION_WAIT_LOG_EVERY_S = 30
 
 
 def _migrations_ready() -> bool:
@@ -202,7 +204,9 @@ def _migrations_ready() -> bool:
     database is locked`` while the server's dbbackup/dbrestore holds
     the file, a missing ``django_migrations`` table on a
     first-boot/empty DB) means the schema is not ready either, so
-    report not-ready rather than raising.
+    report not-ready rather than raising. The error is still logged
+    at DEBUG so a persistent non-transient cause (bad volume mount,
+    corrupted DB file) can be identified from the device logs.
     """
     from django.db import connections
     from django.db.migrations.executor import MigrationExecutor
@@ -212,6 +216,10 @@ def _migrations_ready() -> bool:
         executor = MigrationExecutor(connection)
         plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
     except Exception:
+        logging.debug(
+            'Migration-readiness probe failed; treating as not ready',
+            exc_info=True,
+        )
         return False
     finally:
         # Don't leak the probe connection into the prefork children —
@@ -237,11 +245,16 @@ def wait_for_migrations(**kwargs: Any) -> None:
     """
     waited = 0
     while not _migrations_ready():
-        logging.warning(
-            'Database is not migrated yet; delaying celery worker '
-            'startup (%ss elapsed)',
-            waited,
-        )
+        # First miss logs immediately, then repeat every
+        # MIGRATION_WAIT_LOG_EVERY_S — a multi-minute migrate/restore
+        # on a slow SD card shouldn't drown the device log in a
+        # warning per poll.
+        if waited % MIGRATION_WAIT_LOG_EVERY_S == 0:
+            logging.warning(
+                'Database is not migrated yet; delaying celery worker '
+                'startup (%ss elapsed)',
+                waited,
+            )
         time.sleep(MIGRATION_WAIT_POLL_S)
         waited += MIGRATION_WAIT_POLL_S
 
