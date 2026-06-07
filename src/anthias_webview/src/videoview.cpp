@@ -79,7 +79,19 @@ VideoView::VideoView(QWidget* parent) : QWidget(parent)
     player = new QMediaPlayer(this);
     audioOutput = new QAudioOutput(this);
     player->setAudioOutput(audioOutput);
-    player->setVideoSink(videoSink);
+
+    // The player renders into an intermediate sink rather than the
+    // QML item's own — onVideoFrameDelivered() forwards frames to
+    // the VideoOutput only when the scene graph has composited the
+    // previous one. A 60 fps source otherwise schedules a render per
+    // delivery on a GUI thread that sustains ~45 renders/s at 1080p
+    // on a Pi 4; that overload presented 22.6 fps with the playback
+    // position falling to ~0.6x realtime (issue #2987). The
+    // intermediate sink also keeps the decode-side counter
+    // (frames-delivered) honest now that the item sink only sees
+    // forwarded frames.
+    pacingSink = new QVideoSink(this);
+    player->setVideoSink(pacingSink);
 
     connect(player, &QMediaPlayer::playbackStateChanged,
             this, &VideoView::onPlaybackStateChanged);
@@ -88,12 +100,11 @@ VideoView::VideoView(QWidget* parent) : QWidget(parent)
     connect(player, &QMediaPlayer::errorOccurred,
             this, &VideoView::onErrorOccurred);
 
-    // Count frames delivered to the sink so SAMPLE / END_FILE lines
-    // can report a "frames delivered" → "frames expected" delta.
     // QVideoSink::videoFrameChanged fires once per decoded frame
     // (after libavcodec / V4L2 drops happen upstream) — the
-    // decode-side rate.
-    connect(videoSink, &QVideoSink::videoFrameChanged,
+    // decode-side rate, counted as frames-delivered before the
+    // pacing gate decides whether to forward.
+    connect(pacingSink, &QVideoSink::videoFrameChanged,
             this, &VideoView::onVideoFrameDelivered);
 
     // Presentation-side counter. Retried from play() in case the
@@ -215,8 +226,11 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
     // are clean.
     playStartedAt.invalidate();
     framesDelivered = 0;
+    framesForwarded = 0;
     framesRendered = 0;
     containerFps = 0.0;
+    sceneReadyForFrame = true;
+    pendingFrame = QVideoFrame();
     writeStats(
         QStringLiteral("LOADFILE"),
         QStringLiteral("uri=%1 options={%2}")
@@ -254,14 +268,27 @@ void VideoView::stop()
             QStringLiteral("STOP"),
             QStringLiteral(
                 "uri=%1 elapsed_ms=%2 frames-delivered=%3 "
-                "frames-rendered=%4 position-ms=%5")
+                "frames-forwarded=%4 frames-rendered=%5 "
+                "position-ms=%6")
                 .arg(currentUri)
                 .arg(elapsedMs)
                 .arg(framesDelivered)
+                .arg(framesForwarded)
                 .arg(framesRendered)
                 .arg(player->position()));
     }
     player->stop();
+    // Reset the pacing gate: a frame parked mid-render must not be
+    // forwarded by a later afterRendering (stale-frame flash on the
+    // next reveal), nor keep its decoder buffer alive between
+    // assets. Pushing an empty frame to the VideoOutput releases the
+    // last displayed buffer too — black beats a stale frame when the
+    // widget is next shown.
+    pendingFrame = QVideoFrame();
+    sceneReadyForFrame = true;
+    if (videoSink) {
+        videoSink->setVideoFrame(QVideoFrame());
+    }
 }
 
 void VideoView::onPlaybackStateChanged(QMediaPlayer::PlaybackState state)
@@ -334,10 +361,12 @@ void VideoView::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
             QStringLiteral("END_FILE"),
             QStringLiteral(
                 "uri=%1 elapsed_ms=%2 frames-delivered=%3 "
-                "frames-rendered=%4 expected=%5 dropped=%6")
+                "frames-forwarded=%4 frames-rendered=%5 "
+                "expected=%6 dropped=%7")
                 .arg(currentUri)
                 .arg(elapsedMs)
                 .arg(framesDelivered)
+                .arg(framesForwarded)
                 .arg(framesRendered)
                 .arg(qRound(expected))
                 .arg(dropped));
@@ -380,23 +409,63 @@ void VideoView::sampleStats()
     writeStats(
         QStringLiteral("SAMPLE"),
         QStringLiteral(
-            "position-ms=%1 frames-delivered=%2 frames-rendered=%3 "
-            "expected=%4 dropped=%5")
+            "position-ms=%1 frames-delivered=%2 frames-forwarded=%3 "
+            "frames-rendered=%4 expected=%5 dropped=%6")
             .arg(posMs)
             .arg(framesDelivered)
+            .arg(framesForwarded)
             .arg(framesRendered)
             .arg(qRound(expected))
             .arg(dropped));
 }
 
-void VideoView::onVideoFrameDelivered()
+void VideoView::onVideoFrameDelivered(const QVideoFrame& frame)
 {
     ++framesDelivered;
+    if (!videoSink) {
+        return;
+    }
+    if (!frame.isValid()) {
+        // Stream end / source change marker — always forward so the
+        // VideoOutput clears instead of freezing on the last frame.
+        pendingFrame = QVideoFrame();
+        videoSink->setVideoFrame(frame);
+        return;
+    }
+    // Gate only when the render counter is actually wired: without
+    // afterRendering firing, sceneReadyForFrame would never re-arm
+    // and the video would freeze on its first frame. In that
+    // (shouldn't-happen) state, fall back to unpaced forwarding —
+    // the pre-#2987 behaviour.
+    if (renderCounterConnection && !sceneReadyForFrame) {
+        // Scene busy — park the frame in the single-slot mailbox
+        // (replacing any older parked frame) so onSceneRendered()
+        // can forward the freshest one the moment the render
+        // finishes. Without the mailbox the gate was stop-and-wait:
+        // render (~21 ms) → re-arm → idle until the NEXT delivery
+        // (≤16 ms at 60 fps) → render, which measured only ~23
+        // presented fps on a GUI thread that renders ~45/s when
+        // back-to-back.
+        pendingFrame = frame;
+        return;
+    }
+    sceneReadyForFrame = false;
+    ++framesForwarded;
+    videoSink->setVideoFrame(frame);
 }
 
 void VideoView::onSceneRendered()
 {
     ++framesRendered;
+    if (pendingFrame.isValid() && videoSink) {
+        // Chain straight into the next render with the freshest
+        // parked frame — keeps the gate closed.
+        ++framesForwarded;
+        videoSink->setVideoFrame(pendingFrame);
+        pendingFrame = QVideoFrame();
+        return;
+    }
+    sceneReadyForFrame = true;
 }
 
 void VideoView::connectRenderCounter()

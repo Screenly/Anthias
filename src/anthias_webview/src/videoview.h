@@ -10,6 +10,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+#include <QVideoFrame>
 #include <QWidget>
 
 class QAudioOutput;
@@ -112,12 +113,18 @@ private slots:
     // file is playing.
     void sampleStats();
 
-    // Counts frames delivered to QVideoSink so the SAMPLE / END_FILE
-    // log lines can compare ``actually displayed`` against
-    // ``decoder-expected`` and report a dropped-frame estimate.
-    // ``videoFrameChanged`` fires once per frame the pipeline hands
-    // to the sink — i.e. the *decode-side* rate.
-    void onVideoFrameDelivered();
+    // Receives every frame the pipeline hands to ``pacingSink`` (the
+    // *decode-side* rate, counted as ``frames-delivered``) and
+    // forwards it to the QML VideoOutput's sink only when the scene
+    // graph has composited the previously forwarded frame. Without
+    // the gate, a 60 fps source schedules a scene render per
+    // delivery on a GUI thread that sustains ~45 renders/s at 1080p
+    // on a Pi 4 — the resulting overload presented 22.6 fps with the
+    // playback position falling to ~0.6x realtime (issue #2987).
+    // Dropping early self-paces delivery to render capacity: 30 fps
+    // sources are untouched (render finishes well inside the frame
+    // interval), 60 fps sources settle into an even ~half cadence.
+    void onVideoFrameDelivered(const QVideoFrame& frame);
 
     // Counts scene-graph render passes
     // (``QQuickWindow::afterRendering``). The Quick scene only
@@ -203,8 +210,27 @@ private:
     QString currentUri;
     QElapsedTimer playStartedAt;
     qint64 framesDelivered = 0;
+    qint64 framesForwarded = 0;
     qint64 framesRendered = 0;
     qreal containerFps = 0.0;
+
+    // Intermediate sink between QMediaPlayer and the QML
+    // VideoOutput's sink — the pacing gate's tap point (see
+    // onVideoFrameDelivered). Owned by this widget.
+    QVideoSink* pacingSink = nullptr;
+    // True when the scene graph has rendered since the last frame
+    // was forwarded — i.e. the VideoOutput is ready for new damage.
+    // Starts true so the first frame always shows. All touch points
+    // (onSceneRendered, onVideoFrameDelivered) run on the GUI thread:
+    // QQuickWidget renders via QQuickRenderControl on the GUI thread
+    // and the queued videoFrameChanged delivery lands there too, so
+    // plain members are race-free.
+    bool sceneReadyForFrame = true;
+    // Single-slot mailbox: the newest frame that arrived while the
+    // scene was still rendering. Forwarded (and cleared) from
+    // onSceneRendered() so renders chain back-to-back at capacity
+    // instead of idling until the next sink delivery.
+    QVideoFrame pendingFrame;
 
     // Cap on /data/.anthias/playback-stats.log size. 8 MB ≈ a full
     // 24 h burn-in's worth of SAMPLE lines at 1 Hz; past that we
