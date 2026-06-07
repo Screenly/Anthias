@@ -1714,3 +1714,112 @@ class TestPublishDisplayResolutionOnce:
             '1280x720',
             ex=viewer.DISPLAY_RESOLUTION_TTL_S,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wayland socket wait (Sentry ANTHIAS-19)
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForWaylandSocket:
+    """The webview spawn must not race cage's Wayland socket on a
+    Wayland board — a spawn before the socket exists dies with
+    'Failed to create wl_display' and wastes a retry attempt."""
+
+    def test_no_op_on_non_wayland_board(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(viewer, '_is_wayland_board', lambda: False)
+        slept = mock.Mock()
+        monkeypatch.setattr(viewer, 'sleep', slept)
+        # Even with no socket env set, a linuxfb/eglfs board returns
+        # immediately without polling.
+        viewer._wait_for_wayland_socket(timeout=5)
+        slept.assert_not_called()
+
+    def test_returns_immediately_when_socket_present(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        monkeypatch.setattr(viewer, '_is_wayland_board', lambda: True)
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        (tmp_path / 'wayland-1').write_text('')
+        slept = mock.Mock()
+        monkeypatch.setattr(viewer, 'sleep', slept)
+        viewer._wait_for_wayland_socket(timeout=5)
+        slept.assert_not_called()
+
+    def test_waits_then_proceeds_when_socket_appears(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        monkeypatch.setattr(viewer, '_is_wayland_board', lambda: True)
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        socket = tmp_path / 'wayland-1'
+
+        # The socket shows up after the second poll.
+        calls = {'n': 0}
+
+        def fake_sleep(_seconds: float) -> None:
+            calls['n'] += 1
+            if calls['n'] >= 2:
+                socket.write_text('')
+
+        monkeypatch.setattr(viewer, 'sleep', fake_sleep)
+        viewer._wait_for_wayland_socket(timeout=5)
+        assert socket.exists()
+        assert calls['n'] >= 2
+
+    def test_bounded_when_socket_never_appears(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        # A dead compositor must not hang the asset_loop thread — the
+        # wait falls through after the timeout and lets the spawn fail
+        # the normal way.
+        monkeypatch.setattr(viewer, '_is_wayland_board', lambda: True)
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        monkeypatch.setattr(viewer, 'sleep', lambda _s: None)
+        # Returns (doesn't raise / hang) even though the socket is absent.
+        viewer._wait_for_wayland_socket(timeout=1)
+        assert not (tmp_path / 'wayland-1').exists()
+
+    def test_skips_when_env_incomplete(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(viewer, '_is_wayland_board', lambda: True)
+        monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
+        slept = mock.Mock()
+        monkeypatch.setattr(viewer, 'sleep', slept)
+        viewer._wait_for_wayland_socket(timeout=5)
+        slept.assert_not_called()
+
+    def test_spawn_waits_for_socket_before_launching(
+        self, viewer_fixtures: _ViewerFixtures
+    ) -> None:
+        # _spawn_webview_once must call the wait before it shells out,
+        # so a respawn never races cage. Make the spawn fail fast (a
+        # missing binary is the cheapest terminal error) and assert
+        # the wait ran first.
+        order: list[str] = []
+
+        def fake_wait() -> None:
+            order.append('wait')
+
+        def fake_command(*args: Any, **kwargs: Any) -> Any:
+            order.append('spawn')
+            raise viewer_fixtures.u.sh.CommandNotFound('AnthiasViewer')
+
+        with (
+            mock.patch.object(
+                viewer_fixtures.u,
+                '_wait_for_wayland_socket',
+                side_effect=fake_wait,
+            ),
+            mock.patch.object(
+                viewer_fixtures.u.sh, 'Command', side_effect=fake_command
+            ),
+            pytest.raises(viewer_fixtures.u.WebviewBinaryMissingError),
+        ):
+            viewer_fixtures.u._spawn_webview_once(1)
+        assert order == ['wait', 'spawn']
