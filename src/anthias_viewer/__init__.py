@@ -1222,7 +1222,28 @@ def setup() -> None:
     load_browser()
 
     bus = pydbus.SessionBus()
-    browser_bus = bus.get('anthias.viewer', '/Anthias')
+    try:
+        browser_bus = bus.get('anthias.viewer', '/Anthias')
+    except Exception as exc:
+        # The flaky armv7 Qt5 init crash can strike in the gap between
+        # the D-Bus handshake (which made load_browser() return) and
+        # this bus.get — the name is already released again, pydbus
+        # raises ServiceUnknown, and without this handler the GError
+        # escapes main() and turns one process crash into a container
+        # restart loop (Sentry ANTHIAS-3). Same webview-gone detection
+        # and respawn-then-retry-once contract as _send_to_webview;
+        # we're still at startup, so spend the generous budget.
+        if not _is_webview_gone_error(exc):
+            raise
+        logging.warning(
+            'AnthiasViewer died between handshake and bus.get; '
+            'respawning and retrying once: %s',
+            exc,
+        )
+        if browser is not None:
+            _terminate_webview(browser)
+        load_browser()
+        browser_bus = bus.get('anthias.viewer', '/Anthias')
     # MPVMediaPlayer calls AnthiasViewer's playVideo / stopVideo
     # slots via this same proxy now that video lives in-process
     # (issue #2904). Inject after load_browser so the proxy is
