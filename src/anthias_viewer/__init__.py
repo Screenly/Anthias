@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from os import getenv, path
 from signal import SIGALRM, signal
 from time import monotonic, sleep
@@ -511,7 +512,7 @@ def load_browser(
     persistent failure can't freeze the asset_loop thread for minutes.
     """
     global browser, _webview_supports_set_reload_interval
-    global _last_applied_rotation
+    global _last_applied_rotation, current_browser_url
     logging.info('Loading browser...')
 
     if max_attempts is None:
@@ -568,6 +569,13 @@ def load_browser(
     # and diagnostics never see a live-looking ``browser`` while we are
     # between processes; it is reassigned on a successful spawn below.
     browser = None
+    # A freshly spawned webview displays nothing, so whatever URL the
+    # *previous* process was showing must not short-circuit the next
+    # view_image/view_webpage value comparison — otherwise a webview
+    # that crashed mid-asset respawns to a blank screen and (with an
+    # unchanged URL, e.g. a single-asset playlist) never gets the
+    # loadImage/loadPage re-sent.
+    current_browser_url = None
 
     # Retry the spawn with capped exponential backoff so a board that
     # intermittently crashes during Qt/WebEngine init self-heals on a
@@ -619,6 +627,83 @@ def load_browser(
     ) from last_error
 
 
+# D-Bus error codes that mean "the AnthiasViewer process is gone", as
+# opposed to a method-level failure from a live process. Matched by
+# substring on the exception message — the same convention as the
+# UnknownMethod handling in view_webpage — because pydbus surfaces
+# GDBus errors as GLib.GError whose .message carries the code, and the
+# test environment stubs ``gi`` so the class itself can't be imported
+# here for an isinstance check.
+#
+#   * NoReply — the peer died WHILE our call was in flight ("Message
+#     recipient disconnected from message bus without replying"). This
+#     is what the post-handshake armv7 heap-corruption crash looks
+#     like from the caller's side (Sentry 58040ab3).
+#   * ServiceUnknown / NameHasNoOwner — the peer died BEFORE the call
+#     and already released the ``anthias.viewer`` name.
+#
+# Deliberately NOT included: ``Disconnected`` (it means *our* session
+# bus connection dropped, e.g. dbus-daemon died — respawning the
+# webview can't fix that, so let it escape and have the container
+# restart bring up a whole fresh bus).
+_WEBVIEW_GONE_DBUS_ERRORS = (
+    'org.freedesktop.DBus.Error.NoReply',
+    'org.freedesktop.DBus.Error.ServiceUnknown',
+    'org.freedesktop.DBus.Error.NameHasNoOwner',
+)
+
+
+def _is_webview_gone_error(exc: Exception) -> bool:
+    message = str(exc)
+    return any(code in message for code in _WEBVIEW_GONE_DBUS_ERRORS)
+
+
+def _send_to_webview(send: Callable[[], Any]) -> None:
+    """Run a ``browser_bus`` call, respawning the webview if it died
+    mid-call.
+
+    The flaky armv7 Qt5 init crash that load_browser() retries past can
+    also strike *after* the D-Bus handshake — then the death surfaces
+    not as ``browser.is_alive() == False`` (which view_image /
+    view_webpage already handle) but as a GError raised out of the
+    in-flight ``call_sync``. Without this wrapper that exception
+    escapes main(), turning a one-process crash into a container
+    restart loop and defeating the spawn-retry machinery entirely.
+
+    On a webview-gone error: reap the dead process, respawn with the
+    short inline budget (this runs on the asset_loop thread — see the
+    budget rationale above BROWSER_SPAWN_MAX_ATTEMPTS), and retry the
+    call once. The pydbus proxy targets the well-known
+    ``anthias.viewer`` name, not the dead peer's unique name, so it
+    routes to the respawned process without being rebuilt (the same
+    assumption the rotation-bounce respawn relies on). A failure of
+    the respawn or the retried call still raises — the container
+    restart stays the last resort, it just stops being the first.
+    """
+    try:
+        send()
+        return
+    except Exception as exc:
+        if not _is_webview_gone_error(exc):
+            raise
+        logging.warning(
+            'AnthiasViewer died mid D-Bus call; respawning and retrying '
+            'once: %s',
+            exc,
+        )
+    # Reap the dead process before respawning so it has released the
+    # framebuffer and the ``anthias.viewer`` bus name (no-op if it is
+    # already fully gone; never raises).
+    if browser is not None:
+        _terminate_webview(browser)
+    load_browser(
+        max_attempts=BROWSER_SPAWN_INLINE_MAX_ATTEMPTS,
+        backoff_cap=BROWSER_SPAWN_INLINE_BACKOFF_CAP_SECONDS,
+        startup_timeout=BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS,
+    )
+    send()
+
+
 def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     """Display a webpage and arm its per-asset auto-refresh timer.
 
@@ -647,7 +732,7 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     # str object on consecutive ticks, which a JSON-reconstructed URL
     # would defeat.
     if current_browser_url != uri:
-        browser_bus.loadPage(uri)
+        _send_to_webview(lambda: browser_bus.loadPage(uri))
         current_browser_url = uri
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
     # against an older AnthiasViewer (version skew across a fleet
@@ -707,7 +792,7 @@ def view_image(uri: str) -> None:
     # pass the same str object on consecutive ticks, which a JSON-
     # reconstructed URL would defeat.
     if current_browser_url != uri:
-        browser_bus.loadImage(uri)
+        _send_to_webview(lambda: browser_bus.loadImage(uri))
         current_browser_url = uri
     logging.info('Current url is {0}'.format(current_browser_url))
 

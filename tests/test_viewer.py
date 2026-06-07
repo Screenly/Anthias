@@ -466,6 +466,166 @@ def test_view_webpage_resets_interval_on_unchanged_url(
     fake_bus.setReloadInterval.assert_called_once_with(90)
 
 
+# What pydbus raises when the webview dies while a call is in flight
+# (Sentry 58040ab3 — the post-handshake armv7 heap-corruption crash)
+# and when it died before the call and released the bus name.
+_NOREPLY_ERROR = (
+    'GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient '
+    'disconnected from message bus without replying'
+)
+_SERVICE_UNKNOWN_ERROR = (
+    'GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name '
+    'anthias.viewer was not provided by any .service files'
+)
+
+_INLINE_BUDGET_KWARGS = {
+    'max_attempts': viewer.BROWSER_SPAWN_INLINE_MAX_ATTEMPTS,
+    'backoff_cap': viewer.BROWSER_SPAWN_INLINE_BACKOFF_CAP_SECONDS,
+    'startup_timeout': viewer.BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS,
+}
+
+
+@pytest.mark.parametrize(
+    'error_message',
+    [_NOREPLY_ERROR, _SERVICE_UNKNOWN_ERROR],
+    ids=['noreply-mid-call', 'service-unknown'],
+)
+def test_view_image_respawns_webview_on_mid_call_death(
+    viewer_fixtures: _ViewerFixtures,
+    error_message: str,
+) -> None:
+    """A webview that survives the handshake but dies during the
+    ``loadImage`` D-Bus call must be reaped, respawned with the inline
+    budget, and sent the image again — not crash the viewer process
+    (Sentry 58040ab3)."""
+    uri = 'https://example.com/a.png'
+    fake_bus = mock.Mock()
+    fake_bus.loadImage.side_effect = [RuntimeError(error_message), None]
+    fake_browser = mock.Mock()
+    # Alive for view_image's liveness check, gone once
+    # _terminate_webview polls it after SIGTERM.
+    fake_browser.is_alive.side_effect = [True, False]
+    m_load_browser = mock.Mock(name='load_browser')
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+    ):
+        viewer_fixtures.u.view_image(uri)
+        # The retried send succeeded, so the latch must reflect it.
+        assert viewer_fixtures.u.current_browser_url == uri
+
+    assert fake_bus.loadImage.call_count == 2
+    fake_browser.terminate.assert_called_once()
+    m_load_browser.assert_called_once_with(**_INLINE_BUDGET_KWARGS)
+
+
+def test_view_webpage_respawns_webview_on_mid_call_death(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Same recovery contract for the ``loadPage`` path — and the
+    auto-refresh timer must still be armed on the respawned process."""
+    uri = 'https://example.com'
+    fake_bus = mock.Mock()
+    fake_bus.loadPage.side_effect = [RuntimeError(_NOREPLY_ERROR), None]
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.side_effect = [True, False]
+    m_load_browser = mock.Mock(name='load_browser')
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+    ):
+        viewer_fixtures.u.view_webpage(uri, 30)
+        assert viewer_fixtures.u.current_browser_url == uri
+
+    assert fake_bus.loadPage.call_count == 2
+    m_load_browser.assert_called_once_with(**_INLINE_BUDGET_KWARGS)
+    fake_bus.setReloadInterval.assert_called_once_with(30)
+
+
+def test_view_image_reraises_unrelated_dbus_error(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Method-level failures from a live webview (or a dead session
+    bus) are not respawn-worthy — they must propagate so the container
+    restart handles what a webview respawn can't fix."""
+    fake_bus = mock.Mock()
+    fake_bus.loadImage.side_effect = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.Disconnected: '
+        'The connection is closed'
+    )
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    m_load_browser = mock.Mock(name='load_browser')
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+    ):
+        with pytest.raises(RuntimeError, match='Disconnected'):
+            viewer_fixtures.u.view_image('https://example.com/a.png')
+        # The failed send must not latch the URL or trigger a respawn.
+        assert viewer_fixtures.u.current_browser_url is None
+
+    m_load_browser.assert_not_called()
+    fake_browser.terminate.assert_not_called()
+
+
+def test_send_to_webview_raises_when_retry_also_fails(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """One respawn-and-retry, then give up: if the freshly spawned
+    webview dies mid-call too, the error escapes so the container
+    restart remains the last resort."""
+    send = mock.Mock(side_effect=RuntimeError(_NOREPLY_ERROR))
+    m_load_browser = mock.Mock(name='load_browser')
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser', None),
+        mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+    ):
+        with pytest.raises(RuntimeError, match='NoReply'):
+            viewer_fixtures.u._send_to_webview(send)
+
+    assert send.call_count == 2
+    m_load_browser.assert_called_once_with(**_INLINE_BUDGET_KWARGS)
+
+
+def test_load_browser_resets_current_browser_url(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A fresh webview displays nothing, so the previous process's URL
+    must not short-circuit the next view_* value comparison — with an
+    unchanged URL (single-asset playlist) the respawned webview would
+    otherwise stay blank forever."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    _stub_browser_stdout_chunks(
+        browser_proc,
+        [b'Anthias service start\n'],
+    )
+    browser_proc.is_alive.return_value = True
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with mock.patch.object(
+            viewer_fixtures.u,
+            'current_browser_url',
+            'https://example.com/stale.png',
+        ):
+            viewer_fixtures.u.load_browser()
+            assert viewer_fixtures.u.current_browser_url is None
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
 def test_watchdog_should_create_file_if_not_exists(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
