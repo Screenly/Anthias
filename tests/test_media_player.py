@@ -687,8 +687,39 @@ def test_is_playing_false_when_process_exited(gstfb: _GstFixtures) -> None:
     assert gstfb.player.is_playing() is False
 
 
-def test_fb_geometry_parses_sysfs() -> None:
+def test_fb_geometry_prefers_vscreeninfo_ioctl() -> None:
+    # The visible xres/yres from FBIOGET_VSCREENINFO are what
+    # fbdevsink centers against; virtual_size can be larger (panning /
+    # double-buffer configs) and must not win when the ioctl works.
+    import struct
+
+    def fake_ioctl(fd: Any, request: int, buf: bytearray) -> int:
+        assert request == media_player_module._FBIOGET_VSCREENINFO
+        struct.pack_into('=2I', buf, 0, 1920, 1080)
+        struct.pack_into('=I', buf, 24, 16)
+        return 0
+
     def fake_open(path: str, *a: Any, **k: Any) -> Any:
+        if path == '/dev/fb0':
+            return MagicMock(__enter__=lambda s: s, __exit__=lambda *a: None)
+        data = '3840,2160\n' if 'virtual_size' in path else '16\n'
+        return MagicMock(
+            __enter__=lambda s: MagicMock(read=lambda: data),
+            __exit__=lambda *a: None,
+        )
+
+    with (
+        patch('builtins.open', side_effect=fake_open),
+        patch('fcntl.ioctl', side_effect=fake_ioctl),
+    ):
+        w, h, fb_fmt = media_player_module._fb_geometry()
+    assert (w, h, fb_fmt) == (1920, 1080, 'RGB16')
+
+
+def test_fb_geometry_falls_back_to_sysfs() -> None:
+    def fake_open(path: str, *a: Any, **k: Any) -> Any:
+        if path == '/dev/fb0':
+            raise OSError('no fb device')
         data = '1280,720\n' if 'virtual_size' in path else '32\n'
         return MagicMock(
             __enter__=lambda s: MagicMock(read=lambda: data),

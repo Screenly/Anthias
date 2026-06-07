@@ -363,17 +363,48 @@ class MPVMediaPlayer(MediaPlayer):
         return self._playing
 
 
+# ioctl + offsets for struct fb_var_screeninfo (linux/fb.h): __u32
+# xres, yres, xres_virtual, yres_virtual, xoffset, yoffset,
+# bits_per_pixel, … — xres/yres at offsets 0/4, bits_per_pixel at 24.
+_FBIOGET_VSCREENINFO = 0x4600
+_FB_VSCREENINFO_LEN = 160
+
+
 def _fb_geometry(
+    fb_device: str = '/dev/fb0',
     fb_sys: str = '/sys/class/graphics/fb0',
 ) -> tuple[int, int, str]:
-    """Read the framebuffer resolution + GStreamer pixel format.
+    """Read the *visible* framebuffer resolution + GStreamer format.
 
     Returns (width, height, gst_format). 16bpp → RGB16 (the Pi vc4 fbcon
-    rgb565 default), 32bpp → BGRx. Falls back to 1920x1080/RGB16 if the
-    sysfs nodes are unreadable so playback degrades rather than crashes.
-    The format pins the ``v4l2convert`` (bcm2835 ISP) output so the
-    hardware color-convert lands in the framebuffer's pixel layout.
+    rgb565 default), 32bpp → BGRx. The format pins the ``v4l2convert``
+    (bcm2835 ISP) output so the hardware color-convert lands in the
+    framebuffer's pixel layout.
+
+    The resolution comes from the ``FBIOGET_VSCREENINFO`` ioctl —
+    ``varinfo.xres``/``yres``, the exact fields ``fbdevsink`` uses for
+    its centering/cropping math. The sysfs ``virtual_size`` node used
+    previously reports ``xres_virtual``/``yres_virtual``, which can be
+    larger than the scanned-out mode (panning / double-buffer
+    configs); scaling to the virtual size on such a device paints
+    mostly off-screen. Falls back to sysfs, then to 1920x1080/RGB16,
+    so playback degrades rather than crashes when the ioctl is
+    unavailable (e.g. unit tests on a host with no /dev/fb0).
     """
+    try:
+        import fcntl
+        import struct
+
+        with open(fb_device, 'rb') as fb:
+            info = bytearray(_FB_VSCREENINFO_LEN)
+            fcntl.ioctl(fb, _FBIOGET_VSCREENINFO, info)
+        width, height = struct.unpack_from('=2I', info, 0)
+        bpp = struct.unpack_from('=I', info, 24)[0]
+        if width > 0 and height > 0 and bpp > 0:
+            return width, height, 'BGRx' if bpp >= 32 else 'RGB16'
+    except OSError:
+        pass
+
     width, height = 1920, 1080
     try:
         with open(f'{fb_sys}/virtual_size') as handle:
