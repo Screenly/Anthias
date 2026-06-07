@@ -13,7 +13,7 @@ class WhiteNoiseMiddleware:
 
     def __init__(
         self,
-        get_response: Callable[[HttpRequest], HttpResponseBase | None],
+        get_response: Callable[[HttpRequest], HttpResponseBase],
         settings: Any = ...,
     ) -> None: ...
     def __call__(self, request: HttpRequest) -> HttpResponseBase: ...

@@ -10,10 +10,12 @@ device over one unreadable Django-admin vendor file.
 import logging
 import os
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
 from django.conf import settings
+from django.http import HttpResponse
 
 from anthias_server.lib.whitenoise import ResilientWhiteNoiseMiddleware
 
@@ -23,6 +25,24 @@ def _make_tree(root: Path) -> None:
     (root / 'css' / 'app.css').write_text('body{}')
     (root / 'js').mkdir()
     (root / 'js' / 'app.js').write_text('//')
+
+
+class _ScandirCM:
+    """Context-manager iterable matching ``os.scandir``'s protocol,
+    so fakes that hand back a custom entry list still work with the
+    production ``with os.scandir(...) as it:`` usage."""
+
+    def __init__(self, entries: list[Any]) -> None:
+        self._entries = entries
+
+    def __enter__(self) -> 'list[Any]':
+        return self._entries
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def __iter__(self) -> Any:
+        return iter(self._entries)
 
 
 class TestScantreeTolerant:
@@ -89,8 +109,9 @@ class TestScantreeTolerant:
                     raise OSError(117, 'Structure needs cleaning', self.path)
                 return self._entry.stat()
 
-        def fake_scandir(path: str) -> list[_Entry]:
-            return [_Entry(e) for e in real_scandir(path)]
+        def fake_scandir(path: str) -> _ScandirCM:
+            with real_scandir(path) as it:
+                return _ScandirCM([_Entry(e) for e in it])
 
         skipped: list[tuple[str, OSError]] = []
         with mock.patch(
@@ -106,14 +127,17 @@ class TestScantreeTolerant:
 
 
 class TestMiddlewareDegradesGracefully:
-    def _middleware(self, root: Path) -> ResilientWhiteNoiseMiddleware:
-        # Instantiate against a scratch STATIC_ROOT the way Django's
-        # handler does at startup; autorefresh off = the one-shot
-        # scan that crashed in the field.
-        with mock.patch.object(settings, 'STATIC_ROOT', str(root)):
-            return ResilientWhiteNoiseMiddleware(
-                get_response=lambda request: None
-            )
+    def _middleware(self) -> ResilientWhiteNoiseMiddleware:
+        # Construct without scanning (the test settings enable
+        # WHITENOISE_AUTOREFRESH under DEBUG, so __init__ doesn't scan
+        # STATIC_ROOT), then drive the overridden scan directly — that
+        # keeps the test pinned to our code rather than to whichever
+        # startup path the active DEBUG/autorefresh config takes. The
+        # get_response returns a real HttpResponse per Django's
+        # middleware contract.
+        return ResilientWhiteNoiseMiddleware(
+            get_response=lambda request: HttpResponse()
+        )
 
     def test_survives_corrupted_subtree_and_serves_the_rest(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -122,22 +146,23 @@ class TestMiddlewareDegradesGracefully:
         bad_dir = str(tmp_path / 'js')
         real_scandir = os.scandir
 
-        def fake_scandir(path: str):  # type: ignore[no-untyped-def]
+        def fake_scandir(path: str) -> Any:
             if str(path) == bad_dir:
                 raise OSError(117, 'Structure needs cleaning', path)
             return real_scandir(path)
 
+        middleware = self._middleware()
         with (
             mock.patch(
                 'anthias_server.lib.whitenoise.os.scandir', fake_scandir
             ),
             caplog.at_level(logging.ERROR),
         ):
-            middleware = self._middleware(tmp_path)
+            middleware.update_files_dictionary(str(tmp_path), '/static/')
 
-        # No exception escaped, the healthy file is served under
-        # its canonical /static/ URL (no double-slash from a root
-        # without a trailing separator)...
+        # No exception escaped, the healthy file is served under its
+        # canonical /static/ URL (no double-slash from a root without
+        # a trailing separator)...
         assert '/static/css/app.css' in middleware.files
         # ...and exactly one ERROR records the storage fault.
         errors = [r for r in caplog.records if r.levelno == logging.ERROR]
@@ -149,9 +174,11 @@ class TestMiddlewareDegradesGracefully:
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         _make_tree(tmp_path)
+        middleware = self._middleware()
         with caplog.at_level(logging.ERROR):
-            middleware = self._middleware(tmp_path)
-        assert any('app.css' in url for url in middleware.files)
+            middleware.update_files_dictionary(str(tmp_path), '/static/')
+        assert '/static/css/app.css' in middleware.files
+        assert '/static/js/app.js' in middleware.files
         assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 

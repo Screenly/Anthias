@@ -76,15 +76,18 @@ class ResilientWhiteNoiseMiddleware(WhiteNoiseMiddleware):
         listed or an entry that can't be stat'd is recorded in
         ``skipped`` instead of aborting the whole scan."""
         try:
-            entries = list(os.scandir(root))
+            scandir = os.scandir(root)
         except OSError as exc:
             skipped.append((root, exc))
             return
-        for entry in entries:
-            try:
-                if entry.is_dir():
-                    yield from cls._scantree_tolerant(entry.path, skipped)
-                else:
-                    yield entry.path, entry.stat()
-            except OSError as exc:
-                skipped.append((entry.path, exc))
+        # Close the directory FD promptly even on a large/deep tree —
+        # the recursion below can hold many open otherwise.
+        with scandir:
+            for entry in scandir:
+                try:
+                    if entry.is_dir():
+                        yield from cls._scantree_tolerant(entry.path, skipped)
+                    else:
+                        yield entry.path, entry.stat()
+                except OSError as exc:
+                    skipped.append((entry.path, exc))
