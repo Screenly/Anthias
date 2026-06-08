@@ -448,6 +448,62 @@ def _terminate_webview(proc: Any) -> None:
         logging.debug('Could not SIGKILL AnthiasViewer', exc_info=True)
 
 
+def _wayland_socket_path() -> str | None:
+    """Path to cage's Wayland socket, or ``None`` if the env doesn't
+    name one.
+
+    cage exports both ``XDG_RUNTIME_DIR`` and ``WAYLAND_DISPLAY`` to
+    the viewer before exec'ing it; the socket lives at their join.
+    This env signal — not ``_is_wayland_board()`` — is what gates the
+    wait: cage sets WAYLAND_DISPLAY and nothing else does, on x86,
+    arm64 AND pi5 alike, whereas ``_is_wayland_board()`` is x86-only
+    and would skip the wait on exactly the Pi 5 where ANTHIAS-19
+    fired. ``WAYLAND_DISPLAY`` may itself be an absolute path (rare),
+    used verbatim then. Returns ``None`` when either piece is missing
+    — a non-cage (linuxfb/eglfs) board with no socket to wait for.
+    """
+    wayland_display = getenv('WAYLAND_DISPLAY')
+    if not wayland_display:
+        return None
+    if os.path.isabs(wayland_display):
+        return wayland_display
+    runtime_dir = getenv('XDG_RUNTIME_DIR')
+    if not runtime_dir:
+        return None
+    return os.path.join(runtime_dir, wayland_display)
+
+
+def _wait_for_wayland_socket(deadline: float) -> None:
+    """Block until cage's Wayland socket exists, until ``deadline``
+    (a ``monotonic()`` timestamp).
+
+    No-op on non-cage boards (the env names no socket) and when the
+    socket is already up — the common case, returns at once.
+    ``deadline`` is the *shared* spawn-attempt budget, so this wait
+    and the D-Bus handshake wait that follows together can't exceed
+    ``startup_timeout``; a compositor that never returns falls through
+    and the spawn fails the normal way rather than hanging the
+    asset_loop thread.
+    """
+    socket_path = _wayland_socket_path()
+    if socket_path is None or os.path.exists(socket_path):
+        return
+    logging.warning(
+        'Wayland socket %s not present yet; waiting (within the spawn '
+        'budget) before launching the webview',
+        socket_path,
+    )
+    while monotonic() < deadline:
+        if os.path.exists(socket_path):
+            return
+        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    logging.warning(
+        'Wayland socket %s still absent; launching anyway (the launch '
+        'will fail and retry if cage is truly down)',
+        socket_path,
+    )
+
+
 def _spawn_webview_once(startup_timeout: float) -> Any:
     """Spawn AnthiasViewer once and block until it registers on D-Bus.
 
@@ -457,7 +513,18 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     handshake or fails to emit it within ``startup_timeout``. The matched
     string must stay in lockstep with ``qInfo() << "Anthias service
     start"`` in src/anthias_webview/src/main.cpp.
+
+    ``startup_timeout`` is the total budget for the attempt: on a cage
+    board one shared deadline covers both the wait for the Wayland
+    socket and the handshake, so the socket wait can't pile on top of
+    ``startup_timeout``.
     """
+    deadline = monotonic() + startup_timeout
+    # On cage boards, don't race the Wayland socket — a spawn before
+    # it exists dies instantly with "Failed to create wl_display" and
+    # wastes a retry attempt (Sentry ANTHIAS-19). No-op elsewhere and
+    # when the socket is already up (the common case).
+    _wait_for_wayland_socket(deadline)
     try:
         # _bg_exc=False: with the default (True), sh re-raises the exit
         # error (e.g. SignalException_SIGABRT on a Qt init crash, or
@@ -477,7 +544,9 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
             f'AnthiasViewer binary not found: {exc}'
         ) from exc
 
-    deadline = monotonic() + startup_timeout
+    # Reuse the same ``deadline`` the Wayland-socket wait above shares,
+    # so the whole attempt — socket wait plus handshake — is bounded by
+    # ``startup_timeout`` rather than the two stacking.
     while monotonic() < deadline:
         if BROWSER_HANDSHAKE_LINE in candidate.process.stdout.decode(
             'utf-8', errors='replace'

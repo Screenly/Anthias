@@ -4,7 +4,7 @@
 import logging
 import os
 from collections.abc import Iterator
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 from unittest import mock
 
@@ -1714,3 +1714,136 @@ class TestPublishDisplayResolutionOnce:
             '1280x720',
             ex=viewer.DISPLAY_RESOLUTION_TTL_S,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wayland socket wait (Sentry ANTHIAS-19)
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForWaylandSocket:
+    """The webview spawn must not race cage's Wayland socket — a spawn
+    before the socket exists dies with 'Failed to create wl_display'
+    and wastes a retry attempt (Sentry ANTHIAS-19). The gate is the
+    WAYLAND_DISPLAY env cage exports, NOT _is_wayland_board() (which is
+    x86-only and would skip the Pi 5 where this actually fired)."""
+
+    def test_no_op_when_no_socket_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # linuxfb/eglfs board: cage never ran, so WAYLAND_DISPLAY is
+        # unset and the wait returns immediately without polling.
+        monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
+        slept = mock.Mock()
+        monkeypatch.setattr(viewer, 'sleep', slept)
+        viewer._wait_for_wayland_socket(monotonic() + 5)
+        slept.assert_not_called()
+
+    def test_returns_immediately_when_socket_present(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        (tmp_path / 'wayland-1').write_text('')
+        slept = mock.Mock()
+        monkeypatch.setattr(viewer, 'sleep', slept)
+        viewer._wait_for_wayland_socket(monotonic() + 5)
+        slept.assert_not_called()
+
+    def test_fires_on_pi5_via_env_not_board_helper(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # The regression Copilot flagged: _is_wayland_board() returns
+        # False for pi5, so gating on it would skip the wait on exactly
+        # the board ANTHIAS-19 came from. With DEVICE_TYPE=pi5 the wait
+        # must still engage (driven by WAYLAND_DISPLAY), proven by the
+        # 'not present yet' warning firing for an absent socket.
+        monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+        assert viewer._is_wayland_board() is False
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        monkeypatch.setattr(viewer, 'sleep', lambda _s: None)
+        with caplog.at_level(logging.WARNING):
+            # Deadline already passed: the loop body is skipped, but the
+            # pre-loop "not present yet" warning still fires iff the wait
+            # was entered (i.e. not board-skipped).
+            viewer._wait_for_wayland_socket(monotonic() - 1)
+        assert any('not present yet' in r.getMessage() for r in caplog.records)
+
+    def test_waits_then_proceeds_when_socket_appears(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        socket = tmp_path / 'wayland-1'
+
+        # The socket shows up after the second poll.
+        calls = {'n': 0}
+
+        def fake_sleep(_seconds: float) -> None:
+            calls['n'] += 1
+            if calls['n'] >= 2:
+                socket.write_text('')
+
+        monkeypatch.setattr(viewer, 'sleep', fake_sleep)
+        viewer._wait_for_wayland_socket(monotonic() + 100)
+        assert socket.exists()
+        assert calls['n'] >= 2
+
+    def test_bounded_when_socket_never_appears(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        # A dead compositor must not hang the asset_loop thread — once
+        # the shared deadline passes the wait falls through and lets the
+        # spawn fail the normal way.
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        monkeypatch.setattr(viewer, 'sleep', lambda _s: None)
+        # Deadline already in the past → returns at once, no hang.
+        viewer._wait_for_wayland_socket(monotonic() - 1)
+        assert not (tmp_path / 'wayland-1').exists()
+
+    def test_skips_when_runtime_dir_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # WAYLAND_DISPLAY set but XDG_RUNTIME_DIR absent → no socket
+        # path can be formed, so skip rather than guess.
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        monkeypatch.delenv('XDG_RUNTIME_DIR', raising=False)
+        slept = mock.Mock()
+        monkeypatch.setattr(viewer, 'sleep', slept)
+        viewer._wait_for_wayland_socket(monotonic() + 5)
+        slept.assert_not_called()
+
+    def test_spawn_waits_for_socket_before_launching(
+        self, viewer_fixtures: _ViewerFixtures
+    ) -> None:
+        # _spawn_webview_once must call the wait before it shells out,
+        # so a respawn never races cage. Make the spawn fail fast (a
+        # missing binary is the cheapest terminal error) and assert
+        # the wait ran first.
+        order: list[str] = []
+
+        def fake_wait(_deadline: float) -> None:
+            order.append('wait')
+
+        def fake_command(*args: Any, **kwargs: Any) -> Any:
+            order.append('spawn')
+            raise viewer_fixtures.u.sh.CommandNotFound('AnthiasViewer')
+
+        with (
+            mock.patch.object(
+                viewer_fixtures.u,
+                '_wait_for_wayland_socket',
+                side_effect=fake_wait,
+            ),
+            mock.patch.object(
+                viewer_fixtures.u.sh, 'Command', side_effect=fake_command
+            ),
+            pytest.raises(viewer_fixtures.u.WebviewBinaryMissingError),
+        ):
+            viewer_fixtures.u._spawn_webview_once(1)
+        assert order == ['wait', 'spawn']
