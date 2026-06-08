@@ -21,6 +21,17 @@ from anthias_server.settings import settings
 # even when only exercising GstFbdevMediaPlayer.
 _browser_bus: Any = None
 
+# Optional wrapper that runs a ``browser_bus`` call and, if the webview
+# died mid-call (a D-Bus "service gone" error), reaps + respawns it and
+# retries the call once. Injected from anthias_viewer/__init__.py
+# (``_send_to_webview``); the viewer and the media player share the same
+# AnthiasViewer process, so a video-play D-Bus call hitting a crashed
+# webview must self-heal exactly like loadImage/loadPage does (#3012),
+# rather than logging ERROR and leaving the screen dark until the next
+# rotation (Sentry ANTHIAS-1A). Left None in tests / standalone use, in
+# which case calls run directly.
+_send_to_webview: Any = None
+
 
 def set_browser_bus(bus: Any) -> None:
     """Inject the AnthiasViewer D-Bus proxy.
@@ -37,6 +48,25 @@ def set_browser_bus(bus: Any) -> None:
 
 def get_browser_bus() -> Any:
     return _browser_bus
+
+
+def set_send_to_webview(fn: Any) -> None:
+    """Inject the webview-gone-aware call wrapper (see ``_send_to_webview``
+    in anthias_viewer/__init__.py). Injected from setup() alongside
+    ``set_browser_bus``."""
+    global _send_to_webview
+    _send_to_webview = fn
+
+
+def _call_webview(send: Any) -> None:
+    """Run ``send`` through the injected respawn-on-death wrapper when
+    available, else call it directly. A webview-gone error is handled
+    (respawn + retry) inside the wrapper; anything else propagates to
+    the caller's own error handling."""
+    if _send_to_webview is not None:
+        _send_to_webview(send)
+    else:
+        send()
 
 
 def _screen_rotation() -> int:
@@ -339,7 +369,14 @@ class MPVMediaPlayer(MediaPlayer):
             return
 
         try:
-            bus.playVideo(self.uri, _marshal_dbus_options(options))
+            # Route through the respawn-on-death wrapper: a webview
+            # that crashed mid-playback is reaped + respawned and the
+            # playVideo retried, instead of logging ERROR and leaving
+            # the screen dark (Sentry ANTHIAS-1A). A non-webview-gone
+            # error still surfaces here.
+            _call_webview(
+                lambda: bus.playVideo(self.uri, _marshal_dbus_options(options))
+            )
             self._playing = True
         except Exception as exc:
             # pydbus surfaces transport / signature errors as
@@ -355,7 +392,7 @@ class MPVMediaPlayer(MediaPlayer):
         if bus is None:
             return
         try:
-            bus.stopVideo()
+            _call_webview(lambda: bus.stopVideo())
         except Exception as exc:
             logging.error('MPVMediaPlayer.stop failed: %s', exc)
 

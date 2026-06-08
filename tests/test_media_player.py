@@ -996,3 +996,100 @@ def test_upload_gate_codecs_are_h264_or_hevc() -> None:
             f'in the libavcodec h264/hevc dispatch — add the '
             f'matching decoder or remove from the gate.'
         )
+
+
+# ---------------------------------------------------------------------------
+# Webview-gone respawn routing (#3027 / Sentry ANTHIAS-1A)
+# ---------------------------------------------------------------------------
+
+
+class TestPlayRoutesThroughWebviewWrapper:
+    """play()/stop() must run their D-Bus calls through the injected
+    webview-gone wrapper so a crashed webview is respawned + retried,
+    not logged at ERROR with the screen left dark."""
+
+    def test_play_uses_injected_wrapper(self, mpv: _MPVFixtures) -> None:
+        # A wrapper that just invokes the call (the happy path) — play
+        # must go through it rather than touching the bus directly.
+        calls: list[str] = []
+
+        def wrapper(send: Any) -> None:
+            calls.append('wrapped')
+            send()
+
+        with patch.object(media_player_module, '_send_to_webview', wrapper):
+            mpv.player.uri = 'https://example.com/v.mp4'
+            mpv.player.play()
+
+        assert calls == ['wrapped']
+        mpv.mock_bus.playVideo.assert_called_once()
+        assert mpv.player.is_playing() is True
+
+    def test_stop_uses_injected_wrapper(self, mpv: _MPVFixtures) -> None:
+        calls: list[str] = []
+
+        def wrapper(send: Any) -> None:
+            calls.append('wrapped')
+            send()
+
+        with patch.object(media_player_module, '_send_to_webview', wrapper):
+            mpv.player.stop()
+
+        assert calls == ['wrapped']
+        mpv.mock_bus.stopVideo.assert_called_once()
+
+    def test_play_recovers_when_wrapper_respawns(
+        self, mpv: _MPVFixtures
+    ) -> None:
+        # Simulate the real wrapper: first send hits a webview-gone
+        # error, the wrapper respawns and the retried send succeeds.
+        attempts = {'n': 0}
+
+        def respawning_wrapper(send: Any) -> None:
+            attempts['n'] += 1
+            mpv.mock_bus.playVideo.side_effect = [
+                RuntimeError('NoReply'),
+                None,
+            ]
+            # The production wrapper retries send() once after respawn;
+            # emulate that here so the second call lands.
+            try:
+                send()
+            except RuntimeError:
+                send()
+
+        with patch.object(
+            media_player_module, '_send_to_webview', respawning_wrapper
+        ):
+            mpv.player.uri = 'https://example.com/v.mp4'
+            mpv.player.play()
+
+        assert mpv.mock_bus.playVideo.call_count == 2
+        assert mpv.player.is_playing() is True
+
+    def test_play_clears_state_when_wrapper_reraises(
+        self, mpv: _MPVFixtures
+    ) -> None:
+        # A non-webview-gone error propagates out of the wrapper; play
+        # must log + clear _playing so it doesn't think a video is up.
+        def reraising_wrapper(send: Any) -> None:
+            raise RuntimeError('Disconnected')
+
+        with patch.object(
+            media_player_module, '_send_to_webview', reraising_wrapper
+        ):
+            mpv.player.uri = 'https://example.com/v.mp4'
+            mpv.player.play()
+
+        assert mpv.player.is_playing() is False
+
+    def test_direct_call_when_no_wrapper_injected(
+        self, mpv: _MPVFixtures
+    ) -> None:
+        # Standalone / test use (no injection): calls run directly, so
+        # the prior behaviour is preserved.
+        assert media_player_module._send_to_webview is None
+        mpv.player.uri = 'https://example.com/v.mp4'
+        mpv.player.play()
+        mpv.mock_bus.playVideo.assert_called_once()
+        assert mpv.player.is_playing() is True
