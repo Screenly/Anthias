@@ -165,19 +165,38 @@ def test_cleanup_returns_when_assetdir_missing() -> None:
         settings['assetdir'] = original
 
 
-def test_get_display_power_writes_redis() -> None:
-    """The Celery task wraps diagnostics.get_display_power and persists."""
+@pytest.mark.parametrize(
+    'cec_value, expected',
+    [
+        (True, 'True'),
+        (False, 'False'),
+        ('CEC error', 'CEC error'),
+    ],
+)
+def test_get_display_power_writes_redis_as_str(
+    cec_value: object, expected: str
+) -> None:
+    """The Celery task persists the CEC power state to redis as a str.
+
+    diagnostics.get_display_power() returns ``str | bool``; redis-py
+    raises ``DataError: Invalid input of type: 'bool'`` on a bool, so
+    a clean CEC True/False used to crash the task (Sentry ANTHIAS-2C).
+    The value must reach redis already coerced to a string.
+    """
     fake_redis = mock.MagicMock()
     with (
         mock.patch.object(celery_tasks_module, 'r', fake_redis),
         mock.patch(
             'anthias_server.celery_tasks.diagnostics.get_display_power',
-            return_value=True,
+            return_value=cec_value,
         ),
     ):
         get_display_power.apply()
 
-    fake_redis.set.assert_called_once_with('display_power', True)
+    fake_redis.set.assert_called_once_with('display_power', expected)
+    # No bool ever reaches redis — guards against the DataError.
+    written = fake_redis.set.call_args.args[1]
+    assert isinstance(written, str)
     fake_redis.expire.assert_called_once_with('display_power', 3600)
 
 
