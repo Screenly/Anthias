@@ -1064,7 +1064,7 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
             'Click "Browse" next to "Save As" at the bottom and pick '
             'where to save the converted file.',
             'Click the green "Start Encode" button at the top.',
-            'When it finishes, upload the new MP4 file here.',
+            'When it finishes, upload the new MP4 to Anthias as a new asset.',
         ]
     )
     return steps

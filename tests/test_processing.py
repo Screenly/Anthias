@@ -1706,7 +1706,7 @@ def test_normalize_on_failure_unsupported_codec_persists_recipe(
 
 
 @pytest.mark.django_db
-def test_normalize_on_failure_clears_stale_error_recipe(
+def test_normalize_on_failure_clears_stale_error_recipe_and_handbrake(
     asset_dir: str,
 ) -> None:
     """A subsequent non-recipe failure must clear any stale
