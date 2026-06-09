@@ -427,3 +427,17 @@ def test_github_module_never_logs_at_error_level() -> None:
         f'{error_level_calls} — these become Sentry events on every '
         f'offline device'
     )
+
+
+def test_handle_github_error_surfaces_exception_detail(
+    github_env: None,
+) -> None:
+    """The no-response branch must log the exception detail, not a
+    bare 'no data' — Sentry previously showed 'ConnectionError
+    fetching latest release from GitHub: no data', hiding the
+    host/timeout info that str(exc) carries."""
+    exc = requests_exceptions.ReadTimeout('read timed out')
+    exc.response = None
+    with mock.patch('anthias_server.lib.github.logging.warning') as m_warning:
+        github.handle_github_error(exc, 'latest release')
+    assert m_warning.call_args.args[3] == 'read timed out'
