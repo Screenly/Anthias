@@ -290,7 +290,16 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
 
 @celery.task(time_limit=30)
 def get_display_power() -> None:
-    r.set('display_power', diagnostics.get_display_power())
+    # diagnostics.get_display_power() returns ``str | bool`` (bool for
+    # a clean CEC True/False, str for the error fallbacks). redis-py
+    # refuses a bool — ``DataError: Invalid input of type: 'bool'`` —
+    # so every successful power query crashed this task and left the
+    # key unset (Sentry ANTHIAS-2C). Coerce to str: the v2 System Info
+    # API exposes ``display_power`` as ``string | null`` and just
+    # passes the value through, so 'True'/'False'/'CEC error' all fit
+    # — and the on/off state now actually populates instead of only
+    # the error cases ever landing.
+    r.set('display_power', str(diagnostics.get_display_power()))
     r.expire('display_power', 3600)
 
 
