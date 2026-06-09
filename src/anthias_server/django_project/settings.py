@@ -137,16 +137,18 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     return event
 
 
-# celery's consumer and the embedded beat scheduler both log every
-# broker reconnect attempt at ERROR ("consumer: Cannot connect to
-# redis://..., Trying again in 6.00 seconds" / "beat: Connection
-# error: ..., Trying again in 2.0 seconds") while they retry on
-# their own — same expected-transient rationale as the before_send
-# filter above, but these arrive as log messages rather than
-# exceptions, so they have to be silenced at the logger.
-# (Sentry ANTHIAS-K and ANTHIAS-P.)
+# celery's consumer, the embedded beat scheduler, and the redis
+# result backend all log every broker/backend reconnect attempt at
+# ERROR ("consumer: Cannot connect to redis://..., Trying again in
+# 6.00 seconds" / "beat: Connection error: ..., Trying again in 2.0
+# seconds" / "Connection to Redis lost: Retry (4/20) in 1.00
+# second.") while they retry on their own — same expected-transient
+# rationale as the before_send filter above, but these arrive as log
+# messages rather than exceptions, so they have to be silenced at the
+# logger. (Sentry ANTHIAS-K / ANTHIAS-P / ANTHIAS-2E.)
 ignore_logger('celery.worker.consumer.consumer')
 ignore_logger('celery.beat')
+ignore_logger('celery.backends.redis')
 
 
 def get_sentry_release() -> str | None:
