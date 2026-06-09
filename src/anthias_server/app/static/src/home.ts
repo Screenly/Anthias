@@ -193,15 +193,18 @@ function homeApp(): HomeAppData {
       this.pendingDeleteName = name || ''
     },
     closeModal() {
-      // The Hide button stays clickable while the upload bytes are
-      // still going up — that just hides the modal. Once the bytes are
-      // sent and the server is processing, dropping the modal would
-      // strip the form HTMX is still waiting for, so the button is
-      // disabled in the template at that point.
+      // Hiding the modal during an in-flight upload (Hide button, Esc,
+      // backdrop click) must NOT touch the upload state. uploadFiles()
+      // owns uploadState for the whole batch and clears it when the
+      // last file lands; wiping it here mid-batch would disarm the
+      // re-entry guard (a reopened modal could start a second batch
+      // that races the first over the shared progress/index fields)
+      // and tear down the progress UI while files are still uploading.
+      // Only reset when nothing is in flight — by then it's a no-op
+      // anyway.
       this.mode = null
       this.editAsset = null
-      if (this.uploadState !== 'processing') {
-        this.uploadState = null
+      if (!this.uploadState) {
         this.uploadProgress = 0
         this.uploadFileName = ''
         this.uploadIndex = 0
