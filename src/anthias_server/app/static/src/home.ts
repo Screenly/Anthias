@@ -57,8 +57,15 @@ interface HomeAppData {
   closePreview(): void
   bindFlatpickr(): void
   uploadFiles(input: HTMLInputElement): Promise<void>
-  uploadOne(url: string, csrf: string, file: File): Promise<boolean>
+  uploadOne(url: string, csrf: string, file: File): Promise<UploadResult>
 }
+
+// 'ok'       — file accepted and the asset row was created.
+// 'rejected' — server reached, but it refused this file (HTTP 200 +
+//              error toast, e.g. invalid type). The toast already
+//              informed the user; the batch skips it and carries on.
+// 'error'    — transport failure / non-2xx. Aborts the batch.
+type UploadResult = 'ok' | 'rejected' | 'error'
 
 const DATE_FMT_MAP: Record<string, string> = {
   'mm/dd/yyyy': 'm/d/Y',
@@ -240,16 +247,20 @@ function homeApp(): HomeAppData {
 
       this.uploadTotal = files.length
       let succeeded = 0
-      let failed = false
+      let aborted = false
       for (let i = 0; i < files.length; i++) {
         this.uploadIndex = i + 1
         this.uploadFileName = files[i].name
-        const ok = await this.uploadOne(url, csrf, files[i])
-        if (!ok) {
-          failed = true
+        const result = await this.uploadOne(url, csrf, files[i])
+        if (result === 'error') {
+          // Transport failure — something's wrong with the request
+          // itself, so stop the batch rather than hammering on.
+          aborted = true
           break
         }
-        succeeded += 1
+        // 'rejected' files already surfaced their own server toast;
+        // skip them and keep uploading the rest of the selection.
+        if (result === 'ok') succeeded += 1
       }
 
       // Clear the input so re-selecting the same file(s) fires change
@@ -261,7 +272,7 @@ function homeApp(): HomeAppData {
       this.uploadIndex = 0
       this.uploadTotal = 0
 
-      if (failed) {
+      if (aborted) {
         const store = window.Alpine.store('toasts') as
           | ToastStoreLike
           | undefined
@@ -291,8 +302,8 @@ function homeApp(): HomeAppData {
       url: string,
       csrf: string,
       file: File,
-    ): Promise<boolean> {
-      return new Promise<boolean>((resolve) => {
+    ): Promise<UploadResult> {
+      return new Promise<UploadResult>((resolve) => {
         const xhr = new XMLHttpRequest()
         xhr.open('POST', url)
         xhr.setRequestHeader('X-CSRFToken', csrf)
@@ -310,11 +321,18 @@ function homeApp(): HomeAppData {
           if (ev.loaded >= ev.total) this.uploadState = 'processing'
         })
         xhr.addEventListener('load', () => {
-          fireToastFromHeader(xhr.getResponseHeader('HX-Trigger'))
-          resolve(xhr.status >= 200 && xhr.status < 300)
+          const kind = fireToastFromHeader(xhr.getResponseHeader('HX-Trigger'))
+          if (xhr.status < 200 || xhr.status >= 300) {
+            resolve('error')
+            return
+          }
+          // The server validates and may refuse a file with a 200 +
+          // error toast (invalid type, missing file). Treat that as a
+          // rejected file, not a silent success.
+          resolve(kind === 'error' ? 'rejected' : 'ok')
         })
-        xhr.addEventListener('error', () => resolve(false))
-        xhr.addEventListener('abort', () => resolve(false))
+        xhr.addEventListener('error', () => resolve('error'))
+        xhr.addEventListener('abort', () => resolve('error'))
         const fd = new FormData()
         fd.append('csrfmiddlewaretoken', csrf)
         fd.append('file_upload', file)
@@ -324,11 +342,16 @@ function homeApp(): HomeAppData {
   }
 }
 
-// Replay a server HX-Trigger toast payload through the global store.
-// htmx does this automatically for hx-* requests; the file-upload
-// path uses raw XHR (see uploadFiles), so we parse it by hand.
-function fireToastFromHeader(header: string | null): void {
-  if (!header) return
+// Replay a server HX-Trigger toast payload through the global store
+// and return its kind. htmx does this automatically for hx-* requests;
+// the file-upload path uses raw XHR (see uploadFiles), so we parse it
+// by hand. The returned kind lets uploadOne treat a server-side
+// rejection (HTTP 200 + an error toast — e.g. invalid file type) as a
+// failed file rather than a silent success.
+function fireToastFromHeader(
+  header: string | null,
+): 'success' | 'error' | 'info' | null {
+  if (!header) return null
   try {
     const parsed = JSON.parse(header) as {
       toast?: { kind?: 'success' | 'error' | 'info'; message?: string }
@@ -337,11 +360,13 @@ function fireToastFromHeader(header: string | null): void {
     if (toast?.message) {
       const store = window.Alpine.store('toasts') as ToastStoreLike | undefined
       store?.push(toast.kind || 'info', toast.message)
+      return toast.kind || 'info'
     }
   } catch {
     // Header was a bare event name, not JSON, or carried no toast —
     // nothing to surface.
   }
+  return null
 }
 
 // Tracks the assets that were `is_processing=true` on the previous
