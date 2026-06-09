@@ -46,6 +46,8 @@ interface HomeAppData {
   uploadState: UploadState
   uploadProgress: number
   uploadFileName: string
+  uploadIndex: number
+  uploadTotal: number
   init(): void
   openAdd(): void
   openEdit(asset: AssetEdit): void
@@ -54,9 +56,8 @@ interface HomeAppData {
   closeModal(): void
   closePreview(): void
   bindFlatpickr(): void
-  onUploadStart(): void
-  onUploadProgress(ev: CustomEvent<ProgressEvent>): void
-  onUploadDone(ev: CustomEvent<{ successful: boolean; xhr: XMLHttpRequest }>): void
+  uploadFiles(input: HTMLInputElement): Promise<void>
+  uploadOne(url: string, csrf: string, file: File): Promise<boolean>
 }
 
 const DATE_FMT_MAP: Record<string, string> = {
@@ -97,6 +98,8 @@ function homeApp(): HomeAppData {
     uploadState: null,
     uploadProgress: 0,
     uploadFileName: '',
+    uploadIndex: 0,
+    uploadTotal: 0,
 
     init(this: HomeAppData & { $watch: (k: string, cb: () => void) => void }) {
       // Re-bind Flatpickr every time the edit modal opens. The
@@ -201,45 +204,140 @@ function homeApp(): HomeAppData {
         this.uploadState = null
         this.uploadProgress = 0
         this.uploadFileName = ''
+        this.uploadIndex = 0
+        this.uploadTotal = 0
       }
     },
     closePreview() {
       this.previewAsset = null
     },
-    onUploadStart() {
-      this.uploadState = 'sending'
-      this.uploadProgress = 0
-    },
-    onUploadProgress(ev) {
-      const detail = ev.detail
-      if (!detail || !detail.lengthComputable || detail.total === 0) return
-      const pct = Math.min(99, Math.round((detail.loaded / detail.total) * 100))
-      this.uploadProgress = pct
-      // Once bytes hit the server we flip to "processing" — the server
-      // still has to write the file to disk and (for videos) shell out
-      // to ffprobe, which is the longest part of the round-trip.
-      if (detail.loaded >= detail.total) {
-        this.uploadState = 'processing'
+
+    // Multi-file upload (issue #3045). The server's assets_upload
+    // endpoint takes exactly one file per POST, so a multi-select
+    // batch is uploaded sequentially — one XHR per file — rather
+    // than via htmx's single-form submit. Driving it from JS (instead
+    // of hx-post on the <form>) is what makes "X of N" progress and
+    // per-file failure handling possible; htmx would only ever see
+    // the first file in the input. Mirrors the pre-#2818 React
+    // behaviour added in #2778.
+    async uploadFiles(input: HTMLInputElement) {
+      const files = input.files ? Array.from(input.files) : []
+      const form = input.form
+      // Guard against re-entry: a drop/select while a batch is still
+      // in flight would clobber the progress + index state.
+      if (!files.length || !form || this.uploadState) {
+        input.value = ''
+        return
       }
-    },
-    onUploadDone(ev) {
-      const ok = ev.detail?.successful
-      // Success toast is fired by the server via HX-Trigger so we
-      // don't double up here. The client only owns the failure path
-      // (transport errors that never reach the server) and the
-      // modal-close + state-reset bookkeeping.
+      const url = form.getAttribute('action') || ''
+      const csrf =
+        form.querySelector<HTMLInputElement>(
+          'input[name=csrfmiddlewaretoken]',
+        )?.value || csrfToken()
+
+      this.uploadTotal = files.length
+      let succeeded = 0
+      let failed = false
+      for (let i = 0; i < files.length; i++) {
+        this.uploadIndex = i + 1
+        this.uploadFileName = files[i].name
+        const ok = await this.uploadOne(url, csrf, files[i])
+        if (!ok) {
+          failed = true
+          break
+        }
+        succeeded += 1
+      }
+
+      // Clear the input so re-selecting the same file(s) fires change
+      // again, then drop the progress UI.
+      input.value = ''
       this.uploadState = null
       this.uploadProgress = 0
-      if (ok) {
-        this.uploadFileName = ''
-        this.mode = null
-      } else {
+      this.uploadFileName = ''
+      this.uploadIndex = 0
+      this.uploadTotal = 0
+
+      if (failed) {
         const store = window.Alpine.store('toasts') as
           | ToastStoreLike
           | undefined
         store?.push('error', 'Upload failed — check the file and try again')
       }
+      if (succeeded > 0) {
+        this.mode = null
+        // The per-file responses each fan out a WebSocket refresh
+        // nudge, but force one final swap so the new rows land
+        // immediately even when the socket is unavailable.
+        const htmx = (
+          window as unknown as {
+            htmx?: { trigger: (target: string, event: string) => void }
+          }
+        ).htmx
+        htmx?.trigger('body', 'refresh-assets')
+      }
     },
+
+    // POST a single file and resolve true on a 2xx. Success toasts
+    // ("reading metadata…" / "Uploaded X") ride back on the server's
+    // HX-Trigger header — we replay them here since this isn't an
+    // htmx-managed request. Progress flips to "processing" once the
+    // bytes are up (the server still has to write to disk + ffprobe).
+    uploadOne(
+      this: HomeAppData,
+      url: string,
+      csrf: string,
+      file: File,
+    ): Promise<boolean> {
+      return new Promise<boolean>((resolve) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', url)
+        xhr.setRequestHeader('X-CSRFToken', csrf)
+        // Mark as an htmx request so assets_upload returns the table
+        // partial (+ HX-Trigger toast) instead of a full-page redirect.
+        xhr.setRequestHeader('HX-Request', 'true')
+        this.uploadState = 'sending'
+        this.uploadProgress = 0
+        xhr.upload.addEventListener('progress', (ev) => {
+          if (!ev.lengthComputable || ev.total === 0) return
+          this.uploadProgress = Math.min(
+            99,
+            Math.round((ev.loaded / ev.total) * 100),
+          )
+          if (ev.loaded >= ev.total) this.uploadState = 'processing'
+        })
+        xhr.addEventListener('load', () => {
+          fireToastFromHeader(xhr.getResponseHeader('HX-Trigger'))
+          resolve(xhr.status >= 200 && xhr.status < 300)
+        })
+        xhr.addEventListener('error', () => resolve(false))
+        xhr.addEventListener('abort', () => resolve(false))
+        const fd = new FormData()
+        fd.append('csrfmiddlewaretoken', csrf)
+        fd.append('file_upload', file)
+        xhr.send(fd)
+      })
+    },
+  }
+}
+
+// Replay a server HX-Trigger toast payload through the global store.
+// htmx does this automatically for hx-* requests; the file-upload
+// path uses raw XHR (see uploadFiles), so we parse it by hand.
+function fireToastFromHeader(header: string | null): void {
+  if (!header) return
+  try {
+    const parsed = JSON.parse(header) as {
+      toast?: { kind?: 'success' | 'error' | 'info'; message?: string }
+    }
+    const toast = parsed?.toast
+    if (toast?.message) {
+      const store = window.Alpine.store('toasts') as ToastStoreLike | undefined
+      store?.push(toast.kind || 'info', toast.message)
+    }
+  } catch {
+    // Header was a bare event name, not JSON, or carried no toast —
+    // nothing to surface.
   }
 }
 
