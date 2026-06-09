@@ -175,7 +175,11 @@
              additionally attaches metadata.error_recipe — an ffmpeg
              command pre-filled with the upload's filename — which we
              render in a <code> block plus a copy button so the
-             operator can paste it straight into their terminal.
+             operator can paste it straight into their terminal. For
+             operators who'd rather not touch a terminal,
+             metadata.error_handbrake carries the equivalent
+             point-and-click HandBrake steps, rendered as a numbered
+             list with a link to the download page.
           {% endcomment %}
           <div
             x-show="editAsset.metadata && editAsset.metadata.error_message"
@@ -227,6 +231,30 @@
                   <i class="ti" :class="copied ? 'ti-check' : 'ti-copy'"></i>
                   <span x-text="copied ? 'Copied' : 'Copy command'"></span>
                 </button>
+              </div>
+            </template>
+            {% comment %} GUI alternative for operators uncomfortable
+               with the terminal: the same conversion done in HandBrake
+               (a free, cross-platform point-and-click transcoder).
+               metadata.error_handbrake is the server-generated step
+               list — its codec / resolution choices match the ffmpeg
+               recipe above. {% endcomment %}
+            <template x-if="editAsset.metadata
+                       && editAsset.metadata.error_handbrake
+                       && editAsset.metadata.error_handbrake.length">
+              <div class="modal-alert__handbrake">
+                <p class="modal-alert__handbrake-lead">
+                  Prefer a graphical app? Convert it with
+                  <a href="https://handbrake.fr/"
+                     target="_blank"
+                     rel="noopener noreferrer">HandBrake</a>:
+                </p>
+                <ol class="modal-alert__steps">
+                  <template x-for="(step, idx) in editAsset.metadata.error_handbrake"
+                            :key="idx">
+                    <li x-text="step"></li>
+                  </template>
+                </ol>
               </div>
             </template>
           </div>

@@ -676,6 +676,17 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     # doesn't ask the operator to overwrite their source file.
     assert tokens[-1] == 'beach-clip.hevc.mp4'
 
+    # The terminal-free alternative: HandBrake steps targeting the
+    # same codec (H.265 on a Pi 5), with a link to the download page.
+    handbrake = excinfo.value.handbrake
+    assert handbrake
+    joined = ' '.join(handbrake)
+    assert 'HandBrake' in joined
+    assert processing.HANDBRAKE_URL in joined
+    assert 'H.265 (x265)' in joined
+    # Codec-only rejection: no resolution-limit step.
+    assert not any('Resolution Limit' in step for step in handbrake)
+
     # Metadata was still written so the operator can see *what* they
     # uploaded next to the error message in the asset list.
     asset.refresh_from_db()
@@ -1123,6 +1134,55 @@ def test_ffmpeg_recipe_includes_scale_clause_when_capping() -> None:
     scale_idx = recipe.index('-vf')
     encoder_idx = recipe.index('-c:v')
     assert scale_idx < encoder_idx
+
+
+def test_handbrake_steps_h264_board_uses_stock_preset_no_encoder_change() -> (
+    None
+):
+    """An H.264 board's walkthrough leans entirely on the stock
+    ``Fast 1080p30`` preset (which already outputs H.264 MP4), so it
+    must NOT tell the operator to touch the Video Encoder dropdown.
+    The download link and the upload-back step are always present."""
+    steps = processing._handbrake_steps(frozenset({'h264', 'hevc'}))
+    joined = ' '.join(steps)
+    assert processing.HANDBRAKE_URL in joined
+    assert 'Fast 1080p30' in joined
+    # No encoder change for an H.264 board — the preset's default is
+    # already H.264.
+    assert 'Video Encoder' not in joined
+    assert 'H.265 (x265)' not in joined
+    assert any('upload' in step.lower() for step in steps)
+
+
+def test_handbrake_steps_hevc_only_board_switches_encoder_to_x265() -> None:
+    """A Pi 5 (HEVC only — no H.264 in its set) can't use the preset's
+    default H.264, so the walkthrough adds a Video-tab step switching
+    the encoder to ``H.265 (x265)`` — still on the ``Fast 1080p30``
+    preset for the 1080p MP4 envelope."""
+    steps = processing._handbrake_steps(frozenset({'hevc'}))
+    joined = ' '.join(steps)
+    assert 'Fast 1080p30' in joined
+    assert 'Video Encoder' in joined
+    assert 'H.265 (x265)' in joined
+
+
+def test_handbrake_steps_always_target_1080p_preset() -> None:
+    """The stock ``Fast 1080p30`` preset caps output at 1080p, so it
+    doubles as the low-RAM resolution fix — there's no separate
+    Dimensions / Resolution-Limit step to spell out, and the steps are
+    identical regardless of the source resolution."""
+    h264 = processing._handbrake_steps(frozenset({'h264'}))
+    hevc = processing._handbrake_steps(frozenset({'hevc'}))
+    for steps in (h264, hevc):
+        assert any('Fast 1080p30' in step for step in steps)
+        assert not any('Resolution Limit' in step for step in steps)
+
+
+def test_handbrake_steps_empty_when_board_has_no_hw_decode() -> None:
+    """An empty supported set (unrecognised arm64 board) has no
+    transcode target, so there are no HandBrake steps to offer —
+    matching ``_ffmpeg_reencode_recipe`` returning an empty string."""
+    assert processing._handbrake_steps(frozenset()) == []
 
 
 def test_exceeds_low_ram_pixel_cap_unknown_dims_returns_false() -> None:
@@ -1639,7 +1699,9 @@ def test_normalize_on_failure_unsupported_codec_persists_recipe(
       P1 review finding), and
     * mirror the exception's ``recipe`` attribute into
       ``metadata.error_recipe`` so the Edit modal can render it in a
-      copyable ``<code>`` block.
+      copyable ``<code>`` block, and
+    * mirror the exception's ``handbrake`` steps into
+      ``metadata.error_handbrake`` for the GUI alternative.
     """
     asset = _make_processing_asset(
         'vid-onfail',
@@ -1647,10 +1709,12 @@ def test_normalize_on_failure_unsupported_codec_persists_recipe(
         mimetype='video',
     )
     task = processing._NormalizeAssetTask()
+    handbrake_steps = processing._handbrake_steps(frozenset({'h264', 'hevc'}))
     exc = processing.UnsupportedVideoCodecError(
         "Video codec 'mpeg2video' is not hardware-decoded on this "
         'device. Supported: h264, hevc.',
         recipe="ffmpeg -i 'fixture.mpg' -c:v libx264 'fixture.mp4'",
+        handbrake=handbrake_steps,
     )
 
     with mock.patch.object(processing, '_notify'):
@@ -1664,21 +1728,24 @@ def test_normalize_on_failure_unsupported_codec_persists_recipe(
     assert asset.metadata['error_recipe'] == (
         "ffmpeg -i 'fixture.mpg' -c:v libx264 'fixture.mp4'"
     )
+    assert asset.metadata['error_handbrake'] == handbrake_steps
 
 
 @pytest.mark.django_db
-def test_normalize_on_failure_clears_stale_error_recipe(
+def test_normalize_on_failure_clears_stale_error_recipe_and_handbrake(
     asset_dir: str,
 ) -> None:
     """A subsequent non-recipe failure must clear any stale
-    ``error_recipe`` from a previous run, otherwise the modal would
-    show an outdated recipe alongside the new error message."""
+    ``error_recipe`` / ``error_handbrake`` from a previous run,
+    otherwise the modal would show an outdated recipe and HandBrake
+    steps alongside the new error message."""
     asset = _make_processing_asset(
         'img-clears',
         path.join(asset_dir, 'fixture.tiff'),
         mimetype='image',
         metadata={
             'error_recipe': "ffmpeg -i 'old.mpg' -c:v libx264 'old.mp4'",
+            'error_handbrake': ['old step one', 'old step two'],
         },
     )
     task = processing._NormalizeAssetTask()
@@ -1694,6 +1761,7 @@ def test_normalize_on_failure_clears_stale_error_recipe(
 
     asset.refresh_from_db()
     assert 'error_recipe' not in asset.metadata
+    assert 'error_handbrake' not in asset.metadata
 
 
 # ---------------------------------------------------------------------------

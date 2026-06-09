@@ -813,6 +813,34 @@ label { text-align: left; }
     flex-shrink: 0;
     align-self: flex-start;
   }
+  // GUI alternative to the ffmpeg recipe: numbered HandBrake steps for
+  // operators who'd rather not use a terminal.
+  .modal-alert__handbrake {
+    margin-top: 0.7rem;
+  }
+  .modal-alert__handbrake-lead {
+    margin: 0 0 0.35rem;
+    line-height: 1.4;
+
+    a {
+      color: inherit;
+      font-weight: 600;
+      text-decoration: underline;
+    }
+  }
+  .modal-alert__steps {
+    margin: 0;
+    padding-left: 1.2rem;
+    line-height: 1.4;
+
+    li {
+      margin-bottom: 0.25rem;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
 }
 
 // -----------------------------------------------------------------------------
