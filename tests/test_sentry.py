@@ -163,6 +163,10 @@ class TestBeforeSendTransientNoise:
         # The embedded beat scheduler retries broker connections the
         # same way and logs each attempt at ERROR too.
         assert 'celery.beat' in _IGNORED_LOGGERS
+        # The redis result backend logs its own reconnect retries
+        # ("Connection to Redis lost: Retry (4/20)") at ERROR
+        # (Sentry ANTHIAS-2E).
+        assert 'celery.backends.redis' in _IGNORED_LOGGERS
 
 
 class TestGetBoardModel:
