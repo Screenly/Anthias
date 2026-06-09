@@ -704,8 +704,10 @@ def test_edit_changes_duration(reset_assets: None, page: Page) -> None:
     page.locator('form[action*="/update"] button[type="submit"]').click()
 
     _wait_db(
-        lambda: Asset.objects.get(asset_id=asset_active['asset_id']).duration
-        == 333,
+        lambda: (
+            Asset.objects.get(asset_id=asset_active['asset_id']).duration
+            == 333
+        ),
         description='duration update persisted',
     )
 
@@ -722,8 +724,10 @@ def test_edit_renames_asset(reset_assets: None, page: Page) -> None:
     assert status < 500
 
     _wait_db(
-        lambda: Asset.objects.get(asset_id=asset_active['asset_id']).name
-        == 'TPS Reports — Final Notice',
+        lambda: (
+            Asset.objects.get(asset_id=asset_active['asset_id']).name
+            == 'TPS Reports — Final Notice'
+        ),
         description='rename persisted',
     )
 
@@ -794,9 +798,12 @@ def test_edit_webpage_refresh_interval_persists(
 
     _wait_db(
         lambda: (
-            Asset.objects.get(asset_id=asset_active['asset_id']).metadata or {}
-        ).get('refresh_interval_s')
-        == 120,
+            (
+                Asset.objects.get(asset_id=asset_active['asset_id']).metadata
+                or {}
+            ).get('refresh_interval_s')
+            == 120
+        ),
         description='refresh interval persisted',
     )
 
@@ -1016,8 +1023,10 @@ def _submit_edit_form(page: Page, asset_id: str) -> int:
     form submit answers 302 back to home — the regression assertions
     only care that the POST didn't 5xx."""
     with page.expect_response(
-        lambda r: f'/assets/{asset_id}/update/' in r.url
-        and r.request.method == 'POST'
+        lambda r: (
+            f'/assets/{asset_id}/update/' in r.url
+            and r.request.method == 'POST'
+        )
     ) as resp_info:
         page.locator('form[action*="/update"] button[type="submit"]').click()
     return resp_info.value.status
@@ -1237,10 +1246,10 @@ def test_toggle_enables_asset(reset_assets: None, page: Page) -> None:
     ).click()
 
     _wait_db(
-        lambda: Asset.objects.get(
-            asset_id=asset_disabled['asset_id']
-        ).is_enabled
-        is True,
+        lambda: (
+            Asset.objects.get(asset_id=asset_disabled['asset_id']).is_enabled
+            is True
+        ),
         description='asset is_enabled flipped to True',
     )
 
@@ -1261,8 +1270,10 @@ def test_toggle_disables_asset(reset_assets: None, page: Page) -> None:
     ).click()
 
     _wait_db(
-        lambda: Asset.objects.get(asset_id=asset_active['asset_id']).is_enabled
-        is False,
+        lambda: (
+            Asset.objects.get(asset_id=asset_active['asset_id']).is_enabled
+            is False
+        ),
         description='asset is_enabled flipped to False',
     )
 
