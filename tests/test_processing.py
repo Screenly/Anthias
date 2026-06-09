@@ -682,7 +682,7 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     assert handbrake
     joined = ' '.join(handbrake)
     assert 'HandBrake' in joined
-    assert 'https://handbrake.fr/' in joined
+    assert processing.HANDBRAKE_URL in joined
     assert 'H.265 (x265)' in joined
     # Codec-only rejection: no resolution-limit step.
     assert not any('Resolution Limit' in step for step in handbrake)
@@ -1145,7 +1145,7 @@ def test_handbrake_steps_h264_board_uses_stock_preset_no_encoder_change() -> (
     The download link and the upload-back step are always present."""
     steps = processing._handbrake_steps(frozenset({'h264', 'hevc'}))
     joined = ' '.join(steps)
-    assert 'https://handbrake.fr/' in joined
+    assert processing.HANDBRAKE_URL in joined
     assert 'Fast 1080p30' in joined
     # No encoder change for an H.264 board — the preset's default is
     # already H.264.
