@@ -320,7 +320,10 @@ def _format_subprocess_stderr(exc: sh.ErrorReturnCode) -> str:
 
 
 def _set_processing_error(
-    asset_id: str, message: str, recipe: str = ''
+    asset_id: str,
+    message: str,
+    recipe: str = '',
+    handbrake: list[str] | None = None,
 ) -> None:
     """Persist a human-readable error and clear is_processing.
 
@@ -333,8 +336,11 @@ def _set_processing_error(
 
     ``recipe``, when present, persists alongside the message as
     ``metadata.error_recipe`` — the dashboard renders it in a
-    copyable ``<code>`` block in the Edit Asset modal. Empty
-    ``recipe`` clears any stale value from a prior failure.
+    copyable ``<code>`` block in the Edit Asset modal. ``handbrake``,
+    the equivalent point-and-click steps, persists as
+    ``metadata.error_handbrake`` for operators who'd rather not use a
+    terminal. Empty values clear any stale entries from a prior
+    failure.
     """
     try:
         asset = Asset.objects.get(asset_id=asset_id)
@@ -346,6 +352,10 @@ def _set_processing_error(
         metadata['error_recipe'] = recipe
     else:
         metadata.pop('error_recipe', None)
+    if handbrake:
+        metadata['error_handbrake'] = handbrake
+    else:
+        metadata.pop('error_handbrake', None)
     # Disable the row alongside clearing is_processing. The viewer's
     # scheduling.generate_asset_list filters on ``is_enabled`` + date
     # window only — it doesn't check ``metadata.error_message`` —
@@ -468,7 +478,8 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
       exception. The message body is already operator-readable
       (no class-name prefix); any attached ``recipe`` lands in
       ``metadata.error_recipe`` so the modal can render it in a
-      copyable ``<code>`` block.
+      copyable ``<code>`` block, and the equivalent HandBrake steps
+      land in ``metadata.error_handbrake``.
     * Anything else (corrupt HEIC, ffmpeg subprocess error, ...) —
       prefix with the exception class so the operator sees a
       concrete signal (``UnidentifiedImageError: cannot identify
@@ -489,7 +500,12 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
             return
         try:
             if isinstance(exc, UnsupportedVideoCodecError):
-                _set_processing_error(asset_id, str(exc), recipe=exc.recipe)
+                _set_processing_error(
+                    asset_id,
+                    str(exc),
+                    recipe=exc.recipe,
+                    handbrake=exc.handbrake,
+                )
             else:
                 _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
             _notify(asset_id)
@@ -990,20 +1006,70 @@ def _ffmpeg_reencode_recipe(
     return template.format(input=in_quoted, output=out_quoted)
 
 
+# Anchor for the GUI alternative offered alongside the ffmpeg recipe.
+# HandBrake is a free, open-source, cross-platform (Windows / macOS /
+# Linux) point-and-click transcoder — the path for operators who'd
+# rather not touch a terminal.
+HANDBRAKE_URL = 'https://handbrake.fr/'
+
+
+def _handbrake_steps(
+    supported: frozenset[str],
+    cap_to_1080p: bool = False,
+) -> list[str]:
+    """Return point-and-click HandBrake steps that produce the same
+    output as ``_ffmpeg_reencode_recipe`` — for operators who'd rather
+    not paste a command into a terminal.
+
+    The variable bits mirror the ffmpeg recipe: the target video codec
+    (H.264 on most boards, H.265 / HEVC on the HEVC-only Pi 5) and the
+    optional 1080p downscale for low-RAM boards. Returns an empty list
+    when the board has no HW decode set at all — there's nothing to
+    transcode to, exactly as the recipe returns an empty string.
+    """
+    if 'h264' in supported:
+        encoder_label = 'H.264 (x264)'
+    elif 'hevc' in supported:
+        encoder_label = 'H.265 (x265)'
+    else:
+        return []
+    steps = [
+        f'Download and install HandBrake (free) from {HANDBRAKE_URL}.',
+        'Open HandBrake and drag the video file onto its window.',
+        'In the Summary tab, set Format to "MP4".',
+        f'In the Video tab, set Video Encoder to "{encoder_label}".',
+    ]
+    if cap_to_1080p:
+        steps.append(
+            'In the Dimensions tab, set Resolution Limit to '
+            '"1080p HD" so the output fits within 1920x1080.'
+        )
+    steps.append('Click "Start Encode", then upload the resulting MP4 here.')
+    return steps
+
+
 class UnsupportedVideoCodecError(Exception):
     """Raised by ``_run_video_normalisation`` when a video upload's
     codec can't be hardware-decoded on this device.
 
     Carries the suggested ``recipe`` (an ``ffmpeg`` command the
-    operator can run to fix the upload) as an attribute so
-    ``_NormalizeAssetTask.on_failure`` can persist it alongside the
-    human-readable message — the UI surfaces the two in different
-    spots (message inline, recipe in a copyable ``<code>`` block).
+    operator can run to fix the upload) plus ``handbrake`` (the
+    equivalent point-and-click HandBrake steps) as attributes so
+    ``_NormalizeAssetTask.on_failure`` can persist them alongside the
+    human-readable message — the UI surfaces all three in different
+    spots (message inline, recipe in a copyable ``<code>`` block, the
+    HandBrake steps as a numbered list for terminal-shy operators).
     """
 
-    def __init__(self, message: str, recipe: str = '') -> None:
+    def __init__(
+        self,
+        message: str,
+        recipe: str = '',
+        handbrake: list[str] | None = None,
+    ) -> None:
         super().__init__(message)
         self.recipe = recipe
+        self.handbrake = handbrake or []
 
 
 def _run_video_normalisation(asset: Asset) -> None:
@@ -1077,13 +1143,16 @@ def _run_video_normalisation(asset: Asset) -> None:
             recipe = _ffmpeg_reencode_recipe(
                 supported, upload_name, cap_to_1080p=True
             )
+            handbrake = _handbrake_steps(supported, cap_to_1080p=True)
             message = (
                 f'Video resolution {video_width}x{video_height} '
                 'exceeds the 1080p cap on this device. Boards with '
                 'less than 1.5 GiB of RAM OOM when decoding above '
                 '1920x1080 alongside the web UI.'
             )
-            raise UnsupportedVideoCodecError(message, recipe=recipe)
+            raise UnsupportedVideoCodecError(
+                message, recipe=recipe, handbrake=handbrake
+            )
         update_dict['is_processing'] = False
         Asset.objects.filter(asset_id=asset_id).update(**update_dict)
         _notify(asset_id)
@@ -1105,6 +1174,7 @@ def _run_video_normalisation(asset: Asset) -> None:
     # the codec is the strictly stronger rejection.
     cap = _exceeds_low_ram_pixel_cap(video_width, video_height)
     recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
+    handbrake = _handbrake_steps(supported, cap_to_1080p=cap)
     if supported:
         supported_str = ', '.join(sorted(supported))
         message = (
@@ -1124,4 +1194,6 @@ def _run_video_normalisation(asset: Asset) -> None:
             'specific image (e.g. Rock Pi 4) so anthias_host_agent '
             'can publish its capabilities.'
         )
-    raise UnsupportedVideoCodecError(message, recipe=recipe)
+    raise UnsupportedVideoCodecError(
+        message, recipe=recipe, handbrake=handbrake
+    )
