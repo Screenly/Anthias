@@ -1542,6 +1542,14 @@ def normalize_image_asset(asset_id: str) -> None:
     # Same rationale as normalize_image_asset above: a missing source
     # file is permanent and should land on on_failure right away.
     dont_autoretry_for=(FileNotFoundError,),
+    # ``UnsupportedVideoCodecError`` is the codec/resolution gate's
+    # deliberate, operator-facing rejection (Failed pill + re-encode
+    # recipe via _NormalizeAssetTask.on_failure) — an expected outcome,
+    # not a fault. Listing it in ``throws`` keeps Celery from logging it
+    # at ERROR with a traceback, and sentry-sdk's CeleryIntegration
+    # skips ``task.throws`` exceptions, so the gate stops flooding
+    # Sentry (ANTHIAS-1J, ANTHIAS-20). on_failure still runs.
+    throws=(processing.UnsupportedVideoCodecError,),
     retry_backoff=15,
     retry_backoff_max=300,
     retry_jitter=True,
