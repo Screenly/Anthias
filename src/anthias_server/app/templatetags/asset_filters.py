@@ -188,25 +188,25 @@ def to_json(value: Any) -> SafeString:
 
 
 @register.filter
-def asset_ids(assets: Any) -> SafeString:
+def asset_ids(assets: Any) -> str:
     """Render a list of assets as a JSON array of their asset_ids.
 
     Inlined into the asset-table partial's ``x-init`` so Alpine knows
     which rows are on screen after every HTMX swap (drives the bulk
-    select-all + selection pruning, #3046). asset_id is a hex/underscore
-    token, but route it through json.dumps + the same escape pass
-    ``to_json`` uses so the literal stays valid inside the attribute
-    regardless of what a row carries.
+    select-all + selection pruning, #3046).
+
+    Unlike ``to_json`` (which mark_safe's its output because it's
+    embedded in a *single*-quoted Alpine attribute and hand-escapes the
+    apostrophe), this value lands in a *double*-quoted ``x-init="…"``
+    attribute. The JSON's own ``"`` would prematurely close that
+    attribute, so we deliberately return a plain ``str`` and let
+    Django's template autoescaping HTML-encode ``"``/``&``/``<``/``>``
+    to entities — the browser decodes them back to valid JSON before
+    Alpine evaluates the expression. Returning a SafeString here would
+    suppress that escaping and break the markup.
     """
     ids = [getattr(a, 'asset_id', '') for a in (assets or [])]
-    encoded = json.dumps(ids, separators=(',', ':'))
-    safe = (
-        encoded.replace('&', '\\u0026')
-        .replace("'", '\\u0027')
-        .replace('<', '\\u003c')
-        .replace('>', '\\u003e')
-    )
-    return mark_safe(safe)
+    return json.dumps(ids, separators=(',', ':'))
 
 
 @register.filter

@@ -728,18 +728,18 @@ def assets_bulk_action(request: HttpRequest) -> HttpResponse:
     if action not in ('enable', 'disable', 'delete') or not ids:
         return _asset_table_response(request)
 
-    assets = list(Asset.objects.filter(asset_id__in=ids))
-    if not assets:
-        return _asset_table_response(request)
-
     if action == 'delete':
         from anthias_server.app.helpers import delete_asset_with_file
 
+        assets = list(Asset.objects.filter(asset_id__in=ids))
+        if not assets:
+            return _asset_table_response(request)
         for asset in assets:
-            # delete_asset_with_file nudges the viewer per row; the
-            # redundant reloads are cheap and keep the shared helper
-            # the single source of truth for file cleanup (#2908).
-            delete_asset_with_file(asset)
+            # Suppress the per-row viewer reload — a large batch would
+            # otherwise spam the pub/sub channel with one 'reload' per
+            # asset — and send a single reload after the batch instead.
+            delete_asset_with_file(asset, nudge_viewer=False)
+        ViewerPublisher.get_instance().send_to_viewer('reload')
         count = len(assets)
         return _asset_table_response(
             request,
@@ -749,12 +749,15 @@ def assets_bulk_action(request: HttpRequest) -> HttpResponse:
             ),
         )
 
+    # Enable/disable have no model signals, so collapse to a single
+    # queryset UPDATE (one DB write regardless of selection size) plus
+    # one viewer reload. ``update()`` returns the affected row count,
+    # which doubles as the toast count and the empty-selection guard.
     enabled = action == 'enable'
-    for asset in assets:
-        asset.is_enabled = enabled
-        asset.save()
+    count = Asset.objects.filter(asset_id__in=ids).update(is_enabled=enabled)
+    if not count:
+        return _asset_table_response(request)
     ViewerPublisher.get_instance().send_to_viewer('reload')
-    count = len(assets)
     verb = 'enabled' if enabled else 'disabled'
     return _asset_table_response(
         request,
@@ -818,12 +821,30 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
 
     new_duration: int | None = None
     if apply_duration:
+        # A blank field must NOT silently clobber every selected asset's
+        # duration to 0 (the per-asset edit form preserves the existing
+        # value on blank; bulk has no single "existing" to fall back to,
+        # so require a value instead). Toast and change nothing.
+        raw_duration = (request.POST.get('duration') or '').strip()
+        if not raw_duration:
+            return _asset_table_response(
+                request,
+                toast=('error', 'Enter a duration — nothing changed'),
+            )
         try:
-            new_duration = int(request.POST.get('duration') or 0)
+            new_duration = int(raw_duration)
         except (TypeError, ValueError):
             return _asset_table_response(
                 request,
                 toast=('error', 'Duration must be a number — nothing changed'),
+            )
+        if new_duration < 0:
+            return _asset_table_response(
+                request,
+                toast=(
+                    'error',
+                    'Duration must be zero or more — nothing changed',
+                ),
             )
 
     new_time_from: time | None = None

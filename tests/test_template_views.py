@@ -1169,6 +1169,31 @@ def test_assets_bulk_update_duration_skips_video(
 
 
 @pytest.mark.django_db
+def test_assets_bulk_update_blank_duration_does_not_clobber(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """apply_duration on with a blank duration must NOT zero out every
+    asset — it toasts and changes nothing (Copilot review of #3048).
+    """
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '',
+            },
+        )
+    assert response.status_code in (200, 302)
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.duration == 10
+
+
+@pytest.mark.django_db
 def test_assets_bulk_update_time_window(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
@@ -1326,6 +1351,25 @@ def test_asset_table_renders_selection_controls(
     body = response.content.decode()
     assert 'js-row-select' in body
     assert "sectionAllSelected('active')" in body
+
+
+@pytest.mark.django_db
+def test_asset_ids_json_is_html_escaped_in_x_init(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Regression for the Copilot review of #3048: the asset_ids JSON
+    is inlined into a double-quoted x-init="…" attribute, so its own
+    double quotes MUST be entity-escaped (Django autoescaping) — a raw
+    `["id"]` would close the attribute early and break the markup.
+    """
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    # The ids land entity-escaped inside the setVisible() call …
+    assert 'setVisible(' in body
+    assert '&quot;' in body
+    # … and the raw, attribute-breaking form must not appear.
+    assert 'setVisible(&#x27;active&#x27;, ["' not in body
+    assert "setVisible('active', [\"" not in body
 
 
 @pytest.mark.django_db

@@ -116,7 +116,7 @@ def remove_default_assets() -> None:
             asset.delete()
 
 
-def delete_asset_with_file(asset: Asset) -> None:
+def delete_asset_with_file(asset: Asset, *, nudge_viewer: bool = True) -> None:
     """Delete an ``Asset`` row, remove its on-disk file (if owned), and
     nudge the viewer to advance past it.
 
@@ -132,6 +132,10 @@ def delete_asset_with_file(asset: Asset) -> None:
     and a stray file is eventually cleaned up by the periodic
     ``cleanup()`` orphan sweep — letting an unlink error block the DB
     delete would leave the operator unable to remove the row at all.
+
+    ``nudge_viewer=False`` skips the per-row viewer reload so a bulk
+    delete can fire a single reload after the whole batch instead of
+    spamming the pub/sub channel once per asset (#3046).
     """
     if asset.uri and asset.uri.startswith(settings['assetdir']):
         try:
@@ -147,4 +151,5 @@ def delete_asset_with_file(asset: Asset) -> None:
     # screen instead of finishing its remaining ``duration`` (#2430).
     # The viewer's reload handler checks whether the currently-shown
     # asset is still active and advances if not.
-    ViewerPublisher.get_instance().send_to_viewer('reload')
+    if nudge_viewer:
+        ViewerPublisher.get_instance().send_to_viewer('reload')
