@@ -1231,9 +1231,12 @@ def test_toggle_enables_asset(reset_assets: None, page: Page) -> None:
     ).to_be_visible()
     _disable_asset_poll(page)
 
+    # Target the activity toggle specifically — rows now also carry a
+    # bulk-select checkbox (#3046), so a bare input[type=checkbox] is
+    # ambiguous.
     page.locator(
         f'tr[data-asset-id="{asset_disabled["asset_id"]}"] '
-        f'input[type="checkbox"]'
+        f'.activity-toggle input[type="checkbox"]'
     ).click()
 
     _wait_db(
@@ -1255,9 +1258,12 @@ def test_toggle_disables_asset(reset_assets: None, page: Page) -> None:
     ).to_be_visible()
     _disable_asset_poll(page)
 
+    # Target the activity toggle specifically — rows now also carry a
+    # bulk-select checkbox (#3046), so a bare input[type=checkbox] is
+    # ambiguous.
     page.locator(
         f'tr[data-asset-id="{asset_active["asset_id"]}"] '
-        f'input[type="checkbox"]'
+        f'.activity-toggle input[type="checkbox"]'
     ).click()
 
     _wait_db(

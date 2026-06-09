@@ -477,23 +477,34 @@ label { text-align: left; }
       &[data-no-label]::before { display: none; }
     }
 
-    // Home rows: 2-column grid. Name spans both, schedule + duration
-    // share row 2, toggle + actions share row 3. Right-aligned cells
-    // align their labels to match.
+    // Home rows: 2-column grid. The select checkbox (child 1) is
+    // lifted out of flow into the top-left corner; name (child 2)
+    // spans both columns, schedule + duration share row 2, toggle +
+    // actions share row 3. Right-aligned cells align their labels to
+    // match.
     tbody tr[data-asset-id] {
       display: grid;
       grid-template-columns: 1fr auto;
       gap: var(--space-2) var(--space-3);
+      position: relative;
+      padding-left: 1.9rem;
 
-      td:nth-child(1) { grid-column: 1 / -1; }
-      td:nth-child(2) { grid-column: 1 / 2; }
-      td:nth-child(3) {
+      td.asset-select-col {
+        position: absolute;
+        left: 0;
+        top: var(--space-3);
+        padding: 0;
+        &::before { display: none; }
+      }
+      td:nth-child(2) { grid-column: 1 / -1; }
+      td:nth-child(3) { grid-column: 1 / 2; }
+      td:nth-child(4) {
         grid-column: 2 / 3;
         text-align: right;
         &::before { text-align: right; }
       }
-      td:nth-child(4) { grid-column: 1 / 2; align-self: center; }
-      td:nth-child(5) {
+      td:nth-child(5) { grid-column: 1 / 2; align-self: center; }
+      td:nth-child(6) {
         grid-column: 2 / 3;
         align-self: center;
         &::before { text-align: right; }
@@ -504,6 +515,39 @@ label { text-align: left; }
 
     tbody tr:hover td { background: transparent; }
   }
+}
+
+// Bulk-selection chrome (#3046): the leading checkbox column, the
+// per-section select-all in the surface header, and the selected-row
+// highlight. The checkbox itself reuses .app-check-input from the
+// forms section; .asset-select is just the clickable hit-area wrapper.
+.asset-select-col {
+  width: 2.75rem;
+  text-align: center;
+}
+
+.asset-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin: 0;
+
+  .app-check-input { margin: 0; cursor: pointer; }
+}
+
+.surface__header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.asset-table tbody tr.is-selected td {
+  background: var(--color-accent-wash);
+}
+.asset-table tbody tr.is-selected:hover td {
+  background: var(--color-accent-wash);
 }
 
 .asset-cell-name {
@@ -1202,6 +1246,16 @@ label { text-align: left; }
     background-color: var(--color-link);
     border-color: var(--color-link);
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m4 8.5 3 3 5-7'/%3e%3c/svg%3e");
+    background-size: 0.85rem 0.85rem;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  // Partial selection (the section select-all when only some rows are
+  // ticked). Mirrors :checked but draws a dash instead of a tick.
+  &:indeterminate {
+    background-color: var(--color-link);
+    border-color: var(--color-link);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-width='3' d='M4 8h8'/%3e%3c/svg%3e");
     background-size: 0.85rem 0.85rem;
     background-position: center;
     background-repeat: no-repeat;
@@ -2335,3 +2389,85 @@ body.auth-body {
   align-items: center;
   text-decoration: none;
 }
+
+// -----------------------------------------------------------------------------
+// Bulk asset actions (#3046)
+// -----------------------------------------------------------------------------
+// Floating bar pinned to the bottom of the viewport while a selection
+// is active. Sits below the modal overlays (z 1050+) so the bulk-edit
+// and bulk-delete dialogs render over it. The inner card carries the
+// dark elevated look the navbar/footer use so it stands clear of the
+// page surfaces.
+.bulk-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--space-5);
+  z-index: 1040;
+  display: flex;
+  justify-content: center;
+  padding-inline: var(--space-4);
+  pointer-events: none;
+}
+.bulk-bar__inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 720px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-on-dark);
+  border: 1px solid var(--color-border-on-dark);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg);
+}
+.bulk-bar__count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  i { font-size: 1.1rem; opacity: 0.85; }
+  strong { font-variant-numeric: tabular-nums; }
+}
+.bulk-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.bulk-bar__clear {
+  color: var(--color-text-on-dark);
+  background: transparent;
+  border-color: var(--color-border-on-dark);
+}
+
+@media (max-width: 640px) {
+  .bulk-bar__inner {
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: var(--radius-lg);
+  }
+  .bulk-bar__actions { justify-content: center; }
+}
+
+// Bulk-edit modal: each schedule field group is a card whose body is
+// only revealed once its "Change …" toggle is on. The is-on class
+// lifts the card so the active groups read as the ones being written.
+.bulk-field {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-3);
+  transition: border-color var(--t-fast), background var(--t-fast);
+
+  &.is-on {
+    border-color: var(--color-accent-edge);
+    background: var(--color-accent-wash);
+  }
+}
+.bulk-field__toggle { cursor: pointer; }

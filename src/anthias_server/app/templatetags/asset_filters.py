@@ -188,6 +188,28 @@ def to_json(value: Any) -> SafeString:
 
 
 @register.filter
+def asset_ids(assets: Any) -> SafeString:
+    """Render a list of assets as a JSON array of their asset_ids.
+
+    Inlined into the asset-table partial's ``x-init`` so Alpine knows
+    which rows are on screen after every HTMX swap (drives the bulk
+    select-all + selection pruning, #3046). asset_id is a hex/underscore
+    token, but route it through json.dumps + the same escape pass
+    ``to_json`` uses so the literal stays valid inside the attribute
+    regardless of what a row carries.
+    """
+    ids = [getattr(a, 'asset_id', '') for a in (assets or [])]
+    encoded = json.dumps(ids, separators=(',', ':'))
+    safe = (
+        encoded.replace('&', '\\u0026')
+        .replace("'", '\\u0027')
+        .replace('<', '\\u003c')
+        .replace('>', '\\u003e')
+    )
+    return mark_safe(safe)
+
+
+@register.filter
 def schedule_window(asset: Any) -> dict[str, str]:
     """Return a structured descriptor for the asset's start/end window.
 

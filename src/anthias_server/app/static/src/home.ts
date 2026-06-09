@@ -37,6 +37,8 @@ interface ToastStoreLike {
   push(kind: 'success' | 'error' | 'info', message: string): number
 }
 
+type SectionKey = 'active' | 'inactive'
+
 interface HomeAppData {
   mode: 'add' | 'edit' | null
   editAsset: AssetEdit | null
@@ -46,6 +48,11 @@ interface HomeAppData {
   uploadState: UploadState
   uploadProgress: number
   uploadFileName: string
+  // Bulk selection / actions (#3046)
+  selectedIds: string[]
+  visibleIds: Record<SectionKey, string[]>
+  bulkEditOpen: boolean
+  bulkDeleteOpen: boolean
   init(): void
   openAdd(): void
   openEdit(asset: AssetEdit): void
@@ -57,6 +64,16 @@ interface HomeAppData {
   onUploadStart(): void
   onUploadProgress(ev: CustomEvent<ProgressEvent>): void
   onUploadDone(ev: CustomEvent<{ successful: boolean; xhr: XMLHttpRequest }>): void
+  // Bulk selection helpers
+  isSelected(id: string): boolean
+  toggleSelect(id: string): void
+  setVisible(section: SectionKey, ids: string[]): void
+  sectionAllSelected(section: SectionKey): boolean
+  sectionSomeSelected(section: SectionKey): boolean
+  toggleSection(section: SectionKey, checked: boolean): void
+  clearSelection(): void
+  openBulkEdit(): void
+  closeBulkEdit(): void
 }
 
 const DATE_FMT_MAP: Record<string, string> = {
@@ -97,6 +114,10 @@ function homeApp(): HomeAppData {
     uploadState: null,
     uploadProgress: 0,
     uploadFileName: '',
+    selectedIds: [],
+    visibleIds: { active: [], inactive: [] },
+    bulkEditOpen: false,
+    bulkDeleteOpen: false,
 
     init(this: HomeAppData & { $watch: (k: string, cb: () => void) => void }) {
       // Re-bind Flatpickr every time the edit modal opens. The
@@ -105,6 +126,11 @@ function homeApp(): HomeAppData {
       // (after Alpine has actually inserted the form into the DOM)
       // before querying for inputs.
       this.$watch('editAsset', () =>
+        requestAnimationFrame(() => this.bindFlatpickr()),
+      )
+      // The bulk-edit modal reuses the same .js-flatpickr-* inputs and
+      // is also gated behind an x-if, so bind on open the same way.
+      this.$watch('bulkEditOpen', () =>
         requestAnimationFrame(() => this.bindFlatpickr()),
       )
     },
@@ -206,6 +232,62 @@ function homeApp(): HomeAppData {
     closePreview() {
       this.previewAsset = null
     },
+
+    // --- Bulk selection (#3046) ---------------------------------------
+    // selectedIds is the source of truth; row checkboxes bind their
+    // :checked to isSelected() so the selection survives the table's
+    // 5s HTMX swap (the swapped rows re-evaluate against this state).
+    isSelected(id) {
+      return this.selectedIds.includes(id)
+    },
+    toggleSelect(id) {
+      if (this.selectedIds.includes(id)) {
+        this.selectedIds = this.selectedIds.filter((x) => x !== id)
+      } else {
+        this.selectedIds = [...this.selectedIds, id]
+      }
+    },
+    // Called from each rendered table partial (x-init re-fires after
+    // every swap) so Alpine always knows the ids currently on screen.
+    // Prune the selection to what's still visible — a row deleted out
+    // from under us (or by another browser) shouldn't linger selected.
+    setVisible(section, ids) {
+      this.visibleIds[section] = ids
+      const all = new Set([
+        ...this.visibleIds.active,
+        ...this.visibleIds.inactive,
+      ])
+      this.selectedIds = this.selectedIds.filter((id) => all.has(id))
+    },
+    sectionAllSelected(section) {
+      const ids = this.visibleIds[section]
+      return ids.length > 0 && ids.every((id) => this.selectedIds.includes(id))
+    },
+    sectionSomeSelected(section) {
+      const ids = this.visibleIds[section]
+      const n = ids.filter((id) => this.selectedIds.includes(id)).length
+      return n > 0 && n < ids.length
+    },
+    toggleSection(section, checked) {
+      const ids = this.visibleIds[section]
+      if (checked) {
+        const merged = new Set([...this.selectedIds, ...ids])
+        this.selectedIds = [...merged]
+      } else {
+        const drop = new Set(ids)
+        this.selectedIds = this.selectedIds.filter((id) => !drop.has(id))
+      }
+    },
+    clearSelection() {
+      this.selectedIds = []
+    },
+    openBulkEdit() {
+      this.bulkEditOpen = true
+    },
+    closeBulkEdit() {
+      this.bulkEditOpen = false
+    },
+
     onUploadStart() {
       this.uploadState = 'sending'
       this.uploadProgress = 0
