@@ -1556,6 +1556,32 @@ def test_normalize_tasks_exclude_permanent_oserrors_from_autoretry() -> None:
     )
 
 
+def test_video_task_declares_codec_rejection_as_expected() -> None:
+    """The codec/resolution gate raises ``UnsupportedVideoCodecError``
+    as a deliberate, operator-facing rejection — not a fault. The video
+    task must list it in ``throws`` so Celery logs it at INFO without a
+    traceback and sentry-sdk's CeleryIntegration skips it (it returns
+    early on ``isinstance(exc, task.throws)``), keeping the gate from
+    flooding Sentry. The image task never raises it, so it must not be
+    swept into the image task's ``throws``.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    assert processing.UnsupportedVideoCodecError in tuple(
+        getattr(normalize_video_asset, 'throws', ())
+    ), (
+        'normalize_video_asset expected throws to include '
+        'UnsupportedVideoCodecError so the by-design codec rejection '
+        'is not reported to Sentry'
+    )
+    assert processing.UnsupportedVideoCodecError not in tuple(
+        getattr(normalize_image_asset, 'throws', ())
+    )
+
+
 @pytest.mark.django_db
 def test_normalize_on_failure_writes_error_metadata(
     asset_dir: str,
