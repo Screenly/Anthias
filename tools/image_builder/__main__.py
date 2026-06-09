@@ -87,6 +87,23 @@ def build_image(
         # the conversion) both inherit it. Inert on the viewer
         # process; harmless to ship there too.
         'libheif1',
+        # Runtime libs for Pillow's WebP support (the normalisation
+        # pipeline saves every converted image as lossless WebP).
+        # On 32-bit Pi (armv7) there's no Pillow wheel, so it's built
+        # from source against libwebp-dev and dynamically links the
+        # whole webp family at runtime — libwebp7, libwebpmux3 *and*
+        # libwebpdemux2 (Pillow's _webp uses WebPAnimDecoder). ffmpeg
+        # pulls libwebp7 + libwebpmux3 transitively but NOT
+        # libwebpdemux2, so without it `import PIL._webp` fails, the
+        # WebP plugin registers no save handler, and the conversion
+        # dies with `KeyError: 'WEBP'` (Sentry ANTHIAS-1Y, pi3). List
+        # all three explicitly so the pipeline never depends on
+        # ffmpeg's transitive graph. The 64-bit wheel bundles its own
+        # webp libs, so these are inert there — same harmless-on-all-
+        # boards rationale as libheif1 above.
+        'libwebp7',
+        'libwebpdemux2',
+        'libwebpmux3',
         'lsb-release',
         'procps',
         'psmisc',
