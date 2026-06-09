@@ -292,11 +292,14 @@ function homeApp(): HomeAppData {
       }
     },
 
-    // POST a single file and resolve true on a 2xx. Success toasts
-    // ("reading metadata…" / "Uploaded X") ride back on the server's
-    // HX-Trigger header — we replay them here since this isn't an
-    // htmx-managed request. Progress flips to "processing" once the
-    // bytes are up (the server still has to write to disk + ffprobe).
+    // POST a single file and resolve an UploadResult: 'ok' on a 2xx
+    // with no error toast, 'rejected' on a 2xx carrying an error toast
+    // (server refused the file), 'error' on a non-2xx or transport
+    // failure. Server toasts ("reading metadata…" / "Uploaded X" /
+    // "Invalid file type") ride back on the HX-Trigger header — we
+    // replay them here since this isn't an htmx-managed request.
+    // Progress flips to "processing" once the bytes are up (the server
+    // still has to write to disk + ffprobe).
     uploadOne(
       this: HomeAppData,
       url: string,
