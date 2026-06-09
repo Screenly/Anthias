@@ -247,7 +247,16 @@ def get_alsa_audio_device() -> str:
         elif device_type in ['pi1', 'pi2', 'pi3']:
             return 'sysdefault:CARD=vc4hdmi'
         else:
-            return 'sysdefault:CARD=HID'
+            # x86 fallback: ALSA card names vary across Intel / AMD /
+            # Nvidia HDA chipsets, so there's no portable per-SoC name
+            # to hard-code (the old 'sysdefault:CARD=HID' matched no
+            # real card on standard HDA setups). Defer to the `default`
+            # device — which VideoView::resolveAlsaDevice resolves to
+            # the PulseAudio default sink (x86 is a Qt 6 board and
+            # Debian's Qt 6 Multimedia only has a PulseAudio backend;
+            # the daemon is started by start_viewer.sh). Mirrors the
+            # ARM64 path above.
+            return 'default'
 
 
 class MediaPlayer:

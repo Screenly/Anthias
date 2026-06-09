@@ -341,12 +341,15 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
         assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi'
 
 
-def test_hdmi_on_x86_falls_back_to_hid(alsa_settings: Any) -> None:
+def test_hdmi_on_x86_uses_alsa_default(alsa_settings: Any) -> None:
+    # No portable per-SoC ALSA card name across Intel / AMD / Nvidia
+    # HDA chipsets, so x86 defers to `default`, which the C++ side
+    # resolves to the PulseAudio default sink.
     alsa_settings.__getitem__.return_value = 'hdmi'
     with patch(
         'anthias_viewer.media_player.get_device_type', return_value='x86'
     ):
-        assert get_alsa_audio_device() == 'sysdefault:CARD=HID'
+        assert get_alsa_audio_device() == 'default'
 
 
 class _FakeDirEntry:
