@@ -114,9 +114,19 @@ def _rotation_value() -> int:
 
 
 def _is_wayland_board() -> bool:
-    """The x86 viewer runs under cage + wayland; everything else uses
-    linuxfb. Mirrors the docker/Dockerfile.viewer.j2 split."""
-    return os.environ.get('DEVICE_TYPE') == 'x86'
+    """True when the viewer runs under cage + Wayland (x86, arm64, pi5),
+    where the compositor owns the transform and rotation is applied via
+    ``wlr-randr`` in ``_apply_wlr_transform()`` rather than through a Qt
+    plugin option.
+
+    Keyed off ``QT_QPA_PLATFORM`` — the same signal the
+    docker/Dockerfile.viewer.j2 split sets (``wayland`` for those three
+    boards, ``eglfs``/``linuxfb`` elsewhere) — so it stays correct
+    without a per-board allowlist to maintain. Gating on DEVICE_TYPE=='x86'
+    alone misfired on Pi 5 (and generic arm64): rotation became a no-op
+    because neither the linuxfb ``:rotation=`` option nor the wlr-randr
+    path ran (issue #3044)."""
+    return os.environ.get('QT_QPA_PLATFORM', '').startswith('wayland')
 
 
 def _set_qpa_rotation(qpa: str, rotation: int) -> str:
