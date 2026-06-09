@@ -1013,38 +1013,60 @@ def _ffmpeg_reencode_recipe(
 HANDBRAKE_URL = 'https://handbrake.fr/'
 
 
-def _handbrake_steps(
-    supported: frozenset[str],
-    cap_to_1080p: bool = False,
-) -> list[str]:
-    """Return point-and-click HandBrake steps that produce the same
-    output as ``_ffmpeg_reencode_recipe`` — for operators who'd rather
-    not paste a command into a terminal.
+def _handbrake_steps(supported: frozenset[str]) -> list[str]:
+    """Return a decision-free, point-and-click HandBrake walkthrough —
+    for operators who'd rather not paste a command into a terminal.
 
-    The variable bits mirror the ffmpeg recipe: the target video codec
-    (H.264 on most boards, H.265 / HEVC on the HEVC-only Pi 5) and the
-    optional 1080p downscale for low-RAM boards. Returns an empty list
-    when the board has no HW decode set at all — there's nothing to
-    transcode to, exactly as the recipe returns an empty string.
+    Built around HandBrake's stock ``Fast 1080p30`` preset (General
+    category): one click produces an H.264 MP4 capped at 1920x1080,
+    which every board the viewer supports plays and which is the
+    standard envelope for digital signage. That single preset also
+    satisfies the low-RAM 1080p ceiling, so — unlike the ffmpeg recipe
+    — there's no separate downscale step to spell out.
+
+    The only board-specific tweak is the encoder: an HEVC-only board
+    (Pi 5) can't use the preset's default H.264, so the operator flips
+    ``Video Encoder`` to ``H.265 (x265)`` on the Video tab. HandBrake
+    ships no H.265-at-1080p MP4 preset, so the encoder swap is the
+    cleanest route to a 1080p HEVC MP4.
+
+    Returns an empty list when the board has no HW decode set at all —
+    there's nothing to transcode to, exactly as the recipe returns an
+    empty string. Step text embeds the download URL verbatim so the
+    list stands alone when surfaced as plain text via the v2 API.
     """
     if 'h264' in supported:
-        encoder_label = 'H.264 (x264)'
+        # H.264 board (Pi 2/3/4, x86, ...): the stock preset already
+        # outputs the codec we want — no encoder change.
+        prefers_h264 = True
     elif 'hevc' in supported:
-        encoder_label = 'H.265 (x265)'
+        prefers_h264 = False
     else:
         return []
     steps = [
-        f'Download and install HandBrake (free) from {HANDBRAKE_URL}.',
-        'Open HandBrake and drag the video file onto its window.',
-        'In the Summary tab, set Format to "MP4".',
-        f'In the Video tab, set Video Encoder to "{encoder_label}".',
+        f'Download and install HandBrake — it is free — from '
+        f'{HANDBRAKE_URL} (Windows, macOS, and Linux).',
+        'Open HandBrake. When it asks for a source, pick your video '
+        'file (or drag the file onto the window).',
+        'In the Presets panel on the right, choose "Fast 1080p30" '
+        '(under the "General" group). This makes a 1080p MP4 — the '
+        'format this screen plays.',
     ]
-    if cap_to_1080p:
+    if not prefers_h264:
+        # Pi 5 and friends reject H.264; nudge the encoder to HEVC.
         steps.append(
-            'In the Dimensions tab, set Resolution Limit to '
-            '"1080p HD" so the output fits within 1920x1080.'
+            'Click the "Video" tab and change "Video Encoder" to '
+            '"H.265 (x265)" — this screen needs HEVC rather than the '
+            "preset's default H.264."
         )
-    steps.append('Click "Start Encode", then upload the resulting MP4 here.')
+    steps.extend(
+        [
+            'Click "Browse" next to "Save As" at the bottom and pick '
+            'where to save the converted file.',
+            'Click the green "Start Encode" button at the top.',
+            'When it finishes, upload the new MP4 file here.',
+        ]
+    )
     return steps
 
 
@@ -1143,7 +1165,7 @@ def _run_video_normalisation(asset: Asset) -> None:
             recipe = _ffmpeg_reencode_recipe(
                 supported, upload_name, cap_to_1080p=True
             )
-            handbrake = _handbrake_steps(supported, cap_to_1080p=True)
+            handbrake = _handbrake_steps(supported)
             message = (
                 f'Video resolution {video_width}x{video_height} '
                 'exceeds the 1080p cap on this device. Boards with '
@@ -1174,7 +1196,7 @@ def _run_video_normalisation(asset: Asset) -> None:
     # the codec is the strictly stronger rejection.
     cap = _exceeds_low_ram_pixel_cap(video_width, video_height)
     recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
-    handbrake = _handbrake_steps(supported, cap_to_1080p=cap)
+    handbrake = _handbrake_steps(supported)
     if supported:
         supported_str = ', '.join(sorted(supported))
         message = (

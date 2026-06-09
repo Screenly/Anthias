@@ -1136,36 +1136,46 @@ def test_ffmpeg_recipe_includes_scale_clause_when_capping() -> None:
     assert scale_idx < encoder_idx
 
 
-def test_handbrake_steps_h264_board_targets_x264() -> None:
-    """A board that hardware-decodes H.264 gets HandBrake steps that
-    select the ``H.264 (x264)`` encoder — matching the libx264 recipe.
-    The link to the HandBrake download page is always present."""
+def test_handbrake_steps_h264_board_uses_stock_preset_no_encoder_change() -> (
+    None
+):
+    """An H.264 board's walkthrough leans entirely on the stock
+    ``Fast 1080p30`` preset (which already outputs H.264 MP4), so it
+    must NOT tell the operator to touch the Video Encoder dropdown.
+    The download link and the upload-back step are always present."""
     steps = processing._handbrake_steps(frozenset({'h264', 'hevc'}))
     joined = ' '.join(steps)
     assert 'https://handbrake.fr/' in joined
-    assert 'H.264 (x264)' in joined
+    assert 'Fast 1080p30' in joined
+    # No encoder change for an H.264 board — the preset's default is
+    # already H.264.
+    assert 'Video Encoder' not in joined
     assert 'H.265 (x265)' not in joined
-    # No downscale step when not capping.
-    assert not any('Resolution Limit' in step for step in steps)
+    assert any('upload' in step.lower() for step in steps)
 
 
-def test_handbrake_steps_hevc_only_board_targets_x265() -> None:
-    """A Pi 5 (HEVC only — no H.264 in its set) gets ``H.265 (x265)``
-    steps, mirroring the libx265 recipe."""
+def test_handbrake_steps_hevc_only_board_switches_encoder_to_x265() -> None:
+    """A Pi 5 (HEVC only — no H.264 in its set) can't use the preset's
+    default H.264, so the walkthrough adds a Video-tab step switching
+    the encoder to ``H.265 (x265)`` — still on the ``Fast 1080p30``
+    preset for the 1080p MP4 envelope."""
     steps = processing._handbrake_steps(frozenset({'hevc'}))
     joined = ' '.join(steps)
+    assert 'Fast 1080p30' in joined
+    assert 'Video Encoder' in joined
     assert 'H.265 (x265)' in joined
-    assert 'H.264 (x264)' not in joined
 
 
-def test_handbrake_steps_adds_resolution_limit_when_capping() -> None:
-    """``cap_to_1080p=True`` appends a Dimensions-tab step that sets the
-    Resolution Limit to 1080p, the GUI equivalent of the recipe's
-    ``-vf scale=1920:1080`` clause."""
-    steps = processing._handbrake_steps(frozenset({'h264'}), cap_to_1080p=True)
-    assert any(
-        'Resolution Limit' in step and '1080p' in step for step in steps
-    )
+def test_handbrake_steps_always_target_1080p_preset() -> None:
+    """The stock ``Fast 1080p30`` preset caps output at 1080p, so it
+    doubles as the low-RAM resolution fix — there's no separate
+    Dimensions / Resolution-Limit step to spell out, and the steps are
+    identical regardless of the source resolution."""
+    h264 = processing._handbrake_steps(frozenset({'h264'}))
+    hevc = processing._handbrake_steps(frozenset({'hevc'}))
+    for steps in (h264, hevc):
+        assert any('Fast 1080p30' in step for step in steps)
+        assert not any('Resolution Limit' in step for step in steps)
 
 
 def test_handbrake_steps_empty_when_board_has_no_hw_decode() -> None:
