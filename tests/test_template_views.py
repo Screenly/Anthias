@@ -1194,6 +1194,33 @@ def test_assets_bulk_update_blank_duration_does_not_clobber(
 
 
 @pytest.mark.django_db
+def test_assets_bulk_update_duration_only_count_excludes_videos(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """A duration-only edit on a mixed selection (2 webpages + 1 video)
+    skips the video, so the success toast must report 2 updated, not 3
+    (Copilot review of #3048). Read the count off the HX-Trigger toast.
+    """
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '42',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['message'] == '2 assets updated'
+
+
+@pytest.mark.django_db
 def test_assets_bulk_update_never_writes_video_duration_column(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
@@ -1458,12 +1485,12 @@ def test_asset_ids_json_is_html_escaped_in_x_init(
     """
     response = client.get(reverse('anthias_app:assets_table'))
     body = response.content.decode()
-    # The ids land entity-escaped inside the setVisible() call …
-    assert 'setVisible(' in body
+    # The ids land entity-escaped inside the syncVisibleIds() call …
+    assert 'syncVisibleIds(' in body
     assert '&quot;' in body
     # … and the raw, attribute-breaking form must not appear.
-    assert 'setVisible(&#x27;active&#x27;, ["' not in body
-    assert "setVisible('active', [\"" not in body
+    assert 'syncVisibleIds([&quot;' in body or 'syncVisibleIds([])' in body
+    assert 'syncVisibleIds(["' not in body
 
 
 @pytest.mark.django_db

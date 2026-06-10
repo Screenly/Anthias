@@ -17,7 +17,7 @@
      scope after every swap (x-init re-fires when this element is
      re-inserted). Drives the bulk select-all state + prunes a
      selection of rows that have since disappeared. {% endcomment %}
-  <div x-init="setVisible('active', {{ active_assets|asset_ids }}); setVisible('inactive', {{ inactive_assets|asset_ids }})" hidden></div>
+  <div x-init="syncVisibleIds({{ active_assets|asset_ids }}, {{ inactive_assets|asset_ids }})" hidden></div>
 
   <section id="active-assets-section" class="surface surface--active">
     <header class="surface__header">

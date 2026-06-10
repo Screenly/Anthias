@@ -67,7 +67,7 @@ interface HomeAppData {
   // Bulk selection helpers
   isSelected(id: string): boolean
   toggleSelect(id: string): void
-  setVisible(section: SectionKey, ids: string[]): void
+  syncVisibleIds(activeIds: string[], inactiveIds: string[]): void
   sectionAllSelected(section: SectionKey): boolean
   sectionSomeSelected(section: SectionKey): boolean
   toggleSection(section: SectionKey, checked: boolean): void
@@ -247,16 +247,17 @@ function homeApp(): HomeAppData {
         this.selectedIds = [...this.selectedIds, id]
       }
     },
-    // Called from each rendered table partial (x-init re-fires after
-    // every swap) so Alpine always knows the ids currently on screen.
-    // Prune the selection to what's still visible — a row deleted out
-    // from under us (or by another browser) shouldn't linger selected.
-    setVisible(section, ids) {
-      this.visibleIds[section] = ids
-      const all = new Set([
-        ...this.visibleIds.active,
-        ...this.visibleIds.inactive,
-      ])
+    // Called once from each rendered table partial (x-init re-fires
+    // after every swap) so Alpine always knows the ids currently on
+    // screen. Both sections are passed together and pruning happens
+    // once against their union — pruning per-section would drop the
+    // selection for a row that moved between sections (e.g. an enabled
+    // asset just disabled), because the other section's list would
+    // still be stale at that moment.
+    syncVisibleIds(activeIds, inactiveIds) {
+      this.visibleIds.active = activeIds
+      this.visibleIds.inactive = inactiveIds
+      const all = new Set([...activeIds, ...inactiveIds])
       this.selectedIds = this.selectedIds.filter((id) => all.has(id))
     },
     sectionAllSelected(section) {

@@ -946,7 +946,11 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
     if duration_assets:
         Asset.objects.bulk_update(duration_assets, ['duration'])
     ViewerPublisher.get_instance().send_to_viewer('reload')
-    count = len(assets)
+    # Report only the rows actually written. Shared fields touch every
+    # selected asset, but a duration-only edit skips videos — so a mixed
+    # selection there updated just the non-video subset, and the toast
+    # shouldn't claim the videos were changed.
+    count = len(assets) if changed_fields else len(duration_assets)
     return _asset_table_response(
         request,
         toast=('success', f'{count} asset{_pluralize(count)} updated'),
