@@ -77,7 +77,7 @@ def _mean_center_luminance(extra_args: list[str]) -> float:
     centre = image.crop(
         (width // 4, height // 4, 3 * width // 4, 3 * height // 4)
     )
-    pixels = list(centre.getdata())
+    pixels: list[int] = list(centre.getdata())
     return sum(pixels) / len(pixels)
 
 
