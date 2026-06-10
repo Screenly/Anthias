@@ -1192,6 +1192,32 @@ def test_assets_bulk_action_no_matching_ids_keeps_selection(
 
 
 @pytest.mark.django_db
+def test_assets_bulk_update_unmatched_ids_keeps_selection(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """bulk_update with non-empty but unmatched ids returns an info
+    toast (not a silent no-toast 2xx) so the client keeps the selection
+    and the modal stays open (Copilot review of #3048)."""
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': 'no-such-id,also-missing',
+                'apply_duration': 'true',
+                'duration': '42',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['kind'] == 'info'
+
+
+@pytest.mark.django_db
 def test_assets_bulk_update_dates(
     client: Client, bulk_assets: list[Asset]
 ) -> None:

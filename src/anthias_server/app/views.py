@@ -804,7 +804,15 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
         return _asset_table_response(request)
     assets = list(Asset.objects.filter(asset_id__in=ids))
     if not assets:
-        return _asset_table_response(request)
+        # Non-empty ids that match nothing (e.g. a stale selection after
+        # another operator deleted the rows). Toast so the client's
+        # success gate keeps the selection / leaves the modal open
+        # rather than treating a silent no-toast 2xx as success — same
+        # contract as the enable/disable path.
+        return _asset_table_response(
+            request,
+            toast=('info', 'No matching assets selected'),
+        )
 
     apply_dates = request.POST.get('apply_dates') == 'true'
     apply_duration = request.POST.get('apply_duration') == 'true'
