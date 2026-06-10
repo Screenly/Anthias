@@ -223,13 +223,14 @@ function homeApp(): HomeAppData {
     },
 
     // Multi-file upload (issue #3045). The server's assets_upload
-    // endpoint takes exactly one file per POST, so a multi-select
-    // batch is uploaded sequentially — one XHR per file — rather
-    // than via htmx's single-form submit. Driving it from JS (instead
-    // of hx-post on the <form>) is what makes "X of N" progress and
-    // per-file failure handling possible; htmx would only ever see
-    // the first file in the input. Mirrors the pre-#2818 React
-    // behaviour added in #2778.
+    // endpoint reads exactly one file per request
+    // (request.FILES.get('file_upload')), so a single htmx form POST —
+    // which would carry every selected file in the multipart body —
+    // would still only create one asset. uploadFiles() instead uploads
+    // the batch sequentially, one XHR (one file) per request. Driving
+    // it from JS (instead of hx-post on the <form>) is also what makes
+    // "X of N" progress and per-file failure handling possible. Mirrors
+    // the pre-#2818 React behaviour added in #2778.
     async uploadFiles(input: HTMLInputElement) {
       const files = input.files ? Array.from(input.files) : []
       const form = input.form

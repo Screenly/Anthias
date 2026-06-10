@@ -66,12 +66,14 @@
         </div>
       </form>
 
-      {% comment %} The file tab is NOT htmx-managed. assets_upload takes
-         one file per POST, so a multi-select batch is uploaded
-         sequentially by uploadFiles() in home.ts (one XHR per file) —
-         htmx's single-form submit would only ever send the first file.
-         The action / enctype attributes stay so uploadFiles() can read
-         the endpoint URL off the form and the CSRF token off its input.
+      {% comment %} The file tab is NOT htmx-managed. assets_upload reads
+         one file per request (request.FILES.get('file_upload')), so a
+         single htmx form POST — even though it would carry every
+         selected file in the multipart body — would only ever get one
+         asset created. uploadFiles() in home.ts instead uploads the
+         batch sequentially, one XHR (one file) per request. The action
+         / enctype attributes stay so uploadFiles() can read the endpoint
+         URL off the form and the CSRF token off its input.
       {% endcomment %}
       <form
         x-show="tab === 'file'"
