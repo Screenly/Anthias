@@ -21,10 +21,11 @@ two in sync; the test fails loudly if Chromium ever stops honouring it.
 """
 
 import io
+from typing import Any
 
 import pytest
 from PIL import Image
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import BrowserType
 
 # Must match applyDarkModePreference() in src/anthias_webview/src/main.cpp.
 FORCE_DARK_FLAG = '--blink-settings=forceDarkModeEnabled=true'
@@ -47,30 +48,38 @@ LIGHT_THRESHOLD = 200
 DARK_THRESHOLD = 120
 
 
-def _mean_center_luminance(extra_args: list[str]) -> float:
+def _mean_center_luminance(
+    browser_type: BrowserType,
+    launch_args: dict[str, Any],
+    extra_args: list[str],
+) -> float:
     """Render the white page in headless Chromium and return the mean
     luminance (0-255) of the centre of the screenshot.
+
+    Launches through the suite's ``browser_type`` /
+    ``browser_type_launch_args`` fixtures (rather than a bare
+    ``sync_playwright`` call) so any suite-wide launch configuration —
+    notably the ``--no-sandbox`` override in conftest.py needed because
+    the test container runs as root — is inherited here too and can't
+    drift. We must launch our own browser instead of reusing the shared
+    ``page`` fixture because the force-dark switch differs per test and
+    Chromium only reads it at startup.
 
     Cropping to the centre quarter avoids any window-chrome or
     scrollbar pixels skewing a full-frame average.
     """
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            # --no-sandbox mirrors the suite-wide launch override in
-            # conftest.py: the test container runs as root, where
-            # Chromium's setuid sandbox refuses to start.
-            args=['--no-sandbox', '--hide-scrollbars', *extra_args],
-        )
-        try:
-            page = browser.new_page(viewport={'width': 400, 'height': 300})
-            page.set_content(WHITE_PAGE, wait_until='load')
-            # Force-dark is applied during paint; give the compositor a
-            # beat so the screenshot captures the darkened frame rather
-            # than the initial white flash.
-            page.wait_for_timeout(300)
-            png = page.screenshot()
-        finally:
-            browser.close()
+    args = [*launch_args.get('args', []), '--hide-scrollbars', *extra_args]
+    browser = browser_type.launch(**{**launch_args, 'args': args})
+    try:
+        page = browser.new_page(viewport={'width': 400, 'height': 300})
+        page.set_content(WHITE_PAGE, wait_until='load')
+        # Force-dark is applied during paint; give the compositor a
+        # beat so the screenshot captures the darkened frame rather
+        # than the initial white flash.
+        page.wait_for_timeout(300)
+        png = page.screenshot()
+    finally:
+        browser.close()
 
     image = Image.open(io.BytesIO(png)).convert('L')
     width, height = image.size
@@ -82,10 +91,15 @@ def _mean_center_luminance(extra_args: list[str]) -> float:
 
 
 @pytest.mark.integration
-def test_force_dark_flag_renders_web_page_dark() -> None:
+def test_force_dark_flag_renders_web_page_dark(
+    browser_type: BrowserType,
+    browser_type_launch_args: dict[str, Any],
+) -> None:
     """ "Prefer dark mode" on: the Chromium switch the webview injects
     must darken an otherwise-white page."""
-    luminance = _mean_center_luminance([FORCE_DARK_FLAG])
+    luminance = _mean_center_luminance(
+        browser_type, browser_type_launch_args, [FORCE_DARK_FLAG]
+    )
     assert luminance < DARK_THRESHOLD, (
         f'expected a dark render with {FORCE_DARK_FLAG}, '
         f'got mean luminance {luminance:.1f}'
@@ -93,11 +107,16 @@ def test_force_dark_flag_renders_web_page_dark() -> None:
 
 
 @pytest.mark.integration
-def test_without_flag_web_page_stays_light() -> None:
+def test_without_flag_web_page_stays_light(
+    browser_type: BrowserType,
+    browser_type_launch_args: dict[str, Any],
+) -> None:
     """ "Prefer dark mode" off: with no flag the same white page must
     render light, proving the dark result above is caused by the flag
     and not the harness."""
-    luminance = _mean_center_luminance([])
+    luminance = _mean_center_luminance(
+        browser_type, browser_type_launch_args, []
+    )
     assert luminance > LIGHT_THRESHOLD, (
         'expected a light render without the force-dark flag, '
         f'got mean luminance {luminance:.1f}'

@@ -25,10 +25,32 @@ void applyDarkModePreference()
     }
 
     QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
-    if (!flags.isEmpty()) {
-        flags.append(' ');
+
+    // Idempotent: nothing to do if dark mode is already requested.
+    if (flags.contains("forceDarkModeEnabled")) {
+        return;
     }
-    flags.append("--blink-settings=forceDarkModeEnabled=true");
+
+    const QByteArray darkSetting = "forceDarkModeEnabled=true";
+    const int blinkIdx = flags.indexOf("--blink-settings=");
+    if (blinkIdx >= 0) {
+        // Merge into the existing --blink-settings switch rather than
+        // appending a second one: Chromium keeps only the last
+        // occurrence of a given switch, so a duplicate would silently
+        // drop whatever Blink settings were already configured. The
+        // switch's comma-separated value runs to the next space (or the
+        // end of the string).
+        int valueEnd = flags.indexOf(' ', blinkIdx);
+        if (valueEnd < 0) {
+            valueEnd = flags.size();
+        }
+        flags.insert(valueEnd, "," + darkSetting);
+    } else {
+        if (!flags.isEmpty()) {
+            flags.append(' ');
+        }
+        flags.append("--blink-settings=" + darkSetting);
+    }
     qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
 }
 }  // namespace
