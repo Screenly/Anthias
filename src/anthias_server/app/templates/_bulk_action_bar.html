@@ -29,7 +29,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_action' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (event.detail.successful) clearSelection()"
+        hx-on::after-request="if (isSuccessResponse(event)) clearSelection()"
         class="inline m-0"
       >
         {% csrf_token %}
@@ -46,7 +46,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_action' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (event.detail.successful) clearSelection()"
+        hx-on::after-request="if (isSuccessResponse(event)) clearSelection()"
         class="inline m-0"
       >
         {% csrf_token %}
@@ -105,7 +105,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_action' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (event.detail.successful) { clearSelection(); bulkDeleteOpen = false; }"
+        hx-on::after-request="if (isSuccessResponse(event)) { clearSelection(); bulkDeleteOpen = false; }"
         class="inline m-0"
       >
         {% csrf_token %}

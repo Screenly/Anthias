@@ -35,7 +35,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_update' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (event.detail.successful) { clearSelection(); closeBulkEdit(); }"
+        hx-on::after-request="if (isSuccessResponse(event)) { clearSelection(); closeBulkEdit(); }"
         x-data="{ applyDates: false, applyDuration: false, applyTime: false, applyDays: false }"
       >
         {% csrf_token %}

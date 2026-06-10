@@ -75,6 +75,7 @@ interface HomeAppData {
   clearSelection(): void
   openBulkEdit(): void
   closeBulkEdit(): void
+  isSuccessResponse(event: Event): boolean
 }
 
 // 'ok'       — file accepted and the asset row was created.
@@ -275,13 +276,20 @@ function homeApp(): HomeAppData {
       const all = new Set([...activeIds, ...inactiveIds])
       this.selectedIds = this.selectedIds.filter((id) => all.has(id))
     },
+    // Build a Set for membership so these stay O(visible + selected)
+    // rather than O(visible × selected) — a selection of thousands (the
+    // point of bulk editing) would otherwise lag on every reactive
+    // re-evaluation.
     sectionAllSelected(section) {
       const ids = this.visibleIds[section]
-      return ids.length > 0 && ids.every((id) => this.selectedIds.includes(id))
+      if (!ids.length) return false
+      const sel = new Set(this.selectedIds)
+      return ids.every((id) => sel.has(id))
     },
     sectionSomeSelected(section) {
       const ids = this.visibleIds[section]
-      const n = ids.filter((id) => this.selectedIds.includes(id)).length
+      const sel = new Set(this.selectedIds)
+      const n = ids.reduce((acc, id) => acc + (sel.has(id) ? 1 : 0), 0)
       return n > 0 && n < ids.length
     },
     toggleSection(section, checked) {
@@ -302,6 +310,26 @@ function homeApp(): HomeAppData {
     },
     closeBulkEdit() {
       this.bulkEditOpen = false
+    },
+    // A bulk endpoint returns 200 even when it refuses the input (bad
+    // date, partial time window, blank duration, "nothing to change")
+    // and just rides an error/info toast back on the HX-Trigger header.
+    // So a bare event.detail.successful (2xx) isn't enough to decide
+    // whether to clear the selection / close the modal — that would
+    // wipe the operator's work when nothing was applied. Treat it as a
+    // success only on a 2xx whose toast is absent or kind 'success'.
+    isSuccessResponse(event) {
+      const detail = (event as CustomEvent<{ successful?: boolean; xhr?: XMLHttpRequest }>).detail
+      if (!detail?.successful || !detail.xhr) return false
+      const header = detail.xhr.getResponseHeader('HX-Trigger')
+      if (!header) return true
+      try {
+        const kind = (JSON.parse(header) as { toast?: { kind?: string } })
+          ?.toast?.kind
+        return kind === undefined || kind === 'success'
+      } catch {
+        return true
+      }
     },
 
     // Multi-file upload (issue #3045). The server's assets_upload
