@@ -1575,6 +1575,27 @@ def test_asset_table_renders_selection_controls(
 
 
 @pytest.mark.django_db
+def test_bulk_forms_use_global_event_bridge_not_alpine_methods(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """hx-on::after-request runs in global JS scope, so the bulk forms
+    must NOT call Alpine component methods there (that throws
+    ReferenceError and the selection never clears). They go through the
+    window.bulkSucceeded() gate + a 'bulk-done' window event that Alpine
+    handles via @bulk-done.window (Copilot review of #3048).
+    """
+    body = client.get(reverse('anthias_app:home')).content.decode()
+    assert 'window.bulkSucceeded(event)' in body
+    assert '@bulk-done.window="onBulkDone($event)"' in body
+    # The old, broken forms called Alpine methods straight from hx-on.
+    assert 'hx-on::after-request="if (isSuccessResponse(' not in body
+    assert (
+        'hx-on::after-request="if (event.detail.successful) clearSelection'
+        not in body
+    )
+
+
+@pytest.mark.django_db
 def test_asset_ids_json_is_html_escaped_in_x_init(
     client: Client, bulk_assets: list[Asset]
 ) -> None:

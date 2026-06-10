@@ -12,6 +12,7 @@ declare global {
     flatpickr: typeof flatpickrLib
     homeApp: () => HomeAppData
     fallbackCopyToClipboard: (text: string) => boolean
+    bulkSucceeded: (event: Event) => boolean
   }
 }
 
@@ -75,7 +76,7 @@ interface HomeAppData {
   clearSelection(): void
   openBulkEdit(): void
   closeBulkEdit(): void
-  isSuccessResponse(event: Event): boolean
+  onBulkDone(event: Event): void
 }
 
 // 'ok'       — file accepted and the asset row was created.
@@ -311,25 +312,19 @@ function homeApp(): HomeAppData {
     closeBulkEdit() {
       this.bulkEditOpen = false
     },
-    // A bulk endpoint returns 200 even when it refuses the input (bad
-    // date, partial time window, blank duration, "nothing to change")
-    // and just rides an error/info toast back on the HX-Trigger header.
-    // So a bare event.detail.successful (2xx) isn't enough to decide
-    // whether to clear the selection / close the modal — that would
-    // wipe the operator's work when nothing was applied. Treat it as a
-    // success only on a 2xx whose toast is absent or kind 'success'.
-    isSuccessResponse(event) {
-      const detail = (event as CustomEvent<{ successful?: boolean; xhr?: XMLHttpRequest }>).detail
-      if (!detail?.successful || !detail.xhr) return false
-      const header = detail.xhr.getResponseHeader('HX-Trigger')
-      if (!header) return true
-      try {
-        const kind = (JSON.parse(header) as { toast?: { kind?: string } })
-          ?.toast?.kind
-        return kind === undefined || kind === 'success'
-      } catch {
-        return true
-      }
+    // Bridged from the bulk forms' hx-on::after-request via a global
+    // window 'bulk-done' CustomEvent (hx-on runs in global scope and
+    // can't reach Alpine methods — same dispatch-to-window bridge the
+    // Add modal uses for 'asset-saved'). Only fires on a real success
+    // (window.bulkSucceeded gates it), so a rejected edit leaves the
+    // selection and modal intact. detail flags say which modal to close.
+    onBulkDone(event) {
+      const detail =
+        (event as CustomEvent<{ closeDelete?: boolean; closeEdit?: boolean }>)
+          .detail || {}
+      this.clearSelection()
+      if (detail.closeDelete) this.bulkDeleteOpen = false
+      if (detail.closeEdit) this.closeBulkEdit()
     },
 
     // Multi-file upload (issue #3045). The server's assets_upload
@@ -694,6 +689,30 @@ function fallbackCopyToClipboard(text: string): boolean {
   return ok
 }
 window.fallbackCopyToClipboard = fallbackCopyToClipboard
+
+// Did a bulk request actually succeed? The bulk endpoints return 200
+// even when they refuse the input (bad date, partial window, blank
+// duration, "nothing to change", empty/stale selection) and just ride
+// an error/info toast on the HX-Trigger header. The bulk forms call
+// this from hx-on::after-request — which runs in GLOBAL scope, not
+// Alpine's — so it lives on window rather than as a component method.
+// True only on a 2xx whose toast is absent or kind 'success'.
+function bulkSucceeded(event: Event): boolean {
+  const detail = (
+    event as CustomEvent<{ successful?: boolean; xhr?: XMLHttpRequest }>
+  ).detail
+  if (!detail?.successful || !detail.xhr) return false
+  const header = detail.xhr.getResponseHeader('HX-Trigger')
+  if (!header) return true
+  try {
+    const kind = (JSON.parse(header) as { toast?: { kind?: string } })?.toast
+      ?.kind
+    return kind === undefined || kind === 'success'
+  } catch {
+    return true
+  }
+}
+window.bulkSucceeded = bulkSucceeded
 
 window.homeApp = homeApp
 

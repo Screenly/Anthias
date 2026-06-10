@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block main %}
-<div class="app-container" x-data="homeApp()" @asset-saved.window="closeModal()">
+<div class="app-container" x-data="homeApp()" @asset-saved.window="closeModal()" @bulk-done.window="onBulkDone($event)">
   <div class="page-header-bar">
     <div class="page-header-bar__title">
       <h1 class="page-header">Schedule Overview</h1>

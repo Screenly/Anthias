@@ -29,7 +29,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_action' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (isSuccessResponse(event)) clearSelection()"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done'))"
         class="inline m-0"
       >
         {% csrf_token %}
@@ -46,7 +46,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_action' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (isSuccessResponse(event)) clearSelection()"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done'))"
         class="inline m-0"
       >
         {% csrf_token %}
@@ -105,7 +105,7 @@
         hx-post="{% url 'anthias_app:assets_bulk_action' %}"
         hx-target="#asset-table"
         hx-swap="outerHTML"
-        hx-on::after-request="if (isSuccessResponse(event)) { clearSelection(); bulkDeleteOpen = false; }"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done', {detail: {closeDelete: true}}))"
         class="inline m-0"
       >
         {% csrf_token %}

@@ -813,7 +813,13 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
 
     ids = _bulk_ids(request)
     if not ids:
-        return _asset_table_response(request)
+        # Empty selection (e.g. a submit racing a table swap). Toast so
+        # the client's success gate keeps the modal open rather than
+        # treating the silent 2xx as success — mirrors assets_bulk_action.
+        return _asset_table_response(
+            request,
+            toast=('info', 'No assets selected'),
+        )
     base_qs = Asset.objects.filter(asset_id__in=ids)
     matched = base_qs.count()
     if not matched:
