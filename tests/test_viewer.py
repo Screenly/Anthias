@@ -1063,6 +1063,98 @@ def test_rotation_value_clamps(raw: Any, expected: int) -> None:
         assert viewer._rotation_value() == expected
 
 
+@pytest.mark.parametrize(
+    'qpa, expected',
+    [
+        # cage + Wayland boards (x86 / arm64 / pi5 per
+        # docker/Dockerfile.viewer.j2) — the compositor owns the
+        # transform and rotation goes through wlr-randr.
+        ('wayland', True),
+        # eglfs (pi4-64 / pi3-64) and linuxfb (pi2 / pi3) rotate via a
+        # Qt plugin option, NOT wlr-randr.
+        ('eglfs', False),
+        ('linuxfb', False),
+        ('linuxfb:rotation=90', False),
+        # Defensive: an unset QPA must not be mistaken for Wayland.
+        ('', False),
+    ],
+)
+def test_is_wayland_board_keys_off_qpa(qpa: str, expected: bool) -> None:
+    """Issue #3044: _is_wayland_board() must recognise every cage board
+    (x86, arm64, pi5), not just x86. Keying off QT_QPA_PLATFORM mirrors
+    the Dockerfile split so Pi 5 / arm64 route through the wlr-randr
+    rotation path instead of silently doing nothing."""
+    with mock.patch.dict(os.environ, {'QT_QPA_PLATFORM': qpa}, clear=False):
+        assert viewer._is_wayland_board() is expected
+
+
+def test_is_wayland_board_true_for_pi5() -> None:
+    """The concrete regression: a Pi 5 viewer (DEVICE_TYPE=pi5,
+    QT_QPA_PLATFORM=wayland from the Dockerfile) is now correctly
+    classified as a Wayland board."""
+    with mock.patch.dict(
+        os.environ,
+        {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+        clear=False,
+    ):
+        assert viewer._is_wayland_board() is True
+
+
+def test_build_webview_env_no_op_on_pi5_wayland() -> None:
+    """Issue #3044: on Pi 5 the rotation must NOT be appended as a
+    ``:rotation=N`` option — the Qt wayland plugin ignores it (that's a
+    linuxfb-only option). Rotation is handled by wlr-randr instead, so
+    QT_QPA_PLATFORM is left untouched."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 90}),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['QT_QPA_PLATFORM'] == 'wayland'
+
+
+def test_apply_wlr_transform_runs_on_pi5() -> None:
+    """Issue #3044: the wlr-randr path must actually fire on Pi 5 —
+    previously gated behind an x86-only _is_wayland_board(), so the
+    rotation menu was a complete no-op there."""
+
+    def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
+        result = mock.Mock()
+        result.returncode = 0
+        result.stdout = (
+            'HDMI-A-1\n  Enabled: yes\n' if argv == ['wlr-randr'] else ''
+        )
+        result.stderr = ''
+        return result
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer.subprocess.run', side_effect=_fake_run
+        ) as run,
+    ):
+        assert viewer._apply_wlr_transform(90) is True
+
+    transform_calls = [
+        c
+        for c in run.call_args_list
+        if c.args
+        and c.args[0][:1] == ['wlr-randr']
+        and '--transform' in c.args[0]
+    ]
+    assert len(transform_calls) == 1
+    argv = transform_calls[0].args[0]
+    assert argv[argv.index('--transform') + 1] == '90'
+
+
 def test_build_webview_env_appends_rotation_on_linuxfb() -> None:
     """Pi boards (linuxfb) get the rotation baked into QT_QPA_PLATFORM
     so the Qt plugin rotates the framebuffer for free."""
@@ -1070,7 +1162,7 @@ def test_build_webview_env_appends_rotation_on_linuxfb() -> None:
         mock.patch.dict(settings, {'screen_rotation': 90}),
         mock.patch.dict(
             os.environ,
-            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'linuxfb'},
+            {'DEVICE_TYPE': 'pi3', 'QT_QPA_PLATFORM': 'linuxfb'},
             clear=False,
         ),
     ):
@@ -1086,7 +1178,7 @@ def test_build_webview_env_strips_existing_rotation_suffix() -> None:
         mock.patch.dict(
             os.environ,
             {
-                'DEVICE_TYPE': 'pi5',
+                'DEVICE_TYPE': 'pi3',
                 'QT_QPA_PLATFORM': 'linuxfb:rotation=90',
             },
             clear=False,
@@ -1119,7 +1211,7 @@ def test_build_webview_env_no_suffix_at_zero_rotation() -> None:
         mock.patch.dict(settings, {'screen_rotation': 0}),
         mock.patch.dict(
             os.environ,
-            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'linuxfb'},
+            {'DEVICE_TYPE': 'pi3', 'QT_QPA_PLATFORM': 'linuxfb'},
             clear=False,
         ),
     ):
@@ -1136,7 +1228,7 @@ def test_build_webview_env_preserves_other_qpa_options() -> None:
         mock.patch.dict(
             os.environ,
             {
-                'DEVICE_TYPE': 'pi5',
+                'DEVICE_TYPE': 'pi3',
                 'QT_QPA_PLATFORM': 'linuxfb:fb=/dev/fb1,tty=/dev/tty1',
             },
             clear=False,
@@ -1162,7 +1254,7 @@ def test_build_webview_env_removes_stale_rotation_when_dialed_to_zero() -> (
         mock.patch.dict(
             os.environ,
             {
-                'DEVICE_TYPE': 'pi5',
+                'DEVICE_TYPE': 'pi3',
                 'QT_QPA_PLATFORM': 'linuxfb:fb=/dev/fb1,rotation=90',
             },
             clear=False,
@@ -1241,7 +1333,11 @@ def test_apply_wlr_transform_skipped_on_linuxfb() -> None:
     """The wlr-randr binary isn't even shipped on Pi boards — make
     sure we never call it from a non-wayland viewer."""
     with (
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi3', 'QT_QPA_PLATFORM': 'linuxfb'},
+            clear=False,
+        ),
         mock.patch('anthias_viewer.subprocess.run') as run,
     ):
         viewer._apply_wlr_transform(90)
@@ -1269,7 +1365,11 @@ def test_apply_wlr_transform_invokes_wlr_randr_per_output() -> None:
         return result
 
     with (
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch(
             'anthias_viewer.subprocess.run', side_effect=_fake_run
         ) as run,
@@ -1311,7 +1411,11 @@ def test_wlr_output_names_skips_disabled_outputs() -> None:
         return result
 
     with (
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch('anthias_viewer.subprocess.run', side_effect=_fake_run),
     ):
         names = viewer._wlr_output_names()
@@ -1339,7 +1443,11 @@ def test_apply_wlr_transform_logs_warning_on_nonzero_exit(
         return result
 
     with (
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch('anthias_viewer.subprocess.run', side_effect=_fake_run),
         caplog.at_level(logging.WARNING, logger='root'),
     ):
@@ -1368,7 +1476,11 @@ def test_handle_reload_reapplies_rotation_when_changed(
     """
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
         mock.patch('anthias_viewer.MediaPlayerProxy.reset') as reset,
@@ -1415,7 +1527,11 @@ def test_handle_reload_does_not_latch_when_wlr_transform_fails(
     viewer._last_applied_rotation = 0
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
         mock.patch('anthias_viewer.MediaPlayerProxy.reset'),
@@ -1434,7 +1550,11 @@ def test_handle_reload_no_rotation_change_is_no_op(
     viewer._last_applied_rotation = 90
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
         mock.patch('anthias_viewer.MediaPlayerProxy.reset') as reset,
@@ -1459,7 +1579,11 @@ def test_handle_reload_queues_bounce_on_linuxfb_rotation_change(
     viewer._rotation_bounce_pending = False
     with (
         mock.patch.dict(settings, {'screen_rotation': 270}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi3', 'QT_QPA_PLATFORM': 'linuxfb'},
+            clear=False,
+        ),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
         mock.patch.object(viewer, 'browser', fake_browser),
@@ -1561,7 +1685,11 @@ def test_retry_wayland_rotation_skips_when_already_applied(
     viewer._last_applied_rotation = 90
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch.object(viewer, '_apply_wlr_transform') as apply,
     ):
         viewer._retry_wayland_rotation_if_pending()
@@ -1577,7 +1705,11 @@ def test_retry_wayland_rotation_recovers_from_startup_failure(
     viewer._last_applied_rotation = -1
     with (
         mock.patch.dict(settings, {'screen_rotation': 270}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch.object(
             viewer, '_apply_wlr_transform', return_value=True
         ) as apply,
@@ -1595,7 +1727,11 @@ def test_retry_wayland_rotation_keeps_sentinel_on_failure(
     viewer._last_applied_rotation = -1
     with (
         mock.patch.dict(settings, {'screen_rotation': 270}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'x86'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'x86', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
         mock.patch.object(viewer, '_apply_wlr_transform', return_value=False),
     ):
         viewer._retry_wayland_rotation_if_pending()
@@ -1611,7 +1747,11 @@ def test_retry_wayland_rotation_skipped_on_linuxfb(
     viewer._last_applied_rotation = -1
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi3', 'QT_QPA_PLATFORM': 'linuxfb'},
+            clear=False,
+        ),
         mock.patch.object(viewer, '_apply_wlr_transform') as apply,
     ):
         viewer._retry_wayland_rotation_if_pending()
@@ -1631,7 +1771,11 @@ def test_handle_reload_linuxfb_idempotent_under_repeat(
     viewer._rotation_bounce_pending = False
     with (
         mock.patch.dict(settings, {'screen_rotation': 90}),
-        mock.patch.dict(os.environ, {'DEVICE_TYPE': 'pi5'}, clear=False),
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi3', 'QT_QPA_PLATFORM': 'linuxfb'},
+            clear=False,
+        ),
         mock.patch.object(viewer, 'load_settings'),
         mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
         mock.patch.object(viewer, 'browser', fake_browser),
@@ -1725,8 +1869,10 @@ class TestWaitForWaylandSocket:
     """The webview spawn must not race cage's Wayland socket — a spawn
     before the socket exists dies with 'Failed to create wl_display'
     and wastes a retry attempt (Sentry ANTHIAS-19). The gate is the
-    WAYLAND_DISPLAY env cage exports, NOT _is_wayland_board() (which is
-    x86-only and would skip the Pi 5 where this actually fired)."""
+    WAYLAND_DISPLAY env cage exports, NOT _is_wayland_board(): the wait
+    is needed on any board where cage actually ran, and keying it on the
+    concrete socket env keeps it correct regardless of how the board
+    helper classifies things."""
 
     def test_no_op_when_no_socket_env(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1750,17 +1896,19 @@ class TestWaitForWaylandSocket:
         viewer._wait_for_wayland_socket(monotonic() + 5)
         slept.assert_not_called()
 
-    def test_fires_on_pi5_via_env_not_board_helper(
+    def test_fires_via_env_not_board_helper(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Any,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        # The regression Copilot flagged: _is_wayland_board() returns
-        # False for pi5, so gating on it would skip the wait on exactly
-        # the board ANTHIAS-19 came from. With DEVICE_TYPE=pi5 the wait
-        # must still engage (driven by WAYLAND_DISPLAY), proven by the
-        # 'not present yet' warning firing for an absent socket.
+        # The wait is decoupled from _is_wayland_board(): even a board the
+        # helper does NOT classify as Wayland (QT_QPA_PLATFORM unset here,
+        # so the helper returns False) still engages the wait when cage
+        # exported WAYLAND_DISPLAY. This is the ANTHIAS-19 guarantee —
+        # gating on the concrete socket env, not the board helper, is what
+        # kept the Pi 5 covered even while the helper was x86-only.
+        monkeypatch.delenv('QT_QPA_PLATFORM', raising=False)
         monkeypatch.setenv('DEVICE_TYPE', 'pi5')
         assert viewer._is_wayland_board() is False
         monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))

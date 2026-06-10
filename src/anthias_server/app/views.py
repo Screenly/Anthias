@@ -293,8 +293,9 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
 
     file_upload = request.FILES.get('file_upload')
     if file_upload is None or not file_upload.name:
-        messages.error(request, 'No file uploaded.')
-        return _asset_table_response(request)
+        return _asset_table_response(
+            request, toast=('error', 'No file uploaded.')
+        )
 
     upload_name: str = file_upload.name
 
@@ -378,8 +379,10 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             elif ext in video_exts:
                 file_type = f'video/{ext.lstrip(".")}'
     if file_type.split('/')[0] not in ('image', 'video'):
-        messages.error(request, 'Invalid file type. Expected image or video.')
-        return _asset_table_response(request)
+        return _asset_table_response(
+            request,
+            toast=('error', 'Invalid file type. Expected image or video.'),
+        )
 
     # Operator-friendly display name: 'My_day-2.mp4' → 'My Day 2'.
     # Drops the extension (the row already carries mimetype) and

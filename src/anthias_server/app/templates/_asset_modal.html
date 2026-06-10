@@ -66,18 +66,21 @@
         </div>
       </form>
 
+      {% comment %} The file tab is NOT htmx-managed. assets_upload reads
+         one file per request (request.FILES.get('file_upload')), so a
+         single htmx form POST — even though it would carry every
+         selected file in the multipart body — would only ever get one
+         asset created. uploadFiles() in home.ts instead uploads the
+         batch sequentially, one XHR (one file) per request. The action
+         / enctype attributes stay so uploadFiles() can read the endpoint
+         URL off the form and the CSRF token off its input.
+      {% endcomment %}
       <form
         x-show="tab === 'file'"
         method="post"
         action="{% url 'anthias_app:assets_upload' %}"
         enctype="multipart/form-data"
-        hx-post="{% url 'anthias_app:assets_upload' %}"
-        hx-encoding="multipart/form-data"
-        hx-target="#asset-table"
-        hx-swap="outerHTML"
-        @htmx:xhr:loadstart="onUploadStart()"
-        @htmx:xhr:progress="onUploadProgress($event)"
-        @htmx:after-request="onUploadDone($event)"
+        @submit.prevent
       >
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
@@ -88,8 +91,8 @@
             x-show="!uploadState"
           >
             <i class="ti ti-cloud-upload" style="font-size: 2.25rem; opacity: 0.55"></i>
-            <p class="mb-1 font-semibold mt-2">Click to choose a file</p>
-            <p class="muted-label mb-0">Image or video. Upload starts immediately.</p>
+            <p class="mb-1 font-semibold mt-2">Click to choose files</p>
+            <p class="muted-label mb-0">Images or videos. Select one or many — upload starts immediately.</p>
             {% comment %}
               Browser MIME globs cover JPEG/PNG/WebP/GIF/MP4/WebM/MKV out of
               the box. iOS HEIC and TIFF still slip through `image/*` on
@@ -101,9 +104,9 @@
               H.264/HEVC MP4) makes the wider accept range safe to
               surface here.
             {% endcomment %}
-            <input type="file" class="hidden" id="add-file" name="file_upload"
+            <input type="file" class="hidden" id="add-file" name="file_upload" multiple
               accept="image/*,video/*,.heic,.heif,.tif,.tiff,.bmp,.ico,.tga,.jp2,.j2k,.jpx,.jpc,.jpf,.avif,.mov,.m4v,.mkv,.webm,.avi,.mpg,.mpeg,.ts,.flv"
-              @change="if ($event.target.files.length) { uploadFileName = $event.target.files[0].name; $event.target.form.requestSubmit() }">
+              @change="uploadFiles($event.target)">
           </label>
 
           <div class="upload-progress" x-show="uploadState" x-cloak>
@@ -111,9 +114,9 @@
               <i class="ti" :class="uploadState === 'sending' ? 'ti-cloud-upload' : 'ti-refresh upload-progress__spin'"></i>
               <div class="upload-progress__text">
                 <p class="m-0 font-semibold" x-text="uploadFileName || 'Uploading…'"></p>
-                <p class="muted-label m-0" x-text="uploadState === 'sending'
+                <p class="muted-label m-0" x-text="(uploadTotal > 1 ? `File ${uploadIndex} of ${uploadTotal} · ` : '') + (uploadState === 'sending'
                   ? `Uploading… ${uploadProgress}%`
-                  : 'Processing on server…'"></p>
+                  : 'Processing on server…')"></p>
               </div>
             </div>
             <div class="upload-progress__bar">
