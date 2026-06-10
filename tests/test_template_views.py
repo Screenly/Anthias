@@ -1114,6 +1114,84 @@ def test_assets_bulk_action_empty_ids_is_noop(
 
 
 @pytest.mark.django_db
+def test_assets_bulk_action_trims_whitespace_in_ids(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """A hand-built ``"a, b"`` CSV (spaces after commas) must still
+    match every row — _bulk_ids strips each segment (Copilot review of
+    #3048).
+    """
+    for a in bulk_assets:
+        a.is_enabled = False
+        a.save()
+    spaced = ', '.join(a.asset_id for a in bulk_assets)
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'enable', 'ids': spaced},
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.is_enabled is True
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_enable_already_enabled_reports_match_count(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Re-enabling already-enabled assets must report the matched count,
+    not 0 — the count comes from a matched-rows count(), not update()'s
+    changed-rows return, which can be 0 on some backends (Copilot review
+    of #3048). A 0 with no toast would also make the client treat it as
+    success and clear the selection.
+    """
+    import json as _json
+
+    # bulk_assets are created is_enabled=True; enable them again.
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={
+                'action': 'enable',
+                'ids': _bulk_ids_csv(bulk_assets),
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast'] == {
+        'kind': 'success',
+        'message': '3 assets enabled',
+    }
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_no_matching_ids_keeps_selection(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Stale ids that match nothing return an info toast (not a silent
+    no-toast 2xx) so the client's success gate keeps the selection."""
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'enable', 'ids': 'no-such-id,also-missing'},
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['kind'] == 'info'
+
+
+@pytest.mark.django_db
 def test_assets_bulk_update_dates(
     client: Client, bulk_assets: list[Asset]
 ) -> None:

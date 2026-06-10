@@ -702,11 +702,13 @@ def assets_order(request: HttpRequest) -> HttpResponse:
 def _bulk_ids(request: HttpRequest) -> list[str]:
     """Pull the comma-separated asset_id list the bulk-action bar POSTs.
 
-    Same wire shape as ``assets_order`` ('ids' = "a,b,c"); empty
-    segments are dropped so a trailing comma or an empty field yields
-    [].
+    Same wire shape as ``assets_order`` ('ids' = "a,b,c"). Each segment
+    is stripped and empty ones dropped, so a trailing comma, an empty
+    field, or a hand-built ``"a, b"`` (with spaces) still resolves to
+    clean ids rather than silently failing to match a row.
     """
-    return [i for i in request.POST.get('ids', '').split(',') if i]
+    parts = (i.strip() for i in request.POST.get('ids', '').split(','))
+    return [i for i in parts if i]
 
 
 def _pluralize(count: int, suffix: str = 's') -> str:
@@ -736,7 +738,10 @@ def assets_bulk_action(request: HttpRequest) -> HttpResponse:
 
         assets = list(Asset.objects.filter(asset_id__in=ids))
         if not assets:
-            return _asset_table_response(request)
+            return _asset_table_response(
+                request,
+                toast=('info', 'No matching assets to delete'),
+            )
         for asset in assets:
             # Suppress the per-row viewer reload — a large batch would
             # otherwise spam the pub/sub channel with one 'reload' per
@@ -754,12 +759,22 @@ def assets_bulk_action(request: HttpRequest) -> HttpResponse:
 
     # Enable/disable have no model signals, so collapse to a single
     # queryset UPDATE (one DB write regardless of selection size) plus
-    # one viewer reload. ``update()`` returns the affected row count,
-    # which doubles as the toast count and the empty-selection guard.
+    # one viewer reload. Count is taken from a separate matched-rows
+    # count(), NOT update()'s return value: some backends (and SQLite in
+    # some builds) report rows *changed*, so bulk-enabling already-
+    # enabled assets could return 0 even though the selection was valid.
+    # We want the count of rows the selection actually addressed.
     enabled = action == 'enable'
-    count = Asset.objects.filter(asset_id__in=ids).update(is_enabled=enabled)
+    qs = Asset.objects.filter(asset_id__in=ids)
+    count = qs.count()
     if not count:
-        return _asset_table_response(request)
+        # A genuinely empty match (stale ids) — toast so the client's
+        # success gate keeps the selection and the operator sees why.
+        return _asset_table_response(
+            request,
+            toast=('info', 'No matching assets selected'),
+        )
+    qs.update(is_enabled=enabled)
     ViewerPublisher.get_instance().send_to_viewer('reload')
     verb = 'enabled' if enabled else 'disabled'
     return _asset_table_response(
