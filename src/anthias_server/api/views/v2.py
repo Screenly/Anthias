@@ -602,6 +602,7 @@ class DeviceSettingsViewV2(APIView):
                 'shuffle_playlist': settings['shuffle_playlist'],
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
+                'prefer_dark_mode': settings['prefer_dark_mode'],
                 # Clamp on read too — the OpenAPI schema advertises
                 # an enum of {0,90,180,270}, but a hand-edited conf
                 # could have a stale 45 or any other int sitting on
@@ -685,6 +686,8 @@ class DeviceSettingsViewV2(APIView):
                 settings['use_24_hour_clock'] = data['use_24_hour_clock']
             if 'debug_logging' in data:
                 settings['debug_logging'] = data['debug_logging']
+            if 'prefer_dark_mode' in data:
+                settings['prefer_dark_mode'] = data['prefer_dark_mode']
             if 'screen_rotation' in data:
                 settings['screen_rotation'] = int(data['screen_rotation'])
 

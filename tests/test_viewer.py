@@ -1063,6 +1063,97 @@ def test_rotation_value_clamps(raw: Any, expected: int) -> None:
         assert viewer._rotation_value() == expected
 
 
+# ---------------------------------------------------------------------------
+# Prefer dark mode — the C++ webview reads ANTHIAS_PREFER_DARK_MODE at
+# launch (applyDarkModePreference in src/anthias_webview/src/main.cpp).
+
+
+@pytest.fixture
+def reset_dark_mode_state() -> Iterator[None]:
+    """_last_applied_dark_mode + _rotation_bounce_pending are module
+    state — snapshot and restore so these tests don't bleed into each
+    other or the rotation tests that share the bounce flag."""
+    prior_dark = viewer._last_applied_dark_mode
+    prior_pending = viewer._rotation_bounce_pending
+    try:
+        viewer._last_applied_dark_mode = False
+        viewer._rotation_bounce_pending = False
+        yield
+    finally:
+        viewer._last_applied_dark_mode = prior_dark
+        viewer._rotation_bounce_pending = prior_pending
+
+
+def test_build_webview_env_sets_dark_mode_flag_when_enabled() -> None:
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': True}),
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_PREFER_DARK_MODE'] == '1'
+
+
+def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
+    # A stale value inherited from the process env must not leak into the
+    # spawned webview when the operator turns the setting back off.
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': False}),
+        mock.patch.dict(
+            os.environ,
+            {'QT_QPA_PLATFORM': 'linuxfb', 'ANTHIAS_PREFER_DARK_MODE': '1'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert 'ANTHIAS_PREFER_DARK_MODE' not in env
+
+
+def test_handle_reload_queues_bounce_on_dark_mode_change(
+    reset_dark_mode_state: None,
+) -> None:
+    """The dark-mode flag is only read at webview launch, so a live
+    toggle has to respawn AnthiasViewer. Like the rotation path,
+    _handle_reload runs on the subscriber thread and MUST NOT terminate
+    the browser directly — it only latches the new value and sets the
+    bounce flag the main thread consumes."""
+    fake_browser = mock.Mock()
+    skip = mock.Mock()
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': True}),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_maybe_reapply_rotation'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+    fake_browser.terminate.assert_not_called()
+    assert viewer._rotation_bounce_pending is True
+    skip.set.assert_called_once()
+    # Latched immediately so a second `reload` in the gap before the
+    # respawn doesn't re-queue another bounce.
+    assert viewer._last_applied_dark_mode is True
+
+
+def test_handle_reload_no_op_when_dark_mode_unchanged(
+    reset_dark_mode_state: None,
+) -> None:
+    skip = mock.Mock()
+    viewer._last_applied_dark_mode = True
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': True}),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_maybe_reapply_rotation'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+    assert viewer._rotation_bounce_pending is False
+    skip.set.assert_not_called()
+
+
 @pytest.mark.parametrize(
     'qpa, expected',
     [

@@ -1,11 +1,42 @@
 #include <QApplication>
+#include <QByteArray>
 #include <QDebug>
 #include <QtDBus>
 
 #include "mainwindow.h"
 
+namespace {
+// Realise the operator's "Prefer dark mode" setting. The Python viewer
+// plumbs the Django setting in via the ANTHIAS_PREFER_DARK_MODE env var
+// (see _build_webview_env in src/anthias_viewer/__init__.py); here we
+// translate that into the Chromium switch that makes QtWebEngine render
+// web pages dark. Going through --blink-settings keeps one code path
+// across Qt5 (Pi 1-4) and Qt6 (Pi 5/x86) without a version macro: it
+// sets the same Blink runtime flag that QWebEngineSettings::ForceDarkMode
+// toggles on Qt 6.7+. Dark-aware sites get their own dark theme (Chromium
+// then reports prefers-color-scheme: dark) and the rest are auto-darkened.
+// Must run before QApplication constructs QtWebEngine's Chromium context,
+// since the switch is only read once at engine init.
+void applyDarkModePreference()
+{
+    const QByteArray preference = qgetenv("ANTHIAS_PREFER_DARK_MODE");
+    if (preference != "1" && preference != "true") {
+        return;
+    }
+
+    QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+    if (!flags.isEmpty()) {
+        flags.append(' ');
+    }
+    flags.append("--blink-settings=forceDarkModeEnabled=true");
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+}
+}  // namespace
+
 int main(int argc, char *argv[])
 {
+    applyDarkModePreference();
+
     QApplication app(argc, argv);
 
     QApplication::setOverrideCursor(QCursor(Qt::BlankCursor));

@@ -88,6 +88,14 @@ scheduler: Any = None
 # operator changed rotation from the UI and we need to re-apply.
 _last_applied_rotation: int = 0
 
+# Whether the webview currently running was launched with "Prefer dark
+# mode" on. ``_maybe_reapply_dark_mode`` compares this to the freshly
+# loaded ``settings['prefer_dark_mode']`` after a ``reload`` to decide
+# whether the operator toggled the setting and the webview needs to be
+# respawned to pick up the new ANTHIAS_PREFER_DARK_MODE env var. Latched
+# at each spawn in ``load_browser``.
+_last_applied_dark_mode: bool = False
+
 # Cross-thread handoff for the linuxfb rotation-change path. The
 # subscriber thread (ViewerSubscriber) runs _handle_reload when a
 # `reload` arrives on Redis pub/sub, but ``browser`` and
@@ -182,6 +190,17 @@ def _build_webview_env() -> dict[str, str]:
       us at no perf cost.
     """
     env = dict(os.environ)
+
+    # "Prefer dark mode" applies to every board (the C++ webview turns
+    # this into a Chromium blink flag at launch — see applyDarkModePreference
+    # in src/anthias_webview/src/main.cpp), so set it before the
+    # board-specific rotation branches below. Pop a stale value so dialling
+    # the setting back off actually drops the flag on the respawned process.
+    if settings['prefer_dark_mode']:
+        env['ANTHIAS_PREFER_DARK_MODE'] = '1'
+    else:
+        env.pop('ANTHIAS_PREFER_DARK_MODE', None)
+
     rotation = _rotation_value()
     if _is_wayland_board():
         return env
@@ -593,7 +612,13 @@ def load_browser(
     """
     global browser, _webview_supports_set_reload_interval
     global _last_applied_rotation, current_browser_url
+    global _last_applied_dark_mode
     logging.info('Loading browser...')
+
+    # Latch the dark-mode preference the spawned process is about to be
+    # launched with (via _build_webview_env), so a later ``reload`` only
+    # bounces the webview when the operator actually changed the setting.
+    _last_applied_dark_mode = bool(settings['prefer_dark_mode'])
 
     if max_attempts is None:
         max_attempts = BROWSER_SPAWN_MAX_ATTEMPTS
@@ -926,6 +951,7 @@ def _handle_reload() -> None:
     """
     load_settings()
     _maybe_reapply_rotation()
+    _maybe_reapply_dark_mode()
     _skip_if_current_asset_inactive()
 
 
@@ -1012,6 +1038,45 @@ def _maybe_reapply_rotation() -> None:
     # the bounce happens promptly rather than after the current
     # asset's full duration elapses.
     _last_applied_rotation = rotation
+    _rotation_bounce_pending = True
+    get_skip_event().set()
+
+
+def _maybe_reapply_dark_mode() -> None:
+    """Respawn the webview when the operator toggled "Prefer dark mode".
+
+    The preference is realised by the C++ webview reading the
+    ANTHIAS_PREFER_DARK_MODE env var at launch and setting a Chromium
+    blink flag before QtWebEngine initialises (see
+    applyDarkModePreference in src/anthias_webview/src/main.cpp), so a
+    live toggle only takes effect on a fresh process. Unlike rotation
+    this applies to every board (linuxfb, eglfs and Wayland alike), so
+    there's no platform branch: latch the new value and request a webview
+    respawn that the main asset_loop thread performs.
+
+    We piggy-back on ``_rotation_bounce_pending`` — despite the name it
+    is simply the cross-thread "the main thread must terminate the webview
+    so it respawns with fresh env" handoff, which is exactly what a
+    dark-mode change needs too. ``_handle_reload`` runs on the subscriber
+    thread, which must not touch ``browser`` directly (see
+    _maybe_reapply_rotation), so the flag + skip_event is the only safe
+    path.
+
+    No-op when the on-disk value matches what the running webview was
+    launched with, so unrelated ``reload`` traffic doesn't blank the
+    screen.
+    """
+    global _last_applied_dark_mode, _rotation_bounce_pending
+    prefer_dark = bool(settings['prefer_dark_mode'])
+    if prefer_dark == _last_applied_dark_mode:
+        return
+
+    logging.info(
+        'Prefer-dark-mode changed: %s -> %s',
+        _last_applied_dark_mode,
+        prefer_dark,
+    )
+    _last_applied_dark_mode = prefer_dark
     _rotation_bounce_pending = True
     get_skip_event().set()
 

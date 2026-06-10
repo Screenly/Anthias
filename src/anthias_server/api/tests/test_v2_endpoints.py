@@ -46,6 +46,7 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'prefer_dark_mode': True,
         'screen_rotation': 90,
     }[key]
 
@@ -65,6 +66,7 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'prefer_dark_mode': True,
         'screen_rotation': 90,
         'username': '',
     }
@@ -278,6 +280,7 @@ def test_disable_basic_auth(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'prefer_dark_mode': False,
         'screen_rotation': 0,
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
