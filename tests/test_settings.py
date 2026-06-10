@@ -18,6 +18,7 @@ audio_output = hdmi
 shuffle_playlist = on
 verify_ssl = off
 debug_logging = on
+prefer_dark_mode = on
 resolution = 1920x1080
 default_duration = 45
 
@@ -109,6 +110,7 @@ def test_parse_settings(settings_env: None) -> None:
         assert settings['show_splash'] is False
         assert settings['shuffle_playlist'] is True
         assert settings['debug_logging'] is True
+        assert settings['prefer_dark_mode'] is True
         assert settings['default_duration'] == 45
 
 
@@ -129,6 +131,10 @@ def test_default_settings(settings_env: None) -> None:
         assert (
             settings['debug_logging']
             == mod_settings.DEFAULTS['viewer']['debug_logging']
+        )
+        assert (
+            settings['prefer_dark_mode']
+            == mod_settings.DEFAULTS['viewer']['prefer_dark_mode']
         )
         assert (
             settings['default_duration']
