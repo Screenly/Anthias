@@ -1325,43 +1325,39 @@ def test_assets_bulk_update_duration_only_count_excludes_videos(
 
 
 @pytest.mark.django_db
-def test_assets_bulk_update_never_writes_video_duration_column(
+def test_assets_bulk_update_never_writes_video_duration(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
-    """The duration bulk_update must exclude video rows entirely (not
-    just write the same value back) so it can't race with / clobber the
-    probe_video_duration task's UPDATE (Copilot review of #3048). Spy on
-    bulk_update and assert no video object is ever in a call that writes
-    the duration column.
+    """The duration update must exclude video rows at the SQL level so
+    it can't race with / clobber the probe_video_duration task. Set the
+    video's stored duration to a sentinel and confirm a bulk duration
+    edit leaves it untouched while the webpages change (Copilot review
+    of #3048).
     """
-    calls: list[tuple[list[Asset], list[str]]] = []
-    real_bulk_update = Asset.objects.bulk_update
-
-    def spy(objs: Any, fields: Any, *a: Any, **k: Any) -> Any:
-        objs = list(objs)
-        calls.append((objs, list(fields)))
-        return real_bulk_update(objs, fields, *a, **k)
+    webpage_one, webpage_two, video = bulk_assets
+    # Simulate the probe having written a duration on the video; the
+    # bulk edit must not overwrite it.
+    Asset.objects.filter(asset_id=video.asset_id).update(duration=123)
 
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
         return_value=None,
     ):
-        with mock.patch.object(Asset.objects, 'bulk_update', side_effect=spy):
-            client.post(
-                reverse('anthias_app:assets_bulk_update'),
-                data={
-                    'ids': _bulk_ids_csv(bulk_assets),
-                    'apply_duration': 'true',
-                    'duration': '42',
-                },
-            )
-
-    duration_writes = [objs for objs, fields in calls if 'duration' in fields]
-    assert duration_writes, 'expected a duration bulk_update'
-    for objs in duration_writes:
-        assert all(a.mimetype != 'video' for a in objs), (
-            'a video asset was included in the duration write'
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '42',
+            },
         )
+
+    video.refresh_from_db()
+    webpage_one.refresh_from_db()
+    webpage_two.refresh_from_db()
+    assert video.duration == 123, 'video duration was clobbered'
+    assert webpage_one.duration == 42
+    assert webpage_two.duration == 42
 
 
 @pytest.mark.django_db

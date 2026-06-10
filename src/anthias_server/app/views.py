@@ -730,8 +730,20 @@ def assets_bulk_action(request: HttpRequest) -> HttpResponse:
 
     action = request.POST.get('action', '')
     ids = _bulk_ids(request)
-    if action not in ('enable', 'disable', 'delete') or not ids:
-        return _asset_table_response(request)
+    # Toast on the degenerate cases instead of a silent no-toast 2xx —
+    # the client's success gate treats the latter as success and would
+    # clear the selection (e.g. an empty POST racing a table swap, or a
+    # stale/typoed action value).
+    if action not in ('enable', 'disable', 'delete'):
+        return _asset_table_response(
+            request,
+            toast=('error', 'Unknown bulk action'),
+        )
+    if not ids:
+        return _asset_table_response(
+            request,
+            toast=('info', 'No assets selected'),
+        )
 
     if action == 'delete':
         from anthias_server.app.helpers import delete_asset_with_file
@@ -802,8 +814,9 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
     ids = _bulk_ids(request)
     if not ids:
         return _asset_table_response(request)
-    assets = list(Asset.objects.filter(asset_id__in=ids))
-    if not assets:
+    base_qs = Asset.objects.filter(asset_id__in=ids)
+    matched = base_qs.count()
+    if not matched:
         # Non-empty ids that match nothing (e.g. a stale selection after
         # another operator deleted the rows). Toast so the client's
         # success gate keeps the selection / leaves the modal open
@@ -919,64 +932,58 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
             sorted(set(parsed_days)) or [1, 2, 3, 4, 5, 6, 7]
         )
 
-    # --- Mutate every selected asset in memory, then write them with
-    # bulk_update() (Asset has no custom save()/signals). A large
-    # selection — the whole point of bulk editing — would otherwise fire
-    # one UPDATE per row. We track exactly which columns were touched so
-    # bulk_update only writes those.
-    #
-    # ``duration`` is handled on its own list, NOT folded into the
-    # shared field set: it's only written for non-video assets (video
-    # duration is owned by the probe task), and including the column in
-    # an all-rows bulk_update would write every video's *stale in-memory*
-    # duration back, racing with a concurrent probe_video_duration
-    # UPDATE. Splitting it keeps that "never touch video duration"
-    # guarantee (Copilot review of #3048).
-    changed_fields: set[str] = set()
-    duration_assets: list[Asset] = []
-    for asset in assets:
-        if apply_dates:
-            if new_start is not None:
-                asset.start_date = new_start
-                changed_fields.add('start_date')
-            if new_end is not None:
-                asset.end_date = new_end
-                changed_fields.add('end_date')
-        if apply_duration and asset.mimetype != 'video':
-            asset.duration = new_duration
-            duration_assets.append(asset)
-        if apply_time:
-            if clear_time:
-                asset.play_time_from = None
-                asset.play_time_to = None
-            else:
-                asset.play_time_from = new_time_from
-                asset.play_time_to = new_time_to
-            changed_fields.update(('play_time_from', 'play_time_to'))
-        if apply_days and new_play_days is not None:
-            asset.play_days = new_play_days
-            changed_fields.add('play_days')
+    # The new values are uniform across the whole selection, so apply
+    # them with plain queryset update()s — one UPDATE per affected
+    # column-group — instead of loading every row and building the big
+    # CASE statement bulk_update() would (Copilot review of #3048).
+    # Duration goes through a separate update that excludes videos, so a
+    # video row's probe-owned duration is never touched.
+    shared: dict[str, object] = {}
+    if apply_dates:
+        if new_start is not None:
+            shared['start_date'] = new_start
+        if new_end is not None:
+            shared['end_date'] = new_end
+    if apply_time:
+        shared['play_time_from'] = None if clear_time else new_time_from
+        shared['play_time_to'] = None if clear_time else new_time_to
+    if apply_days and new_play_days is not None:
+        shared['play_days'] = new_play_days
 
-    # Nothing actually changed (e.g. apply_dates ticked but both date
-    # fields left blank, or a duration-only edit on an all-video
-    # selection). bulk_update() rejects an empty field list, so short-
-    # circuit with the same "nothing to change" toast.
-    if not changed_fields and not duration_assets:
+    if not shared and not apply_duration:
+        # e.g. apply_dates ticked but both date fields left blank.
         return _asset_table_response(
             request,
             toast=('info', 'Nothing to change — pick a field to edit'),
         )
 
-    if changed_fields:
-        Asset.objects.bulk_update(assets, sorted(changed_fields))
-    if duration_assets:
-        Asset.objects.bulk_update(duration_assets, ['duration'])
+    # Count the rows actually affected from matched-rows count()s rather
+    # than update()'s return value (which reports rows *changed* on some
+    # backends — re-applying an identical value would otherwise read as
+    # zero). Shared fields touch every matched row; duration touches
+    # only the non-video subset.
+    if shared:
+        base_qs.update(**shared)
+    nonvideo_count = 0
+    if apply_duration:
+        nonvideo_qs = base_qs.exclude(mimetype='video')
+        nonvideo_count = nonvideo_qs.count()
+        if nonvideo_count:
+            nonvideo_qs.update(duration=new_duration)
+
+    count = matched if shared else nonvideo_count
+    if not count:
+        # Duration-only edit on an all-video selection — nothing the
+        # duration rule allows us to change.
+        return _asset_table_response(
+            request,
+            toast=(
+                'info',
+                'Duration applies to images and web pages only '
+                '— nothing changed',
+            ),
+        )
     ViewerPublisher.get_instance().send_to_viewer('reload')
-    # Report only the rows actually written. Shared fields touch every
-    # selected asset, but a duration-only edit skips videos — so a mixed
-    # selection there updated just the non-video subset, and the toast
-    # shouldn't claim the videos were changed.
-    count = len(assets) if changed_fields else len(duration_assets)
     return _asset_table_response(
         request,
         toast=('success', f'{count} asset{_pluralize(count)} updated'),
