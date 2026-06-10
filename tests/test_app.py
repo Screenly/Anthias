@@ -660,6 +660,98 @@ def test_add_two_uploads_in_one_modal_session(
     assert {a.name for a in assets} == {'Standby', 'Video'}
 
 
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_multiple_uploads_at_once(reset_assets: None, page: Page) -> None:
+    """Regression for #3045: selecting several files in one go uploads
+    every one of them. The file input carries ``multiple`` and
+    uploadFiles() in home.ts POSTs them sequentially against the
+    single-file assets_upload endpoint. Multi-file upload existed in
+    the React UI (#2778) but was dropped in the #2818 rewrite."""
+    with (
+        _TemporaryCopy(
+            'src/anthias_server/app/static/img/standby.png', 'alpha.png'
+        ) as alpha,
+        _TemporaryCopy(
+            'src/anthias_server/app/static/img/anthias-loading.png', 'beta.png'
+        ) as beta,
+    ):
+        page.goto(BASE_URL)
+        page.locator('#add-asset-button').click()
+        _wait_alpine(page, 'state.mode', 'add')
+        page.get_by_role('button', name='Upload file').click()
+
+        # The picker only allows multi-select because the input has the
+        # `multiple` attribute — set_input_files with a list asserts it
+        # and exercises the sequential per-file upload loop.
+        page.locator('input[name="file_upload"]').set_input_files(
+            [alpha, beta]
+        )
+
+        _wait_db(
+            lambda: Asset.objects.count() == 2,
+            timeout=30.0,
+            description='both uploads persisted',
+        )
+
+    assets = list(Asset.objects.order_by('name'))
+    assert {a.name for a in assets} == {'Alpha', 'Beta'}
+    assert all(a.mimetype == 'image' for a in assets)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_multi_upload_skips_rejected_file_and_continues(
+    reset_assets: None, page: Page
+) -> None:
+    """A file the server refuses (invalid type → HTTP 200 + error
+    toast) must not silently abort the batch: the error surfaces and
+    the remaining valid files still upload. The invalid file is first
+    in the selection so the valid one only lands if the loop carried
+    on past the rejection."""
+    junk = os.path.join(tempfile.gettempdir(), 'junk.bin')
+    with open(junk, 'wb') as fh:
+        fh.write(b'\x00\x01\x02\x03')
+    try:
+        with _TemporaryCopy(
+            'src/anthias_server/app/static/img/standby.png', 'good.png'
+        ) as good:
+            page.goto(BASE_URL)
+            page.locator('#add-asset-button').click()
+            _wait_alpine(page, 'state.mode', 'add')
+            page.get_by_role('button', name='Upload file').click()
+
+            # Playwright can't mix buffers with paths in one
+            # set_input_files call, so the junk file is written to disk
+            # above. The invalid file is first so the valid one only
+            # lands if the loop carried on past the rejection.
+            page.locator('input[name="file_upload"]').set_input_files(
+                [junk, good]
+            )
+
+            # The rejected file surfaces a server error toast...
+            toast = page.locator('.app-toast--error').first
+            expect(toast).to_be_visible(timeout=30_000)
+            expect(toast).to_contain_text('Invalid file type')
+
+            # ...and the valid file that followed it still uploads.
+            _wait_db(
+                lambda: Asset.objects.count() == 1,
+                timeout=30.0,
+                description='valid file uploaded despite earlier rejection',
+            )
+    finally:
+        try:
+            os.remove(junk)
+        except FileNotFoundError:
+            pass
+
+    asset = Asset.objects.first()
+    assert asset is not None
+    assert asset.name == 'Good'
+    assert asset.mimetype == 'image'
+
+
 # ---------------------------------------------------------------------------
 # 4. Edit / preview / delete modals
 # ---------------------------------------------------------------------------
