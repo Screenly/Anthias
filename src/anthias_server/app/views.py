@@ -893,18 +893,26 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
             sorted(set(parsed_days)) or [1, 2, 3, 4, 5, 6, 7]
         )
 
-    # --- Apply to every selected asset ---
+    # --- Mutate every selected asset in memory, then write them all in
+    # one bulk_update() (Asset has no custom save()/signals). A large
+    # selection — the whole point of bulk editing — would otherwise fire
+    # one UPDATE per row. We track exactly which columns were touched so
+    # bulk_update only writes those.
+    changed_fields: set[str] = set()
     for asset in assets:
         if apply_dates:
             if new_start is not None:
                 asset.start_date = new_start
+                changed_fields.add('start_date')
             if new_end is not None:
                 asset.end_date = new_end
+                changed_fields.add('end_date')
         # Video duration stays owned by the probe task — same guard the
         # per-asset edit form applies — so a bulk duration change never
         # clobbers a probed length back to a fixed value.
         if apply_duration and asset.mimetype != 'video':
             asset.duration = new_duration
+            changed_fields.add('duration')
         if apply_time:
             if clear_time:
                 asset.play_time_from = None
@@ -912,10 +920,22 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
             else:
                 asset.play_time_from = new_time_from
                 asset.play_time_to = new_time_to
+            changed_fields.update(('play_time_from', 'play_time_to'))
         if apply_days and new_play_days is not None:
             asset.play_days = new_play_days
-        asset.save()
+            changed_fields.add('play_days')
 
+    # Nothing actually changed (e.g. apply_dates ticked but both date
+    # fields left blank, or a duration-only edit on an all-video
+    # selection). bulk_update() rejects an empty field list, so short-
+    # circuit with the same "nothing to change" toast.
+    if not changed_fields:
+        return _asset_table_response(
+            request,
+            toast=('info', 'Nothing to change — pick a field to edit'),
+        )
+
+    Asset.objects.bulk_update(assets, sorted(changed_fields))
     ViewerPublisher.get_instance().send_to_viewer('reload')
     count = len(assets)
     return _asset_table_response(

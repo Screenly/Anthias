@@ -1194,6 +1194,60 @@ def test_assets_bulk_update_blank_duration_does_not_clobber(
 
 
 @pytest.mark.django_db
+def test_assets_bulk_update_issues_single_update_query(
+    client: Client,
+) -> None:
+    """Bulk update must write the whole selection in one UPDATE, not one
+    per row (Copilot review of #3048) — proven by counting UPDATE
+    statements against a 5-asset selection.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    now = timezone.now()
+    ids = []
+    for i in range(5):
+        a = Asset.objects.create(
+            name=f'q{i}',
+            uri=f'https://q{i}.example',
+            mimetype='webpage',
+            duration=10,
+            is_enabled=True,
+            is_processing=False,
+            play_order=i,
+            start_date=now,
+            end_date=now + timedelta(days=30),
+        )
+        ids.append(a.asset_id)
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        with CaptureQueriesContext(connection) as ctx:
+            client.post(
+                reverse('anthias_app:assets_bulk_update'),
+                data={
+                    'ids': ','.join(ids),
+                    'apply_duration': 'true',
+                    'duration': '55',
+                },
+            )
+
+    updates = [
+        q['sql']
+        for q in ctx.captured_queries
+        if q['sql'].lstrip().upper().startswith('UPDATE "ASSETS"')
+    ]
+    assert len(updates) == 1, (
+        f'expected exactly 1 UPDATE for the batch, got {len(updates)}:\n'
+        + '\n'.join(updates)
+    )
+    for a_id in ids:
+        assert Asset.objects.get(asset_id=a_id).duration == 55
+
+
+@pytest.mark.django_db
 def test_assets_bulk_update_time_window(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
