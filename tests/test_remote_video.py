@@ -131,7 +131,10 @@ def test_classify_streaming_scheme_with_mp4_path_returns_stream() -> None:
         'udp://stream.example.test:1234',
         'mms://media.example.com/live',
         'https://cdn.example.com/live/index.m3u8',  # HLS over http(s)
-        'http://example.com/stream.mpd',  # DASH over http(s)
+        # DASH over http (not https) is deliberate here: it exercises
+        # the http manifest branch of is_streaming_uri. Test fixture,
+        # no real traffic.
+        'http://example.com/stream.mpd',  # NOSONAR S5332
         'https://example.com/legacy.m3u',
         'https://example.com/smooth.ism',
         'https://cdn.example.com/live/index.m3u8?token=abc',  # query
