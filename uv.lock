@@ -266,7 +266,7 @@ website = [
 dev = [
     { name = "playwright", specifier = "==1.59.0" },
     { name = "pytest", specifier = "==9.0.3" },
-    { name = "pytest-cov", specifier = "==6.0.0" },
+    { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "pytest-django", specifier = "==4.12.0" },
     { name = "pytest-mock", specifier = "==3.15.1" },
     { name = "pytest-playwright", specifier = "==0.8.0" },
@@ -284,12 +284,12 @@ dev-host = [
     { name = "types-gunicorn", specifier = "==26.0.0.20260518" },
     { name = "types-netifaces", specifier = "==0.11.0.20260408" },
     { name = "types-python-dateutil", specifier = "==2.9.0.20260518" },
-    { name = "types-pytz", specifier = "==2026.2.0.20260506" },
+    { name = "types-pytz", specifier = "==2026.2.0.20260518" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260408" },
     { name = "types-requests", specifier = "==2.33.0.20260518" },
 ]
 docker-image-builder = [
-    { name = "click", specifier = "==8.1.7" },
+    { name = "click", specifier = "==8.4.1" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "pygit2", specifier = "==1.19.2" },
     { name = "python-on-whales", specifier = "==0.81.0" },
@@ -303,7 +303,7 @@ host = [
     { name = "tenacity", specifier = "==9.1.4" },
 ]
 local = [
-    { name = "click", specifier = "==8.1.7" },
+    { name = "click", specifier = "==8.4.1" },
     { name = "requests", specifier = "==2.33.1" },
     { name = "tenacity", specifier = "==9.1.4" },
 ]
@@ -312,11 +312,11 @@ mypy = [
     { name = "celery-types", specifier = "==0.26.0" },
     { name = "channels", specifier = "==4.3.2" },
     { name = "channels-redis", specifier = "==4.3.0" },
-    { name = "click", specifier = "==8.1.7" },
+    { name = "click", specifier = "==8.4.1" },
     { name = "django", specifier = "==5.2.14" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
     { name = "django-stubs", specifier = "==6.0.5" },
-    { name = "django-stubs-ext", specifier = "==6.0.3" },
+    { name = "django-stubs-ext", specifier = "==6.0.5" },
     { name = "djangorestframework", specifier = "==3.17.1" },
     { name = "djangorestframework-stubs", specifier = "==3.16.9" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
@@ -333,7 +333,7 @@ mypy = [
     { name = "types-gunicorn", specifier = "==26.0.0.20260518" },
     { name = "types-netifaces", specifier = "==0.11.0.20260408" },
     { name = "types-python-dateutil", specifier = "==2.9.0.20260518" },
-    { name = "types-pytz", specifier = "==2026.2.0.20260506" },
+    { name = "types-pytz", specifier = "==2026.2.0.20260518" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260408" },
     { name = "types-requests", specifier = "==2.33.0.20260518" },
     { name = "whitenoise", specifier = "==6.12.0" },
@@ -346,7 +346,7 @@ server = [
     { name = "channels-redis", specifier = "==4.3.0" },
     { name = "django", specifier = "==5.2.14" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
-    { name = "django-stubs-ext", specifier = "==6.0.3" },
+    { name = "django-stubs-ext", specifier = "==6.0.5" },
     { name = "djangorestframework", specifier = "==3.17.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "jinja2", specifier = "==3.1.6" },
@@ -362,7 +362,7 @@ server = [
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
     { name = "sentry-sdk", specifier = "==2.61.1" },
-    { name = "sh", specifier = "==2.2.2" },
+    { name = "sh", specifier = "==2.3.0" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "urllib3", specifier = "==2.7.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.49.0" },
@@ -377,7 +377,7 @@ test = [
     { name = "channels-redis", specifier = "==4.3.0" },
     { name = "django", specifier = "==5.2.14" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
-    { name = "django-stubs-ext", specifier = "==6.0.3" },
+    { name = "django-stubs-ext", specifier = "==6.0.5" },
     { name = "djangorestframework", specifier = "==3.17.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "jinja2", specifier = "==3.1.6" },
@@ -389,7 +389,7 @@ test = [
     { name = "psutil", specifier = "==7.2.2" },
     { name = "pydbus", specifier = "==0.6.0" },
     { name = "pytest", specifier = "==9.0.3" },
-    { name = "pytest-cov", specifier = "==6.0.0" },
+    { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "pytest-django", specifier = "==4.12.0" },
     { name = "pytest-mock", specifier = "==3.15.1" },
     { name = "pytest-playwright", specifier = "==0.8.0" },
@@ -400,7 +400,7 @@ test = [
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
     { name = "sentry-sdk", specifier = "==2.61.1" },
-    { name = "sh", specifier = "==2.2.2" },
+    { name = "sh", specifier = "==2.3.0" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "time-machine", specifier = "==3.2.0" },
     { name = "urllib3", specifier = "==2.7.0" },
@@ -420,7 +420,7 @@ viewer = [
     { name = "redis", specifier = "==7.4.0" },
     { name = "requests", specifier = "==2.33.1" },
     { name = "sentry-sdk", specifier = "==2.61.1" },
-    { name = "sh", specifier = "==2.2.2" },
+    { name = "sh", specifier = "==2.3.0" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "urllib3", specifier = "==2.7.0" },
 ]
@@ -707,14 +707,14 @@ wheels = [
 
 [[package]]
 name = "click"
-version = "8.1.7"
+version = "8.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/96/d3/f04c7bfcf5c1862a2a5b845c6b2b360488cf47af55dfa79c98f6a6bf98b5/click-8.1.7.tar.gz", hash = "sha256:ca9853ad459e787e2192211578cc907e7594e294c7ccc834310722b41b9ca6de", size = 336121, upload-time = "2023-08-17T17:29:11.868Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/98/518d8e5081007684232226f475082b30087d0f585e8457db087298259f49/click-8.4.1.tar.gz", hash = "sha256:918b5633eddf6b41c32d4f454bf0de810065c74e3f7dbf8ee5452f8be88d3e96", size = 353007, upload-time = "2026-05-22T04:08:37.769Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl", hash = "sha256:ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28", size = 97941, upload-time = "2023-08-17T17:29:10.08Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/0d/67e5b4109ea4a837e80daa87c2c696711955e40449a97e8926672534def2/click-8.4.1-py3-none-any.whl", hash = "sha256:482be17c6991b8c19c5429a1e995d9b0efdbb63172824c41f99965dc0ade8ec2", size = 116639, upload-time = "2026-05-22T04:08:35.26Z" },
 ]
 
 [[package]]
@@ -937,15 +937,15 @@ wheels = [
 
 [[package]]
 name = "django-stubs-ext"
-version = "6.0.3"
+version = "6.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fb/e6/5dcdaa785ec3eed5fc196c7e68fb7ad9d9fe6d5acccea4690e65f2546417/django_stubs_ext-6.0.3.tar.gz", hash = "sha256:3307d42132bc295d5744de6276bc5fdf6896efc70f891e21c0ae8bdf529d2762", size = 6663, upload-time = "2026-04-18T15:10:53.667Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/01/419bc3cd882f3ec645d5a4511085202dd6bd3ef8d385871dcd2d32cc15b3/django_stubs_ext-6.0.5.tar.gz", hash = "sha256:1cc325e991303849bce70e19748981b225ef08b37256f263e113caf97cd3bcc0", size = 6666, upload-time = "2026-05-25T08:46:36.012Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/10/fa/0a3a05c29d6295dbd52fa3cb4047a95de11ba4f2696072d6f3f2c1e6f370/django_stubs_ext-6.0.3-py3-none-any.whl", hash = "sha256:9e4105955419ae310d7da9cfd808e039d4dae3092c628f021057bb4f2c237f8f", size = 10354, upload-time = "2026-04-18T15:10:52.395Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/bf/7ee71071d84ad4e0efcd77e2681afed254a5f65c27524441a9caf8c60467/django_stubs_ext-6.0.5-py3-none-any.whl", hash = "sha256:a9932c8233d6dd4e34ae0b192026379c1a9be8f0b7c27aa1fa09ae215169773e", size = 10362, upload-time = "2026-05-25T08:46:34.467Z" },
 ]
 
 [[package]]
@@ -1736,15 +1736,16 @@ wheels = [
 
 [[package]]
 name = "pytest-cov"
-version = "6.0.0"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "coverage" },
+    { name = "pluggy" },
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/be/45/9b538de8cef30e17c7b45ef42f538a94889ed6a16f2387a6c89e73220651/pytest-cov-6.0.0.tar.gz", hash = "sha256:fde0b595ca248bb8e2d76f020b465f3b107c9632e6a1d1705f17834c89dcadc0", size = 66945, upload-time = "2024-10-29T20:13:35.363Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/51/a849f96e117386044471c8ec2bd6cfebacda285da9525c9106aeb28da671/pytest_cov-7.1.0.tar.gz", hash = "sha256:30674f2b5f6351aa09702a9c8c364f6a01c27aae0c1366ae8016160d1efc56b2", size = 55592, upload-time = "2026-03-21T20:11:16.284Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/3b/48e79f2cd6a61dbbd4807b4ed46cb564b4fd50a76166b1c4ea5c1d9e2371/pytest_cov-6.0.0-py3-none-any.whl", hash = "sha256:eee6f1b9e61008bd34975a4d5bab25801eb31898b032dd55addc93e96fcaaa35", size = 22949, upload-time = "2024-10-29T20:13:33.215Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl", hash = "sha256:a0461110b7865f9a271aa1b51e516c9a95de9d696734a2f71e3e78f46e1d4678", size = 22876, upload-time = "2026-03-21T20:11:14.438Z" },
 ]
 
 [[package]]
@@ -2104,11 +2105,11 @@ wheels = [
 
 [[package]]
 name = "sh"
-version = "2.2.2"
+version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/59/52/f43920223c93e31874677c681b8603d36a40d3d8502d3a37f80d3995d43e/sh-2.2.2.tar.gz", hash = "sha256:653227a7c41a284ec5302173fbc044ee817c7bad5e6e4d8d55741b9aeb9eb65b", size = 345866, upload-time = "2025-02-24T07:16:25.363Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/56/6cedf4704590ac9c8ab57089ffa95895c21e82499981008ad369c43c9cc4/sh-2.3.0.tar.gz", hash = "sha256:402af9087bf8a5557562913ca83d715bfa0646cb93865c5d60c5578b07b17871", size = 135995, upload-time = "2026-06-09T04:22:34.431Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/98/d82f14ac7ffedbd38dfa2383f142b26d18d23ca6cf35a40f4af60df666bd/sh-2.2.2-py3-none-any.whl", hash = "sha256:e0b15b4ae8ffcd399bc8ffddcbd770a43c7a70a24b16773fbb34c001ad5d52af", size = 38295, upload-time = "2025-02-24T07:16:23.782Z" },
+    { url = "https://files.pythonhosted.org/packages/47/85/d06247fc88ba278227397da5604287e4762f130347dc968f6d205eb15ee6/sh-2.3.0-py3-none-any.whl", hash = "sha256:9b9c51f988fa91ba09e2a78edc48810d0b5a34c8cf383408e4e8c4352169f26e", size = 48045, upload-time = "2026-06-09T04:22:33.069Z" },
 ]
 
 [[package]]
@@ -2271,11 +2272,11 @@ wheels = [
 
 [[package]]
 name = "types-pytz"
-version = "2026.2.0.20260506"
+version = "2026.2.0.20260518"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ba/2e/a545aae2c4d2af7e3b7b967049c2f271b2f5338d96a58224fe1ee53a54f3/types_pytz-2026.2.0.20260506.tar.gz", hash = "sha256:fc6a0de6a1b7da82a748fb4065e152372dac3016559cb1eef5e8af1e338eb627", size = 10844, upload-time = "2026-05-06T05:17:51.964Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/d9/9fa4019d2235bd374293e1fd4153879b28b6ae1d2bae98addd352c9713f2/types_pytz-2026.2.0.20260518.tar.gz", hash = "sha256:e5d254329e9c4e91f0781b22c43a4bb2d10bb044d97b24c4b05d45567b0eae16", size = 10871, upload-time = "2026-05-18T06:02:45.789Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/cd/df3e4ccccb2a5a0b7e59c9fb2baafb6dac0817e80799e4c9854fe4d2eba3/types_pytz-2026.2.0.20260506-py3-none-any.whl", hash = "sha256:58ab5307c20885f9bcd42ff106616eb0e32710791f8cbdc770aee2ea0c4f01fb", size = 10120, upload-time = "2026-05-06T05:17:51.026Z" },
+    { url = "https://files.pythonhosted.org/packages/62/89/41e80670779a223d8bc8bc83019a619988cfa5c432cedac5cec23884fbc4/types_pytz-2026.2.0.20260518-py3-none-any.whl", hash = "sha256:3a12eaa38f476bd650902a9c9bb442f03f3c7dee2be5c5848bce61bd708d205a", size = 10125, upload-time = "2026-05-18T06:02:44.968Z" },
 ]
 
 [[package]]
