@@ -230,8 +230,28 @@ class Scheduler:
         )
 
     def get_db_mtime(self) -> float:
-        # get database file last modification time
-        try:
-            return path.getmtime(settings['database'])
-        except (OSError, TypeError):
+        # Newest mtime across the SQLite database and its WAL sidecars.
+        #
+        # Since the DB is opened with journal_mode=WAL (#3015), commits
+        # are written to ``anthias.db-wal`` and ``anthias.db-shm``; the
+        # main ``anthias.db`` file's mtime stays frozen until a (rare)
+        # checkpoint. Stat'ing only the main file therefore never sees
+        # an asset add/edit, so refresh_playlist() never reloads — most
+        # visibly, the first asset on a fresh install never displays
+        # (its empty playlist has no deadline fallback either). Take the
+        # max over all three so a write bumps the value regardless of
+        # journal mode: WAL commits move ``-wal``/``-shm``, and a
+        # checkpoint moves the main file.
+        database = settings['database']
+        if not database:
             return 0
+
+        newest = 0.0
+        for suffix in ('', '-wal', '-shm'):
+            try:
+                mtime = path.getmtime(database + suffix)
+            except OSError:
+                continue
+            if mtime > newest:
+                newest = mtime
+        return newest
