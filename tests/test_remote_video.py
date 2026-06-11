@@ -21,6 +21,7 @@ import requests
 
 from anthias_common.remote_video import (
     is_downloadable_remote_video,
+    is_streaming_uri,
     remote_video_destination_path,
 )
 from anthias_server.settings import AnthiasSettings
@@ -113,6 +114,47 @@ def test_classify_streaming_scheme_with_mp4_path_returns_stream() -> None:
     assert ok is False
     assert ext == ''
     head.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# is_streaming_uri — the create-path classifier that maps stream URIs
+# to mimetype='streaming' (counterpart to is_downloadable_remote_video)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'uri',
+    [
+        'rtsp://camera.local/feed',
+        'rtsp://camera/feed.mp4',  # scheme wins over path extension
+        'rtmp://media.example.com/live',
+        'srt://stream.example.com:9000',
+        'udp://stream.example.test:1234',
+        'mms://media.example.com/live',
+        'https://cdn.example.com/live/index.m3u8',  # HLS over http(s)
+        'http://example.com/stream.mpd',  # DASH over http(s)
+        'https://example.com/legacy.m3u',
+        'https://example.com/smooth.ism',
+        'https://cdn.example.com/live/index.m3u8?token=abc',  # query
+    ],
+)
+def test_is_streaming_uri_true_for_streams(uri: str) -> None:
+    assert is_streaming_uri(uri) is True
+
+
+@pytest.mark.parametrize(
+    'uri',
+    [
+        '',
+        'https://example.com/clip.mp4',  # downloadable video, not a stream
+        'https://example.com/photo.jpg',
+        'https://dashboard.example.com/',  # plain web page
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'file:///tmp/clip.mp4',
+    ],
+)
+def test_is_streaming_uri_false_for_non_streams(uri: str) -> None:
+    assert is_streaming_uri(uri) is False
 
 
 def test_classify_non_http_scheme_returns_stream() -> None:

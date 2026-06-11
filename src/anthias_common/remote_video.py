@@ -203,6 +203,31 @@ def is_downloadable_remote_video(uri: str) -> tuple[bool, str]:
     return _head_probe(uri)
 
 
+def is_streaming_uri(uri: str) -> bool:
+    """True when *uri* is a live stream the viewer plays directly via
+    its video pipeline rather than a downloadable file or a renderable
+    web page.
+
+    Covers both streaming-by-construction schemes (``rtsp://``,
+    ``rtmp://``, ``srt://``, ``udp://``, ``mms://``) and HTTP-delivered
+    streaming manifests (HLS ``.m3u8``, DASH ``.mpd``, legacy ``.m3u``,
+    Smooth Streaming ``.ism``). The create paths use this to stamp such
+    URIs as ``mimetype='streaming'`` so the viewer routes them to
+    ``view_video`` instead of loading them in QtWebEngine (which can't
+    open ``rtsp://`` and renders a manifest as plain text).
+
+    Shares the same scheme / extension sets as
+    ``is_downloadable_remote_video`` so the "leave the URI verbatim"
+    decision there and the "classify it as streaming" decision here can
+    never drift apart.
+    """
+    if not uri:
+        return False
+    if _url_scheme(uri) in _STREAM_SCHEMES:
+        return True
+    return _url_path_ext(uri) in _STREAM_MANIFEST_EXTS
+
+
 def remote_video_destination_path(
     asset_id: str,
     ext: str,

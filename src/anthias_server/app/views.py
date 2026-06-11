@@ -202,6 +202,7 @@ def assets_create(request: HttpRequest) -> HttpResponse:
     queued to fetch the file. The "Processing" pill on the table row
     clears once the worker completes.
     """
+    from anthias_common.remote_video import is_streaming_uri
     from anthias_common.utils import validate_url
     from anthias_common.youtube import (
         dispatch_download,
@@ -216,13 +217,25 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         messages.error(request, 'Invalid URL.')
         return _asset_table_response(request)
 
-    # Best-effort mimetype guess from extension; default to webpage.
-    # YouTube takes priority — its watch URLs end in `?v=…` not a
-    # video extension, so the file-extension heuristic below would
-    # otherwise classify them as a webpage.
+    # Best-effort mimetype guess; default to webpage. Order matters:
+    #
+    #   1. YouTube first — its watch URLs end in `?v=…` not a video
+    #      extension, so the file-extension heuristic below would
+    #      otherwise classify them as a webpage.
+    #   2. Live streams (rtsp:// / rtmp:// schemes, HLS/DASH manifests)
+    #      next — these are streaming-by-construction regardless of the
+    #      URL's path extension (`rtsp://host/feed.mp4` is still an RTSP
+    #      session, not a downloadable MP4). They must land as
+    #      `mimetype='streaming'` so the viewer routes them through
+    #      view_video; classifying them as a webpage (the pre-#2818
+    #      regression) makes QtWebEngine try to open the URL and the
+    #      stream never plays.
+    #   3. Extension heuristic last.
     is_youtube = is_youtube_url(uri)
     if is_youtube:
         mimetype = 'video'
+    elif is_streaming_uri(uri):
+        mimetype = 'streaming'
     else:
         mimetype = 'webpage'
         lower = uri.lower()
@@ -269,11 +282,22 @@ def assets_create(request: HttpRequest) -> HttpResponse:
             toast=('info', 'Downloading YouTube video…'),
         )
 
+    # Streams have no intrinsic length, so they reuse the dedicated
+    # `default_streaming_duration` window (how long each stream holds
+    # the screen before rotation) the same way the pre-#2818 React
+    # frontend did. Everything else gets the standard default. int()
+    # because `default_streaming_duration` is stored as a string in
+    # the config file (BigIntegerField on the model wants an int).
+    if mimetype == 'streaming':
+        duration = int(settings['default_streaming_duration'])
+    else:
+        duration = settings['default_duration']
+
     Asset.objects.create(
         name=uri,
         uri=uri,
         mimetype=mimetype,
-        duration=settings['default_duration'],
+        duration=duration,
         is_enabled=True,
         is_processing=False,
         play_order=play_order,
