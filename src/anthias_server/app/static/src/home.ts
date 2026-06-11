@@ -51,6 +51,7 @@ interface HomeAppData {
   uploadFileName: string
   uploadIndex: number
   uploadTotal: number
+  dragActive: boolean
   // Bulk selection / actions (#3046)
   selectedIds: string[]
   visibleIds: Record<SectionKey, string[]>
@@ -65,6 +66,7 @@ interface HomeAppData {
   closePreview(): void
   bindFlatpickr(): void
   uploadFiles(input: HTMLInputElement): Promise<void>
+  dropFiles(event: DragEvent): void
   uploadOne(url: string, csrf: string, file: File): Promise<UploadResult>
   // Bulk selection helpers
   isSelected(id: string): boolean
@@ -126,6 +128,7 @@ function homeApp(): HomeAppData {
     uploadFileName: '',
     uploadIndex: 0,
     uploadTotal: 0,
+    dragActive: false,
     selectedIds: [],
     visibleIds: { active: [], inactive: [] },
     bulkEditOpen: false,
@@ -396,6 +399,21 @@ function homeApp(): HomeAppData {
         ).htmx
         htmx?.trigger('body', 'refresh-assets')
       }
+    },
+
+    // Drag-and-drop entry point for the dropzone. Assigns the dropped
+    // FileList to the hidden <input> (so input.form / re-select still
+    // behave) and runs it through the same sequential uploadFiles()
+    // batch path the input's change event uses.
+    dropFiles(event: DragEvent) {
+      const dropped = event.dataTransfer?.files
+      if (!dropped || !dropped.length || this.uploadState) return
+      const input = document.getElementById(
+        'add-file',
+      ) as HTMLInputElement | null
+      if (!input) return
+      input.files = dropped
+      void this.uploadFiles(input)
     },
 
     // POST a single file and resolve an UploadResult: 'ok' on a 2xx

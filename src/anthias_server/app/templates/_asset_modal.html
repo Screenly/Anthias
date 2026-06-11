@@ -84,11 +84,19 @@
       >
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
+          {% comment %} The dashed dropzone reads as a drop target, so it
+             accepts drops as well as clicks. dropFiles() hands the
+             dropped FileList to the same uploadFiles() batch path the
+             <input>'s change event uses. {% endcomment %}
           <label
             for="add-file"
             class="upload-dropzone"
-            :class="{ 'is-disabled': uploadState }"
+            :class="{ 'is-disabled': uploadState, 'is-dragover': dragActive }"
             x-show="!uploadState"
+            @dragover.prevent
+            @dragenter.prevent="dragActive = true"
+            @dragleave.prevent="dragActive = false"
+            @drop.prevent="dragActive = false; dropFiles($event)"
           >
             <i class="ti ti-cloud-upload" style="font-size: 2.25rem; opacity: 0.55"></i>
             <p class="mb-1 font-semibold mt-2">Click to choose files</p>

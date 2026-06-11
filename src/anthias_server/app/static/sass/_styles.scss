@@ -908,10 +908,23 @@ label { text-align: left; }
     font-size: 0.9rem;
     margin: 0 0 var(--space-3);
   }
-  a {
+  // The call-to-action is an action (opens the Add modal), not
+  // navigation, so it's a <button> styled as a link.
+  a,
+  .empty-state__action {
+    font: inherit;
     font-weight: 600;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
     color: var(--surface-anchor);
     &:hover { color: var(--surface-anchor-hover); }
+    &:focus-visible {
+      outline: none;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+    }
   }
 }
 
@@ -939,7 +952,15 @@ label { text-align: left; }
   width: 100%;
   max-width: 720px;
   margin: auto;
-  overflow: hidden;
+  // Cap the card to the viewport (minus the overlay's space-5 padding
+  // top + bottom) and scroll inside it, so a tall modal — the
+  // bulk-edit form with every group expanded, or the Edit modal with
+  // the failure alert + Advanced open — never pushes its footer below
+  // the fold. The header/footer pin via position: sticky so the title
+  // and the Save/Apply buttons stay reachable while the body scrolls.
+  // (overflow-y: auto still clips children to the rounded corners.)
+  max-height: calc(100vh - var(--space-5) * 2);
+  overflow-y: auto;
   color: var(--color-text);
   animation: modal-in 220ms var(--ease-out) both;
 }
@@ -954,6 +975,13 @@ label { text-align: left; }
 .modal-card__header {
   padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border);
+  // Pin to the top of the scrolling card so the title + close button
+  // stay put while a tall body scrolls underneath. Opaque background
+  // so scrolled content doesn't bleed through.
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-surface);
   display: flex;
   // Top-aligned across every modal: only the preview modal can carry
   // a long title (the asset name), but `flex-start` is also fine for
@@ -1030,6 +1058,11 @@ label { text-align: left; }
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-soft);
+  // Pin to the bottom of the scrolling card so Save / Apply / Cancel
+  // stay reachable no matter how tall the body grows.
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2187,7 +2220,11 @@ body.auth-body {
   background: var(--color-surface-tint);
   transition: border-color var(--t-fast), background var(--t-fast);
 
-  &:hover {
+  // The dashed border + cloud icon read as "drop files here", so the
+  // zone now accepts drops (dropFiles() in home.ts). Mirror the hover
+  // treatment while a drag is over it for feedback.
+  &:hover,
+  &.is-dragover {
     border-color: var(--color-link);
     background: #ece4f5;
   }
@@ -2444,6 +2481,9 @@ body.auth-body {
   color: var(--color-text-on-dark);
   background: transparent;
   border-color: var(--color-border-on-dark);
+  // Set the utility "clear" apart from the destructive Delete it sits
+  // beside in the action row.
+  margin-left: var(--space-2);
 }
 
 @media (max-width: 640px) {
@@ -2451,8 +2491,17 @@ body.auth-body {
     flex-direction: column;
     align-items: stretch;
     border-radius: var(--radius-lg);
+    // Anchor the clear (×) to the top-right corner so it doesn't wrap
+    // onto a second row right next to the red Delete (mis-tap risk).
+    position: relative;
   }
   .bulk-bar__actions { justify-content: center; }
+  .bulk-bar__clear {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    margin-left: 0;
+  }
 }
 
 // Bulk-edit modal: each schedule field group is a card whose body is
@@ -2471,3 +2520,35 @@ body.auth-body {
   }
 }
 .bulk-field__toggle { cursor: pointer; }
+
+// Reserve room at the bottom of the page while a selection is active so
+// the fixed bulk bar never covers the last rows or their action
+// buttons (it floats over them otherwise, blocking clicks on the very
+// assets a bulk selection targets). Bound to `selectedIds.length` in
+// home.html. The bar is taller when stacked on phones, hence the bump.
+.app-container.has-bulk-selection {
+  padding-bottom: 7rem;
+  @media (max-width: 640px) { padding-bottom: 11rem; }
+}
+
+// Selection checkboxes on the dark Enabled surface. The default
+// white-fill, faint-border checkbox and its purple checked/indeterminate
+// fill nearly vanish against the purple gradient — lift the border and
+// give the box a translucent-white ground so it reads as a control and
+// its state is legible. Scoped to .asset-select so the per-row activity
+// switch (also an .app-check-input) keeps its own track styling.
+.surface--active .asset-select .app-check-input {
+  border-color: rgba(255, 255, 255, 0.5);
+  background-color: rgba(255, 255, 255, 0.1);
+
+  &:checked,
+  &:indeterminate { border-color: rgba(255, 255, 255, 0.75); }
+}
+
+// Stack the ffmpeg recipe's copy button under the (horizontally
+// scrolling) command on narrow widths, instead of squeezing the code to
+// a thin strip beside it.
+@media (max-width: 480px) {
+  .modal-alert__recipe { flex-direction: column; }
+  .modal-alert__copy { align-self: stretch; }
+}
