@@ -21,6 +21,7 @@ import requests
 
 from anthias_common.remote_video import (
     is_downloadable_remote_video,
+    is_streaming_uri,
     remote_video_destination_path,
 )
 from anthias_server.settings import AnthiasSettings
@@ -88,16 +89,16 @@ def test_classify_streaming_manifest_extensions_return_stream(
     'uri',
     [
         'rtsp://camera.local/feed',
-        'rtmp://media.example.com/live',
         'srt://stream.example.com:9000',
         'udp://stream.example.test:1234',
         'mms://media.example.com/live',
     ],
 )
 def test_classify_streaming_schemes_return_stream(uri: str) -> None:
-    """RTSP / RTMP / SRT / UDP / MMS are streaming-by-construction,
-    even if the URL's path happens to end in ``.mp4``. The viewer
-    plays them live via mpv's network stack."""
+    """RTSP / SRT / UDP / MMS are streaming-by-construction, even if
+    the URL's path happens to end in ``.mp4``. The viewer plays them
+    live via QtMultimedia's network stack. (rtmp is excluded — Qt6
+    can't open it; see _STREAM_SCHEMES.)"""
     with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video(uri)
     assert ok is False
@@ -113,6 +114,56 @@ def test_classify_streaming_scheme_with_mp4_path_returns_stream() -> None:
     assert ok is False
     assert ext == ''
     head.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# is_streaming_uri — the create-path classifier that maps stream URIs
+# to mimetype='streaming' (counterpart to is_downloadable_remote_video)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'uri',
+    [
+        'rtsp://camera.local/feed',
+        'rtsp://camera/feed.mp4',  # scheme wins over path extension
+        'srt://stream.example.com:9000',
+        'udp://stream.example.test:1234',
+        'mms://media.example.com/live',
+        'https://cdn.example.com/live/index.m3u8',  # HLS over http(s)
+        # DASH over http (not https) is deliberate here: it exercises
+        # the http manifest branch of is_streaming_uri. Test fixture,
+        # no real traffic.
+        'http://example.com/stream.mpd',  # NOSONAR S5332
+        'https://example.com/legacy.m3u',
+        'https://example.com/smooth.ism',
+        'https://cdn.example.com/live/index.m3u8?token=abc',  # query
+    ],
+)
+def test_is_streaming_uri_true_for_streams(uri: str) -> None:
+    assert is_streaming_uri(uri) is True
+
+
+@pytest.mark.parametrize(
+    'uri',
+    [
+        '',
+        'https://example.com/clip.mp4',  # downloadable video, not a stream
+        'https://example.com/photo.jpg',
+        'https://dashboard.example.com/',  # plain web page
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'file:///tmp/clip.mp4',
+        # rtmp is NOT a playable stream — Qt6 can't open it, so it is
+        # excluded from _STREAM_SCHEMES and rejected by validate_url.
+        'rtmp://media.example.com/live',
+        # A manifest extension over a non-http(s) scheme is not a live
+        # stream — manifests are HTTP-delivered (HLS/DASH).
+        'file:///media/playlists/index.m3u8',
+        'file:///media/manifest.mpd',
+    ],
+)
+def test_is_streaming_uri_false_for_non_streams(uri: str) -> None:
+    assert is_streaming_uri(uri) is False
 
 
 def test_classify_non_http_scheme_returns_stream() -> None:

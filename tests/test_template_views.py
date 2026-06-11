@@ -290,6 +290,67 @@ def test_assets_create_routes_youtube_to_celery(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_create_routes_rtsp_to_streaming(client: Client) -> None:
+    """Pasting an RTSP URL into the Add modal must classify it as
+    mimetype='streaming' (not 'webpage'), otherwise the viewer hands
+    it to QtWebEngine instead of the video player and the stream never
+    appears. Regression guard for the classifier dropped in the
+    React→Django migration (#2818)."""
+    from anthias_server.settings import settings
+
+    rtsp_url = 'rtsp://camera.local:554/stream'
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': rtsp_url},
+        )
+    assert response.status_code in (200, 302)
+    row = Asset.objects.filter(uri=rtsp_url).first()
+    assert row is not None
+    assert row.mimetype == 'streaming'
+    # Streams have no intrinsic length — they take the dedicated
+    # streaming-duration window, not the standard default.
+    assert row.duration == int(settings['default_streaming_duration'])
+
+
+@pytest.mark.django_db
+def test_assets_create_rejects_rtmp(client: Client) -> None:
+    """RTMP is well-formed but Qt6's QMediaPlayer can't open it, so the
+    Add modal must reject rtmp:// rather than create an asset that
+    renders black. No row is written."""
+    rtmp_url = 'rtmp://media.example.com/live'
+    response = client.post(
+        reverse('anthias_app:assets_create'),
+        data={'uri': rtmp_url},
+    )
+    assert response.status_code in (200, 302)
+    assert not Asset.objects.filter(uri=rtmp_url).exists()
+
+
+@pytest.mark.django_db
+def test_assets_create_routes_hls_manifest_to_streaming(
+    client: Client,
+) -> None:
+    """An HTTP-delivered HLS manifest (.m3u8) is a live stream, not a
+    downloadable file or a web page — it must classify as streaming."""
+    hls_url = 'https://cdn.example.com/live/index.m3u8'
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': hls_url},
+        )
+    row = Asset.objects.filter(uri=hls_url).first()
+    assert row is not None
+    assert row.mimetype == 'streaming'
+
+
+@pytest.mark.django_db
 def test_assets_create_youtube_short_form(client: Client) -> None:
     """youtu.be short URLs are recognised the same as full URLs."""
     short_url = 'https://youtu.be/dQw4w9WgXcQ'
