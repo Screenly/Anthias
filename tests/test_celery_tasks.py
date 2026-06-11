@@ -194,11 +194,13 @@ def test_get_display_power_writes_redis_as_str(
     ):
         get_display_power.apply()
 
-    fake_redis.set.assert_called_once_with('display_power', expected)
+    # Value and TTL are written atomically in a single SET (ex=) so a
+    # soft-limit signal can't leave the key without a TTL.
+    fake_redis.set.assert_called_once_with('display_power', expected, ex=3600)
+    fake_redis.expire.assert_not_called()
     # No bool ever reaches redis — guards against the DataError.
     written = fake_redis.set.call_args.args[1]
     assert isinstance(written, str)
-    fake_redis.expire.assert_called_once_with('display_power', 3600)
 
 
 def test_send_telemetry_task_dispatches() -> None:

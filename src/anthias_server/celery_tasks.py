@@ -318,8 +318,11 @@ def get_display_power() -> None:
     # — and the on/off state now actually populates instead of only
     # the error cases ever landing.
     try:
-        r.set('display_power', str(diagnostics.get_display_power()))
-        r.expire('display_power', 3600)
+        # Single SET with ex= so the value and its TTL are written
+        # atomically — a soft-limit signal landing between a separate
+        # SET and EXPIRE would otherwise leave the key without a TTL
+        # (a stale display_power that never expires).
+        r.set('display_power', str(diagnostics.get_display_power()), ex=3600)
     except SoftTimeLimitExceeded:
         # The CEC query is meant to be bounded by its own
         # subprocess timeout, but a child wedged in libcec can keep
