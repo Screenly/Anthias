@@ -32,6 +32,7 @@
       x86: amd64
       pi5: arm64
       pi4-64: arm64
+      pi3-64: arm64
       pi3: armhf
       pi2: armhf
       arm64: arm64
@@ -108,7 +109,7 @@
     # authoritative discriminator and is validated upstream in
     # ansible/site.yml's pre_tasks.
     device_is_pi: &is_pi >-
-      {{ device_type in ['pi2', 'pi3', 'pi4-64', 'pi5'] }}
+      {{ device_type in ['pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5'] }}
 
 - name: Ensure Anthias user is in required groups
   ansible.builtin.user:
