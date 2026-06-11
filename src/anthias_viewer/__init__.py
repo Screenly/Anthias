@@ -471,17 +471,35 @@ def unblank_display() -> None:
     get_skip_event().set()
 
 
+def stop_playback() -> None:
+    """Handle the ``stop`` command: pause the asset loop on the current
+    frame. Sets the module-level ``loop_is_stopped`` that ``start_loop``
+    actually reads — the previous ``setattr(__main__, ...)`` wrote to a
+    different namespace under ``python -m anthias_viewer`` and never took
+    effect (surfaced by the blank/unblank work; Copilot)."""
+    global loop_is_stopped
+    loop_is_stopped = stop_loop(scheduler)
+
+
+def play_playback() -> None:
+    """Handle the ``play`` command: resume the asset loop. If the display
+    is currently blanked, ``play`` implies ``unblank`` (power the
+    connector back on and clear the black paint) so we never end up
+    stopped-but-looking-live or repaint black on a later ``stop``."""
+    global loop_is_stopped
+    if display_blanked:
+        unblank_display()
+        return
+    loop_is_stopped = play_loop()
+
+
 commands = {
     'next': lambda _: skip_asset(scheduler),
     'previous': lambda _: skip_asset(scheduler, back=True),
     'asset': lambda asset_id: navigate_to_asset(scheduler, asset_id),
     'reload': lambda _: _handle_reload(),
-    'stop': lambda _: setattr(
-        __import__('__main__'), 'loop_is_stopped', stop_loop(scheduler)
-    ),
-    'play': lambda _: setattr(
-        __import__('__main__'), 'loop_is_stopped', play_loop()
-    ),
+    'stop': lambda _: stop_playback(),
+    'play': lambda _: play_playback(),
     'blank': lambda _: blank_display(),
     'unblank': lambda _: unblank_display(),
     'unknown': lambda _: command_not_found(),
@@ -1499,11 +1517,11 @@ def start_loop() -> None:
     logging.debug('Entering infinite loop.')
     while True:
         if loop_is_stopped:
-            if display_blanked:
-                # Paint black from the main thread (the owner of the
-                # webview / current_browser_url). view_image() no-ops
-                # once current_browser_url is already BLACK_SCREEN, so
-                # this costs one loadImage and then idles.
+            # Paint black once from the main thread (the owner of the
+            # webview / current_browser_url). Guard on the URL so we
+            # don't re-call view_image() — and re-log "Current url ..."
+            # at INFO — on every 0.1s tick while blanked (Copilot).
+            if display_blanked and current_browser_url != BLACK_SCREEN:
                 view_image(BLACK_SCREEN)
             sleep(0.1)
             continue

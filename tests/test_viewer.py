@@ -13,6 +13,7 @@ import pytest
 import anthias_viewer as viewer
 from anthias_server.settings import settings
 from anthias_viewer.scheduling import Scheduler
+from anthias_viewer.utils import get_skip_event
 
 logging.disable(logging.CRITICAL)
 
@@ -2098,7 +2099,7 @@ def restore_blank_state() -> Iterator[None]:
     finally:
         viewer.display_blanked = False
         viewer.loop_is_stopped = False
-        viewer.get_skip_event().clear()
+        get_skip_event().clear()
 
 
 def test_apply_wlr_power_targets_all_outputs_including_disabled() -> None:
@@ -2216,3 +2217,38 @@ def test_unblank_display_resumes_and_powers_on(
 def test_blank_and_unblank_commands_registered() -> None:
     assert 'blank' in viewer.commands
     assert 'unblank' in viewer.commands
+
+
+def test_stop_playback_sets_module_loop_flag(
+    restore_blank_state: None,
+) -> None:
+    """stop must flip the module-level loop_is_stopped that start_loop
+    reads (the old setattr(__main__, ...) wrote a dead namespace)."""
+    viewer.loop_is_stopped = False
+    viewer.stop_playback()
+    assert viewer.loop_is_stopped is True
+
+
+def test_play_unblanks_when_display_blanked(
+    restore_blank_state: None,
+) -> None:
+    """play on a blanked display implies unblank: power back on, clear
+    the blank, resume — never leave display_blanked set."""
+    viewer.display_blanked = True
+    viewer.loop_is_stopped = True
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer._apply_wlr_power', return_value=True
+        ) as power,
+    ):
+        viewer.play_playback()
+
+    assert viewer.display_blanked is False
+    assert viewer.loop_is_stopped is False
+    power.assert_called_once_with(True)
