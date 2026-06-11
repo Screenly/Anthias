@@ -242,6 +242,11 @@ function homeApp(): HomeAppData {
       // anyway.
       this.mode = null
       this.editAsset = null
+      // Clear any leftover drag highlight: dragging into the dropzone and
+      // then closing the modal (Esc/backdrop/Cancel) before dragleave
+      // fires would otherwise leave dragActive true, so the dropzone
+      // re-opens still highlighted.
+      this.dragActive = false
       if (!this.uploadState) {
         this.uploadProgress = 0
         this.uploadFileName = ''
