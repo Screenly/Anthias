@@ -29,7 +29,7 @@ def settings_data() -> dict[str, Any]:
 def fake_redis(redis_data: dict[str, str]) -> MagicMock:
     fake = MagicMock()
     fake.get.side_effect = redis_data.get
-    fake.set.side_effect = lambda key, value: redis_data.__setitem__(
+    fake.set.side_effect = lambda key, value, ex=None: redis_data.__setitem__(
         key, value
     )
     fake.expire.side_effect = lambda key, _ttl: None
@@ -165,9 +165,12 @@ def test_sets_cooldown_after_success(
 ) -> None:
     telemetry.send_telemetry()
     assert telemetry.TELEMETRY_COOLDOWN_KEY in redis_data
-    fake_redis.expire.assert_any_call(
+    # Value and TTL are written in a single atomic SET so a soft time
+    # limit can't strand the cooldown key without an expiry.
+    fake_redis.set.assert_any_call(
         telemetry.TELEMETRY_COOLDOWN_KEY,
-        telemetry.TELEMETRY_COOLDOWN_TTL,
+        '1',
+        ex=telemetry.TELEMETRY_COOLDOWN_TTL,
     )
 
 

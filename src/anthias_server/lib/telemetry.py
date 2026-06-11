@@ -119,6 +119,10 @@ def send_telemetry() -> bool:
         logging.debug('Telemetry POST failed: %s', exc)
         return False
 
-    r.set(TELEMETRY_COOLDOWN_KEY, '1')
-    r.expire(TELEMETRY_COOLDOWN_KEY, TELEMETRY_COOLDOWN_TTL)
+    # Single SET with ex= so the value and its TTL are written
+    # atomically — send_telemetry_task now runs under a soft time
+    # limit, and a SoftTimeLimitExceeded landing between a separate
+    # SET and EXPIRE would leave the cooldown key without a TTL,
+    # silencing telemetry permanently.
+    r.set(TELEMETRY_COOLDOWN_KEY, '1', ex=TELEMETRY_COOLDOWN_TTL)
     return True
