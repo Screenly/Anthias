@@ -89,16 +89,16 @@ def test_classify_streaming_manifest_extensions_return_stream(
     'uri',
     [
         'rtsp://camera.local/feed',
-        'rtmp://media.example.com/live',
         'srt://stream.example.com:9000',
         'udp://stream.example.test:1234',
         'mms://media.example.com/live',
     ],
 )
 def test_classify_streaming_schemes_return_stream(uri: str) -> None:
-    """RTSP / RTMP / SRT / UDP / MMS are streaming-by-construction,
-    even if the URL's path happens to end in ``.mp4``. The viewer
-    plays them live via mpv's network stack."""
+    """RTSP / SRT / UDP / MMS are streaming-by-construction, even if
+    the URL's path happens to end in ``.mp4``. The viewer plays them
+    live via QtMultimedia's network stack. (rtmp is excluded — Qt6
+    can't open it; see _STREAM_SCHEMES.)"""
     with mock.patch('anthias_common.remote_video._session.head') as head:
         ok, ext = is_downloadable_remote_video(uri)
     assert ok is False
@@ -127,7 +127,6 @@ def test_classify_streaming_scheme_with_mp4_path_returns_stream() -> None:
     [
         'rtsp://camera.local/feed',
         'rtsp://camera/feed.mp4',  # scheme wins over path extension
-        'rtmp://media.example.com/live',
         'srt://stream.example.com:9000',
         'udp://stream.example.test:1234',
         'mms://media.example.com/live',
@@ -151,6 +150,9 @@ def test_is_streaming_uri_true_for_streams(uri: str) -> None:
         'https://dashboard.example.com/',  # plain web page
         'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         'file:///tmp/clip.mp4',
+        # rtmp is NOT a playable stream — Qt6 can't open it, so it is
+        # excluded from _STREAM_SCHEMES and rejected by validate_url.
+        'rtmp://media.example.com/live',
     ],
 )
 def test_is_streaming_uri_false_for_non_streams(uri: str) -> None:

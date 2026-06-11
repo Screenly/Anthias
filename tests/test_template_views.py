@@ -317,6 +317,20 @@ def test_assets_create_routes_rtsp_to_streaming(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_create_rejects_rtmp(client: Client) -> None:
+    """RTMP is well-formed but Qt6's QMediaPlayer can't open it, so the
+    Add modal must reject rtmp:// rather than create an asset that
+    renders black. No row is written."""
+    rtmp_url = 'rtmp://media.example.com/live'
+    response = client.post(
+        reverse('anthias_app:assets_create'),
+        data={'uri': rtmp_url},
+    )
+    assert response.status_code in (200, 302)
+    assert not Asset.objects.filter(uri=rtmp_url).exists()
+
+
+@pytest.mark.django_db
 def test_assets_create_routes_hls_manifest_to_streaming(
     client: Client,
 ) -> None:

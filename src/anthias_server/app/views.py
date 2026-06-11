@@ -214,7 +214,20 @@ def assets_create(request: HttpRequest) -> HttpResponse:
 
     uri = (request.POST.get('uri') or '').strip()
     if not uri or not validate_url(uri):
-        messages.error(request, 'Invalid URL.')
+        # RTMP is a well-formed URL, but Qt6's QMediaPlayer can't open
+        # it (the FFmpeg backend sets a `timeout` option the rtmp
+        # protocol misreads as TCP listen mode), so the stream would
+        # only ever render black. validate_url already rejects it;
+        # give the operator a clear reason and a working alternative
+        # rather than the generic "Invalid URL".
+        if uri and urlparse(uri).scheme.lower() == 'rtmp':
+            messages.error(
+                request,
+                'RTMP streams are not supported. '
+                'Use an RTSP, HLS, or DASH URL instead.',
+            )
+        else:
+            messages.error(request, 'Invalid URL.')
         return _asset_table_response(request)
 
     # Best-effort mimetype guess; default to webpage. Order matters:
@@ -222,9 +235,9 @@ def assets_create(request: HttpRequest) -> HttpResponse:
     #   1. YouTube first — its watch URLs end in `?v=…` not a video
     #      extension, so the file-extension heuristic below would
     #      otherwise classify them as a webpage.
-    #   2. Live streams (rtsp:// / rtmp:// schemes, HLS/DASH manifests)
-    #      next — these are streaming-by-construction regardless of the
-    #      URL's path extension (`rtsp://host/feed.mp4` is still an RTSP
+    #   2. Live streams (rtsp:// scheme, HLS/DASH manifests) next —
+    #      these are streaming-by-construction regardless of the URL's
+    #      path extension (`rtsp://host/feed.mp4` is still an RTSP
     #      session, not a downloadable MP4). They must land as
     #      `mimetype='streaming'` so the viewer routes them through
     #      view_video; classifying them as a webpage (the pre-#2818

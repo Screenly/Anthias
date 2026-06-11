@@ -58,8 +58,15 @@ _VIDEO_CONTAINER_EXTS = frozenset(
 # never rewrites these to a local download even when the URL path's
 # extension suggests a single file (``rtsp://host/stream.mp4`` is
 # still an RTSP session, not an HTTP MP4). The viewer plays them
-# through mpv's network stack as-is.
-_STREAM_SCHEMES = frozenset({'rtsp', 'rtmp', 'srt', 'udp', 'mms'})
+# through QtMultimedia's network stack as-is.
+#
+# ``rtmp`` is deliberately absent. Qt6's QMediaPlayer (FFmpeg backend)
+# can't open it: the backend sets a ``timeout`` AVFormatContext option
+# the rtmp protocol misreads as TCP *listen* mode, so the open fails
+# and the screen stays black. ``validate_url`` rejects ``rtmp://`` at
+# create time; keeping it out of this set too means ``is_streaming_uri``
+# never classifies a (legacy) rtmp row as a playable stream.
+_STREAM_SCHEMES = frozenset({'rtsp', 'srt', 'udp', 'mms'})
 
 # HTTP-delivered manifests that describe a stream rather than a single
 # downloadable file. ``.m3u8`` (HLS), ``.mpd`` (DASH), ``.m3u`` (legacy
@@ -175,9 +182,9 @@ def is_downloadable_remote_video(uri: str) -> tuple[bool, str]:
     Three-step decision:
 
     1. **Stream short-circuit** — non-http(s) streaming schemes
-       (``rtsp://``, ``rtmp://``, ``srt://``, ``udp://``, ``mms://``)
-       and manifest extensions (``.m3u8`` / ``.mpd`` / ...) never
-       download, no HEAD call.
+       (``rtsp://``, ``srt://``, ``udp://``, ``mms://``) and manifest
+       extensions (``.m3u8`` / ``.mpd`` / ...) never download, no HEAD
+       call.
     2. **Extension match** — the URL path's lowercase extension is in
        ``_VIDEO_CONTAINER_EXTS``: ``(True, ext)``, no HEAD call.
        Common path, zero network round-trips.
@@ -209,8 +216,8 @@ def is_streaming_uri(uri: str) -> bool:
     web page.
 
     Covers both streaming-by-construction schemes (``rtsp://``,
-    ``rtmp://``, ``srt://``, ``udp://``, ``mms://``) and HTTP-delivered
-    streaming manifests (HLS ``.m3u8``, DASH ``.mpd``, legacy ``.m3u``,
+    ``srt://``, ``udp://``, ``mms://``) and HTTP-delivered streaming
+    manifests (HLS ``.m3u8``, DASH ``.mpd``, legacy ``.m3u``,
     Smooth Streaming ``.ism``). The create paths use this to stamp such
     URIs as ``mimetype='streaming'`` so the viewer routes them to
     ``view_video`` instead of loading them in QtWebEngine (which can't
