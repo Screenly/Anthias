@@ -134,6 +134,20 @@ class TestBeforeSendTransientNoise:
         hint = self._hint_for(asyncio.CancelledError())
         assert _sentry_before_send({'event_id': 'x'}, hint) is None
 
+    def test_drops_auth_settings_error(self) -> None:
+        # AuthSettingsError is operator-facing input validation from
+        # the settings-save flow (mismatched password, taken username,
+        # weak password), not a bug. The save views log it at warning
+        # so it never reaches the logging integration; this is the
+        # backstop for any other path (Sentry ANTHIAS-3D).
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+        from anthias_server.lib.auth import AuthSettingsError
+
+        hint = self._hint_for(AuthSettingsError('New passwords do not match!'))
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
     def test_keeps_ordinary_exceptions(self) -> None:
         from anthias_server.django_project.settings import (
             _sentry_before_send,

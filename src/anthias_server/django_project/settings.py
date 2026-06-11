@@ -121,7 +121,22 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
       * ``asyncio.CancelledError`` — an HTTP client hanging up
         mid-request under ASGI; Django/uvicorn cancel the handler by
         design (Sentry ANTHIAS-N).
+      * ``AuthSettingsError`` — an operator-facing validation failure
+        from the settings-save flow (mismatched/incorrect password,
+        a taken username, a too-weak password). It is expected input
+        validation, not a bug: the message is already shown to the
+        operator and the next attempt self-corrects. The save views
+        now log it at warning rather than ``logger.exception`` so it
+        never reaches the logging integration in the first place; this
+        is the backstop for any other path that logs it as an error
+        (Sentry ANTHIAS-3D).
     """
+    # Imported lazily — this runs only when an event is about to send,
+    # well after Django is configured, and avoids an import cycle at
+    # settings-module load. ``lib.auth`` only pulls stdlib at import
+    # time, so the cost is a cached module lookup.
+    from anthias_server.lib.auth import AuthSettingsError
+
     exc_info = hint.get('exc_info')
     if not exc_info:
         return event
@@ -133,6 +148,8 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         if isinstance(exc, asyncio.CancelledError):
             return None
         if isinstance(exc, transient_redis):
+            return None
+        if isinstance(exc, AuthSettingsError):
             return None
     return event
 

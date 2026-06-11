@@ -31,6 +31,7 @@ from anthias_server.app.models import clamp_refresh_interval
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import (
+    AuthSettingsError,
     apply_auth_settings,
     authorized,
 )
@@ -1265,6 +1266,15 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         ViewerPublisher.get_instance().send_to_viewer('reload')
 
         messages.success(request, 'Settings were successfully saved.')
+    except AuthSettingsError as exc:
+        # Operator input the form should have caught — mismatched or
+        # incorrect password, a taken username, a too-weak password.
+        # Expected, self-correcting, and already surfaced to the
+        # operator, so log at warning (no traceback) instead of
+        # logger.exception; the ERROR-level record is what Sentry's
+        # logging integration turns into an event (ANTHIAS-3D).
+        logger.warning('Settings save rejected: %s', exc)
+        messages.error(request, str(exc) or 'Failed to save settings.')
     except Exception as exc:
         logger.exception('Settings save failed')
         messages.error(request, str(exc) or 'Failed to save settings.')
