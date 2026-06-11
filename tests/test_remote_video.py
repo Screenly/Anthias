@@ -153,6 +153,10 @@ def test_is_streaming_uri_true_for_streams(uri: str) -> None:
         # rtmp is NOT a playable stream — Qt6 can't open it, so it is
         # excluded from _STREAM_SCHEMES and rejected by validate_url.
         'rtmp://media.example.com/live',
+        # A manifest extension over a non-http(s) scheme is not a live
+        # stream — manifests are HTTP-delivered (HLS/DASH).
+        'file:///media/playlists/index.m3u8',
+        'file:///media/manifest.mpd',
     ],
 )
 def test_is_streaming_uri_false_for_non_streams(uri: str) -> None:

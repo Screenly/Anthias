@@ -230,9 +230,16 @@ def is_streaming_uri(uri: str) -> bool:
     """
     if not uri:
         return False
-    if _url_scheme(uri) in _STREAM_SCHEMES:
+    scheme = _url_scheme(uri)
+    if scheme in _STREAM_SCHEMES:
         return True
-    return _url_path_ext(uri) in _STREAM_MANIFEST_EXTS
+    # Manifests are HTTP-delivered (HLS/DASH); only treat a manifest
+    # extension as streaming over http(s). A ``file:///…/index.m3u8``
+    # (or any other scheme) is not a live stream and must not be
+    # classified as one.
+    if scheme in ('http', 'https'):
+        return _url_path_ext(uri) in _STREAM_MANIFEST_EXTS
+    return False
 
 
 def remote_video_destination_path(
