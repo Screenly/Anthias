@@ -95,7 +95,7 @@
             x-show="!uploadState"
             @dragover.prevent
             @dragenter.prevent="dragActive = true"
-            @dragleave.prevent="dragActive = false"
+            @dragleave.self.prevent="dragActive = false"
             @drop.prevent="dragActive = false; dropFiles($event)"
           >
             <i class="ti ti-cloud-upload" style="font-size: 2.25rem; opacity: 0.55"></i>
