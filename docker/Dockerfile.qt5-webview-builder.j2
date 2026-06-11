@@ -151,10 +151,13 @@ USER root
 # stage must run on x86_64. CI is amd64; arm64 build hosts (e.g. Apple
 # Silicon) will execute this stage under QEMU.
 #
-# Host build tools only. The webview app builds against the pre-built
-# Qt 5 toolchain, so we don't need the Qt 5 / QtWebEngine source-build
-# stack (chromium's bison/flex/gperf/ninja/gyp/python2.7). python3 is
-# required for sysroot-relativelinks.py.
+# Host build tools plus the armhf cross-toolchain. The webview app
+# builds against the pre-built Qt 5 toolchain, so we don't need the
+# Qt 5 / QtWebEngine source-build stack (chromium's
+# bison/flex/gperf/ninja/gyp/python2.7). python3 is required for
+# sysroot-relativelinks.py; crossbuild-essential-armhf provides the
+# arm-linux-gnueabihf- cross-compiler the Qt 5 qmake.conf invokes (see
+# the symlink step below).
 {% if disable_cache_mounts %}
 RUN \
 {% else %}
@@ -164,9 +167,9 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt5-host-apt,sharing=locked \
     apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
+        crossbuild-essential-armhf \
         curl \
-        python3 \
-        xz-utils
+        python3
 
 WORKDIR /build
 
@@ -189,19 +192,26 @@ COPY --from=qt5-sysroot /usr/share/pkgconfig/ /sysroot/usr/share/pkgconfig/
 
 RUN python3 /usr/local/bin/sysroot-relativelinks.py /sysroot
 
-# Linaro gcc-7.4.1 — hardcoded path matches the CROSS_COMPILE setting
-# baked into the Qt 5 toolchain's qmake.conf at original toolchain
-# build time (src/anthias_webview/build_qt5.sh
-# `-device-option CROSS_COMPILE=`).
-# SHA256-pinned: Linaro doesn't publish signed manifests for these
-# legacy 7.4 binaries, so the hash is the trust anchor.
-RUN mkdir -p /src && \
-    cd /src && \
-    curl --proto '=https' --tlsv1.2 -fsSL -o gcc-linaro.tar.xz \
-        https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz && \
-    echo '3c951cf1941d0fa06d64cc0d5e88612b209d8123b273fa26c16d70bd7bc6b163  gcc-linaro.tar.xz' | sha256sum -c - && \
-    tar xf gcc-linaro.tar.xz && \
-    rm gcc-linaro.tar.xz
+# armhf cross-compiler. The pre-built Qt 5 toolchain's qmake.conf bakes
+# CROSS_COMPILE=/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-
+# (set in src/anthias_webview/build_qt5.sh at toolchain-build time), so
+# qmake invokes the cross-gcc from that exact path and prefix.
+#
+# We used to fetch Linaro's legacy gcc-7.4.1 tarball here, but Linaro
+# retired releases.linaro.org — the download now fails to connect and
+# broke every pi2/pi3 CI build (which froze the floating latest-* tags,
+# since publish-latest only advances on a fully green matrix). Use
+# Debian's own supported armhf cross-toolchain (crossbuild-essential-armhf,
+# installed above) and expose it under the legacy path the pinned
+# qmake.conf expects. The prefix is identical (arm-linux-gnueabihf-), so
+# the frozen Qt 5 artifact needs no rebuild, and the app still links
+# against the Raspbian /sysroot (-sysroot) so the target glibc is
+# unchanged.
+RUN mkdir -p /src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin && \
+    for tool in /usr/bin/arm-linux-gnueabihf-*; do \
+        ln -s "$tool" \
+            "/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/$(basename "$tool")"; \
+    done
 
 # Pre-built Qt 5 toolchain — pinned permanently to WebView-v2026.04.1
 # (Qt 5 is frozen for pi2/pi3). The qt5pi/ tree contains both host

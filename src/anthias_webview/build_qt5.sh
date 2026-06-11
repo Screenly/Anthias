@@ -33,16 +33,18 @@ if [ "${BUILD_WEBENGINE-x}" == "1" ]; then
 fi
 
 function fetch_cross_compile_tool () {
-    # The Raspberry Pi Foundation's cross compiling tools are too old so we need newer ones.
-    # References:
-    # * https://github.com/UvinduW/Cross-Compiling-Qt-for-Raspberry-Pi-4
-    # * https://releases.linaro.org/components/toolchain/binaries/latest-7/armv8l-linux-gnueabihf/
-    if [ ! -d "/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf" ]; then
-        pushd /src/
-        wget -q https://releases.linaro.org/components/toolchain/binaries/7.4-2019.02/arm-linux-gnueabihf/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
-        tar xf gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
-        rm gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
-        popd
+    # The Raspberry Pi Foundation's cross compiling tools are too old, so
+    # we use Debian's supported armhf cross-toolchain. (We previously
+    # fetched Linaro's gcc-7.4.1, but Linaro retired releases.linaro.org.)
+    # Expose it under the legacy gcc-linaro path so the CROSS_COMPILE
+    # baked into qmake.conf below keeps resolving. crossbuild-essential-armhf
+    # must be installed in the builder image (see ./Dockerfile).
+    local linaro_path="/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf"
+    if [ ! -d "$linaro_path" ]; then
+        mkdir -p "$linaro_path/bin"
+        for tool in /usr/bin/arm-linux-gnueabihf-*; do
+            ln -s "$tool" "$linaro_path/bin/$(basename "$tool")"
+        done
     fi
 }
 
