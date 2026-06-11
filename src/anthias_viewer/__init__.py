@@ -19,6 +19,7 @@ import sh as sh
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
+from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
@@ -72,6 +73,10 @@ current_browser_url: str | None = None
 _webview_supports_set_reload_interval: bool = True
 browser: Any = None
 loop_is_stopped: bool = False
+# Set by the ``blank`` command: pauses the asset loop (via
+# loop_is_stopped) and signals the main thread to paint a black screen.
+# Cleared by ``unblank``. See blank_display()/unblank_display().
+display_blanked: bool = False
 browser_bus: Any = None
 r = connect_to_redis()
 reply_sender = ReplySender(r)
@@ -231,8 +236,13 @@ def _wlr_transform_value(rotation_deg: int) -> str:
     )
 
 
-def _wlr_output_names() -> list[str]:
-    """List *enabled* connector names known to the wlroots compositor.
+def _wlr_output_names(include_disabled: bool = False) -> list[str]:
+    """List connector names known to the wlroots compositor.
+
+    By default only *enabled* outputs are returned. Pass
+    ``include_disabled=True`` to list every connector regardless of its
+    ``Enabled:`` state — the display-power path needs disabled outputs
+    too so it can turn a blanked screen back on.
 
     ``wlr-randr`` with no args prints one block per output. Each block
     looks like::
@@ -282,7 +292,9 @@ def _wlr_output_names() -> list[str]:
             # line, which on modern wlr-randr versions means the
             # output is implicitly enabled, so include it as a
             # conservative default).
-            if current is not None and current_enabled is not False:
+            if current is not None and (
+                include_disabled or current_enabled is not False
+            ):
                 names.append(current)
             current = line.split()[0]
             current_enabled = None
@@ -291,7 +303,9 @@ def _wlr_output_names() -> list[str]:
             if stripped.startswith('Enabled:'):
                 _, _, value = stripped.partition(':')
                 current_enabled = value.strip().lower() == 'yes'
-    if current is not None and current_enabled is not False:
+    if current is not None and (
+        include_disabled or current_enabled is not False
+    ):
         names.append(current)
     return names
 
@@ -355,6 +369,51 @@ def _apply_wlr_transform(rotation_deg: int) -> bool:
     return any_success
 
 
+def _apply_wlr_power(on: bool) -> bool:
+    """Turn every wlroots output on or off via ``wlr-randr``.
+
+    This is the Wayland half of display blanking: the compositor owns
+    the connector, so ``wlr-randr --output X --off`` puts the monitor
+    into DPMS power-off (no signal). No-op / False on non-Wayland boards
+    — eglfs/linuxfb can't be powered off externally (the Qt app holds
+    the DRM master), so the blank path paints a black screen there
+    instead. Toggling an already-on/off output is harmless, so we target
+    every connector including disabled ones (needed to turn a blanked
+    screen back on).
+    """
+    if not _is_wayland_board():
+        return False
+    names = _wlr_output_names(include_disabled=True)
+    if not names:
+        return False
+    flag = '--on' if on else '--off'
+    any_success = False
+    for name in names:
+        try:
+            result = subprocess.run(
+                ['wlr-randr', '--output', name, flag],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.SubprocessError) as exc:
+            logging.warning('wlr-randr %s failed for %s: %s', flag, name, exc)
+            continue
+        if result.returncode == 0:
+            logging.info('Set output %s %s', name, flag)
+            any_success = True
+        else:
+            logging.warning(
+                'wlr-randr %s on %s exited %d: %s',
+                flag,
+                name,
+                result.returncode,
+                (result.stderr or '').strip(),
+            )
+    return any_success
+
+
 def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     if not correlation_id:
         logging.warning(
@@ -382,6 +441,36 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     )
 
 
+def blank_display() -> None:
+    """Handle the ``blank`` command: darken the screen and pause playback.
+
+    Wayland boards DPMS-off via wlr-randr (true monitor power-off).
+    eglfs/linuxfb boards can't be powered off externally — the Qt app
+    owns the DRM master — so the asset loop paints BLACK_SCREEN there
+    instead (see start_loop). The wlr-randr call is an out-of-process
+    IPC that's safe from this subscriber thread; the webview repaint is
+    deferred to the main loop thread via the ``display_blanked`` flag.
+    """
+    global display_blanked, loop_is_stopped
+    display_blanked = True
+    loop_is_stopped = True
+    if _is_wayland_board():
+        _apply_wlr_power(False)
+    # Wake the main thread out of any in-progress asset sleep so it
+    # reaches the blanked branch (and the black repaint) promptly.
+    get_skip_event().set()
+
+
+def unblank_display() -> None:
+    """Handle the ``unblank`` command: power the display back on and resume."""
+    global display_blanked, loop_is_stopped
+    if _is_wayland_board():
+        _apply_wlr_power(True)
+    display_blanked = False
+    loop_is_stopped = False
+    get_skip_event().set()
+
+
 commands = {
     'next': lambda _: skip_asset(scheduler),
     'previous': lambda _: skip_asset(scheduler, back=True),
@@ -393,6 +482,8 @@ commands = {
     'play': lambda _: setattr(
         __import__('__main__'), 'loop_is_stopped', play_loop()
     ),
+    'blank': lambda _: blank_display(),
+    'unblank': lambda _: unblank_display(),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda corr: send_current_asset_id_to_server(corr),
 }
@@ -1408,6 +1499,12 @@ def start_loop() -> None:
     logging.debug('Entering infinite loop.')
     while True:
         if loop_is_stopped:
+            if display_blanked:
+                # Paint black from the main thread (the owner of the
+                # webview / current_browser_url). view_image() no-ops
+                # once current_browser_url is already BLACK_SCREEN, so
+                # this costs one loadImage and then idles.
+                view_image(BLACK_SCREEN)
             sleep(0.1)
             continue
 

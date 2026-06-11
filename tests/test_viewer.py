@@ -2086,3 +2086,133 @@ class TestWaitForWaylandSocket:
         ):
             viewer_fixtures.u._spawn_webview_once(1)
         assert order == ['wait', 'spawn']
+
+
+# --- display blanking (blank / unblank commands) ----------------------
+
+
+@pytest.fixture
+def restore_blank_state() -> Iterator[None]:
+    try:
+        yield
+    finally:
+        viewer.display_blanked = False
+        viewer.loop_is_stopped = False
+        viewer.get_skip_event().clear()
+
+
+def test_apply_wlr_power_targets_all_outputs_including_disabled() -> None:
+    """Power-off/on must reach *disabled* outputs too, so unblank can
+    turn a previously blanked (Enabled: no) connector back on."""
+
+    def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
+        result = mock.Mock()
+        result.returncode = 0
+        result.stderr = ''
+        result.stdout = (
+            'HDMI-A-1\n  Enabled: yes\nHDMI-A-2\n  Enabled: no\n'
+            if argv == ['wlr-randr']
+            else ''
+        )
+        return result
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer.subprocess.run', side_effect=_fake_run
+        ) as run,
+    ):
+        assert viewer._apply_wlr_power(False) is True
+
+    off_calls = [
+        c for c in run.call_args_list if c.args and '--off' in c.args[0]
+    ]
+    targeted = {c.args[0][c.args[0].index('--output') + 1] for c in off_calls}
+    assert targeted == {'HDMI-A-1', 'HDMI-A-2'}
+
+
+def test_apply_wlr_power_noop_off_wayland() -> None:
+    """eglfs/linuxfb boards can't be powered off via wlr-randr; the call
+    is a no-op there (the blank path paints black instead)."""
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi4-64', 'QT_QPA_PLATFORM': 'eglfs'},
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.subprocess.run') as run,
+    ):
+        assert viewer._apply_wlr_power(False) is False
+    run.assert_not_called()
+
+
+def test_blank_display_powers_off_and_pauses_on_wayland(
+    restore_blank_state: None,
+) -> None:
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer._apply_wlr_power', return_value=True
+        ) as power,
+    ):
+        viewer.blank_display()
+
+    assert viewer.display_blanked is True
+    assert viewer.loop_is_stopped is True
+    power.assert_called_once_with(False)
+
+
+def test_blank_display_pauses_without_wlr_on_eglfs(
+    restore_blank_state: None,
+) -> None:
+    """On eglfs the screen blanks by the loop painting BLACK_SCREEN, so
+    blank_display() flips the state but must not invoke wlr-randr."""
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi4-64', 'QT_QPA_PLATFORM': 'eglfs'},
+            clear=False,
+        ),
+        mock.patch('anthias_viewer._apply_wlr_power') as power,
+    ):
+        viewer.blank_display()
+
+    assert viewer.display_blanked is True
+    assert viewer.loop_is_stopped is True
+    power.assert_not_called()
+
+
+def test_unblank_display_resumes_and_powers_on(
+    restore_blank_state: None,
+) -> None:
+    viewer.display_blanked = True
+    viewer.loop_is_stopped = True
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer._apply_wlr_power', return_value=True
+        ) as power,
+    ):
+        viewer.unblank_display()
+
+    assert viewer.display_blanked is False
+    assert viewer.loop_is_stopped is False
+    power.assert_called_once_with(True)
+
+
+def test_blank_and_unblank_commands_registered() -> None:
+    assert 'blank' in viewer.commands
+    assert 'unblank' in viewer.commands
