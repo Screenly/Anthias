@@ -143,6 +143,21 @@ ASSET_REVALIDATION_TIME_LIMIT_S = 60 * 30
 # kill-versus-catch rationale as the on-demand probe limits above.
 ASSET_REVALIDATION_SOFT_TIME_LIMIT_S = ASSET_REVALIDATION_TIME_LIMIT_S - 60
 
+# Time budget for the lightweight periodic pokes — the display-power
+# CEC query and the telemetry POST. Both ran under a bare
+# ``time_limit=30`` and share the asset probe's failure mode: the CEC
+# query can wedge inside libcec, and the telemetry POST can stall in
+# getaddrinfo against a broken resolver (requests' ``timeout`` covers
+# connect/read but not DNS). Tripping the *hard* limit SIGKILLs the
+# pool child, which Sentry groups by the kill signature regardless of
+# task — so these two kept the ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B trio
+# alive after #3017 fixed only the asset probe. The soft limit raises
+# ``SoftTimeLimitExceeded`` *inside* the task so it logs and skips the
+# tick cleanly; the hard limit stays as the backstop for a call stuck
+# in C code where the soft signal can't be delivered.
+PERIODIC_POKE_SOFT_TIME_LIMIT_S = 30
+PERIODIC_POKE_TIME_LIMIT_S = 60
+
 # Redis key for the sweep singleton lock. Whoever sets it first runs
 # the sweep; later beat ticks observe the key and exit. The TTL matches
 # the time_limit so a worker that crashes mid-sweep doesn't lock the
@@ -288,7 +303,10 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     )
 
 
-@celery.task(time_limit=30)
+@celery.task(
+    soft_time_limit=PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+    time_limit=PERIODIC_POKE_TIME_LIMIT_S,
+)
 def get_display_power() -> None:
     # diagnostics.get_display_power() returns ``str | bool`` (bool for
     # a clean CEC True/False, str for the error fallbacks). redis-py
@@ -299,13 +317,39 @@ def get_display_power() -> None:
     # passes the value through, so 'True'/'False'/'CEC error' all fit
     # — and the on/off state now actually populates instead of only
     # the error cases ever landing.
-    r.set('display_power', str(diagnostics.get_display_power()))
-    r.expire('display_power', 3600)
+    try:
+        r.set('display_power', str(diagnostics.get_display_power()))
+        r.expire('display_power', 3600)
+    except SoftTimeLimitExceeded:
+        # The CEC query is meant to be bounded by its own
+        # subprocess timeout, but a child wedged in libcec can keep
+        # the pipe open past it. Skip this tick rather than let the
+        # hard limit SIGKILL the worker (ANTHIAS-A / 9 / B); the next
+        # beat tick re-queries.
+        logging.warning(
+            'get_display_power: CEC query exceeded %ss; skipping this tick',
+            PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+        )
 
 
-@celery.task(time_limit=30)
+@celery.task(
+    soft_time_limit=PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+    time_limit=PERIODIC_POKE_TIME_LIMIT_S,
+)
 def send_telemetry_task() -> None:
-    send_telemetry()
+    try:
+        send_telemetry()
+    except SoftTimeLimitExceeded:
+        # requests' timeout doesn't cover a getaddrinfo stall against
+        # a broken resolver, so the POST can outlive the soft budget.
+        # Skip this tick instead of being SIGKILLed by the hard limit
+        # (ANTHIAS-A / 9 / B); send_telemetry didn't set its cooldown,
+        # so the next beat tick retries.
+        logging.warning(
+            'send_telemetry_task: telemetry POST exceeded %ss; '
+            'skipping this tick',
+            PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+        )
 
 
 @celery.task

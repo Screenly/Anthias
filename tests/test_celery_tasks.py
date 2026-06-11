@@ -7,6 +7,7 @@ from typing import Any
 from unittest import mock
 
 import pytest
+from celery.exceptions import SoftTimeLimitExceeded
 
 import anthias_server.celery_tasks as celery_tasks_module
 from anthias_server.app.models import Asset
@@ -1765,6 +1766,47 @@ class TestProbeTimeLimits:
         # The finally block must have released the singleton lock so
         # the next beat tick can run.
         assert celery_tasks_module.r.get(ASSET_REVALIDATION_LOCK_KEY) is None
+
+
+class TestPeriodicPokeTimeLimits:
+    """The lightweight periodic pokes (display-power CEC query,
+    telemetry POST) share the asset probe's SIGKILL failure mode and so
+    fed the same ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B group. They must
+    catch the soft limit and skip the tick instead of tripping the hard
+    limit, which SIGKILLs the pool child."""
+
+    def test_tasks_have_soft_limit_headroom(self) -> None:
+        for task in (get_display_power, send_telemetry_task):
+            soft = task.soft_time_limit
+            hard = task.time_limit
+            assert soft == celery_tasks_module.PERIODIC_POKE_SOFT_TIME_LIMIT_S
+            assert hard == celery_tasks_module.PERIODIC_POKE_TIME_LIMIT_S
+            assert soft is not None
+            assert hard is not None
+            assert soft < hard
+
+    def test_display_power_soft_limit_skips_tick(self) -> None:
+        fake_redis = mock.MagicMock()
+        with (
+            mock.patch.object(celery_tasks_module, 'r', fake_redis),
+            mock.patch(
+                'anthias_server.celery_tasks.diagnostics.get_display_power',
+                side_effect=SoftTimeLimitExceeded,
+            ),
+        ):
+            result = get_display_power.apply()
+        # Caught inside the task — no failure propagates to Sentry.
+        assert result.successful()
+        fake_redis.set.assert_not_called()
+
+    def test_telemetry_soft_limit_skips_tick(self) -> None:
+        with mock.patch.object(
+            celery_tasks_module,
+            'send_telemetry',
+            side_effect=SoftTimeLimitExceeded,
+        ):
+            result = send_telemetry_task.apply()
+        assert result.successful()
 
 
 class TestWaitForMigrations:
