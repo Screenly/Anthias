@@ -35,7 +35,7 @@ dev-host = [
     "types-requests==2.33.0.20260518",
 ]
 docker-image-builder = [
-    "click==8.1.7",
+    "click==8.4.1",
     "jinja2==3.1.6",
     "pygit2==1.19.2",
     "requests==2.33.1",
@@ -113,7 +113,7 @@ host = [
     "tenacity==9.1.4",
 ]
 local = [
-    "click==8.1.7",
+    "click==8.4.1",
     "requests==2.33.1",
     "tenacity==9.1.4",
 ]
