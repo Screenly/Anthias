@@ -211,6 +211,32 @@ def test_check_get_db_mtime(restore_shuffle_setting: None) -> None:
 
 
 @pytest.mark.django_db
+def test_get_db_mtime_tracks_wal_sidecar(
+    restore_shuffle_setting: None,
+) -> None:
+    # Under journal_mode=WAL (#3015) commits land in the -wal/-shm
+    # sidecars while the main DB file's mtime stays frozen. get_db_mtime
+    # must surface the newer sidecar mtime, otherwise refresh_playlist
+    # never reloads and the first asset on a fresh install never shows
+    # (issue #3061).
+    wal_path = FAKE_DB_PATH + '-wal'
+    original_database = settings['database']
+    try:
+        settings['database'] = FAKE_DB_PATH
+        with open(FAKE_DB_PATH, 'a'):
+            os.utime(FAKE_DB_PATH, (1000, 1000))
+        with open(wal_path, 'a'):
+            os.utime(wal_path, (2000, 2000))
+
+        # The newer -wal write wins over the stale main-file mtime.
+        assert Scheduler().get_db_mtime() == 2000
+    finally:
+        settings['database'] = original_database
+        if os.path.exists(wal_path):
+            os.remove(wal_path)
+
+
+@pytest.mark.django_db
 def test_playlist_should_be_updated_after_deadline_reached(
     restore_shuffle_setting: None,
 ) -> None:
