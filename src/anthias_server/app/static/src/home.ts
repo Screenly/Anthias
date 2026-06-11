@@ -12,6 +12,7 @@ declare global {
     flatpickr: typeof flatpickrLib
     homeApp: () => HomeAppData
     fallbackCopyToClipboard: (text: string) => boolean
+    bulkSucceeded: (event: Event) => boolean
   }
 }
 
@@ -37,6 +38,8 @@ interface ToastStoreLike {
   push(kind: 'success' | 'error' | 'info', message: string): number
 }
 
+type SectionKey = 'active' | 'inactive'
+
 interface HomeAppData {
   mode: 'add' | 'edit' | null
   editAsset: AssetEdit | null
@@ -48,6 +51,11 @@ interface HomeAppData {
   uploadFileName: string
   uploadIndex: number
   uploadTotal: number
+  // Bulk selection / actions (#3046)
+  selectedIds: string[]
+  visibleIds: Record<SectionKey, string[]>
+  bulkEditOpen: boolean
+  bulkDeleteOpen: boolean
   init(): void
   openAdd(): void
   openEdit(asset: AssetEdit): void
@@ -58,6 +66,17 @@ interface HomeAppData {
   bindFlatpickr(): void
   uploadFiles(input: HTMLInputElement): Promise<void>
   uploadOne(url: string, csrf: string, file: File): Promise<UploadResult>
+  // Bulk selection helpers
+  isSelected(id: string): boolean
+  toggleSelect(id: string): void
+  syncVisibleIds(activeIds: string[], inactiveIds: string[]): void
+  sectionAllSelected(section: SectionKey): boolean
+  sectionSomeSelected(section: SectionKey): boolean
+  toggleSection(section: SectionKey, checked: boolean): void
+  clearSelection(): void
+  openBulkEdit(): void
+  closeBulkEdit(): void
+  onBulkDone(event: Event): void
 }
 
 // 'ok'       — file accepted and the asset row was created.
@@ -107,6 +126,10 @@ function homeApp(): HomeAppData {
     uploadFileName: '',
     uploadIndex: 0,
     uploadTotal: 0,
+    selectedIds: [],
+    visibleIds: { active: [], inactive: [] },
+    bulkEditOpen: false,
+    bulkDeleteOpen: false,
 
     init(this: HomeAppData & { $watch: (k: string, cb: () => void) => void }) {
       // Re-bind Flatpickr every time the edit modal opens. The
@@ -115,6 +138,11 @@ function homeApp(): HomeAppData {
       // (after Alpine has actually inserted the form into the DOM)
       // before querying for inputs.
       this.$watch('editAsset', () =>
+        requestAnimationFrame(() => this.bindFlatpickr()),
+      )
+      // The bulk-edit modal reuses the same .js-flatpickr-* inputs and
+      // is also gated behind an x-if, so bind on open the same way.
+      this.$watch('bulkEditOpen', () =>
         requestAnimationFrame(() => this.bindFlatpickr()),
       )
     },
@@ -220,6 +248,83 @@ function homeApp(): HomeAppData {
     },
     closePreview() {
       this.previewAsset = null
+    },
+
+    // --- Bulk selection (#3046) ---------------------------------------
+    // selectedIds is the source of truth; row checkboxes bind their
+    // :checked to isSelected() so the selection survives the table's
+    // 5s HTMX swap (the swapped rows re-evaluate against this state).
+    isSelected(id) {
+      return this.selectedIds.includes(id)
+    },
+    toggleSelect(id) {
+      if (this.selectedIds.includes(id)) {
+        this.selectedIds = this.selectedIds.filter((x) => x !== id)
+      } else {
+        this.selectedIds = [...this.selectedIds, id]
+      }
+    },
+    // Called once from each rendered table partial (x-init re-fires
+    // after every swap) so Alpine always knows the ids currently on
+    // screen. Both sections are passed together and pruning happens
+    // once against their union — pruning per-section would drop the
+    // selection for a row that moved between sections (e.g. an enabled
+    // asset just disabled), because the other section's list would
+    // still be stale at that moment.
+    syncVisibleIds(activeIds, inactiveIds) {
+      this.visibleIds.active = activeIds
+      this.visibleIds.inactive = inactiveIds
+      const all = new Set([...activeIds, ...inactiveIds])
+      this.selectedIds = this.selectedIds.filter((id) => all.has(id))
+    },
+    // Build a Set for membership so these stay O(visible + selected)
+    // rather than O(visible × selected) — a selection of thousands (the
+    // point of bulk editing) would otherwise lag on every reactive
+    // re-evaluation.
+    sectionAllSelected(section) {
+      const ids = this.visibleIds[section]
+      if (!ids.length) return false
+      const sel = new Set(this.selectedIds)
+      return ids.every((id) => sel.has(id))
+    },
+    sectionSomeSelected(section) {
+      const ids = this.visibleIds[section]
+      const sel = new Set(this.selectedIds)
+      const n = ids.reduce((acc, id) => acc + (sel.has(id) ? 1 : 0), 0)
+      return n > 0 && n < ids.length
+    },
+    toggleSection(section, checked) {
+      const ids = this.visibleIds[section]
+      if (checked) {
+        const merged = new Set([...this.selectedIds, ...ids])
+        this.selectedIds = [...merged]
+      } else {
+        const drop = new Set(ids)
+        this.selectedIds = this.selectedIds.filter((id) => !drop.has(id))
+      }
+    },
+    clearSelection() {
+      this.selectedIds = []
+    },
+    openBulkEdit() {
+      this.bulkEditOpen = true
+    },
+    closeBulkEdit() {
+      this.bulkEditOpen = false
+    },
+    // Bridged from the bulk forms' hx-on::after-request via a global
+    // window 'bulk-done' CustomEvent (hx-on runs in global scope and
+    // can't reach Alpine methods — same dispatch-to-window bridge the
+    // Add modal uses for 'asset-saved'). Only fires on a real success
+    // (window.bulkSucceeded gates it), so a rejected edit leaves the
+    // selection and modal intact. detail flags say which modal to close.
+    onBulkDone(event) {
+      const detail =
+        (event as CustomEvent<{ closeDelete?: boolean; closeEdit?: boolean }>)
+          .detail || {}
+      this.clearSelection()
+      if (detail.closeDelete) this.bulkDeleteOpen = false
+      if (detail.closeEdit) this.closeBulkEdit()
     },
 
     // Multi-file upload (issue #3045). The server's assets_upload
@@ -584,6 +689,30 @@ function fallbackCopyToClipboard(text: string): boolean {
   return ok
 }
 window.fallbackCopyToClipboard = fallbackCopyToClipboard
+
+// Did a bulk request actually succeed? The bulk endpoints return 200
+// even when they refuse the input (bad date, partial window, blank
+// duration, "nothing to change", empty/stale selection) and just ride
+// an error/info toast on the HX-Trigger header. The bulk forms call
+// this from hx-on::after-request — which runs in GLOBAL scope, not
+// Alpine's — so it lives on window rather than as a component method.
+// True only on a 2xx whose toast is absent or kind 'success'.
+function bulkSucceeded(event: Event): boolean {
+  const detail = (
+    event as CustomEvent<{ successful?: boolean; xhr?: XMLHttpRequest }>
+  ).detail
+  if (!detail?.successful || !detail.xhr) return false
+  const header = detail.xhr.getResponseHeader('HX-Trigger')
+  if (!header) return true
+  try {
+    const kind = (JSON.parse(header) as { toast?: { kind?: string } })?.toast
+      ?.kind
+    return kind === undefined || kind === 'success'
+  } catch {
+    return true
+  }
+}
+window.bulkSucceeded = bulkSucceeded
 
 window.homeApp = homeApp
 

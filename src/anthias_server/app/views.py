@@ -699,6 +699,303 @@ def assets_order(request: HttpRequest) -> HttpResponse:
     return _asset_table_response(request)
 
 
+def _bulk_ids(request: HttpRequest) -> list[str]:
+    """Pull the comma-separated asset_id list the bulk-action bar POSTs.
+
+    Same wire shape as ``assets_order`` ('ids' = "a,b,c"). Each segment
+    is stripped and empty ones dropped, so a trailing comma, an empty
+    field, or a hand-built ``"a, b"`` (with spaces) still resolves to
+    clean ids rather than silently failing to match a row.
+    """
+    parts = (i.strip() for i in request.POST.get('ids', '').split(','))
+    return [i for i in parts if i]
+
+
+def _pluralize(count: int, suffix: str = 's') -> str:
+    return '' if count == 1 else suffix
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_bulk_action(request: HttpRequest) -> HttpResponse:
+    """Enable / disable / delete a set of assets in one request.
+
+    Backs the home-page bulk-action bar. ``action`` is one of
+    enable/disable/delete and ``ids`` is the comma-separated selection.
+    A single table partial + viewer reload covers the whole batch
+    rather than one round-trip per row, which is the painful workaround
+    this feature replaces (#3046).
+    """
+    from anthias_server.app.models import Asset
+
+    action = request.POST.get('action', '')
+    ids = _bulk_ids(request)
+    # Toast on the degenerate cases instead of a silent no-toast 2xx —
+    # the client's success gate treats the latter as success and would
+    # clear the selection (e.g. an empty POST racing a table swap, or a
+    # stale/typoed action value).
+    if action not in ('enable', 'disable', 'delete'):
+        return _asset_table_response(
+            request,
+            toast=('error', 'Unknown bulk action'),
+        )
+    if not ids:
+        return _asset_table_response(
+            request,
+            toast=('info', 'No assets selected'),
+        )
+
+    if action == 'delete':
+        from anthias_server.app.helpers import delete_asset_with_file
+
+        assets = list(Asset.objects.filter(asset_id__in=ids))
+        if not assets:
+            return _asset_table_response(
+                request,
+                toast=('info', 'No matching assets to delete'),
+            )
+        for asset in assets:
+            # Suppress the per-row viewer reload — a large batch would
+            # otherwise spam the pub/sub channel with one 'reload' per
+            # asset — and send a single reload after the batch instead.
+            delete_asset_with_file(asset, nudge_viewer=False)
+        ViewerPublisher.get_instance().send_to_viewer('reload')
+        count = len(assets)
+        return _asset_table_response(
+            request,
+            toast=(
+                'success',
+                f'{count} asset{_pluralize(count)} deleted',
+            ),
+        )
+
+    # Enable/disable have no model signals, so collapse to a single
+    # queryset UPDATE (one DB write regardless of selection size) plus
+    # one viewer reload. Count is taken from a separate matched-rows
+    # count(), NOT update()'s return value: some backends (and SQLite in
+    # some builds) report rows *changed*, so bulk-enabling already-
+    # enabled assets could return 0 even though the selection was valid.
+    # We want the count of rows the selection actually addressed.
+    enabled = action == 'enable'
+    qs = Asset.objects.filter(asset_id__in=ids)
+    count = qs.count()
+    if not count:
+        # A genuinely empty match (stale ids) — toast so the client's
+        # success gate keeps the selection and the operator sees why.
+        return _asset_table_response(
+            request,
+            toast=('info', 'No matching assets selected'),
+        )
+    qs.update(is_enabled=enabled)
+    ViewerPublisher.get_instance().send_to_viewer('reload')
+    verb = 'enabled' if enabled else 'disabled'
+    return _asset_table_response(
+        request,
+        toast=('success', f'{count} asset{_pluralize(count)} {verb}'),
+    )
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_bulk_update(request: HttpRequest) -> HttpResponse:
+    """Apply common schedule fields to a set of assets at once.
+
+    Mirrors the per-asset ``assets_update`` parsing for dates,
+    duration, time-of-day, and weekday filters, but each group is
+    opt-in via an ``apply_*`` flag so an operator only overwrites the
+    fields they ticked — an unticked group is left untouched on every
+    selected asset. Everything is parsed before any row is mutated so a
+    bad date/time toasts without leaving a half-applied batch (#3046).
+    """
+    import json as _json
+
+    from anthias_server.app.models import Asset
+
+    ids = _bulk_ids(request)
+    if not ids:
+        # Empty selection (e.g. a submit racing a table swap). Toast so
+        # the client's success gate keeps the modal open rather than
+        # treating the silent 2xx as success — mirrors assets_bulk_action.
+        return _asset_table_response(
+            request,
+            toast=('info', 'No assets selected'),
+        )
+    base_qs = Asset.objects.filter(asset_id__in=ids)
+    matched = base_qs.count()
+    if not matched:
+        # Non-empty ids that match nothing (e.g. a stale selection after
+        # another operator deleted the rows). Toast so the client's
+        # success gate keeps the selection / leaves the modal open
+        # rather than treating a silent no-toast 2xx as success — same
+        # contract as the enable/disable path.
+        return _asset_table_response(
+            request,
+            toast=('info', 'No matching assets selected'),
+        )
+
+    apply_dates = request.POST.get('apply_dates') == 'true'
+    apply_duration = request.POST.get('apply_duration') == 'true'
+    apply_time = request.POST.get('apply_time') == 'true'
+    apply_days = request.POST.get('apply_days') == 'true'
+
+    if not (apply_dates or apply_duration or apply_time or apply_days):
+        return _asset_table_response(
+            request,
+            toast=('info', 'Nothing to change — pick a field to edit'),
+        )
+
+    # --- Parse everything up-front; toast on the first bad value ---
+    new_start: datetime | None = None
+    new_end: datetime | None = None
+    if apply_dates:
+        start = request.POST.get('start_date')
+        end = request.POST.get('end_date')
+        try:
+            if start:
+                new_start = _parse_local_datetime(start)
+            if end:
+                new_end = _parse_local_datetime(end)
+        except ValueError:
+            return _asset_table_response(
+                request,
+                toast=(
+                    'error',
+                    'Could not read the start/end date — nothing changed',
+                ),
+            )
+
+    new_duration: int | None = None
+    if apply_duration:
+        # A blank field must NOT silently clobber every selected asset's
+        # duration to 0 (the per-asset edit form preserves the existing
+        # value on blank; bulk has no single "existing" to fall back to,
+        # so require a value instead). Toast and change nothing.
+        raw_duration = (request.POST.get('duration') or '').strip()
+        if not raw_duration:
+            return _asset_table_response(
+                request,
+                toast=('error', 'Enter a duration — nothing changed'),
+            )
+        try:
+            new_duration = int(raw_duration)
+        except (TypeError, ValueError):
+            return _asset_table_response(
+                request,
+                toast=('error', 'Duration must be a number — nothing changed'),
+            )
+        if new_duration < 0:
+            return _asset_table_response(
+                request,
+                toast=(
+                    'error',
+                    'Duration must be zero or more — nothing changed',
+                ),
+            )
+
+    new_time_from: time | None = None
+    new_time_to: time | None = None
+    clear_time = False
+    if apply_time:
+        play_from = (request.POST.get('play_time_from') or '').strip()
+        play_to = (request.POST.get('play_time_to') or '').strip()
+        if play_from and play_to:
+            try:
+                new_time_from = _parse_local_time(play_from)
+                new_time_to = _parse_local_time(play_to)
+            except ValueError:
+                return _asset_table_response(
+                    request,
+                    toast=(
+                        'error',
+                        'Could not read the play from/until times '
+                        '— nothing changed',
+                    ),
+                )
+        elif play_from or play_to:
+            return _asset_table_response(
+                request,
+                toast=(
+                    'error',
+                    'Set both play from and until times, or clear both '
+                    '— nothing changed',
+                ),
+            )
+        else:
+            # Both empty with the toggle on means "remove the window".
+            clear_time = True
+
+    new_play_days: str | None = None
+    if apply_days:
+        parsed_days: list[int] = []
+        for d in request.POST.getlist('play_days'):
+            try:
+                n = int(d)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= n <= 7:
+                parsed_days.append(n)
+        new_play_days = _json.dumps(
+            sorted(set(parsed_days)) or [1, 2, 3, 4, 5, 6, 7]
+        )
+
+    # The new values are uniform across the whole selection, so apply
+    # them with plain queryset update()s — one UPDATE per affected
+    # column-group — instead of loading every row and building the big
+    # CASE statement bulk_update() would (Copilot review of #3048).
+    # Duration goes through a separate update that excludes videos, so a
+    # video row's probe-owned duration is never touched.
+    shared: dict[str, object] = {}
+    if apply_dates:
+        if new_start is not None:
+            shared['start_date'] = new_start
+        if new_end is not None:
+            shared['end_date'] = new_end
+    if apply_time:
+        shared['play_time_from'] = None if clear_time else new_time_from
+        shared['play_time_to'] = None if clear_time else new_time_to
+    if apply_days and new_play_days is not None:
+        shared['play_days'] = new_play_days
+
+    if not shared and not apply_duration:
+        # e.g. apply_dates ticked but both date fields left blank.
+        return _asset_table_response(
+            request,
+            toast=('info', 'Nothing to change — pick a field to edit'),
+        )
+
+    # Count the rows actually affected from matched-rows count()s rather
+    # than update()'s return value (which reports rows *changed* on some
+    # backends — re-applying an identical value would otherwise read as
+    # zero). Shared fields touch every matched row; duration touches
+    # only the non-video subset.
+    if shared:
+        base_qs.update(**shared)
+    nonvideo_count = 0
+    if apply_duration:
+        nonvideo_qs = base_qs.exclude(mimetype='video')
+        nonvideo_count = nonvideo_qs.count()
+        if nonvideo_count:
+            nonvideo_qs.update(duration=new_duration)
+
+    count = matched if shared else nonvideo_count
+    if not count:
+        # Duration-only edit on an all-video selection — nothing the
+        # duration rule allows us to change.
+        return _asset_table_response(
+            request,
+            toast=(
+                'info',
+                'Duration applies to images and web pages only '
+                '— nothing changed',
+            ),
+        )
+    ViewerPublisher.get_instance().send_to_viewer('reload')
+    return _asset_table_response(
+        request,
+        toast=('success', f'{count} asset{_pluralize(count)} updated'),
+    )
+
+
 def _safe_redirect_uri(uri: str) -> str | None:
     """Defang asset.uri before handing it to redirect().
 

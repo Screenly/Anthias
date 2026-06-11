@@ -13,9 +13,26 @@
   data-order-url="{% url 'anthias_app:assets_order' %}"
   class="flex flex-col gap-4"
 >
+  {% comment %} Republish the on-screen asset ids to the homeApp Alpine
+     scope after every swap (x-init re-fires when this element is
+     re-inserted). Drives the bulk select-all state + prunes a
+     selection of rows that have since disappeared. {% endcomment %}
+  <div x-init="syncVisibleIds({{ active_assets|asset_ids }}, {{ inactive_assets|asset_ids }})" hidden></div>
+
   <section id="active-assets-section" class="surface surface--active">
     <header class="surface__header">
-      <h2><i class="ti ti-toggle-right mr-2"></i>Enabled</h2>
+      <div class="surface__header-left">
+        {% if active_assets %}
+        <label class="asset-select asset-select--all" title="Select all enabled">
+          <input type="checkbox" class="app-check-input"
+            :checked="sectionAllSelected('active')"
+            @change="toggleSection('active', $event.target.checked)"
+            x-effect="$el.indeterminate = sectionSomeSelected('active')"
+            aria-label="Select all enabled assets">
+        </label>
+        {% endif %}
+        <h2><i class="ti ti-toggle-right mr-2"></i>Enabled</h2>
+      </div>
       <span class="surface__count">{{ active_assets|length }} item{{ active_assets|length|pluralize }}</span>
     </header>
 
@@ -23,6 +40,7 @@
     <table class="asset-table">
       <thead>
         <tr>
+          <th scope="col" class="asset-select-col"><span class="sr-only">Select</span></th>
           <th scope="col">Name</th>
           <th scope="col" style="width: 28%">Schedule window</th>
           <th scope="col" style="width: 10%">Duration</th>
@@ -43,7 +61,18 @@
 
   <section id="inactive-assets-section" class="surface">
     <header class="surface__header">
-      <h2><i class="ti ti-player-pause mr-2"></i>Inactive</h2>
+      <div class="surface__header-left">
+        {% if inactive_assets %}
+        <label class="asset-select asset-select--all" title="Select all inactive">
+          <input type="checkbox" class="app-check-input"
+            :checked="sectionAllSelected('inactive')"
+            @change="toggleSection('inactive', $event.target.checked)"
+            x-effect="$el.indeterminate = sectionSomeSelected('inactive')"
+            aria-label="Select all inactive assets">
+        </label>
+        {% endif %}
+        <h2><i class="ti ti-player-pause mr-2"></i>Inactive</h2>
+      </div>
       <span class="surface__count">{{ inactive_assets|length }} item{{ inactive_assets|length|pluralize }}</span>
     </header>
 
@@ -51,6 +80,7 @@
     <table class="asset-table">
       <thead>
         <tr>
+          <th scope="col" class="asset-select-col"><span class="sr-only">Select</span></th>
           <th scope="col">Name</th>
           <th scope="col" style="width: 28%">Schedule window</th>
           <th scope="col" style="width: 10%">Duration</th>
