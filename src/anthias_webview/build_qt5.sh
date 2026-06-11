@@ -37,15 +37,18 @@ function fetch_cross_compile_tool () {
     # we use Debian's supported armhf cross-toolchain. (We previously
     # fetched Linaro's gcc-7.4.1, but Linaro retired releases.linaro.org.)
     # Expose it under the legacy gcc-linaro path so the CROSS_COMPILE
-    # baked into qmake.conf below keeps resolving. crossbuild-essential-armhf
-    # must be installed in the builder image (see ./Dockerfile).
-    local linaro_path="/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf"
-    if [ ! -d "$linaro_path" ]; then
-        mkdir -p "$linaro_path/bin"
-        for tool in /usr/bin/arm-linux-gnueabihf-*; do
-            ln -s "$tool" "$linaro_path/bin/$(basename "$tool")"
-        done
+    # baked into qmake.conf below keeps resolving.
+    if ! command -v arm-linux-gnueabihf-g++ >/dev/null 2>&1; then
+        echo "error: arm-linux-gnueabihf cross toolchain not found — " \
+             "install crossbuild-essential-armhf (see ./Dockerfile)." >&2
+        exit 1
     fi
+    # ln -sf (no -d skip) so reruns refresh the shim idempotently.
+    local linaro_path="/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf"
+    mkdir -p "$linaro_path/bin"
+    for tool in /usr/bin/arm-linux-gnueabihf-*; do
+        ln -sf "$tool" "$linaro_path/bin/$(basename "$tool")"
+    done
 }
 
 function fetch_rpi_firmware () {

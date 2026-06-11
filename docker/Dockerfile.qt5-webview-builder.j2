@@ -146,10 +146,11 @@ FROM --platform=linux/amd64 {{ base_image }}:{{ base_image_tag }} AS webview-bui
 
 USER root
 
-# Pinned to linux/amd64 (not $BUILDPLATFORM): the Linaro 7.4.1
-# cross-compiler downloaded below is the x86_64 host tarball, so this
-# stage must run on x86_64. CI is amd64; arm64 build hosts (e.g. Apple
-# Silicon) will execute this stage under QEMU.
+# Pinned to linux/amd64 (not $BUILDPLATFORM): the pre-built Qt 5
+# toolchain bundle ships an x86_64 host qmake under qt5pi/bin, and the
+# Debian armhf cross-compiler installed below is the x86_64-hosted
+# toolchain — so this stage must run on x86_64. CI is amd64; arm64
+# build hosts (e.g. Apple Silicon) will execute this stage under QEMU.
 #
 # Host build tools plus the armhf cross-toolchain. The webview app
 # builds against the pre-built Qt 5 toolchain, so we don't need the
