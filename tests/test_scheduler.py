@@ -213,18 +213,21 @@ def test_check_get_db_mtime(restore_shuffle_setting: None) -> None:
 @pytest.mark.django_db
 def test_get_db_mtime_tracks_wal_sidecar(
     restore_shuffle_setting: None,
+    tmp_path: Any,
 ) -> None:
     # Under journal_mode=WAL (#3015) commits land in the -wal/-shm
     # sidecars while the main DB file's mtime stays frozen. get_db_mtime
     # must surface the newer sidecar mtime, otherwise refresh_playlist
     # never reloads and the first asset on a fresh install never shows
-    # (issue #3061).
-    wal_path = FAKE_DB_PATH + '-wal'
+    # (issue #3061). Uses a unique tmp_path dir so the -wal sidecar can't
+    # leak into test_check_get_db_mtime under `pytest -n auto`.
+    db_path = str(tmp_path / 'anthias.db')
+    wal_path = db_path + '-wal'
     original_database = settings['database']
     try:
-        settings['database'] = FAKE_DB_PATH
-        with open(FAKE_DB_PATH, 'a'):
-            os.utime(FAKE_DB_PATH, (1000, 1000))
+        settings['database'] = db_path
+        with open(db_path, 'a'):
+            os.utime(db_path, (1000, 1000))
         with open(wal_path, 'a'):
             os.utime(wal_path, (2000, 2000))
 
@@ -232,8 +235,6 @@ def test_get_db_mtime_tracks_wal_sidecar(
         assert Scheduler().get_db_mtime() == 2000
     finally:
         settings['database'] = original_database
-        if os.path.exists(wal_path):
-            os.remove(wal_path)
 
 
 @pytest.mark.django_db
