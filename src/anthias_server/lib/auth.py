@@ -69,7 +69,15 @@ import logging
 import os.path
 import re
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, ParamSpec, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+    cast,
+)
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -82,7 +90,11 @@ if TYPE_CHECKING:
     # Request wraps the underlying Django request and delegates
     # ``.user``, so the body of these helpers handles both shapes
     # the same way; the annotation just needs to admit either one.
-    AnyRequest = HttpRequest | DRFRequest
+    # Spelled as an explicit ``TypeAlias`` so mypy always resolves the
+    # forward-ref ``'AnyRequest'`` as a type rather than a module
+    # variable — the implicit form flipped to "not valid as a type"
+    # once settings.py started importing this module (ANTHIAS-3D).
+    AnyRequest: TypeAlias = HttpRequest | DRFRequest
 
 P = ParamSpec('P')
 R = TypeVar('R')

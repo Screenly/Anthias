@@ -31,6 +31,7 @@ from anthias_server.api.helpers import (
     save_active_assets_ordering,
 )
 from anthias_server.lib.auth import (
+    AuthSettingsError,
     apply_auth_settings,
     operator_username,
 )
@@ -696,6 +697,16 @@ class DeviceSettingsViewV2(APIView):
             publisher.send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})
+        except AuthSettingsError as exc:
+            # Operator input the client should have caught — mismatched
+            # or incorrect password, a taken username, a too-weak
+            # password. Expected and self-correcting, so log at warning
+            # (no traceback) and echo the operator-friendly message
+            # instead of logger.exception + a generic error: the
+            # ERROR-level record is what Sentry's logging integration
+            # turns into an event (ANTHIAS-3D).
+            logger.warning('Settings save rejected: %s', exc)
+            return Response({'error': str(exc)}, status=400)
         except Exception:
             logger.exception('Settings save failed')
             return Response(
