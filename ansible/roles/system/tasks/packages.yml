@@ -23,7 +23,6 @@
       ansible.builtin.apt:
         name: libc6-dev
         state: present
-        update_cache: true
       when: not system_cdefs.stat.exists
 
 - name: Install Anthias dependencies

@@ -22,6 +22,20 @@ DOCKER_TAG="latest"
 UPGRADE_SCRIPT_PATH="${ANTHIAS_REPO_DIR}/bin/upgrade_containers.sh"
 ARCHITECTURE=$(uname -m)
 
+# Refresh the apt lists at most once. install.sh touches apt in two
+# places (install_prerequisites + install_packages), so without this
+# guard a minimal image missing whiptail would run two back-to-back
+# `apt-get update`s. The only thing that warrants a second refresh is a
+# *source* change — install_packages resets the flag after it rewrites
+# the legacy Raspbian mirror so the new mirror gets fetched.
+APT_CACHE_FRESH=0
+apt_update_once() {
+    if [ "${APT_CACHE_FRESH}" -eq 0 ]; then
+        sudo apt-get update
+        APT_CACHE_FRESH=1
+    fi
+}
+
 # Pin uv to match docker/uv-builder.j2 so host and image use the same binary.
 UV_PIN_VERSION="0.9.17"
 
@@ -143,8 +157,8 @@ function install_prerequisites() {
         return
     fi
 
-    sudo apt -y update && sudo apt -y install \
-        whiptail jq curl ca-certificates
+    apt_update_once
+    sudo apt-get install -y whiptail jq curl ca-certificates
 }
 
 function display_banner() {
@@ -260,12 +274,16 @@ function install_packages() {
     # non-Pi ARM distros only populate /etc/apt/sources.list.d/*.list and
     # leave /etc/apt/sources.list absent, where the unconditional sed
     # would exit non-zero and trip `set -e`.
-    if [ "$ARCHITECTURE" != "x86_64" ] && [ -f /etc/apt/sources.list ]; then
+    if [ "$ARCHITECTURE" != "x86_64" ] && [ -f /etc/apt/sources.list ] \
+        && grep -q 'apt.screenlyapp.com' /etc/apt/sources.list; then
         sudo sed -i 's/apt.screenlyapp.com/archive.raspbian.org/g' \
             /etc/apt/sources.list
+        # The mirror changed, so a refresh is genuinely needed even if
+        # install_prerequisites already ran one.
+        APT_CACHE_FRESH=0
     fi
 
-    sudo apt-get update
+    apt_update_once
     sudo apt-get install -y "${APT_INSTALL_ARGS[@]}"
 }
 
