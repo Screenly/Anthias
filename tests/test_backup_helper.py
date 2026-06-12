@@ -169,6 +169,32 @@ def test_astream_backup_response_streams_under_asgi(
     assert path.isfile(marker)
 
 
+def test_astream_backup_stops_producer_when_consumer_disconnects(
+    backup_home: str,
+) -> None:
+    # A client that disconnects mid-download makes Django aclose() the
+    # async generator. Cleanup must stop the producer thread (and not
+    # raise) — a cross-thread close racing an in-flight next() would
+    # leave it taring forever (PR #3074 review).
+    marker = path.join(backup_home, '.anthias', 'anthias.conf')
+    with open(marker, 'w') as f:
+        f.write('[viewer]\n')
+
+    async def take_one_then_disconnect() -> None:
+        agen = astream_backup()
+        first = await agen.__anext__()
+        assert first
+        await agen.aclose()  # GeneratorExit cleanup path
+
+    asyncio.run(take_one_then_disconnect())
+
+    main_thread = threading.main_thread()
+    for thread in threading.enumerate():
+        if thread.name == 'backup-stream' and thread is not main_thread:
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+
+
 @pytest.fixture
 def legacy_home() -> Iterator[str]:
     """Backups produced by pre-rename releases used `.screenly` and

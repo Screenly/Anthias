@@ -1,14 +1,14 @@
+import asyncio
 import logging
 import os
 import sys
 import tarfile
 import threading
 from collections.abc import AsyncGenerator, Generator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
-
-from asgiref.sync import sync_to_async
 
 directories = ['.anthias', 'anthias_assets']
 # Tarballs created by older releases used these top-level entry names.
@@ -148,37 +148,49 @@ async def astream_backup() -> AsyncGenerator[bytes, None]:
     a RAM list) before the first response byte goes out. That silently
     reintroduces the exact 0-bytes-then-timeout failure stream_backup()
     was written to fix, and risks OOM on a 1 GB Pi with a multi-GB
-    library (issue #3073). Pulling each chunk through sync_to_async
-    keeps bytes flowing as the tar is built and the footprint flat.
+    library (issue #3073). Driving the sync generator one chunk at a
+    time off the event loop keeps bytes flowing as the tar is built and
+    the footprint flat.
 
-    thread_sensitive=False runs the blocking pipe read in its own
-    worker thread rather than Django's single shared sync executor, so
-    a slow backup can't wedge unrelated sync work handled for the same
-    request.
+    A single-worker executor serialises every touch of the sync
+    generator — both ``next()`` and the cleanup ``close()`` — onto one
+    thread. They therefore can never overlap: if the client disconnects
+    mid-``next()``, the queued ``close()`` runs only after that
+    ``next()`` returns, so we avoid ``ValueError: generator already
+    executing`` and the leaked producer thread that a cross-thread
+    close would cause. A dedicated executor (rather than Django's
+    shared sync pool) also keeps the long blocking pipe read from
+    wedging unrelated sync work.
     """
+    loop = asyncio.get_running_loop()
     gen = stream_backup()
+    executor = ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix='backup-stream-reader'
+    )
 
     def next_chunk() -> bytes | None:
         # next(gen, None) rather than bare next() so exhaustion returns
         # a sentinel instead of raising StopIteration, which can't
-        # propagate cleanly across the sync_to_async boundary.
-        # stream_backup() only ever yields non-empty bytes, so None is
-        # an unambiguous end marker.
+        # cross the executor boundary cleanly. stream_backup() only ever
+        # yields non-empty bytes, so None is an unambiguous end marker.
         return next(gen, None)
 
-    pull = sync_to_async(next_chunk, thread_sensitive=False)
     try:
         while True:
-            chunk = await pull()
+            chunk = await loop.run_in_executor(executor, next_chunk)
             if chunk is None:
                 break
             yield chunk
     finally:
-        # On client disconnect Django aclose()s this generator; close
-        # the underlying sync generator so its producer thread stops
-        # taring instead of leaking. close() may block on the producer
-        # join, so keep it off the event loop too.
-        await sync_to_async(gen.close, thread_sensitive=False)()
+        # On client disconnect Django aclose()s this generator. Closing
+        # the sync generator throws GeneratorExit into stream_backup at
+        # its yield, so its own finally joins the producer thread and
+        # closes the pipe (the producer's next write then hits
+        # BrokenPipeError and exits) — nothing is left taring.
+        try:
+            await loop.run_in_executor(executor, gen.close)
+        finally:
+            executor.shutdown(wait=False)
 
 
 def create_backup(name: str = default_archive_name) -> str:
