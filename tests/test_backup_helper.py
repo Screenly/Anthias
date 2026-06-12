@@ -157,8 +157,8 @@ def test_astream_backup_response_streams_under_asgi(
 
     os.makedirs(path.join(backup_home, static_dir), exist_ok=True)
     file_path = path.join(backup_home, static_dir, 'astreamed.tar.gz')
-    with open(file_path, 'wb') as f:
-        f.write(b''.join(chunks))
+    with open(file_path, 'wb') as out_file:
+        out_file.write(b''.join(chunks))
 
     with tarfile.open(file_path, 'r:gz') as tar:
         names = tar.getnames()

@@ -157,12 +157,20 @@ async def astream_backup() -> AsyncGenerator[bytes, None]:
     request.
     """
     gen = stream_backup()
-    pull = sync_to_async(next, thread_sensitive=False)
-    sentinel = object()
+
+    def next_chunk() -> bytes | None:
+        # next(gen, None) rather than bare next() so exhaustion returns
+        # a sentinel instead of raising StopIteration, which can't
+        # propagate cleanly across the sync_to_async boundary.
+        # stream_backup() only ever yields non-empty bytes, so None is
+        # an unambiguous end marker.
+        return next(gen, None)
+
+    pull = sync_to_async(next_chunk, thread_sensitive=False)
     try:
         while True:
-            chunk = await pull(gen, sentinel)
-            if chunk is sentinel:
+            chunk = await pull()
+            if chunk is None:
                 break
             yield chunk
     finally:
