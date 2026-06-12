@@ -3,10 +3,12 @@ import os
 import sys
 import tarfile
 import threading
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
+
+from asgiref.sync import sync_to_async
 
 directories = ['.anthias', 'anthias_assets']
 # Tarballs created by older releases used these top-level entry names.
@@ -134,6 +136,41 @@ def stream_backup() -> Generator[bytes, None, None]:
         # spurious error.
         if drained and produce_error:
             raise produce_error[0]
+
+
+async def astream_backup() -> AsyncGenerator[bytes, None]:
+    """Async front-end to stream_backup() for the ASGI download view.
+
+    StreamingHttpResponse only *streams* an asynchronous iterator under
+    ASGI. Handed a synchronous generator, Django's __aiter__ falls back
+    to ``await sync_to_async(list)(...)``, which drains the generator
+    whole — i.e. builds the entire archive (and buffers every chunk in
+    a RAM list) before the first response byte goes out. That silently
+    reintroduces the exact 0-bytes-then-timeout failure stream_backup()
+    was written to fix, and risks OOM on a 1 GB Pi with a multi-GB
+    library (issue #3073). Pulling each chunk through sync_to_async
+    keeps bytes flowing as the tar is built and the footprint flat.
+
+    thread_sensitive=False runs the blocking pipe read in its own
+    worker thread rather than Django's single shared sync executor, so
+    a slow backup can't wedge unrelated sync work handled for the same
+    request.
+    """
+    gen = stream_backup()
+    pull = sync_to_async(next, thread_sensitive=False)
+    sentinel = object()
+    try:
+        while True:
+            chunk = await pull(gen, sentinel)
+            if chunk is sentinel:
+                break
+            yield chunk
+    finally:
+        # On client disconnect Django aclose()s this generator; close
+        # the underlying sync generator so its producer thread stops
+        # taring instead of leaking. close() may block on the producer
+        # join, so keep it off the event loop too.
+        await sync_to_async(gen.close, thread_sensitive=False)()
 
 
 def create_backup(name: str = default_archive_name) -> str:
