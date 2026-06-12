@@ -13,6 +13,7 @@ import pytest
 import anthias_viewer as viewer
 from anthias_server.settings import settings
 from anthias_viewer.scheduling import Scheduler
+from anthias_viewer.utils import get_skip_event
 
 logging.disable(logging.CRITICAL)
 
@@ -1063,6 +1064,97 @@ def test_rotation_value_clamps(raw: Any, expected: int) -> None:
         assert viewer._rotation_value() == expected
 
 
+# ---------------------------------------------------------------------------
+# Prefer dark mode — the C++ webview reads ANTHIAS_PREFER_DARK_MODE at
+# launch (applyDarkModePreference in src/anthias_webview/src/main.cpp).
+
+
+@pytest.fixture
+def reset_dark_mode_state() -> Iterator[None]:
+    """_last_applied_dark_mode + _rotation_bounce_pending are module
+    state — snapshot and restore so these tests don't bleed into each
+    other or the rotation tests that share the bounce flag."""
+    prior_dark = viewer._last_applied_dark_mode
+    prior_pending = viewer._rotation_bounce_pending
+    try:
+        viewer._last_applied_dark_mode = False
+        viewer._rotation_bounce_pending = False
+        yield
+    finally:
+        viewer._last_applied_dark_mode = prior_dark
+        viewer._rotation_bounce_pending = prior_pending
+
+
+def test_build_webview_env_sets_dark_mode_flag_when_enabled() -> None:
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': True}),
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_PREFER_DARK_MODE'] == '1'
+
+
+def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
+    # A stale value inherited from the process env must not leak into the
+    # spawned webview when the operator turns the setting back off.
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': False}),
+        mock.patch.dict(
+            os.environ,
+            {'QT_QPA_PLATFORM': 'linuxfb', 'ANTHIAS_PREFER_DARK_MODE': '1'},
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert 'ANTHIAS_PREFER_DARK_MODE' not in env
+
+
+def test_handle_reload_queues_bounce_on_dark_mode_change(
+    reset_dark_mode_state: None,
+) -> None:
+    """The dark-mode flag is only read at webview launch, so a live
+    toggle has to respawn AnthiasViewer. Like the rotation path,
+    _handle_reload runs on the subscriber thread and MUST NOT terminate
+    the browser directly — it only latches the new value and sets the
+    bounce flag the main thread consumes."""
+    fake_browser = mock.Mock()
+    skip = mock.Mock()
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': True}),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_maybe_reapply_rotation'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+    fake_browser.terminate.assert_not_called()
+    assert viewer._rotation_bounce_pending is True
+    skip.set.assert_called_once()
+    # Latched immediately so a second `reload` in the gap before the
+    # respawn doesn't re-queue another bounce.
+    assert viewer._last_applied_dark_mode is True
+
+
+def test_handle_reload_no_op_when_dark_mode_unchanged(
+    reset_dark_mode_state: None,
+) -> None:
+    skip = mock.Mock()
+    viewer._last_applied_dark_mode = True
+    with (
+        mock.patch.dict(settings, {'prefer_dark_mode': True}),
+        mock.patch.object(viewer, 'load_settings'),
+        mock.patch.object(viewer, '_maybe_reapply_rotation'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip),
+    ):
+        viewer._handle_reload()
+    assert viewer._rotation_bounce_pending is False
+    skip.set.assert_not_called()
+
+
 @pytest.mark.parametrize(
     'qpa, expected',
     [
@@ -1995,3 +2087,168 @@ class TestWaitForWaylandSocket:
         ):
             viewer_fixtures.u._spawn_webview_once(1)
         assert order == ['wait', 'spawn']
+
+
+# --- display blanking (blank / unblank commands) ----------------------
+
+
+@pytest.fixture
+def restore_blank_state() -> Iterator[None]:
+    try:
+        yield
+    finally:
+        viewer.display_blanked = False
+        viewer.loop_is_stopped = False
+        get_skip_event().clear()
+
+
+def test_apply_wlr_power_targets_all_outputs_including_disabled() -> None:
+    """Power-off/on must reach *disabled* outputs too, so unblank can
+    turn a previously blanked (Enabled: no) connector back on."""
+
+    def _fake_run(argv: Any, **kwargs: Any) -> mock.Mock:
+        result = mock.Mock()
+        result.returncode = 0
+        result.stderr = ''
+        result.stdout = (
+            'HDMI-A-1\n  Enabled: yes\nHDMI-A-2\n  Enabled: no\n'
+            if argv == ['wlr-randr']
+            else ''
+        )
+        return result
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer.subprocess.run', side_effect=_fake_run
+        ) as run,
+    ):
+        assert viewer._apply_wlr_power(False) is True
+
+    off_calls = [
+        c for c in run.call_args_list if c.args and '--off' in c.args[0]
+    ]
+    targeted = {c.args[0][c.args[0].index('--output') + 1] for c in off_calls}
+    assert targeted == {'HDMI-A-1', 'HDMI-A-2'}
+
+
+def test_apply_wlr_power_noop_off_wayland() -> None:
+    """eglfs/linuxfb boards can't be powered off via wlr-randr; the call
+    is a no-op there (the blank path paints black instead)."""
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi4-64', 'QT_QPA_PLATFORM': 'eglfs'},
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.subprocess.run') as run,
+    ):
+        assert viewer._apply_wlr_power(False) is False
+    run.assert_not_called()
+
+
+def test_blank_display_powers_off_and_pauses_on_wayland(
+    restore_blank_state: None,
+) -> None:
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer._apply_wlr_power', return_value=True
+        ) as power,
+    ):
+        viewer.blank_display()
+
+    assert viewer.display_blanked is True
+    assert viewer.loop_is_stopped is True
+    power.assert_called_once_with(False)
+
+
+def test_blank_display_pauses_without_wlr_on_eglfs(
+    restore_blank_state: None,
+) -> None:
+    """On eglfs the screen blanks by the loop painting BLACK_SCREEN, so
+    blank_display() flips the state but must not invoke wlr-randr."""
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi4-64', 'QT_QPA_PLATFORM': 'eglfs'},
+            clear=False,
+        ),
+        mock.patch('anthias_viewer._apply_wlr_power') as power,
+    ):
+        viewer.blank_display()
+
+    assert viewer.display_blanked is True
+    assert viewer.loop_is_stopped is True
+    power.assert_not_called()
+
+
+def test_unblank_display_resumes_and_powers_on(
+    restore_blank_state: None,
+) -> None:
+    viewer.display_blanked = True
+    viewer.loop_is_stopped = True
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer._apply_wlr_power', return_value=True
+        ) as power,
+    ):
+        viewer.unblank_display()
+
+    assert viewer.display_blanked is False
+    assert viewer.loop_is_stopped is False
+    power.assert_called_once_with(True)
+
+
+def test_blank_and_unblank_commands_registered() -> None:
+    assert 'blank' in viewer.commands
+    assert 'unblank' in viewer.commands
+
+
+def test_stop_playback_sets_module_loop_flag(
+    restore_blank_state: None,
+) -> None:
+    """stop must flip the module-level loop_is_stopped that start_loop
+    reads (the old setattr(__main__, ...) wrote a dead namespace)."""
+    viewer.loop_is_stopped = False
+    viewer.stop_playback()
+    assert viewer.loop_is_stopped is True
+
+
+def test_play_unblanks_when_display_blanked(
+    restore_blank_state: None,
+) -> None:
+    """play on a blanked display implies unblank: power back on, clear
+    the blank, resume — never leave display_blanked set."""
+    viewer.display_blanked = True
+    viewer.loop_is_stopped = True
+
+    with (
+        mock.patch.dict(
+            os.environ,
+            {'DEVICE_TYPE': 'pi5', 'QT_QPA_PLATFORM': 'wayland'},
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer._apply_wlr_power', return_value=True
+        ) as power,
+    ):
+        viewer.play_playback()
+
+    assert viewer.display_blanked is False
+    assert viewer.loop_is_stopped is False
+    power.assert_called_once_with(True)

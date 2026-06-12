@@ -233,6 +233,7 @@ def device_settings() -> dict[str, Any]:
         'shuffle_playlist': settings['shuffle_playlist'],
         'use_24_hour_clock': settings['use_24_hour_clock'],
         'debug_logging': settings['debug_logging'],
+        'prefer_dark_mode': settings['prefer_dark_mode'],
         # Clamp on the read side so a stale conf value (e.g. an
         # old 45 from a hand-edit) doesn't leave the dropdown with no
         # ``selected`` option — the template's {% if screen_rotation

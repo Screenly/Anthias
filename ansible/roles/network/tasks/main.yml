@@ -60,6 +60,21 @@
     - ansible_distribution_major_version|int <= 12
   changed_when: not network_pkla_stat.stat.exists
 
+# NetworkManager only *Recommends* polkitd, so a minimal Trixie image
+# (e.g. Armbian on a Rock Pi / Orange Pi) can ship NM without it. Without
+# polkit there is no /etc/polkit-1/rules.d for the rules file below, and
+# no daemon to enforce the rule that lets the netdev/sudo user manage the
+# connection — so install it explicitly on the Trixie+ manage-network
+# path. The package owns /etc/polkit-1/rules.d, so the copy task that
+# follows then has its destination directory.
+- name: Ensure polkit is installed for NetworkManager (Trixie+)
+  ansible.builtin.apt:
+    name: polkitd
+    state: present
+  when:
+    - manage_network|bool
+    - ansible_distribution_major_version|int >= 13
+
 - name: Create polkit rules for NetworkManager (Trixie+)
   ansible.builtin.copy:
     dest: /etc/polkit-1/rules.d/50-network-manager.rules

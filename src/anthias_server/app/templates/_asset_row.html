@@ -1,6 +1,14 @@
 {% load asset_filters %}
 {% with pills=asset|schedule_pills %}
-<tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}">
+<tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}" :class="isSelected('{{ asset.asset_id }}') && 'is-selected'">
+  <td class="asset-select-col" data-label="Select" data-no-label>
+    <label class="asset-select">
+      <input type="checkbox" class="app-check-input js-row-select"
+        :checked="isSelected('{{ asset.asset_id }}')"
+        @change="toggleSelect('{{ asset.asset_id }}')"
+        aria-label="Select {{ asset.name|default:'asset'|escape }}">
+    </label>
+  </td>
   <td data-label="Name" data-no-label>
     <div class="asset-cell-name">
       {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}

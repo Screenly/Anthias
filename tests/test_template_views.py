@@ -290,6 +290,67 @@ def test_assets_create_routes_youtube_to_celery(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_create_routes_rtsp_to_streaming(client: Client) -> None:
+    """Pasting an RTSP URL into the Add modal must classify it as
+    mimetype='streaming' (not 'webpage'), otherwise the viewer hands
+    it to QtWebEngine instead of the video player and the stream never
+    appears. Regression guard for the classifier dropped in the
+    React→Django migration (#2818)."""
+    from anthias_server.settings import settings
+
+    rtsp_url = 'rtsp://camera.local:554/stream'
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': rtsp_url},
+        )
+    assert response.status_code in (200, 302)
+    row = Asset.objects.filter(uri=rtsp_url).first()
+    assert row is not None
+    assert row.mimetype == 'streaming'
+    # Streams have no intrinsic length — they take the dedicated
+    # streaming-duration window, not the standard default.
+    assert row.duration == int(settings['default_streaming_duration'])
+
+
+@pytest.mark.django_db
+def test_assets_create_rejects_rtmp(client: Client) -> None:
+    """RTMP is well-formed but Qt6's QMediaPlayer can't open it, so the
+    Add modal must reject rtmp:// rather than create an asset that
+    renders black. No row is written."""
+    rtmp_url = 'rtmp://media.example.com/live'
+    response = client.post(
+        reverse('anthias_app:assets_create'),
+        data={'uri': rtmp_url},
+    )
+    assert response.status_code in (200, 302)
+    assert not Asset.objects.filter(uri=rtmp_url).exists()
+
+
+@pytest.mark.django_db
+def test_assets_create_routes_hls_manifest_to_streaming(
+    client: Client,
+) -> None:
+    """An HTTP-delivered HLS manifest (.m3u8) is a live stream, not a
+    downloadable file or a web page — it must classify as streaming."""
+    hls_url = 'https://cdn.example.com/live/index.m3u8'
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': hls_url},
+        )
+    row = Asset.objects.filter(uri=hls_url).first()
+    assert row is not None
+    assert row.mimetype == 'streaming'
+
+
+@pytest.mark.django_db
 def test_assets_create_youtube_short_form(client: Client) -> None:
     """youtu.be short URLs are recognised the same as full URLs."""
     short_url = 'https://youtu.be/dQw4w9WgXcQ'
@@ -971,6 +1032,647 @@ def test_assets_update_missing_id_is_no_op(client: Client) -> None:
             data={'name': 'whatever'},
         )
     assert response.status_code in (200, 302)
+
+
+# ---------------------------------------------------------------------------
+# Bulk asset actions (#3046)
+
+
+@pytest.fixture
+def bulk_assets() -> list[Asset]:
+    """Three assets — two webpages and one video — for bulk tests."""
+    now = timezone.now()
+    common = {
+        'duration': 10,
+        'is_enabled': True,
+        'is_processing': False,
+        'start_date': now,
+        'end_date': now + timedelta(days=30),
+    }
+    return [
+        Asset.objects.create(
+            name='one',
+            uri='https://a.example',
+            mimetype='webpage',
+            play_order=0,
+            **common,
+        ),
+        Asset.objects.create(
+            name='two',
+            uri='https://b.example',
+            mimetype='webpage',
+            play_order=1,
+            **common,
+        ),
+        Asset.objects.create(
+            name='vid',
+            uri='https://c.example/v.mp4',
+            mimetype='video',
+            play_order=2,
+            **common,
+        ),
+    ]
+
+
+def _bulk_ids_csv(assets: list[Asset]) -> str:
+    return ','.join(a.asset_id for a in assets)
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_disable(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={
+                'action': 'disable',
+                'ids': _bulk_ids_csv(bulk_assets),
+            },
+        )
+    assert response.status_code in (200, 302)
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.is_enabled is False
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_enable_only_selected(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Only the ids in the POST flip — an unselected row is untouched."""
+    for a in bulk_assets:
+        a.is_enabled = False
+        a.save()
+    selected = bulk_assets[:2]
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'enable', 'ids': _bulk_ids_csv(selected)},
+        )
+    bulk_assets[0].refresh_from_db()
+    bulk_assets[1].refresh_from_db()
+    bulk_assets[2].refresh_from_db()
+    assert bulk_assets[0].is_enabled is True
+    assert bulk_assets[1].is_enabled is True
+    assert bulk_assets[2].is_enabled is False
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_delete(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'delete', 'ids': _bulk_ids_csv(bulk_assets)},
+        )
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_invalid_action_is_noop(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'frobnicate', 'ids': _bulk_ids_csv(bulk_assets)},
+        )
+    assert response.status_code in (200, 302)
+    assert Asset.objects.count() == 3
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.is_enabled is True
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_empty_ids_is_noop(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'delete', 'ids': ''},
+        )
+    assert response.status_code in (200, 302)
+    assert Asset.objects.count() == 3
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_trims_whitespace_in_ids(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """A hand-built ``"a, b"`` CSV (spaces after commas) must still
+    match every row — _bulk_ids strips each segment (Copilot review of
+    #3048).
+    """
+    for a in bulk_assets:
+        a.is_enabled = False
+        a.save()
+    spaced = ', '.join(a.asset_id for a in bulk_assets)
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'enable', 'ids': spaced},
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.is_enabled is True
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_enable_already_enabled_reports_match_count(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Re-enabling already-enabled assets must report the matched count,
+    not 0 — the count comes from a matched-rows count(), not update()'s
+    changed-rows return, which can be 0 on some backends (Copilot review
+    of #3048). A 0 with no toast would also make the client treat it as
+    success and clear the selection.
+    """
+    import json as _json
+
+    # bulk_assets are created is_enabled=True; enable them again.
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={
+                'action': 'enable',
+                'ids': _bulk_ids_csv(bulk_assets),
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast'] == {
+        'kind': 'success',
+        'message': '3 assets enabled',
+    }
+
+
+@pytest.mark.django_db
+def test_assets_bulk_action_no_matching_ids_keeps_selection(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Stale ids that match nothing return an info toast (not a silent
+    no-toast 2xx) so the client's success gate keeps the selection."""
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_action'),
+            data={'action': 'enable', 'ids': 'no-such-id,also-missing'},
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['kind'] == 'info'
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_unmatched_ids_keeps_selection(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """bulk_update with non-empty but unmatched ids returns an info
+    toast (not a silent no-toast 2xx) so the client keeps the selection
+    and the modal stays open (Copilot review of #3048)."""
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': 'no-such-id,also-missing',
+                'apply_duration': 'true',
+                'duration': '42',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['kind'] == 'info'
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_dates(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_dates': 'true',
+                'start_date': '01/02/2030 09:00 AM',
+                'end_date': '01/03/2030 09:00 AM',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.start_date is not None
+        assert (a.start_date.year, a.start_date.month, a.start_date.day) == (
+            2030,
+            1,
+            2,
+        )
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_duration_skips_video(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Duration is applied to images/webpages but never videos — the
+    video's duration is owned by the probe task (mirrors assets_update).
+    """
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '42',
+            },
+        )
+    webpage_one, webpage_two, video = bulk_assets
+    webpage_one.refresh_from_db()
+    webpage_two.refresh_from_db()
+    video.refresh_from_db()
+    assert webpage_one.duration == 42
+    assert webpage_two.duration == 42
+    assert video.duration == 10
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_blank_duration_does_not_clobber(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """apply_duration on with a blank duration must NOT zero out every
+    asset — it toasts and changes nothing (Copilot review of #3048).
+    """
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '',
+            },
+        )
+    assert response.status_code in (200, 302)
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.duration == 10
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_duration_only_count_excludes_videos(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """A duration-only edit on a mixed selection (2 webpages + 1 video)
+    skips the video, so the success toast must report 2 updated, not 3
+    (Copilot review of #3048). Read the count off the HX-Trigger toast.
+    """
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '42',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['message'] == '2 assets updated'
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_never_writes_video_duration(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """The duration update must exclude video rows at the SQL level so
+    it can't race with / clobber the probe_video_duration task. Set the
+    video's stored duration to a sentinel and confirm a bulk duration
+    edit leaves it untouched while the webpages change (Copilot review
+    of #3048).
+    """
+    webpage_one, webpage_two, video = bulk_assets
+    # Simulate the probe having written a duration on the video; the
+    # bulk edit must not overwrite it.
+    Asset.objects.filter(asset_id=video.asset_id).update(duration=123)
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_duration': 'true',
+                'duration': '42',
+            },
+        )
+
+    video.refresh_from_db()
+    webpage_one.refresh_from_db()
+    webpage_two.refresh_from_db()
+    assert video.duration == 123, 'video duration was clobbered'
+    assert webpage_one.duration == 42
+    assert webpage_two.duration == 42
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_issues_single_update_query(
+    client: Client,
+) -> None:
+    """Bulk update must write the whole selection in one UPDATE, not one
+    per row (Copilot review of #3048) — proven by counting UPDATE
+    statements against a 5-asset selection.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    now = timezone.now()
+    ids = []
+    for i in range(5):
+        a = Asset.objects.create(
+            name=f'q{i}',
+            uri=f'https://q{i}.example',
+            mimetype='webpage',
+            duration=10,
+            is_enabled=True,
+            is_processing=False,
+            play_order=i,
+            start_date=now,
+            end_date=now + timedelta(days=30),
+        )
+        ids.append(a.asset_id)
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        with CaptureQueriesContext(connection) as ctx:
+            client.post(
+                reverse('anthias_app:assets_bulk_update'),
+                data={
+                    'ids': ','.join(ids),
+                    'apply_duration': 'true',
+                    'duration': '55',
+                },
+            )
+
+    updates = [
+        q['sql']
+        for q in ctx.captured_queries
+        if q['sql'].lstrip().upper().startswith('UPDATE "ASSETS"')
+    ]
+    assert len(updates) == 1, (
+        f'expected exactly 1 UPDATE for the batch, got {len(updates)}:\n'
+        + '\n'.join(updates)
+    )
+    for a_id in ids:
+        assert Asset.objects.get(asset_id=a_id).duration == 55
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_time_window(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_time': 'true',
+                'play_time_from': '09:00',
+                'play_time_to': '17:00',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.play_time_from == time(9, 0)
+        assert a.play_time_to == time(17, 0)
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_clears_time_window(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """apply_time on with both fields empty removes the window."""
+    for a in bulk_assets:
+        a.play_time_from = time(9, 0)
+        a.play_time_to = time(17, 0)
+        a.save()
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_time': 'true',
+                'play_time_from': '',
+                'play_time_to': '',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.play_time_from is None
+        assert a.play_time_to is None
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_partial_time_window_toasts(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Only one endpoint set — reject and leave everything untouched."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_time': 'true',
+                'play_time_from': '09:00',
+                'play_time_to': '',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.play_time_from is None
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_days(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_days': 'true',
+                'play_days': ['1', '3', '5'],
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.get_play_days() == [1, 3, 5]
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_no_flags_is_noop(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    original = [a.start_date for a in bulk_assets]
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'start_date': '01/02/2030 09:00 AM',
+            },
+        )
+    assert response.status_code in (200, 302)
+    for a, start in zip(bulk_assets, original):
+        a.refresh_from_db()
+        assert a.start_date == start
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_invalid_date_toasts_and_keeps_values(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    original = [a.start_date for a in bulk_assets]
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_dates': 'true',
+                'start_date': 'not-a-date',
+            },
+        )
+    assert response.status_code in (200, 302)
+    for a, start in zip(bulk_assets, original):
+        a.refresh_from_db()
+        assert a.start_date == start
+
+
+@pytest.mark.django_db
+def test_asset_ids_filter_emits_json_array(bulk_assets: list[Asset]) -> None:
+    from anthias_server.app.templatetags.asset_filters import asset_ids
+
+    rendered = str(asset_ids(bulk_assets))
+    assert rendered.startswith('[') and rendered.endswith(']')
+    for a in bulk_assets:
+        assert a.asset_id in rendered
+
+
+@pytest.mark.django_db
+def test_asset_table_renders_selection_controls(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert 'js-row-select' in body
+    assert "sectionAllSelected('active')" in body
+
+
+@pytest.mark.django_db
+def test_bulk_forms_use_global_event_bridge_not_alpine_methods(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """hx-on::after-request runs in global JS scope, so the bulk forms
+    must NOT call Alpine component methods there (that throws
+    ReferenceError and the selection never clears). They go through the
+    window.bulkSucceeded() gate + a 'bulk-done' window event that Alpine
+    handles via @bulk-done.window (Copilot review of #3048).
+    """
+    body = client.get(reverse('anthias_app:home')).content.decode()
+    assert 'window.bulkSucceeded(event)' in body
+    assert '@bulk-done.window="onBulkDone($event)"' in body
+    # The old, broken forms called Alpine methods straight from hx-on.
+    assert 'hx-on::after-request="if (isSuccessResponse(' not in body
+    assert (
+        'hx-on::after-request="if (event.detail.successful) clearSelection'
+        not in body
+    )
+
+
+@pytest.mark.django_db
+def test_asset_ids_json_is_html_escaped_in_x_init(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Regression for the Copilot review of #3048: the asset_ids JSON
+    is inlined into a double-quoted x-init="…" attribute, so its own
+    double quotes MUST be entity-escaped (Django autoescaping) — a raw
+    `["id"]` would close the attribute early and break the markup.
+    """
+    response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    # The ids land entity-escaped inside the syncVisibleIds() call …
+    assert 'syncVisibleIds(' in body
+    assert '&quot;' in body
+    # … and the raw, attribute-breaking form must not appear.
+    assert 'syncVisibleIds([&quot;' in body or 'syncVisibleIds([])' in body
+    assert 'syncVisibleIds(["' not in body
 
 
 @pytest.mark.django_db

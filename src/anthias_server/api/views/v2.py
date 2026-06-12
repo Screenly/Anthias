@@ -31,6 +31,7 @@ from anthias_server.api.helpers import (
     save_active_assets_ordering,
 )
 from anthias_server.lib.auth import (
+    AuthSettingsError,
     apply_auth_settings,
     operator_username,
 )
@@ -602,6 +603,7 @@ class DeviceSettingsViewV2(APIView):
                 'shuffle_playlist': settings['shuffle_playlist'],
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
+                'prefer_dark_mode': settings['prefer_dark_mode'],
                 # Clamp on read too — the OpenAPI schema advertises
                 # an enum of {0,90,180,270}, but a hand-edited conf
                 # could have a stale 45 or any other int sitting on
@@ -685,6 +687,8 @@ class DeviceSettingsViewV2(APIView):
                 settings['use_24_hour_clock'] = data['use_24_hour_clock']
             if 'debug_logging' in data:
                 settings['debug_logging'] = data['debug_logging']
+            if 'prefer_dark_mode' in data:
+                settings['prefer_dark_mode'] = data['prefer_dark_mode']
             if 'screen_rotation' in data:
                 settings['screen_rotation'] = int(data['screen_rotation'])
 
@@ -693,6 +697,16 @@ class DeviceSettingsViewV2(APIView):
             publisher.send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})
+        except AuthSettingsError as exc:
+            # Operator input the client should have caught — mismatched
+            # or incorrect password, a taken username, a too-weak
+            # password. Expected and self-correcting, so log at warning
+            # (no traceback) and echo the operator-friendly message
+            # instead of logger.exception + a generic error: the
+            # ERROR-level record is what Sentry's logging integration
+            # turns into an event (ANTHIAS-3D).
+            logger.warning('Settings save rejected: %s', exc)
+            return Response({'error': str(exc)}, status=400)
         except Exception:
             logger.exception('Settings save failed')
             return Response(

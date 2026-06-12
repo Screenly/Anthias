@@ -46,6 +46,7 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'prefer_dark_mode': True,
         'screen_rotation': 90,
     }[key]
 
@@ -65,6 +66,7 @@ def test_get_device_settings(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'prefer_dark_mode': True,
         'screen_rotation': 90,
         'username': '',
     }
@@ -278,6 +280,7 @@ def test_disable_basic_auth(
         'shuffle_playlist': False,
         'use_24_hour_clock': True,
         'debug_logging': False,
+        'prefer_dark_mode': False,
         'screen_rotation': 0,
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
@@ -609,3 +612,57 @@ def test_display_power_returns_503_when_no_cec_adapter(
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     set_display_power_mock.assert_not_called()
     assert 'adapter' in response.data['message']
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+def test_patch_device_settings_password_mismatch_is_not_logged_as_error(
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A mismatched-password PATCH is operator input validation, not a
+    server bug. It must return 400 with the operator-friendly message
+    AND be logged at WARNING (no traceback) so Sentry's logging
+    integration doesn't turn it into an event (ANTHIAS-3D)."""
+    import logging
+
+    user = _make_operator(username='testuser', pwd=_FIXTURE_PASSWORD)
+    api_client.force_authenticate(user=user)
+
+    settings_mock.load = mock.MagicMock()
+    settings_mock.save = mock.MagicMock()
+    settings_mock.__getitem__.side_effect = lambda key: {
+        'auth_backend': 'auth_basic',
+    }[key]
+    settings_mock.__setitem__ = mock.MagicMock()
+
+    data = {
+        'auth_backend': 'auth_basic',
+        'current_password': _FIXTURE_PASSWORD,
+        'username': 'testuser',
+        'password': 'brand-new-password',  # NOSONAR
+        'password_2': 'does-not-match',  # NOSONAR
+    }
+
+    with caplog.at_level(logging.WARNING):
+        response = api_client.patch(
+            device_settings_url, data=data, format='json'
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    # The operator-friendly message is echoed, not a generic string.
+    assert 'do not match' in response.data['error']
+    # Nothing was persisted — the validation aborted before save().
+    settings_mock.save.assert_not_called()
+
+    save_records = [
+        r for r in caplog.records if 'Settings save' in r.getMessage()
+    ]
+    assert save_records, 'expected a log line for the rejected save'
+    # The rejection logs at WARNING, never ERROR, and carries no
+    # exc_info — an ERROR record (logger.exception) is what becomes a
+    # Sentry event.
+    assert all(r.levelno == logging.WARNING for r in save_records)
+    assert all(r.exc_info is None for r in save_records)

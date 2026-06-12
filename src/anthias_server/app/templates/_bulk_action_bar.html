@@ -1,0 +1,120 @@
+{% comment %} Floating bulk-action bar (#3046). Shown whenever one or
+   more rows are selected (selectedIds is the homeApp Alpine state).
+   Enable / Disable / Delete each POST the comma-joined selection to
+   assets_bulk_action and swap the table partial back; Edit opens the
+   bulk-edit modal. selectedIds is read at submit time via the hidden
+   ``ids`` input's :value binding, so it always reflects the live
+   selection. On a successful action the selection is cleared.
+{% endcomment %}
+<div
+  class="bulk-bar"
+  x-show="selectedIds.length"
+  x-cloak
+  x-transition.opacity
+  role="region"
+  aria-label="Bulk actions"
+>
+  <div class="bulk-bar__inner">
+    <div class="bulk-bar__count">
+      <i class="ti ti-checkbox"></i>
+      <span><strong x-text="selectedIds.length"></strong>
+        <span x-text="selectedIds.length === 1 ? 'asset' : 'assets'"></span>
+        selected</span>
+    </div>
+
+    <div class="bulk-bar__actions">
+      <form
+        method="post"
+        action="{% url 'anthias_app:assets_bulk_action' %}"
+        hx-post="{% url 'anthias_app:assets_bulk_action' %}"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done'))"
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="action" value="enable">
+        <input type="hidden" name="ids" :value="selectedIds.join(',')">
+        <button type="submit" class="app-btn app-btn-light app-btn-pill">
+          <i class="ti ti-toggle-right"></i><span>Enable</span>
+        </button>
+      </form>
+
+      <form
+        method="post"
+        action="{% url 'anthias_app:assets_bulk_action' %}"
+        hx-post="{% url 'anthias_app:assets_bulk_action' %}"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done'))"
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="action" value="disable">
+        <input type="hidden" name="ids" :value="selectedIds.join(',')">
+        <button type="submit" class="app-btn app-btn-light app-btn-pill">
+          <i class="ti ti-player-pause"></i><span>Disable</span>
+        </button>
+      </form>
+
+      <button type="button" class="app-btn app-btn-light app-btn-pill" @click="openBulkEdit()">
+        <i class="ti ti-pencil"></i><span>Edit</span>
+      </button>
+
+      <button type="button" class="app-btn app-btn-danger app-btn-pill" @click="bulkDeleteOpen = true">
+        <i class="ti ti-trash"></i><span>Delete</span>
+      </button>
+
+      <button type="button" class="app-btn app-btn-icon bulk-bar__clear" @click="clearSelection()" title="Clear selection" aria-label="Clear selection">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+{% comment %} Bulk delete confirmation — mirrors the single-asset
+   delete prompt in home.html. {% endcomment %}
+<div
+  x-show="bulkDeleteOpen"
+  x-cloak
+  class="modal-overlay"
+  style="z-index: 1060"
+  @keydown.escape.window="bulkDeleteOpen = false"
+  @click.self="bulkDeleteOpen = false"
+>
+  <div class="modal-card modal-card--sm">
+    <div class="modal-card__header">
+      <h2>Delete selected assets?</h2>
+      <button type="button" class="modal-card__close" @click="bulkDeleteOpen = false" aria-label="Close">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <div class="modal-card__body">
+      <p class="m-0">
+        You're about to delete
+        <strong><span x-text="selectedIds.length"></span>
+          <span x-text="selectedIds.length === 1 ? 'asset' : 'assets'"></span></strong>.
+        This action cannot be undone.
+      </p>
+    </div>
+    <div class="modal-card__footer">
+      <button type="button" class="app-btn app-btn-link" @click="bulkDeleteOpen = false">Cancel</button>
+      <form
+        method="post"
+        action="{% url 'anthias_app:assets_bulk_action' %}"
+        hx-post="{% url 'anthias_app:assets_bulk_action' %}"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done', {detail: {closeDelete: true}}))"
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="ids" :value="selectedIds.join(',')">
+        <button type="submit" class="app-btn app-btn-danger confirm-bulk-delete">
+          <i class="ti ti-trash"></i><span>Delete</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>

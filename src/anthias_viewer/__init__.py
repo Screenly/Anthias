@@ -19,6 +19,7 @@ import sh as sh
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
+from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
@@ -72,6 +73,10 @@ current_browser_url: str | None = None
 _webview_supports_set_reload_interval: bool = True
 browser: Any = None
 loop_is_stopped: bool = False
+# Set by the ``blank`` command: pauses the asset loop (via
+# loop_is_stopped) and signals the main thread to paint a black screen.
+# Cleared by ``unblank``. See blank_display()/unblank_display().
+display_blanked: bool = False
 browser_bus: Any = None
 r = connect_to_redis()
 reply_sender = ReplySender(r)
@@ -87,6 +92,14 @@ scheduler: Any = None
 # freshly-loaded ``settings['screen_rotation']`` to decide whether the
 # operator changed rotation from the UI and we need to re-apply.
 _last_applied_rotation: int = 0
+
+# Whether the webview currently running was launched with "Prefer dark
+# mode" on. ``_maybe_reapply_dark_mode`` compares this to the freshly
+# loaded ``settings['prefer_dark_mode']`` after a ``reload`` to decide
+# whether the operator toggled the setting and the webview needs to be
+# respawned to pick up the new ANTHIAS_PREFER_DARK_MODE env var. Latched
+# at each spawn in ``load_browser``.
+_last_applied_dark_mode: bool = False
 
 # Cross-thread handoff for the linuxfb rotation-change path. The
 # subscriber thread (ViewerSubscriber) runs _handle_reload when a
@@ -182,6 +195,17 @@ def _build_webview_env() -> dict[str, str]:
       us at no perf cost.
     """
     env = dict(os.environ)
+
+    # "Prefer dark mode" applies to every board (the C++ webview turns
+    # this into a Chromium blink flag at launch — see applyDarkModePreference
+    # in src/anthias_webview/src/main.cpp), so set it before the
+    # board-specific rotation branches below. Pop a stale value so dialling
+    # the setting back off actually drops the flag on the respawned process.
+    if settings['prefer_dark_mode']:
+        env['ANTHIAS_PREFER_DARK_MODE'] = '1'
+    else:
+        env.pop('ANTHIAS_PREFER_DARK_MODE', None)
+
     rotation = _rotation_value()
     if _is_wayland_board():
         return env
@@ -212,8 +236,13 @@ def _wlr_transform_value(rotation_deg: int) -> str:
     )
 
 
-def _wlr_output_names() -> list[str]:
-    """List *enabled* connector names known to the wlroots compositor.
+def _wlr_output_names(include_disabled: bool = False) -> list[str]:
+    """List connector names known to the wlroots compositor.
+
+    By default only *enabled* outputs are returned. Pass
+    ``include_disabled=True`` to list every connector regardless of its
+    ``Enabled:`` state — the display-power path needs disabled outputs
+    too so it can turn a blanked screen back on.
 
     ``wlr-randr`` with no args prints one block per output. Each block
     looks like::
@@ -263,7 +292,9 @@ def _wlr_output_names() -> list[str]:
             # line, which on modern wlr-randr versions means the
             # output is implicitly enabled, so include it as a
             # conservative default).
-            if current is not None and current_enabled is not False:
+            if current is not None and (
+                include_disabled or current_enabled is not False
+            ):
                 names.append(current)
             current = line.split()[0]
             current_enabled = None
@@ -272,7 +303,9 @@ def _wlr_output_names() -> list[str]:
             if stripped.startswith('Enabled:'):
                 _, _, value = stripped.partition(':')
                 current_enabled = value.strip().lower() == 'yes'
-    if current is not None and current_enabled is not False:
+    if current is not None and (
+        include_disabled or current_enabled is not False
+    ):
         names.append(current)
     return names
 
@@ -336,6 +369,51 @@ def _apply_wlr_transform(rotation_deg: int) -> bool:
     return any_success
 
 
+def _apply_wlr_power(on: bool) -> bool:
+    """Turn every wlroots output on or off via ``wlr-randr``.
+
+    This is the Wayland half of display blanking: the compositor owns
+    the connector, so ``wlr-randr --output X --off`` puts the monitor
+    into DPMS power-off (no signal). No-op / False on non-Wayland boards
+    — eglfs/linuxfb can't be powered off externally (the Qt app holds
+    the DRM master), so the blank path paints a black screen there
+    instead. Toggling an already-on/off output is harmless, so we target
+    every connector including disabled ones (needed to turn a blanked
+    screen back on).
+    """
+    if not _is_wayland_board():
+        return False
+    names = _wlr_output_names(include_disabled=True)
+    if not names:
+        return False
+    flag = '--on' if on else '--off'
+    any_success = False
+    for name in names:
+        try:
+            result = subprocess.run(
+                ['wlr-randr', '--output', name, flag],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.SubprocessError) as exc:
+            logging.warning('wlr-randr %s failed for %s: %s', flag, name, exc)
+            continue
+        if result.returncode == 0:
+            logging.info('Set output %s %s', name, flag)
+            any_success = True
+        else:
+            logging.warning(
+                'wlr-randr %s on %s exited %d: %s',
+                flag,
+                name,
+                result.returncode,
+                (result.stderr or '').strip(),
+            )
+    return any_success
+
+
 def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     if not correlation_id:
         logging.warning(
@@ -363,17 +441,67 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     )
 
 
+def blank_display() -> None:
+    """Handle the ``blank`` command: darken the screen and pause playback.
+
+    Wayland boards DPMS-off via wlr-randr (true monitor power-off).
+    eglfs/linuxfb boards can't be powered off externally — the Qt app
+    owns the DRM master — so the asset loop paints BLACK_SCREEN there
+    instead (see start_loop). The wlr-randr call is an out-of-process
+    IPC that's safe from this subscriber thread; the webview repaint is
+    deferred to the main loop thread via the ``display_blanked`` flag.
+    """
+    global display_blanked, loop_is_stopped
+    display_blanked = True
+    loop_is_stopped = True
+    if _is_wayland_board():
+        _apply_wlr_power(False)
+    # Wake the main thread out of any in-progress asset sleep so it
+    # reaches the blanked branch (and the black repaint) promptly.
+    get_skip_event().set()
+
+
+def unblank_display() -> None:
+    """Handle the ``unblank`` command: power the display back on and resume."""
+    global display_blanked, loop_is_stopped
+    if _is_wayland_board():
+        _apply_wlr_power(True)
+    display_blanked = False
+    loop_is_stopped = False
+    get_skip_event().set()
+
+
+def stop_playback() -> None:
+    """Handle the ``stop`` command: pause the asset loop on the current
+    frame. Sets the module-level ``loop_is_stopped`` that ``start_loop``
+    actually reads — the previous ``setattr(__main__, ...)`` wrote to a
+    different namespace under ``python -m anthias_viewer`` and never took
+    effect (surfaced by the blank/unblank work; Copilot)."""
+    global loop_is_stopped
+    loop_is_stopped = stop_loop(scheduler)
+
+
+def play_playback() -> None:
+    """Handle the ``play`` command: resume the asset loop. If the display
+    is currently blanked, ``play`` implies ``unblank`` (power the
+    connector back on and clear the black paint) so we never end up
+    stopped-but-looking-live or repaint black on a later ``stop``."""
+    global loop_is_stopped
+    if display_blanked:
+        unblank_display()
+        return
+    loop_is_stopped = play_loop()
+
+
 commands = {
     'next': lambda _: skip_asset(scheduler),
     'previous': lambda _: skip_asset(scheduler, back=True),
     'asset': lambda asset_id: navigate_to_asset(scheduler, asset_id),
     'reload': lambda _: _handle_reload(),
-    'stop': lambda _: setattr(
-        __import__('__main__'), 'loop_is_stopped', stop_loop(scheduler)
-    ),
-    'play': lambda _: setattr(
-        __import__('__main__'), 'loop_is_stopped', play_loop()
-    ),
+    'stop': lambda _: stop_playback(),
+    'play': lambda _: play_playback(),
+    'blank': lambda _: blank_display(),
+    'unblank': lambda _: unblank_display(),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda corr: send_current_asset_id_to_server(corr),
 }
@@ -593,7 +721,13 @@ def load_browser(
     """
     global browser, _webview_supports_set_reload_interval
     global _last_applied_rotation, current_browser_url
+    global _last_applied_dark_mode
     logging.info('Loading browser...')
+
+    # Latch the dark-mode preference the spawned process is about to be
+    # launched with (via _build_webview_env), so a later ``reload`` only
+    # bounces the webview when the operator actually changed the setting.
+    _last_applied_dark_mode = bool(settings['prefer_dark_mode'])
 
     if max_attempts is None:
         max_attempts = BROWSER_SPAWN_MAX_ATTEMPTS
@@ -926,6 +1060,7 @@ def _handle_reload() -> None:
     """
     load_settings()
     _maybe_reapply_rotation()
+    _maybe_reapply_dark_mode()
     _skip_if_current_asset_inactive()
 
 
@@ -1012,6 +1147,45 @@ def _maybe_reapply_rotation() -> None:
     # the bounce happens promptly rather than after the current
     # asset's full duration elapses.
     _last_applied_rotation = rotation
+    _rotation_bounce_pending = True
+    get_skip_event().set()
+
+
+def _maybe_reapply_dark_mode() -> None:
+    """Respawn the webview when the operator toggled "Prefer dark mode".
+
+    The preference is realised by the C++ webview reading the
+    ANTHIAS_PREFER_DARK_MODE env var at launch and setting a Chromium
+    blink flag before QtWebEngine initialises (see
+    applyDarkModePreference in src/anthias_webview/src/main.cpp), so a
+    live toggle only takes effect on a fresh process. Unlike rotation
+    this applies to every board (linuxfb, eglfs and Wayland alike), so
+    there's no platform branch: latch the new value and request a webview
+    respawn that the main asset_loop thread performs.
+
+    We piggy-back on ``_rotation_bounce_pending`` — despite the name it
+    is simply the cross-thread "the main thread must terminate the webview
+    so it respawns with fresh env" handoff, which is exactly what a
+    dark-mode change needs too. ``_handle_reload`` runs on the subscriber
+    thread, which must not touch ``browser`` directly (see
+    _maybe_reapply_rotation), so the flag + skip_event is the only safe
+    path.
+
+    No-op when the on-disk value matches what the running webview was
+    launched with, so unrelated ``reload`` traffic doesn't blank the
+    screen.
+    """
+    global _last_applied_dark_mode, _rotation_bounce_pending
+    prefer_dark = bool(settings['prefer_dark_mode'])
+    if prefer_dark == _last_applied_dark_mode:
+        return
+
+    logging.info(
+        'Prefer-dark-mode changed: %s -> %s',
+        _last_applied_dark_mode,
+        prefer_dark,
+    )
+    _last_applied_dark_mode = prefer_dark
     _rotation_bounce_pending = True
     get_skip_event().set()
 
@@ -1343,6 +1517,12 @@ def start_loop() -> None:
     logging.debug('Entering infinite loop.')
     while True:
         if loop_is_stopped:
+            # Paint black once from the main thread (the owner of the
+            # webview / current_browser_url). Guard on the URL so we
+            # don't re-call view_image() — and re-log "Current url ..."
+            # at INFO — on every 0.1s tick while blanked (Copilot).
+            if display_blanked and current_browser_url != BLACK_SCREEN:
+                view_image(BLACK_SCREEN)
             sleep(0.1)
             continue
 

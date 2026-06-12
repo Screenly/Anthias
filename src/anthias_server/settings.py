@@ -36,6 +36,7 @@ DEFAULTS = {
         'default_duration': 10,
         'default_streaming_duration': '300',
         'player_name': '',
+        'prefer_dark_mode': False,
         'resolution': '1920x1080',
         'screen_rotation': 0,
         'show_splash': True,

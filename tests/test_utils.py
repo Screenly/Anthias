@@ -133,7 +133,9 @@ def test_string_to_bool_invalid_raises(value: str) -> None:
         ('http://wireload.net/logo.png', True),
         ('https://wireload.net/logo.png', True),
         ('rtsp://example.com/stream', True),
-        ('rtmp://example.com/stream', True),
+        # rtmp is rejected — Qt6's QMediaPlayer can't open it, so we
+        # don't let operators add a stream that renders black.
+        ('rtmp://example.com/stream', False),
         ('hello', False),
         ('ftp://example.com', False),
         ('http://', False),

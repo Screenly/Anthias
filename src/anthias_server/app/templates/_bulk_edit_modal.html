@@ -1,0 +1,137 @@
+{% comment %} Bulk-edit modal (#3046). Applies common schedule fields
+   to every selected asset at once. Each field group is opt-in via a
+   "Change …" toggle: only ticked groups are POSTed (their inputs are
+   disabled — and so omitted — until the toggle is on) and the matching
+   apply_* flag tells assets_bulk_update which groups to write. This
+   keeps an operator from silently overwriting fields they didn't mean
+   to touch across the whole selection.
+
+   Reuses the .js-flatpickr-datetime / .js-flatpickr-time inputs so
+   home.ts bindFlatpickr() (re-run on the bulkEditOpen watch) wires the
+   same date/time pickers the per-asset edit modal uses.
+{% endcomment %}
+<div
+  x-show="bulkEditOpen"
+  x-cloak
+  class="modal-overlay"
+  @keydown.escape.window="closeBulkEdit()"
+  @click.self="closeBulkEdit()"
+>
+  <div class="modal-card">
+    <div class="modal-card__header">
+      <h2>Edit
+        <span x-text="selectedIds.length"></span>
+        <span x-text="selectedIds.length === 1 ? 'asset' : 'assets'"></span>
+      </h2>
+      <button type="button" class="modal-card__close" @click="closeBulkEdit()" aria-label="Close">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+
+    <template x-if="bulkEditOpen">
+      <form
+        method="post"
+        action="{% url 'anthias_app:assets_bulk_update' %}"
+        hx-post="{% url 'anthias_app:assets_bulk_update' %}"
+        hx-target="#asset-table"
+        hx-swap="outerHTML"
+        hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done', {detail: {closeEdit: true}}))"
+        x-data="{ applyDates: false, applyDuration: false, applyTime: false, applyDays: false }"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="ids" :value="selectedIds.join(',')">
+        <div class="modal-card__body">
+          <p class="modal-section__hint mt-0">
+            Tick a field to change it on every selected asset. Unticked
+            fields are left as they are.
+          </p>
+
+          {# ---- Availability dates ---- #}
+          <section class="bulk-field" :class="applyDates && 'is-on'">
+            <label class="app-check app-switch bulk-field__toggle m-0">
+              <input type="checkbox" class="app-check-input" name="apply_dates" value="true" x-model="applyDates">
+              <span class="app-check-label ml-2">Start &amp; end dates</span>
+            </label>
+            <div class="app-form-grid mt-3" x-show="applyDates" x-cloak>
+              <div class="app-floating">
+                <input type="text" class="app-input js-flatpickr-datetime" id="bulk-start" name="start_date" :disabled="!applyDates" autocomplete="off">
+                <label for="bulk-start">Start</label>
+              </div>
+              <div class="app-floating">
+                <input type="text" class="app-input js-flatpickr-datetime" id="bulk-end" name="end_date" :disabled="!applyDates" autocomplete="off">
+                <label for="bulk-end">End</label>
+              </div>
+            </div>
+          </section>
+
+          {# ---- Duration ---- #}
+          <section class="bulk-field" :class="applyDuration && 'is-on'">
+            <label class="app-check app-switch bulk-field__toggle m-0">
+              <input type="checkbox" class="app-check-input" name="apply_duration" value="true" x-model="applyDuration">
+              <span class="app-check-label ml-2">Duration</span>
+            </label>
+            <div class="mt-3" x-show="applyDuration" x-cloak>
+              <div class="app-floating">
+                <input type="number" class="app-input" id="bulk-duration" name="duration" min="0" step="1" required :disabled="!applyDuration">
+                <label for="bulk-duration">Duration (seconds)</label>
+              </div>
+              <p class="modal-section__hint mt-2 mb-0">
+                Video assets keep their measured length — duration only
+                applies to images and web pages.
+              </p>
+            </div>
+          </section>
+
+          {# ---- Time-of-day window ---- #}
+          <section class="bulk-field" :class="applyTime && 'is-on'">
+            <label class="app-check app-switch bulk-field__toggle m-0">
+              <input type="checkbox" class="app-check-input" name="apply_time" value="true" x-model="applyTime">
+              <span class="app-check-label ml-2">Play from / until times</span>
+            </label>
+            <div class="mt-3" x-show="applyTime" x-cloak>
+              <div class="app-form-grid">
+                <div class="app-floating">
+                  <input type="text" class="app-input js-flatpickr-time" id="bulk-play-from" name="play_time_from" :disabled="!applyTime" autocomplete="off">
+                  <label for="bulk-play-from">Play from</label>
+                </div>
+                <div class="app-floating">
+                  <input type="text" class="app-input js-flatpickr-time" id="bulk-play-to" name="play_time_to" :disabled="!applyTime" autocomplete="off">
+                  <label for="bulk-play-to">Play until</label>
+                </div>
+              </div>
+              <p class="modal-section__hint mt-2 mb-0">
+                Leave both empty to clear the time window (play all day).
+              </p>
+            </div>
+          </section>
+
+          {# ---- Weekdays ---- #}
+          <section class="bulk-field" :class="applyDays && 'is-on'">
+            <label class="app-check app-switch bulk-field__toggle m-0">
+              <input type="checkbox" class="app-check-input" name="apply_days" value="true" x-model="applyDays">
+              <span class="app-check-label ml-2">Days of week</span>
+            </label>
+            <div class="mt-3" x-show="applyDays" x-cloak>
+              <div class="weekday-picker">
+                <template x-for="d in [{n:1,l:'Mon'},{n:2,l:'Tue'},{n:3,l:'Wed'},{n:4,l:'Thu'},{n:5,l:'Fri'},{n:6,l:'Sat'},{n:7,l:'Sun'}]" :key="d.n">
+                  <label class="weekday">
+                    <input type="checkbox" name="play_days" :value="d.n" checked :disabled="!applyDays">
+                    <span x-text="d.l"></span>
+                  </label>
+                </template>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="modal-card__footer">
+          <button type="button" class="app-btn app-btn-link" @click="closeBulkEdit()">Cancel</button>
+          <button type="submit" class="app-btn app-btn-primary"
+            :disabled="!(applyDates || applyDuration || applyTime || applyDays)">
+            <i class="ti ti-check"></i><span>Apply to selected</span>
+          </button>
+        </div>
+      </form>
+    </template>
+  </div>
+</div>

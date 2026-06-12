@@ -162,6 +162,7 @@ RUN apt-get update && \
         build-essential \
         ccache \
         cowsay \
+        crossbuild-essential-armhf \
         curl \
         flex \
         freetds-dev \

@@ -88,12 +88,18 @@ def validate_url(string: str) -> bool:
     True
     >>> validate_url("https://wireload.net/logo.png")
     True
+    >>> validate_url("rtsp://camera.local/stream")
+    True
+    >>> validate_url("rtmp://media.example.com/live")
+    False
     """
 
     checker = urlparse(string)
-    return bool(
-        checker.scheme in ('http', 'https', 'rtsp', 'rtmp') and checker.netloc
-    )
+    # rtmp is intentionally excluded: Qt6's QMediaPlayer (FFmpeg
+    # backend) can't open it — see remote_video._STREAM_SCHEMES — so
+    # accepting it would only let an operator add a stream that renders
+    # black on the screen.
+    return bool(checker.scheme in ('http', 'https', 'rtsp') and checker.netloc)
 
 
 def get_balena_supervisor_api_response(

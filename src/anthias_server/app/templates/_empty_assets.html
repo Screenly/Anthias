@@ -10,7 +10,7 @@
     {% else %}Assets you toggle off — or that haven't been enabled yet — appear here.
     {% endif %}
   </p>
-  <a href="#" @click.prevent="openAdd()">
+  <button type="button" class="empty-state__action" @click="openAdd()">
     <i class="ti ti-plus mr-1"></i>Add an asset
-  </a>
+  </button>
 </div>

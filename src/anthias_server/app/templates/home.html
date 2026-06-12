@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block main %}
-<div class="app-container" x-data="homeApp()" @asset-saved.window="closeModal()">
+<div class="app-container" :class="{ 'has-bulk-selection': selectedIds.length }" x-data="homeApp()" @asset-saved.window="closeModal()" @bulk-done.window="onBulkDone($event)">
   <div class="page-header-bar">
     <div class="page-header-bar__title">
       <h1 class="page-header">Schedule Overview</h1>
@@ -39,9 +39,17 @@
 
   {% include "_asset_table.html" %}
 
+  {% comment %} _asset_modal stays the first .modal-card in the DOM —
+     the add-asset layering integration test grabs .modal-card.first.
+     The bulk modals/bar (which also carry a .modal-card) are included
+     after it so that assumption holds. {% endcomment %}
   {% include "_asset_modal.html" %}
 
   {% include "_preview_modal.html" %}
+
+  {% include "_bulk_action_bar.html" %}
+
+  {% include "_bulk_edit_modal.html" %}
 
   {% comment %} Delete confirmation overlay — shared shell with the reboot/shutdown
      prompt on /settings (.modal-overlay + .modal-card pattern). {% endcomment %}

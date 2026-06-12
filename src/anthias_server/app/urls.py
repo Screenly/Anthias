@@ -48,6 +48,16 @@ urlpatterns = [
     path('assets/upload/', views.assets_upload, name='assets_upload'),
     path('assets/order/', views.assets_order, name='assets_order'),
     path(
+        'assets/bulk/action/',
+        views.assets_bulk_action,
+        name='assets_bulk_action',
+    ),
+    path(
+        'assets/bulk/update/',
+        views.assets_bulk_update,
+        name='assets_bulk_update',
+    ),
+    path(
         'assets/control/<str:command>/',
         views.assets_control,
         name='assets_control',
