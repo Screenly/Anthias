@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import tarfile
@@ -9,8 +10,10 @@ from os import path
 from unittest import mock
 
 import pytest
+from django.http import StreamingHttpResponse
 
 from anthias_server.lib.backup_helper import (
+    astream_backup,
     backup_archive_name,
     create_backup,
     recover,
@@ -116,6 +119,75 @@ def test_stream_backup_stops_when_consumer_disconnects(
     stream = stream_backup()
     assert next(stream)
     stream.close()  # GeneratorExit → read end closed
+    main_thread = threading.main_thread()
+    for thread in threading.enumerate():
+        if thread.name == 'backup-stream' and thread is not main_thread:
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+
+
+def test_astream_backup_response_streams_under_asgi(
+    backup_home: str,
+) -> None:
+    # Regression for issue #3073. StreamingHttpResponse only streams an
+    # *asynchronous* iterator under ASGI; handed a sync generator,
+    # Django's __aiter__ does `await sync_to_async(list)(...)` — it
+    # builds the whole archive in RAM before the first byte, which
+    # reproduced the original 0-bytes-then-timeout failure. The download
+    # view must wrap the producer in astream_backup() so Django takes
+    # its real streaming path (is_async == True) and round-trips back
+    # through recover() unchanged.
+    marker = path.join(backup_home, '.anthias', 'anthias.conf')
+    with open(marker, 'w') as f:
+        f.write('[viewer]\n')
+
+    response = StreamingHttpResponse(
+        astream_backup(), content_type='application/x-tgz'
+    )
+    # The crux of the fix: a sync generator would leave this False and
+    # send Django down the list()-buffering branch.
+    assert response.is_async is True
+
+    async def drain() -> list[bytes]:
+        # aiter(response) is exactly what Django's ASGI handler consumes.
+        return [part async for part in aiter(response)]
+
+    chunks = asyncio.run(drain())
+    assert chunks
+
+    os.makedirs(path.join(backup_home, static_dir), exist_ok=True)
+    file_path = path.join(backup_home, static_dir, 'astreamed.tar.gz')
+    with open(file_path, 'wb') as out_file:
+        out_file.write(b''.join(chunks))
+
+    with tarfile.open(file_path, 'r:gz') as tar:
+        names = tar.getnames()
+    assert '.anthias/anthias.conf' in names
+
+    os.remove(marker)
+    recover(file_path)
+    assert path.isfile(marker)
+
+
+def test_astream_backup_stops_producer_when_consumer_disconnects(
+    backup_home: str,
+) -> None:
+    # A client that disconnects mid-download makes Django aclose() the
+    # async generator. Cleanup must stop the producer thread (and not
+    # raise) — a cross-thread close racing an in-flight next() would
+    # leave it taring forever (PR #3074 review).
+    marker = path.join(backup_home, '.anthias', 'anthias.conf')
+    with open(marker, 'w') as f:
+        f.write('[viewer]\n')
+
+    async def take_one_then_disconnect() -> None:
+        agen = astream_backup()
+        first = await agen.__anext__()
+        assert first
+        await agen.aclose()  # GeneratorExit cleanup path
+
+    asyncio.run(take_one_then_disconnect())
+
     main_thread = threading.main_thread()
     for thread in threading.enumerate():
         if thread.name == 'backup-stream' and thread is not main_thread:

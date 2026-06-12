@@ -1329,16 +1329,18 @@ def settings_backup(request: HttpRequest) -> HttpResponseBase:
     that build takes minutes on an SBC with a real content library.
     Browsers abort a request that has produced no bytes for ~5
     minutes, so on devices like the reporter's Pi 3 "Get backup"
-    spun and then silently failed every time. stream_backup() puts
+    spun and then silently failed every time. astream_backup() puts
     the first tar block on the wire immediately and keeps bytes
     flowing for the whole build (and needs no staging space on the
-    SD card). The iterator is synchronous — Django adapts it under
-    ASGI via its thread executor, which is fine for an operation
-    this rare.
+    SD card).
+
+    The iterator must be async: StreamingHttpResponse list()-buffers a
+    *sync* generator under ASGI (builds the whole archive before the
+    first byte), which silently brought the timeout back — issue #3073.
     """
     filename = backup_helper.backup_archive_name(settings['player_name'])
     response = StreamingHttpResponse(
-        backup_helper.stream_backup(),
+        backup_helper.astream_backup(),
         content_type='application/x-tgz',
     )
     # content_disposition_header() RFC-8187-escapes the filename —
