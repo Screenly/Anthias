@@ -77,7 +77,14 @@ elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Modu
     # 64-bit OS on a Pi 3 → arm64 Qt 6 viewer (`pi3-64`); a 32-bit OS
     # keeps the legacy armhf/Qt5 `pi3` image. See
     # bin/install.sh::set_device_type for the full rationale.
-    if [ "$(uname -m)" = "aarch64" ]; then
+    #
+    # Key off the *userspace* arch, not `uname -m`: 32-bit Raspberry Pi
+    # OS ships a 64-bit kernel by default on Pi 3 (arm_64bit=1), so
+    # `uname -m` reports aarch64 even though Docker/apt are armhf. Pulling
+    # the arm64 `pi3-64` image there fails with "no matching manifest for
+    # linux/arm/v8". `dpkg --print-architecture` maps 1:1 to the image
+    # platform (armhf/arm64).
+    if [ "$(dpkg --print-architecture)" = "arm64" ]; then
         export DEVICE_TYPE="pi3-64"
     else
         export DEVICE_TYPE="pi3"

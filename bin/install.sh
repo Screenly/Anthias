@@ -417,12 +417,19 @@ function set_device_type() {
         export DEVICE_TYPE="pi4-64"
     elif grep -qF "Raspberry Pi 3" /proc/device-tree/model || grep -qF "Compute Module 3" /proc/device-tree/model; then
         # A Pi 3 reports the same model string on both a 32-bit and a
-        # 64-bit OS — the split is the running kernel/userland arch. On
-        # a 64-bit OS use the arm64 Qt 6 viewer (`pi3-64`, the
-        # recommended stream); a 32-bit OS gets the legacy armhf/Qt5
-        # `pi3` image. There's no in-place arch switch: a device only
-        # changes streams by reflashing to a different-arch OS.
-        if [ "$(uname -m)" = "aarch64" ]; then
+        # 64-bit OS — the split is the running userland arch. On a 64-bit
+        # OS use the arm64 Qt 6 viewer (`pi3-64`, the recommended
+        # stream); a 32-bit OS gets the legacy armhf/Qt5 `pi3` image.
+        # There's no in-place arch switch: a device only changes streams
+        # by reflashing to a different-arch OS.
+        #
+        # Gate on the *userspace* arch, not `uname -m`: 32-bit Raspberry
+        # Pi OS ships a 64-bit kernel by default on Pi 3 (arm_64bit=1),
+        # so `uname -m` reports aarch64 while Docker/apt are armhf.
+        # Selecting `pi3-64` there fails the image pull with "no matching
+        # manifest for linux/arm/v8". `dpkg --print-architecture` maps
+        # 1:1 to the image platform (armhf/arm64).
+        if [ "$(dpkg --print-architecture)" = "arm64" ]; then
             export DEVICE_TYPE="pi3-64"
         else
             export DEVICE_TYPE="pi3"
