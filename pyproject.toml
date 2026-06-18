@@ -96,7 +96,7 @@ viewer = [
     "urllib3==2.7.0",
 ]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.1.0",
     "pytest-cov==7.1.0",
     "pytest-django==4.12.0",
     "pytest-mock==3.15.1",
@@ -118,7 +118,7 @@ local = [
     "tenacity==9.1.4",
 ]
 website = [
-    "pytest==9.0.3",
+    "pytest==9.1.0",
     "requests==2.33.1",
 ]
 test = [
