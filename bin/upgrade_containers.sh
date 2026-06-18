@@ -167,17 +167,17 @@ case "$DEVICE_TYPE" in
         CEC_DEV=""
         if command -v cec-ctl >/dev/null 2>&1; then
             for DEV in /dev/cec0 /dev/cec1; do
-                [ -e "$DEV" ] || continue
+                [[ -e "$DEV" ]] || continue
                 PHYS_ADDR=$(cec-ctl -d "$DEV" 2>/dev/null \
                     | grep "Physical Address" | head -1 | awk -F: '{print $2}' | xargs)
-                if [ -n "$PHYS_ADDR" ] && [ "$PHYS_ADDR" != "f.f.f.f" ]; then
+                if [[ -n "$PHYS_ADDR" ]] && [[ "$PHYS_ADDR" != "f.f.f.f" ]]; then
                     CEC_DEV="$DEV"
                     break
                 fi
             done
         fi
 
-        if [ -n "$CEC_DEV" ]; then
+        if [[ -n "$CEC_DEV" ]]; then
             # libcec only ever probes /dev/cec0 — it doesn't enumerate
             # /dev/cec1, even when that's the port actually connected
             # to the TV (confirmed on hardware: with only /dev/cec1
@@ -200,18 +200,18 @@ case "$DEVICE_TYPE" in
             # it (cec-ctl becomes available, or the TV is on); that's
             # a known limitation of this degraded fallback.
             MOUNT_REPL=""
-            if [ -e /dev/cec0 ]; then
+            if [[ -e /dev/cec0 ]]; then
                 MOUNT_REPL='\1- "/dev/cec0:/dev/cec0"'
             fi
-            if [ -e /dev/cec1 ]; then
-                if [ -n "$MOUNT_REPL" ]; then
+            if [[ -e /dev/cec1 ]]; then
+                if [[ -n "$MOUNT_REPL" ]]; then
                     MOUNT_REPL="${MOUNT_REPL}\\n\\1- \"/dev/cec1:/dev/cec1\""
                 else
                     MOUNT_REPL='\1- "/dev/cec1:/dev/cec1"'
                 fi
             fi
 
-            if [ -n "$MOUNT_REPL" ]; then
+            if [[ -n "$MOUNT_REPL" ]]; then
                 sed -i "s|^\([[:space:]]*\)- \"/dev/vchiq:/dev/vchiq\"\$|${MOUNT_REPL}|" \
                     /home/${USER}/anthias/docker-compose.yml
             else
