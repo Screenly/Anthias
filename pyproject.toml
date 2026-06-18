@@ -44,7 +44,7 @@ docker-image-builder = [
 server = [
     "cec==0.2.8",
     "celery==5.6.3",
-    "certifi==2026.5.20",
+    "certifi==2026.6.17",
     "channels==4.3.2",
     "channels-redis==4.3.0",
     "Django==5.2.14",
@@ -71,7 +71,7 @@ server = [
     "PyYAML==6.0.3",
     "redis==7.4.0",
     "requests==2.33.1",
-    "sentry-sdk==2.61.1",
+    "sentry-sdk==2.63.0",
     "tenacity==9.1.4",
     "sh==2.3.0",
     "urllib3==2.7.0",
@@ -81,7 +81,7 @@ server = [
 ]
 viewer = [
     "cec==0.2.8",
-    "certifi==2026.5.20",
+    "certifi==2026.6.17",
     "Django==5.2.14",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
@@ -90,13 +90,13 @@ viewer = [
     "pytz==2026.2",
     "redis==7.4.0",
     "requests==2.33.1",
-    "sentry-sdk==2.61.1",
+    "sentry-sdk==2.63.0",
     "tenacity==9.1.4",
     "sh==2.3.0",
     "urllib3==2.7.0",
 ]
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.1.0",
     "pytest-cov==7.1.0",
     "pytest-django==4.12.0",
     "pytest-mock==3.15.1",
@@ -106,7 +106,7 @@ dev = [
     "time-machine==3.2.0",
 ]
 host = [
-    "ansible-core==2.20.5",
+    "ansible-core==2.21.0",
     "netifaces2==0.0.22",
     "redis==7.4.0",
     "requests==2.33.1",
@@ -118,7 +118,7 @@ local = [
     "tenacity==9.1.4",
 ]
 website = [
-    "pytest==9.0.3",
+    "pytest==9.1.0",
     "requests==2.33.1",
 ]
 test = [
@@ -149,7 +149,7 @@ mypy = [
     # ignored, mirroring the cec / pydbus / sh pattern.
     "Pillow==12.2.0",
     "pytz==2026.2",
-    "sentry-sdk==2.61.1",
+    "sentry-sdk==2.63.0",
     "whitenoise==6.12.0",
 ]
 
