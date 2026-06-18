@@ -175,7 +175,11 @@ def cec_available() -> bool:
     means the adapter *could* work, not that it will: the actual
     success/failure is surfaced by ``set_display_power``'s toast.
     """
-    return os.path.exists('/dev/cec0') or os.path.exists('/dev/vchiq')
+    return (
+        os.path.exists('/dev/cec0')
+        or os.path.exists('/dev/cec1')
+        or os.path.exists('/dev/vchiq')
+    )
 
 
 def get_uptime() -> float:

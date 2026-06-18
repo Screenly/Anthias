@@ -163,18 +163,44 @@ cat /home/${USER}/anthias/docker-compose.yml.tmpl \
 # pre-fix behaviour of dropping the bind mount entirely). Fixes
 # the "CEC error" toast on Pi 5 reported in issue #2863.
 case "$DEVICE_TYPE" in
-    pi5)
-        sed -i 's|^\([[:space:]]*\)- "/dev/vchiq:/dev/vchiq"$|\1- "/dev/cec0:/dev/cec0"\n\1- "/dev/cec1:/dev/cec1"|' \
-            /home/${USER}/anthias/docker-compose.yml
-        ;;
-    x86|arm64)
-        if [ -e /dev/cec0 ]; then
-            sed -i 's|/dev/vchiq:/dev/vchiq|/dev/cec0:/dev/cec0|g' \
+    pi4-64|pi5)
+        CEC_DEV=""
+        if command -v cec-ctl >/dev/null 2>&1; then
+            for DEV in /dev/cec0 /dev/cec1; do
+                [ -e "$DEV" ] || continue
+                PHYS_ADDR=$(cec-ctl -d "$DEV" --playback --logical-address 2>/dev/null \
+                    | grep "Physical Address" | awk -F: '{print $2}' | xargs)
+                if [ -n "$PHYS_ADDR" ] && [ "$PHYS_ADDR" != "f.f.f.f" ]; then
+                    CEC_DEV="$DEV"
+                    break
+                fi
+            done
+        fi
+
+        if [ -n "$CEC_DEV" ]; then
+            # libcec solo prueba /dev/cec0 — no enumera /dev/cec1
+            # aunque sea el puerto realmente conectado a la TV
+            # (confirmado en hardware: con solo /dev/cec1 montado con
+            # su propio nombre, cec.init() tira "No default adapter
+            # found"). Remapeamos el puerto que esté vivo al path fijo
+            # /dev/cec0 dentro del contenedor, sin importar a qué
+            # micro-HDMI físico corresponda en el host.
+            sed -i "s|^\([[:space:]]*\)- \"/dev/vchiq:/dev/vchiq\"\$|\1- \"$CEC_DEV:/dev/cec0\"|" \
                 /home/${USER}/anthias/docker-compose.yml
         else
-            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+            # cec-ctl no está en el host, o ningún puerto reportó
+            # dirección física (TV apagada durante el upgrade, por
+            # ejemplo): mantenemos el comportamiento anterior —
+            # montar los dos con su nombre real. Si el puerto vivo
+            # resulta ser /dev/cec1, va a seguir sin funcionar hasta
+            # el próximo upgrade que sí pueda detectarlo; es una
+            # limitación conocida de este fallback degradado.
+            sed -i 's|^\([[:space:]]*\)- "/dev/vchiq:/dev/vchiq"$|\1- "/dev/cec0:/dev/cec0"\n\1- "/dev/cec1:/dev/cec1"|' \
                 /home/${USER}/anthias/docker-compose.yml
         fi
+        ;;
+    x86|arm64)
+        ...
         ;;
 esac
 

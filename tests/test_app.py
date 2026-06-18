@@ -1865,11 +1865,13 @@ def test_skip_buttons_publish_correct_command(
 # 8. Display power (experimental, HDMI-CEC) — issue #2575
 # ---------------------------------------------------------------------------
 #
-# The section is gated on cec_available(), which stats /dev/cec0 and
-# /dev/vchiq. Neither exists in the test container by default, so the
-# section is hidden on every other settings test. To exercise the
-# visible state we stub /dev/vchiq with a plain file before navigating
-# and remove it on teardown.
+# The section is gated on cec_available(), which stats /dev/cec0,
+# /dev/cec1, and /dev/vchiq. The /dev/cec1 check covers Pi 4/5 hosts
+# where the display is wired to the second micro-HDMI port (issue
+# #2863). None of these exist in the test container by default, so
+# the section is hidden on every other settings test. To exercise the
+# visible state we stub one of them with a plain file before
+# navigating and remove it on teardown.
 
 # Screenshot capture is OFF by default. The original PR (#2886) used
 # screenshots for a one-time UX review; running them on every CI cycle
@@ -1921,6 +1923,32 @@ def cec_stub_device() -> Any:
                 pass
 
 
+@pytest.fixture
+def cec1_stub_device() -> Any:
+    """Create a stub `/dev/cec1` so `diagnostics.cec_available()`
+    returns True via the second-HDMI-port path rather than
+    `/dev/vchiq`. Exercises the Pi 4/5 dual-micro-HDMI case where the
+    display is wired to the second port and only `/dev/cec1` exists
+    (issue #2863's actual failure mode).
+    """
+    path = '/dev/cec1'
+    created = False
+    if not os.path.exists(path):
+        try:
+            open(path, 'w').close()
+            created = True
+        except OSError:
+            pytest.skip('cannot stub /dev/cec1 in this environment')
+    try:
+        yield path
+    finally:
+        if created:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
 def test_display_power_section_hidden_without_cec_adapter(
@@ -1929,7 +1957,11 @@ def test_display_power_section_hidden_without_cec_adapter(
     """No /dev/cec0 or /dev/vchiq in the container by default — the
     experimental section must NOT render. Guards against accidentally
     surfacing CEC controls on x86 / non-CEC hardware."""
-    if os.path.exists('/dev/vchiq') or os.path.exists('/dev/cec0'):
+    if (
+        os.path.exists('/dev/vchiq')
+        or os.path.exists('/dev/cec0')
+        or os.path.exists('/dev/cec1')
+    ):
         pytest.skip('CEC device present; cannot test the hidden case')
     page.goto(SETTINGS_URL)
     expect(
@@ -1973,6 +2005,20 @@ def test_display_power_section_visible_with_cec_adapter(
                 'height': box['height'] + 16,
             },
         )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_display_power_section_visible_with_cec1_only(
+    reset_assets: None, page: Page, cec1_stub_device: str
+) -> None:
+    """Pi 4/5 with the display on the second micro-HDMI port exposes
+    only /dev/cec1, not /dev/cec0 — the section must still render
+    instead of silently disappearing (issue #2863)."""
+    page.goto(SETTINGS_URL)
+    expect(page.get_by_role('heading', name='Display power')).to_be_visible()
+    expect(page.get_by_role('button', name='Turn display on')).to_be_visible()
+    expect(page.get_by_role('button', name='Turn display off')).to_be_visible()
 
 
 @pytest.mark.integration

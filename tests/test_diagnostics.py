@@ -289,6 +289,17 @@ def test_cec_available_true_when_cec0_present() -> None:
         assert diagnostics.cec_available() is True
 
 
+def test_cec_available_true_when_only_cec1_present() -> None:
+    """Pi 4/5 displays wired to the second micro-HDMI port only
+    expose /dev/cec1 — the gate must not assume /dev/cec0 is the only
+    possible CEC node (the actual failure mode behind the
+    device-routing fix for issue #2863)."""
+    with mock.patch.object(
+        os.path, 'exists', side_effect=lambda p: p == '/dev/cec1'
+    ):
+        assert diagnostics.cec_available() is True
+
+
 def test_cec_available_true_when_vchiq_present() -> None:
     with mock.patch.object(
         os.path, 'exists', side_effect=lambda p: p == '/dev/vchiq'
