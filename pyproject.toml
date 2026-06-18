@@ -44,7 +44,7 @@ docker-image-builder = [
 server = [
     "cec==0.2.8",
     "celery==5.6.3",
-    "certifi==2026.5.20",
+    "certifi==2026.6.17",
     "channels==4.3.2",
     "channels-redis==4.3.0",
     "Django==5.2.14",
@@ -81,7 +81,7 @@ server = [
 ]
 viewer = [
     "cec==0.2.8",
-    "certifi==2026.5.20",
+    "certifi==2026.6.17",
     "Django==5.2.14",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
