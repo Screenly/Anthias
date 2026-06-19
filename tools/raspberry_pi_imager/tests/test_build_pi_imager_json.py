@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tools.raspberry_pi_imager.build_pi_imager_json import (
+    BOARD_DEVICE_TAGS,
     MAINTENANCE_SUFFIX,
     REQUIRED_FIELDS,
     SUPPORTED_BOARDS,
@@ -198,6 +199,15 @@ def test_get_asset_list_excludes_pi1(
     assert all(get_board_from_url(u) != 'pi1' for u in urls)
 
 
+def test_get_asset_list_hides_32bit_pi3_but_keeps_pi3_64(
+    mock_release_assets: MagicMock,
+) -> None:
+    boards = {get_board_from_url(u) for u in get_asset_list(RELEASE_TAG)}
+
+    assert 'pi3' not in boards
+    assert 'pi3-64' in boards
+
+
 def test_get_asset_list_excludes_non_zst(
     mock_release_assets: MagicMock,
 ) -> None:
@@ -278,6 +288,27 @@ def test_retrieve_and_patch_json_has_all_required_fields(
     assert not missing, f'Missing fields: {missing}'
 
 
+@pytest.mark.parametrize('board, expected_tags', BOARD_DEVICE_TAGS.items())
+def test_retrieve_and_patch_json_adds_device_tags(
+    mock_requests_get: MagicMock, board: str, expected_tags: list[str]
+) -> None:
+    mock_requests_get.return_value = _build_side_effect(
+        make_image_metadata(board)
+    )
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-{board}.img.zst'
+
+    assert retrieve_and_patch_json(url)['devices'] == expected_tags
+
+
+def test_every_supported_board_has_device_tags() -> None:
+    # An untagged entry is silently dropped by Imager's exclusive-matching
+    # devices (e.g. the Raspberry Pi 5), so every listed board must map to
+    # at least one hardware tag. BOARD_DEVICE_TAGS may carry extras (e.g.
+    # the hidden pi3) that are no longer in SUPPORTED_BOARDS.
+    assert SUPPORTED_BOARDS <= set(BOARD_DEVICE_TAGS)
+    assert all(BOARD_DEVICE_TAGS[board] for board in SUPPORTED_BOARDS)
+
+
 # ---------------------------------------------------------------------------
 # build_imager_json
 # ---------------------------------------------------------------------------
@@ -305,3 +336,13 @@ def test_build_imager_json_excludes_pi1(mock_full_build: MagicMock) -> None:
     result = build_imager_json()
 
     assert all('(pi1)' not in entry['name'] for entry in result['os_list'])
+
+
+def test_build_imager_json_tags_every_entry_for_its_board(
+    mock_full_build: MagicMock,
+) -> None:
+    result = build_imager_json()
+
+    for entry in result['os_list']:
+        board = get_board_from_url(entry['url'])
+        assert entry['devices'] == BOARD_DEVICE_TAGS[board]

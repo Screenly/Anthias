@@ -167,6 +167,18 @@ jobs:
             jq -e '.os_list[] |
               (.extract_size | type == "number") and
               (.image_download_size | type == "number")' "$out" > /dev/null
+            # Every entry should carry at least one hardware tag — an
+            # untagged entry is silently dropped by Imager's
+            # exclusive-matching devices (e.g. the Raspberry Pi 5). This
+            # is a non-fatal warning, not a hard gate: a release built
+            # before the generator started emitting `devices` would
+            # otherwise block every website deploy until the next
+            # release. New releases always include the field.
+            if ! jq -e '[.os_list[] |
+              (.devices | type == "array") and (.devices | length > 0)]
+              | all' "$out" > /dev/null; then
+              echo "::warning::rpi-imager.json has entries without a non-empty 'devices' tag; Imager may hide them on exclusive-matching devices (e.g. Pi 5). This release predates the devices change — re-cut a release."
+            fi
             jq -e '[.os_list[] | .name | test("pi1")] | any | not' "$out" > /dev/null
             jq -e '[.os_list[] | .url | startswith("https://")] | all' "$out" > /dev/null
             echo "rpi-imager.json validation passed"
