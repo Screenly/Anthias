@@ -686,19 +686,15 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     from yt_dlp import YoutubeDL
     from yt_dlp.utils import DownloadError
 
-    # Bias yt-dlp toward the codec the board can actually decode in
-    # hardware. HEVC-only boards (Pi 5) must not receive an H.264
-    # stream — normalize_video_asset would reject it immediately with
-    # "Video codec 'h264' is not hardware-decoded on this device."
-    # Boards that support both codecs keep h264 as the preference:
-    # H.264 streams are more widely available on YouTube. Unknown
-    # boards fall back to h264 so the download still proceeds;
-    # normalize_video_asset will gate on the actual codec if needed.
+    # Bias yt-dlp toward the board's hardware-decoded codec so playback
+    # is as efficient as possible. Pi 5 prefers HEVC (VideoCore VII HW
+    # path) but also accepts H.264 via software decode on Cortex-A76 —
+    # YouTube rarely serves HEVC so H.264 is the realistic outcome.
+    # Boards without HEVC (Pi 2/3) fall back to H.264. Unknown boards
+    # default to H.264; normalize_video_asset gates on the actual codec.
     from anthias_server.processing import _hw_decoded_codecs
     _supported = _hw_decoded_codecs()
-    # Prefer HEVC when the board can decode it — it's the hardware path
-    # on Pi 5 and is more efficient than H.264 wherever it's available.
-    # Boards without HEVC support (Pi 2/3) fall back to H.264.
+    # Prefer HEVC when the board can hardware-decode it; fall back to H.264.
     _preferred_vcodec = 'hevc' if 'hevc' in _supported else 'h264'
 
     ydl_opts = {
