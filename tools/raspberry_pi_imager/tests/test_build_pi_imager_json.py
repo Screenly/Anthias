@@ -67,6 +67,14 @@ MOCK_RELEASE_ASSETS = {
 }
 
 
+BOARD_DEVICES = {
+    'pi2': ['pi2-32bit'],
+    'pi3': ['pi3-32bit'],
+    'pi4-64': ['pi4-64bit'],
+    'pi5': ['pi5-64bit'],
+}
+
+
 def make_image_metadata(board: str) -> dict[str, Any]:
     return {
         'name': f'Anthias ({board})',
@@ -78,6 +86,7 @@ def make_image_metadata(board: str) -> dict[str, Any]:
         'image_download_size': '1600981967',
         'image_download_sha256': 'def456',
         'release_date': '2025-01-01',
+        'devices': BOARD_DEVICES[board],
     }
 
 
@@ -276,6 +285,20 @@ def test_retrieve_and_patch_json_has_all_required_fields(
     missing = REQUIRED_FIELDS - result.keys()
 
     assert not missing, f'Missing fields: {missing}'
+
+
+@pytest.mark.parametrize('board, expected_devices', BOARD_DEVICES.items())
+def test_retrieve_and_patch_json_preserves_devices(
+    mock_requests_get: MagicMock,
+    board: str,
+    expected_devices: list[str],
+) -> None:
+    mock_requests_get.return_value = _build_side_effect(
+        make_image_metadata(board)
+    )
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-{board}.img.zst'
+
+    assert retrieve_and_patch_json(url)['devices'] == expected_devices
 
 
 # ---------------------------------------------------------------------------
