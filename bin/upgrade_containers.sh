@@ -163,9 +163,64 @@ cat /home/${USER}/anthias/docker-compose.yml.tmpl \
 # pre-fix behaviour of dropping the bind mount entirely). Fixes
 # the "CEC error" toast on Pi 5 reported in issue #2863.
 case "$DEVICE_TYPE" in
-    pi5)
-        sed -i 's|^\([[:space:]]*\)- "/dev/vchiq:/dev/vchiq"$|\1- "/dev/cec0:/dev/cec0"\n\1- "/dev/cec1:/dev/cec1"|' \
-            /home/${USER}/anthias/docker-compose.yml
+    pi4-64|pi5)
+        CEC_DEV=""
+        if command -v cec-ctl >/dev/null 2>&1; then
+            for DEV in /dev/cec0 /dev/cec1; do
+                [[ -e "$DEV" ]] || continue
+                PHYS_ADDR=$(cec-ctl -d "$DEV" 2>/dev/null \
+                    | grep "Physical Address" | head -1 | awk -F: '{print $2}' | xargs)
+                if [[ -n "$PHYS_ADDR" ]] && [[ "$PHYS_ADDR" != "f.f.f.f" ]]; then
+                    CEC_DEV="$DEV"
+                    break
+                fi
+            done
+        fi
+
+        if [[ -n "$CEC_DEV" ]]; then
+            # libcec only ever probes /dev/cec0 — it doesn't enumerate
+            # /dev/cec1, even when that's the port actually connected
+            # to the TV (confirmed on hardware: with only /dev/cec1
+            # mounted under its real name, cec.init() raises "No
+            # default adapter found"). Remap whichever port is live to
+            # the fixed path /dev/cec0 inside the container, regardless
+            # of which physical micro-HDMI port it corresponds to on
+            # the host.
+            sed -i "s|^\([[:space:]]*\)- \"/dev/vchiq:/dev/vchiq\"\$|\1- \"$CEC_DEV:/dev/cec0\"|" \
+                /home/${USER}/anthias/docker-compose.yml
+        else
+            # cec-ctl isn't on the host, or no port reported a valid
+            # physical address (e.g. the TV was off during the
+            # upgrade). Mount whichever real /dev/cecN nodes actually
+            # exist on the host, under their real names — devices:
+            # fails container start if a listed host path doesn't
+            # exist, so we can't assume both are always present.
+            # If the live port turns out to be /dev/cec1, this will
+            # keep not working until a future upgrade run can detect
+            # it (cec-ctl becomes available, or the TV is on); that's
+            # a known limitation of this degraded fallback.
+            MOUNT_REPL=""
+            if [[ -e /dev/cec0 ]]; then
+                MOUNT_REPL='\1- "/dev/cec0:/dev/cec0"'
+            fi
+            if [[ -e /dev/cec1 ]]; then
+                if [[ -n "$MOUNT_REPL" ]]; then
+                    MOUNT_REPL="${MOUNT_REPL}\\n\\1- \"/dev/cec1:/dev/cec1\""
+                else
+                    MOUNT_REPL='\1- "/dev/cec1:/dev/cec1"'
+                fi
+            fi
+
+            if [[ -n "$MOUNT_REPL" ]]; then
+                sed -i "s|^\([[:space:]]*\)- \"/dev/vchiq:/dev/vchiq\"\$|${MOUNT_REPL}|" \
+                    /home/${USER}/anthias/docker-compose.yml
+            else
+                # Neither node exists — same situation as a board
+                # with no CEC adapter at all; drop the mount entirely.
+                sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
+                    /home/${USER}/anthias/docker-compose.yml
+            fi
+        fi
         ;;
     x86|arm64)
         if [ -e /dev/cec0 ]; then
