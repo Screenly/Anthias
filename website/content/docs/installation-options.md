@@ -6,14 +6,7 @@ aliases:
   - "/docs/installation-options/"
 ---
 
-> **Note**
->
-> Raspberry Pi 5 images are not yet available via the Raspberry Pi Imager. For Pi 5 installations, please use either:
-> * [balenaHub images](#using-the-images-from-balenahub)
-> * [Release images](#using-the-images-from-the-releases)
-> * [Manual installation](#installing-on-raspberry-pi-os-lite-or-debian)
-
-The quickest way to get started on supported devices is to use [Raspberry Pi Imager](https://www.screenly.io/blog/2022/12/13/anthias-and-screenly-now-in-rpi-imager/), where you can find Anthias under `Other specific-purpose OS`.
+The quickest way to get started on a Raspberry Pi is to use [Raspberry Pi Imager](https://www.raspberrypi.com/software/), where you can find Anthias under **Other specific-purpose OS &rarr; Digital signage and kiosks**. Pick the entry that matches your Pi (Pi 2, Pi 3, Pi 4, or Pi 5), select your SD card, and flash &mdash; the device boots straight into Anthias.
 
 ![Raspberry Pi Imager showing Other specific-purpose OS category](/docs/images/imager-01.png)
 

@@ -217,14 +217,26 @@
 <section class="bg-bg-light py-20 lg:py-28 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto">
         <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Get running in minutes</h2>
-        <p class="text-zinc-500 mt-3 text-lg max-w-xl">Install Anthias on Raspberry Pi OS or Debian with a single command.</p>
+        <p class="text-zinc-500 mt-3 text-lg max-w-xl">Two ready-to-go paths: flash an SD card with Raspberry Pi Imager, or install over an existing Raspberry Pi OS / Debian system.</p>
 
-        <div class="mt-8 bg-brand-dark rounded-lg p-6 max-w-2xl">
-            <p class="text-white/50 text-xs font-mono mb-2">$ install on Raspberry Pi OS / Debian</p>
-            <code class="text-brand-yellow font-mono text-sm md:text-base break-all">bash &lt;(curl -sL https://install-anthias.srly.io)</code>
+        <div class="mt-8 grid md:grid-cols-2 gap-6 max-w-4xl">
+            <div class="bg-white border border-black/10 rounded-lg p-6 flex flex-col">
+                <h3 class="text-lg font-bold">Raspberry Pi Imager</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed flex-grow">Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, pick <em>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</em>, choose your Pi model, and flash. The SD card boots straight into Anthias &mdash; no SSH, no installer prompts.</p>
+                <p class="text-zinc-400 text-xs mt-3">Raspberry Pi 2 through Pi 5.</p>
+            </div>
+
+            <div class="bg-brand-dark rounded-lg p-6 flex flex-col">
+                <h3 class="text-white text-lg font-bold">One-line install</h3>
+                <p class="text-white/60 text-sm mt-2 leading-relaxed">On a running Raspberry Pi OS Lite or Debian system, run:</p>
+                <div class="mt-3 bg-black/30 rounded-md p-4 flex-grow flex items-center">
+                    <code class="text-brand-yellow font-mono text-xs md:text-sm break-all">bash &lt;(curl -sL https://install-anthias.srly.io)</code>
+                </div>
+                <p class="text-white/50 text-xs mt-3">Raspberry Pi, x86, and 64-bit ARM SBCs.</p>
+            </div>
         </div>
 
-        <p class="text-zinc-500 mt-4 text-sm">Or use pre-built disk images for Raspberry Pi via <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/releases/latest" target="_blank" rel="noopener">GitHub Releases</a> or <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>.</p>
+        <p class="text-zinc-500 mt-6 text-sm">Prefer fleet-managed, OTA-updated images? See <a class="text-brand-purple no-underline hover:underline" href="https://hub.balena.io/fleets-for-good" target="_blank" rel="noopener">balenaHub Fleets for Good</a>.</p>
 
         <div class="mt-8">
             <a class="text-brand-purple font-semibold text-sm no-underline hover:underline" href="/get-started/">All installation options &rarr;</a>
