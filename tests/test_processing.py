@@ -853,6 +853,36 @@ def test_pi3_64_hw_decode_set_is_h264_only(
     assert processing._hw_decoded_codecs() == frozenset({'h264'})
 
 
+# ---------------------------------------------------------------------------
+# preferred_download_vcodec — per-board yt-dlp format_sort preference
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'device_type, expected',
+    [
+        # Pi 5: HEVC is the hardware decode path; H.264 is software-only.
+        ('pi5', 'hevc'),
+        # All other boards: H.264 is the primary HW path and more available
+        # on YouTube. x86 HEVC via VAAPI is known-broken (black screen).
+        ('pi4-64', 'h264'),
+        ('pi3', 'h264'),
+        ('pi3-64', 'h264'),
+        ('x86', 'h264'),
+        ('rockpi4', 'h264'),
+        # Unknown board must not crash and must default to h264.
+        ('unrecognised-board-xyz', 'h264'),
+    ],
+)
+def test_preferred_download_vcodec(
+    device_type: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+    assert processing.preferred_download_vcodec() == expected
+
+
 @pytest.mark.parametrize(
     'filename',
     [

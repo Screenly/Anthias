@@ -937,6 +937,28 @@ def _hw_decoded_codecs() -> frozenset[str]:
     return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
 
 
+# Preferred yt-dlp ``vcodec`` sort key per board. Distinct from the
+# accepted-codec gate above: Pi 5 accepts H.264 via software decode
+# (Cortex-A76 handles 1080p without frame drops) but HEVC is still the
+# hardware path, so downloads should bias toward it when available.
+# Boards not listed here default to ``h264`` — it is more widely
+# available on YouTube and is their primary hardware decode path.
+_PREFERRED_DOWNLOAD_VCODEC: dict[str, str] = {
+    'pi5': 'hevc',
+}
+
+
+def preferred_download_vcodec() -> str:
+    """yt-dlp ``vcodec`` sort preference for the current board.
+
+    Returns the codec string to place first in ``format_sort`` so
+    yt-dlp biases downloads toward the board's best playback path.
+    Falls back to ``'h264'`` for unknown boards and all boards where
+    H.264 is the primary hardware decode path.
+    """
+    return _PREFERRED_DOWNLOAD_VCODEC.get(resolve_device_key(), 'h264')
+
+
 def _ffmpeg_reencode_recipe(
     supported: frozenset[str],
     source_filename: str = '',
