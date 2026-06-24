@@ -476,6 +476,99 @@ wait_for_framebuffer() {
 }
 wait_for_framebuffer
 
+# === HDMI hotplug resolution recovery (linuxfb / Pi 1-3) ===
+#
+# Under dtoverlay=vc4-kms-v3d the kernel's drm_fb_helper owns the
+# display mode on the linuxfb boards: Qt's linuxfb plugin only paints
+# /dev/fb0 and never takes DRM master, so nothing in userspace re-runs a
+# modeset. When an HDMI sink on a power schedule (a TV that switches
+# itself off and on) wakes up, the connector re-probe can win the race
+# against the sink's EDID/DDC coming back; the connector momentarily
+# reports no valid modes and drm_fb_helper latches the framebuffer to
+# its hard-coded 1024x768 fallback. Qt read the framebuffer geometry
+# once at startup and can't follow the change, so the picture stays
+# stuck at 1024x768 until someone power-cycles the Pi (issue #3052).
+#
+# eglfs boards (pi4 / pi5 / pi3-64 / arm64) are immune: Qt holds DRM
+# master and keeps its own modeset committed across the hotplug, so they
+# hold the resolution through a TV power-cycle (verified on a Pi 3-64
+# testbed: a real ~10 s HDMI unplug never left 1920x1080). The
+# QT_QPA_PLATFORM guard below makes the watchdog a no-op for them.
+#
+# Recover by watching the HDMI connector for a disconnect->reconnect
+# and, once its EDID is readable again, re-asserting the connector's
+# *preferred* mode onto the framebuffer through the fbdev sysfs `mode`
+# attribute. The target mode is read live from the connector, never
+# hard-coded, so any panel resolution is honoured. The viewer is then
+# restarted (the wait loop below exits, the container's restart policy
+# brings it back) so Qt re-initialises cleanly against the restored
+# mode. All reads/writes are under /sys — the viewer container is
+# privileged and no DRM master is taken, so this never conflicts with
+# Qt's fbdev use.
+HOTPLUG_SETTLE_SECONDS="${ANTHIAS_HOTPLUG_SETTLE_SECONDS:-5}"
+
+find_connected_hdmi() {
+    # Echo the sysfs dir of the first connected HDMI connector, if any.
+    local status_file
+    for status_file in /sys/class/drm/card*-HDMI*/status; do
+        [ -r "$status_file" ] || continue
+        [ "$(cat "$status_file" 2>/dev/null)" = 'connected' ] || continue
+        dirname "$status_file"
+        return 0
+    done
+    return 1
+}
+
+reassert_preferred_mode() {
+    # Re-apply the connector's EDID-preferred mode to /dev/fb0.
+    # $1 = connector sysfs dir. Returns non-zero (so the caller retries
+    # on the next reconnect tick) while the sink hasn't published EDID.
+    local conn="$1" preferred width height mode
+    preferred=$(head -n1 "$conn/modes" 2>/dev/null)
+    case "$preferred" in
+        *x*) ;;
+        *) return 1 ;;  # no modes yet — EDID still negotiating
+    esac
+    width=${preferred%%x*}
+    height=${preferred#*x}
+    height=${height%%[!0-9]*}  # drop a trailing 'i' on interlaced modes
+    # Prefer the matching fbcon mode string the kernel already
+    # registered; fall back to constructing one in the same format.
+    mode=$(grep -m1 -E "^U:${width}x${height}p" \
+        /sys/class/graphics/fb0/modes 2>/dev/null)
+    [ -n "$mode" ] || mode="U:${width}x${height}p-0"
+    echo "$mode" > /sys/class/graphics/fb0/mode 2>/dev/null || return 1
+    echo "start_viewer: HDMI reconnect — re-asserted ${width}x${height}" \
+        "framebuffer mode; restarting viewer."
+    return 0
+}
+
+monitor_hdmi_resolution() {
+    # linuxfb only; eglfs/wayland boards recover on their own.
+    [ "${QT_QPA_PLATFORM:-}" = 'linuxfb' ] || return 0
+    local viewer_pid="$1" conn previous current
+    conn=$(find_connected_hdmi) || return 0
+    previous='connected'
+    while kill -0 "$viewer_pid" 2>/dev/null; do
+        sleep 3
+        current=$(cat "$conn/status" 2>/dev/null)
+        if [ "$previous" != 'connected' ] && [ "$current" = 'connected' ]; then
+            # The sink just came back. Give EDID/DDC a moment to settle,
+            # then re-assert the preferred mode. On success the viewer is
+            # restarted so Qt re-reads the framebuffer at the right size;
+            # on failure (EDID not up yet) leave previous != connected so
+            # the next loop re-checks.
+            sleep "$HOTPLUG_SETTLE_SECONDS"
+            if reassert_preferred_mode "$conn"; then
+                kill "$viewer_pid" 2>/dev/null
+                return 0
+            fi
+            continue
+        fi
+        [ -n "$current" ] && previous="$current"
+    done
+}
+
 # x86 / arm64 / pi5 run under `cage`, a kiosk wlroots compositor.
 # cage acquires DRM master as root, exports WAYLAND_DISPLAY for its
 # child, and exits when the child exits — so the existing kill -0
@@ -571,6 +664,11 @@ while true; do
   fi
   sleep 0.5
 done
+
+# Self-heal the linuxfb 1024x768 HDMI-hotplug latch (issue #3052): on a
+# TV power-cycle, re-assert the connector's preferred mode and restart
+# the viewer. No-op on eglfs/wayland boards (guarded inside).
+monitor_hdmi_resolution "$PID" &
 
 # If the viewer runs OOM, force the OOM killer to kill this script so the container restarts
 echo 1000 > /proc/$$/oom_score_adj
