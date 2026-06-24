@@ -1010,9 +1010,12 @@ def test_download_youtube_asset_pi5_prefers_hevc_format(
         download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
 
     ydl_opts = fake_youtube_dl._cls.call_args.args[0]
-    assert ydl_opts['format_sort'] == ['vcodec:hevc', 'fps', 'res:1080', 'acodec:m4a'], (
-        f"Pi 5 must bias yt-dlp toward HEVC; got: {ydl_opts['format_sort']!r}"
-    )
+    assert ydl_opts['format_sort'] == [
+        'vcodec:hevc',
+        'fps',
+        'res:1080',
+        'acodec:m4a',
+    ], f'Pi 5 must bias yt-dlp toward HEVC; got: {ydl_opts["format_sort"]!r}'
 
 
 @pytest.mark.django_db

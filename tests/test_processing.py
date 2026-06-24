@@ -680,7 +680,9 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     assert "'hevc'" in msg
     assert 'h264' in msg
     recipe = excinfo.value.recipe
-    assert 'libx264' in recipe  # Pi 3 supports H.264 — recipe encodes to H.264.
+    assert (
+        'libx264' in recipe
+    )  # Pi 3 supports H.264 — recipe encodes to H.264.
     tokens = _shlex.split(recipe)
     assert tokens[1] == '-i'
     assert tokens[2] == 'beach-clip.mp4'

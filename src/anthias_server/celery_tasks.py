@@ -693,6 +693,7 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     # Boards without HEVC (Pi 2/3) fall back to H.264. Unknown boards
     # default to H.264; normalize_video_asset gates on the actual codec.
     from anthias_server.processing import _hw_decoded_codecs
+
     _supported = _hw_decoded_codecs()
     # Prefer HEVC when the board can hardware-decode it; fall back to H.264.
     _preferred_vcodec = 'hevc' if 'hevc' in _supported else 'h264'
@@ -704,7 +705,12 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         # is available if no exact match exists. Strict ``format=``
         # filters would reject videos that only have other codecs,
         # which we don't want — normalize_video_asset handles that.
-        'format_sort': [f'vcodec:{_preferred_vcodec}', 'fps', 'res:1080', 'acodec:m4a'],
+        'format_sort': [
+            f'vcodec:{_preferred_vcodec}',
+            'fps',
+            'res:1080',
+            'acodec:m4a',
+        ],
         # Final filename — yt-dlp writes <location>.part during the
         # download and renames on success. cleanup() recognises
         # .part / .info.json sidecars and skips them inside the 1h
