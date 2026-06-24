@@ -779,6 +779,47 @@ def test_video_h264_accepted_on_pi5_software_decode(
     mock_notify.assert_called_once_with('vid-h264-pi5-sw')
 
 
+@pytest.mark.django_db
+def test_video_unsupported_codec_still_rejected_on_pi5(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """VP9 / AV1 uploads on Pi 5 are still rejected even though H.264
+    software-decode was added to the Pi 5 codec set. The rejection recipe
+    tells the operator to re-encode to H.264 (accepted via software decode —
+    faster to encode than HEVC and still plays fine on Cortex-A76)."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00' * 16)
+    asset = _make_processing_asset('vid-vp9-pi5', src, mimetype='video')
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'vp9',
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+    ):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    import shlex as _shlex
+
+    recipe = excinfo.value.recipe
+    tokens = _shlex.split(recipe)
+    assert tokens[-1] == 'upload.h264.mp4'
+    assert 'libx264' in recipe
+    assert 'libx265' not in recipe
+
+
 @pytest_ffmpeg
 @pytest.mark.django_db
 def test_video_unsupported_codec_h264_board_recipe(

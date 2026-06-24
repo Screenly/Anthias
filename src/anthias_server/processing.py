@@ -949,10 +949,10 @@ def _ffmpeg_reencode_recipe(
     Prefers libx264 when H.264 is in the board's supported set —
     libx264 is roughly 5-10× faster than libx265 at comparable
     quality, which matters when the operator is doing the encode by
-    hand. Falls back to libx265 + ``-tag:v hvc1`` for Pi 5 (HEVC-
-    only board). Returns an empty string when the board has no HW
-    decode set at all — there's nothing the operator can transcode
-    to that would land in a supported pipe.
+    hand. Falls back to libx265 + ``-tag:v hvc1`` for HEVC-only boards.
+    Returns an empty string when the board has no HW decode set at all —
+    there's nothing the operator can transcode to that would land in a
+    supported pipe.
 
     ``source_filename``, when supplied, substitutes the bare upload
     filename (no path) for the ``INPUT`` placeholder and reuses its
@@ -1029,10 +1029,11 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
     — there's no separate downscale step to spell out.
 
     The only board-specific tweak is the encoder: an HEVC-only board
-    (Pi 5) can't use the preset's default H.264, so the operator flips
-    ``Video Encoder`` to ``H.265 (x265)`` on the Video tab. HandBrake
-    ships no H.265-at-1080p MP4 preset, so the encoder swap is the
-    cleanest route to a 1080p HEVC MP4.
+    (Pi 5 before the H.264 software-decode fallback was added) can't
+    use the preset's default H.264, so the operator flips ``Video
+    Encoder`` to ``H.265 (x265)`` on the Video tab. HandBrake ships no
+    H.265-at-1080p MP4 preset, so the encoder swap is the cleanest
+    route to a 1080p HEVC MP4.
 
     Returns an empty list when the board has no HW decode set at all —
     there's nothing to transcode to, exactly as the recipe returns an
@@ -1040,8 +1041,8 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
     list stands alone when surfaced as plain text via the v2 API.
     """
     if 'h264' in supported:
-        # H.264 board (Pi 2/3/4, x86, ...): the stock preset already
-        # outputs the codec we want — no encoder change.
+        # H.264 board (Pi 2/3/4, Pi 5, x86, ...): the stock preset
+        # already outputs an accepted codec — no encoder change needed.
         prefers_h264 = True
     elif 'hevc' in supported:
         prefers_h264 = False
