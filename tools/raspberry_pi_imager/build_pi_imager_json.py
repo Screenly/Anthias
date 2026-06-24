@@ -16,14 +16,36 @@ GITHUB_HEADERS = {
 # website-deploy job indefinitely. The job runs on every push to master
 # and CI's overall budget is in the minutes, not hours.
 HTTP_TIMEOUT = 30
-SUPPORTED_BOARDS = {'pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5'}
+# Boards surfaced in Raspberry Pi Imager. The 32-bit armhf/Qt5 `pi3`
+# stream is intentionally omitted: the image is still built and remains
+# directly downloadable from the release, but Pi 3 users are steered to
+# the current 64-bit Qt6 `pi3-64` stream rather than the frozen 32-bit
+# one. `pi2` stays because the Pi 2 has no 64-bit option.
+SUPPORTED_BOARDS = {'pi2', 'pi3-64', 'pi4-64', 'pi5'}
 # Boards surfaced with the maintenance/legacy suffix. The 32-bit
 # armhf/Qt5 streams (pi2, pi3) are frozen; the 64-bit Qt6 `pi3-64`
 # stream is the current recommendation and is NOT a maintenance board.
+# `pi3` is kept here so that if it is ever re-listed it carries the
+# suffix, even though it is no longer in SUPPORTED_BOARDS.
 MAINTENANCE_BOARDS = {'pi2', 'pi3'}
 MAINTENANCE_SUFFIX = (
     ' [Maintenance mode - consider upgrading to Pi 4 or later]'
 )
+
+# Hardware-filter tags consumed by Raspberry Pi Imager's device picker.
+# Imager (1.9+/2.x) makes the user choose a device first, then drops any
+# OS entry whose `devices` array does not intersect that device's tags.
+# The Raspberry Pi 5 entry in the official catalog uses
+# `matching_type: "exclusive"`, which also drops *untagged* entries — so
+# without these tags Anthias vanishes entirely once a Pi 5 is selected.
+# Each Anthias image is board-specific, so it maps to exactly one tag.
+BOARD_DEVICE_TAGS = {
+    'pi2': ['pi2-32bit'],
+    'pi3': ['pi3-32bit'],
+    'pi3-64': ['pi3-64bit'],
+    'pi4-64': ['pi4-64bit'],
+    'pi5': ['pi5-64bit'],
+}
 
 REQUIRED_FIELDS = {
     'name',
@@ -36,6 +58,7 @@ REQUIRED_FIELDS = {
     'image_download_sha256',
     'release_date',
     'url',
+    'devices',
 }
 
 
@@ -106,6 +129,8 @@ def retrieve_and_patch_json(url: str) -> dict[str, Any]:
     image_json['image_download_size'] = int(image_json['image_download_size'])
 
     board = get_board_from_url(url)
+    if board and board in BOARD_DEVICE_TAGS:
+        image_json['devices'] = BOARD_DEVICE_TAGS[board]
     if board and board in MAINTENANCE_BOARDS:
         image_json['description'] += MAINTENANCE_SUFFIX
 
