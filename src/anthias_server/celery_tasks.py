@@ -686,15 +686,28 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     from yt_dlp import YoutubeDL
     from yt_dlp.utils import DownloadError
 
+    # Bias yt-dlp toward the codec the board can actually decode in
+    # hardware. HEVC-only boards (Pi 5) must not receive an H.264
+    # stream — normalize_video_asset would reject it immediately with
+    # "Video codec 'h264' is not hardware-decoded on this device."
+    # Boards that support both codecs keep h264 as the preference:
+    # H.264 streams are more widely available on YouTube. Unknown
+    # boards fall back to h264 so the download still proceeds;
+    # normalize_video_asset will gate on the actual codec if needed.
+    from anthias_server.processing import _hw_decoded_codecs
+    _supported = _hw_decoded_codecs()
+    _preferred_vcodec = (
+        'hevc' if ('hevc' in _supported and 'h264' not in _supported) else 'h264'
+    )
+
     ydl_opts = {
-        # ``format_sort`` mirrors the previous CLI's `-S
-        # vcodec:h264,fps,res:1080,acodec:m4a` — bias toward h264
-        # video and m4a audio, keep resolution at 1080p, prefer
-        # higher fps. yt-dlp still picks the *best matching* format,
-        # falling back to whatever is available if no exact match
-        # exists. Strict `format=` filters would reject videos that
-        # happen to have only vp9, which we don't want.
-        'format_sort': ['vcodec:h264', 'fps', 'res:1080', 'acodec:m4a'],
+        # ``format_sort`` biases toward the board's preferred codec,
+        # m4a audio, 1080p resolution, and higher fps. yt-dlp still
+        # picks the *best matching* format, falling back to whatever
+        # is available if no exact match exists. Strict ``format=``
+        # filters would reject videos that only have other codecs,
+        # which we don't want — normalize_video_asset handles that.
+        'format_sort': [f'vcodec:{_preferred_vcodec}', 'fps', 'res:1080', 'acodec:m4a'],
         # Final filename — yt-dlp writes <location>.part during the
         # download and renames on success. cleanup() recognises
         # .part / .info.json sidecars and skips them inside the 1h
