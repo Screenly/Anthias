@@ -696,9 +696,10 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     # normalize_video_asset will gate on the actual codec if needed.
     from anthias_server.processing import _hw_decoded_codecs
     _supported = _hw_decoded_codecs()
-    _preferred_vcodec = (
-        'hevc' if ('hevc' in _supported and 'h264' not in _supported) else 'h264'
-    )
+    # Prefer HEVC when the board can decode it — it's the hardware path
+    # on Pi 5 and is more efficient than H.264 wherever it's available.
+    # Boards without HEVC support (Pi 2/3) fall back to H.264.
+    _preferred_vcodec = 'hevc' if 'hevc' in _supported else 'h264'
 
     ydl_opts = {
         # ``format_sort`` biases toward the board's preferred codec,

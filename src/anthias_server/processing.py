@@ -885,7 +885,11 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     # V4L2 bcm2835-codec), not the Qt5 GStreamer fbdev path.
     'pi3-64': frozenset({'h264'}),
     'pi4-64': frozenset({'h264', 'hevc'}),
-    'pi5': frozenset({'hevc'}),
+    # hevc: hardware-decoded via v4l2-request (BCM2712 VideoCore VII).
+    # h264: software-decoded — Cortex-A76 handles 1080p H.264 without
+    # frame drops, and YouTube rarely serves HEVC so excluding h264
+    # would block all YouTube downloads on Pi 5.
+    'pi5': frozenset({'hevc', 'h264'}),
     'rockpi4': frozenset({'h264', 'hevc'}),
     'x86': frozenset({'h264', 'hevc'}),
 }

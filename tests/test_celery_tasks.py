@@ -1016,13 +1016,14 @@ def test_download_youtube_asset_pi5_prefers_hevc_format(
 
 
 @pytest.mark.django_db
-def test_download_youtube_asset_pi4_prefers_h264_format(
+def test_download_youtube_asset_pi4_prefers_hevc_format(
     fake_youtube_dl: mock.MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pi 4 supports both H.264 and HEVC; the task should still prefer
-    H.264 because H.264 streams are far more available on YouTube and
-    the board can decode either."""
+    """Pi 4 supports both H.264 and HEVC hardware decode; HEVC is
+    preferred in format_sort as the more efficient codec. In practice
+    YouTube rarely serves HEVC so yt-dlp falls back to H.264, which
+    Pi 4 can also hardware-decode."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
     _make_youtube_asset()
     fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 10}
@@ -1033,7 +1034,7 @@ def test_download_youtube_asset_pi4_prefers_h264_format(
         download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
 
     ydl_opts = fake_youtube_dl._cls.call_args.args[0]
-    assert ydl_opts['format_sort'][0] == 'vcodec:h264'
+    assert ydl_opts['format_sort'][0] == 'vcodec:hevc'
 
 
 @pytest.mark.django_db
