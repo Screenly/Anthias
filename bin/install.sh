@@ -261,6 +261,11 @@ function install_packages() {
         "git"
         "libffi-dev"
         "libssl-dev"
+        # On 32-bit ARM (armv7l) there is no python-build-standalone
+        # binary, so uv falls back to the system interpreter and has to
+        # compile cffi from its sdist (no armv7 wheel exists). That build
+        # needs the CPython headers (Python.h), provided by python3-dev.
+        "python3-dev"
         "whois"
     )
 
