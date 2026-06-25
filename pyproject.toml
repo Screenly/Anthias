@@ -38,7 +38,7 @@ docker-image-builder = [
     "click==8.4.1",
     "jinja2==3.1.6",
     "pygit2==1.19.2",
-    "requests==2.33.1",
+    "requests==2.34.2",
     "python-on-whales==0.81.0",
 ]
 server = [
@@ -70,7 +70,7 @@ server = [
     "pytz==2026.2",
     "PyYAML==6.0.3",
     "redis==7.4.0",
-    "requests==2.33.1",
+    "requests==2.34.2",
     "sentry-sdk==2.63.0",
     "tenacity==9.1.4",
     "sh==2.3.0",
@@ -89,7 +89,7 @@ viewer = [
     "python-dateutil==2.9.0.post0",
     "pytz==2026.2",
     "redis==7.4.0",
-    "requests==2.33.1",
+    "requests==2.34.2",
     "sentry-sdk==2.63.0",
     "tenacity==9.1.4",
     "sh==2.3.0",
@@ -109,17 +109,17 @@ host = [
     "ansible-core==2.21.0",
     "netifaces2==0.0.22",
     "redis==7.4.0",
-    "requests==2.33.1",
+    "requests==2.34.2",
     "tenacity==9.1.4",
 ]
 local = [
     "click==8.4.1",
-    "requests==2.33.1",
+    "requests==2.34.2",
     "tenacity==9.1.4",
 ]
 website = [
     "pytest==9.1.0",
-    "requests==2.33.1",
+    "requests==2.34.2",
 ]
 test = [
     { include-group = "server" },
