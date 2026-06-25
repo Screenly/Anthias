@@ -23,7 +23,7 @@ dev-host = [
     "ansible-lint==26.4.0",
     "celery-types==0.26.0",
     "django-stubs==6.0.5",
-    "djangorestframework-stubs==3.16.9",
+    "djangorestframework-stubs==3.17.0",
     "mypy==2.1.0",
     "ruff==0.14.10",
     "tenacity==9.1.4",
