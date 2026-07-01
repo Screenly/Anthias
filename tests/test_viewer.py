@@ -1111,6 +1111,48 @@ def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
     assert 'ANTHIAS_PREFER_DARK_MODE' not in env
 
 
+# User-Agent token — the C++ webview appends ANTHIAS_UA_TOKEN to
+# QtWebEngine's default User-Agent (the profile setup in
+# src/anthias_webview/src/view.cpp). The token is composed by the
+# canonical get_anthias_product_token() helper.
+
+
+def test_build_webview_env_sets_ua_token() -> None:
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch(
+            'anthias_viewer.get_anthias_product_token',
+            return_value='Anthias/1.2.3',
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_UA_TOKEN'] == 'Anthias/1.2.3'
+
+
+def test_build_webview_env_overwrites_stale_ua_token() -> None:
+    # The token is set unconditionally, so a stale value inherited from
+    # the process env is always overwritten with the freshly composed
+    # one (parity with the dark-mode set-or-clear discipline).
+    with (
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'linuxfb',
+                'ANTHIAS_UA_TOKEN': 'Anthias/stale',
+            },
+            clear=False,
+        ),
+        mock.patch(
+            'anthias_viewer.get_anthias_product_token',
+            return_value='Anthias/1.2.3',
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_UA_TOKEN'] == 'Anthias/1.2.3'
+
+
 def test_handle_reload_queues_bounce_on_dark_mode_change(
     reset_dark_mode_state: None,
 ) -> None:
