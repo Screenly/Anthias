@@ -4,7 +4,6 @@ import io
 from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
-from urllib.parse import urlunparse
 
 import pytest
 import requests
@@ -424,42 +423,25 @@ def test_detect_local_mac_prefers_default_route(
 
 
 # ---------------------------------------------------------------------------
-# LAN content — url_fails must probe private/LAN hosts exactly like any
-# other. Serving signage from an intranet host, a NAS on 192.168.x.x, or
-# a sibling Docker container (which resolves to a 172.16.0.0/12 bridge
-# address) is a first-class use case, so there is no private-address
-# short-circuit. See GH #3101.
+# LAN content — url_fails must probe a private/LAN host, not short-circuit
+# on its address class. Serving signage from an intranet host, a NAS on
+# 192.168.x.x, or a sibling Docker container (which resolves to a
+# 172.16.0.0/12 bridge address) is a first-class use case. See GH #3101.
 
 
-# urlunparse keeps Sonar's plain-http detector quiet — it never sees a
-# literal "http://..." substring in source.
-_FAKE_PRIVATE_HTTP = urlunparse(
-    ('http', 'menu-webserver', '/index.html', '', '', '')
-)
+@pytest.mark.django_db
+def test_url_fails_probes_private_host_instead_of_rejecting() -> None:
+    """A LAN host is probed like any other — HEAD actually fires.
 
-
-def test_url_fails_probes_private_http_target(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A URL pointing at a LAN host must be probed, not short-circuited.
-
-    A reachable private host (HEAD returns 200) must come back as
-    ``url_fails() is False`` — the reachability sweep then keeps the
-    asset displayable instead of flagging it un-reachable purely for
-    living on a private range.
+    The reachable/unreachable verdict itself is already covered by
+    ``test_url_fails_returns_false_on_2xx_response``; this guards the
+    distinct behaviour that there is no private-address short-circuit
+    (a regression guard for #3101), so it asserts the probe ran.
     """
-    from anthias_common import utils
-
-    head_calls: list[Any] = []
-
-    def fake_head(*args: Any, **kwargs: Any) -> Any:
-        head_calls.append(args)
-        response = MagicMock()
-        response.ok = True
-        return response
-
-    monkeypatch.setattr('anthias_common.utils.requests.head', fake_head)
-
-    assert utils.url_fails(_FAKE_PRIVATE_HTTP) is False
-    # The probe actually ran — no private-address short-circuit.
-    assert len(head_calls) == 1
+    fake = MagicMock()
+    fake.ok = True
+    with patch(
+        'anthias_common.utils.requests.head', return_value=fake
+    ) as mock_head:
+        assert url_fails('http://menu-webserver/index.html') is False
+    mock_head.assert_called_once()
