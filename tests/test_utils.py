@@ -424,9 +424,9 @@ def test_detect_local_mac_prefers_default_route(
 
 # ---------------------------------------------------------------------------
 # LAN content — url_fails must probe a private/LAN host, not short-circuit
-# on its address class. Serving signage from an intranet host, a NAS on
-# 192.168.x.x, or a sibling Docker container (which resolves to a
-# 172.16.0.0/12 bridge address) is a first-class use case. See GH #3101.
+# on its address class. Serving signage from an intranet host, a NAS on a
+# private subnet, or a sibling Docker container (which resolves to a
+# private bridge address) is a first-class use case. See GH #3101.
 
 
 @pytest.mark.django_db
