@@ -987,6 +987,120 @@ def test_download_youtube_asset_on_failure_writes_error_metadata() -> None:
 
 
 # ---------------------------------------------------------------------------
+# download_youtube_asset — per-board format_sort selection  (GH #3092)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_pi5_prefers_hevc_format(
+    fake_youtube_dl: mock.MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pi 5 biases yt-dlp toward HEVC — it is the hardware decode path
+    (VideoCore VII). H.264 is accepted as a software fallback (GH #3092)
+    but HEVC is preferred when YouTube serves it."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 10}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    ydl_opts = fake_youtube_dl._cls.call_args.args[0]
+    assert ydl_opts['format_sort'] == [
+        'vcodec:hevc',
+        'fps',
+        'res:1080',
+        'acodec:m4a',
+    ], f'Pi 5 must bias yt-dlp toward HEVC; got: {ydl_opts["format_sort"]!r}'
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_pi4_prefers_h264_format(
+    fake_youtube_dl: mock.MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pi 4 hardware-decodes both H.264 and HEVC, so it keeps the H.264
+    preference — H.264 is more widely available on YouTube and Pi 4 plays
+    it just as efficiently as HEVC."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 10}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    ydl_opts = fake_youtube_dl._cls.call_args.args[0]
+    assert ydl_opts['format_sort'][0] == 'vcodec:h264'
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_x86_prefers_h264_format(
+    fake_youtube_dl: mock.MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """x86 keeps the H.264 preference — HEVC via VAAPI is known to produce
+    a black screen on x86, so biasing toward HEVC downloads would cause
+    silent playback failures when YouTube serves HEVC streams."""
+    monkeypatch.setenv('DEVICE_TYPE', 'x86')
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 10}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    ydl_opts = fake_youtube_dl._cls.call_args.args[0]
+    assert ydl_opts['format_sort'][0] == 'vcodec:h264'
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_pi3_prefers_h264_format(
+    fake_youtube_dl: mock.MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pi 3 supports H.264 only; format_sort must request h264."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi3')
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 10}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    ydl_opts = fake_youtube_dl._cls.call_args.args[0]
+    assert ydl_opts['format_sort'][0] == 'vcodec:h264'
+
+
+@pytest.mark.django_db
+def test_download_youtube_asset_unknown_board_falls_back_to_h264(
+    fake_youtube_dl: mock.MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unrecognised DEVICE_TYPE yields an empty HW codec set; the
+    task must not crash and must fall back to the h264 preference so
+    the download still proceeds. normalize_video_asset will gate on
+    the actual codec if the board turns out not to support it."""
+    monkeypatch.setenv('DEVICE_TYPE', 'unrecognised-board-xyz')
+    _make_youtube_asset()
+    fake_youtube_dl.extract_info.return_value = {'title': 't', 'duration': 10}
+    with (
+        mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        mock.patch('anthias_server.processing.dispatch_normalize_video'),
+    ):
+        download_youtube_asset('yt-1', 'https://www.youtube.com/watch?v=abc')
+
+    ydl_opts = fake_youtube_dl._cls.call_args.args[0]
+    assert ydl_opts['format_sort'][0] == 'vcodec:h264'
+
+
+# ---------------------------------------------------------------------------
 # download_remote_video_asset — generic http(s) single-file video URLs
 # ---------------------------------------------------------------------------
 

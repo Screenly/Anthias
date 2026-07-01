@@ -632,83 +632,106 @@ def test_video_supported_codec_writes_metadata_and_clears_processing(
     assert path.exists(src)
 
 
-@pytest_ffmpeg
 @pytest.mark.django_db
 def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An H.264 upload on a Pi 5 (HEVC only — Pi 5's mpv has no v4l2-
-    request H.264 hwdec) is rejected. The exception's message names
-    the rejected codec and supported set; its ``recipe`` attribute
-    carries an ffmpeg command pre-filled with the upload's filename
-    (taken from ``metadata.upload_name``, which the upload view
-    stashes at create time) so the operator can copy-paste it
-    verbatim."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    """A codec outside the board's HW decode set is rejected. The
+    exception's message names the rejected codec and supported set;
+    its ``recipe`` attribute carries an ffmpeg command pre-filled with
+    the upload's filename so the operator can copy-paste it verbatim.
+
+    Pi 3 (H.264 only) is used here — an HEVC upload is the clearest
+    unsupported-codec case for that board."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi3')
     src = path.join(asset_dir, 'sample.mp4')
-    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    # Create a minimal placeholder — ffprobe is mocked below so the
+    # file content doesn't matter, only path.isfile() needs to pass.
+    with open(src, 'wb') as f:
+        f.write(b'\x00' * 16)
     asset = _make_processing_asset(
-        'vid-h264-pi5',
+        'vid-hevc-pi3',
         src,
         mimetype='video',
         metadata={'upload_name': 'beach-clip.mp4'},
     )
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
 
-    with mock.patch.object(processing, '_notify'):
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+    ):
         with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
             processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
     msg = str(excinfo.value)
-    assert "'h264'" in msg
-    assert 'hevc' in msg
-    # Recipe is on the exception, not in the message body.
+    assert "'hevc'" in msg
+    assert 'h264' in msg
     recipe = excinfo.value.recipe
-    assert 'libx265' in recipe  # Pi 5 supports HEVC only.
-    assert '-tag:v hvc1' in recipe
-    # The upload's filename appears in the recipe's input slot —
-    # operator can copy and paste it without hand-editing INPUT.
+    assert (
+        'libx264' in recipe
+    )  # Pi 3 supports H.264 — recipe encodes to H.264.
     tokens = _shlex.split(recipe)
     assert tokens[1] == '-i'
     assert tokens[2] == 'beach-clip.mp4'
-    # Output filename carries a ``.hevc.`` suffix so the recipe
-    # doesn't ask the operator to overwrite their source file.
-    assert tokens[-1] == 'beach-clip.hevc.mp4'
+    assert tokens[-1] == 'beach-clip.h264.mp4'
 
-    # The terminal-free alternative: HandBrake steps targeting the
-    # same codec (H.265 on a Pi 5), with a link to the download page.
     handbrake = excinfo.value.handbrake
     assert handbrake
     joined = ' '.join(handbrake)
     assert 'HandBrake' in joined
     assert processing.HANDBRAKE_URL in joined
-    assert 'H.265 (x265)' in joined
-    # Codec-only rejection: no resolution-limit step.
+    # H.264 board: the stock Fast 1080p30 preset is already H.264,
+    # no encoder-switch step needed.
+    assert 'H.265 (x265)' not in joined
     assert not any('Resolution Limit' in step for step in handbrake)
 
-    # Metadata was still written so the operator can see *what* they
-    # uploaded next to the error message in the asset list.
     asset.refresh_from_db()
-    assert asset.metadata.get('video_codec') == 'h264'
-    assert asset.metadata.get('video_width') == 32
+    assert asset.metadata.get('video_codec') == 'hevc'
+    assert asset.metadata.get('video_width') == 1920
 
 
-@pytest_ffmpeg
 @pytest.mark.django_db
 def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When the row has no ``metadata.upload_name`` (YouTube
-    downloads, pre-rebrand rows), the recipe uses a stable
-    ``upload<ext>`` placeholder so the operator still sees the
-    correct input extension to substitute."""
-    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    """When the row has no ``metadata.upload_name`` (YouTube downloads,
+    pre-rebrand rows), the recipe uses a stable ``upload<ext>``
+    placeholder so the operator still sees the correct input extension
+    to substitute."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi3')
     src = path.join(asset_dir, 'noname.mp4')
-    _make_video(src, codec='libx264', container='mp4', audio='aac')
+    with open(src, 'wb') as f:
+        f.write(b'\x00' * 16)
     asset = _make_processing_asset('vid-noname', src, mimetype='video')
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
 
-    with mock.patch.object(processing, '_notify'):
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+    ):
         with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
             processing._run_video_normalisation(asset)
 
@@ -718,7 +741,85 @@ def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
     tokens = _shlex.split(recipe)
     assert tokens[1] == '-i'
     assert tokens[2] == 'upload.mp4'
-    assert tokens[-1] == 'upload.hevc.mp4'
+    assert tokens[-1] == 'upload.h264.mp4'
+
+
+@pytest.mark.django_db
+def test_video_h264_accepted_on_pi5_software_decode(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H.264 is accepted on Pi 5 via software decode — the
+    Cortex-A76 handles 1080p H.264 without frame drops, and YouTube
+    rarely serves HEVC so blocking H.264 on Pi 5 would prevent all
+    YouTube downloads. (GH #3092)"""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00' * 16)
+    asset = _make_processing_asset('vid-h264-pi5-sw', src, mimetype='video')
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+
+    with (
+        mock.patch.object(processing, '_notify') as mock_notify,
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
+    mock_notify.assert_called_once_with('vid-h264-pi5-sw')
+
+
+@pytest.mark.django_db
+def test_video_unsupported_codec_still_rejected_on_pi5(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """VP9 / AV1 uploads on Pi 5 are still rejected even though H.264
+    software-decode was added to the Pi 5 codec set. The rejection recipe
+    tells the operator to re-encode to H.264 (accepted via software decode —
+    faster to encode than HEVC and still plays fine on Cortex-A76)."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00' * 16)
+    asset = _make_processing_asset('vid-vp9-pi5', src, mimetype='video')
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'vp9',
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+    ):
+        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
+            processing._run_video_normalisation(asset)
+
+    import shlex as _shlex
+
+    recipe = excinfo.value.recipe
+    tokens = _shlex.split(recipe)
+    assert tokens[-1] == 'upload.h264.mp4'
+    assert 'libx264' in recipe
+    assert 'libx265' not in recipe
 
 
 @pytest_ffmpeg
@@ -750,6 +851,36 @@ def test_pi3_64_hw_decode_set_is_h264_only(
     gate must reject HEVC for it just like the armhf stream."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi3-64')
     assert processing._hw_decoded_codecs() == frozenset({'h264'})
+
+
+# ---------------------------------------------------------------------------
+# preferred_download_vcodec — per-board yt-dlp format_sort preference
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'device_type, expected',
+    [
+        # Pi 5: HEVC is the hardware decode path; H.264 is software-only.
+        ('pi5', 'hevc'),
+        # All other boards: H.264 is the primary HW path and more available
+        # on YouTube. x86 HEVC via VAAPI is known-broken (black screen).
+        ('pi4-64', 'h264'),
+        ('pi3', 'h264'),
+        ('pi3-64', 'h264'),
+        ('x86', 'h264'),
+        ('rockpi4', 'h264'),
+        # Unknown board must not crash and must default to h264.
+        ('unrecognised-board-xyz', 'h264'),
+    ],
+)
+def test_preferred_download_vcodec(
+    device_type: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('DEVICE_TYPE', device_type)
+    assert processing.preferred_download_vcodec() == expected
 
 
 @pytest.mark.parametrize(

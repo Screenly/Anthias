@@ -885,7 +885,11 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     # V4L2 bcm2835-codec), not the Qt5 GStreamer fbdev path.
     'pi3-64': frozenset({'h264'}),
     'pi4-64': frozenset({'h264', 'hevc'}),
-    'pi5': frozenset({'hevc'}),
+    # hevc: hardware-decoded via v4l2-request (BCM2712 VideoCore VII).
+    # h264: software-decoded — Cortex-A76 handles 1080p H.264 without
+    # frame drops, and YouTube rarely serves HEVC so excluding h264
+    # would block all YouTube downloads on Pi 5.
+    'pi5': frozenset({'hevc', 'h264'}),
     'rockpi4': frozenset({'h264', 'hevc'}),
     'x86': frozenset({'h264', 'hevc'}),
 }
@@ -933,6 +937,28 @@ def _hw_decoded_codecs() -> frozenset[str]:
     return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
 
 
+# Preferred yt-dlp ``vcodec`` sort key per board. Distinct from the
+# accepted-codec gate above: Pi 5 accepts H.264 via software decode
+# (Cortex-A76 handles 1080p without frame drops) but HEVC is still the
+# hardware path, so downloads should bias toward it when available.
+# Boards not listed here default to ``h264`` — it is more widely
+# available on YouTube and is their primary hardware decode path.
+_PREFERRED_DOWNLOAD_VCODEC: dict[str, str] = {
+    'pi5': 'hevc',
+}
+
+
+def preferred_download_vcodec() -> str:
+    """yt-dlp ``vcodec`` sort preference for the current board.
+
+    Returns the codec string to place first in ``format_sort`` so
+    yt-dlp biases downloads toward the board's best playback path.
+    Falls back to ``'h264'`` for unknown boards and all boards where
+    H.264 is the primary hardware decode path.
+    """
+    return _PREFERRED_DOWNLOAD_VCODEC.get(resolve_device_key(), 'h264')
+
+
 def _ffmpeg_reencode_recipe(
     supported: frozenset[str],
     source_filename: str = '',
@@ -945,10 +971,10 @@ def _ffmpeg_reencode_recipe(
     Prefers libx264 when H.264 is in the board's supported set —
     libx264 is roughly 5-10× faster than libx265 at comparable
     quality, which matters when the operator is doing the encode by
-    hand. Falls back to libx265 + ``-tag:v hvc1`` for Pi 5 (HEVC-
-    only board). Returns an empty string when the board has no HW
-    decode set at all — there's nothing the operator can transcode
-    to that would land in a supported pipe.
+    hand. Falls back to libx265 + ``-tag:v hvc1`` for HEVC-only boards.
+    Returns an empty string when the board has no HW decode set at all —
+    there's nothing the operator can transcode to that would land in a
+    supported pipe.
 
     ``source_filename``, when supplied, substitutes the bare upload
     filename (no path) for the ``INPUT`` placeholder and reuses its
@@ -1025,10 +1051,11 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
     — there's no separate downscale step to spell out.
 
     The only board-specific tweak is the encoder: an HEVC-only board
-    (Pi 5) can't use the preset's default H.264, so the operator flips
-    ``Video Encoder`` to ``H.265 (x265)`` on the Video tab. HandBrake
-    ships no H.265-at-1080p MP4 preset, so the encoder swap is the
-    cleanest route to a 1080p HEVC MP4.
+    (Pi 5 before the H.264 software-decode fallback was added) can't
+    use the preset's default H.264, so the operator flips ``Video
+    Encoder`` to ``H.265 (x265)`` on the Video tab. HandBrake ships no
+    H.265-at-1080p MP4 preset, so the encoder swap is the cleanest
+    route to a 1080p HEVC MP4.
 
     Returns an empty list when the board has no HW decode set at all —
     there's nothing to transcode to, exactly as the recipe returns an
@@ -1036,8 +1063,8 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
     list stands alone when surfaced as plain text via the v2 API.
     """
     if 'h264' in supported:
-        # H.264 board (Pi 2/3/4, x86, ...): the stock preset already
-        # outputs the codec we want — no encoder change.
+        # H.264 board (Pi 2/3/4, Pi 5, x86, ...): the stock preset
+        # already outputs an accepted codec — no encoder change needed.
         prefers_h264 = True
     elif 'hevc' in supported:
         prefers_h264 = False
