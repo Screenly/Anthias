@@ -1,12 +1,9 @@
 # coding=utf-8
 
 import io
-import socket
 from datetime import datetime
-from ipaddress import IPv4Address, IPv6Address
 from typing import Any
 from unittest.mock import MagicMock, patch
-from urllib.parse import urlunparse
 
 import pytest
 import requests
@@ -426,106 +423,27 @@ def test_detect_local_mac_prefers_default_route(
 
 
 # ---------------------------------------------------------------------------
-# SSRF guard — url_fails must reject hosts that resolve to private /
-# loopback / link-local addresses unless the operator opted in via the
-# env var. Test the resolver helper directly so we don't need DNS.
+# LAN content — url_fails must probe a private/LAN host, not short-circuit
+# on its address class. Serving signage from an intranet host, a NAS on a
+# private subnet, or a sibling Docker container (which resolves to a
+# private bridge address) is a first-class use case. See GH #3101.
 
 
-# Test fixtures below cover RFC1918 / loopback / link-local addresses
-# (which is the whole point of _is_private_address). They're built from
-# integer octets via the ipaddress module so the source contains no IP
-# string literals — Sonar's hardcoded-IP hotspot rule only matches
-# literal patterns like "10.0.0.1" appearing verbatim in source.
+@pytest.mark.django_db
+def test_url_fails_probes_private_host_instead_of_rejecting() -> None:
+    """A LAN host is probed like any other — HEAD actually fires.
 
-
-def _v4(a: int, b: int, c: int, d: int) -> str:
-    return str(IPv4Address((a << 24) | (b << 16) | (c << 8) | d))
-
-
-def _v6(value: int) -> str:
-    return str(IPv6Address(value))
-
-
-_PRIV_RFC1918_A = _v4(10, 0, 0, 1)
-_PRIV_RFC1918_B = _v4(172, 20, 5, 5)
-_PRIV_RFC1918_C = _v4(192, 168, 1, 50)
-_PRIV_LOOPBACK = _v4(127, 0, 0, 1)
-_PRIV_LINK_LOCAL = _v4(169, 254, 1, 1)
-_PRIV_V6_LOOPBACK = _v6(1)
-_PRIV_V6_LINK_LOCAL = _v6((0xFE80 << 112) | 1)
-_PUBLIC_DNS_GOOG = _v4(8, 8, 8, 8)
-_PUBLIC_DNS_CF = _v4(1, 1, 1, 1)
-
-
-_PRIVATE_ADDR_FIXTURES: list[tuple[str, bool]] = [
-    (_PRIV_RFC1918_A, True),
-    (_PRIV_RFC1918_C, True),
-    (_PRIV_RFC1918_B, True),
-    (_PRIV_LOOPBACK, True),
-    (_PRIV_LINK_LOCAL, True),
-    (_PRIV_V6_LOOPBACK, True),
-    (_PRIV_V6_LINK_LOCAL, True),
-    (_PUBLIC_DNS_GOOG, False),
-    (_PUBLIC_DNS_CF, False),
-]
-
-
-def _resolve_family(addr: str) -> int:
-    return socket.AF_INET6 if ':' in addr else socket.AF_INET
-
-
-@pytest.mark.parametrize('fake_addr,is_private', _PRIVATE_ADDR_FIXTURES)
-def test_is_private_address_classification(
-    fake_addr: str, is_private: bool, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from anthias_common import utils
-
-    monkeypatch.delenv('ANTHIAS_ALLOW_PRIVATE_FETCH', raising=False)
-    family = _resolve_family(fake_addr)
-    monkeypatch.setattr(
-        'anthias_common.utils.socket.getaddrinfo',
-        lambda host, port: [(family, 0, 0, '', (fake_addr, 0))],
-    )
-    assert utils._is_private_address('any.host') is is_private
-
-
-def test_is_private_address_opt_out(monkeypatch: pytest.MonkeyPatch) -> None:
-    from anthias_common import utils
-
-    monkeypatch.setenv('ANTHIAS_ALLOW_PRIVATE_FETCH', '1')
-    # Even a private result returns False — operator opted in.
-    monkeypatch.setattr(
-        'anthias_common.utils.socket.getaddrinfo',
-        lambda host, port: [(socket.AF_INET, 0, 0, '', (_PRIV_RFC1918_A, 0))],
-    )
-    assert utils._is_private_address('intranet.local') is False
-
-
-# urlunparse keeps Sonar's plain-http detector quiet — it never sees a
-# literal "http://..." substring in source.
-_FAKE_PRIVATE_HTTP = urlunparse(
-    ('http', 'intranet.local', '/admin', '', '', '')
-)
-
-
-def test_url_fails_rejects_private_http_target(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A URL whose host resolves to RFC1918 must be marked 'fails' —
-    the sweep then flags it un-reachable instead of the server probing
-    it."""
-    from anthias_common import utils
-
-    monkeypatch.delenv('ANTHIAS_ALLOW_PRIVATE_FETCH', raising=False)
-    monkeypatch.setattr(
-        'anthias_common.utils.socket.getaddrinfo',
-        lambda host, port: [(socket.AF_INET, 0, 0, '', (_PRIV_RFC1918_A, 0))],
-    )
-    # If the SSRF guard fires, requests.head must not be called.
-    called: list[Any] = []
-    monkeypatch.setattr(
-        'anthias_common.utils.requests.head',
-        lambda *a, **k: called.append(1),
-    )
-    assert utils.url_fails(_FAKE_PRIVATE_HTTP) is True
-    assert called == []
+    The reachable/unreachable verdict itself is already covered by
+    ``test_url_fails_returns_false_on_2xx_response``; this guards the
+    distinct behaviour that there is no private-address short-circuit
+    (a regression guard for #3101), so it asserts the probe ran.
+    """
+    fake = MagicMock()
+    fake.ok = True
+    # NOSONAR(S5332): mocked test URL, never fetched over the wire.
+    url = 'http://menu-webserver/index.html'  # NOSONAR(S5332)
+    with patch(
+        'anthias_common.utils.requests.head', return_value=fake
+    ) as mock_head:
+        assert url_fails(url) is False
+    mock_head.assert_called_once()
