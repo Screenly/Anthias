@@ -440,8 +440,10 @@ def test_url_fails_probes_private_host_instead_of_rejecting() -> None:
     """
     fake = MagicMock()
     fake.ok = True
+    # NOSONAR(S5332): mocked test URL, never fetched over the wire.
+    url = 'http://menu-webserver/index.html'  # NOSONAR(S5332)
     with patch(
         'anthias_common.utils.requests.head', return_value=fake
     ) as mock_head:
-        assert url_fails('http://menu-webserver/index.html') is False
+        assert url_fails(url) is False
     mock_head.assert_called_once()
