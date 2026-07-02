@@ -47,6 +47,7 @@ def handle_github_error(
 ) -> None:
     _set_github_error_backoff(action)
 
+    errdesc: bytes | str
     if exc.response is not None:
         errdesc = exc.response.content
     else:

@@ -543,7 +543,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install requests
-        run: pip install 'requests==2.33.1'
+        run: pip install 'requests==2.34.2'
 
       - name: Generate rpi-imager.json
         env:
