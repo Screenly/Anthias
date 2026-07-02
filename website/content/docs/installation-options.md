@@ -49,26 +49,24 @@ Alternatively, you can [download our pre-built Balena disk images from the relea
 # Using the images from the releases
 
 You can find the latest release [here](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
-The image file looks something like `<yyyy>-<mm>-<dd>-raspberry<version>.zst`. Take note that the `.img` file is compressed in this `.zst` file.
+The image file looks something like `<yyyy>-<mm>-<dd>-anthias-<board>.img.xz`. Take note that the `.img` file is compressed in this `.img.xz` file.
 
 > **Note**
 >
-> We started to release the images in `.zst` format in [v0.20.0](https://github.com/Screenly/Anthias/releases/tag/v0.20.0) so that the images are smaller in size. Using `zip` with the `-9` flag won't make the each of the images smaller than 2 GB.
->
-> Raspberry Pi Imager supports the `.zst` format from version [v1.9.4](https://github.com/raspberrypi/rpi-imager/releases/tag/v1.9.4) onwards. For those who are using [balenaEtcher](https://etcher.balena.io/), you can use the `zstd` command to decompress the image file first:
+> We release the images in `.img.xz` format so that they are smaller in size. Both [Raspberry Pi Imager](https://www.raspberrypi.com/software/) and [balenaEtcher](https://etcher.balena.io/) flash `.img.xz` files directly &mdash; there's no need to decompress them first. If you ever want the raw `.img`, you can extract it yourself:
 >
 > ```
-> zstd -d <yyyy>-<mm>-<dd>-raspberry<version>.zst
+> xz -d <yyyy>-<mm>-<dd>-anthias-<board>.img.xz
 > ```
 
 > **macOS: "Error writing to storage device"**
 >
-> Raspberry Pi Imager **2.0.2 through at least 2.0.7** has a macOS bug that aborts mid-write with *"Error writing to storage device. Some writes failed to complete."* It is triggered by writing any image that is decompressed on the fly &mdash; not just our `.zst` images, but also `.img.xz` and even uncompressed `.img` files (see rpi-imager [#1605](https://github.com/raspberrypi/rpi-imager/issues/1605) and [#1489](https://github.com/raspberrypi/rpi-imager/issues/1489)). The card itself is fine.
+> Raspberry Pi Imager **2.0.2 through at least 2.0.7** has a macOS bug that aborts mid-write with *"Error writing to storage device. Some writes failed to complete."* It is triggered by writing any image that is decompressed on the fly &mdash; our `.img.xz` images as well as uncompressed `.img` files (see rpi-imager [#1605](https://github.com/raspberrypi/rpi-imager/issues/1605) and [#1489](https://github.com/raspberrypi/rpi-imager/issues/1489)). The card itself is fine.
 >
 > The fix was merged upstream in [rpi-imager#1621](https://github.com/raspberrypi/rpi-imager/pull/1621) (May 2026), so the simplest solution is to **update Raspberry Pi Imager to a release newer than 2.0.7**. If you can't update, work around it by decompressing the image yourself and flashing the resulting `.img`:
 >
 > ```
-> zstd -d <yyyy>-<mm>-<dd>-raspberry<version>.zst
+> xz -d <yyyy>-<mm>-<dd>-anthias-<board>.img.xz
 > ```
 >
 > Then select the extracted `.img` in Raspberry Pi Imager (or [balenaEtcher](https://etcher.balena.io/)), which skips the on-the-fly decompression path that trips the bug.

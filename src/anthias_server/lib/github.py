@@ -48,7 +48,9 @@ def handle_github_error(
     _set_github_error_backoff(action)
 
     if exc.response is not None:
-        errdesc = exc.response.content
+        # .text (decoded str) rather than .content (bytes) so the log
+        # line reads as the server's message, not a b'...' repr.
+        errdesc = exc.response.text
     else:
         # Surface the exception detail — a bare 'no data' hid the
         # host/timeout info str(exc) carries (e.g. 'read timed out').

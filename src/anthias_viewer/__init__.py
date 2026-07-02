@@ -16,6 +16,7 @@ import redis.exceptions
 import requests
 import sh as sh
 
+from anthias_common.http import get_anthias_product_token
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
@@ -195,6 +196,15 @@ def _build_webview_env() -> dict[str, str]:
       us at no perf cost.
     """
     env = dict(os.environ)
+
+    # Pass the Anthias product token ("Anthias/<version>") to the C++
+    # webview, which appends it to QtWebEngine's User-Agent (see the
+    # profile setup in src/anthias_webview/src/view.cpp). Composed by the
+    # canonical get_anthias_product_token() helper so the format lives in
+    # one place. Set unconditionally — before the board-specific early
+    # returns below — so every platform plugin gets it and any stale
+    # inherited value is overwritten.
+    env['ANTHIAS_UA_TOKEN'] = get_anthias_product_token()
 
     # "Prefer dark mode" applies to every board (the C++ webview turns
     # this into a Chromium blink flag at launch — see applyDarkModePreference
