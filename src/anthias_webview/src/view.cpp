@@ -185,6 +185,24 @@ View::View(QWidget* parent) : QWidget(parent)
         qDebug() << "Accept-Language:" << acceptLanguage;
     }
 
+    // Append the Anthias product token to QtWebEngine's default
+    // User-Agent so sites still see a normal "Mozilla/5.0 ...
+    // Chrome/... Safari/..." string (preserving compatibility) while
+    // ops at the receiving end can spot that the request came from an
+    // Anthias screen and which release. The token ("Anthias/<version>")
+    // is composed once in Python by get_anthias_product_token() and
+    // passed through ANTHIAS_UA_TOKEN by _build_webview_env() in
+    // src/anthias_viewer/__init__.py, so the format lives in a single
+    // place. Left untouched when the token is absent — the Python side
+    // always sets it, so this only guards a standalone launch.
+    const QByteArray uaToken = qgetenv("ANTHIAS_UA_TOKEN");
+    if (!uaToken.isEmpty()) {
+        const QString userAgent = profile->httpUserAgent()
+            + QStringLiteral(" ") + QString::fromUtf8(uaToken);
+        profile->setHttpUserAgent(userAgent);
+        qDebug() << "User-Agent:" << userAgent;
+    }
+
     currentWebView = webView1;
     nextWebView = webView2;
     nextWebViewReady = false;
