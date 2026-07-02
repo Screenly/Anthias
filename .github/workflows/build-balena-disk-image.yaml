@@ -440,32 +440,42 @@ jobs:
           # alongside the .img.xz it describes.
           # build_pi_imager_json.py fetches it via the same base name
           # (s/.img.xz$/.json/) and consolidates into rpi-imager.json.
-          jq --null-input \
-            --arg BOARD "$BOARD" \
-            --arg IMAGE_SHA256 "$IMAGE_SHA256" \
-            --argjson IMAGE_SIZE "$IMAGE_SIZE" \
-            --arg DOWNLOAD_SHA256 "$DOWNLOAD_SHA256" \
-            --argjson DOWNLOAD_SIZE "$DOWNLOAD_SIZE" \
-            --arg RELEASE_DATE "$BUILD_DATE" \
-            '{
-              "name": ("Anthias (" + ({
-                "pi2": "Raspberry Pi 2",
-                "pi3": "Raspberry Pi 3 (32-bit)",
-                "pi3-64": "Raspberry Pi 3",
-                "pi4-64": "Raspberry Pi 4",
-                "pi5": "Raspberry Pi 5",
-                "rockpi4": "Rock Pi 4",
-                "x86": "Generic x86 PC"
-              }[$BOARD] // $BOARD) + ")"),
-              "description": "Turn your Raspberry Pi into a digital signage player. Manage images, videos, and web pages from anywhere with a clean web dashboard. Free and open source.",
-              "icon": "https://anthias.screenly.io/img/anthias-icon.svg",
-              "website": "https://anthias.screenly.io",
-              "extract_size": $IMAGE_SIZE,
-              "extract_sha256": $IMAGE_SHA256,
-              "image_download_size": $DOWNLOAD_SIZE,
-              "image_download_sha256": $DOWNLOAD_SHA256,
-              "release_date": $RELEASE_DATE
-            }' > "$ARTIFACT.json"
+          #
+          # Only Raspberry Pi boards belong in Raspberry Pi Imager, and
+          # this snippet has no other consumer, so skip the non-Pi
+          # boards (x86, rockpi4) rather than attach an unused,
+          # Pi-worded metadata file to the release for them.
+          case "$BOARD" in
+          x86 | rockpi4)
+            echo "Skipping rpi-imager metadata for non-Pi board: $BOARD"
+            ;;
+          *)
+            jq --null-input \
+              --arg BOARD "$BOARD" \
+              --arg IMAGE_SHA256 "$IMAGE_SHA256" \
+              --argjson IMAGE_SIZE "$IMAGE_SIZE" \
+              --arg DOWNLOAD_SHA256 "$DOWNLOAD_SHA256" \
+              --argjson DOWNLOAD_SIZE "$DOWNLOAD_SIZE" \
+              --arg RELEASE_DATE "$BUILD_DATE" \
+              '{
+                "name": ("Anthias (" + ({
+                  "pi2": "Raspberry Pi 2",
+                  "pi3": "Raspberry Pi 3 (32-bit)",
+                  "pi3-64": "Raspberry Pi 3",
+                  "pi4-64": "Raspberry Pi 4",
+                  "pi5": "Raspberry Pi 5"
+                }[$BOARD] // $BOARD) + ")"),
+                "description": "Turn your Raspberry Pi into a digital signage player. Manage images, videos, and web pages from anywhere with a clean web dashboard. Free and open source.",
+                "icon": "https://anthias.screenly.io/img/anthias-icon.svg",
+                "website": "https://anthias.screenly.io",
+                "extract_size": $IMAGE_SIZE,
+                "extract_sha256": $IMAGE_SHA256,
+                "image_download_size": $DOWNLOAD_SIZE,
+                "image_download_sha256": $DOWNLOAD_SHA256,
+                "release_date": $RELEASE_DATE
+              }' > "$ARTIFACT.json"
+            ;;
+          esac
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
