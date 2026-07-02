@@ -44,7 +44,7 @@ Flash the ISO to a USB drive using one of:
 1. Plug the USB drive into the PC.
 2. Set the boot order in BIOS/UEFI to boot from USB first.
 3. Power on the PC and follow the Debian installer prompts. When you reach these screens, choose:
-   * **Root password:** leave it blank. Skipping the root password makes your regular user a `sudo` user automatically.
+   * **Root password:** leave it blank. When you skip the root password, the Debian installer installs `sudo` and adds your regular user to the `sudo` group automatically. If you *set* a root password instead, Debian does **neither** — `sudo` won't even be installed — and you'll have extra work to do in Step 4. Leaving it blank is strongly recommended.
    * **Partitioning:** use the entire disk.
    * **Software selection:** check only **SSH server** and **standard system utilities**. **Uncheck every desktop environment** (GNOME, Xfce, KDE Plasma, …) — Anthias renders from inside a container and does not use any host-side graphical session.
 4. When the installer finishes, remove the USB drive **before** the system reboots into the freshly installed Debian.
@@ -52,6 +52,19 @@ Flash the ISO to a USB drive using one of:
 ## Step 4 — Prepare the system for Anthias
 
 Once you can SSH (or log in locally) to the new install:
+
+> **If you set a root password in Step 3**
+>
+> Your user can't run `sudo` yet — in fact `sudo` isn't installed, so every command below will fail with `sudo: command not found`. Fix this once, as `root`, then continue:
+>
+> ```bash
+> $ su -          # enter the root password you set
+> # apt update && apt install -y sudo
+> # /usr/sbin/usermod -aG sudo <username>   # replace <username>
+> # exit
+> ```
+>
+> Log out and back in (so your new group membership takes effect), then continue below. If you left the root password blank, skip this box — `sudo` already works.
 
 1. Install `curl` if it isn't already there:
 
