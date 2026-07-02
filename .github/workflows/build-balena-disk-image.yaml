@@ -457,7 +457,7 @@ jobs:
                 "rockpi4": "Rock Pi 4",
                 "x86": "Generic x86 PC"
               }[$BOARD] // $BOARD) + ")"),
-              "description": "Anthias, formerly known as Screenly OSE, is the most popular open source digital signage project in the world.",
+              "description": "Turn your Raspberry Pi into a digital signage player. Manage images, videos, and web pages from anywhere with a clean web dashboard. Free and open source.",
               "icon": "https://anthias.screenly.io/img/anthias-icon.svg",
               "website": "https://anthias.screenly.io",
               "extract_size": $IMAGE_SIZE,
