@@ -46,7 +46,7 @@ wheels = [
 
 [[package]]
 name = "ansible-core"
-version = "2.21.0"
+version = "2.21.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
@@ -55,9 +55,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "resolvelib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/f6/8da4912a93e1319292bada5e5185e82b1a12cf212da7a7cc4589064f3247/ansible_core-2.21.0.tar.gz", hash = "sha256:28ccd0e2d1849f1c7272cec39a74a8a5c83f3d51314658fa5ca57ea85a87f454", size = 3387206, upload-time = "2026-05-18T20:52:31.677Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/6d/38d7eaea1df4a95c3b137e780f6ad2208d7886334a291cadde5d645f08a1/ansible_core-2.21.1.tar.gz", hash = "sha256:a5536ece95be84de15212b3644cdbbe9cbd9efd62e4e8a544cd6b0b27a083039", size = 3384534, upload-time = "2026-06-18T19:35:02.887Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/5c/75152a7ec51634bdc90b262a74cd6ca8b81cd6e264e19389c4c471e9f4df/ansible_core-2.21.0-py3-none-any.whl", hash = "sha256:fed7dd076365aad9ccf885c6b8f938e0fd508f5dcdffe5d2ca87cfb5fac47940", size = 2443954, upload-time = "2026-05-18T20:52:29.679Z" },
+    { url = "https://files.pythonhosted.org/packages/90/55/894f2cad10ef650bf33a0e64e242805de2d1a8835f539d04d52053fe08a6/ansible_core-2.21.1-py3-none-any.whl", hash = "sha256:1403ff56bb69484ef90788126d06c65b4e28e8d2dcdcfb7f027d4c1495052d7e", size = 2454057, upload-time = "2026-06-18T19:35:00.741Z" },
 ]
 
 [[package]]
@@ -277,7 +277,7 @@ dev-host = [
     { name = "ansible-lint", specifier = "==26.4.0" },
     { name = "celery-types", specifier = "==0.26.0" },
     { name = "django-stubs", specifier = "==6.0.5" },
-    { name = "djangorestframework-stubs", specifier = "==3.16.9" },
+    { name = "djangorestframework-stubs", specifier = "==3.17.0" },
     { name = "mypy", specifier = "==2.1.0" },
     { name = "ruff", specifier = "==0.14.10" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -293,18 +293,18 @@ docker-image-builder = [
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "pygit2", specifier = "==1.19.2" },
     { name = "python-on-whales", specifier = "==0.81.0" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.34.2" },
 ]
 host = [
-    { name = "ansible-core", specifier = "==2.21.0" },
+    { name = "ansible-core", specifier = "==2.21.1" },
     { name = "netifaces2", specifier = "==0.0.22" },
-    { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "redis", specifier = "==8.0.1" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "tenacity", specifier = "==9.1.4" },
 ]
 local = [
     { name = "click", specifier = "==8.4.1" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "tenacity", specifier = "==9.1.4" },
 ]
 mypy = [
@@ -316,9 +316,9 @@ mypy = [
     { name = "django", specifier = "==5.2.14" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
     { name = "django-stubs", specifier = "==6.0.5" },
-    { name = "django-stubs-ext", specifier = "==6.0.5" },
+    { name = "django-stubs-ext", specifier = "==6.0.6" },
     { name = "djangorestframework", specifier = "==3.17.1" },
-    { name = "djangorestframework-stubs", specifier = "==3.16.9" },
+    { name = "djangorestframework-stubs", specifier = "==3.17.0" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mypy", specifier = "==2.1.0" },
@@ -326,7 +326,7 @@ mypy = [
     { name = "pygit2", specifier = "==1.19.2" },
     { name = "python-on-whales", specifier = "==0.81.0" },
     { name = "pytz", specifier = "==2026.2" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "ruff", specifier = "==0.14.10" },
     { name = "sentry-sdk", specifier = "==2.63.0" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -346,7 +346,7 @@ server = [
     { name = "channels-redis", specifier = "==4.3.0" },
     { name = "django", specifier = "==5.2.14" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
-    { name = "django-stubs-ext", specifier = "==6.0.5" },
+    { name = "django-stubs-ext", specifier = "==6.0.6" },
     { name = "djangorestframework", specifier = "==3.17.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "jinja2", specifier = "==3.1.6" },
@@ -359,8 +359,8 @@ server = [
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "pytz", specifier = "==2026.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
-    { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "redis", specifier = "==8.0.1" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "sentry-sdk", specifier = "==2.63.0" },
     { name = "sh", specifier = "==2.3.0" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -377,7 +377,7 @@ test = [
     { name = "channels-redis", specifier = "==4.3.0" },
     { name = "django", specifier = "==5.2.14" },
     { name = "django-dbbackup", specifier = "==5.3.0" },
-    { name = "django-stubs-ext", specifier = "==6.0.5" },
+    { name = "django-stubs-ext", specifier = "==6.0.6" },
     { name = "djangorestframework", specifier = "==3.17.1" },
     { name = "drf-spectacular", specifier = "==0.29.0" },
     { name = "jinja2", specifier = "==3.1.6" },
@@ -397,8 +397,8 @@ test = [
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "pytz", specifier = "==2026.2" },
     { name = "pyyaml", specifier = "==6.0.3" },
-    { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "redis", specifier = "==8.0.1" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "sentry-sdk", specifier = "==2.63.0" },
     { name = "sh", specifier = "==2.3.0" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -417,8 +417,8 @@ viewer = [
     { name = "pydbus", specifier = "==0.6.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "pytz", specifier = "==2026.2" },
-    { name = "redis", specifier = "==7.4.0" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "redis", specifier = "==8.0.1" },
+    { name = "requests", specifier = "==2.34.2" },
     { name = "sentry-sdk", specifier = "==2.63.0" },
     { name = "sh", specifier = "==2.3.0" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -426,7 +426,7 @@ viewer = [
 ]
 website = [
     { name = "pytest", specifier = "==9.1.0" },
-    { name = "requests", specifier = "==2.33.1" },
+    { name = "requests", specifier = "==2.34.2" },
 ]
 
 [[package]]
@@ -934,15 +934,15 @@ wheels = [
 
 [[package]]
 name = "django-stubs-ext"
-version = "6.0.5"
+version = "6.0.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/01/419bc3cd882f3ec645d5a4511085202dd6bd3ef8d385871dcd2d32cc15b3/django_stubs_ext-6.0.5.tar.gz", hash = "sha256:1cc325e991303849bce70e19748981b225ef08b37256f263e113caf97cd3bcc0", size = 6666, upload-time = "2026-05-25T08:46:36.012Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/51/8b/dc3c37cf994836ee09bc07f6a0c0ea840b975449940bd7ff77cc97a732f3/django_stubs_ext-6.0.6.tar.gz", hash = "sha256:e6f09884e48d7c5b250a373dfa22aa3e83bb91b8babbd8d05187f6b92247f232", size = 6674, upload-time = "2026-06-23T08:21:38.355Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/bf/7ee71071d84ad4e0efcd77e2681afed254a5f65c27524441a9caf8c60467/django_stubs_ext-6.0.5-py3-none-any.whl", hash = "sha256:a9932c8233d6dd4e34ae0b192026379c1a9be8f0b7c27aa1fa09ae215169773e", size = 10362, upload-time = "2026-05-25T08:46:34.467Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/e4/7d60a1bdb092807318af34a809dc6674b95cc78ec4d3aaa6027174e7201c/django_stubs_ext-6.0.6-py3-none-any.whl", hash = "sha256:5470c970f61a3ccf5aae7633feef1a097f944f417b955da200c9ac26ecd9134b", size = 10361, upload-time = "2026-06-23T08:21:37.228Z" },
 ]
 
 [[package]]
@@ -959,16 +959,16 @@ wheels = [
 
 [[package]]
 name = "djangorestframework-stubs"
-version = "3.16.9"
+version = "3.17.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django-stubs" },
     { name = "types-pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/30/84/fa0e31f763ee35152a418c2a456efdd8047a9da0f5909110147b70382191/djangorestframework_stubs-3.16.9.tar.gz", hash = "sha256:b1abb97490c90c85eabcd09b8ecbadae1b9360f21ad3021abf830227c0129697", size = 32798, upload-time = "2026-03-31T22:40:23.626Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/a1/45e25dab89b3dfc5da7a138f7e82aca4e970269c53a3fceed1e94b31d390/djangorestframework_stubs-3.17.0.tar.gz", hash = "sha256:74c0307cad304c03c15aee5955ec2fdeab0ac854b5bea569dc124892792e2b96", size = 33115, upload-time = "2026-05-13T18:58:36.554Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5a/be/e53e3b89eaa30c21e036ae4d2ee88a92ef8cb43678400901748ddad870c5/djangorestframework_stubs-3.16.9-py3-none-any.whl", hash = "sha256:27b3e245d5f9c22ff6988d9e54388249f98f88608cc2b365b71e9f39dd096958", size = 57239, upload-time = "2026-03-31T22:40:22.314Z" },
+    { url = "https://files.pythonhosted.org/packages/72/ff/6e27d4aea12f67d14e0c0ec41869307ae98ad3816858ddc2a56bc3f4e0b5/djangorestframework_stubs-3.17.0-py3-none-any.whl", hash = "sha256:babe2703f0401507780848439f49f76222a178b4fc73a6dcb30d0952a0a6dbc6", size = 57629, upload-time = "2026-05-13T18:58:34.779Z" },
 ]
 
 [[package]]
@@ -1920,11 +1920,11 @@ wheels = [
 
 [[package]]
 name = "redis"
-version = "7.4.0"
+version = "8.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7b/7f/3759b1d0d72b7c92f0d70ffd9dc962b7b7b5ee74e135f9d7d8ab06b8a318/redis-7.4.0.tar.gz", hash = "sha256:64a6ea7bf567ad43c964d2c30d82853f8df927c5c9017766c55a1d1ed95d18ad", size = 4943913, upload-time = "2026-03-24T09:14:37.53Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/c3/928b290c2c0ca99ab96eea5b4ff8f30be8112b075301a7d3ba214a3c8c12/redis-8.0.1.tar.gz", hash = "sha256:afc5a7a2f5a084f5b1880dec548dd45be17db7e43c82a30d84f952aefb05cfb0", size = 5114170, upload-time = "2026-06-23T14:52:37.728Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/3a/95deec7db1eb53979973ebd156f3369a72732208d1391cd2e5d127062a32/redis-7.4.0-py3-none-any.whl", hash = "sha256:a9c74a5c893a5ef8455a5adb793a31bb70feb821c86eccb62eebef5a19c429ec", size = 409772, upload-time = "2026-03-24T09:14:35.968Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/0a/c2345ebf1ebe70840ce3f6c6ee612f8fa749cfbd1b03069c53bf0c62aaad/redis-8.0.1-py3-none-any.whl", hash = "sha256:47daa35a058c23468d6437f17a8c76882cb316b838ef763036af99b96cedd743", size = 502406, upload-time = "2026-06-23T14:52:36.137Z" },
 ]
 
 [[package]]
@@ -1942,7 +1942,7 @@ wheels = [
 
 [[package]]
 name = "requests"
-version = "2.33.1"
+version = "2.34.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -1950,9 +1950,9 @@ dependencies = [
     { name = "idna" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5f/a4/98b9c7c6428a668bf7e42ebb7c79d576a1c3c1e3ae2d47e674b468388871/requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517", size = 134120, upload-time = "2026-03-30T16:09:15.531Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed", size = 142856, upload-time = "2026-05-14T19:25:27.735Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a", size = 64947, upload-time = "2026-03-30T16:09:13.83Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0", size = 73075, upload-time = "2026-05-14T19:25:26.443Z" },
 ]
 
 [[package]]
