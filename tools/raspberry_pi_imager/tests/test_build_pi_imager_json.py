@@ -345,4 +345,5 @@ def test_build_imager_json_tags_every_entry_for_its_board(
 
     for entry in result['os_list']:
         board = get_board_from_url(entry['url'])
+        assert board is not None
         assert entry['devices'] == BOARD_DEVICE_TAGS[board]

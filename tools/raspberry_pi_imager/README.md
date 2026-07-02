@@ -28,5 +28,7 @@ python raspberry_pi_imager/bin/build-pi-imager-json.py
 3. For each matching asset, fetches the corresponding `.json` metadata
 4. Patches URLs and file sizes, tags each entry with its hardware
    `devices` (so Imager's device picker doesn't hide it), and appends a
-   maintenance mode notice for pi2/pi3
+   maintenance mode notice to any listed maintenance board (currently
+   only pi2; the 32-bit pi3 is a maintenance board but is not surfaced
+   in Imager)
 5. Outputs a JSON file compatible with Raspberry Pi Imager

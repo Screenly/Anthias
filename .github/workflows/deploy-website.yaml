@@ -177,7 +177,7 @@ jobs:
             if ! jq -e '[.os_list[] |
               (.devices | type == "array") and (.devices | length > 0)]
               | all' "$out" > /dev/null; then
-              echo "::warning::rpi-imager.json has entries without a non-empty 'devices' tag; Imager may hide them on exclusive-matching devices (e.g. Pi 5). This release predates the devices change — re-cut a release."
+              echo "::warning::rpi-imager.json has entries without a non-empty 'devices' tag; Imager may hide them on exclusive-matching devices (e.g. Pi 5). This is expected for a release cut before the generator started emitting 'devices'; if the current release should already be tagged, investigate the generator."
             fi
             jq -e '[.os_list[] | .name | test("pi1")] | any | not' "$out" > /dev/null
             jq -e '[.os_list[] | .url | startswith("https://")] | all' "$out" > /dev/null
