@@ -25,37 +25,37 @@ MOCK_RELEASE_ASSETS = {
     'assets': [
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi1.img.zst'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi1.img.xz'
             )
         },
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.img.zst'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.img.xz'
             )
         },
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi3.img.zst'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi3.img.xz'
             )
         },
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi3-64.img.zst'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi3-64.img.xz'
             )
         },
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi4-64.img.zst'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi4-64.img.xz'
             )
         },
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi5.img.zst'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi5.img.xz'
             )
         },
         {
             'browser_download_url': (
-                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.img.zst.sha256'
+                f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.img.xz.sha256'
             )
         },
         {
@@ -148,12 +148,12 @@ def test_get_latest_tag_honours_release_tag_env(
 @pytest.mark.parametrize(
     'filename, expected_board',
     [
-        ('2025-01-01-anthias-pi1.img.zst', 'pi1'),
-        ('2025-01-01-anthias-pi2.img.zst', 'pi2'),
-        ('2025-01-01-anthias-pi3.img.zst', 'pi3'),
-        ('2025-01-01-anthias-pi3-64.img.zst', 'pi3-64'),
-        ('2025-01-01-anthias-pi4-64.img.zst', 'pi4-64'),
-        ('2025-01-01-anthias-pi5.img.zst', 'pi5'),
+        ('2025-01-01-anthias-pi1.img.xz', 'pi1'),
+        ('2025-01-01-anthias-pi2.img.xz', 'pi2'),
+        ('2025-01-01-anthias-pi3.img.xz', 'pi3'),
+        ('2025-01-01-anthias-pi3-64.img.xz', 'pi3-64'),
+        ('2025-01-01-anthias-pi4-64.img.xz', 'pi4-64'),
+        ('2025-01-01-anthias-pi5.img.xz', 'pi5'),
     ],
 )
 def test_get_board_from_url_extracts_board(
@@ -168,8 +168,8 @@ def test_get_board_from_url_extracts_board(
     'url',
     [
         f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.json',
-        f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.img.zst.sha256',
-        'https://example.com/file.zst',
+        f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi2.img.xz.sha256',
+        'https://example.com/file.xz',
     ],
 )
 def test_get_board_from_url_returns_none_for_non_image(url: str) -> None:
@@ -198,12 +198,12 @@ def test_get_asset_list_excludes_pi1(
     assert all(get_board_from_url(u) != 'pi1' for u in urls)
 
 
-def test_get_asset_list_excludes_non_zst(
+def test_get_asset_list_excludes_non_xz(
     mock_release_assets: MagicMock,
 ) -> None:
     urls = get_asset_list(RELEASE_TAG)
 
-    assert all(u.endswith('.zst') for u in urls)
+    assert all(u.endswith('.xz') for u in urls)
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +217,7 @@ def test_retrieve_and_patch_json_patches_url(
     mock_requests_get.return_value = _build_side_effect(
         make_image_metadata('pi4-64')
     )
-    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi4-64.img.zst'
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi4-64.img.xz'
 
     assert retrieve_and_patch_json(url)['url'] == url
 
@@ -228,7 +228,7 @@ def test_retrieve_and_patch_json_converts_sizes_to_int(
     mock_requests_get.return_value = _build_side_effect(
         make_image_metadata('pi5')
     )
-    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi5.img.zst'
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi5.img.xz'
 
     result = retrieve_and_patch_json(url)
 
@@ -243,7 +243,7 @@ def test_retrieve_and_patch_json_marks_maintenance_boards(
     mock_requests_get.return_value = _build_side_effect(
         make_image_metadata(board)
     )
-    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-{board}.img.zst'
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-{board}.img.xz'
 
     result = retrieve_and_patch_json(url)
 
@@ -257,7 +257,7 @@ def test_retrieve_and_patch_json_skips_maintenance_for_modern_boards(
     mock_requests_get.return_value = _build_side_effect(
         make_image_metadata(board)
     )
-    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-{board}.img.zst'
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-{board}.img.xz'
 
     assert (
         'Maintenance mode' not in retrieve_and_patch_json(url)['description']
@@ -270,7 +270,7 @@ def test_retrieve_and_patch_json_has_all_required_fields(
     mock_requests_get.return_value = _build_side_effect(
         make_image_metadata('pi5')
     )
-    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi5.img.zst'
+    url = f'{BASE_RELEASE_URL}/2025-01-01-anthias-pi5.img.xz'
 
     result = retrieve_and_patch_json(url)
     missing = REQUIRED_FIELDS - result.keys()

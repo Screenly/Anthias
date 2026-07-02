@@ -21,7 +21,7 @@ python raspberry_pi_imager/bin/build-pi-imager-json.py
 ## How it Works
 
 1. Fetches the latest release from GitHub
-2. Filters `.zst` assets to only include supported boards
+2. Filters `.xz` assets to only include supported boards
 3. For each matching asset, fetches the corresponding `.json` metadata
 4. Patches URLs and file sizes, appends maintenance mode notice for pi2/pi3
 5. Outputs a JSON file compatible with Raspberry Pi Imager

@@ -68,7 +68,7 @@ def get_latest_tag() -> str:
 
 
 def get_board_from_url(url: str) -> str | None:
-    match = re.search(r'-(pi\d(?:-\d+)?)\.img\.zst$', url)
+    match = re.search(r'-(pi\d(?:-\d+)?)\.img\.xz$', url)
     return match.group(1) if match else None
 
 
@@ -83,7 +83,7 @@ def get_asset_list(release_tag: str) -> list[str]:
 
     for url in response.json()['assets']:
         download_url = url['browser_download_url']
-        if not download_url.endswith('.zst'):
+        if not download_url.endswith('.xz'):
             continue
         board = get_board_from_url(download_url)
         if board and board in SUPPORTED_BOARDS:
@@ -94,7 +94,7 @@ def get_asset_list(release_tag: str) -> list[str]:
 
 def retrieve_and_patch_json(url: str) -> dict[str, Any]:
     response = requests.get(
-        url.replace('.img.zst', '.json'),
+        url.replace('.img.xz', '.json'),
         headers=get_github_headers(),
         timeout=HTTP_TIMEOUT,
     )

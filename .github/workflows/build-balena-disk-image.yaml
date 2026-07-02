@@ -274,7 +274,7 @@ jobs:
             "${{ matrix.board }}" "${TAG#v}" "$SHORT_HASH"
 
   # Download balena OS, preload with the fleet's `latest` (the commit
-  # we just pushed in balena-cloud-deploy), package as .img.zst, and
+  # we just pushed in balena-cloud-deploy), package as .img.xz, and
   # emit per-board metadata used to build rpi-imager.json.
   balena-build-images:
     needs: [resolve-context, balena-cloud-deploy]
@@ -293,10 +293,10 @@ jobs:
         with:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
-      - name: Install zstd
+      - name: Install xz
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd
+          sudo apt-get install -y xz-utils
 
       # See balena-cloud-deploy's "Install balena CLI" step for why
       # this uses npm rather than bun.
@@ -391,7 +391,7 @@ jobs:
           # Final artefacts embed the board slug rather than balena's
           # image name (which is `raspberry-pi2` / `raspberrypi3` /
           # `raspberrypi3-64` / `raspberrypi4-64` / `raspberrypi5` —
-          # inconsistently hyphenated). The `anthias-<board>.img.zst`
+          # inconsistently hyphenated). The `anthias-<board>.img.xz`
           # shape matches
           # the regex in tools/raspberry_pi_imager/build_pi_imager_json
           # so the consolidation step can route entries by board.
@@ -406,26 +406,40 @@ jobs:
           IMAGE_SHA256=$(sha256sum "$BALENA_IMAGE.img" | awk '{print $1}')
           IMAGE_SIZE=$(wc -c < "$BALENA_IMAGE.img")
 
-          zstd -19 -T0 "$BALENA_IMAGE.img" -o "$ARTIFACT.img.zst"
-          DOWNLOAD_SHA256=$(sha256sum "$ARTIFACT.img.zst" | awk '{print $1}')
-          DOWNLOAD_SIZE=$(wc -c < "$ARTIFACT.img.zst")
+          # xz (LZMA2) is chosen over zstd because it is the only
+          # compression format flashed natively by BOTH Raspberry Pi
+          # Imager and balenaEtcher out of the box — Etcher has no
+          # zstd support (balena-io/etcher#2856), and Pi Imager's zstd
+          # path has been flaky. It's also the format official
+          # Raspberry Pi OS images ship as. `-9e` is the maximum ratio;
+          # `-T0` uses every core.
+          #
+          # `-T0` splits the image into independent blocks so it can
+          # compress in parallel. Measured on a pi4-64 image, the
+          # block-split ratio penalty vs single-threaded xz is only
+          # ~0.7% (794 MB vs 788 MB) while single-threaded takes ~4x
+          # longer (~33 min vs ~8 min on 4 cores) — so multi-threaded
+          # is the clear win. Both still beat zstd -19 by ~12% (907 MB).
+          xz -9e -T0 -c "$BALENA_IMAGE.img" > "$ARTIFACT.img.xz"
+          DOWNLOAD_SHA256=$(sha256sum "$ARTIFACT.img.xz" | awk '{print $1}')
+          DOWNLOAD_SIZE=$(wc -c < "$ARTIFACT.img.xz")
 
           # Match the format `sha256sum` would have written so the
           # sidecar is a drop-in input to `sha256sum -c`. The
           # uncompressed line uses `$ARTIFACT.img` (not the local
           # intermediate `$BALENA_IMAGE.img`) because that's the
           # filename a user gets when they decompress with
-          # `zstd -d $ARTIFACT.img.zst` — the local name is a
+          # `xz -d $ARTIFACT.img.xz` — the local name is a
           # CI-internal artefact that the release asset never carries.
           {
             printf '%s  %s\n' "$IMAGE_SHA256" "$ARTIFACT.img"
-            printf '%s  %s\n' "$DOWNLOAD_SHA256" "$ARTIFACT.img.zst"
+            printf '%s  %s\n' "$DOWNLOAD_SHA256" "$ARTIFACT.img.xz"
           } > "$ARTIFACT.sha256"
 
           # Per-board metadata snippet, uploaded to the release
-          # alongside the .img.zst it describes.
+          # alongside the .img.xz it describes.
           # build_pi_imager_json.py fetches it via the same base name
-          # (s/.img.zst$/.json/) and consolidates into rpi-imager.json.
+          # (s/.img.xz$/.json/) and consolidates into rpi-imager.json.
           jq --null-input \
             --arg BOARD "$BOARD" \
             --arg IMAGE_SHA256 "$IMAGE_SHA256" \
@@ -450,14 +464,14 @@ jobs:
         with:
           name: balena-images-${{ matrix.board }}
           path: |
-            ./*-anthias-*.img.zst
+            ./*-anthias-*.img.xz
             ./*-anthias-*.sha256
             ./*-anthias-*.json
 
       - name: Attest
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
-          subject-path: '${{ github.workspace }}/*-anthias-*.img.zst'
+          subject-path: '${{ github.workspace }}/*-anthias-*.img.xz'
 
   # Phase 1 release upload: ensure the release exists, then attach the
   # disk images, per-board metadata snippets, OpenAPI schema, and the
