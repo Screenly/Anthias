@@ -560,7 +560,7 @@ jobs:
           uv run --locked --group local \
             python -m tools.raspberry_pi_imager.build_pi_imager_json \
             > rpi-imager.json
-          jq . rpi-imager.json
+          jq empty rpi-imager.json
 
       - name: Upload rpi-imager.json to release
         env:
