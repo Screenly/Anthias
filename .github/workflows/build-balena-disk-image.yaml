@@ -542,15 +542,23 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install requests
-        run: pip install 'requests==2.34.2'
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: '0.9.17'
 
+      # build_pi_imager_json only needs `requests`; the `local` group is
+      # the lightest one that provides it (all pure-Python wheels).
+      # `uv run --locked` resolves the version from uv.lock and fails the
+      # job if pyproject.toml and the lockfile have drifted, so the pin
+      # can never fall out of sync with the rest of the project again.
       - name: Generate rpi-imager.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.resolve-context.outputs.tag }}
         run: |
-          python -m tools.raspberry_pi_imager.build_pi_imager_json \
+          uv run --locked --group local \
+            python -m tools.raspberry_pi_imager.build_pi_imager_json \
             > rpi-imager.json
           jq . rpi-imager.json
 
