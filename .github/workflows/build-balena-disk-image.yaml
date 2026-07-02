@@ -441,15 +441,15 @@ jobs:
           # build_pi_imager_json.py fetches it via the same base name
           # (s/.img.xz$/.json/) and consolidates into rpi-imager.json.
           #
-          # Only Raspberry Pi boards belong in Raspberry Pi Imager, and
-          # this snippet has no other consumer, so skip the non-Pi
-          # boards (x86, rockpi4) rather than attach an unused,
-          # Pi-worded metadata file to the release for them.
+          # Emit it only for the boards Raspberry Pi Imager lists (keep
+          # this allowlist in sync with SUPPORTED_BOARDS in
+          # build_pi_imager_json.py). Every board still ships a
+          # downloadable image, but the 32-bit pi3 is superseded by
+          # pi3-64 and x86/rockpi4 aren't Raspberry Pi hardware, so none
+          # of them belong in Imager — a snippet for them would just be
+          # an unused file on the release.
           case "$BOARD" in
-          x86 | rockpi4)
-            echo "Skipping rpi-imager metadata for non-Pi board: $BOARD"
-            ;;
-          *)
+          pi2 | pi3-64 | pi4-64 | pi5)
             jq --null-input \
               --arg BOARD "$BOARD" \
               --arg IMAGE_SHA256 "$IMAGE_SHA256" \
@@ -460,7 +460,6 @@ jobs:
               '{
                 "name": ("Anthias (" + ({
                   "pi2": "Raspberry Pi 2",
-                  "pi3": "Raspberry Pi 3 (32-bit)",
                   "pi3-64": "Raspberry Pi 3",
                   "pi4-64": "Raspberry Pi 4",
                   "pi5": "Raspberry Pi 5"
@@ -474,6 +473,9 @@ jobs:
                 "image_download_sha256": $DOWNLOAD_SHA256,
                 "release_date": $RELEASE_DATE
               }' > "$ARTIFACT.json"
+            ;;
+          *)
+            echo "Skipping rpi-imager metadata for board not in Imager: $BOARD"
             ;;
           esac
 
