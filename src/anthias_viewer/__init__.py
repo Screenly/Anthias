@@ -76,6 +76,11 @@ __license__ = 'Dual License: GPLv2 and Commercial License'
 
 
 current_browser_url: str | None = None
+# The per-asset "skip SSL verification" flag last sent to the webview,
+# tracked alongside ``current_browser_url`` so toggling the flag on the
+# currently-displayed asset (URI unchanged) still re-issues the load
+# with the new policy instead of being swallowed by the URI dedup.
+current_browser_skip_ssl: bool = False
 # Latched True->False on the first failure of ``setReloadInterval`` —
 # version skew between the running viewer and the AnthiasViewer
 # binary persists for the lifetime of the viewer process, so once we
@@ -863,7 +868,7 @@ def load_browser(
     global browser, _webview_supports_set_reload_interval
     global _webview_supports_set_request_headers
     global _last_applied_rotation, current_browser_url, current_browser_headers
-    global _last_applied_dark_mode
+    global _last_applied_dark_mode, current_browser_skip_ssl
     logging.info('Loading browser...')
 
     # Latch the dark-mode preference the spawned process is about to be
@@ -938,6 +943,11 @@ def load_browser(
     # Likewise drop the applied-headers cache so the next view_webpage
     # re-sends them to the fresh process (whose interceptor starts empty).
     current_browser_headers = {}
+    # And drop the skip-SSL cache: a fresh webview defaults to verifying
+    # certificates, so the next view_image/view_webpage must re-assert
+    # the flag rather than assume the previous process's policy carried
+    # over.
+    current_browser_skip_ssl = False
 
     # Retry the spawn with capped exponential backoff so a board that
     # intermittently crashes during Qt/WebEngine init self-heals on a
@@ -1151,6 +1161,7 @@ def view_webpage(
     reload_interval_s: int = 0,
     nocache: bool = False,
     headers: dict[str, str] | None = None,
+    skip_ssl_verify: bool = False,
 ) -> None:
     """Display a webpage and arm its per-asset auto-refresh timer.
 
@@ -1169,6 +1180,7 @@ def view_webpage(
     HTTP cache or skipped by the unchanged-URL short-circuit below.
     """
     global current_browser_url, current_browser_headers
+    global current_browser_skip_ssl
 
     headers = headers or {}
 
@@ -1192,12 +1204,19 @@ def view_webpage(
     # ``!=`` (value comparison): an ``is not`` identity check would
     # only short-circuit when the asset_loop happens to pass the same
     # str object on consecutive ticks, which a JSON-reconstructed URL
-    # would defeat. Reload when the headers change too — a header-only
-    # edit must still refetch so the new headers reach the main document,
-    # not just later same-origin XHR.
-    if current_browser_url != uri or current_browser_headers != headers:
+    # would defeat. Reload when the headers or the skip-SSL flag change
+    # too — a header-only edit must still refetch so the new headers
+    # reach the main document (not just later same-origin XHR), and
+    # flipping skip-SSL on the current page must re-load immediately.
+    if (
+        current_browser_url != uri
+        or current_browser_headers != headers
+        or current_browser_skip_ssl != skip_ssl_verify
+    ):
         if headers_applied:
-            _send_to_webview(lambda: browser_bus.loadPage(uri))
+            _send_to_webview(
+                lambda: browser_bus.loadPage(uri, skip_ssl_verify)
+            )
             current_browser_url = uri
             # Store a copy, not the caller's dict: aliasing it would let a
             # later in-place mutation of that dict silently change the
@@ -1205,6 +1224,7 @@ def view_webpage(
             # a needed reload. The asset_loop currently hands us a fresh
             # dict each tick, but the copy keeps that a non-assumption.
             current_browser_headers = dict(headers)
+            current_browser_skip_ssl = skip_ssl_verify
         else:
             # setRequestHeaders failed transiently, so the webview still
             # holds the PREVIOUS asset's staged headers. Issuing loadPage
@@ -1212,9 +1232,10 @@ def view_webpage(
             # to THIS asset's origin — a cross-asset credential leak (e.g.
             # the prior asset's Authorization reaching the next asset's
             # host). Defer navigation and leave current_browser_url /
-            # current_browser_headers stale so the next tick retries once
-            # the D-Bus call succeeds. A single-asset playlist self-heals
-            # the same way (the mismatch persists until the send lands).
+            # current_browser_headers / current_browser_skip_ssl stale so
+            # the next tick retries once the D-Bus call succeeds. A
+            # single-asset playlist self-heals the same way (the mismatch
+            # persists until the send lands).
             logging.debug(
                 'Deferring loadPage until request headers apply '
                 '(transient setRequestHeaders failure)'
@@ -1260,8 +1281,8 @@ def view_webpage(
     logging.info('Current url is {0}'.format(current_browser_url))
 
 
-def view_image(uri: str) -> None:
-    global current_browser_url
+def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
+    global current_browser_url, current_browser_skip_ssl
 
     if browser is None or not browser.is_alive():
         # Mid-playback respawn on the asset_loop thread: small, short
@@ -1275,10 +1296,15 @@ def view_image(uri: str) -> None:
     # Value comparison (matches view_webpage): an ``is not`` identity
     # check would only short-circuit when the asset_loop happens to
     # pass the same str object on consecutive ticks, which a JSON-
-    # reconstructed URL would defeat.
-    if current_browser_url != uri:
-        _send_to_webview(lambda: browser_bus.loadImage(uri))
+    # reconstructed URL would defeat. The skip-SSL flag is part of the
+    # key so flipping it on the current asset re-fetches immediately.
+    if (
+        current_browser_url != uri
+        or current_browser_skip_ssl != skip_ssl_verify
+    ):
+        _send_to_webview(lambda: browser_bus.loadImage(uri, skip_ssl_verify))
         current_browser_url = uri
+        current_browser_skip_ssl = skip_ssl_verify
     logging.info('Current url is {0}'.format(current_browser_url))
 
     if string_to_bool(getenv('WEBVIEW_DEBUG', '0')) and _webview_output:
@@ -1867,8 +1893,19 @@ def asset_loop(scheduler: Any) -> None:
         logging.debug('Asset URI %s', uri)
         watchdog()
 
+        # Effective SSL policy for this asset: the C++ webview should
+        # skip certificate verification when the operator disabled it
+        # device-wide (settings['verify_ssl'] off) OR opted this asset
+        # out (Asset.skip_ssl_verify). Only images and web pages route
+        # through the webview's cert-verifying stacks
+        # (QNetworkAccessManager / QWebEngine); video plays via FFmpeg,
+        # which doesn't verify self-signed certs, so it needs no flag.
+        skip_ssl = (not settings['verify_ssl']) or bool(
+            asset.get('skip_ssl_verify')
+        )
+
         if 'image' in mime:
-            view_image(uri)
+            view_image(uri, skip_ssl_verify=skip_ssl)
         elif 'web' in mime:
             # Per-asset auto-refresh — feature #2813. ``metadata`` is a
             # JSONField (defaults to {}); the column was historically
@@ -1893,6 +1930,7 @@ def asset_loop(scheduler: Any) -> None:
                 reload_interval_s=interval,
                 nocache=bool(asset.get('nocache')),
                 headers=headers,
+                skip_ssl_verify=skip_ssl,
             )
         elif 'video' in mime or 'streaming' in mime:
             # ``'video' or 'streaming' in mime`` parses as ``'video'

@@ -14,8 +14,13 @@ class MainWindow : public QMainWindow
         explicit MainWindow();
 
     public slots:
-        void loadPage(const QString &uri);
-        void loadImage(const QString &uri);
+        // ``skipSslVerify`` carries the asset's effective SSL policy
+        // (device-wide verify_ssl composed with per-asset
+        // skip_ssl_verify) computed by the Python viewer. No default
+        // argument: a defaulted D-Bus slot would export two overloads
+        // of the same method name, so the Python side always passes it.
+        void loadPage(const QString &uri, bool skipSslVerify);
+        void loadImage(const QString &uri, bool skipSslVerify);
         void setReloadInterval(int seconds);
         // Per-asset custom HTTP request headers (#2215). ``headersJson``
         // is a JSON object of ``{name: value}`` pairs. Called by the

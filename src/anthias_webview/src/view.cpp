@@ -12,6 +12,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSslError>
+#include <QWebEngineCertificateError>
 #include <QImage>
 #include <QImageReader>
 #include <QPainter>
@@ -139,6 +141,52 @@ int getServerPort()
 
     return value;
 }
+
+// QWebEnginePage that can be told, per navigation, to proceed past TLS
+// certificate errors — the web-page counterpart of the image loader's
+// ignoreSslErrors() path. Drives the per-asset ``skip_ssl_verify``
+// flag (composed with the device-wide ``verify_ssl`` setting on the
+// Python side) so a web-page asset served over HTTPS with a
+// self-signed / untrusted-CA cert renders instead of showing Chromium's
+// certificate-error page.
+//
+// The API is version-split: Qt5 exposes ``certificateError`` as a
+// virtual returning true-to-proceed; Qt6 replaced it with a signal
+// (connected in configureWebView()) and dropped the virtual. The flag
+// lives on the page either way, so ``loadPage`` sets it on the target
+// view's page before navigating and both paths read the same bit.
+//
+// No Q_OBJECT: the class declares no new signals/slots (the Qt6 signal
+// it uses is inherited), so it needs no moc pass and the call sites
+// reach it via static_cast rather than qobject_cast.
+class AnthiasWebEnginePage : public QWebEnginePage
+{
+public:
+    AnthiasWebEnginePage(QWebEngineProfile* profile, QObject* parent)
+        : QWebEnginePage(profile, parent)
+    {
+    }
+
+    void setSkipSslVerify(bool skip) { m_skipSslVerify = skip; }
+    bool skipSslVerify() const { return m_skipSslVerify; }
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    // Qt5: return true to ignore the error and continue loading.
+    bool certificateError(const QWebEngineCertificateError& error) override
+    {
+        Q_UNUSED(error);
+        if (m_skipSslVerify) {
+            qDebug() << "loadPage: proceeding past certificate error "
+                        "(skip_ssl_verify enabled)";
+            return true;
+        }
+        return false;
+    }
+#endif
+
+private:
+    bool m_skipSslVerify = false;
+};
 
 // Build an Accept-Language header value from the system locale so
 // multi-language URL assets serve content in the operator's configured
@@ -367,11 +415,35 @@ View::~View()
 
 void View::configureWebView(QWebEngineView* view)
 {
+    // Install our certificate-error-aware page (see AnthiasWebEnginePage)
+    // in place of the default one so ``skip_ssl_verify`` web-page assets
+    // can proceed past a self-signed cert. Parented to the view, which
+    // takes ownership on setPage(). Done first so the settings/background
+    // tweaks below apply to the page that will actually be used.
+    auto* page =
+        new AnthiasWebEnginePage(QWebEngineProfile::defaultProfile(), view);
+    view->setPage(page);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Qt6: certificateError is a signal. Accept or reject based on the
+    // per-navigation flag loadPage() set on this page. Capturing the
+    // typed page pointer avoids a qobject_cast in the handler.
+    connect(page, &QWebEnginePage::certificateError, this,
+        [page](QWebEngineCertificateError error) {
+            if (page->skipSslVerify()) {
+                qDebug() << "loadPage: accepting certificate error "
+                            "(skip_ssl_verify enabled)";
+                error.acceptCertificate();
+            } else {
+                error.rejectCertificate();
+            }
+        });
+#endif
+
     view->settings()->setAttribute(QWebEngineSettings::LocalStorageEnabled, true);
     view->settings()->setAttribute(QWebEngineSettings::ShowScrollBars, false);
     // Match the widget's black backdrop so dark-themed URL assets don't
     // flash white between the page-load start and the first paint.
-    view->page()->setBackgroundColor(Qt::black);
+    page->setBackgroundColor(Qt::black);
     view->setVisible(false);
 }
 
@@ -385,11 +457,19 @@ void View::stopAnimation()
     isAnimatedImage = false;
 }
 
-void View::loadPage(const QString &uri)
+void View::loadPage(const QString &uri, bool skipSslVerify)
 {
     qDebug() << "Type: Webpage";
 
     const quint64 requestId = ++loadGenerationId;
+
+    // The page load goes into nextWebView (startPageLoad), so set the
+    // per-navigation certificate policy on that view's page now. It
+    // persists on the page across watchdog retries of the same URI.
+    // static_cast is safe: configureWebView() installs an
+    // AnthiasWebEnginePage on every view.
+    static_cast<AnthiasWebEnginePage*>(nextWebView->page())
+        ->setSkipSslVerify(skipSslVerify);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Drop back to the web/image surface in case the previous asset
     // was a video. Stops the QMediaPlayer (frees its decoder
@@ -585,7 +665,7 @@ void View::handlePageLoadTimeout()
     startPageLoad(pendingPageUri, loadGenerationId);
 }
 
-void View::loadImage(const QString &preUri)
+void View::loadImage(const QString &preUri, bool skipSslVerify)
 {
     qDebug() << "Type: Image";
     const quint64 requestId = ++loadGenerationId;
@@ -669,6 +749,21 @@ void View::loadImage(const QString &preUri)
 
     QNetworkRequest request(src);
     QNetworkReply* reply = networkManager->get(request);
+
+    if (skipSslVerify) {
+        // Per-asset opt-in (Asset.skip_ssl_verify) or the device-wide
+        // verify_ssl setting is off — trust self-signed / untrusted-CA
+        // hosts for this image. ignoreSslErrors() must be armed on the
+        // reply before the handshake completes, so connect it here
+        // rather than waiting for the finished handler. Without this a
+        // self-signed HTTPS image fails with SslHandshakeFailedError
+        // and renders blank (forum "web content doesn't display").
+        // Stable API on both Qt5 and Qt6.
+        connect(reply, &QNetworkReply::sslErrors, reply,
+            [reply](const QList<QSslError>&) {
+                reply->ignoreSslErrors();
+            });
+    }
 
     connect(reply, &QNetworkReply::finished, this, [this, reply, requestId]() {
         reply->deleteLater();

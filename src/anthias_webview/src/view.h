@@ -32,8 +32,8 @@ public:
     explicit View(QWidget* parent);
     ~View();
 
-    void loadPage(const QString &uri);
-    void loadImage(const QString &uri);
+    void loadPage(const QString &uri, bool skipSslVerify = false);
+    void loadImage(const QString &uri, bool skipSslVerify = false);
     void setReloadInterval(int seconds);
     // Per-asset custom HTTP request headers (#2215). ``headersJson`` is
     // a JSON object of ``{name: value}`` string pairs (an empty object

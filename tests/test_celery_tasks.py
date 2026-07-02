@@ -421,6 +421,7 @@ def _make_revalidation_asset(
     is_enabled: bool = True,
     is_processing: bool = False,
     skip_asset_check: bool = False,
+    skip_ssl_verify: bool = False,
     is_reachable: bool = True,
 ) -> Asset:
     return Asset.objects.create(
@@ -432,6 +433,7 @@ def _make_revalidation_asset(
         is_enabled=is_enabled,
         is_processing=is_processing,
         skip_asset_check=skip_asset_check,
+        skip_ssl_verify=skip_ssl_verify,
         is_reachable=is_reachable,
     )
 
@@ -471,6 +473,41 @@ def test_sweep_marks_reachable_when_url_succeeds(eager_celery: None) -> None:
     ):
         revalidate_asset_urls.apply()
     assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_skips_ssl_verification_per_asset(eager_celery: None) -> None:
+    """A per-asset skip_ssl_verify must reach url_fails as
+    verify_ssl=False so a trusted self-signed host isn't marked
+    unreachable. A default asset keeps verification on.
+
+    Pin the device-wide ``verify_ssl`` on explicitly: the effective flag
+    is ``settings['verify_ssl'] and not asset.skip_ssl_verify``, so a
+    host whose ``anthias.conf`` happens to have verification off would
+    otherwise mask the per-asset composition under test."""
+    _make_revalidation_asset('secure', uri='https://secure.example/x.png')
+    _make_revalidation_asset(
+        'selfsigned',
+        uri='https://intranet.example/x.png',
+        skip_ssl_verify=True,
+    )
+
+    with (
+        mock.patch.dict(
+            'anthias_server.celery_tasks.settings', {'verify_ssl': True}
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.url_fails', return_value=False
+        ) as m,
+    ):
+        revalidate_asset_urls.apply()
+
+    verify_by_url = {
+        call.args[0]: call.kwargs.get('verify_ssl')
+        for call in m.call_args_list
+    }
+    assert verify_by_url['https://secure.example/x.png'] is True
+    assert verify_by_url['https://intranet.example/x.png'] is False
 
 
 @pytest.mark.django_db
@@ -553,7 +590,7 @@ def test_sweep_probe_exception_does_not_kill_sweep(
     _make_revalidation_asset('boom', uri='https://example.com/boom')
     _make_revalidation_asset('ok', uri='https://example.com/ok')
 
-    def fake_url_fails(url: str) -> bool:
+    def fake_url_fails(url: str, verify_ssl: bool | None = None) -> bool:
         if 'boom' in url:
             raise RuntimeError('synthetic')
         return False

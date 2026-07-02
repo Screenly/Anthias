@@ -48,6 +48,7 @@ def test_get_device_settings(
         'use_24_hour_clock': True,
         'debug_logging': False,
         'prefer_dark_mode': True,
+        'verify_ssl': True,
         'screen_rotation': 90,
     }[key]
 
@@ -69,6 +70,7 @@ def test_get_device_settings(
         'use_24_hour_clock': True,
         'debug_logging': False,
         'prefer_dark_mode': True,
+        'verify_ssl': True,
         'screen_rotation': 90,
         'username': '',
     }
@@ -363,6 +365,7 @@ def test_disable_basic_auth(
         'use_24_hour_clock': True,
         'debug_logging': False,
         'prefer_dark_mode': False,
+        'verify_ssl': True,
         'screen_rotation': 0,
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()

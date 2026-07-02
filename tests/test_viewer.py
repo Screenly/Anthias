@@ -519,8 +519,86 @@ def test_view_webpage_arms_reload_interval(
     ):
         viewer_fixtures.u.view_webpage('https://example.com', 30)
 
-    fake_bus.loadPage.assert_called_once_with('https://example.com')
+    fake_bus.loadPage.assert_called_once_with('https://example.com', False)
     fake_bus.setReloadInterval.assert_called_once_with(30)
+
+
+@pytest.mark.parametrize('skip_ssl', [True, False])
+def test_view_image_passes_skip_ssl_verify(
+    viewer_fixtures: _ViewerFixtures, skip_ssl: bool
+) -> None:
+    """The per-asset SSL policy must reach the C++ webview's loadImage
+    D-Bus slot so a self-signed HTTPS image can be trusted per-asset."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+    ):
+        viewer_fixtures.u.view_image(
+            'https://example.com/x.jpg', skip_ssl_verify=skip_ssl
+        )
+
+    fake_bus.loadImage.assert_called_once_with(
+        'https://example.com/x.jpg', skip_ssl
+    )
+
+
+@pytest.mark.parametrize('skip_ssl', [True, False])
+def test_view_webpage_passes_skip_ssl_verify(
+    viewer_fixtures: _ViewerFixtures, skip_ssl: bool
+) -> None:
+    """Same per-asset SSL policy must reach loadPage for webpage
+    assets (QWebEngine certificate-error handling on the C++ side)."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(
+            'https://example.com', 0, skip_ssl_verify=skip_ssl
+        )
+
+    fake_bus.loadPage.assert_called_once_with('https://example.com', skip_ssl)
+
+
+def test_view_image_reissues_when_skip_ssl_flips(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Toggling skip_ssl_verify on the currently-displayed asset (URI
+    unchanged) must re-issue loadImage — the URI-only dedup would
+    otherwise swallow it and leave a blank self-signed image."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_url', 'https://h/x.jpg'
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+    ):
+        # Same URI, flag flipped on — must re-send.
+        viewer_fixtures.u.view_image('https://h/x.jpg', skip_ssl_verify=True)
+
+    fake_bus.loadImage.assert_called_once_with('https://h/x.jpg', True)
 
 
 def test_view_webpage_default_zero_interval(
@@ -565,7 +643,7 @@ def test_view_webpage_sends_custom_headers(
         viewer_fixtures.u.view_webpage('https://example.com', headers=headers)
 
     fake_bus.setRequestHeaders.assert_called_once_with(json.dumps(headers))
-    fake_bus.loadPage.assert_called_once_with('https://example.com')
+    fake_bus.loadPage.assert_called_once_with('https://example.com', False)
 
 
 def test_view_webpage_no_headers_sends_empty_object(
@@ -609,7 +687,7 @@ def test_view_webpage_reloads_when_only_headers_change(
     ):
         viewer_fixtures.u.view_webpage(url, headers={'X-New': '2'})
 
-    fake_bus.loadPage.assert_called_once_with(url)
+    fake_bus.loadPage.assert_called_once_with(url, False)
 
 
 def test_view_webpage_no_reload_when_url_and_headers_unchanged(
@@ -669,7 +747,7 @@ def test_view_webpage_setrequestheaders_version_skew_latches_off(
         assert viewer_fixtures.u._webview_supports_set_request_headers is False
         fake_bus.setRequestHeaders.assert_called_once()
         # Page still loaded despite the missing slot.
-        fake_bus.loadPage.assert_called_once_with('https://example.com')
+        fake_bus.loadPage.assert_called_once_with('https://example.com', False)
 
         # A second webpage tick no longer calls the slot at all.
         viewer_fixtures.u.view_webpage(
@@ -741,7 +819,7 @@ def test_view_webpage_nocache_busts_url(
         viewer_fixtures.u.view_webpage('https://example.com', 30, nocache=True)
 
     fake_bus.loadPage.assert_called_once_with(
-        'https://example.com?_anthias_nc=1234567'
+        'https://example.com?_anthias_nc=1234567', False
     )
     fake_bus.setReloadInterval.assert_called_once_with(30)
 
@@ -765,7 +843,7 @@ def test_view_webpage_nocache_preserves_existing_query(
             'https://example.com/dash?tab=sales&x=1', nocache=True
         )
 
-    (loaded,), _ = fake_bus.loadPage.call_args
+    (loaded, _skip), _ = fake_bus.loadPage.call_args
     assert loaded.startswith('https://example.com/dash?')
     assert 'tab=sales' in loaded
     assert 'x=1' in loaded
@@ -791,7 +869,7 @@ def test_view_webpage_nocache_preserves_encoded_query_verbatim(
     ):
         viewer_fixtures.u.view_webpage(signed, nocache=True)
 
-    (loaded,), _ = fake_bus.loadPage.call_args
+    (loaded, _skip), _ = fake_bus.loadPage.call_args
     assert loaded == signed + '&_anthias_nc=3000'
 
 
@@ -837,7 +915,9 @@ def test_view_webpage_without_nocache_leaves_url_untouched(
     ):
         viewer_fixtures.u.view_webpage('https://example.com/dash?tab=1')
 
-    fake_bus.loadPage.assert_called_once_with('https://example.com/dash?tab=1')
+    fake_bus.loadPage.assert_called_once_with(
+        'https://example.com/dash?tab=1', False
+    )
 
 
 @pytest.mark.parametrize(

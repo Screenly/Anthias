@@ -804,6 +804,7 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
         )
     asset.nocache = _checkbox(request, 'nocache')
     asset.skip_asset_check = _checkbox(request, 'skip_asset_check')
+    asset.skip_ssl_verify = _checkbox(request, 'skip_ssl_verify')
 
     # Day-of-week filter — POST sends one value per checked weekday
     # (1=Mon..7=Sun, ISO). Empty / unchecked-all means "every day", same
@@ -1686,6 +1687,7 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['prefer_dark_mode'] = _checkbox(request, 'prefer_dark_mode')
         settings['use_24_hour_clock'] = _checkbox(request, 'use_24_hour_clock')
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
+        settings['verify_ssl'] = _checkbox(request, 'verify_ssl')
 
         # Restrict to the four cardinal angles via the shared
         # clamp_screen_rotation() helper. The Qt linuxfb plugin only

@@ -21,14 +21,14 @@ MainWindow::MainWindow() : QMainWindow()
     // the surface and tripped a wlroots xdg_surface warning under cage.
 }
 
-void MainWindow::loadPage(const QString &uri)
+void MainWindow::loadPage(const QString &uri, bool skipSslVerify)
 {
-    view->loadPage(uri);
+    view->loadPage(uri, skipSslVerify);
 }
 
-void MainWindow::loadImage(const QString &uri)
+void MainWindow::loadImage(const QString &uri, bool skipSslVerify)
 {
-    view->loadImage(uri);
+    view->loadImage(uri, skipSslVerify);
 }
 
 void MainWindow::setReloadInterval(int seconds)

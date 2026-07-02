@@ -185,6 +185,9 @@ class UpdateAssetSerializer(Serializer[Asset]):
         instance.skip_asset_check = validated_data.get(
             'skip_asset_check', instance.skip_asset_check
         )
+        instance.skip_ssl_verify = validated_data.get(
+            'skip_ssl_verify', instance.skip_ssl_verify
+        )
 
         if 'video' not in (instance.mimetype or ''):
             instance.duration = validated_data.get(

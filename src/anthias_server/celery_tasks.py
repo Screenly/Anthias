@@ -1231,13 +1231,20 @@ def _check_asset_reachability(asset: Asset) -> bool:
     Local files: existence check. Remote URIs: defer to ``url_fails``,
     which knows about both HTTP(S) and streaming (RTSP/RTMP) probes.
     Trust ``skip_asset_check`` — operator opted out of validation.
+
+    TLS verification for the remote probe composes the device-wide
+    ``verify_ssl`` setting with the per-asset ``skip_ssl_verify``
+    override: verification is skipped when the global setting is off OR
+    the asset opts out, so a trusted self-signed host isn't marked
+    unreachable (which would make the viewer silently skip the asset).
     """
     if asset.skip_asset_check:
         return True
     uri = asset.uri or ''
     if uri.startswith('/'):
         return path.isfile(uri)
-    return not url_fails(uri)
+    verify_ssl = settings['verify_ssl'] and not asset.skip_ssl_verify
+    return not url_fails(uri, verify_ssl=verify_ssl)
 
 
 @celery.task(

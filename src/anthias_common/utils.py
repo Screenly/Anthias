@@ -575,9 +575,16 @@ def json_dump(obj: Any) -> str:
     return json.dumps(obj, default=handler)
 
 
-def url_fails(url: str) -> bool:
+def url_fails(url: str, verify_ssl: bool | None = None) -> bool:
     """
     If it is streaming
+
+    ``verify_ssl`` controls TLS certificate verification for the HTTP(S)
+    reachability probe. ``None`` (the default) reads the device-wide
+    ``verify_ssl`` setting, preserving the behaviour of existing
+    callers. Callers that know a per-asset override (``Asset.
+    skip_ssl_verify``) pass the already-composed effective flag so a
+    trusted self-signed host isn't wrongly marked unreachable.
     """
     # Note: no private/LAN-address filtering here. Serving signage from
     # a LAN host (an intranet dashboard, a sibling Docker container, a
@@ -615,15 +622,30 @@ def url_fails(url: str) -> bool:
 
     # Use Certifi module and set to True as default so users stop
     # seeing InsecureRequestWarning in logs.
+    verify_flag = settings['verify_ssl'] if verify_ssl is None else verify_ssl
     verify: str | bool
-    if settings['verify_ssl']:
+    if verify_flag:
         verify = certifi.where()
     else:
-        verify = True
+        # verify_ssl is off — the operator has opted into trusting
+        # self-signed / untrusted-CA hosts (e.g. an intranet media
+        # server). Pass verify=False so requests skips certificate
+        # validation; anything else (True, or a certifi bundle path)
+        # still validates and would wrongly mark such a host
+        # unreachable, defeating the setting. Regressed to `True` in
+        # 2019 (commit c1dd61ce); restored here.
+        verify = False
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'  # noqa: E501
     }
+    if verify is False:
+        # The operator explicitly disabled verification; silence the
+        # per-request InsecureRequestWarning urllib3 would otherwise
+        # spam into the logs on every reachability sweep.
+        requests.packages.urllib3.disable_warnings(  # type: ignore[attr-defined]
+            requests.packages.urllib3.exceptions.InsecureRequestWarning  # type: ignore[attr-defined]
+        )
     try:
         if not validate_url(url):
             return False
