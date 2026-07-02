@@ -1,4 +1,4 @@
-{% if board in ('pi4-64', 'pi5', 'arm64') %}
+{% if board in ('pi4-64', 'pi3-64', 'pi5', 'arm64') %}
 # archive.raspberrypi.com ships ffmpeg patched with v4l2_request
 # enabled (``--enable-v4l2-request --enable-libudev
 # --enable-vout-drm --enable-sand --enable-neon``). Stock Debian
@@ -9,6 +9,16 @@
 # * Pi 4-64 — V3D V4L2 M2M (H.264 via stateful v4l2m2m, works on
 #   stock too) plus the dedicated rpi-hevc-dec block (HEVC via
 #   v4l2_request, needs ``+rpt1``).
+# * Pi 3-64 — VideoCore IV bcm2835-codec H.264 (the same eglfs/Qt6
+#   video path as pi4-64). QtMultimedia only engages HW decode via
+#   the ``+rpt1`` drm / v4l2_request + SAND path; on stock Debian
+#   ffmpeg it silently falls back to SW, which can't sustain 1080p30
+#   on the Pi 3 (measured 0.74x realtime) and drops frames / stalls
+#   presentation under thermal + memory pressure (issue #3084). The
+#   hardware itself decodes fine — ``ffmpeg -c:v h264_v4l2m2m`` runs
+#   at 2.49x realtime on-device. pi3-64 was added (#2985) after this
+#   pin's board list (#2885) and grouped with pi4-64 everywhere else,
+#   so its omission here was an oversight.
 # * Pi 5 — Hantro G2 HEVC via v4l2_request (needs ``+rpt1``).
 # * arm64 — Rock Pi 4 / RK3399's ``rkvdec`` (HEVC) and Hantro VPU
 #   (H.264) are also stateless v4l2_request decoders. Live test
