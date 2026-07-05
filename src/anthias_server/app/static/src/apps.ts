@@ -66,8 +66,10 @@ export function appsTab(): AppsTabData {
     loaded: false,
 
     init(this: AppsTabData) {
-      // Lazy: only hit the network the first time the tab is shown.
-      // The Apps pane calls load() via x-init when it becomes visible.
+      // Lazy: nothing here. The Apps pane triggers load() the first
+      // time it becomes visible via x-effect="if (tab === 'apps')
+      // load()" in the template, so the catalog is only fetched when
+      // the operator actually opens the tab.
     },
 
     async load(this: AppsTabData) {
@@ -95,7 +97,7 @@ export function appsTab(): AppsTabData {
         if (e instanceof DOMException && e.name === 'AbortError') return
         this.phase = 'error'
         this.error =
-          "Couldn't reach the app store. Check the device's connection " +
+          "Couldn't reach the app store. Check your network connection " +
           'and try again.'
       }
     },
@@ -247,8 +249,8 @@ export function appEdit(asset: EditAsset): AppEditData {
           if (e instanceof DOMException && e.name === 'AbortError') return
           this.phase = 'error'
           this.error =
-            "Couldn't load this app's settings. Check the connection " +
-            'and reopen.'
+            "Couldn't load this app's settings. Check your network " +
+            'connection and reopen.'
         })
     },
   }

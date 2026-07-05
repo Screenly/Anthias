@@ -493,7 +493,9 @@ def test_host_allowed_matching() -> None:
 
     assert _host_allowed('weather.srly.io')
     assert _host_allowed('srly.io')  # the bare apex
-    assert _host_allowed('WEATHER.SRLY.IO'.lower())
+    # Pass the uppercase form as-is: exercises the internal lower-casing
+    # (a URL's hostname can arrive mixed-case).
+    assert _host_allowed('WEATHER.SRLY.IO')
     assert _host_allowed('signage-apps.com')
     # A hostname is port/userinfo-free by the time it reaches here.
     assert not _host_allowed('evilsrly.io')  # no dot boundary
