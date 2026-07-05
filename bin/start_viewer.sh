@@ -154,6 +154,17 @@ start_pulseaudio() {
         echo 'load-module module-always-sink'
     } > "$pa_config"
 
+    # Clear the stale pid file a previously SIGKILLed daemon left behind.
+    # XDG_RUNTIME_DIR is a persistent path in the container's writable
+    # layer, not a per-boot tmpfs like on the host, so the pid file (and
+    # socket) survive a container restart or a device reboot. On the next
+    # start, --daemonize's self-exec re-runs pa_pid_file_create() and
+    # racily reads that pid file as a live pulseaudio — its own pre-exec
+    # PID — and aborts with "Daemon already running", leaving video silent
+    # (issue #3112). Removing the pid file makes every restart clean; the
+    # socket is unlinked by module-native-protocol-unix's own stale check.
+    rm -f "${XDG_RUNTIME_DIR}/pulse/pid"
+
     # --daemonize blocks until the daemon is initialised, so the
     # socket is guaranteed to exist before AnthiasViewer's
     # QMediaDevices first looks for a server. exit-idle-time=-1
