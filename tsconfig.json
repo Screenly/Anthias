@@ -7,18 +7,8 @@
     "noImplicitAny": true,
     "strict": true,
     "module": "esnext",
-    "moduleResolution": "node",
-    "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": {
-      "@/components/*": ["src/anthias_server/app/static/src/components/*"],
-      "@/constants": ["src/anthias_server/app/static/src/constants.ts"],
-      "@/hooks/*": ["src/anthias_server/app/static/src/hooks/*"],
-      "@/store/*": ["src/anthias_server/app/static/src/store/*"],
-      "@/sass/*": ["src/anthias_server/app/static/sass/*"],
-      "@/types": ["src/anthias_server/app/static/src/types.ts"],
-      "@/tests/*": ["src/anthias_server/app/static/src/tests/*"]
-    }
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx"
   },
   "include": [
     "src/anthias_server/app/static/src/**/*"
@@ -26,6 +16,10 @@
   "exclude": [
     "node_modules",
     "src/anthias_server/app/static/dist",
-    "src/anthias_server/app/static/spec"
+    "src/anthias_server/app/static/spec",
+    // Test files run under Bun's own test runner, which provides the
+    // `bun:test` module types natively; tsc (app type-check) can't
+    // resolve that import, so keep specs out of this pass.
+    "**/*.test.ts"
   ]
 }

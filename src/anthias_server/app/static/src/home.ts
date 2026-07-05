@@ -6,11 +6,21 @@
 import type Alpine from 'alpinejs'
 import type flatpickrLib from 'flatpickr'
 
+import {
+  appEdit,
+  appsTab,
+  type AppEditData,
+  type AppsTabData,
+  type EditAsset as AppEditAsset,
+} from './apps'
+
 declare global {
   interface Window {
     Alpine: typeof Alpine
     flatpickr: typeof flatpickrLib
     homeApp: () => HomeAppData
+    appsTab: () => AppsTabData
+    appEdit: (asset: AppEditAsset) => AppEditData
     fallbackCopyToClipboard: (text: string) => boolean
     bulkSucceeded: (event: Event) => boolean
   }
@@ -738,6 +748,8 @@ function bulkSucceeded(event: Event): boolean {
 window.bulkSucceeded = bulkSucceeded
 
 window.homeApp = homeApp
+window.appsTab = appsTab
+window.appEdit = appEdit
 
 function bootHomePage(): void {
   installProcessingToastWatcher()

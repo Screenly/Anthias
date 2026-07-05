@@ -2552,3 +2552,279 @@ body.auth-body {
   .modal-alert__recipe { flex-direction: column; }
   .modal-alert__copy { align-self: stretch; }
 }
+
+// -----------------------------------------------------------------------------
+// Add → Apps tab: store catalog grid + manifest-driven config form.
+// The grid, cards and config controls are project-namespaced (.app-*)
+// to match the rest of the modal; the location-map wraps Leaflet.
+// -----------------------------------------------------------------------------
+
+// Centred loading / error / empty state inside the modal body.
+.app-cfg-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  text-align: center;
+  min-height: 12rem;
+}
+
+.app-cfg-spin {
+  font-size: 2rem;
+  color: var(--color-text-muted);
+  animation: app-cfg-spin 0.9s linear infinite;
+}
+
+@keyframes app-cfg-spin {
+  to { transform: rotate(360deg); }
+}
+
+// Responsive catalog grid — auto-fills as the modal widens.
+.app-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+
+.app-card {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  text-align: left;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast),
+    transform var(--t-fast);
+
+  &:hover {
+    border-color: var(--color-link);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+  &:focus-visible {
+    outline: none;
+    border-color: var(--color-link);
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+  }
+}
+
+.app-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-tint);
+  color: var(--color-text-muted);
+  overflow: hidden;
+
+  img { width: 100%; height: 100%; object-fit: cover; }
+  i { font-size: 1.5rem; }
+
+  &--lg {
+    width: 3.5rem;
+    height: 3.5rem;
+    i { font-size: 2rem; }
+  }
+}
+
+.app-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.app-card__name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.app-card__text {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  // Clamp the summary to two lines so cards stay even.
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.app-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.app-card__tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  background-color: var(--color-surface-tint);
+}
+
+// Config panel header (back link + app identity).
+.app-cfg-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: var(--space-3);
+  cursor: pointer;
+
+  &:hover { color: var(--color-link); }
+}
+
+.app-cfg-head {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.app-cfg-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+// Manifest-driven form controls.
+.app-cfg-fields { margin-top: var(--space-4); }
+
+.app-cfg-field {
+  margin-bottom: var(--space-4);
+  &:last-child { margin-bottom: 0; }
+}
+
+.app-cfg-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.app-cfg-input {
+  @extend .app-input;
+}
+
+.app-cfg-help {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.app-cfg-group {
+  margin: var(--space-5) 0 var(--space-3);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.app-cfg-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+
+  input { flex: 0 0 auto; }
+  span { font-size: 0.95rem; color: var(--color-text); }
+}
+
+.app-cfg-nosettings { margin-top: var(--space-3); }
+
+// Location-map widget (Leaflet + OSM). A fixed centre pin over a
+// draggable map; the map canvas fills the frame and the pin/readout
+// float above it.
+.app-cfg-map {
+  position: relative;
+  height: 16rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  background-color: var(--color-surface-tint);
+}
+
+.app-cfg-map__canvas {
+  // Fill the sized parent with explicit width/height rather than
+  // inset:0 — Leaflet stamps `.leaflet-container { position: relative }`
+  // on this same element, which beats our `position: absolute` in the
+  // cascade and would leave inset ignored and the canvas 0-height (so
+  // only a few tiles load and the map reads blank). 100% of the fixed
+  // 16rem parent is robust to whichever `position` wins.
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  // Leaflet needs an explicit z-index floor so its panes sit below the
+  // pin/readout but above the frame background.
+  z-index: 0;
+}
+
+.app-cfg-map__pin {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  // Anchor the pin's tip (bottom-centre) on the map centre.
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 500;
+  background-color: var(--color-danger);
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  box-shadow: var(--shadow-sm);
+  rotate: -45deg;
+}
+
+.app-cfg-map__readout,
+.app-cfg-map__hint {
+  position: absolute;
+  bottom: var(--space-2);
+  left: var(--space-2);
+  z-index: 500;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-on-dark);
+  background-color: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+// Until the operator picks a point (or the map was seeded with a saved
+// pin), show the "Drag to set location" hint instead of coordinates —
+// the numbers would otherwise imply a location is set when it isn't.
+.app-cfg-map__readout { display: none; }
+.app-cfg-map__hint { display: block; }
+.app-cfg-map.is-touched {
+  .app-cfg-map__readout { display: block; }
+  .app-cfg-map__hint { display: none; }
+}
+
+.app-cfg-map--unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  height: auto;
+  min-height: 6rem;
+}

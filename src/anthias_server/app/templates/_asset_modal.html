@@ -38,6 +38,13 @@
               <i class="ti ti-cloud-upload mr-1"></i>Upload file
             </button>
           </li>
+          <li class="app-tab-item">
+            <button type="button" id="tab-apps"
+              class="app-tab-link" :class="tab === 'apps' && 'active'"
+              @click="tab = 'apps'">
+              <i class="ti ti-apps mr-1"></i>Apps
+            </button>
+          </li>
         </ul>
       </div>
 
@@ -140,6 +147,129 @@
           </button>
         </div>
       </form>
+
+      {% comment %} Apps tab — the signage-app store catalog. appsTab()
+         (apps.ts) fetches the store index + each manifest client-side
+         the first time this tab is shown (x-effect below), renders the
+         card grid, and on select renders the manifest-driven config
+         form into [x-ref=configHost]. Installing POSTs the built launch
+         URL to assets_create_app via the htmx form, reusing the same
+         #asset-table swap + asset-saved contract as the URI tab.
+      {% endcomment %}
+      <div
+        x-show="tab === 'apps'"
+        x-data="appsTab()"
+        x-effect="if (tab === 'apps') load()"
+      >
+        {# Loading #}
+        <div class="modal-card__body app-cfg-state" x-show="phase === 'loading'" x-cloak>
+          <i class="ti ti-loader-2 app-cfg-spin" aria-hidden="true"></i>
+          <p class="muted-label m-0">Loading apps…</p>
+        </div>
+
+        {# Error / empty #}
+        <div class="modal-card__body app-cfg-state" x-show="phase === 'error'" x-cloak>
+          <i class="ti ti-plug-connected-x" style="font-size: 2rem; opacity: .55" aria-hidden="true"></i>
+          <p class="mb-2" x-text="error"></p>
+          <button type="button" class="app-btn app-btn-secondary" @click="retry()">
+            <i class="ti ti-refresh"></i><span>Try again</span>
+          </button>
+        </div>
+
+        {# Catalog grid #}
+        <div x-show="phase === 'ready'" x-cloak>
+          <div class="modal-card__body" style="padding-top: 0">
+            <div class="app-grid">
+              <template x-for="app in apps" :key="app.id">
+                <button type="button" class="app-card" @click="select(app)">
+                  <span class="app-card__icon">
+                    <template x-if="app.manifest.icon">
+                      <img :src="app.manifest.icon" :alt="app.manifest.name" loading="lazy">
+                    </template>
+                    <template x-if="!app.manifest.icon">
+                      <i class="ti ti-app-window" aria-hidden="true"></i>
+                    </template>
+                  </span>
+                  <span class="app-card__body">
+                    <span class="app-card__name" x-text="app.manifest.name"></span>
+                    <span class="app-card__text"
+                      x-text="app.manifest.summary || app.manifest.description"></span>
+                    <span class="app-card__tags" x-show="app.manifest.tags && app.manifest.tags.length">
+                      <template x-for="tag in (app.manifest.tags || []).slice(0, 3)" :key="tag">
+                        <span class="app-card__tag" x-text="tag"></span>
+                      </template>
+                    </span>
+                  </span>
+                </button>
+              </template>
+            </div>
+          </div>
+          <div class="modal-card__footer">
+            <button type="button" class="app-btn app-btn-link" @click="closeModal()">Cancel</button>
+          </div>
+        </div>
+
+        {# Configure + install #}
+        <form
+          x-show="phase === 'config'"
+          x-cloak
+          method="post"
+          action="{% url 'anthias_app:assets_create_app' %}"
+          hx-post="{% url 'anthias_app:assets_create_app' %}"
+          hx-target="#asset-table"
+          hx-swap="outerHTML"
+          hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
+        >
+          {% csrf_token %}
+          <input type="hidden" name="app_id" :value="appId">
+          <input type="hidden" name="manifest_url" :value="manifestUrl">
+          <input type="hidden" name="manifest_version" :value="manifestVersion">
+          <input type="hidden" name="uri" :value="launchUrl">
+          <input type="hidden" name="values" :value="valuesJson">
+          <input type="hidden" name="refresh_interval_s" :value="refreshIntervalS">
+
+          <div class="modal-card__body" style="padding-top: var(--space-2)">
+            <button type="button" class="app-cfg-back" @click="back()">
+              <i class="ti ti-arrow-left"></i><span>All apps</span>
+            </button>
+
+            <div class="app-cfg-head">
+              <span class="app-card__icon app-card__icon--lg">
+                <template x-if="selected && selected.manifest.icon">
+                  <img :src="selected.manifest.icon" :alt="selected.manifest.name">
+                </template>
+                <template x-if="selected && !selected.manifest.icon">
+                  <i class="ti ti-app-window" aria-hidden="true"></i>
+                </template>
+              </span>
+              <div>
+                <h3 class="app-cfg-title" x-text="selected && selected.manifest.name"></h3>
+                <p class="muted-label m-0"
+                  x-text="selected && selected.manifest.description"></p>
+              </div>
+            </div>
+
+            <div class="app-floating mt-4 mb-3">
+              <input type="text" class="app-input" id="app-asset-name" name="name" :value="assetName" placeholder=" " required>
+              <label for="app-asset-name">Name</label>
+            </div>
+
+            {# Manifest-driven settings render here (empty for no-config apps). #}
+            <div class="app-cfg-fields" x-ref="configHost"></div>
+
+            <p class="app-cfg-nosettings muted-label m-0" x-show="!hasConfig">
+              This app has no settings — it's ready to add.
+            </p>
+          </div>
+
+          <div class="modal-card__footer">
+            <button type="button" class="app-btn app-btn-link" @click="back()">Back</button>
+            <button type="submit" class="app-btn app-btn-primary">
+              <i class="ti ti-plus"></i><span>Add app</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
     {# ---- Edit mode ---- #}
@@ -163,6 +293,9 @@
             const u = editAsset && editAsset.uri ? String(editAsset.uri) : '';
             return !(u.startsWith('http://') || u.startsWith('https://') ||
                      u.startsWith('rtsp://') || u.startsWith('rtmp://'));
+          },
+          get isAppAsset() {
+            return !!(editAsset && editAsset.metadata && editAsset.metadata.app);
           },
           get hasAdvancedDefaults() {
             const days = editAsset.play_days_list || [];
@@ -275,7 +408,10 @@
             <label for="edit-name">Name</label>
           </div>
 
-          <div class="app-floating mb-3" x-show="!isUploadedAsset">
+          {% comment %} App assets hide the machine launch URL (it's
+             rebuilt from the config form below, not hand-edited); plain
+             remote URLs still show it, uploads still collapse it. {% endcomment %}
+          <div class="app-floating mb-3" x-show="!isUploadedAsset && !isAppAsset">
             <input type="text" class="app-input" id="edit-uri" :value="editAsset.uri" readonly>
             <label for="edit-uri">Asset location</label>
           </div>
@@ -285,8 +421,33 @@
             style="border-bottom: 1px solid var(--color-border);"
           >
             <span class="muted-label">Type</span>
-            <span class="schedule-chip text-capitalize" x-text="editAsset.mimetype"></span>
+            <span class="schedule-chip text-capitalize"
+              x-text="isAppAsset ? 'App' : editAsset.mimetype"></span>
           </div>
+
+          {% comment %} App reconfiguration. appEdit() (apps.ts) refetches
+             the app's manifest by metadata.app.manifest_url, re-renders
+             the same manifest-driven config form seeded from the saved
+             metadata.app.values, and keeps the hidden app_uri/app_values
+             inputs in sync as the operator edits. assets_update rebuilds
+             the row's uri + metadata.app.values from them. Only present
+             for app assets, so a plain-webpage edit never posts these. {% endcomment %}
+          <template x-if="isAppAsset">
+            <section class="modal-section" x-data="appEdit(editAsset)" x-init="init()">
+              <h3 class="modal-section__title">App settings</h3>
+              <input type="hidden" name="app_uri" :value="appUri">
+              <input type="hidden" name="app_values" :value="appValuesJson">
+
+              <div class="app-cfg-state" x-show="phase === 'loading'" x-cloak>
+                <i class="ti ti-loader-2 app-cfg-spin" aria-hidden="true"></i>
+                <p class="muted-label m-0">Loading settings…</p>
+              </div>
+              <p class="muted-label" x-show="phase === 'error'" x-cloak x-text="error"></p>
+              <div x-show="phase === 'ready'" x-cloak>
+                <div class="app-cfg-fields" x-ref="appEditHost"></div>
+              </div>
+            </section>
+          </template>
 
           <section class="modal-section">
             <h3 class="modal-section__title">Availability</h3>

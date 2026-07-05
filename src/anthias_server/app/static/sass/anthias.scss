@@ -1,3 +1,6 @@
 @import "fonts";
 @import "flatpickr/dist/flatpickr";
+// Leaflet powers the Apps tab's location-map widget. Bundled locally
+// (no CDN) alongside the library JS; tiles load from OSM at runtime.
+@import "leaflet/dist/leaflet";
 @import "styles";

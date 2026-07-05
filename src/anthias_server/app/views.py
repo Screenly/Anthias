@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, time
 from mimetypes import guess_extension, guess_type
 from os import path, remove
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from django.contrib import messages
@@ -318,6 +319,121 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         end_date=now + timedelta(days=30),
     )
     return _asset_table_response(request, toast=('success', 'Asset added'))
+
+
+def _host_allowed(host: str) -> bool:
+    """True if ``host`` is under an allowed store-app suffix.
+
+    Suffix match on a dotted boundary so `.srly.io` matches
+    `weather.srly.io` but not a look-alike like `evilsrly.io`.
+    """
+    from django.conf import settings as django_settings
+
+    host = (host or '').lower()
+    for suffix in django_settings.APP_STORE_ALLOWED_HOST_SUFFIXES:
+        suffix = suffix.lower()
+        bare = suffix.lstrip('.')
+        if host == bare or host.endswith(suffix):
+            return True
+    return False
+
+
+@authorized
+@require_http_methods(['POST'])
+def assets_create_app(request: HttpRequest) -> HttpResponse:
+    """Install a signage-store app as a webpage asset (the Add → Apps
+    tab).
+
+    The catalog and manifest-driven config form live entirely in the
+    operator's browser (apps.ts); by the time we're called the client
+    has already built the launch URL from the app's ``launch.template``.
+    We persist it as an ordinary ``webpage`` asset — so playback,
+    scheduling and the viewer treat it like any other web page — but
+    stamp ``metadata.app`` with the app id, its manifest URL/version and
+    the raw setting *values*. Values (not just the finished URL) are
+    what let the edit modal reopen the exact config form the operator
+    last saw; the URI stays the source of truth for what actually
+    plays.
+    """
+    import json
+
+    from anthias_common.utils import validate_url
+    from anthias_server.app.models import Asset
+    from datetime import timedelta
+
+    uri = (request.POST.get('uri') or '').strip()
+    app_id = (request.POST.get('app_id') or '').strip()
+    manifest_url = (request.POST.get('manifest_url') or '').strip()
+    manifest_version = (request.POST.get('manifest_version') or '').strip()
+    name = (request.POST.get('name') or '').strip()
+
+    if not app_id or not uri or not validate_url(uri):
+        return _asset_table_response(
+            request, toast=('error', 'Could not add app — invalid app data.')
+        )
+
+    # Defence in depth: the launch URL and the manifest must sit on an
+    # allowed store origin. Without it, this endpoint would be a way to
+    # stamp the "app" badge (and its edit-time config form) onto an
+    # arbitrary URL. The operator can already add any plain webpage via
+    # the URL tab, so this guards data integrity, not access.
+    if not _host_allowed(urlparse(uri).netloc):
+        return _asset_table_response(
+            request,
+            toast=('error', 'That app is not from a recognised app store.'),
+        )
+    if manifest_url and not _host_allowed(urlparse(manifest_url).netloc):
+        return _asset_table_response(
+            request,
+            toast=('error', 'That app is not from a recognised app store.'),
+        )
+
+    # Setting values chosen in the config form, echoed back for the edit
+    # modal to reseed from. Malformed / non-object JSON degrades to an
+    # empty bag rather than 500-ing the install.
+    try:
+        values = json.loads(request.POST.get('values') or '{}')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        values = {}
+    if not isinstance(values, dict):
+        values = {}
+
+    metadata: dict[str, Any] = {
+        'app': {
+            'id': app_id,
+            'manifest_url': manifest_url,
+            'manifest_version': manifest_version,
+            'values': values,
+        }
+    }
+    # Pace the page from the manifest's playback hint (refreshIntervalS),
+    # reusing the same per-asset auto-refresh the viewer already honours.
+    # Clamp with the shared helper so an out-of-range client value can't
+    # land junk in the column.
+    raw_interval = request.POST.get('refresh_interval_s')
+    if raw_interval is not None and raw_interval.strip():
+        interval = clamp_refresh_interval(raw_interval.strip())
+        if interval:
+            metadata['refresh_interval_s'] = interval
+
+    now = timezone.now()
+    play_order = Asset.objects.filter(
+        is_enabled=True, is_processing=False
+    ).count()
+
+    Asset.objects.create(
+        name=name or app_id,
+        uri=uri,
+        mimetype='webpage',
+        duration=settings['default_duration'],
+        is_enabled=True,
+        is_processing=False,
+        play_order=play_order,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+        metadata=metadata,
+    )
+    return _asset_table_response(request, toast=('success', 'App added'))
 
 
 @authorized
@@ -688,6 +804,44 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
             raw_interval.strip() or 0
         )
         asset.metadata = metadata
+
+    # Store-app reconfiguration. When editing an app asset (one carrying
+    # ``metadata.app``), the modal re-renders the manifest config form
+    # and rebuilds the launch URL client-side, posting the new URL and
+    # values back here. We refresh both the ``uri`` (the source of truth
+    # for playback) and ``metadata.app.values`` (what reseeds the form
+    # next time). Guarded by the same host allowlist as install so an
+    # app edit can't be turned into an arbitrary URL, and only when the
+    # row is actually an app — a plain-webpage edit never sends these.
+    from anthias_common.utils import validate_url
+
+    app_uri = (request.POST.get('app_uri') or '').strip()
+    app_values_raw = request.POST.get('app_values')
+    existing_app = (asset.metadata or {}).get('app')
+    if existing_app and app_values_raw is not None and app_uri:
+        if not validate_url(app_uri) or not _host_allowed(
+            urlparse(app_uri).netloc
+        ):
+            return _asset_table_response(
+                request,
+                toast=(
+                    'error',
+                    'That app URL is not from a recognised '
+                    'app store — not saved',
+                ),
+            )
+        try:
+            app_values = _json.loads(app_values_raw)
+        except (TypeError, ValueError, _json.JSONDecodeError):
+            app_values = {}
+        if not isinstance(app_values, dict):
+            app_values = {}
+        metadata = dict(asset.metadata or {})
+        app_meta = dict(metadata.get('app') or {})
+        app_meta['values'] = app_values
+        metadata['app'] = app_meta
+        asset.metadata = metadata
+        asset.uri = app_uri
 
     asset.save()
     ViewerPublisher.get_instance().send_to_viewer('reload')

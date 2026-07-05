@@ -59,6 +59,19 @@ def test_home_renders(client: Client, asset: Asset) -> None:
 
 
 @pytest.mark.django_db
+def test_home_exposes_apps_tab_and_store_index(client: Client) -> None:
+    """The Add → Apps tab and the store-index <meta> the tab reads must
+    both reach the rendered home page — this is the settings ->
+    helpers.template -> base.html -> _asset_modal wiring end to end."""
+    response = client.get(reverse('anthias_app:home'))
+    body = response.content.decode()
+    assert 'name="anthias-app-store-index"' in body
+    assert 'signage-apps.com/manifest.json' in body
+    assert 'id="tab-apps"' in body
+    assert 'appsTab()' in body
+
+
+@pytest.mark.django_db
 def test_system_info_renders(client: Client) -> None:
     response = client.get(reverse('anthias_app:system_info'))
     assert response.status_code == 200
@@ -369,6 +382,254 @@ def test_assets_create_youtube_short_form(client: Client) -> None:
         )
     assert Asset.objects.filter(name=short_url, mimetype='video').exists()
     mock_dispatch.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Add → Apps tab: installing a signage-store app (assets_create_app)
+
+
+def _post_app(client: Client, **data: Any) -> Any:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        return client.post(reverse('anthias_app:assets_create_app'), data=data)
+
+
+@pytest.mark.django_db
+def test_assets_create_app_stamps_metadata(client: Client) -> None:
+    """A configured app installs as a webpage asset carrying
+    metadata.app (id, manifest URL/version and the raw setting values)
+    so the edit modal can reopen the same config form."""
+    response = _post_app(
+        client,
+        app_id='weather',
+        manifest_url='https://weather.srly.io/.well-known/signage-app.json',
+        manifest_version='1',
+        name='Weather',
+        uri='https://weather.srly.io/?lat=51.5&lng=-0.1&24h=1',
+        values='{"location": {"lat": 51.5, "lng": -0.1}, "24h": "1"}',
+    )
+    assert response.status_code in (200, 302)
+
+    asset = Asset.objects.filter(name='Weather').first()
+    assert asset is not None
+    assert asset.mimetype == 'webpage'
+    assert asset.uri == 'https://weather.srly.io/?lat=51.5&lng=-0.1&24h=1'
+    assert asset.is_enabled is True
+    assert asset.metadata['app'] == {
+        'id': 'weather',
+        'manifest_url': (
+            'https://weather.srly.io/.well-known/signage-app.json'
+        ),
+        'manifest_version': '1',
+        'values': {'location': {'lat': 51.5, 'lng': -0.1}, '24h': '1'},
+    }
+
+
+@pytest.mark.django_db
+def test_assets_create_app_no_settings(client: Client) -> None:
+    """A no-settings app (e.g. Quotes) installs with an empty values
+    bag and the bare base URL."""
+    response = _post_app(
+        client,
+        app_id='quotes',
+        manifest_url='https://quotes.srly.io/.well-known/signage-app.json',
+        manifest_version='1',
+        name='Quotes',
+        uri='https://quotes.srly.io/',
+        values='{}',
+    )
+    assert response.status_code in (200, 302)
+    asset = Asset.objects.filter(name='Quotes').first()
+    assert asset is not None
+    assert asset.metadata['app']['values'] == {}
+
+
+@pytest.mark.django_db
+def test_assets_create_app_maps_refresh_interval(client: Client) -> None:
+    """The manifest's playback.refreshIntervalS is echoed via the
+    hidden field and stored (clamped) as metadata.refresh_interval_s,
+    reusing the viewer's existing per-asset auto-refresh."""
+    _post_app(
+        client,
+        app_id='weather',
+        manifest_url='https://weather.srly.io/.well-known/signage-app.json',
+        manifest_version='1',
+        name='Weather',
+        uri='https://weather.srly.io/',
+        values='{}',
+        refresh_interval_s='3600',
+    )
+    asset = Asset.objects.filter(name='Weather').first()
+    assert asset is not None
+    assert asset.metadata['refresh_interval_s'] == 3600
+
+
+@pytest.mark.django_db
+def test_assets_create_app_rejects_foreign_host(client: Client) -> None:
+    """A launch URL outside the store-app allowlist is refused — the
+    'app' badge can't be stamped onto an arbitrary URL."""
+    _post_app(
+        client,
+        app_id='evil',
+        manifest_url='https://evil.example.com/manifest.json',
+        manifest_version='1',
+        name='Evil',
+        uri='https://evil.example.com/',
+        values='{}',
+    )
+    assert not Asset.objects.filter(uri='https://evil.example.com/').exists()
+
+
+@pytest.mark.django_db
+def test_assets_create_app_rejects_lookalike_host(client: Client) -> None:
+    """Suffix matching is on a dotted boundary, so a look-alike domain
+    (evilsrly.io) does not satisfy the .srly.io suffix."""
+    _post_app(
+        client,
+        app_id='evil',
+        manifest_url='https://evilsrly.io/manifest.json',
+        manifest_version='1',
+        name='Evil',
+        uri='https://evilsrly.io/',
+        values='{}',
+    )
+    assert not Asset.objects.filter(uri='https://evilsrly.io/').exists()
+
+
+@pytest.mark.django_db
+def test_assets_create_app_rejects_invalid_uri(client: Client) -> None:
+    _post_app(
+        client,
+        app_id='weather',
+        manifest_url='https://weather.srly.io/.well-known/signage-app.json',
+        manifest_version='1',
+        name='Weather',
+        uri='not-a-url',
+        values='{}',
+    )
+    assert not Asset.objects.filter(name='Weather').exists()
+
+
+@pytest.mark.django_db
+def test_assets_create_app_tolerates_malformed_values(client: Client) -> None:
+    """Malformed / non-object values JSON degrades to an empty bag
+    rather than 500-ing the install."""
+    _post_app(
+        client,
+        app_id='weather',
+        manifest_url='https://weather.srly.io/.well-known/signage-app.json',
+        manifest_version='1',
+        name='Weather',
+        uri='https://weather.srly.io/',
+        values='["not", "an", "object"]',
+    )
+    asset = Asset.objects.filter(name='Weather').first()
+    assert asset is not None
+    assert asset.metadata['app']['values'] == {}
+
+
+@pytest.fixture
+def app_asset() -> Asset:
+    now = timezone.now()
+    return Asset.objects.create(
+        name='Weather',
+        uri='https://weather.srly.io/?24h=1',
+        mimetype='webpage',
+        duration=10,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+        metadata={
+            'app': {
+                'id': 'weather',
+                'manifest_url': (
+                    'https://weather.srly.io/.well-known/signage-app.json'
+                ),
+                'manifest_version': '1',
+                'values': {'24h': '1'},
+            }
+        },
+    )
+
+
+def _update_asset(client: Client, asset: Asset, **extra: Any) -> Any:
+    data = {
+        'name': asset.name,
+        'duration': str(asset.duration),
+        'start_date': timezone.localtime(asset.start_date).strftime(
+            '%Y-%m-%dT%H:%M'
+        ),
+        'end_date': timezone.localtime(asset.end_date).strftime(
+            '%Y-%m-%dT%H:%M'
+        ),
+        **extra,
+    }
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        return client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data=data,
+        )
+
+
+@pytest.mark.django_db
+def test_assets_update_app_rebuilds_uri_and_values(
+    client: Client, app_asset: Asset
+) -> None:
+    """Editing an app asset rebuilds the URI (client-built) and
+    refreshes metadata.app.values, keeping the app id/manifest intact."""
+    _update_asset(
+        client,
+        app_asset,
+        app_uri='https://weather.srly.io/?lat=40.7&lng=-74&24h=0',
+        app_values='{"location": {"lat": 40.7, "lng": -74}, "24h": "0"}',
+    )
+    app_asset.refresh_from_db()
+    assert app_asset.uri == 'https://weather.srly.io/?lat=40.7&lng=-74&24h=0'
+    assert app_asset.metadata['app']['id'] == 'weather'
+    assert app_asset.metadata['app']['values'] == {
+        'location': {'lat': 40.7, 'lng': -74},
+        '24h': '0',
+    }
+
+
+@pytest.mark.django_db
+def test_assets_update_app_rejects_foreign_uri(
+    client: Client, app_asset: Asset
+) -> None:
+    """A rebuilt URI outside the store allowlist is refused; the row's
+    original URI is left untouched."""
+    _update_asset(
+        client,
+        app_asset,
+        app_uri='https://evil.example.com/',
+        app_values='{}',
+    )
+    app_asset.refresh_from_db()
+    assert app_asset.uri == 'https://weather.srly.io/?24h=1'
+
+
+@pytest.mark.django_db
+def test_assets_update_non_app_ignores_app_fields(
+    client: Client, asset: Asset
+) -> None:
+    """A plain-webpage edit never posts app_* fields; even if forged,
+    they're ignored because the row carries no metadata.app."""
+    _update_asset(
+        client,
+        asset,
+        app_uri='https://weather.srly.io/?x=1',
+        app_values='{"x": "1"}',
+    )
+    asset.refresh_from_db()
+    assert asset.uri == 'https://example.com'
+    assert 'app' not in (asset.metadata or {})
 
 
 @pytest.mark.django_db

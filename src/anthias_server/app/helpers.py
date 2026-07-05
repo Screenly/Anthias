@@ -4,6 +4,7 @@ from os import getenv, path, remove
 from typing import Any
 
 import yaml
+from django.conf import settings as django_settings
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -39,6 +40,10 @@ def template(
         'default_filters': ['template_handle_unicode'],
     }
     context['use_24_hour_clock'] = settings['use_24_hour_clock']
+    # Store-catalog index URL for the Add → Apps tab (read client-side
+    # off a <meta> tag). Sourced from Django settings so it stays
+    # env-overridable in one place.
+    context['app_store_index_url'] = django_settings.APP_STORE_INDEX_URL
     # Navbar needs is_balena / up_to_date / player_name on every page.
     context.update(_navbar_context())
 

@@ -584,6 +584,36 @@ if getenv('FORWARDED_ALLOW_IPS'):
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Signage app store — the pointers-only index (indexVersion, apps:
+# [{id, manifest}]) the Add → Apps tab fetches to populate the app
+# catalog. Each app then serves its own manifest at
+# /.well-known/signage-app.json on its own origin. The fetch happens
+# in the operator's browser (the manifests send Access-Control-Allow-
+# Origin: *), so the device itself never needs to reach the store.
+# Overridable via env so a device can be pointed at staging or a
+# self-hosted mirror; defaults to the staging index until the
+# production index (signage-apps.com/manifest.json) is deployed.
+APP_STORE_INDEX_URL = getenv(
+    'APP_STORE_INDEX_URL',
+    'https://stage.signage-apps.com/manifest.json',
+)
+
+# Host suffixes an installed app's launch URL / manifest may live on.
+# The catalog is fetched client-side, so the create endpoint can't
+# re-derive the app's real origin from the store; this allowlist keeps
+# a `metadata.app`-stamped asset honestly pointed at a store app rather
+# than an arbitrary URL dressed up as one. Comma-separated, env-
+# overridable for self-hosted stores. Matched as a dotted-suffix (so
+# `.srly.io` covers `weather.srly.io` but not `evilsrly.io`).
+APP_STORE_ALLOWED_HOST_SUFFIXES = [
+    h.strip()
+    for h in getenv(
+        'APP_STORE_ALLOWED_HOST_SUFFIXES',
+        '.srly.io,.signage-apps.com',
+    ).split(',')
+    if h.strip()
+]
+
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
