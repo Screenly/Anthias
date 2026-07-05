@@ -221,11 +221,18 @@
           hx-on::after-request="if (event.detail.successful) { window.dispatchEvent(new CustomEvent('asset-saved')); }"
         >
           {% csrf_token %}
+          {% comment %} App fields use an `app_`-prefixed / distinct
+             names (app_uri, app_values) rather than uri/values so they
+             don't collide with the URL-tab's visible name="uri" input
+             — two same-named inputs in the modal DOM would make a bare
+             input[name="uri"] selector ambiguous (Playwright strict
+             mode) and is just confusing. Matches the edit form, which
+             already posts app_uri/app_values. {% endcomment %}
           <input type="hidden" name="app_id" :value="appId">
           <input type="hidden" name="manifest_url" :value="manifestUrl">
           <input type="hidden" name="manifest_version" :value="manifestVersion">
-          <input type="hidden" name="uri" :value="launchUrl">
-          <input type="hidden" name="values" :value="valuesJson">
+          <input type="hidden" name="app_uri" :value="launchUrl">
+          <input type="hidden" name="app_values" :value="valuesJson">
           <input type="hidden" name="refresh_interval_s" :value="refreshIntervalS">
 
           <div class="modal-card__body" style="padding-top: var(--space-2)">

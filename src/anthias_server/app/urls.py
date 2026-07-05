@@ -45,7 +45,10 @@ urlpatterns = [
         name='assets_table',
     ),
     path('assets/new/', views.assets_create, name='assets_create'),
-    path('assets/new-app/', views.assets_create_app, name='assets_create_app'),
+    # Path deliberately avoids the `assets/new` prefix: a test/selector
+    # matching form[action*="assets/new"] would otherwise also match
+    # this form's submit button.
+    path('apps/install/', views.assets_create_app, name='assets_create_app'),
     path('assets/upload/', views.assets_upload, name='assets_upload'),
     path('assets/order/', views.assets_order, name='assets_order'),
     path(

@@ -407,8 +407,8 @@ def test_assets_create_app_stamps_metadata(client: Client) -> None:
         manifest_url='https://weather.srly.io/.well-known/signage-app.json',
         manifest_version='1',
         name='Weather',
-        uri='https://weather.srly.io/?lat=51.5&lng=-0.1&24h=1',
-        values='{"location": {"lat": 51.5, "lng": -0.1}, "24h": "1"}',
+        app_uri='https://weather.srly.io/?lat=51.5&lng=-0.1&24h=1',
+        app_values='{"location": {"lat": 51.5, "lng": -0.1}, "24h": "1"}',
     )
     assert response.status_code in (200, 302)
 
@@ -437,8 +437,8 @@ def test_assets_create_app_no_settings(client: Client) -> None:
         manifest_url='https://quotes.srly.io/.well-known/signage-app.json',
         manifest_version='1',
         name='Quotes',
-        uri='https://quotes.srly.io/',
-        values='{}',
+        app_uri='https://quotes.srly.io/',
+        app_values='{}',
     )
     assert response.status_code in (200, 302)
     asset = Asset.objects.filter(name='Quotes').first()
@@ -457,8 +457,8 @@ def test_assets_create_app_maps_refresh_interval(client: Client) -> None:
         manifest_url='https://weather.srly.io/.well-known/signage-app.json',
         manifest_version='1',
         name='Weather',
-        uri='https://weather.srly.io/',
-        values='{}',
+        app_uri='https://weather.srly.io/',
+        app_values='{}',
         refresh_interval_s='3600',
     )
     asset = Asset.objects.filter(name='Weather').first()
@@ -476,8 +476,8 @@ def test_assets_create_app_rejects_foreign_host(client: Client) -> None:
         manifest_url='https://evil.example.com/manifest.json',
         manifest_version='1',
         name='Evil',
-        uri='https://evil.example.com/',
-        values='{}',
+        app_uri='https://evil.example.com/',
+        app_values='{}',
     )
     assert not Asset.objects.filter(uri='https://evil.example.com/').exists()
 
@@ -492,8 +492,8 @@ def test_assets_create_app_rejects_lookalike_host(client: Client) -> None:
         manifest_url='https://evilsrly.io/manifest.json',
         manifest_version='1',
         name='Evil',
-        uri='https://evilsrly.io/',
-        values='{}',
+        app_uri='https://evilsrly.io/',
+        app_values='{}',
     )
     assert not Asset.objects.filter(uri='https://evilsrly.io/').exists()
 
@@ -506,8 +506,8 @@ def test_assets_create_app_rejects_invalid_uri(client: Client) -> None:
         manifest_url='https://weather.srly.io/.well-known/signage-app.json',
         manifest_version='1',
         name='Weather',
-        uri='not-a-url',
-        values='{}',
+        app_uri='not-a-url',
+        app_values='{}',
     )
     assert not Asset.objects.filter(name='Weather').exists()
 
@@ -522,8 +522,8 @@ def test_assets_create_app_tolerates_malformed_values(client: Client) -> None:
         manifest_url='https://weather.srly.io/.well-known/signage-app.json',
         manifest_version='1',
         name='Weather',
-        uri='https://weather.srly.io/',
-        values='["not", "an", "object"]',
+        app_uri='https://weather.srly.io/',
+        app_values='["not", "an", "object"]',
     )
     asset = Asset.objects.filter(name='Weather').first()
     assert asset is not None

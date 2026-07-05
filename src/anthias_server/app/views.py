@@ -361,7 +361,10 @@ def assets_create_app(request: HttpRequest) -> HttpResponse:
     from anthias_server.app.models import Asset
     from datetime import timedelta
 
-    uri = (request.POST.get('uri') or '').strip()
+    # The launch URL / values are posted as app_uri / app_values (not
+    # uri / values) so the Apps form's hidden inputs don't collide with
+    # the URL tab's visible name="uri" input.
+    uri = (request.POST.get('app_uri') or '').strip()
     app_id = (request.POST.get('app_id') or '').strip()
     manifest_url = (request.POST.get('manifest_url') or '').strip()
     manifest_version = (request.POST.get('manifest_version') or '').strip()
@@ -392,7 +395,7 @@ def assets_create_app(request: HttpRequest) -> HttpResponse:
     # modal to reseed from. Malformed / non-object JSON degrades to an
     # empty bag rather than 500-ing the install.
     try:
-        values = json.loads(request.POST.get('values') or '{}')
+        values = json.loads(request.POST.get('app_values') or '{}')
     except (TypeError, ValueError, json.JSONDecodeError):
         values = {}
     if not isinstance(values, dict):
