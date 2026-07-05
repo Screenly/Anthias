@@ -20,7 +20,11 @@ const DEFAULT_ZOOM = 11
 const DEFAULT_PRECISION = 4
 
 export interface LocationMapOptions {
-  onChange?: (coords: { lat: string; lng: string }) => void
+  // Coordinates are reported as numbers (not toFixed strings) so a
+  // {lat,lng} value compares cleanly against a numeric schema default
+  // in buildLaunchUrl — a string "51.5" would never equal the number
+  // 51.5 and would leak into the URL as a phantom change.
+  onChange?: (coords: { lat: number; lng: number }) => void
   precision?: number
 }
 
@@ -33,10 +37,15 @@ function showUnavailable(mount: HTMLElement): void {
     'Map unavailable — the app will auto-detect a location.'
 }
 
+const noop = (): void => {}
+
+// Returns a teardown that removes the map and disconnects its
+// ResizeObserver; the form renderer calls it before re-rendering so
+// repeated open/select cycles don't leak detached Leaflet maps.
 export function initLocationMap(
   mount: HTMLElement,
   options: LocationMapOptions = {},
-): void {
+): () => void {
   const { onChange, precision = DEFAULT_PRECISION } = options
 
   // Host markup may seed the starting view via data-attributes (add
@@ -98,12 +107,10 @@ export function initLocationMap(
       const c = map.getCenter()
       readout.textContent = `${c.lat.toFixed(precision)}, ${c.lng.toFixed(precision)}`
     }
+    const round = (n: number): number => Number(n.toFixed(precision))
     const emit = (): void => {
       const c = map.getCenter()
-      onChange?.({
-        lat: c.lat.toFixed(precision),
-        lng: c.lng.toFixed(precision),
-      })
+      onChange?.({ lat: round(c.lat), lng: round(c.lng) })
     }
 
     map.on('dragstart', markTouched)
@@ -126,14 +133,21 @@ export function initLocationMap(
     // whenever the canvas actually gets its size — robust to the modal
     // transition and to the panel scrolling into view — where a single
     // rAF invalidateSize fired too early.
+    let ro: ResizeObserver | null = null
     if (typeof ResizeObserver !== 'undefined') {
-      const ro = new ResizeObserver(() => map.invalidateSize())
+      ro = new ResizeObserver(() => map.invalidateSize())
       ro.observe(canvas)
     } else {
       requestAnimationFrame(() => map.invalidateSize())
       setTimeout(() => map.invalidateSize(), 300)
     }
+
+    return () => {
+      ro?.disconnect()
+      map.remove()
+    }
   } catch {
     showUnavailable(mount)
+    return noop
   }
 }

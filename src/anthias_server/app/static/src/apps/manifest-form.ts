@@ -19,6 +19,25 @@ import type { SettingSchema, SettingValue } from './types'
 
 type SetFn = (key: string, value: SettingValue) => void
 
+type HostWithCleanups = HTMLElement & { __cfgCleanups?: Array<() => void> }
+
+// Run and clear any teardown callbacks a prior render stored on the
+// host (Leaflet maps + their ResizeObservers), then empty it. Use this
+// instead of a bare replaceChildren() anywhere the config host is
+// cleared, so those maps don't leak.
+export function teardownHost(host: HTMLElement): void {
+  const h = host as HostWithCleanups
+  h.__cfgCleanups?.forEach((fn) => {
+    try {
+      fn()
+    } catch {
+      /* teardown is best-effort */
+    }
+  })
+  h.__cfgCleanups = []
+  host.replaceChildren()
+}
+
 // Which control to render for a settings property.
 function widgetFor(schema: SettingSchema): string {
   if (schema['x-widget']) return schema['x-widget']
@@ -75,11 +94,18 @@ function fieldRow(
   return row
 }
 
-// One shared <datalist> of IANA time zones for all timezone fields
-// (avoids duplicate ids), created lazily when the browser can
-// enumerate zones.
+// Monotonic id source so each rendered form's timezone <datalist> gets
+// a globally-unique id — the Add-app and Edit-app config hosts both
+// live in the modal DOM, so a shared hard-coded id would produce
+// duplicate ids and an <input list=…> could bind to the wrong host's
+// list.
+let tzListSeq = 0
+
+// One shared <datalist> of IANA time zones per host (looked up by a
+// data-attribute, not the global id), created lazily when the browser
+// can enumerate zones.
 function timezoneList(host: HTMLElement): HTMLDataListElement | null {
-  const existing = host.querySelector<HTMLDataListElement>('#app-cfg-tz-list')
+  const existing = host.querySelector<HTMLDataListElement>('[data-tz-list]')
   if (existing) return existing
   const intl = Intl as typeof Intl & {
     supportedValuesOf?: (key: string) => string[]
@@ -90,7 +116,8 @@ function timezoneList(host: HTMLElement): HTMLDataListElement | null {
       : []
   if (!zones.length) return null
   const list = document.createElement('datalist')
-  list.id = 'app-cfg-tz-list'
+  list.id = `app-cfg-tz-list-${tzListSeq++}`
+  list.setAttribute('data-tz-list', '')
   for (const zone of zones) {
     const opt = document.createElement('option')
     opt.value = zone
@@ -108,6 +135,7 @@ function renderField(
   set: SetFn,
   host: HTMLElement,
   seedValue: SettingValue,
+  cleanups: Array<() => void>,
 ): HTMLElement | null {
   const id = `app-cfg-${key}`
 
@@ -182,9 +210,10 @@ function renderField(
       mount.dataset.lat = String(seed.lat)
       mount.dataset.lng = String(seed.lng)
     }
-    initLocationMap(mount, {
+    const teardown = initLocationMap(mount, {
       onChange: ({ lat, lng }) => set(key, { lat, lng }),
     })
+    cleanups.push(teardown)
     return fieldRow(schema, key, mount)
   }
 
@@ -241,7 +270,13 @@ export function renderManifestForm(
     defaults: Record<string, SettingValue>,
   ) => void,
 ): ManifestFormResult {
-  host.replaceChildren()
+  // Tear down any controls a previous render left on this host (e.g. a
+  // Leaflet map + its ResizeObserver) before replacing them, so
+  // re-rendering the same host doesn't leak detached maps.
+  teardownHost(host)
+
+  const cleanups: Array<() => void> = []
+  ;(host as HostWithCleanups).__cfgCleanups = cleanups
 
   const values: Record<string, SettingValue> = {}
   const defaults: Record<string, SettingValue> = {}
@@ -272,6 +307,7 @@ export function renderManifestForm(
       set,
       host,
       values[key],
+      cleanups,
     )
     // Seed a control that was rendered from a saved value (edit mode):
     // renderField reads schema.default for its initial display, so push

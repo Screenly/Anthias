@@ -11,7 +11,7 @@
 
 import { fetchManifest, loadCatalog } from './apps/catalog'
 import { buildLaunchUrl } from './apps/launch-url'
-import { renderManifestForm } from './apps/manifest-form'
+import { renderManifestForm, teardownHost } from './apps/manifest-form'
 import type { CatalogApp, SettingValue } from './apps/types'
 
 type Phase = 'loading' | 'ready' | 'error' | 'config'
@@ -122,7 +122,9 @@ export function appsTab(): AppsTabData {
       requestAnimationFrame(() => {
         const host = this.$refs.configHost
         if (!host) return
-        host.replaceChildren()
+        // Tear down a prior app's controls (incl. any Leaflet map) even
+        // when the new app has no settings — a bare clear would leak.
+        teardownHost(host)
         if (!hasProps || !properties) return
         renderManifestForm(host, properties, {}, (values, defaults) => {
           this.launchUrl = buildLaunchUrl(

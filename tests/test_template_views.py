@@ -63,10 +63,14 @@ def test_home_exposes_apps_tab_and_store_index(client: Client) -> None:
     """The Add → Apps tab and the store-index <meta> the tab reads must
     both reach the rendered home page — this is the settings ->
     helpers.template -> base.html -> _asset_modal wiring end to end."""
+    from django.conf import settings as dj_settings
+
     response = client.get(reverse('anthias_app:home'))
     body = response.content.decode()
     assert 'name="anthias-app-store-index"' in body
-    assert 'signage-apps.com/manifest.json' in body
+    # Assert the actual configured index URL reached the page, not a
+    # hard-coded literal that would drift if the default changes.
+    assert dj_settings.APP_STORE_INDEX_URL in body
     assert 'id="tab-apps"' in body
     assert 'appsTab()' in body
 
@@ -480,6 +484,38 @@ def test_assets_create_app_rejects_foreign_host(client: Client) -> None:
         app_values='{}',
     )
     assert not Asset.objects.filter(uri='https://evil.example.com/').exists()
+
+
+def test_host_allowed_matching() -> None:
+    """Dotted-boundary suffix matching: real store hosts (with or
+    without a port) pass; look-alikes and foreign hosts don't."""
+    from anthias_server.app.views import _host_allowed
+
+    assert _host_allowed('weather.srly.io')
+    assert _host_allowed('srly.io')  # the bare apex
+    assert _host_allowed('WEATHER.SRLY.IO'.lower())
+    assert _host_allowed('signage-apps.com')
+    # A hostname is port/userinfo-free by the time it reaches here.
+    assert not _host_allowed('evilsrly.io')  # no dot boundary
+    assert not _host_allowed('srly.io.evil.com')
+    assert not _host_allowed('evil.com')
+    assert not _host_allowed('')
+
+
+@pytest.mark.django_db
+def test_assets_create_app_allows_port_in_uri(client: Client) -> None:
+    """A store URL with an explicit port still installs — the host
+    check runs on the port-free hostname, not the raw netloc."""
+    _post_app(
+        client,
+        app_id='weather',
+        manifest_url='https://weather.srly.io/.well-known/signage-app.json',
+        manifest_version='1',
+        name='Weather',
+        app_uri='https://weather.srly.io:8443/?24h=1',
+        app_values='{}',
+    )
+    assert Asset.objects.filter(name='Weather').exists()
 
 
 @pytest.mark.django_db

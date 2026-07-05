@@ -590,12 +590,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # /.well-known/signage-app.json on its own origin. The fetch happens
 # in the operator's browser (the manifests send Access-Control-Allow-
 # Origin: *), so the device itself never needs to reach the store.
-# Overridable via env so a device can be pointed at staging or a
-# self-hosted mirror; defaults to the staging index until the
-# production index (signage-apps.com/manifest.json) is deployed.
+# Overridable via env so a device can be pointed at the staging index
+# (stage.signage-apps.com) or a self-hosted mirror; defaults to the
+# production store index.
 APP_STORE_INDEX_URL = getenv(
     'APP_STORE_INDEX_URL',
-    'https://stage.signage-apps.com/manifest.json',
+    'https://signage-apps.com/manifest.json',
 )
 
 # Host suffixes an installed app's launch URL / manifest may live on.

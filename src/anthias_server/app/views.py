@@ -324,16 +324,24 @@ def assets_create(request: HttpRequest) -> HttpResponse:
 def _host_allowed(host: str) -> bool:
     """True if ``host`` is under an allowed store-app suffix.
 
-    Suffix match on a dotted boundary so `.srly.io` matches
-    `weather.srly.io` but not a look-alike like `evilsrly.io`.
+    ``host`` is the URL's ``hostname`` (already port/userinfo-free and
+    lower-cased by ``urlparse``). Each configured suffix is normalised
+    to its bare domain and matched on a dotted boundary — enforced here
+    regardless of whether the operator wrote the suffix with a leading
+    dot — so ``srly.io`` / ``.srly.io`` both match ``weather.srly.io``
+    (and ``srly.io`` itself) but never a look-alike like
+    ``evilsrly.io``.
     """
     from django.conf import settings as django_settings
 
     host = (host or '').lower()
+    if not host:
+        return False
     for suffix in django_settings.APP_STORE_ALLOWED_HOST_SUFFIXES:
-        suffix = suffix.lower()
-        bare = suffix.lstrip('.')
-        if host == bare or host.endswith(suffix):
+        bare = suffix.strip().lstrip('.').lower()
+        if not bare:
+            continue
+        if host == bare or host.endswith('.' + bare):
             return True
     return False
 
@@ -380,12 +388,14 @@ def assets_create_app(request: HttpRequest) -> HttpResponse:
     # stamp the "app" badge (and its edit-time config form) onto an
     # arbitrary URL. The operator can already add any plain webpage via
     # the URL tab, so this guards data integrity, not access.
-    if not _host_allowed(urlparse(uri).netloc):
+    if not _host_allowed(urlparse(uri).hostname or ''):
         return _asset_table_response(
             request,
             toast=('error', 'That app is not from a recognised app store.'),
         )
-    if manifest_url and not _host_allowed(urlparse(manifest_url).netloc):
+    if manifest_url and not _host_allowed(
+        urlparse(manifest_url).hostname or ''
+    ):
         return _asset_table_response(
             request,
             toast=('error', 'That app is not from a recognised app store.'),
@@ -823,7 +833,7 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
     existing_app = (asset.metadata or {}).get('app')
     if existing_app and app_values_raw is not None and app_uri:
         if not validate_url(app_uri) or not _host_allowed(
-            urlparse(app_uri).netloc
+            urlparse(app_uri).hostname or ''
         ):
             return _asset_table_response(
                 request,
