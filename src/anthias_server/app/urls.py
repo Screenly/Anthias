@@ -44,6 +44,16 @@ urlpatterns = [
         views.assets_table_partial,
         name='assets_table',
     ),
+    path(
+        'review-cta/dismiss/',
+        views.review_cta_dismiss,
+        name='review_cta_dismiss',
+    ),
+    path(
+        'review-cta/snooze/',
+        views.review_cta_snooze,
+        name='review_cta_snooze',
+    ),
     path('assets/new/', views.assets_create, name='assets_create'),
     # Path deliberately avoids the `assets/new` prefix: a test/selector
     # matching form[action*="assets/new"] would otherwise also match

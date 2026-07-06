@@ -2872,3 +2872,128 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'under .app-* now, and Bootstrap Icons were replaced by Tabler '
         '(.ti / .ti-*):\n  ' + '\n  '.join(seen)
     )
+
+
+# ---------------------------------------------------------------------------
+# "Star on GitHub / Review on G2" nudge (review-CTA)
+# ---------------------------------------------------------------------------
+def _make_enabled_assets(count: int) -> None:
+    """Create ``count`` real (non-default) enabled assets."""
+    now = timezone.now()
+    for i in range(count):
+        Asset.objects.create(
+            name=f'real-{i}',
+            uri=f'https://example.com/{i}.png',
+            mimetype='image',
+            duration=10,
+            is_enabled=True,
+            is_processing=False,
+            play_order=i,
+            start_date=now,
+            end_date=now + timedelta(days=30),
+        )
+
+
+@pytest.fixture
+def _reset_review_cta() -> Any:
+    """Clear the persisted nudge state before and after each test so the
+    module-level ``settings`` singleton doesn't leak dismiss/snooze
+    across tests."""
+    from anthias_server.settings import settings
+
+    def _clear() -> None:
+        settings['review_cta_dismissed'] = False
+        settings['review_cta_snooze_until'] = ''
+        settings.save()
+
+    _clear()
+    yield
+    _clear()
+
+
+@pytest.mark.django_db
+def test_review_cta_fires_after_enough_assets(
+    client: Client, _reset_review_cta: Any
+) -> None:
+    """Adding an asset that lands the device at >= REVIEW_CTA_MIN_ASSETS
+    real assets attaches the ``review-cta`` HX-Trigger."""
+    _make_enabled_assets(2)  # 3rd is added by the POST below
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': 'https://anthias.example.com/third.png'},
+            HTTP_HX_REQUEST='true',
+        )
+    assert response.status_code == 200
+    assert 'review-cta' in response.headers.get('HX-Trigger', '')
+
+
+@pytest.mark.django_db
+def test_review_cta_silent_below_threshold(
+    client: Client, _reset_review_cta: Any
+) -> None:
+    """Below the engagement threshold the nudge stays silent — a fresh
+    device with its first asset shouldn't be asked to review."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': 'https://anthias.example.com/first.png'},
+            HTTP_HX_REQUEST='true',
+        )
+    assert response.status_code == 200
+    assert 'review-cta' not in response.headers.get('HX-Trigger', '')
+
+
+@pytest.mark.django_db
+def test_review_cta_suppressed_after_dismiss(
+    client: Client, _reset_review_cta: Any
+) -> None:
+    """Once dismissed, the nudge never fires again even on a qualifying
+    add."""
+    _make_enabled_assets(3)
+    dismiss = client.post(reverse('anthias_app:review_cta_dismiss'))
+    assert dismiss.status_code == 204
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': 'https://anthias.example.com/another.png'},
+            HTTP_HX_REQUEST='true',
+        )
+    assert response.status_code == 200
+    assert 'review-cta' not in response.headers.get('HX-Trigger', '')
+
+
+@pytest.mark.django_db
+def test_review_cta_suppressed_while_snoozed(
+    client: Client, _reset_review_cta: Any
+) -> None:
+    """ "Maybe later" persists a future snooze timestamp and suppresses
+    the nudge until it passes."""
+    from anthias_server.settings import settings
+
+    _make_enabled_assets(3)
+    snooze = client.post(reverse('anthias_app:review_cta_snooze'))
+    assert snooze.status_code == 204
+    assert settings['review_cta_snooze_until']  # a future ISO timestamp
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': 'https://anthias.example.com/snoozed.png'},
+            HTTP_HX_REQUEST='true',
+        )
+    assert response.status_code == 200
+    assert 'review-cta' not in response.headers.get('HX-Trigger', '')

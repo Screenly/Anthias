@@ -1,0 +1,84 @@
+{% comment %}
+  "Star on GitHub / Review on G2" nudge. Stays hidden until the server
+  fires the `review-cta` HX-Trigger event on a qualifying asset-add
+  (see views._maybe_offer_review_cta) — htmx dispatches that event for
+  the URL/App forms, and home.ts replays it for the raw-XHR upload path.
+  Acting on either CTA dismisses it permanently; "Maybe later" snoozes.
+{% endcomment %}
+<div
+  id="review-cta"
+  class="review-cta"
+  role="dialog"
+  aria-modal="false"
+  aria-labelledby="review-cta-title"
+  x-cloak
+  x-data="{
+    open: false,
+    post(url) {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': this.$refs.csrf.value },
+      }).catch(() => {})
+    },
+    dismiss() {
+      this.open = false
+      this.post('{% url 'anthias_app:review_cta_dismiss' %}')
+    },
+    later() {
+      this.open = false
+      this.post('{% url 'anthias_app:review_cta_snooze' %}')
+    },
+  }"
+  x-show="open"
+  x-transition.opacity.duration.200ms
+  @review-cta.window="open = true"
+>
+  <input type="hidden" x-ref="csrf" value="{{ csrf_token }}">
+
+  <button
+    type="button"
+    class="review-cta__close"
+    @click="later()"
+    aria-label="Maybe later"
+  >
+    <i class="ti ti-x"></i>
+  </button>
+
+  <div class="review-cta__body">
+    <i class="ti ti-heart-handshake review-cta__icon" aria-hidden="true"></i>
+    <div>
+      <p id="review-cta-title" class="review-cta__title">
+        Enjoying Anthias?
+      </p>
+      <p class="review-cta__text">
+        Anthias is free and open source. A quick star or review helps
+        others find it and keeps the project going.
+      </p>
+    </div>
+  </div>
+
+  <div class="review-cta__actions">
+    <a
+      href="https://github.com/Screenly/Anthias"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="app-btn app-btn-primary"
+      @click="dismiss()"
+    >
+      <i class="ti ti-brand-github"></i> Star on GitHub
+    </a>
+    <a
+      href="https://www.g2.com/products/anthias/reviews"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="app-btn app-btn-light"
+      @click="dismiss()"
+    >
+      <i class="ti ti-star"></i> Review on G2
+    </a>
+  </div>
+
+  <button type="button" class="review-cta__later" @click="later()">
+    Maybe later
+  </button>
+</div>

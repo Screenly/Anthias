@@ -497,6 +497,14 @@ function fireToastFromHeader(
   try {
     const parsed = JSON.parse(header) as {
       toast?: { kind?: 'success' | 'error' | 'info'; message?: string }
+      'review-cta'?: unknown
+    }
+    // The upload path is raw XHR, so htmx never sees this header and
+    // can't dispatch the `review-cta` event for us the way it does for
+    // the hx-* URL/App forms. Replay it by hand so the nudge surfaces
+    // after a qualifying file upload too.
+    if (parsed?.['review-cta']) {
+      window.dispatchEvent(new CustomEvent('review-cta'))
     }
     const toast = parsed?.toast
     if (toast?.message) {

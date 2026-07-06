@@ -2337,6 +2337,84 @@ body.auth-body {
 .app-toast--error   { border-left-color: var(--color-danger); > i { color: var(--color-danger); } }
 .app-toast--info    { border-left-color: var(--color-link); > i { color: var(--color-accent); } }
 
+// Star-on-GitHub / Review-on-G2 nudge — a dismissible card pinned to
+// the bottom-right, clear of the top-right toast stack so a success
+// toast from the same asset-add can sit alongside it. Surfaced by the
+// `review-cta` HX-Trigger event (see _review_cta.html).
+.review-cta {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  z-index: 1090;
+  width: min(360px, calc(100vw - var(--space-5) * 2));
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border);
+
+  .review-cta__close {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: var(--space-1);
+    line-height: 1;
+    border-radius: var(--radius-sm);
+    transition: color var(--t-fast), background var(--t-fast);
+    &:hover { color: var(--color-text); background: var(--scrim-8); }
+  }
+
+  .review-cta__body {
+    display: flex;
+    gap: var(--space-3);
+    padding-right: var(--space-4); // clear of the close button
+  }
+  .review-cta__icon {
+    flex: none;
+    font-size: 1.5rem;
+    color: var(--color-accent);
+    line-height: 1.4;
+  }
+  .review-cta__title {
+    font-weight: 700;
+    margin: 0 0 var(--space-1);
+  }
+  .review-cta__text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+  }
+
+  .review-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    .app-btn { flex: 1 1 auto; }
+  }
+
+  .review-cta__later {
+    display: block;
+    width: 100%;
+    margin-top: var(--space-2);
+    padding: var(--space-1);
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: color var(--t-fast);
+    &:hover { color: var(--color-text); }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // 18. Misc
 // -----------------------------------------------------------------------------

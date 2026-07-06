@@ -294,6 +294,7 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         return _asset_table_response(
             request,
             toast=('info', 'Downloading YouTube video…'),
+            offer_review_cta=True,
         )
 
     # Streams have no intrinsic length, so they reuse the dedicated
@@ -318,7 +319,9 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         start_date=now,
         end_date=now + timedelta(days=30),
     )
-    return _asset_table_response(request, toast=('success', 'Asset added'))
+    return _asset_table_response(
+        request, toast=('success', 'Asset added'), offer_review_cta=True
+    )
 
 
 def _host_allowed(host: str) -> bool:
@@ -446,7 +449,9 @@ def assets_create_app(request: HttpRequest) -> HttpResponse:
         end_date=now + timedelta(days=30),
         metadata=metadata,
     )
-    return _asset_table_response(request, toast=('success', 'App added'))
+    return _asset_table_response(
+        request, toast=('success', 'App added'), offer_review_cta=True
+    )
 
 
 @authorized
@@ -682,6 +687,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
                 'info',
                 f'Uploaded {upload_name} — reading metadata…',
             ),
+            offer_review_cta=True,
         )
     if needs_image_normalize:
         from anthias_server.processing import dispatch_normalize_image
@@ -693,9 +699,12 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
                 'info',
                 f'Uploaded {upload_name} — converting image…',
             ),
+            offer_review_cta=True,
         )
     return _asset_table_response(
-        request, toast=('success', f'Uploaded {upload_name}')
+        request,
+        toast=('success', f'Uploaded {upload_name}'),
+        offer_review_cta=True,
     )
 
 
@@ -1342,6 +1351,7 @@ def _asset_table_response(
     request: HttpRequest,
     *,
     toast: tuple[str, str] | None = None,
+    offer_review_cta: bool = False,
 ) -> HttpResponse:
     """Shared response helper for all write endpoints.
 
@@ -1350,7 +1360,12 @@ def _asset_table_response(
 
     Pass `toast=("success", "Asset deleted")` to fire a client toast
     via the HX-Trigger header (HTMX requests) or a Django flash
-    message (full-page reload)."""
+    message (full-page reload).
+
+    Pass `offer_review_cta=True` from the asset-*add* endpoints so the
+    "Star on GitHub / Review on G2" nudge can surface at that positive
+    moment — but only once the operator has enough real content on the
+    device to have gotten value (see `_maybe_offer_review_cta`)."""
     # Fan out a refresh nudge over the WebSocket so other browsers
     # currently looking at the home page repaint without waiting for
     # their next 5s poll. Skipped on read endpoints (those don't call
@@ -1365,6 +1380,8 @@ def _asset_table_response(
         response = _render(request, '_asset_table.html', page_context.assets())
         if toast is not None:
             _set_toast_header(response, toast[0], toast[1])
+        if offer_review_cta:
+            _maybe_offer_review_cta(response)
         return response
 
     if toast is not None:
@@ -1377,26 +1394,121 @@ def _asset_table_response(
     return redirect(reverse('anthias_app:home'))
 
 
-def _set_toast_header(response: HttpResponse, kind: str, message: str) -> None:
-    """Attach an HX-Trigger header so the global Alpine store
-    (registered in vendor.ts) renders a toast for this response."""
+def _merge_hx_trigger(response: HttpResponse, key: str, value: Any) -> None:
+    """Set ``response['HX-Trigger'][key] = value``, merging with any
+    trigger already attached so stacked callers don't clobber each other.
+
+    htmx dispatches one client event per top-level key on the swapped
+    element (the toast store and the review-CTA nudge both listen this
+    way), so each feature just claims its own key."""
     import json as _json
 
-    payload = {'toast': {'kind': kind, 'message': message}}
-    # Merge with any existing HX-Trigger so callers stacking triggers
-    # don't clobber each other.
+    payload: dict[str, Any] = {}
     existing = response.headers.get('HX-Trigger')
     if existing:
         try:
-            merged = _json.loads(existing)
-            if isinstance(merged, dict):
-                merged.update(payload)
-                payload = merged
+            parsed = _json.loads(existing)
+            if isinstance(parsed, dict):
+                payload = parsed
         except _json.JSONDecodeError:
-            # Existing value was a bare event name, not JSON — drop
-            # it; the toast payload supersedes for our use case.
+            # Existing value was a bare event name, not JSON — drop it;
+            # our structured payload supersedes for our use case.
             pass
+    payload[key] = value
     response['HX-Trigger'] = _json.dumps(payload)
+
+
+def _set_toast_header(response: HttpResponse, kind: str, message: str) -> None:
+    """Attach an HX-Trigger header so the global Alpine store
+    (registered in vendor.ts) renders a toast for this response."""
+    _merge_hx_trigger(response, 'toast', {'kind': kind, 'message': message})
+
+
+# How many real (operator-added, enabled) assets a device must carry
+# before the star/review nudge is allowed to appear. Below this the
+# operator hasn't invested enough content to have felt the product's
+# value, so asking would be premature. "default_*" seed assets don't
+# count — they're not the operator's own work.
+REVIEW_CTA_MIN_ASSETS = 3
+
+# "Maybe later" hides the nudge for this many days before it may
+# resurface on a future asset-add.
+REVIEW_CTA_SNOOZE_DAYS = 90
+
+
+def _review_cta_suppressed() -> bool:
+    """True when the nudge must stay hidden: the operator has already
+    acted on it (permanent), or "Maybe later" hasn't elapsed yet."""
+    from datetime import datetime
+
+    # Re-read from disk: a "dismiss"/"snooze" POST may have been served
+    # by a different uvicorn worker than the one handling this add.
+    settings.load()
+
+    if settings['review_cta_dismissed']:
+        return True
+
+    snooze = settings['review_cta_snooze_until'] or ''
+    if snooze:
+        try:
+            until = datetime.fromisoformat(snooze)
+        except ValueError:
+            # Corrupt hand-edited value — treat as no snooze rather
+            # than suppressing forever.
+            return False
+        if timezone.now() < until:
+            return True
+
+    return False
+
+
+def _maybe_offer_review_cta(response: HttpResponse) -> None:
+    """Attach the ``review-cta`` HX-Trigger when the operator has just
+    added an asset and the device has crossed into "engaged" territory.
+
+    Fires on every qualifying add (not just the crossing one) so an
+    operator who ignored it without dismissing gets another gentle
+    chance next time; "dismiss"/"snooze" are what actually stop it."""
+    from anthias_server.app.models import Asset
+
+    if _review_cta_suppressed():
+        return
+
+    real_enabled = (
+        Asset.objects.filter(is_enabled=True)
+        .exclude(asset_id__startswith='default_')
+        .count()
+    )
+    if real_enabled < REVIEW_CTA_MIN_ASSETS:
+        return
+
+    _merge_hx_trigger(response, 'review-cta', True)
+
+
+@authorized
+@require_http_methods(['POST'])
+def review_cta_dismiss(request: HttpRequest) -> HttpResponse:
+    """Operator acted on the star/review nudge (starred, reviewed, or
+    said no thanks) — silence it permanently."""
+    settings.load()
+    settings['review_cta_dismissed'] = True
+    settings.save()
+    return HttpResponse(status=204)
+
+
+@authorized
+@require_http_methods(['POST'])
+def review_cta_snooze(request: HttpRequest) -> HttpResponse:
+    """ "Maybe later" — suppress the nudge for REVIEW_CTA_SNOOZE_DAYS,
+    after which it may resurface on a future asset-add."""
+    from datetime import timedelta
+
+    settings.load()
+    settings['review_cta_snooze_until'] = (
+        timezone.now() + timedelta(days=REVIEW_CTA_SNOOZE_DAYS)
+    ).isoformat()
+    settings.save()
+    return HttpResponse(status=204)
 
 
 @authorized
