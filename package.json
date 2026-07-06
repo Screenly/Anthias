@@ -21,7 +21,7 @@
     "lint:fix": "echo 'no-op'",
     "format:check": "echo 'no-op'",
     "format:fix": "echo 'no-op'",
-    "test": "echo 'no-op: TS tests removed with the React stack'"
+    "test": "bun test"
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.2.8",

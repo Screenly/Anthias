@@ -15,6 +15,7 @@
 // are skipped rather than mis-rendered.
 
 import { initLocationMap } from './location-map'
+import { selectOptionLabel } from './select-label'
 import type { SettingSchema, SettingValue } from './types'
 
 type SetFn = (key: string, value: SettingValue) => void
@@ -148,22 +149,18 @@ function renderField(
     const select = document.createElement('select')
     select.className = 'app-cfg-input'
     select.id = id
-    const labels = schema['x-enumLabels'] || []
     const options = schema.enum || []
     // <select> values read back as strings; map the chosen option back
     // to its original enum value so a typed (number/boolean) default
     // still compares equal and isn't emitted into the URL.
     const typed = (raw: string): SettingValue =>
       (options.find((v) => String(v) === raw) as SettingValue) ?? raw
-    options.forEach((value, i) => {
+    options.forEach((value) => {
       const opt = document.createElement('option')
       opt.value = String(value)
-      opt.textContent =
-        labels[i] !== undefined
-          ? labels[i]
-          : value === ''
-            ? 'Default'
-            : String(value)
+      // Shared with the asset-name derivation so a name derived from
+      // the chosen option matches this rendered label exactly.
+      opt.textContent = selectOptionLabel(schema, value as SettingValue)
       if (String(value) === String(schema.default ?? '')) opt.selected = true
       select.appendChild(opt)
     })

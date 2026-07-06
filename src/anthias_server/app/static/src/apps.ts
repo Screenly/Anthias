@@ -12,31 +12,8 @@
 import { fetchManifest, loadCatalog } from './apps/catalog'
 import { buildLaunchUrl } from './apps/launch-url'
 import { renderManifestForm, teardownHost } from './apps/manifest-form'
+import { suggestedName } from './apps/suggested-name'
 import type { CatalogApp, SettingValue } from './apps/types'
-
-// Derive a distinguishing default asset name from an app's config.
-// Several store apps are one generic app configured per install via a
-// labelled select — e.g. the RSS Reader picks a feed — so every install
-// would otherwise share the identical manifest name ("RSS Reader"). The
-// chosen option's label (the feed's title) is exactly what tells two
-// installs apart, so prefer it. Falls back to the manifest name for apps
-// with no such setting (or before one is chosen). Uses the first select
-// with `x-enumLabels` in manifest order, so it's generic, not RSS-specific.
-function suggestedName(
-  app: CatalogApp,
-  values: Record<string, SettingValue>,
-): string {
-  const props = app.manifest.settings?.properties ?? {}
-  for (const [key, schema] of Object.entries(props)) {
-    const labels = schema['x-enumLabels']
-    const options = schema.enum
-    if (!labels || !options) continue
-    const value = key in values ? values[key] : schema.default
-    const i = options.findIndex((v) => v === value)
-    if (i >= 0 && labels[i]) return labels[i]
-  }
-  return app.manifest.name
-}
 
 type Phase = 'loading' | 'ready' | 'error' | 'config'
 
@@ -45,7 +22,8 @@ export interface AppsTabData {
   apps: CatalogApp[]
   error: string
   selected: CatalogApp | null
-  // Bound to hidden form inputs (see the install <form>).
+  // Bound to the visible Name input in the install <form> (:value),
+  // seeded from config and editable by the operator.
   assetName: string
   // The operator typed their own name, so stop deriving it from config.
   nameEdited: boolean
@@ -139,7 +117,7 @@ export function appsTab(): AppsTabData {
       // Seed the name from the app's default config (e.g. the RSS
       // Reader's default feed) rather than the identical manifest name,
       // and let it track config changes until the operator overrides it.
-      this.assetName = suggestedName(app, {})
+      this.assetName = suggestedName(app.manifest, {})
       this.nameEdited = false
       this.phase = 'config'
       const launch = app.manifest.launch
@@ -167,7 +145,9 @@ export function appsTab(): AppsTabData {
             defaults,
           )
           this.valuesJson = JSON.stringify(pruneEmpty(values, defaults))
-          if (!this.nameEdited) this.assetName = suggestedName(app, values)
+          if (!this.nameEdited) {
+            this.assetName = suggestedName(app.manifest, values)
+          }
         })
       })
     },
