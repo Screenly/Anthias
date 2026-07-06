@@ -169,9 +169,10 @@ def test_create_asset_rejects_absolute_uri_outside_assetdir(
             asset_list_url, data=get_request_data(payload, version)
         )
 
-    # Rejected before the destructive rename, with no row persisted and
-    # the source file left intact.
-    assert response.status_code != status.HTTP_201_CREATED
+    # Rejected as a 400 keyed on ``uri``, before the destructive
+    # rename, with no row persisted and the source file left intact.
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'uri' in response.data
     mixins_rename.assert_not_called()
     v1_1_rename.assert_not_called()
     assert Asset.objects.count() == 0

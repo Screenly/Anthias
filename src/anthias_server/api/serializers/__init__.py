@@ -2,6 +2,7 @@ from datetime import timezone
 from os import path
 from typing import Any
 
+from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
     CharField,
     DateTimeField,
@@ -51,12 +52,18 @@ def _is_within_assetdir(uri: str) -> bool:
 
 
 def validate_uri(uri: str) -> None:
+    # Raise DRF ``ValidationError`` (keyed on ``uri``) rather than a
+    # bare ``Exception`` so ``serializer.is_valid()`` catches it and the
+    # create view returns a 400 instead of a 500 — ``validate_uri`` only
+    # runs inside the create serializers' ``prepare_asset``.
     if uri.startswith('/'):
         if not _is_within_assetdir(uri) or not path.isfile(uri):
-            raise Exception('Invalid file path. Failed to add asset.')
+            raise ValidationError(
+                {'uri': 'Invalid file path. Failed to add asset.'}
+            )
     else:
         if not validate_url(uri):
-            raise Exception('Invalid URL. Failed to add asset.')
+            raise ValidationError({'uri': 'Invalid URL. Failed to add asset.'})
 
 
 class AssetSerializer(ModelSerializer[Asset]):
