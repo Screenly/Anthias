@@ -1456,6 +1456,11 @@ def _review_cta_suppressed() -> bool:
             # Corrupt hand-edited value — treat as no snooze rather
             # than suppressing forever.
             return False
+        if until.tzinfo is None:
+            # We always write an aware ISO timestamp; a naive value can
+            # only come from a hand edit. Anchor it to the current zone
+            # so the comparison below doesn't raise on aware-vs-naive.
+            until = timezone.make_aware(until)
         if timezone.now() < until:
             return True
 

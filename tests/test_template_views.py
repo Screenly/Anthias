@@ -2974,6 +2974,33 @@ def test_review_cta_suppressed_after_dismiss(
 
 
 @pytest.mark.django_db
+def test_review_cta_naive_snooze_does_not_crash(
+    client: Client, _reset_review_cta: Any
+) -> None:
+    """A hand-edited *naive* snooze timestamp (no tz offset) must not
+    raise aware-vs-naive on comparison; a future naive value is anchored
+    to the current zone and still suppresses the nudge."""
+    from anthias_server.settings import settings
+
+    _make_enabled_assets(3)
+    future_naive = (timezone.now() + timedelta(days=30)).replace(tzinfo=None)
+    settings['review_cta_snooze_until'] = future_naive.isoformat()
+    settings.save()
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_create'),
+            data={'uri': 'https://anthias.example.com/naive.png'},
+            HTTP_HX_REQUEST='true',
+        )
+    assert response.status_code == 200
+    assert 'review-cta' not in response.headers.get('HX-Trigger', '')
+
+
+@pytest.mark.django_db
 def test_review_cta_suppressed_while_snoozed(
     client: Client, _reset_review_cta: Any
 ) -> None:
