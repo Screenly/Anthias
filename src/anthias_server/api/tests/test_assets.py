@@ -130,6 +130,56 @@ def test_create_video_asset_v2_with_non_zero_duration_should_fail(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_create_asset_rejects_absolute_uri_outside_assetdir(
+    api_client: APIClient, version: str, tmp_path: Any
+) -> None:
+    """A create request must reject an absolute ``uri`` that points
+    outside the asset directory.
+
+    Regression guard for the arbitrary-file-read/-move flaw: without
+    the ``_is_within_assetdir`` confinement in ``validate_uri`` a
+    ``/``-prefixed uri such as ``/data/.anthias/anthias.conf`` would be
+    ``rename``d into the asset store and then served verbatim by the
+    content endpoint — disclosing ``django_secret_key`` / operator
+    password hashes and destroying the source file. A real file placed
+    *outside* the asset dir proves the guard rejects on location, not
+    merely on non-existence.
+    """
+    from anthias_server.app.models import Asset
+
+    secret_file = tmp_path / 'anthias.conf'
+    secret_file.write_text('[main]\ndjango_secret_key = topsecret\n')
+
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': str(secret_file),
+        'mimetype': 'image',
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+
+    with (
+        mock.patch(
+            'anthias_server.api.serializers.mixins.rename'
+        ) as mixins_rename,
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.rename'
+        ) as v1_1_rename,
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    # Rejected before the destructive rename, with no row persisted and
+    # the source file left intact.
+    assert response.status_code != status.HTTP_201_CREATED
+    mixins_rename.assert_not_called()
+    v1_1_rename.assert_not_called()
+    assert Asset.objects.count() == 0
+    assert secret_file.exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_get_assets_after_create_should_return_1_asset(
     api_client: APIClient, version: str
 ) -> None:

@@ -29,9 +29,30 @@ def get_unique_name(name: str) -> str:
     return name
 
 
+def _is_within_assetdir(uri: str) -> bool:
+    """True when ``uri`` resolves to a real path inside the asset dir.
+
+    Absolute-path URIs are only legitimate for the two-step upload
+    flow: the ``file_asset`` endpoint stages the upload at
+    ``<assetdir>/<uuid>.tmp`` and the create request then submits that
+    path. ``prepare_asset`` will ``rename`` a ``/``-prefixed URI into
+    the asset store and the content endpoint reads it straight back, so
+    without this guard a create request could point an asset at any
+    host file the process can read (``/data/.anthias/anthias.conf`` —
+    which holds ``django_secret_key`` — the SQLite DB, etc.), then GET
+    its contents. ``realpath`` is applied to both sides so a symlink
+    staged inside the asset dir can't resolve back out.
+    """
+    from anthias_server.settings import settings
+
+    base = path.realpath(settings['assetdir']) + path.sep
+    target = path.realpath(uri)
+    return target.startswith(base)
+
+
 def validate_uri(uri: str) -> None:
     if uri.startswith('/'):
-        if not path.isfile(uri):
+        if not _is_within_assetdir(uri) or not path.isfile(uri):
             raise Exception('Invalid file path. Failed to add asset.')
     else:
         if not validate_url(uri):
