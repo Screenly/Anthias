@@ -2895,20 +2895,26 @@ def _make_enabled_assets(count: int) -> None:
 
 
 @pytest.fixture
-def _reset_review_cta() -> Any:
-    """Clear the persisted nudge state before and after each test so the
-    module-level ``settings`` singleton doesn't leak dismiss/snooze
-    across tests."""
+def _reset_review_cta(tmp_path: Any) -> Any:
+    """Redirect the settings singleton's config file to a per-test temp
+    path so the dismiss/snooze ``settings.save()`` writes stay hermetic
+    (the test env otherwise resolves ``conf_file`` to the real
+    ``~/.anthias/anthias.conf``), and clear the nudge state around each
+    test so it can't leak dismiss/snooze across tests."""
     from anthias_server.settings import settings
 
-    def _clear() -> None:
-        settings['review_cta_dismissed'] = False
-        settings['review_cta_snooze_until'] = ''
-        settings.save()
-
-    _clear()
-    yield
-    _clear()
+    original_conf_file = settings.conf_file
+    settings.conf_file = str(tmp_path / 'anthias.conf')
+    settings['review_cta_dismissed'] = False
+    settings['review_cta_snooze_until'] = ''
+    settings.save()
+    try:
+        yield
+    finally:
+        # Point back at the real config and reload it so the singleton's
+        # in-memory state is restored for any later test.
+        settings.conf_file = original_conf_file
+        settings.load()
 
 
 @pytest.mark.django_db
