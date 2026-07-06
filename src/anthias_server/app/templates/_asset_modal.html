@@ -257,7 +257,7 @@
             </div>
 
             <div class="app-floating mt-4 mb-3">
-              <input type="text" class="app-input" id="app-asset-name" name="name" :value="assetName" placeholder=" " required>
+              <input type="text" class="app-input" id="app-asset-name" name="name" :value="assetName" @input="nameEdited = true" placeholder=" " required>
               <label for="app-asset-name">Name</label>
             </div>
 

@@ -14,6 +14,30 @@ import { buildLaunchUrl } from './apps/launch-url'
 import { renderManifestForm, teardownHost } from './apps/manifest-form'
 import type { CatalogApp, SettingValue } from './apps/types'
 
+// Derive a distinguishing default asset name from an app's config.
+// Several store apps are one generic app configured per install via a
+// labelled select — e.g. the RSS Reader picks a feed — so every install
+// would otherwise share the identical manifest name ("RSS Reader"). The
+// chosen option's label (the feed's title) is exactly what tells two
+// installs apart, so prefer it. Falls back to the manifest name for apps
+// with no such setting (or before one is chosen). Uses the first select
+// with `x-enumLabels` in manifest order, so it's generic, not RSS-specific.
+function suggestedName(
+  app: CatalogApp,
+  values: Record<string, SettingValue>,
+): string {
+  const props = app.manifest.settings?.properties ?? {}
+  for (const [key, schema] of Object.entries(props)) {
+    const labels = schema['x-enumLabels']
+    const options = schema.enum
+    if (!labels || !options) continue
+    const value = key in values ? values[key] : schema.default
+    const i = options.findIndex((v) => v === value)
+    if (i >= 0 && labels[i]) return labels[i]
+  }
+  return app.manifest.name
+}
+
 type Phase = 'loading' | 'ready' | 'error' | 'config'
 
 export interface AppsTabData {
@@ -23,6 +47,8 @@ export interface AppsTabData {
   selected: CatalogApp | null
   // Bound to hidden form inputs (see the install <form>).
   assetName: string
+  // The operator typed their own name, so stop deriving it from config.
+  nameEdited: boolean
   launchUrl: string
   valuesJson: string
   loaded: boolean
@@ -61,6 +87,7 @@ export function appsTab(): AppsTabData {
     error: '',
     selected: null,
     assetName: '',
+    nameEdited: false,
     launchUrl: '',
     valuesJson: '{}',
     loaded: false,
@@ -109,7 +136,11 @@ export function appsTab(): AppsTabData {
 
     select(this: WithRefs, app: CatalogApp) {
       this.selected = app
-      this.assetName = app.manifest.name
+      // Seed the name from the app's default config (e.g. the RSS
+      // Reader's default feed) rather than the identical manifest name,
+      // and let it track config changes until the operator overrides it.
+      this.assetName = suggestedName(app, {})
+      this.nameEdited = false
       this.phase = 'config'
       const launch = app.manifest.launch
       const properties = app.manifest.settings?.properties
@@ -136,6 +167,7 @@ export function appsTab(): AppsTabData {
             defaults,
           )
           this.valuesJson = JSON.stringify(pruneEmpty(values, defaults))
+          if (!this.nameEdited) this.assetName = suggestedName(app, values)
         })
       })
     },
@@ -145,6 +177,7 @@ export function appsTab(): AppsTabData {
       this.phase = this.loaded ? 'ready' : 'loading'
       this.launchUrl = ''
       this.valuesJson = '{}'
+      this.nameEdited = false
     },
 
     get hasConfig(): boolean {
