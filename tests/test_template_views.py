@@ -3004,8 +3004,8 @@ def test_review_cta_naive_snooze_does_not_crash(
 def test_review_cta_suppressed_while_snoozed(
     client: Client, _reset_review_cta: Any
 ) -> None:
-    """ "Maybe later" persists a future snooze timestamp and suppresses
-    the nudge until it passes."""
+    """The "Maybe later" action persists a future snooze timestamp and
+    suppresses the nudge until it passes."""
     from anthias_server.settings import settings
 
     _make_enabled_assets(3)

@@ -1481,9 +1481,11 @@ def _maybe_offer_review_cta(response: HttpResponse) -> None:
     if _review_cta_suppressed():
         return
 
+    # Only the threshold matters, so cap the scan at REVIEW_CTA_MIN_ASSETS
+    # rows rather than counting the whole (possibly large) asset table.
     real_enabled = (
         Asset.objects.filter(is_enabled=True)
-        .exclude(asset_id__startswith='default_')
+        .exclude(asset_id__startswith='default_')[:REVIEW_CTA_MIN_ASSETS]
         .count()
     )
     if real_enabled < REVIEW_CTA_MIN_ASSETS:
@@ -1506,8 +1508,9 @@ def review_cta_dismiss(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['POST'])
 def review_cta_snooze(request: HttpRequest) -> HttpResponse:
-    """ "Maybe later" — suppress the nudge for REVIEW_CTA_SNOOZE_DAYS,
-    after which it may resurface on a future asset-add."""
+    """Snooze the nudge for REVIEW_CTA_SNOOZE_DAYS (the "Maybe later"
+    and close actions), after which it may resurface on a future
+    asset-add."""
     from datetime import timedelta
 
     settings.load()
