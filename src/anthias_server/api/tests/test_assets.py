@@ -568,6 +568,66 @@ def test_create_youtube_asset_dispatches_celery_task(
             m.assert_not_called()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_create_youtube_asset_rejects_non_youtube_uri(
+    api_client: APIClient, version: str
+) -> None:
+    """A ``youtube_asset`` create must be rejected when its URI is not a
+    YouTube URL.
+
+    ``mimetype`` is a free-form CharField, so without the
+    ``is_youtube_url`` gate a client could claim ``youtube_asset`` for
+    any http(s) URL and have the device fetch it server-side through
+    yt-dlp's generic extractor — an SSRF to internal / cloud-metadata
+    hosts. The HTML create path already enforces this; every API
+    version must match.
+    """
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': 'http://169.254.169.254/latest/meta-data/',
+        'mimetype': 'youtube_asset',
+        'duration': 0,
+    }
+    asset_list_url = reverse(f'api:asset_list_{version}')
+
+    with (
+        mock.patch(
+            'anthias_server.api.views.v1.dispatch_download'
+        ) as v1_dispatch,
+        mock.patch(
+            'anthias_server.api.views.v1_1.dispatch_download'
+        ) as v1_1_dispatch,
+        mock.patch(
+            'anthias_server.api.views.v1_2.dispatch_download'
+        ) as v1_2_dispatch,
+        mock.patch(
+            'anthias_server.api.views.v2.dispatch_download'
+        ) as v2_dispatch,
+        mock.patch(
+            'anthias_server.api.serializers.mixins.url_fails',
+            return_value=False,
+        ),
+        mock.patch(
+            'anthias_server.api.serializers.v1_1.url_fails',
+            return_value=False,
+        ),
+    ):
+        response = api_client.post(
+            asset_list_url, data=get_request_data(payload, version)
+        )
+
+    # Rejected outright, and yt-dlp is never dispatched on any version.
+    assert response.status_code != status.HTTP_201_CREATED
+    for dispatcher in (
+        v1_dispatch,
+        v1_1_dispatch,
+        v1_2_dispatch,
+        v2_dispatch,
+    ):
+        dispatcher.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # Viewer wake-ups on mutation — issue #2430
 # ---------------------------------------------------------------------------
