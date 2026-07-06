@@ -32,10 +32,11 @@ DEFAULTS = {
         # State for the "Star on GitHub / Review on G2" nudge (server-
         # side so it survives a browser/cache clear and stays consistent
         # across every device the operator opens the UI from).
-        # ``review_cta_dismissed`` is set once the operator acts on it
-        # (starred, reviewed, or said no) and permanently silences it;
+        # ``review_cta_dismissed`` is set once the operator acts on a
+        # CTA (starred or reviewed) and permanently silences the nudge;
         # ``review_cta_snooze_until`` is an ISO-8601 timestamp set by
-        # "Maybe later" that suppresses the nudge until it passes.
+        # "Maybe later" (and the close button) that suppresses the nudge
+        # until it passes.
         'review_cta_dismissed': False,
         'review_cta_snooze_until': '',
     },

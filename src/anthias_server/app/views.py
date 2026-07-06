@@ -1493,8 +1493,8 @@ def _maybe_offer_review_cta(response: HttpResponse) -> None:
 @authorized
 @require_http_methods(['POST'])
 def review_cta_dismiss(request: HttpRequest) -> HttpResponse:
-    """Operator acted on the star/review nudge (starred, reviewed, or
-    said no thanks) — silence it permanently."""
+    """Operator acted on a star/review CTA (starred or reviewed) —
+    silence the nudge permanently."""
     settings.load()
     settings['review_cta_dismissed'] = True
     settings.save()
