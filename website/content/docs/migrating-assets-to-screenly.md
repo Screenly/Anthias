@@ -31,9 +31,10 @@ You'll need a Screenly API token:
    the token against Screenly before moving on.
 4. Choose which assets to migrate. All assets are selected by default; use
    **Select all** / **Select none** or the per-asset checkboxes to adjust.
-5. Click **Migrate**. Each selected asset is uploaded to Screenly in turn,
-   with live per-asset progress.
-6. When it finishes, any assets that failed can be re-uploaded with **Retry
-   failed** without repeating the ones that already succeeded.
+5. Click the **Migrate _N_ assets** button. Each selected asset is uploaded
+   to Screenly in turn, with live per-asset progress.
+6. When it finishes, any assets that failed can be re-uploaded with the
+   **Retry _N_ failed** button, without repeating the ones that already
+   succeeded.
 
 That's it — your selected assets now live in your Screenly account.
