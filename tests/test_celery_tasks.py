@@ -187,6 +187,12 @@ def test_get_display_power_writes_redis_as_str(
     fake_redis = mock.MagicMock()
     with (
         mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        # CEC adapter present so the task runs the probe rather than
+        # short-circuiting on the cec_available() gate below.
+        mock.patch(
+            'anthias_server.celery_tasks.diagnostics.cec_available',
+            return_value=True,
+        ),
         mock.patch(
             'anthias_server.celery_tasks.diagnostics.get_display_power',
             return_value=cec_value,
@@ -201,6 +207,34 @@ def test_get_display_power_writes_redis_as_str(
     # No bool ever reaches redis — guards against the DataError.
     written = fake_redis.set.call_args.args[1]
     assert isinstance(written, str)
+
+
+def test_get_display_power_reports_not_available_without_cec() -> None:
+    """On a board with no CEC adapter the task records 'Not available'
+    and never spawns the libcec probe.
+
+    x86 (and any host that doesn't pass /dev/cec0 or /dev/vchiq into
+    the container) can only fail the probe; it used to store
+    'CEC error', which the System Info card and the v2 /info API then
+    showed as though something were broken.
+    """
+    fake_redis = mock.MagicMock()
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch(
+            'anthias_server.celery_tasks.diagnostics.cec_available',
+            return_value=False,
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.diagnostics.get_display_power'
+        ) as probe,
+    ):
+        get_display_power.apply()
+
+    fake_redis.set.assert_called_once_with(
+        'display_power', 'Not available', ex=3600
+    )
+    probe.assert_not_called()
 
 
 def test_send_telemetry_task_dispatches() -> None:
@@ -1905,6 +1939,13 @@ class TestPeriodicPokeTimeLimits:
         fake_redis = mock.MagicMock()
         with (
             mock.patch.object(celery_tasks_module, 'r', fake_redis),
+            # CEC adapter present so the task reaches the probe (which
+            # raises the soft-limit) rather than short-circuiting on the
+            # cec_available() gate.
+            mock.patch(
+                'anthias_server.celery_tasks.diagnostics.cec_available',
+                return_value=True,
+            ),
             mock.patch(
                 'anthias_server.celery_tasks.diagnostics.get_display_power',
                 side_effect=SoftTimeLimitExceeded,

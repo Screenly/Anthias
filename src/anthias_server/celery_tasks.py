@@ -317,6 +317,18 @@ def get_display_power() -> None:
     # passes the value through, so 'True'/'False'/'CEC error' all fit
     # — and the on/off state now actually populates instead of only
     # the error cases ever landing.
+    #
+    # Boards without a CEC adapter (x86, and any host that doesn't pass
+    # /dev/cec0 or /dev/vchiq into the container — e.g. Pi 5) can only
+    # ever fail the libcec probe, which used to surface on the System
+    # Info card and the v2 /info API as 'CEC error' — reading like a
+    # fault when CEC simply isn't a thing on the hardware. Short-circuit
+    # on the same cec_available() gate the settings UI and the display-
+    # power SET endpoint already use: record a clear 'Not available'
+    # rather than spawning a doomed subprocess every tick.
+    if not diagnostics.cec_available():
+        r.set('display_power', 'Not available', ex=3600)
+        return
     try:
         # Single SET with ex= so the value and its TTL are written
         # atomically — a soft-limit signal landing between a separate
