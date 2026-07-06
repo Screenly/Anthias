@@ -2536,8 +2536,70 @@ def test_friendly_device_model_x86_with_dmi(
         '_read_cpu_brand',
         lambda: 'Intel Core i5-1135G7 @ 2.40GHz',
     )
+    # The 'Intel Corp.' board vendor is redundant with the 'Intel Core'
+    # CPU, so it's dropped rather than stuttered — leaving the NUC
+    # product and the CPU.
     assert device_helper.get_friendly_device_model() == (
-        'Intel Corp. NUC11PAHi5 · Intel Core i5-1135G7 @ 2.40GHz'
+        'NUC11PAHi5 · Intel Core i5-1135G7 @ 2.40GHz'
+    )
+
+
+def test_friendly_device_model_x86_drops_redundant_vendor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reference / whitebox boards set sys_vendor to the CPU maker
+    ('Intel Corporation' next to an 'Intel Celeron' CPU). The stuttering
+    vendor is dropped, leaving the board product and the CPU."""
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(
+        device_helper, 'parse_cpu_info', lambda: {'cpu_count': 2}
+    )
+
+    def fake_sysfs(path: str) -> str:
+        if path.endswith('sys_vendor'):
+            return 'Intel Corporation'
+        if path.endswith('product_name'):
+            return 'Whiskey Platform'
+        return ''
+
+    monkeypatch.setattr(device_helper, '_read_sysfs', fake_sysfs)
+    monkeypatch.setattr(
+        device_helper,
+        '_read_cpu_brand',
+        lambda: 'Intel Celeron 4205U @ 1.80GHz',
+    )
+    assert device_helper.get_friendly_device_model() == (
+        'Whiskey Platform · Intel Celeron 4205U @ 1.80GHz'
+    )
+
+
+def test_friendly_device_model_x86_keeps_branded_vendor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A branded OEM vendor that differs from the CPU maker is kept, but
+    its corporate suffix ('Inc.') is trimmed."""
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(
+        device_helper, 'parse_cpu_info', lambda: {'cpu_count': 8}
+    )
+
+    def fake_sysfs(path: str) -> str:
+        if path.endswith('sys_vendor'):
+            return 'Dell Inc.'
+        if path.endswith('product_name'):
+            return 'OptiPlex 7090'
+        return ''
+
+    monkeypatch.setattr(device_helper, '_read_sysfs', fake_sysfs)
+    monkeypatch.setattr(
+        device_helper,
+        '_read_cpu_brand',
+        lambda: 'Intel Core i5-10500 @ 3.10GHz',
+    )
+    assert device_helper.get_friendly_device_model() == (
+        'Dell OptiPlex 7090 · Intel Core i5-10500 @ 3.10GHz'
     )
 
 
