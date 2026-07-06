@@ -1395,8 +1395,10 @@ def _asset_table_response(
 
 
 def _merge_hx_trigger(response: HttpResponse, key: str, value: Any) -> None:
-    """Set ``response['HX-Trigger'][key] = value``, merging with any
-    trigger already attached so stacked callers don't clobber each other.
+    """Merge ``{key: value}`` into the response's ``HX-Trigger`` header,
+    preserving any keys already present so stacked callers don't clobber
+    each other. The header is a JSON-encoded object; this decodes it,
+    sets ``key``, and re-encodes.
 
     htmx dispatches one client event per top-level key on the swapped
     element (the toast store and the review-CTA nudge both listen this
