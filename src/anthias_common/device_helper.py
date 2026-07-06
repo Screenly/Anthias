@@ -103,20 +103,24 @@ def _strip_corporate_suffix(vendor: str) -> str:
     return ' '.join(tokens)
 
 
-def get_friendly_device_model() -> str:
-    """Operator-facing label for the host the player is running on.
+def get_device_model_parts() -> tuple[str, str]:
+    """(primary, secondary) label for the host, for a two-line card.
 
-    Pi:  whatever the firmware Model line reads
-         ('Raspberry Pi 5 Model B Rev 1.0').
-    x86: '<vendor> <product> · <CPU>' when DMI is exposed via
-         /sys/class/dmi/id, otherwise just the CPU brand. Falls back
-         to 'Generic x86_64 Device' when neither is readable so the
-         System Info card never renders blank.
+    Returns the board/chassis as the primary line and the CPU brand as
+    the secondary line so the System Info card can stack them rather than
+    cramming both onto one row joined by a separator.
+
+    Pi:  ('Raspberry Pi 5 Model B Rev 1.0', '') — the firmware Model
+         line, no separate CPU line.
+    x86: ('Whiskey Platform', 'Intel Celeron 4205U @ 1.80GHz') when DMI
+         exposes a real chassis; ('Intel Celeron ...', '') when it only
+         yields a CPU. Falls back to ('Generic x86_64 Device', '') when
+         neither is readable so the card never renders blank.
     """
     cpu_info = parse_cpu_info()
     pi_model = cpu_info.get('model')
     if isinstance(pi_model, str) and pi_model:
-        return pi_model
+        return pi_model, ''
 
     vendor = _read_sysfs('/sys/class/dmi/id/sys_vendor')
     product = _read_sysfs('/sys/class/dmi/id/product_name')
@@ -163,22 +167,24 @@ def get_friendly_device_model() -> str:
 
     # Drop the board vendor when the CPU brand already names it. Whitebox
     # / reference boards set sys_vendor to the CPU maker ('Intel
-    # Corporation' next to an 'Intel Celeron ...' CPU), which stutters as
-    # 'Intel ... · Intel ...'. Branded OEM boxes (Dell, Lenovo) keep
-    # their vendor because it differs from the CPU maker.
+    # Corporation' next to an 'Intel Celeron ...' CPU), which would stutter
+    # as 'Intel ...' on both the board and CPU lines. Branded OEM boxes
+    # (Dell, Lenovo) keep their vendor because it differs from the CPU.
     if vendor and cpu_brand:
         if vendor.split()[0].lower() in cpu_brand.lower().split():
             vendor = ''
 
     chassis = ' '.join(part for part in (vendor, product) if part).strip()
 
-    parts = [p for p in (chassis, cpu_brand) if p]
-    if parts:
-        return ' · '.join(parts)
+    if chassis:
+        # Board on the primary line, CPU (when known) on the secondary.
+        return chassis, cpu_brand
+    if cpu_brand:
+        return cpu_brand, ''
 
     from platform import machine
 
-    return f'Generic {machine() or "x86_64"} Device'
+    return f'Generic {machine() or "x86_64"} Device', ''
 
 
 def get_device_type() -> str:

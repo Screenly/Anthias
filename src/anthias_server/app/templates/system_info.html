@@ -134,6 +134,7 @@
       <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Device model</p>
         <div class="stat-card__value">{{ device_model }}</div>
+        {% if device_model_detail %}<div class="stat-card__meta">{{ device_model_detail }}</div>{% endif %}
       </div>
       <div class="stat-card">
         <p class="stat-card__label">Resolution</p>

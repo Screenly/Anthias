@@ -66,7 +66,7 @@ def system_info() -> dict[str, Any]:
     disk_free = slash.f_bavail * slash.f_frsize
     disk_used = max(0, disk_total - disk_free)
     uptime = timedelta(seconds=diagnostics.get_uptime())
-    device_model = device_helper.get_friendly_device_model()
+    device_model, device_model_detail = device_helper.get_device_model_parts()
 
     anthias_version = diagnostics.get_anthias_version()
     anthias_version_head = diagnostics.get_anthias_version_head()
@@ -172,6 +172,7 @@ def system_info() -> dict[str, Any]:
         'display_power': _redis.get('display_power'),
         'resolution': _resolved_resolution(),
         'device_model': device_model,
+        'device_model_detail': device_model_detail,
         'anthias_version': anthias_version,
         'anthias_version_head': anthias_version_head,
         'anthias_version_meta': anthias_version_meta,
