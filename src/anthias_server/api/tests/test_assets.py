@@ -585,7 +585,8 @@ def test_create_youtube_asset_rejects_non_youtube_uri(
     """
     payload = {
         **ASSET_CREATION_DATA,
-        'uri': 'http://169.254.169.254/latest/meta-data/',
+        # Cloud-metadata endpoint — the SSRF target this gate blocks.
+        'uri': 'http://169.254.169.254/latest/meta-data/',  # NOSONAR
         'mimetype': 'youtube_asset',
         'duration': 0,
     }
@@ -617,8 +618,11 @@ def test_create_youtube_asset_rejects_non_youtube_uri(
             asset_list_url, data=get_request_data(payload, version)
         )
 
-    # Rejected outright, and yt-dlp is never dispatched on any version.
-    assert response.status_code != status.HTTP_201_CREATED
+    # Rejected as a 400 keyed on ``uri`` (every version routes the
+    # failure through serializer validation), and yt-dlp is never
+    # dispatched on any version.
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'uri' in response.data
     for dispatcher in (
         v1_dispatch,
         v1_1_dispatch,

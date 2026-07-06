@@ -3,6 +3,7 @@ from inspect import cleandoc
 from os import path, rename
 from typing import Any
 
+from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import CharField, Serializer
 
 from anthias_server.api.errors import AssetCreationError
@@ -112,8 +113,13 @@ class CreateAssetSerializerMixin:
         # hosts) would be fetched server-side through yt-dlp's generic
         # extractor. The URI already passed ``validate_uri``.
         if is_youtube and not is_youtube_url(uri):
-            raise AssetCreationError(
-                'A youtube_asset URI must point at a YouTube URL.'
+            # DRF ``ValidationError`` (not ``AssetCreationError``) so
+            # ``serializer.is_valid()`` catches it and the create view
+            # returns a 400 keyed on ``uri`` — matching the v1.1
+            # serializer. A bare ``AssetCreationError`` from here would
+            # escape ``is_valid()`` and surface as a 500.
+            raise ValidationError(
+                {'uri': 'A youtube_asset URI must point at a YouTube URL.'}
             )
         if is_youtube:
             # Defer the download to download_youtube_asset (Celery).
