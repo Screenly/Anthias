@@ -133,6 +133,41 @@ def test_file_asset_disk_full_during_parse_returns_507(
 
 
 @pytest.mark.django_db
+def test_file_asset_disk_full_during_write_cleans_up_partial(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """When the disk fills mid-write (open() succeeds, f.write() then
+    raises ENOSPC), the handler must remove the partial .tmp and still
+    return 507 — not leave a truncated file behind."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    write_fails = mock.mock_open()
+    write_fails.return_value.write.side_effect = OSError(
+        errno.ENOSPC, 'No space left on device'
+    )
+    with (
+        mock.patch(
+            'anthias_server.api.views.mixins.open', write_fails, create=True
+        ),
+        mock.patch('anthias_server.api.views.mixins.remove') as mock_remove,
+    ):
+        response = api_client.post(
+            reverse('api:file_asset_v1'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.png', b'\x89PNG\r\n', content_type='image/png'
+                )
+            },
+        )
+
+    assert response.status_code == status.HTTP_507_INSUFFICIENT_STORAGE
+    assert 'disk is full' in response.data['detail']
+    mock_remove.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_file_asset_chunked_out_of_order_reassembles(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:

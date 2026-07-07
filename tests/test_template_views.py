@@ -2130,6 +2130,41 @@ def test_assets_upload_disk_full_during_parse_shows_toast(
 
 
 @pytest.mark.django_db
+def test_assets_upload_disk_full_during_write_cleans_up_partial(
+    client: Client,
+) -> None:
+    """When the disk fills mid-write (open() succeeds, f.write() then
+    raises ENOSPC), the view must remove the partially-written file so
+    a truncated asset doesn't squat on the last free bytes — and still
+    show the toast with no row persisted."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    write_fails = mock.mock_open()
+    write_fails.return_value.write.side_effect = OSError(
+        errno.ENOSPC, 'No space left on device'
+    )
+    with (
+        mock.patch('anthias_server.app.views.open', write_fails, create=True),
+        mock.patch('anthias_server.app.views.remove') as mock_remove,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.png', b'\x89PNG\r\n', content_type='image/png'
+                ),
+            },
+            headers={'HX-Request': 'true'},
+        )
+    assert response.status_code == 200
+    assert 'disk is full' in response.headers.get('HX-Trigger', '')
+    assert Asset.objects.count() == 0
+    mock_remove.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_write_endpoint_fires_websocket_notify(
     client: Client, asset: Asset
 ) -> None:
