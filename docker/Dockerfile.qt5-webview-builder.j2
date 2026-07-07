@@ -8,11 +8,11 @@
         at via `-sysroot /sysroot`.
      2. webview-builder  — host x86 (`$BUILDPLATFORM`); installs the
         Linaro gcc-7.4.1 cross-compiler plus the pre-built Qt 5
-        toolchain pinned to WebView-v2026.04.1, then compiles the
+        toolchain pinned to WebView-v2026.07.0, then compiles the
         in-tree src/anthias_webview/ source.
 
    Qt 5 is frozen for pi2/pi3 boards, so the toolchain artifact at
-   WebView-v2026.04.1 never changes. To CVE-patch the toolchain run
+   WebView-v2026.07.0 never changes. To CVE-patch the toolchain run
    bin/rebuild_qt5_toolchain.sh and re-upload to that tag.
 #}
 FROM --platform=linux/arm/v7 {{ base_image }}:{{ base_image_tag }} AS qt5-sysroot
@@ -214,7 +214,7 @@ RUN mkdir -p /src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin && \
             "/src/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf/bin/$(basename "$tool")"; \
     done
 
-# Pre-built Qt 5 toolchain — pinned permanently to WebView-v2026.04.1
+# Pre-built Qt 5 toolchain — pinned permanently to WebView-v2026.07.0
 # (Qt 5 is frozen for pi2/pi3). The qt5pi/ tree contains both host
 # qmake (x86) and armhf libs the webview app links against.
 RUN mkdir -p /src/{{ artifact_board }} && \
