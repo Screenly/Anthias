@@ -11,6 +11,7 @@ from unittest import mock
 import pytest
 
 import anthias_viewer as viewer
+from anthias_server.app.models import DURATION_S_MAX
 from anthias_server.settings import settings
 from anthias_viewer.scheduling import Scheduler
 from anthias_viewer.utils import get_skip_event
@@ -894,6 +895,34 @@ def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
     ):
         viewer.asset_loop(scheduler)
     trigger.assert_called_once_with('remote')
+
+
+def test_asset_loop_clamps_out_of_range_duration() -> None:
+    """A stored duration past C ``PyTime_t`` range must not crash the
+    loop (Sentry ANTHIAS-3E) — ``threading.Event.wait`` raises
+    OverflowError on such a timeout and the whole viewer crash-loops.
+    The API rejects these on write; this is the read-side guard for
+    pre-existing rows. 9999999999999 is the real value from the
+    incident."""
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'huge',
+        'name': 'huge',
+        'uri': 'https://example.com/pinned.png',
+        'mimetype': 'image',
+        'duration': 9999999999999,
+        'skip_asset_check': True,
+        'is_reachable': True,
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer.view_image'),
+        mock.patch('anthias_viewer.watchdog'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    skip_event.wait.assert_called_once_with(timeout=DURATION_S_MAX)
 
 
 # ---------------------------------------------------------------------------

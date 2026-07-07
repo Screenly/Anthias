@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from anthias_server.app import page_context
-from anthias_server.app.models import Asset
+from anthias_server.app.models import DURATION_S_MAX, Asset
 from anthias_server.app.templatetags.asset_filters import to_json
 
 
@@ -1110,6 +1110,33 @@ def test_assets_update_clamps_oversize_refresh_interval(
         )
     asset.refresh_from_db()
     assert asset.metadata.get('refresh_interval_s') == 86400
+
+
+@pytest.mark.django_db
+def test_assets_update_clamps_oversize_duration(
+    client: Client, asset: Asset
+) -> None:
+    """Same clamp-not-400 policy as the refresh interval above. The
+    posted value is the real one from Sentry ANTHIAS-3E: an operator
+    typed 9999999999999 to mean "forever", and the stored row
+    crash-looped the viewer's ``Event.wait`` on OverflowError."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_update', args=[asset.asset_id]),
+            data={
+                'name': asset.name,
+                'mimetype': 'webpage',
+                'duration': '9999999999999',
+                'start_date': '2026-01-01T00:00',
+                'end_date': '2027-01-01T00:00',
+                'refresh_interval_s': '',
+            },
+        )
+    asset.refresh_from_db()
+    assert asset.duration == DURATION_S_MAX
 
 
 @pytest.mark.django_db

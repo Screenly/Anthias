@@ -20,6 +20,7 @@ from rest_framework.serializers import (
 from anthias_common.utils import SCREEN_ROTATION_CHOICES
 from anthias_server.app.models import (
     Asset,
+    DURATION_S_MAX,
     REFRESH_INTERVAL_S_MAX,
     clamp_refresh_interval,
 )
@@ -202,7 +203,7 @@ class CreateAssetSerializerV2(
     uri = CharField()
     start_date = DateTimeField(default_timezone=timezone.utc)
     end_date = DateTimeField(default_timezone=timezone.utc)
-    duration = IntegerField()
+    duration = IntegerField(min_value=0, max_value=DURATION_S_MAX)
     mimetype = CharField()
     is_enabled = BooleanField()
     is_processing = BooleanField(required=False)
@@ -257,7 +258,7 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     is_processing = BooleanField(required=False)
     nocache = BooleanField(required=False)
     skip_asset_check = BooleanField(required=False)
-    duration = IntegerField()
+    duration = IntegerField(min_value=0, max_value=DURATION_S_MAX)
     play_days = ListField(
         child=IntegerField(min_value=1, max_value=7),
         required=False,
@@ -322,8 +323,16 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
 class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     player_name = CharField(required=False, allow_blank=True)
     audio_output = CharField(required=False)
-    default_duration = IntegerField(required=False)
-    default_streaming_duration = IntegerField(required=False)
+    # Bounded like Asset.duration — these defaults get copied onto new
+    # asset rows (CreateAssetSerializerMixin, HTML add-asset path), so
+    # a poisoned default would reach the viewer's Event.wait the same
+    # way a bad per-asset duration does (Sentry ANTHIAS-3E).
+    default_duration = IntegerField(
+        required=False, min_value=0, max_value=DURATION_S_MAX
+    )
+    default_streaming_duration = IntegerField(
+        required=False, min_value=0, max_value=DURATION_S_MAX
+    )
     date_format = CharField(required=False)
     show_splash = BooleanField(required=False)
     default_assets = BooleanField(required=False)

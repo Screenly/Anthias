@@ -53,6 +53,7 @@ from anthias_common.utils import (  # noqa: E402
     string_to_bool,
 )
 from anthias_server.app.models import Asset  # noqa: E402
+from anthias_server.app.models import clamp_duration  # noqa: E402
 from anthias_server.app.models import clamp_refresh_interval  # noqa: E402
 from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
 from anthias_viewer.scheduling import Scheduler  # noqa: E402
@@ -1407,6 +1408,12 @@ def asset_loop(scheduler: Any) -> None:
 
     elif _asset_is_displayable(asset):
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
+        # Both waits below feed this into ``threading.Event.wait``,
+        # where an out-of-range timeout raises OverflowError and
+        # crash-loops the whole viewer (Sentry ANTHIAS-3E). The API
+        # rejects such values on write, but a pre-existing row must
+        # not take the screen down.
+        duration = clamp_duration(asset['duration'])
         logging.info('Showing asset %s (%s)', name, mime)
         logging.debug('Asset URI %s', uri)
         watchdog()
@@ -1433,12 +1440,11 @@ def asset_loop(scheduler: Any) -> None:
             # or ('streaming' in mime)`` — the truthy literal short-
             # circuits and the branch runs for every mimetype, making
             # the ``else: Unknown MimeType`` arm below unreachable.
-            view_video(uri, asset['duration'])
+            view_video(uri, duration)
         else:
             logging.error('Unknown MimeType %s', mime)
 
         if 'image' in mime or 'web' in mime:
-            duration = int(asset['duration'])
             logging.info('Sleeping for %s', duration)
             skip_event = get_skip_event()
             skip_event.clear()

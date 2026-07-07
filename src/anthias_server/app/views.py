@@ -28,7 +28,10 @@ from django.utils.http import (
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app import page_context
-from anthias_server.app.models import clamp_refresh_interval
+from anthias_server.app.models import (
+    clamp_duration,
+    clamp_refresh_interval,
+)
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import (
@@ -733,7 +736,10 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
         # that try to write a duration anyway.
         pass
     else:
-        asset.duration = int(
+        # Clamp (rather than reject) like the refresh-interval handler
+        # below — an out-of-range duration would crash-loop the
+        # viewer's Event.wait (Sentry ANTHIAS-3E).
+        asset.duration = clamp_duration(
             request.POST.get('duration') or asset.duration or 0
         )
     start = request.POST.get('start_date')
@@ -1555,10 +1561,13 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['auth_backend'] = auth_backend
 
         settings['player_name'] = request.POST.get('player_name', '')
-        settings['default_duration'] = int(
+        # Clamped for the same reason as the per-asset duration: these
+        # defaults get copied onto new asset rows and would reach the
+        # viewer's Event.wait (Sentry ANTHIAS-3E).
+        settings['default_duration'] = clamp_duration(
             request.POST.get('default_duration') or 0
         )
-        settings['default_streaming_duration'] = int(
+        settings['default_streaming_duration'] = clamp_duration(
             request.POST.get('default_streaming_duration') or 0
         )
         settings['audio_output'] = request.POST.get('audio_output', 'hdmi')

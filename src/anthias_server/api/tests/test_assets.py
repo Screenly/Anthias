@@ -18,6 +18,7 @@ from anthias_server.api.tests.test_common import (
     ASSET_UPDATE_DATA_V2,
     get_request_data,
 )
+from anthias_server.app.models import DURATION_S_MAX
 
 
 @pytest.fixture
@@ -467,6 +468,64 @@ def test_v2_patch_refresh_interval_out_of_range_rejected(
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert 'refresh_interval_s' in response.data
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'value',
+    [-1, DURATION_S_MAX + 1],
+    ids=['negative', 'over-one-year-cap'],
+)
+def test_v2_patch_duration_out_of_range_rejected(
+    api_client: APIClient, v2_asset_detail_url: str, value: int
+) -> None:
+    """Both bounds of the 0..DURATION_S_MAX range must 400 on write.
+    A stored duration past C ``PyTime_t`` range crash-loops the
+    viewer's ``Event.wait`` (Sentry ANTHIAS-3E — an operator entered
+    9999999999999 to mean "forever" and took the screen down)."""
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'duration': value},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'duration' in response.data
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_create_asset_duration_out_of_range_rejected(
+    api_client: APIClient, version: str
+) -> None:
+    """Every create path must bound duration — the v1 family models it
+    as a CharField, so the range check lives in the prepare_asset
+    paths rather than on the field (Sentry ANTHIAS-3E)."""
+    response = api_client.post(
+        reverse(f'api:asset_list_{version}'),
+        data=get_request_data(
+            {**ASSET_CREATION_DATA, 'duration': 9999999999999}, version
+        ),
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_update_asset_duration_out_of_range_rejected(
+    api_client: APIClient, version: str
+) -> None:
+    asset = _create_asset(api_client, ASSET_CREATION_DATA, version)
+
+    if version == 'v2':
+        data = ASSET_UPDATE_DATA_V2
+    else:
+        data = ASSET_UPDATE_DATA_V1_2
+
+    response = api_client.put(
+        reverse(f'api:asset_detail_{version}', args=[asset['asset_id']]),
+        data=get_request_data({**data, 'duration': 9999999999999}, version),
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db

@@ -19,6 +19,35 @@ ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 REFRESH_INTERVAL_S_MAX = 86400
 
 
+# Upper bound for ``Asset.duration`` (seconds). The hard constraint is
+# the viewer: ``asset_loop`` / ``view_video`` feed the value straight
+# into ``threading.Event.wait``, and a timeout past C ``PyTime_t``
+# range (~2.9e11 s) raises OverflowError, crash-looping the viewer
+# (Sentry ANTHIAS-3E — an operator typed 9999999999999 to mean
+# "forever" and took the screen down). One year is effectively
+# "pinned forever" for signage while staying a typo guard. Enforced
+# by the v2 serializers + settings (write validation), the
+# v1/v1.1/v1.2 create paths, the page-form handlers (clamping), and
+# the viewer's read-side clamp.
+DURATION_S_MAX = 365 * 24 * 60 * 60
+
+
+def clamp_duration(value: Any) -> int:
+    """Coerce an arbitrary ``Asset.duration`` value to a safe int in
+    ``[0, DURATION_S_MAX]``.
+
+    The API write paths reject out-of-range values, but a hand-edited
+    row or a legacy import can still hold junk, and the viewer must
+    never crash on a DB value. Same contract as
+    ``clamp_refresh_interval`` below: garbage coerces to 0.
+    """
+    try:
+        duration = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(duration, DURATION_S_MAX))
+
+
 def clamp_refresh_interval(value: Any) -> int:
     """Coerce an arbitrary ``metadata['refresh_interval_s']`` value to
     a safe int in ``[0, REFRESH_INTERVAL_S_MAX]``.

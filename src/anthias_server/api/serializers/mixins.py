@@ -20,9 +20,11 @@ from anthias_server.processing import needs_image_normalisation
 from anthias_server.settings import settings
 
 from . import (
+    DURATION_RANGE_ERROR,
     get_unique_name,
     validate_uri,
 )
+from anthias_server.app.models import DURATION_S_MAX
 
 
 class CreateAssetSerializerMixin:
@@ -212,9 +214,16 @@ class CreateAssetSerializerMixin:
             duration = data.get('duration', settings['default_duration'])
 
             if version == 'v2':
+                # Already an int bounded by the v2 IntegerField.
                 asset['duration'] = duration
             else:
+                # v1.2 models duration as a CharField, so bound the
+                # parsed value here — an out-of-range duration would
+                # otherwise crash-loop the viewer's Event.wait
+                # (Sentry ANTHIAS-3E).
                 asset['duration'] = int(duration)
+                if not 0 <= asset['duration'] <= DURATION_S_MAX:
+                    raise ValidationError({'duration': DURATION_RANGE_ERROR})
 
         asset['play_order'] = (
             data.get('play_order') if data.get('play_order') else 0
