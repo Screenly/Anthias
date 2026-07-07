@@ -22,7 +22,8 @@ REFRESH_INTERVAL_S_MAX = 86400
 # Upper bound for ``Asset.duration`` (seconds). The hard constraint is
 # the viewer: ``asset_loop`` / ``view_video`` feed the value straight
 # into ``threading.Event.wait``, and a timeout past C ``PyTime_t``
-# range (~2.9e11 s) raises OverflowError, crash-looping the viewer
+# range (int64 nanoseconds, ~9.2e9 s ≈ 292 years) raises
+# OverflowError, crash-looping the viewer
 # (Sentry ANTHIAS-3E — an operator typed 9999999999999 to mean
 # "forever" and took the screen down). One year is effectively
 # "pinned forever" for signage while staying a typo guard. Enforced
