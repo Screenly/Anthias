@@ -12,10 +12,12 @@ from celery import Celery, Task
 from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import worker_init
 from django.apps import apps as _django_apps
+import requests
 from PIL import UnidentifiedImageError
 from tenacity import (
     RetryError,
     Retrying,
+    retry_if_exception_type,
     stop_after_delay,
     wait_exponential,
 )
@@ -1164,6 +1166,14 @@ def _run_supervisor_command(command: Any, action: str) -> None:
         for attempt in Retrying(
             stop=stop_after_delay(SUPERVISOR_CMD_RETRY_WINDOW_S),
             wait=wait_exponential(multiplier=1, max=SUPERVISOR_CMD_WAIT_MAX_S),
+            # Only transport/HTTP failures are retryable. Anything
+            # else (a TypeError, celery's SoftTimeLimitExceeded)
+            # must propagate immediately instead of being masked as
+            # "supervisor didn't accept the command" — retrying it
+            # would also pin the worker until the hard limit.
+            retry=retry_if_exception_type(
+                requests.exceptions.RequestException
+            ),
         ):
             with attempt:
                 response = command(timeout=SUPERVISOR_CMD_REQUEST_TIMEOUT_S)

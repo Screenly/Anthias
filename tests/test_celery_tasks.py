@@ -320,10 +320,34 @@ def test_reboot_anthias_retries_until_supervisor_recovers() -> None:
                 ok_response,
             ],
         ) as mock_reboot,
+        # Zero the exponential backoff so the retries don't sleep.
+        mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
     ):
         result = reboot_anthias.apply()
     assert result.successful()
     assert mock_reboot.call_count == 3
+
+
+def test_reboot_anthias_non_transport_error_propagates() -> None:
+    """Only transport/HTTP failures are retryable — anything else
+    (a TypeError-class bug, celery's SoftTimeLimitExceeded) must
+    escape immediately instead of being retried for the full window
+    and masked as 'supervisor didn't accept the command'."""
+    with (
+        mock.patch.object(
+            celery_tasks_module, 'is_balena_app', return_value=True
+        ),
+        mock.patch.object(
+            celery_tasks_module,
+            'reboot_via_balena_supervisor',
+            side_effect=TypeError('a real bug'),
+        ) as mock_reboot,
+        mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
+    ):
+        result = reboot_anthias.apply()
+    assert result.failed()
+    assert isinstance(result.result, TypeError)
+    mock_reboot.assert_called_once()
 
 
 def test_reboot_anthias_terminal_supervisor_failure_warns_not_raises() -> None:
@@ -341,10 +365,12 @@ def test_reboot_anthias_terminal_supervisor_failure_warns_not_raises() -> None:
             'reboot_via_balena_supervisor',
             side_effect=requests_module.exceptions.ConnectionError(),
         ),
-        # Shrink the two-minute budget so the test doesn't sleep it out.
+        # Shrink the two-minute budget and zero the backoff so the
+        # test neither sleeps out the window nor between attempts.
         mock.patch.object(
             celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0.1
         ),
+        mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
         mock.patch.object(
             celery_tasks_module.logging, 'warning'
         ) as mock_warning,
@@ -373,6 +399,7 @@ def test_shutdown_anthias_terminal_supervisor_failure_warns_not_raises() -> (
         mock.patch.object(
             celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0.1
         ),
+        mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
         mock.patch.object(
             celery_tasks_module.logging, 'warning'
         ) as mock_warning,
