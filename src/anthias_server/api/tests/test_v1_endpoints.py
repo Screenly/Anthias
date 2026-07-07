@@ -207,6 +207,32 @@ def test_file_asset_chunked_out_of_order_reassembles(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    'header',
+    ['garbage', 'bytes abc-def/8', 'bytes 0-3', '0-3/8'],
+    ids=['non-range', 'non-numeric', 'no-total', 'no-unit'],
+)
+def test_file_asset_malformed_content_range_returns_400(
+    api_client: APIClient, cleanup_asset_dir: None, header: str
+) -> None:
+    """A client-controlled ``Content-Range`` header must be validated:
+    a malformed value returns 400, not a 500 from a split()/int()
+    crash."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    response = api_client.post(
+        reverse('api:file_asset_v1'),
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': header},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
 def test_playlist_order(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:

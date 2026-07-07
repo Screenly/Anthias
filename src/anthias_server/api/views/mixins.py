@@ -1,4 +1,5 @@
 import logging
+import re
 import tarfile
 import uuid
 from base64 import b64encode
@@ -276,10 +277,24 @@ class FileAssetViewMixin(APIView):
             + '.tmp'
         )
 
+        has_range = 'Content-Range' in request.headers
+        start_bytes = 0
+        if has_range:
+            # ``Content-Range`` is client-controlled; parse it strictly
+            # and 400 on anything malformed rather than letting a bad
+            # header raise ValueError/IndexError and surface as a 500.
+            match = re.fullmatch(
+                r'bytes (\d+)-(\d+)/(\d+|\*)',
+                request.headers['Content-Range'].strip(),
+            )
+            if match is None:
+                raise ValidationError(
+                    {'Content-Range': 'Malformed Content-Range header.'}
+                )
+            start_bytes = int(match.group(1))
+
         try:
-            if 'Content-Range' in request.headers:
-                range_str = request.headers['Content-Range']
-                start_bytes = int(range_str.split(' ')[1].split('-')[0])
+            if has_range:
                 # ``r+b`` (not ``ab``): append mode pins every write to
                 # EOF and silently ignores ``seek()``, so an out-of-
                 # order chunk would land at the wrong offset and
