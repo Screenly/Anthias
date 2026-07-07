@@ -1,3 +1,4 @@
+import errno
 import json
 import logging
 import os
@@ -49,6 +50,25 @@ def clamp_screen_rotation(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return rotation if rotation in SCREEN_ROTATION_CHOICES else 0
+
+
+# Operator-facing message for ENOSPC during an upload — shared by the
+# HTML upload toast and the API's 507 response so the wording can't
+# drift between surfaces (Sentry ANTHIAS-3K).
+DISK_FULL_ERROR = (
+    'The device disk is full. Free up space — for example by deleting '
+    'unused assets — and try again.'
+)
+
+
+def is_disk_full(exc: OSError) -> bool:
+    """True when ``exc`` is ENOSPC — the device disk is full.
+
+    Upload paths turn this into an actionable operator message
+    instead of a 500: a full disk is a device-capacity condition,
+    not a code bug (Sentry ANTHIAS-3K).
+    """
+    return exc.errno == errno.ENOSPC
 
 
 def string_to_bool(string: Any) -> bool:

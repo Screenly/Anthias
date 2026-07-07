@@ -71,6 +71,37 @@ def test_file_asset(api_client: APIClient, cleanup_asset_dir: None) -> None:
 
 
 @pytest.mark.django_db
+def test_file_asset_disk_full_returns_507(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """ENOSPC while writing the upload must come back as an actionable
+    507 with the shared disk-full message, not an unhandled 500
+    (Sentry ANTHIAS-3K)."""
+    import errno
+
+    image_path = os.path.join(
+        django_settings.BASE_DIR,
+        'src/anthias_server/app/static/img/standby.png',
+    )
+
+    with (
+        open(image_path, 'rb') as file_upload,
+        mock.patch(
+            'anthias_server.api.views.mixins.open',
+            side_effect=OSError(errno.ENOSPC, 'No space left on device'),
+            create=True,
+        ),
+    ):
+        response = api_client.post(
+            reverse('api:file_asset_v1'),
+            data={'file_upload': file_upload},
+        )
+
+    assert response.status_code == status.HTTP_507_INSUFFICIENT_STORAGE
+    assert 'disk is full' in response.data['detail']
+
+
+@pytest.mark.django_db
 def test_playlist_order(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:

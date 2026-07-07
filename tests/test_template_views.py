@@ -2069,6 +2069,34 @@ def test_assets_upload_rejects_unknown_extension(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_assets_upload_disk_full_shows_toast_not_500(client: Client) -> None:
+    """ENOSPC while copying the upload into assetdir must surface as
+    the disk-full toast on the table partial, with no row persisted
+    — not an unhandled 500 (Sentry ANTHIAS-3K)."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with mock.patch(
+        'anthias_server.app.views.open',
+        side_effect=OSError(errno.ENOSPC, 'No space left on device'),
+        create=True,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.png', b'\x89PNG\r\n', content_type='image/png'
+                ),
+            },
+            headers={'HX-Request': 'true'},
+        )
+    assert response.status_code == 200
+    assert 'disk is full' in response.headers.get('HX-Trigger', '')
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_write_endpoint_fires_websocket_notify(
     client: Client, asset: Asset
 ) -> None:

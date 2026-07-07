@@ -2,6 +2,7 @@ import logging
 import re
 import tarfile
 import uuid
+from contextlib import suppress
 from datetime import datetime, time
 from mimetypes import guess_extension, guess_type
 from os import path, remove
@@ -37,8 +38,10 @@ from anthias_server.lib.auth import (
     authorized,
 )
 from anthias_common.utils import (
+    DISK_FULL_ERROR,
     clamp_screen_rotation,
     connect_to_redis,
+    is_disk_full,
 )
 from anthias_server.settings import ViewerPublisher, settings
 
@@ -463,7 +466,16 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     from anthias_server.app.models import Asset
     from datetime import timedelta
 
-    file_upload = request.FILES.get('file_upload')
+    # ``request.FILES`` triggers the (lazy) multipart parse, which
+    # spools the body to a temp file — on a full disk that write is
+    # where ENOSPC actually surfaces (Sentry ANTHIAS-3K). Turn it
+    # into an actionable toast instead of a 500.
+    try:
+        file_upload = request.FILES.get('file_upload')
+    except OSError as exc:
+        if not is_disk_full(exc):
+            raise
+        return _asset_table_response(request, toast=('error', DISK_FULL_ERROR))
     if file_upload is None or not file_upload.name:
         return _asset_table_response(
             request, toast=('error', 'No file uploaded.')
@@ -615,9 +627,18 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # overwriting the older one.
     final_name = uuid.uuid4().hex
     final_path = path.join(settings['assetdir'], f'{final_name}{src_ext}')
-    with open(final_path, 'wb') as f:
-        for chunk in file_upload.chunks():
-            f.write(chunk)
+    try:
+        with open(final_path, 'wb') as f:
+            for chunk in file_upload.chunks():
+                f.write(chunk)
+    except OSError as exc:
+        if not is_disk_full(exc):
+            raise
+        # Don't leave a truncated file squatting on the last free
+        # bytes of an already-full disk.
+        with suppress(OSError):
+            remove(final_path)
+        return _asset_table_response(request, toast=('error', DISK_FULL_ERROR))
 
     # Decide which Celery task — if any — needs to run before the
     # viewer can play the row.
