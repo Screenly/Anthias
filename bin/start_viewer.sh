@@ -522,37 +522,37 @@ wait_for_framebuffer
 # Qt's fbdev use.
 HOTPLUG_SETTLE_SECONDS="${ANTHIAS_HOTPLUG_SETTLE_SECONDS:-5}"
 
-find_connected_hdmi() {
-    # Echo the sysfs dir of the first connected HDMI connector, if any.
-    local status_file
-    for status_file in /sys/class/drm/card*-HDMI*/status; do
-        [ -r "$status_file" ] || continue
-        [ "$(cat "$status_file" 2>/dev/null)" = 'connected' ] || continue
-        dirname "$status_file"
-        return 0
-    done
-    return 1
-}
-
 reassert_preferred_mode() {
     # Re-apply the connector's EDID-preferred mode to /dev/fb0.
     # $1 = connector sysfs dir. Returns non-zero (so the caller retries
     # on the next reconnect tick) while the sink hasn't published EDID.
-    local conn="$1" preferred width height mode
+    local conn="$1" preferred width rest height flag mode
     preferred=$(head -n1 "$conn/modes" 2>/dev/null)
     case "$preferred" in
         *x*) ;;
         *) return 1 ;;  # no modes yet — EDID still negotiating
     esac
     width=${preferred%%x*}
-    height=${preferred#*x}
-    height=${height%%[!0-9]*}  # drop a trailing 'i' on interlaced modes
-    # Prefer the matching fbcon mode string the kernel already
-    # registered; fall back to constructing one in the same format.
-    mode=$(grep -m1 -E "^U:${width}x${height}p" \
+    rest=${preferred#*x}          # e.g. 1080 or 1080i
+    height=${rest%%[!0-9]*}       # numeric height, minus any scan-type suffix
+    # Preserve the scan type: interlaced sinks advertise a trailing 'i'
+    # (e.g. 1920x1080i); forcing a progressive string on them is rejected.
+    case "$rest" in *i*) flag='i';; *) flag='p';; esac
+    # Prefer a mode string the kernel already registered for this
+    # geometry — either scan type, any refresh — and only fabricate one
+    # (in the fbcon "U:WxH{p,i}-<refresh>" format the vc4 DRM fbdev uses,
+    # which registers a 0 refresh field) as a last resort.
+    mode=$(grep -m1 -E "^U:${width}x${height}[pi]" \
         /sys/class/graphics/fb0/modes 2>/dev/null)
-    [ -n "$mode" ] || mode="U:${width}x${height}p-0"
-    echo "$mode" > /sys/class/graphics/fb0/mode 2>/dev/null || return 1
+    [ -n "$mode" ] || mode="U:${width}x${height}${flag}-0"
+    if ! echo "$mode" > /sys/class/graphics/fb0/mode 2>/dev/null; then
+        # A rejected write (EDID not settled, unsupported mode) must not
+        # fail silently — log it so a screen stuck at 1024x768 is
+        # diagnosable. The caller retries on the next reconnect tick.
+        echo "start_viewer: HDMI reconnect — could not set framebuffer" \
+            "mode '${mode}' yet; will retry on the next probe."
+        return 1
+    fi
     echo "start_viewer: HDMI reconnect — re-asserted ${width}x${height}" \
         "framebuffer mode; restarting viewer."
     return 0
@@ -561,26 +561,44 @@ reassert_preferred_mode() {
 monitor_hdmi_resolution() {
     # linuxfb only; eglfs/wayland boards recover on their own.
     [ "${QT_QPA_PLATFORM:-}" = 'linuxfb' ] || return 0
-    local viewer_pid="$1" conn previous current
-    conn=$(find_connected_hdmi) || return 0
-    previous='connected'
+    local viewer_pid="$1" status_file conn current
+    # Watch every HDMI connector, not just one bound at startup: a device
+    # may drive the second micro-HDMI port, or the sink the viewer came
+    # up on may differ from where the panel ends up. Seed each
+    # connector's current status so we react only to subsequent
+    # disconnect->reconnect edges (a port that starts disconnected still
+    # recovers the first time it connects).
+    declare -A previous
+    for status_file in /sys/class/drm/card*-HDMI*/status; do
+        [ -r "$status_file" ] || continue
+        previous["$(dirname "$status_file")"]=$(cat "$status_file" 2>/dev/null)
+    done
     while kill -0 "$viewer_pid" 2>/dev/null; do
         sleep 3
-        current=$(cat "$conn/status" 2>/dev/null)
-        if [ "$previous" != 'connected' ] && [ "$current" = 'connected' ]; then
-            # The sink just came back. Give EDID/DDC a moment to settle,
-            # then re-assert the preferred mode. On success the viewer is
-            # restarted so Qt re-reads the framebuffer at the right size;
-            # on failure (EDID not up yet) leave previous != connected so
-            # the next loop re-checks.
-            sleep "$HOTPLUG_SETTLE_SECONDS"
-            if reassert_preferred_mode "$conn"; then
-                kill "$viewer_pid" 2>/dev/null
-                return 0
+        for status_file in /sys/class/drm/card*-HDMI*/status; do
+            [ -r "$status_file" ] || continue
+            conn=$(dirname "$status_file")
+            current=$(cat "$status_file" 2>/dev/null)
+            # A transient empty read (racing the connector re-probe) must
+            # not overwrite the last good status, or the reconnect edge
+            # gets lost — skip and re-sample next tick.
+            [ -n "$current" ] || continue
+            if [ "${previous[$conn]}" != 'connected' ] \
+                && [ "$current" = 'connected' ]; then
+                # The sink just came back. Give EDID/DDC a moment to
+                # settle, then re-assert the preferred mode. On success
+                # restart the viewer so Qt re-reads the framebuffer at
+                # the right size; on failure (EDID not up yet) leave
+                # previous[$conn] non-connected so the next loop re-checks.
+                sleep "$HOTPLUG_SETTLE_SECONDS"
+                if reassert_preferred_mode "$conn"; then
+                    kill "$viewer_pid" 2>/dev/null
+                    return 0
+                fi
+                continue
             fi
-            continue
-        fi
-        [ -n "$current" ] && previous="$current"
+            previous[$conn]="$current"
+        done
     done
 }
 
@@ -679,6 +697,12 @@ while true; do
   fi
   sleep 0.5
 done
+# pidof may return several space-separated PIDs (a transient python
+# child alongside the viewer). Keep only the first so `kill -0 "$PID"`
+# and monitor_hdmi_resolution get a single numeric PID instead of a
+# multi-word string that kill rejects (which would exit the wait loop
+# immediately and silently disable the HDMI watchdog).
+PID=${PID%% *}
 
 # Self-heal the linuxfb 1024x768 HDMI-hotplug latch (issue #3052): on a
 # TV power-cycle, re-assert the connector's preferred mode and restart
