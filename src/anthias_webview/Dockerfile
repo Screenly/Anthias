@@ -5,7 +5,7 @@
 # docker/Dockerfile.qt5-webview-builder.j2). This file remains only
 # for the rare Qt 5 toolchain rebuild (CVE patch, base image bump)
 # driven by bin/rebuild_qt5_toolchain.sh, which uploads the resulting
-# qt5-5.15.14-trixie-{pi2,pi3}.tar.gz tarballs to a WebView-v* GitHub
+# qt5-5.15.19-trixie-{pi2,pi3}.tar.gz tarballs to a WebView-v* GitHub
 # release.
 
 ARG BUILDER_BASE_PLATFORM=linux/arm/v7
@@ -91,7 +91,6 @@ RUN apt-get update && \
         libpulse-dev \
         libraspberrypi-bin \
         libraspberrypi0 \
-        libre2-dev \
         librsvg2-common \
         libsnappy-dev \
         libsqlite3-dev \
@@ -156,6 +155,18 @@ FROM mirror.gcr.io/library/debian:trixie
 USER root
 
 # This list can most likely be slimmed down *a lot* but that's for another day.
+#
+# 32-bit x86 host toolchain (lib32gcc-14-dev, lib32stdc++-14-dev, libc6-dev-i386,
+# lib32z1-dev): QtWebEngine's Chromium builds its V8 snapshot generator as a
+# 32-bit x86 host binary (g++ -m32) so the snapshot's pointer width matches the
+# 32-bit ARM target, so the host needs working `g++ -m32` + 32-bit libc/libstdc++/
+# zlib. We can NOT use the usual gcc-multilib/g++-multilib metapackages: on trixie
+# gcc-14-arm-linux-gnueabihf (pulled in by crossbuild-essential-armhf, needed for
+# the ARM target build) declares Conflicts: gcc-multilib, so apt would evict the
+# ARM cross-gcc. The lib32*-14-dev + libc6-dev-i386 packages provide the same -m32
+# capability without that conflict (they're amd64 multilib libs, no i386 foreign
+# arch required). Version-pinned to -14 to match the trixie gcc; bump if the base
+# image's gcc major changes.
 RUN apt-get update && \
     apt-get -y install \
         bison \
@@ -167,12 +178,13 @@ RUN apt-get update && \
         flex \
         freetds-dev \
         g++ \
-        g++-multilib \
-        gcc-multilib \
         git \
         gperf \
         gyp \
+        lib32gcc-14-dev \
+        lib32stdc++-14-dev \
         lib32z1-dev \
+        libc6-dev-i386 \
         libasound2 \
         libasound2-dev \
         libavcodec-dev \
@@ -204,7 +216,6 @@ RUN apt-get update && \
         libpci-dev \
         libpng16-16t64 \
         libpulse-dev \
-        libre2-dev \
         libsecret-1-0 \
         libsnappy-dev \
         libsrtp2-dev \
@@ -222,6 +233,7 @@ RUN apt-get update && \
         ninja-build \
         nodejs \
         python3 \
+        python3-html5lib \
         rsync \
         ruby \
         subversion \
@@ -229,7 +241,7 @@ RUN apt-get update && \
         make && \
     apt-get clean
 
-# Qt 5.15.14's QtWebEngine `configure` hard-rejects Python 3 (the
+# Qt 5.15.19's QtWebEngine `configure` hard-rejects Python 3 (the
 # bundled chromium gn/gyp scripts predate py3 support); it needs a
 # Python 2.7 interpreter to produce QtWebEngineCore at all. Trixie
 # dropped py2 from main, but bullseye still ships 2.7.18 — pull it

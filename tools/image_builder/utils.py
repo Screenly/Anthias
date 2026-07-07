@@ -170,11 +170,11 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # Qt version is only relevant for the Qt 5 path: pi2/pi3 pull the
     # cross-built Qt 5 toolchain tarball at build time. Qt 5 is frozen
     # for these boards, so the toolchain stays pinned to the
-    # WebView-v2026.04.1 release indefinitely. Qt 6 boards install Qt
+    # WebView-v2026.07.0 release indefinitely. Qt 6 boards install Qt
     # straight from Debian apt (qt6-*-dev in viewer_extra_apt below).
-    qt_version = '6.4.2' if is_qt6 else '5.15.14'
+    qt_version = '6.4.2' if is_qt6 else '5.15.19'
     qt_major_version = qt_version.split('.')[0]
-    qt5_toolchain_url = f'{releases_url}/WebView-v2026.04.1'
+    qt5_toolchain_url = f'{releases_url}/WebView-v2026.07.0'
 
     # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
     # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,

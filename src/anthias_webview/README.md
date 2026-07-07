@@ -25,7 +25,7 @@ viewer image build:
   Qt 5 toolchain, all in
   `docker/Dockerfile.qt5-webview-builder.j2`. Qt 5 is frozen for
   these boards, so the toolchain itself is a permanent artifact at
-  the `WebView-v2026.04.1` GitHub release.
+  the `WebView-v2026.07.0` GitHub release.
 
 To rebuild a viewer image (which rebuilds the binary):
 
@@ -38,8 +38,8 @@ uv run python -m tools.image_builder \
 
 If the Qt 5 toolchain itself needs to change (CVE patch, base image
 bump), `bin/rebuild_qt5_toolchain.sh` produces fresh
-`qt5-5.15.14-trixie-{pi2,pi3}.tar.gz` tarballs. Re-uploading them to
-the same `WebView-v2026.04.1` release tag means no source change is
+`qt5-5.15.19-trixie-{pi2,pi3}.tar.gz` tarballs. Re-uploading them to
+the same `WebView-v2026.07.0` release tag means no source change is
 needed elsewhere; uploading to a new tag means bumping
 `qt5_toolchain_url` in `tools/image_builder/utils.py`. Runtime is
 ~2-4 hours per board on a beefy x86 host (Qt 5 + QtWebEngine under

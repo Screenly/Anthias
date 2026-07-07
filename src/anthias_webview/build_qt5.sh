@@ -1,7 +1,7 @@
 #!/bin/bash
 # Qt 5 toolchain builder. Run via bin/rebuild_qt5_toolchain.sh inside
 # the src/anthias_webview/Dockerfile builder image; emits
-# qt5-5.15.14-trixie-{pi2,pi3}.tar.gz under /build for upload to a
+# qt5-5.15.19-trixie-{pi2,pi3}.tar.gz under /build for upload to a
 # WebView-v* GitHub release. Not wired into CI — the viewer image
 # now compiles the webview app inline against the toolchain artifact
 # this script produces (see docker/Dockerfile.qt5-webview-builder.j2).
@@ -15,7 +15,7 @@ BUILD_TARGET=/build
 SRC=/src
 QT_MAJOR="5"
 QT_MINOR="15"
-QT_BUG_FIX="14"
+QT_BUG_FIX="19"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
 # MAKE_CORES caps parallelism. Overridable via env so the wrapper can
@@ -23,6 +23,15 @@ DEBIAN_VERSION=$(lsb_release -cs)
 # ~3-4 GB during the chromium compile, so the default `nproc + 2`
 # happily OOMs anything <40 GB RAM on a 16-core box.
 MAKE_CORES="${MAKE_CORES:-$(expr $(nproc) + 2)}"
+
+# QtWebEngine's chromium build does NOT inherit `make -j`: qmake shells
+# out to its bundled ninja, which self-detects nproc and floods the box
+# with ~nproc parallel cc1plus regardless of MAKE_CORES. That inner
+# ninja is the real RAM driver (it, not the outer make, caused the
+# box-wide OOMs). NINJAFLAGS is the documented knob qtwebengine honours,
+# so pin it to MAKE_CORES too — otherwise MAKE_CORES=1 is a no-op for
+# the only phase that actually matters.
+export NINJAFLAGS="-j${MAKE_CORES}"
 
 mkdir -p "$BUILD_TARGET"
 mkdir -p "$SRC"
@@ -259,7 +268,7 @@ function build_qt () {
     # (docker/Dockerfile.qt5-webview-builder.j2 includes this Qt 5
     # toolchain at build time). This script only emits the toolchain
     # tarball — bin/rebuild_qt5_toolchain.sh uploads it to the frozen
-    # WebView-v2026.04.1 release.
+    # WebView-v2026.07.0 release.
 }
 
 # Modify paths for build process

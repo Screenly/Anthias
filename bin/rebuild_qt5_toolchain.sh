@@ -2,14 +2,14 @@
 #
 # Rebuild the Qt 5 cross-compile toolchain tarballs for the surviving
 # 32-bit Pi boards (pi2, pi3) on Debian Trixie. Produces
-#     qt5-5.15.14-trixie-{pi2,pi3}.tar.gz       (+ .sha256)
+#     qt5-5.15.19-trixie-{pi2,pi3}.tar.gz       (+ .sha256)
 # under .qt5-toolchain-build/release/ at the repo root, ready to be
 # attached to a `WebView-v*` GitHub release.
 #
 # This is an out-of-band prereq: docker/Dockerfile.qt5-webview-builder.j2
 # fetches these tarballs from the release the viewer image references
 # via tools/image_builder/utils.py (qt5_toolchain_url, currently
-# WebView-v2026.04.1). If that release doesn't have trixie-* artifacts
+# WebView-v2026.07.0). If that release doesn't have trixie-* artifacts
 # for both pi2 and pi3, pi2/pi3 viewer image builds fail with
 #     sha256sum: no properly formatted checksum lines found
 # (the curl on the missing .sha256 falls back to a 404 HTML page).
@@ -65,8 +65,30 @@ echo "==> Building ${IMAGE_TAG} (BuildKit layer cache will short-circuit if unch
 GIT_HASH=$(git -C "${REPO_ROOT}" rev-parse HEAD)
 GIT_SHORT_HASH=$(git -C "${REPO_ROOT}" rev-parse --short HEAD)
 GIT_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD)
+
+# Build on the same buildx builder CI uses (docker-build.yaml creates
+# `multiarch-builder`) and read the same GHCR registry buildcache that
+# `tools/image_builder` populates for the viewer image. This is
+# READ-ONLY: the anthias-* GHCR packages are public so pulls need no
+# auth, but writing back needs a packages:write token that only CI
+# holds, so we deliberately omit --cache-to (a local token without that
+# scope would fail the export mid-build). Shared base/apt layers hit;
+# the toolchain builder's own layers fall back to the local BuildKit
+# cache. Override the builder with BUILDX_BUILDER; set
+# QT5_NO_REGISTRY_CACHE=1 to skip the registry pulls entirely (e.g.
+# offline).
+BUILDX_BUILDER="${BUILDX_BUILDER:-multiarch-builder}"
+cache_from_args=()
+if [[ -z "${QT5_NO_REGISTRY_CACHE:-}" ]]; then
+    for cache_board in pi3 pi2; do
+        cache_from_args+=(--cache-from \
+            "type=registry,ref=ghcr.io/screenly/anthias-viewer:buildcache-${cache_board}")
+    done
+fi
 docker buildx build \
+    --builder "${BUILDX_BUILDER}" \
     --load \
+    "${cache_from_args[@]}" \
     --build-arg "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
     --build-arg "GIT_HASH=${GIT_HASH}" \
     --build-arg "GIT_SHORT_HASH=${GIT_SHORT_HASH}" \
@@ -75,7 +97,7 @@ docker buildx build \
     "${WEBVIEW_DIR}"
 
 for board in "${BOARDS[@]}"; do
-    expected_tarball="${OUT_DIR}/qt5-5.15.14-trixie-${board}.tar.gz"
+    expected_tarball="${OUT_DIR}/qt5-5.15.19-trixie-${board}.tar.gz"
     if [[ -f "${expected_tarball}" ]]; then
         echo "==> ${expected_tarball} already exists; skipping ${board}"
         echo "    (delete the .tar.gz to force a rebuild)"
@@ -106,12 +128,12 @@ echo "==> Toolchain build complete. Artifacts in ${OUT_DIR}:"
 ls -lah "${OUT_DIR}" 2>/dev/null || true
 echo
 echo "Verify checksums:"
-echo "  (cd '${OUT_DIR}' && sha256sum -c qt5-5.15.14-trixie-*.tar.gz.sha256)"
+echo "  (cd '${OUT_DIR}' && sha256sum -c qt5-5.15.19-trixie-*.tar.gz.sha256)"
 echo
 echo "Upload to a WebView-v* release. If you re-use the tag the viewer"
 echo "image references in tools/image_builder/utils.py via qt5_toolchain_url"
-echo "(currently WebView-v2026.04.1), no source change is needed;"
+echo "(currently WebView-v2026.07.0), no source change is needed;"
 echo "otherwise bump that URL to the new tag in the same commit."
 echo "  gh release upload <WebView-vX.Y.Z> \\"
-echo "      '${OUT_DIR}'/qt5-5.15.14-trixie-pi2.tar.gz{,.sha256} \\"
-echo "      '${OUT_DIR}'/qt5-5.15.14-trixie-pi3.tar.gz{,.sha256}"
+echo "      '${OUT_DIR}'/qt5-5.15.19-trixie-pi2.tar.gz{,.sha256} \\"
+echo "      '${OUT_DIR}'/qt5-5.15.19-trixie-pi3.tar.gz{,.sha256}"
