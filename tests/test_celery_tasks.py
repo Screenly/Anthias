@@ -371,10 +371,10 @@ def test_reboot_anthias_terminal_supervisor_failure_warns_not_raises() -> None:
             celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0
         ),
         mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
-        mock.patch.object(
-            celery_tasks_module.logging, 'warning'
+        mock.patch(
+            'anthias_server.celery_tasks.logging.warning'
         ) as mock_warning,
-        mock.patch.object(celery_tasks_module.logging, 'error') as mock_error,
+        mock.patch('anthias_server.celery_tasks.logging.error') as mock_error,
     ):
         result = reboot_anthias.apply()
     assert result.successful()
@@ -400,8 +400,8 @@ def test_shutdown_anthias_terminal_supervisor_failure_warns_not_raises() -> (
             celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0
         ),
         mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
-        mock.patch.object(
-            celery_tasks_module.logging, 'warning'
+        mock.patch(
+            'anthias_server.celery_tasks.logging.warning'
         ) as mock_warning,
     ):
         result = shutdown_anthias.apply()
