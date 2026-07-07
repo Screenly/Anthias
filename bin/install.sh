@@ -472,10 +472,20 @@ function run_ansible_playbook() {
 
     cd "${ANTHIAS_REPO_DIR}/ansible"
 
-    # If the user doesn't have NOPASSWD sudo yet (first install), Ansible
-    # needs --ask-become-pass to elevate. The blanket NOPASSWD rule is
-    # written by modify_permissions later in this script.
-    if [ ! -f "/etc/sudoers.d/010_${USER}-nopasswd" ]; then
+    # If the user can't elevate without a password, Ansible needs
+    # --ask-become-pass. Probe the actual sudo capability instead of
+    # looking for our own sudoers file (the blanket NOPASSWD rule that
+    # modify_permissions writes later): stock Raspberry Pi OS already
+    # grants the first user passwordless sudo via
+    # /etc/sudoers.d/010_pi-nopasswd — a fixed filename whatever the
+    # username — so a filename check misfires there and leaves Ansible
+    # prompting for a password that unattended runs can never type.
+    # `sudo -K` first drops any cached credential so a password typed
+    # for an earlier apt call can't masquerade as passwordless sudo;
+    # without it the playbook outlives the sudo timestamp and dies
+    # mid-run with "Missing sudo password" instead.
+    sudo -K
+    if ! sudo -n true 2>/dev/null; then
         ANSIBLE_PLAYBOOK_ARGS+=("--ask-become-pass")
         echo "Note: Ansible may prompt for your sudo password below."
         echo
