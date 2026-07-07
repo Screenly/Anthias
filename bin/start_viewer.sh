@@ -475,14 +475,18 @@ wait_for_framebuffer() {
         "Connect or power on the screen; the viewer starts automatically once one is present."
     local waited=0
     until [ -e /dev/fb0 ]; do
+        sleep 5
+        waited=$((waited + 5))
+        # Re-check first: on a fresh container start the /dev/fb0 node can
+        # lag its sysfs entry by a moment, so give it this cycle to appear
+        # before treating a present sysfs entry as the stale-devtmpfs case.
+        [ -e /dev/fb0 ] && break
         if [ -e /sys/class/graphics/fb0/dev ]; then
             echo "start_viewer: display present on host but /dev/fb0 missing" \
                 "in container (stale devtmpfs snapshot) — exiting so the" \
                 "container restarts with a fresh /dev."
             exit 1
         fi
-        sleep 5
-        waited=$((waited + 5))
         if [ "$((waited % 60))" -eq 0 ]; then
             echo "start_viewer: still no display after ${waited}s; waiting for a display."
         fi
@@ -583,7 +587,11 @@ monitor_hdmi_resolution() {
             # not overwrite the last good status, or the reconnect edge
             # gets lost — skip and re-sample next tick.
             [ -n "$current" ] || continue
-            if [ "${previous[$conn]}" != 'connected' ] \
+            # Default an unseeded connector to 'connected' (not empty): if
+            # a status file was unreadable when we seeded, an empty prior
+            # would look like a reconnect edge on the first readable tick
+            # and spuriously restart a display that never dropped.
+            if [ "${previous[$conn]:-connected}" != 'connected' ] \
                 && [ "$current" = 'connected' ]; then
                 # The sink just came back. Give EDID/DDC a moment to
                 # settle, then re-assert the preferred mode. On success
@@ -697,12 +705,14 @@ while true; do
   fi
   sleep 0.5
 done
-# pidof may return several space-separated PIDs (a transient python
-# child alongside the viewer). Keep only the first so `kill -0 "$PID"`
-# and monitor_hdmi_resolution get a single numeric PID instead of a
-# multi-word string that kill rejects (which would exit the wait loop
-# immediately and silently disable the HDMI watchdog).
-PID=${PID%% *}
+# pidof may return several space-separated PIDs (the linuxfb video path
+# spawns a gst_fbdev_player.py helper alongside the viewer). Keep a
+# single numeric PID so `kill -0 "$PID"` and monitor_hdmi_resolution
+# don't get a multi-word string that kill rejects (which would exit the
+# wait loop immediately and silently disable the HDMI watchdog). pidof
+# lists newest first, so the last token is the oldest process — the
+# long-lived viewer, launched before any helper.
+PID=${PID##* }
 
 # Self-heal the linuxfb 1024x768 HDMI-hotplug latch (issue #3052): on a
 # TV power-cycle, re-assert the connector's preferred mode and restart
