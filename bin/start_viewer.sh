@@ -464,11 +464,20 @@ release_boot_splash
 # Wait for the framebuffer instead of launching into a guaranteed crash.
 # No assumptions about which connector the panel is on or its resolution:
 # when a display is (re)connected the KMS driver creates /dev/fb0 and we
-# proceed; a genuinely headless device idles here quietly and self-heals
-# on hotplug. Only the linuxfb path needs the /dev/fb0 wait — eglfs has
-# no /dev/fb0 and is guarded by wait_for_eglfs_display above instead,
-# while cage (wayland) tolerates a missing display without crashing — so
-# the QT_QPA_PLATFORM guard makes this a no-op for those paths.
+# proceed; a genuinely headless device idles here quietly. Only the
+# linuxfb path needs the /dev/fb0 wait — eglfs has no /dev/fb0 and is
+# guarded by wait_for_eglfs_display above instead, while cage (wayland)
+# tolerates a missing display without crashing — so the QT_QPA_PLATFORM
+# guard makes this a no-op for those paths.
+#
+# Hotplug caveat: this (privileged) container's /dev is a devtmpfs
+# snapshot taken at container start, so a display plugged in *after* we
+# booted headless creates /dev/fb0 on the host but never inside our
+# stale /dev — the plain `[ -e /dev/fb0 ]` wait would then block forever.
+# sysfs is bind-through from the host and stays truthful, so when
+# /sys/class/graphics/fb0 appears but our /dev/fb0 does not, exit and let
+# the `restart: always` policy recreate us with a fresh /dev (the same
+# exit-to-restart recovery the OOM and viewer-death paths below rely on).
 wait_for_framebuffer() {
     [ "${QT_QPA_PLATFORM:-}" = 'linuxfb' ] || return 0
     [ -e /dev/fb0 ] && return 0
@@ -477,10 +486,16 @@ wait_for_framebuffer() {
         "Connect or power on the screen; the viewer starts automatically once one is present."
     local waited=0
     until [ -e /dev/fb0 ]; do
+        if [ -e /sys/class/graphics/fb0/dev ]; then
+            echo "start_viewer: display present on host but /dev/fb0 missing" \
+                "in container (stale devtmpfs snapshot) — exiting so the" \
+                "container restarts with a fresh /dev."
+            exit 1
+        fi
         sleep 5
         waited=$((waited + 5))
         if [ "$((waited % 60))" -eq 0 ]; then
-            echo "start_viewer: still no /dev/fb0 after ${waited}s; waiting for a display."
+            echo "start_viewer: still no display after ${waited}s; waiting for a display."
         fi
     done
     echo "start_viewer: /dev/fb0 present after ${waited}s — starting the viewer."
