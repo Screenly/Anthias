@@ -280,7 +280,15 @@ class FileAssetViewMixin(APIView):
             if 'Content-Range' in request.headers:
                 range_str = request.headers['Content-Range']
                 start_bytes = int(range_str.split(' ')[1].split('-')[0])
-                with open(file_path, 'ab') as f:
+                # ``r+b`` (not ``ab``): append mode pins every write to
+                # EOF and silently ignores ``seek()``, so an out-of-
+                # order chunk would land at the wrong offset and
+                # corrupt the ``.tmp``. Open the existing file for
+                # in-place random-access writes; the first chunk
+                # (offset 0, file not yet created) falls back to
+                # ``wb`` to create it.
+                mode = 'r+b' if path.isfile(file_path) else 'wb'
+                with open(file_path, mode) as f:
                     f.seek(start_bytes)
                     f.write(file_upload.read())
             else:

@@ -102,6 +102,45 @@ def test_file_asset_disk_full_returns_507(
 
 
 @pytest.mark.django_db
+def test_file_asset_chunked_out_of_order_reassembles(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """A resumable (Content-Range) upload must reassemble correctly
+    even when chunks arrive out of order. Append mode ignored the
+    seek() and pinned every write to EOF, corrupting the .tmp; r+b
+    honours the offset."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    url = reverse('api:file_asset_v1')
+    # Post the tail chunk first, then the head, to prove the offset —
+    # not arrival order — decides where bytes land.
+    tail = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'BBBB', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 4-7/8'},
+    )
+    head = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 0-3/8'},
+    )
+
+    assert tail.status_code == status.HTTP_200_OK
+    assert head.status_code == status.HTTP_200_OK
+    assert head.data['uri'] == tail.data['uri']
+    with open(head.data['uri'], 'rb') as f:
+        assert f.read() == b'AAAABBBB'
+
+
+@pytest.mark.django_db
 def test_playlist_order(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:
