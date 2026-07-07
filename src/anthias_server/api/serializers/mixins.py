@@ -24,7 +24,7 @@ from . import (
     get_unique_name,
     validate_uri,
 )
-from anthias_server.app.models import DURATION_S_MAX
+from anthias_server.app.models import DURATION_S_MAX, clamp_duration
 
 
 class CreateAssetSerializerMixin:
@@ -201,9 +201,12 @@ class CreateAssetSerializerMixin:
                         raise AssetCreationError(
                             f'Could not determine duration of video {uri!r}'
                         )
-                    duration = video_duration.total_seconds()
-                    asset['duration'] = (
-                        duration if version == 'v2' else int(duration)
+                    # Clamp (not reject): the file itself is playable,
+                    # only a corrupted container header can advertise
+                    # an out-of-range length — and that must not put
+                    # an over-cap value in the DB (Sentry ANTHIAS-3E).
+                    asset['duration'] = clamp_duration(
+                        video_duration.total_seconds()
                     )
             else:
                 raise AssetCreationError(
