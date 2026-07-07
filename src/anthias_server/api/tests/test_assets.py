@@ -604,6 +604,30 @@ def test_v1_2_create_stream_clamps_absurd_probed_duration(
 
 
 @pytest.mark.django_db
+def test_v1_2_create_video_non_integer_duration_rejected(
+    api_client: APIClient,
+) -> None:
+    """The video branch's zero-check parses the raw CharField value —
+    ``'abc'`` must be a keyed 400, not an unhandled ValueError."""
+    payload = {
+        **ASSET_CREATION_DATA,
+        'uri': 'rtsp://example.com/stream',
+        'mimetype': 'video',
+        'duration': 'abc',
+    }
+    with mock.patch(
+        'anthias_server.api.serializers.mixins.url_fails',
+        return_value=False,
+    ):
+        response = api_client.post(
+            reverse('api:asset_list_v1_2'),
+            data=get_request_data(payload, 'v1_2'),
+        )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'duration' in str(response.data)
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_update_asset_duration_out_of_range_rejected(
     api_client: APIClient, version: str

@@ -184,7 +184,18 @@ class CreateAssetSerializerMixin:
             and not is_remote_video_download
         ):
             duration_raw = data.get('duration')
-            if duration_raw is not None and int(duration_raw) == 0:
+            # Guarded parse: v1.2 models duration as a CharField, so
+            # ``'abc'`` must 400 keyed on ``duration``, not escape as
+            # an unhandled ValueError (500).
+            try:
+                duration_is_zero = (
+                    duration_raw is not None and int(duration_raw) == 0
+                )
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    {'duration': 'A valid integer is required.'}
+                )
+            if duration_is_zero:
                 if needs_video:
                     # Defer ffprobe to ``normalize_video_asset``: a
                     # passthrough-eligible upload still needs a
