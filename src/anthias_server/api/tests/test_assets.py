@@ -511,6 +511,23 @@ def test_create_asset_duration_out_of_range_rejected(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_create_asset_non_integer_duration_rejected(
+    api_client: APIClient, version: str
+) -> None:
+    """A non-integer duration must be a keyed 400, not a 500 — the
+    v1.2 path used to let ``int('abc')`` escape as an unhandled
+    ValueError."""
+    response = api_client.post(
+        reverse(f'api:asset_list_{version}'),
+        data=get_request_data(
+            {**ASSET_CREATION_DATA, 'duration': 'abc'}, version
+        ),
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_update_asset_duration_out_of_range_rejected(
     api_client: APIClient, version: str
 ) -> None:

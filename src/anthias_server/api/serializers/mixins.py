@@ -210,18 +210,23 @@ class CreateAssetSerializerMixin:
                     'Duration must be zero for video assets.'
                 )
         elif not is_youtube and not is_remote_video_download:
-            # Crashes if it's not an int. We want that.
             duration = data.get('duration', settings['default_duration'])
 
             if version == 'v2':
                 # Already an int bounded by the v2 IntegerField.
                 asset['duration'] = duration
             else:
-                # v1.2 models duration as a CharField, so bound the
-                # parsed value here — an out-of-range duration would
-                # otherwise crash-loop the viewer's Event.wait
-                # (Sentry ANTHIAS-3E).
-                asset['duration'] = int(duration)
+                # v1.2 models duration as a CharField, so parse and
+                # bound the value here — a non-integer must 400 like
+                # the other keyed validation errors (not 500), and an
+                # out-of-range duration would crash-loop the viewer's
+                # Event.wait (Sentry ANTHIAS-3E).
+                try:
+                    asset['duration'] = int(duration)
+                except (TypeError, ValueError):
+                    raise ValidationError(
+                        {'duration': 'A valid integer is required.'}
+                    )
                 if not 0 <= asset['duration'] <= DURATION_S_MAX:
                     raise ValidationError({'duration': DURATION_RANGE_ERROR})
 
