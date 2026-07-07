@@ -187,9 +187,11 @@ def is_up_to_date() -> bool:
     published Anthias release.
 
     Compares ``importlib.metadata.version('anthias')`` (CalVer, sourced
-    from ``pyproject.toml``) against the ``tag_name`` of GitHub's
-    ``/releases/latest`` endpoint. Caches the remote tag for 24h and
-    falls back to the last computed verdict if GitHub is unreachable.
+    from ``pyproject.toml``) against the highest CalVer-parseable
+    ``tag_name`` in GitHub's ``/releases`` list (non-app releases like
+    ``WebView-*`` are skipped — see ``_latest_parseable_tag``). Caches
+    the remote tag for 24h and falls back to the last computed verdict
+    if GitHub is unreachable.
 
     Returns ``True`` (suppressing the "Update available" indicator)
     when the local CalVer can't be parsed, e.g. on dev / branch builds
