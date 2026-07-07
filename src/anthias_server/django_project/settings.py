@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import asyncio
 import platform
 import secrets
+import socket
 import sys
 import zoneinfo
 from collections.abc import Iterator
@@ -130,6 +131,16 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         never reaches the logging integration in the first place; this
         is the backstop for any other path that logs it as an error
         (Sentry ANTHIAS-3D).
+      * ``socket.gaierror`` — DNS resolution failing because the
+        device is offline (captive network, upstream outage, no
+        uplink at all). Being offline is a routine operating state
+        for a signage device, and a DNS-less box otherwise burns an
+        event per attempted external call — 253/day from a single
+        pi3-64, mostly via asyncio's "Future exception was never
+        retrieved" error log (Sentry ANTHIAS-3G). Chain-checked like
+        the redis errors because requests wraps it several layers
+        deep (urllib3 ``NameResolutionError`` →
+        ``requests.ConnectionError``).
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -150,6 +161,8 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         if isinstance(exc, transient_redis):
             return None
         if isinstance(exc, AuthSettingsError):
+            return None
+        if isinstance(exc, socket.gaierror):
             return None
     return event
 
