@@ -365,10 +365,10 @@ def test_reboot_anthias_terminal_supervisor_failure_warns_not_raises() -> None:
             'reboot_via_balena_supervisor',
             side_effect=requests_module.exceptions.ConnectionError(),
         ),
-        # Shrink the two-minute budget and zero the backoff so the
-        # test neither sleeps out the window nor between attempts.
+        # Zero the budget so stop_after_delay trips right after the
+        # first attempt — no sleeping and no tight retry loop.
         mock.patch.object(
-            celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0.1
+            celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0
         ),
         mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
         mock.patch.object(
@@ -397,7 +397,7 @@ def test_shutdown_anthias_terminal_supervisor_failure_warns_not_raises() -> (
             side_effect=requests_module.exceptions.ConnectionError(),
         ),
         mock.patch.object(
-            celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0.1
+            celery_tasks_module, 'SUPERVISOR_CMD_RETRY_WINDOW_S', 0
         ),
         mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
         mock.patch.object(

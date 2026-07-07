@@ -1180,14 +1180,19 @@ def _run_supervisor_command(command: Any, action: str) -> None:
                 # A 5xx from a half-started supervisor must retry too,
                 # not read as "command accepted".
                 response.raise_for_status()
-    except RetryError:
+    except RetryError as exc:
+        # Surface the terminal failure's cause (connection refused vs
+        # an HTTP 503, say) — it's the difference between "supervisor
+        # restarting" and "supervisor misconfigured" when diagnosing.
+        last_error = exc.last_attempt.exception()
         logging.warning(
             'Balena supervisor did not accept the %s command within '
-            '%s seconds; giving up. The supervisor may be restarting '
-            '(e.g. mid-OTA) — retry from the UI if the device does '
-            'not %s on its own.',
+            '%s seconds (last error: %r); giving up. The supervisor '
+            'may be restarting (e.g. mid-OTA) — retry from the UI if '
+            'the device does not %s on its own.',
             action,
             SUPERVISOR_CMD_RETRY_WINDOW_S,
+            last_error,
             action,
         )
 
