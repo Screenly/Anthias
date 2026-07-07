@@ -78,14 +78,68 @@ def test_fetch_latest_release_tag_backoff_skips_fetch(
 def test_fetch_latest_release_tag_happy_path(
     github_env: None, redis_data: dict[str, str]
 ) -> None:
-    resp = _resp(200, json_data={'tag_name': 'v2026.6.0', 'name': 'Release'})
+    resp = _resp(200, json_data=[{'tag_name': 'v2026.6.0', 'name': 'Release'}])
     with mock.patch.object(
         github, 'requests_get', return_value=resp
     ) as mock_get:
         assert github._fetch_latest_release_tag() == 'v2026.6.0'
     assert redis_data[github.LATEST_RELEASE_TAG_KEY] == 'v2026.6.0'
     url = mock_get.call_args.args[0]
-    assert url.endswith('/repos/Screenly/Anthias/releases/latest')
+    assert '/repos/Screenly/Anthias/releases' in url
+    assert '/releases/latest' not in url
+
+
+def test_fetch_latest_release_tag_skips_non_app_releases(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """The ANTHIAS-3P scenario: a non-app release (frozen Qt 5
+    toolchain, tagged ``WebView-v2026.07.0``) is the newest release in
+    the repo. ``/releases/latest`` would return it and break the
+    update check fleet-wide; the list-based fetch must skip it and
+    pick the newest parseable CalVer tag instead."""
+    resp = _resp(
+        200,
+        json_data=[
+            {'tag_name': 'WebView-v2026.07.0', 'name': 'WebView toolchain'},
+            {'tag_name': 'v2026.7.0', 'name': 'Anthias'},
+            {'tag_name': 'v2026.6.3', 'name': 'Anthias'},
+        ],
+    )
+    with mock.patch.object(github, 'requests_get', return_value=resp):
+        assert github._fetch_latest_release_tag() == 'v2026.7.0'
+    assert redis_data[github.LATEST_RELEASE_TAG_KEY] == 'v2026.7.0'
+    assert 'github-api-error' not in redis_data
+
+
+def test_fetch_latest_release_tag_picks_highest_version_not_first(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    """The list is ordered by creation date, not by version — a
+    hotfix tagged out of order must not mask the real latest."""
+    resp = _resp(
+        200,
+        json_data=[
+            {'tag_name': 'v2026.5.1', 'name': 'Hotfix, created last'},
+            {'tag_name': 'v2026.6.0', 'name': 'Anthias'},
+        ],
+    )
+    with mock.patch.object(github, 'requests_get', return_value=resp):
+        assert github._fetch_latest_release_tag() == 'v2026.6.0'
+
+
+def test_fetch_latest_release_tag_skips_drafts_and_prereleases(
+    github_env: None, redis_data: dict[str, str]
+) -> None:
+    resp = _resp(
+        200,
+        json_data=[
+            {'tag_name': 'v2026.8.0', 'draft': True},
+            {'tag_name': 'v2026.7.1', 'prerelease': True},
+            {'tag_name': 'v2026.7.0'},
+        ],
+    )
+    with mock.patch.object(github, 'requests_get', return_value=resp):
+        assert github._fetch_latest_release_tag() == 'v2026.7.0'
 
 
 def test_fetch_latest_release_tag_request_exception(
@@ -121,35 +175,32 @@ def test_fetch_latest_release_tag_invalid_json(
     assert github.LATEST_RELEASE_TAG_KEY not in redis_data
 
 
-def test_fetch_latest_release_tag_missing_tag_name(
-    github_env: None, redis_data: dict[str, str]
+@pytest.mark.parametrize(
+    'json_data',
+    [
+        [],
+        [{'name': 'Release without tag_name'}],
+        [{'tag_name': 12345}],
+        [{'tag_name': 'nightly'}, {'tag_name': 'WebView-v2026.07.0'}],
+        {'tag_name': 'v2026.6.0'},  # dict (old /latest shape), not a list
+    ],
+    ids=[
+        'empty-list',
+        'missing-tag-name',
+        'non-string-tag-name',
+        'no-parseable-tags',
+        'non-list-payload',
+    ],
+)
+def test_fetch_latest_release_tag_unusable_payload_arms_backoff(
+    github_env: None, redis_data: dict[str, str], json_data: object
 ) -> None:
-    resp = _resp(200, json_data={'name': 'Release without tag_name'})
-    with mock.patch.object(github, 'requests_get', return_value=resp):
-        assert github._fetch_latest_release_tag() is None
-    assert 'github-api-error' in redis_data
-    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
-
-
-def test_fetch_latest_release_tag_non_string_tag_name(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    resp = _resp(200, json_data={'tag_name': 12345})
-    with mock.patch.object(github, 'requests_get', return_value=resp):
-        assert github._fetch_latest_release_tag() is None
-    assert 'github-api-error' in redis_data
-    assert github.LATEST_RELEASE_TAG_KEY not in redis_data
-
-
-def test_fetch_latest_release_tag_unparseable_tag_name(
-    github_env: None, redis_data: dict[str, str]
-) -> None:
-    """An upstream tag like ``nightly`` must not be cached: with a
-    24h TTL, caching it would pin is_up_to_date() to the fallback
-    verdict for a day even after upstream corrects the tag. Trip the
-    5-minute backoff instead so the next attempt re-fetches once
-    upstream is fixed."""
-    resp = _resp(200, json_data={'tag_name': 'nightly'})
+    """A payload with no usable tag must not be cached: with a 24h
+    TTL, caching would pin is_up_to_date() to the fallback verdict
+    for a day even after upstream corrects it. Trip the 5-minute
+    backoff instead so the next attempt re-fetches once upstream is
+    fixed."""
+    resp = _resp(200, json_data=json_data)
     with mock.patch.object(github, 'requests_get', return_value=resp):
         assert github._fetch_latest_release_tag() is None
     assert 'github-api-error' in redis_data
