@@ -280,32 +280,34 @@ class FileAssetViewMixin(APIView):
         has_range = 'Content-Range' in request.headers
         start_bytes = 0
         end_bytes = 0
-        total_bytes: int | None = None
+        total_bytes = 0
         data = file_upload.read()
         if has_range:
             # ``Content-Range`` is client-controlled; parse it strictly
             # and 400 on anything malformed rather than letting a bad
             # header raise ValueError/IndexError and surface as a 500.
+            # A known numeric total is required (``*`` is rejected): the
+            # end-of-upload truncation below relies on it to drop stale
+            # trailing bytes, so an unknown total would reopen the
+            # corruption window it exists to close. Our uploader always
+            # knows the file size.
             match = re.fullmatch(
-                r'bytes (\d+)-(\d+)/(\d+|\*)',
+                r'bytes (\d+)-(\d+)/(\d+)',
                 request.headers['Content-Range'].strip(),
             )
             if match is None:
                 raise ValidationError(
                     {'Content-Range': 'Malformed Content-Range header.'}
                 )
-            start_bytes, end_bytes = int(match.group(1)), int(match.group(2))
-            total_bytes = (
-                None if match.group(3) == '*' else int(match.group(3))
-            )
+            start_bytes = int(match.group(1))
+            end_bytes = int(match.group(2))
+            total_bytes = int(match.group(3))
             # Reject inconsistent numeric semantics: end before start, an
             # end at/after the (0-indexed) total, or a chunk body whose
             # length doesn't match the declared range. Any of these would
             # otherwise silently write a misaligned/short chunk and
             # corrupt the reassembled asset.
-            if end_bytes < start_bytes or (
-                total_bytes is not None and end_bytes >= total_bytes
-            ):
+            if end_bytes < start_bytes or end_bytes >= total_bytes:
                 raise ValidationError(
                     {'Content-Range': 'Invalid Content-Range bounds.'}
                 )
@@ -337,10 +339,7 @@ class FileAssetViewMixin(APIView):
                     # file ends up exactly ``total_bytes`` long whenever
                     # the last byte is written, regardless of chunk
                     # arrival order.
-                    if (
-                        total_bytes is not None
-                        and end_bytes + 1 == total_bytes
-                    ):
+                    if end_bytes + 1 == total_bytes:
                         f.truncate(total_bytes)
             else:
                 with open(file_path, 'wb') as f:
