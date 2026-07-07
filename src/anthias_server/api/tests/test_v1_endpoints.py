@@ -209,15 +209,29 @@ def test_file_asset_chunked_out_of_order_reassembles(
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     'header',
-    ['garbage', 'bytes abc-def/8', 'bytes 0-3', '0-3/8'],
-    ids=['non-range', 'non-numeric', 'no-total', 'no-unit'],
+    [
+        'garbage',
+        'bytes abc-def/8',
+        'bytes 0-3',
+        '0-3/8',
+        'bytes 5-3/8',
+        'bytes 0-8/8',
+    ],
+    ids=[
+        'non-range',
+        'non-numeric',
+        'no-total',
+        'no-unit',
+        'end-before-start',
+        'end-at-or-past-total',
+    ],
 )
 def test_file_asset_malformed_content_range_returns_400(
     api_client: APIClient, cleanup_asset_dir: None, header: str
 ) -> None:
     """A client-controlled ``Content-Range`` header must be validated:
-    a malformed value returns 400, not a 500 from a split()/int()
-    crash."""
+    a syntactically malformed value or inconsistent numeric bounds
+    returns 400, not a 500 from a split()/int() crash."""
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     response = api_client.post(
@@ -230,6 +244,64 @@ def test_file_asset_malformed_content_range_returns_400(
         headers={'Content-Range': header},
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_file_asset_content_range_chunk_length_mismatch_returns_400(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """The chunk body length must match the declared range; a mismatch
+    (here 4 bytes for a claimed 10-byte range) is a 400, not a silently
+    misaligned write."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    response = api_client.post(
+        reverse('api:file_asset_v1'),
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 0-9/10'},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_file_asset_content_range_truncates_stale_tmp(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """The .tmp path is deterministic per filename, so a shorter new
+    upload must not inherit trailing bytes from a longer previous
+    attempt. Writing the final chunk truncates to the declared total."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    url = reverse('api:file_asset_v1')
+    # First upload: a 10-byte file in one chunk.
+    first = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'XXXXXXXXXX', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 0-9/10'},
+    )
+    # Second upload, same filename (=> same .tmp path): shorter content.
+    second = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 0-3/4'},
+    )
+    assert first.status_code == status.HTTP_200_OK
+    assert second.status_code == status.HTTP_200_OK
+    assert second.data['uri'] == first.data['uri']
+    with open(second.data['uri'], 'rb') as f:
+        assert f.read() == b'AAAA'
 
 
 @pytest.mark.django_db

@@ -279,6 +279,9 @@ class FileAssetViewMixin(APIView):
 
         has_range = 'Content-Range' in request.headers
         start_bytes = 0
+        end_bytes = 0
+        total_bytes: int | None = None
+        data = file_upload.read()
         if has_range:
             # ``Content-Range`` is client-controlled; parse it strictly
             # and 400 on anything malformed rather than letting a bad
@@ -291,24 +294,57 @@ class FileAssetViewMixin(APIView):
                 raise ValidationError(
                     {'Content-Range': 'Malformed Content-Range header.'}
                 )
-            start_bytes = int(match.group(1))
+            start_bytes, end_bytes = int(match.group(1)), int(match.group(2))
+            total_bytes = (
+                None if match.group(3) == '*' else int(match.group(3))
+            )
+            # Reject inconsistent numeric semantics: end before start, an
+            # end at/after the (0-indexed) total, or a chunk body whose
+            # length doesn't match the declared range. Any of these would
+            # otherwise silently write a misaligned/short chunk and
+            # corrupt the reassembled asset.
+            if end_bytes < start_bytes or (
+                total_bytes is not None and end_bytes >= total_bytes
+            ):
+                raise ValidationError(
+                    {'Content-Range': 'Invalid Content-Range bounds.'}
+                )
+            if len(data) != end_bytes - start_bytes + 1:
+                raise ValidationError(
+                    {
+                        'Content-Range': (
+                            'Chunk length does not match the declared range.'
+                        )
+                    }
+                )
 
         try:
             if has_range:
                 # ``r+b`` (not ``ab``): append mode pins every write to
                 # EOF and silently ignores ``seek()``, so an out-of-
-                # order chunk would land at the wrong offset and
-                # corrupt the ``.tmp``. Open the existing file for
-                # in-place random-access writes; the first chunk
-                # (offset 0, file not yet created) falls back to
-                # ``wb`` to create it.
+                # order chunk would land at the wrong offset and corrupt
+                # the ``.tmp``. Open the existing file for in-place
+                # random-access writes; if it doesn't exist yet, ``wb``
+                # creates it.
                 mode = 'r+b' if path.isfile(file_path) else 'wb'
                 with open(file_path, mode) as f:
                     f.seek(start_bytes)
-                    f.write(file_upload.read())
+                    f.write(data)
+                    # On the final chunk, truncate to the declared total
+                    # so stale trailing bytes from a previous, longer
+                    # upload to this deterministic path can't survive
+                    # into the reassembled asset. Order-independent: the
+                    # file ends up exactly ``total_bytes`` long whenever
+                    # the last byte is written, regardless of chunk
+                    # arrival order.
+                    if (
+                        total_bytes is not None
+                        and end_bytes + 1 == total_bytes
+                    ):
+                        f.truncate(total_bytes)
             else:
                 with open(file_path, 'wb') as f:
-                    f.write(file_upload.read())
+                    f.write(data)
         except OSError as exc:
             if not is_disk_full(exc):
                 raise
