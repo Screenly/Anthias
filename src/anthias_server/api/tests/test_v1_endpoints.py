@@ -102,6 +102,37 @@ def test_file_asset_disk_full_returns_507(
 
 
 @pytest.mark.django_db
+def test_file_asset_disk_full_during_parse_returns_507(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """The ANTHIAS-3K stack is ENOSPC during the multipart parse
+    (Django spooling the body to a temp file), surfaced when the view
+    accesses ``request.data``. Force the parser to raise and assert
+    the same 507 + shared message."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django.http.multipartparser import MultiPartParser
+
+    with mock.patch.object(
+        MultiPartParser,
+        'parse',
+        side_effect=OSError(errno.ENOSPC, 'No space left on device'),
+    ):
+        response = api_client.post(
+            reverse('api:file_asset_v1'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.png', b'\x89PNG\r\n', content_type='image/png'
+                )
+            },
+        )
+
+    assert response.status_code == status.HTTP_507_INSUFFICIENT_STORAGE
+    assert 'disk is full' in response.data['detail']
+
+
+@pytest.mark.django_db
 def test_file_asset_chunked_out_of_order_reassembles(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:
