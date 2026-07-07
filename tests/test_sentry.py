@@ -176,10 +176,23 @@ class TestBeforeSendTransientNoise:
             _sentry_before_send,
         )
 
-        root = socket.gaierror(-5, 'No address associated with hostname')
-        wrapper = requests.exceptions.ConnectionError('resolution failed')
-        wrapper.__cause__ = root
-        hint = self._hint_for(wrapper)
+        try:
+            try:
+                raise socket.gaierror(
+                    -5, 'No address associated with hostname'
+                )
+            except socket.gaierror as root:
+                raise requests.exceptions.ConnectionError(
+                    'resolution failed'
+                ) from root
+        except requests.exceptions.ConnectionError as wrapper:
+            hint = {
+                'exc_info': (
+                    type(wrapper),
+                    wrapper,
+                    wrapper.__traceback__,
+                )
+            }
         assert _sentry_before_send({'event_id': 'x'}, hint) is None
 
     def test_keeps_ordinary_exceptions(self) -> None:

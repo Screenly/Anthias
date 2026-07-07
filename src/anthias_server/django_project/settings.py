@@ -100,7 +100,7 @@ def _exception_chain(exc: BaseException | None) -> Iterator[BaseException]:
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     """Drop events that report expected transient states, not bugs.
 
-    Two classes of noise, both observed fleet-wide on day one:
+    The classes of noise dropped here, each observed fleet-wide:
 
       * ``redis.exceptions.ConnectionError`` AND
         ``redis.exceptions.TimeoutError`` (plus subclasses and
