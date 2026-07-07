@@ -13,7 +13,12 @@ from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import worker_init
 from django.apps import apps as _django_apps
 from PIL import UnidentifiedImageError
-from tenacity import Retrying, stop_after_attempt, wait_fixed
+from tenacity import (
+    RetryError,
+    Retrying,
+    stop_after_delay,
+    wait_exponential,
+)
 
 # ``django.setup()`` is not reentrant — calling it while
 # ``apps.populate()`` is still running (e.g. when an ``AppConfig.ready``
@@ -1131,34 +1136,76 @@ def download_remote_video_asset(asset_id: str, uri: str) -> None:
     dispatch_normalize_video(asset_id)
 
 
-@celery.task
+# Retry budget for the balena supervisor power commands. The
+# supervisor is routinely down for a stretch exactly when these fire —
+# a reboot often follows an OTA apply, which restarts the supervisor
+# itself — so the old 5 x 1s window was far too tight and the task
+# died in an unhandled RetryError with the command silently dropped
+# (Sentry ANTHIAS-3F). Each HTTP attempt is individually bounded so a
+# hung supervisor socket can't pin the worker, and the task-level
+# limits below stay comfortably above window + one full attempt as
+# the SIGKILL backstop.
+SUPERVISOR_CMD_RETRY_WINDOW_S = 120
+SUPERVISOR_CMD_REQUEST_TIMEOUT_S = 10
+SUPERVISOR_CMD_WAIT_MAX_S = 15
+SUPERVISOR_CMD_SOFT_TIME_LIMIT_S = (
+    SUPERVISOR_CMD_RETRY_WINDOW_S + 2 * SUPERVISOR_CMD_REQUEST_TIMEOUT_S
+)
+SUPERVISOR_CMD_TIME_LIMIT_S = SUPERVISOR_CMD_SOFT_TIME_LIMIT_S + 30
+
+
+def _run_supervisor_command(command: Any, action: str) -> None:
+    """Post a power command to the balena supervisor, retrying with
+    backoff while it's down/restarting. Terminal failure is logged at
+    warning — a down supervisor is an expected transient (the operator
+    can retry from the UI), not a crash worth a Sentry event.
+    """
+    try:
+        for attempt in Retrying(
+            stop=stop_after_delay(SUPERVISOR_CMD_RETRY_WINDOW_S),
+            wait=wait_exponential(multiplier=1, max=SUPERVISOR_CMD_WAIT_MAX_S),
+        ):
+            with attempt:
+                response = command(timeout=SUPERVISOR_CMD_REQUEST_TIMEOUT_S)
+                # A 5xx from a half-started supervisor must retry too,
+                # not read as "command accepted".
+                response.raise_for_status()
+    except RetryError:
+        logging.warning(
+            'Balena supervisor did not accept the %s command within '
+            '%s seconds; giving up. The supervisor may be restarting '
+            '(e.g. mid-OTA) — retry from the UI if the device does '
+            'not %s on its own.',
+            action,
+            SUPERVISOR_CMD_RETRY_WINDOW_S,
+            action,
+        )
+
+
+@celery.task(
+    soft_time_limit=SUPERVISOR_CMD_SOFT_TIME_LIMIT_S,
+    time_limit=SUPERVISOR_CMD_TIME_LIMIT_S,
+)
 def reboot_anthias() -> None:
     """
     Background task to reboot Anthias
     """
     if is_balena_app():
-        for attempt in Retrying(
-            stop=stop_after_attempt(5),
-            wait=wait_fixed(1),
-        ):
-            with attempt:
-                reboot_via_balena_supervisor()
+        _run_supervisor_command(reboot_via_balena_supervisor, 'reboot')
     else:
         r.publish('hostcmd', 'reboot')
 
 
-@celery.task
+@celery.task(
+    soft_time_limit=SUPERVISOR_CMD_SOFT_TIME_LIMIT_S,
+    time_limit=SUPERVISOR_CMD_TIME_LIMIT_S,
+)
 def shutdown_anthias() -> None:
     """
     Background task to shutdown Anthias
     """
     if is_balena_app():
-        for attempt in Retrying(
-            stop=stop_after_attempt(5),
-            wait=wait_fixed(1),
-        ):
-            with attempt:
-                shutdown_via_balena_supervisor()
+        _run_supervisor_command(shutdown_via_balena_supervisor, 'shutdown')
     else:
         r.publish('hostcmd', 'shutdown')
 

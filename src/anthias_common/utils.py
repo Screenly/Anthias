@@ -143,12 +143,22 @@ def get_balena_device_info(
     )
 
 
-def shutdown_via_balena_supervisor() -> requests.Response:
-    return get_balena_supervisor_api_response(method='post', action='shutdown')
+def shutdown_via_balena_supervisor(
+    *,
+    timeout: float | tuple[float, float] | None = None,
+) -> requests.Response:
+    return get_balena_supervisor_api_response(
+        method='post', action='shutdown', timeout=timeout
+    )
 
 
-def reboot_via_balena_supervisor() -> requests.Response:
-    return get_balena_supervisor_api_response(method='post', action='reboot')
+def reboot_via_balena_supervisor(
+    *,
+    timeout: float | tuple[float, float] | None = None,
+) -> requests.Response:
+    return get_balena_supervisor_api_response(
+        method='post', action='reboot', timeout=timeout
+    )
 
 
 def get_balena_supervisor_version() -> str:
