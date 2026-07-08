@@ -14,6 +14,7 @@ from .base import ImportProvider
 from .optisigns import OptiSignsProvider
 from .pisignage import PiSignageProvider
 from .screencloud import ScreenCloudProvider
+from .xibo import XiboProvider
 from .yodeck import YodeckProvider
 
 # Providers are stateless (their HTTP session is module-level), so a
@@ -25,6 +26,7 @@ _PROVIDERS: dict[str, ImportProvider] = {
         ScreenCloudProvider(),
         OptiSignsProvider(),
         PiSignageProvider(),
+        XiboProvider(),
     )
 }
 
