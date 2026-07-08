@@ -201,6 +201,16 @@ ignore_logger('celery.backends.redis')
 # fetch); a persistent outage still surfaces via the watchdog restart
 # loop. (Sentry ANTHIAS-3X.)
 ignore_logger('celery.backends.asynchronous')
+# A device exposed to the internet gets a steady drip of background
+# scanners and bots hitting it with a bogus/spoofed Host header
+# ("Invalid HTTP_HOST header: '141.212.44.121/..'"). Django rejects the
+# request with a 400 and logs it at ERROR to ``django.security.
+# DisallowedHost``, which the logging integration then turns into a
+# Sentry event. It is neither an Anthias bug nor actionable — the
+# request never reaches a view — so silence the logger, exactly as
+# Django's own docs suggest for this well-known noise source. (Sentry
+# ANTHIAS-2A.)
+ignore_logger('django.security.DisallowedHost')
 
 
 def get_sentry_release() -> str | None:

@@ -278,6 +278,17 @@ class TestBeforeSendTransientNoise:
         # fatal level on a sustained redis outage (Sentry ANTHIAS-3X).
         assert 'celery.backends.asynchronous' in _IGNORED_LOGGERS
 
+    def test_disallowed_host_logger_is_ignored(self) -> None:
+        # An internet-exposed device gets scanned with bogus/spoofed
+        # Host headers; Django rejects each with a 400 and logs it at
+        # ERROR to django.security.DisallowedHost, which the logging
+        # integration would otherwise turn into a Sentry event. It is
+        # non-actionable background-scanner noise (Sentry ANTHIAS-2A).
+        import anthias_server.django_project.settings  # noqa: F401
+        from sentry_sdk.integrations.logging import _IGNORED_LOGGERS
+
+        assert 'django.security.DisallowedHost' in _IGNORED_LOGGERS
+
 
 class TestGetBoardModel:
     """Board-model detection feeding the fleet-triage Sentry tags."""

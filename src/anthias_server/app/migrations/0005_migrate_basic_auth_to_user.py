@@ -184,10 +184,15 @@ def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
     #     clearing the flag.
     #   * ``auth_basic`` selected with a legacy SHA256 / plaintext hash
     #     → unverifiable by Django's hashers. Same fail-open.
+    # These two branches are operator-config conditions we handle by
+    # failing open, not bugs: the device recovers on its own and the
+    # log line already tells the operator how to re-set the password.
+    # Log at warning, not error — an ERROR-level record is what Sentry's
+    # logging integration turns into an event (ANTHIAS-1S / ANTHIAS-1Z).
     disable_auth = False
     if auth_backend == 'auth_basic':
         if not creds_present:
-            logging.error(
+            logging.warning(
                 'auth_basic enabled in %s but credentials are missing; '
                 'disabling basic auth to avoid a lockout. Re-set the '
                 'password from the Settings page.',
@@ -195,7 +200,7 @@ def _migrate(apps, schema_editor):  # type: ignore[no-untyped-def]
             )
             disable_auth = True
         elif not creds_django_format:
-            logging.error(
+            logging.warning(
                 'Insecure password hash in %s; clearing credentials and '
                 'disabling basic auth. Re-set the password from the '
                 'Settings page.',
