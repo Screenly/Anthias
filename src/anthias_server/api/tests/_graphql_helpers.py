@@ -1,8 +1,9 @@
-"""Shared response fakes for GraphQL provider tests.
+"""Shared response fakes for import-provider tests.
 
-Used by the ScreenCloud and OptiSigns import-provider test modules so the
-canned-response boilerplate lives in one place. Not a test module (no
-``test_`` prefix), so pytest doesn't collect it.
+Used by the provider test modules (GraphQL: ScreenCloud/OptiSigns; REST:
+Yodeck/piSignage/Xibo) so the canned-response boilerplate lives in one
+place. Not a test module (no ``test_`` prefix), so pytest doesn't collect
+it.
 """
 
 from __future__ import annotations
@@ -11,6 +12,19 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import requests
+
+
+def json_response(status: int, json_body: Any = None) -> MagicMock:
+    """A fake ``requests.Response`` for a plain-JSON REST call."""
+    resp = MagicMock(spec=requests.Response)
+    resp.status_code = status
+    resp.ok = 200 <= status < 400
+    resp.json.return_value = json_body
+    if not resp.ok:
+        resp.raise_for_status.side_effect = requests.HTTPError(
+            f'HTTP {status}', response=resp
+        )
+    return resp
 
 
 def gql_response(

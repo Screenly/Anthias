@@ -15,6 +15,10 @@ import pytest
 import requests
 
 from anthias_server.app.models import Asset
+from anthias_server.api.tests._graphql_helpers import (
+    json_response as _resp,
+    stream_response as _stream,
+)
 from anthias_server.lib.integrations import xibo
 from anthias_server.lib.integrations.base import ProviderImportError
 from anthias_server.lib.integrations.registry import (
@@ -25,28 +29,6 @@ from anthias_server.settings import settings
 
 PROVIDER = xibo.XiboProvider()
 TOKEN = 'https://cms.xibosignage.com client123 secret456'
-
-
-def _resp(status: int, json_body: Any = None) -> MagicMock:
-    resp = MagicMock(spec=requests.Response)
-    resp.status_code = status
-    resp.ok = 200 <= status < 400
-    resp.json.return_value = json_body
-    if not resp.ok:
-        resp.raise_for_status.side_effect = requests.HTTPError(
-            f'HTTP {status}', response=resp
-        )
-    return resp
-
-
-def _stream(status: int, chunks: list[bytes]) -> MagicMock:
-    resp = MagicMock(spec=requests.Response)
-    resp.status_code = status
-    resp.ok = 200 <= status < 400
-    resp.iter_content.return_value = iter(chunks)
-    resp.__enter__.return_value = resp
-    resp.__exit__.return_value = False
-    return resp
 
 
 def _token_ok() -> MagicMock:
@@ -62,9 +44,10 @@ class TestTokenAndSession:
         )
 
     def test_parse_token_self_hosted_with_port(self) -> None:
-        base, cid, sec = xibo._parse_token(
+        base, client_id, client_secret = xibo._parse_token(
             'https://signage.example.com:8080 cid sec'
         )
+        assert (client_id, client_secret) == ('cid', 'sec')
         assert base == 'https://signage.example.com:8080'
         # auth-host scoping must include the port so the download matches.
         assert xibo._host(base) == 'signage.example.com:8080'

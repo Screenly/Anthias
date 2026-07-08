@@ -27,6 +27,10 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from anthias_server.app.models import Asset
+from anthias_server.api.tests._graphql_helpers import (
+    json_response as _fake_response,
+    stream_response as _fake_stream_response,
+)
 from anthias_server.lib.integrations import ingest, yodeck
 from anthias_server.lib.integrations.base import (
     ImportOutcome,
@@ -45,34 +49,6 @@ from anthias_server.settings import settings
 # ``pytest.raises`` blocks also means each of those blocks has a single
 # throwing invocation (Sonar S5778).
 PROVIDER = yodeck.YodeckProvider()
-
-
-# ---------------------------------------------------------------------------
-# Fake HTTP responses
-# ---------------------------------------------------------------------------
-
-
-def _fake_response(status_code: int, json_body: Any = None) -> MagicMock:
-    resp = MagicMock(spec=requests.Response)
-    resp.status_code = status_code
-    resp.ok = 200 <= status_code < 400
-    resp.json.return_value = json_body
-    if not resp.ok:
-        resp.raise_for_status.side_effect = requests.HTTPError(
-            f'HTTP {status_code}', response=resp
-        )
-    return resp
-
-
-def _fake_stream_response(status_code: int, chunks: list[bytes]) -> MagicMock:
-    """A streaming response usable as a context manager (``with ... as``)."""
-    resp = MagicMock(spec=requests.Response)
-    resp.status_code = status_code
-    resp.ok = 200 <= status_code < 400
-    resp.iter_content.return_value = iter(chunks)
-    resp.__enter__.return_value = resp
-    resp.__exit__.return_value = False
-    return resp
 
 
 # ---------------------------------------------------------------------------
