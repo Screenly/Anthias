@@ -72,11 +72,12 @@ _DOWNLOAD_TIMEOUT_S = 120.0
 
 # Candidate fields that may carry a downloadable ORIGINAL file URL for an
 # image/video, in priority order — first at the top level, then inside
-# ``arguments``. Yodeck's media detail schema is documented behind a
-# login; these cover the observed shape (``arguments.download_from_url``
-# for URL-ingested media) plus the common alternatives. This is the one
-# lookup that decides whether a directly-uploaded (``source: local``)
-# original can be pulled; if none resolves, the item is skipped with a
+# ``arguments``. ``arguments.download_from_url`` is Yodeck's download link
+# for the original and is present for uploaded (``source: local``) media
+# too — it points at Yodeck (app.yodeck.com) and 302-redirects to a signed
+# S3 URL, so the token is attached for the Yodeck host and dropped by
+# ``requests`` on the cross-host redirect. The extra keys cover forward-
+# compatible alternatives; if none resolves, the item is skipped with a
 # clear reason rather than guessed at.
 _FILE_URL_KEYS = ('file', 'media_file', 'source_url', 'original_url', 'url')
 _ARGUMENT_FILE_KEYS = ('download_from_url', 'source_url', 'file', 'url')
@@ -275,8 +276,10 @@ class YodeckProvider(ImportProvider):
     )
     token_help = (
         'Create an API token in Yodeck under Account Settings → Advanced '
-        'Settings → API Tokens, then paste it here. It is used only for '
-        'this import and is never stored.'
+        'Settings → API Tokens. Enter it as "<label>:<token>" — the name '
+        'you gave the token, a colon, then the copied token value (e.g. '
+        '"mylabel:XXXXXXXX"). It is used only for this import and is never '
+        'stored.'
     )
 
     # -- token / listing ---------------------------------------------------
