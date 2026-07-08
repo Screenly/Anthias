@@ -225,6 +225,21 @@ class TestBeforeSendTransientNoise:
         hint = self._hint_for(other_cls('a real bug'))
         assert _sentry_before_send(event, hint) == event
 
+    def test_keeps_lookalike_module_download_error(self) -> None:
+        # The module match is exact/prefix-scoped so a look-alike
+        # package (yt_dlp2, yt_dlp_fake) can't smuggle its own
+        # DownloadError through the drop.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        lookalike_cls = type(
+            'DownloadError', (Exception,), {'__module__': 'yt_dlp2.utils'}
+        )
+        event: Event = {'event_id': 'x'}
+        hint = self._hint_for(lookalike_cls('not really yt-dlp'))
+        assert _sentry_before_send(event, hint) == event
+
     def test_keeps_ordinary_exceptions(self) -> None:
         from anthias_server.django_project.settings import (
             _sentry_before_send,

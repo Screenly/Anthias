@@ -172,9 +172,9 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         if isinstance(exc, socket.gaierror):
             return None
         exc_cls = type(exc)
-        if (
-            exc_cls.__name__ == 'DownloadError'
-            and exc_cls.__module__.startswith('yt_dlp')
+        if exc_cls.__name__ == 'DownloadError' and (
+            exc_cls.__module__ == 'yt_dlp'
+            or exc_cls.__module__.startswith('yt_dlp.')
         ):
             return None
     return event
