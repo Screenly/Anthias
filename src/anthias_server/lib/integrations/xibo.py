@@ -1,11 +1,15 @@
 """Xibo import provider — REST (Xibo CMS API).
 
-Xibo runs per-CMS (Xibo Cloud gives each account a host such as
-``<name>.xibosignage.com``) and authenticates with OAuth2
-client-credentials: an API application's ``client_id`` / ``client_secret``
-are exchanged for a Bearer token at ``POST /api/authorize/access_token``.
-Because the CMS host and both credentials are needed, the operator's
-"token" is ``host:client_id:client_secret`` (hostname only, no scheme).
+Works with both Xibo Cloud (``https://<name>.xibosignage.com``) and
+self-hosted CMS instances (any URL, including a custom host, port or
+sub-path). Authenticates with OAuth2 client-credentials: an API
+application's ``client_id`` / ``client_secret`` are exchanged for a Bearer
+token at ``POST <cms>/api/authorize/access_token``.
+
+Because a self-hosted CMS URL can contain ``:`` (scheme, port), the
+operator's "token" is whitespace-separated:
+``<cms-url> <client_id> <client_secret>`` — e.g.
+``https://signage.example.com:8080 abc123 secretxyz``.
 
 Media is the CMS library (``GET /library``): images and videos are
 imported, everything else (audio, documents, module widgets) is skipped.
@@ -21,6 +25,7 @@ Swagger spec and worth confirming against a live CMS.
 from __future__ import annotations
 
 from typing import Any, Iterator
+from urllib.parse import urlparse
 
 import requests
 
@@ -42,24 +47,40 @@ _LIST_TIMEOUT_S = 30.0
 _session = new_import_session()
 
 
-def _base_url(host: str) -> str:
-    return f'https://{host}/api'
-
-
 def _parse_token(token: str) -> tuple[str, str, str]:
-    """Split ``host:client_id:client_secret`` (hostname only, no scheme)."""
-    parts = (token or '').split(':', 2)
-    if len(parts) != 3 or not all(p.strip() for p in parts):
+    """Split ``<cms-url> <client_id> <client_secret>`` (whitespace-separated).
+
+    The CMS URL is validated as http(s); any trailing slash is trimmed so
+    ``<base>/api/...`` is well-formed for cloud and self-hosted alike.
+    """
+    parts = (token or '').split()
+    if len(parts) != 3:
         raise ProviderImportError(
-            'Xibo token must be "cms-host:client_id:client_secret".'
+            'Xibo token must be "<cms-url> <client_id> <client_secret>".'
         )
-    return parts[0].strip(), parts[1].strip(), parts[2].strip()
+    base, client_id, client_secret = parts
+    parsed = urlparse(base)
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        raise ProviderImportError(
+            'Xibo CMS URL must be a full http(s) URL, e.g. '
+            'https://name.xibosignage.com.'
+        )
+    return base.rstrip('/'), client_id, client_secret
 
 
-def _authorize(host: str, client_id: str, client_secret: str) -> str | None:
+def _api_url(base: str, path: str) -> str:
+    return f'{base}/api{path}'
+
+
+def _host(base: str) -> str:
+    """Host (with port, if any) the CMS is served from."""
+    return urlparse(base).netloc.lower()
+
+
+def _authorize(base: str, client_id: str, client_secret: str) -> str | None:
     """Exchange client credentials for a Bearer token, or None if rejected."""
     response = _session.post(
-        f'{_base_url(host)}/authorize/access_token',
+        _api_url(base, '/authorize/access_token'),
         data={
             'grant_type': 'client_credentials',
             'client_id': client_id,
@@ -75,16 +96,16 @@ def _authorize(host: str, client_id: str, client_secret: str) -> str | None:
 
 
 def _login_or_raise(token: str) -> tuple[str, dict[str, str]]:
-    """Return (host, auth-headers) after authorizing.
+    """Return (cms-base-url, auth-headers) after authorizing.
 
     Raises ``ProviderImportError`` for a malformed token or rejected
     credentials; transport errors propagate.
     """
-    host, client_id, client_secret = _parse_token(token)
-    access = _authorize(host, client_id, client_secret)
+    base, client_id, client_secret = _parse_token(token)
+    access = _authorize(base, client_id, client_secret)
     if not access:
         raise ProviderImportError('Xibo rejected these API credentials.')
-    return host, {'Authorization': f'Bearer {access}'}
+    return base, {'Authorization': f'Bearer {access}'}
 
 
 def _map_type(media_type: Any) -> str | None:
@@ -100,36 +121,38 @@ class XiboProvider(ImportProvider):
     key = PROVIDER_KEY
     label = 'Xibo'
     description = (
-        'Copy images and videos from a Xibo CMS library into this player.'
+        'Copy images and videos from a Xibo CMS library into this player '
+        '(Xibo Cloud or self-hosted).'
     )
     token_help = (
         'In your Xibo CMS create an API application (Applications → Add), '
-        'then enter "cms-host:client_id:client_secret" — the host is the '
-        'CMS hostname (e.g. name.xibosignage.com). Used only for this import '
-        'and never stored.'
+        'then enter "<cms-url> <client_id> <client_secret>" (space '
+        'separated) — the CMS URL is your Xibo address, e.g. '
+        'https://name.xibosignage.com, or your self-hosted CMS URL. Used '
+        'only for this import and never stored.'
     )
 
     # -- token / listing ---------------------------------------------------
 
     def validate_token(self, token: str) -> bool:
         try:
-            host, client_id, client_secret = _parse_token(token)
+            base, client_id, client_secret = _parse_token(token)
         except ProviderImportError:
             return False
-        return _authorize(host, client_id, client_secret) is not None
+        return _authorize(base, client_id, client_secret) is not None
 
     def list_media(
         self, token: str, *, workspace: str | None = None
     ) -> list[RemoteMediaItem]:
         try:
-            host, headers = _login_or_raise(token)
+            base, headers = _login_or_raise(token)
         except ProviderImportError as error:
             # list_media's caller handles transport errors, not
             # ProviderImportError — surface bad creds as a controlled 502.
             raise requests.RequestException(error.user_message) from error
 
         items: list[RemoteMediaItem] = []
-        for media in self._paginate(host, headers):
+        for media in self._paginate(base, headers):
             media_id = media.get('mediaId')
             if media_id is None:
                 continue
@@ -154,13 +177,13 @@ class XiboProvider(ImportProvider):
         return items
 
     def _paginate(
-        self, host: str, headers: dict[str, str]
+        self, base: str, headers: dict[str, str]
     ) -> Iterator[dict[str, Any]]:
         start = 0
         seen: set[Any] = set()
         while True:
             batch = self._library(
-                host, headers, {'start': start, 'length': _PAGE_SIZE}
+                base, headers, {'start': start, 'length': _PAGE_SIZE}
             )
             fresh = [
                 media
@@ -179,10 +202,10 @@ class XiboProvider(ImportProvider):
             start += _PAGE_SIZE
 
     def _library(
-        self, host: str, headers: dict[str, str], params: dict[str, Any]
+        self, base: str, headers: dict[str, str], params: dict[str, Any]
     ) -> list[Any]:
         response = _session.get(
-            f'{_base_url(host)}/library',
+            _api_url(base, '/library'),
             headers=headers,
             params=params,
             timeout=_LIST_TIMEOUT_S,
@@ -205,8 +228,8 @@ class XiboProvider(ImportProvider):
                 reason='Already imported.',
             )
 
-        host, headers = _login_or_raise(token)
-        matches = self._library(host, headers, {'mediaId': remote_id})
+        base, headers = _login_or_raise(token)
+        matches = self._library(base, headers, {'mediaId': remote_id})
         media = (
             matches[0] if matches and isinstance(matches[0], dict) else None
         )
@@ -221,9 +244,9 @@ class XiboProvider(ImportProvider):
                 reason="This Xibo library item isn't an image or video.",
             )
 
-        file_url = (
-            f'{_base_url(host)}/library/download/{remote_id}/'
-            f'{media.get("mediaType")}'
+        file_url = _api_url(
+            base,
+            f'/library/download/{remote_id}/{media.get("mediaType")}',
         )
         start_date, end_date = ingest.default_window()
         asset = ingest.create_file_asset(
@@ -231,7 +254,7 @@ class XiboProvider(ImportProvider):
             headers=headers,
             # The download is on the CMS host, so the Bearer token IS
             # attached (scoped to that host by ingest).
-            auth_host=host,
+            auth_host=_host(base),
             provider_key=PROVIDER_KEY,
             remote_id=remote_id,
             name=str(media.get('name') or media.get('fileName') or remote_id),

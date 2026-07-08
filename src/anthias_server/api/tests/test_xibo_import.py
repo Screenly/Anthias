@@ -24,7 +24,7 @@ from anthias_server.lib.integrations.registry import (
 from anthias_server.settings import settings
 
 PROVIDER = xibo.XiboProvider()
-TOKEN = 'cms.xibosignage.com:client123:secret456'
+TOKEN = 'https://cms.xibosignage.com client123 secret456'
 
 
 def _resp(status: int, json_body: Any = None) -> MagicMock:
@@ -54,12 +54,28 @@ def _token_ok() -> MagicMock:
 
 
 class TestTokenAndSession:
-    def test_parse_token(self) -> None:
-        assert xibo._parse_token('h:cid:sec') == ('h', 'cid', 'sec')
+    def test_parse_token_cloud(self) -> None:
+        assert xibo._parse_token('https://h.x/ cid sec') == (
+            'https://h.x',
+            'cid',
+            'sec',
+        )
+
+    def test_parse_token_self_hosted_with_port(self) -> None:
+        base, cid, sec = xibo._parse_token(
+            'https://signage.example.com:8080 cid sec'
+        )
+        assert base == 'https://signage.example.com:8080'
+        # auth-host scoping must include the port so the download matches.
+        assert xibo._host(base) == 'signage.example.com:8080'
 
     def test_parse_token_malformed(self) -> None:
         with pytest.raises(ProviderImportError):
-            xibo._parse_token('only:two')
+            xibo._parse_token('only two')
+
+    def test_parse_token_non_url(self) -> None:
+        with pytest.raises(ProviderImportError):
+            xibo._parse_token('not-a-url cid sec')
 
     def test_map_type(self) -> None:
         assert xibo._map_type('image') == 'image'
