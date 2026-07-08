@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import sys
+from collections import deque
 from collections.abc import Callable
 from os import getenv, path
 from signal import SIGALRM, signal
@@ -681,13 +682,24 @@ class _BoundedWebviewOutput:
 
     We keep the last ``maxlen`` characters: the handshake line is emitted
     early (well inside the window) and a crash tail is the most recent
-    output, so both survive while everything older is dropped. sh invokes
-    ``__call__`` from its stdout reader thread, so access is lock-guarded.
+    output, so both survive while everything older is dropped.
+
+    Retention is a deque of raw chunks, not a growing-then-sliced string:
+    a chatty decoder can call ``__call__`` per audio frame for the life of
+    the process, and ``buf += chunk`` + slice would re-copy ~``maxlen``
+    characters on *every* such call once the window is full — steady CPU
+    burn on a weak Pi, against the spirit of this fix. Appending a chunk
+    and dropping whole oldest chunks is amortized O(1); the join to a
+    single string happens only in ``text()``, which is read rarely (the
+    startup handshake poll, where the buffer is still small, and
+    ``WEBVIEW_DEBUG``). sh invokes ``__call__`` from its stdout reader
+    thread, so access is lock-guarded.
     """
 
     def __init__(self, maxlen: int = WEBVIEW_OUTPUT_BUFFER_CHARS) -> None:
         self._maxlen = maxlen
-        self._buf = ''
+        self._chunks: deque[str] = deque()
+        self._size = 0
         self._lock = Lock()
 
     def __call__(self, chunk: str | bytes) -> None:
@@ -699,21 +711,30 @@ class _BoundedWebviewOutput:
         if isinstance(chunk, bytes):
             chunk = chunk.decode('utf-8', errors='replace')
         # A single chunk larger than the window (a big unbuffered write
-        # from the child) would otherwise force a ``buf + chunk``
-        # allocation proportional to the chunk, spiking well past
-        # ``maxlen`` — the very thing this sink exists to prevent. Slice
-        # it to its tail first (same tail-retention result), so both the
-        # retained buffer and the transient stay within ~2x maxlen.
+        # from the child) can't add more than the tail we'd keep anyway,
+        # so slice it up front — bounds both the stored chunk and the
+        # transient at ``maxlen``.
         if len(chunk) > self._maxlen:
             chunk = chunk[-self._maxlen :]
         with self._lock:
-            self._buf += chunk
-            if len(self._buf) > self._maxlen:
-                self._buf = self._buf[-self._maxlen :]
+            self._chunks.append(chunk)
+            self._size += len(chunk)
+            # Drop whole oldest chunks while the remainder still covers
+            # the window, so retained size stays within [maxlen,
+            # maxlen + newest-dropped-chunk) < 2x maxlen — without ever
+            # re-copying the kept data.
+            while (
+                self._chunks
+                and self._size - len(self._chunks[0]) >= self._maxlen
+            ):
+                self._size -= len(self._chunks.popleft())
 
     def text(self) -> str:
         with self._lock:
-            return self._buf
+            joined = ''.join(self._chunks)
+        # Trim to the exact tail: the front chunk may push the join a
+        # little over ``maxlen`` (see the drop condition above).
+        return joined[-self._maxlen :]
 
 
 def _spawn_webview_once(startup_timeout: float) -> Any:

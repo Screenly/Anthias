@@ -309,6 +309,27 @@ def test_bounded_webview_output_discards_old_data(
     assert text.endswith('duplicate\n')
 
 
+def test_bounded_webview_output_write_is_amortized_cheap(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Once the window is full, a new chunk must not re-copy the retained
+    data: retention is a deque of chunks, not a grow-then-slice string, so
+    a per-frame chatty decoder doesn't burn CPU recopying ~maxlen chars on
+    every call. Assert the write path stores whole chunks (bounded count)
+    and never materializes maxlen-sized strings on append."""
+    sink = viewer_fixtures.u._BoundedWebviewOutput(maxlen=100)
+    # 10k tiny writes; if each recopied the buffer this would be O(n*maxlen).
+    for i in range(10000):
+        sink(f'line {i}\n')
+    # The kept data is bounded, holds the most recent lines, and the
+    # number of retained chunks is small (only enough to cover the window,
+    # not one per write).
+    text = sink.text()
+    assert len(text) <= 100
+    assert text.endswith('line 9999\n')
+    assert len(sink._chunks) < 50
+
+
 def test_bounded_webview_output_slices_oversized_chunk(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
