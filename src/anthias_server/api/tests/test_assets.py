@@ -881,17 +881,29 @@ def test_v2_patch_custom_headers_preserves_pipeline_metadata(
         {'X-Inject': 'a\r\nEvil: 1'},  # CRLF injection in value
         {'': 'v'},  # empty name
         {'X-Colon:': 'v'},  # colon in name
+        {'X-Num': 123},  # non-string value must be rejected, not coerced
+        {'X-Bool': True},  # non-string value must be rejected, not coerced
+        {'X-Null': None},  # non-string value must be rejected
     ],
-    ids=['space-in-name', 'crlf-in-value', 'empty-name', 'colon-in-name'],
+    ids=[
+        'space-in-name',
+        'crlf-in-value',
+        'empty-name',
+        'colon-in-name',
+        'numeric-value',
+        'bool-value',
+        'null-value',
+    ],
 )
 def test_v2_custom_headers_malformed_rejected(
     api_client: APIClient,
     v2_asset_detail_url: str,
-    headers: dict[str, str],
+    headers: dict[str, Any],
 ) -> None:
     """The strict API write path 400s on any malformed header rather
     than silently dropping it. CRLF-in-value is the security-critical
-    case (header/response splitting)."""
+    case (header/response splitting); the non-string cases guard against
+    DRF CharField coercing e.g. 123 -> "123" instead of rejecting it."""
     response = api_client.patch(
         v2_asset_detail_url,
         data={'custom_headers': headers},

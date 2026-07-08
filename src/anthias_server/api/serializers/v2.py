@@ -281,12 +281,13 @@ class CreateAssetSerializerV2(
     # ``metadata['headers']`` and is surfaced back via
     # ``AssetSerializerV2.get_custom_headers``. ``DictField`` gives a
     # clean 400 on a non-object; ``validate_custom_headers`` enforces the
-    # header-name/value rules.
-    custom_headers = DictField(
-        child=CharField(allow_blank=True, trim_whitespace=False),
-        required=False,
-        write_only=True,
-    )
+    # header-name/value rules. No ``child=CharField``: that would *coerce*
+    # a numeric/boolean JSON value (``{"X": 123}`` -> ``"123"``) instead
+    # of rejecting it. The unvalidated child passes values through
+    # verbatim so ``validate_asset_headers``' ``isinstance(str)`` gate
+    # can 400 non-string values (and no CharField trimming mangles a
+    # value we send on the wire byte-for-byte).
+    custom_headers = DictField(required=False, write_only=True)
 
     def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
@@ -345,10 +346,10 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
         min_value=0,
         max_value=REFRESH_INTERVAL_S_MAX,
     )
-    custom_headers = DictField(
-        child=CharField(allow_blank=True, trim_whitespace=False),
-        required=False,
-    )
+    # No ``child=CharField`` — see CreateAssetSerializerV2.custom_headers:
+    # the unvalidated child preserves value types so a non-string value is
+    # rejected (not coerced) and header values aren't trimmed.
+    custom_headers = DictField(required=False)
 
     def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
