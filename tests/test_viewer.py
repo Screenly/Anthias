@@ -543,6 +543,141 @@ def test_view_webpage_default_zero_interval(
     fake_bus.setReloadInterval.assert_called_once_with(0)
 
 
+def test_view_webpage_sends_custom_headers(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """``view_webpage`` pushes the asset's custom headers to the webview
+    as a JSON string via ``setRequestHeaders`` before ``loadPage``, so
+    the C++ interceptor is armed when the navigation fires (#2215)."""
+    import json
+
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    headers = {'Authorization': 'Bearer abc'}
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com', headers=headers)
+
+    fake_bus.setRequestHeaders.assert_called_once_with(json.dumps(headers))
+    fake_bus.loadPage.assert_called_once_with('https://example.com')
+
+
+def test_view_webpage_no_headers_sends_empty_object(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A header-less webpage still calls ``setRequestHeaders('{}')`` so
+    the webview clears any headers left by a previous asset."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com')
+
+    fake_bus.setRequestHeaders.assert_called_once_with('{}')
+
+
+def test_view_webpage_reloads_when_only_headers_change(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """An edit that changes the headers but not the URL must still
+    re-issue ``loadPage`` so the new headers reach the main document,
+    not just later same-host XHR."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    url = 'https://example.com'
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', url),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_headers', {'X-Old': '1'}
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(url, headers={'X-New': '2'})
+
+    fake_bus.loadPage.assert_called_once_with(url)
+
+
+def test_view_webpage_no_reload_when_url_and_headers_unchanged(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The unchanged-URL short-circuit still holds when the headers are
+    also unchanged: no ``loadPage``, but ``setRequestHeaders`` is still
+    (idempotently) sent."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    url = 'https://example.com'
+    headers = {'X-Same': '1'}
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', url),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_headers', dict(headers)
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(url, headers=headers)
+
+    fake_bus.loadPage.assert_not_called()
+    fake_bus.setRequestHeaders.assert_called_once()
+
+
+def test_view_webpage_setrequestheaders_version_skew_latches_off(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """An older AnthiasViewer without the ``setRequestHeaders`` slot
+    raises UnknownMethod; the capability latches off so we stop calling
+    it, and the asset still loads (no screen-down)."""
+    fake_bus = mock.Mock()
+    fake_bus.setRequestHeaders.side_effect = Exception(
+        'org.freedesktop.DBus.Error.UnknownMethod: no such method'
+    )
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(
+            viewer_fixtures.u,
+            '_webview_supports_set_request_headers',
+            True,
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(
+            'https://example.com', headers={'X': '1'}
+        )
+        # First call attempted the slot, hit UnknownMethod, latched off.
+        assert viewer_fixtures.u._webview_supports_set_request_headers is False
+        fake_bus.setRequestHeaders.assert_called_once()
+        # Page still loaded despite the missing slot.
+        fake_bus.loadPage.assert_called_once_with('https://example.com')
+
+        # A second webpage tick no longer calls the slot at all.
+        viewer_fixtures.u.view_webpage(
+            'https://example.org', headers={'X': '2'}
+        )
+        fake_bus.setRequestHeaders.assert_called_once()
+
+
 def test_view_webpage_nocache_busts_url(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:

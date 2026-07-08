@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import os
 import subprocess
@@ -59,6 +60,7 @@ from anthias_common.utils import (  # noqa: E402
 from anthias_server.app.models import Asset  # noqa: E402
 from anthias_server.app.models import clamp_duration  # noqa: E402
 from anthias_server.app.models import clamp_refresh_interval  # noqa: E402
+from anthias_server.app.models import normalize_asset_headers  # noqa: E402
 from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
 from anthias_viewer.scheduling import Scheduler  # noqa: E402
 
@@ -77,6 +79,16 @@ current_browser_url: str | None = None
 # An operator who upgrades the webview package should restart the
 # viewer anyway; that resets the cache.
 _webview_supports_set_reload_interval: bool = True
+# Custom request headers currently applied to the webview (#2215). Held
+# so view_webpage can force a fresh load when only the headers change on
+# an asset whose URL is unchanged. Reset to {} on every (re)spawn along
+# with ``current_browser_url``.
+current_browser_headers: dict[str, str] = {}
+# Same version-skew latch as ``_webview_supports_set_reload_interval`` but
+# for the ``setRequestHeaders`` slot: an AnthiasViewer binary that
+# predates it raises UnknownMethod once, after which we stop paying the
+# D-Bus round-trip until the viewer restarts.
+_webview_supports_set_request_headers: bool = True
 browser: Any = None
 # Bounded sink for the current AnthiasViewer's merged stdout+stderr. See
 # _BoundedWebviewOutput / _spawn_webview_once (issue #3138). Mirrors
@@ -844,7 +856,8 @@ def load_browser(
     persistent failure can't freeze the asset_loop thread for minutes.
     """
     global browser, _webview_supports_set_reload_interval
-    global _last_applied_rotation, current_browser_url
+    global _webview_supports_set_request_headers
+    global _last_applied_rotation, current_browser_url, current_browser_headers
     global _last_applied_dark_mode
     logging.info('Loading browser...')
 
@@ -879,6 +892,9 @@ def load_browser(
     # case. Resetting on every launch keeps the latch tied to the
     # actual running process, not the viewer's lifetime.
     _webview_supports_set_reload_interval = True
+    # Same re-probe for the custom-headers slot (#2215): a webview
+    # restart may bring up a binary that now supports setRequestHeaders.
+    _webview_supports_set_request_headers = True
 
     # Apply screen rotation *before* the webview starts so it picks up
     # the rotated geometry on first frame: the wlroots compositor
@@ -914,6 +930,9 @@ def load_browser(
     # unchanged URL, e.g. a single-asset playlist) never gets the
     # loadImage/loadPage re-sent.
     current_browser_url = None
+    # Likewise drop the applied-headers cache so the next view_webpage
+    # re-sends them to the fresh process (whose interceptor starts empty).
+    current_browser_headers = {}
 
     # Retry the spawn with capped exponential backoff so a board that
     # intermittently crashes during Qt/WebEngine init self-heals on a
@@ -1068,8 +1087,53 @@ def _cache_busted_url(uri: str) -> str:
     return urlunparse(parts._replace(query=new_query))
 
 
+def _apply_request_headers(headers: dict[str, str]) -> None:
+    """Push the current webpage asset's custom request headers to the
+    webview over D-Bus (#2215).
+
+    The payload is a JSON object string rather than a D-Bus ``a{sv}`` map
+    — passing JSON keeps the marshaling trivial across pydbus versions
+    and matches how the C++ side (``setRequestHeaders``) parses it. Sent
+    on every webpage tick (cheap, idempotent); the C++ interceptor only
+    attaches them to same-host requests.
+
+    Version-skew tolerant, mirroring ``setReloadInterval``: an older
+    AnthiasViewer that predates the slot raises UnknownMethod, which
+    latches the capability off for this viewer process so we don't flood
+    journald or keep paying the round-trip. Transient failures are logged
+    at debug and retried next rotation.
+    """
+    global _webview_supports_set_request_headers
+    if not _webview_supports_set_request_headers:
+        return
+    payload = json.dumps(headers or {})
+    try:
+        browser_bus.setRequestHeaders(payload)
+    except Exception as exc:
+        message = str(exc)
+        method_missing = (
+            'UnknownMethod' in message or 'no such method' in message.lower()
+        )
+        if method_missing:
+            _webview_supports_set_request_headers = False
+            logging.warning(
+                'setRequestHeaders not supported by webview (version '
+                'skew?); custom headers disabled until viewer restart: %s',
+                exc,
+            )
+        else:
+            logging.debug(
+                'Transient setRequestHeaders failure (will retry next '
+                'rotation): %s',
+                exc,
+            )
+
+
 def view_webpage(
-    uri: str, reload_interval_s: int = 0, nocache: bool = False
+    uri: str,
+    reload_interval_s: int = 0,
+    nocache: bool = False,
+    headers: dict[str, str] | None = None,
 ) -> None:
     """Display a webpage and arm its per-asset auto-refresh timer.
 
@@ -1087,7 +1151,9 @@ def view_webpage(
     each time the asset is shown rather than served from QtWebEngine's
     HTTP cache or skipped by the unchanged-URL short-circuit below.
     """
-    global current_browser_url
+    global current_browser_url, current_browser_headers
+
+    headers = headers or {}
 
     if nocache:
         uri = _cache_busted_url(uri)
@@ -1101,13 +1167,21 @@ def view_webpage(
             backoff_cap=BROWSER_SPAWN_INLINE_BACKOFF_CAP_SECONDS,
             startup_timeout=BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS,
         )
+    # Hand the per-asset headers to the webview BEFORE loadPage so the
+    # C++ interceptor has them when the navigation fires. Always sent
+    # (empty {} for header-less assets) so switching away from a
+    # header-carrying asset clears the previous asset's headers.
+    _apply_request_headers(headers)
     # ``!=`` (value comparison): an ``is not`` identity check would
     # only short-circuit when the asset_loop happens to pass the same
     # str object on consecutive ticks, which a JSON-reconstructed URL
-    # would defeat.
-    if current_browser_url != uri:
+    # would defeat. Reload when the headers change too — a header-only
+    # edit must still refetch so the new headers reach the main document,
+    # not just later same-host XHR.
+    if current_browser_url != uri or current_browser_headers != headers:
         _send_to_webview(lambda: browser_bus.loadPage(uri))
         current_browser_url = uri
+        current_browser_headers = headers
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
     # against an older AnthiasViewer (version skew across a fleet
     # rollout, where the viewer container has rotated to a newer image
@@ -1764,10 +1838,16 @@ def asset_loop(scheduler: Any) -> None:
             interval = clamp_refresh_interval(
                 metadata.get('refresh_interval_s')
             )
+            # Per-asset custom request headers (#2215). Sanitised on read
+            # for the same reason as the interval: a hand-crafted DB row
+            # could hold junk, and the C++ interceptor trusts what it's
+            # handed, so this is the last gate before the wire.
+            headers = normalize_asset_headers(metadata.get('headers'))
             view_webpage(
                 uri,
                 reload_interval_s=interval,
                 nocache=bool(asset.get('nocache')),
+                headers=headers,
             )
         elif 'video' in mime or 'streaming' in mime:
             # ``'video' or 'streaming' in mime`` parses as ``'video'

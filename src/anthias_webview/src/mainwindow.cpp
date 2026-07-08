@@ -36,6 +36,11 @@ void MainWindow::setReloadInterval(int seconds)
     view->setReloadInterval(seconds);
 }
 
+void MainWindow::setRequestHeaders(const QString &headersJson)
+{
+    view->setRequestHeaders(headersJson);
+}
+
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 void MainWindow::playVideo(const QString &uri, const QVariantMap &options)
 {

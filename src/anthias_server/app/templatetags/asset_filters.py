@@ -157,6 +157,16 @@ def _to_dict(obj: Any) -> Any:
                 meta['refresh_interval_s']
             )
             out['metadata'] = meta
+        # Sanitise metadata['headers'] the same way, so a legacy /
+        # hand-edited row can't seed the edit modal's textarea with an
+        # unsafe (CR/LF) value or a non-string blob (#2215).
+        meta = out.get('metadata')
+        if isinstance(meta, dict) and 'headers' in meta:
+            from anthias_server.app.models import normalize_asset_headers
+
+            meta = dict(meta)
+            meta['headers'] = normalize_asset_headers(meta['headers'])
+            out['metadata'] = meta
         return out
     return _coerce(obj)
 
