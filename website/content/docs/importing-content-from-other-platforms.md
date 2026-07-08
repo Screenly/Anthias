@@ -12,8 +12,11 @@ platform's API — no SSH or scripts required. Your existing Anthias assets
 are left untouched, and re-running an import skips anything already brought
 over, so it is safe to run more than once.
 
-**Available now:** [Yodeck](https://www.yodeck.com/). Support for more
-platforms (ScreenCloud, OptiSign, NoviSign, and PiSignage) is on the way.
+**Supported platforms:** [Yodeck](https://www.yodeck.com/),
+[ScreenCloud](https://screencloud.com/),
+[OptiSigns](https://www.optisigns.com/),
+[piSignage](https://pisignage.com/), and
+[Xibo](https://xibosignage.com/) (Xibo Cloud or self-hosted).
 
 ## What gets imported
 
@@ -36,21 +39,25 @@ platform, is **skipped and reported** rather than imported half-way:
 
 ## Before you start
 
-You will need an API token for the platform you are importing from. For
-Yodeck:
+You will need API credentials for the platform you are importing from. What
+to enter differs slightly per platform — the wizard shows a reminder for
+each. Credentials are **not** stored on the device; they are only used to
+talk to the platform's API while the import runs.
 
-1. Sign in to Yodeck.
-2. Go to **Account Settings → Advanced Settings → API Tokens** and create a
-   new token.
-3. Keep the token handy. It is not stored on the device — it is only used to
-   talk to the platform's API while the import runs.
+| Platform | What to enter in the wizard | Where to create it |
+| --- | --- | --- |
+| **Yodeck** | `label:token` | Account Settings → Advanced Settings → API Tokens |
+| **ScreenCloud** | Your API token (add a `us:` prefix if your account is in the US region) | Studio → Account Settings → Developer → New Token |
+| **OptiSigns** | Your API key | Account Settings → API Keys → New API Key |
+| **piSignage** | `subdomain:email:password` (the `<name>` in `<name>.pisignage.com`, plus your login) | Your piSignage account login |
+| **Xibo** | `cms-url client_id client_secret` (space separated; the CMS URL works for Xibo Cloud or self-hosted) | Applications → Add (an API application) |
 
 ## Run the import
 
 1. Open your Anthias web interface and go to **Settings**.
-2. In the **Import content** section, click **Import from Yodeck** (or the
-   platform you are moving from).
-3. Paste your API token and click **Continue**. Anthias validates the token
+2. In the **Import content** section, click **Import from _&lt;platform&gt;_** for
+   the platform you are moving from.
+3. Paste your credentials and click **Continue**. Anthias validates them
    before listing your media.
 4. Review the list of media found. Supported items are selected by default;
    unsupported items are shown with the reason they will be skipped. Use
@@ -71,7 +78,10 @@ The same import runs headlessly for support and automation:
 
 ```bash
 $ docker compose exec anthias-server \
-    python manage.py import_content --provider yodeck --token '<your-token>'
+    python manage.py import_content --provider yodeck --token '<credentials>'
 ```
 
-Add `--dry-run` to list what would be imported without copying anything.
+Use `--provider` with one of `yodeck`, `screencloud`, `optisigns`,
+`pisignage`, or `xibo`, and pass the same credentials you would enter in the
+wizard. Add `--dry-run` to list what would be imported without copying
+anything.
