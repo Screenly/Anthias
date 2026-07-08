@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import ImportProvider
+from .optisigns import OptiSignsProvider
 from .screencloud import ScreenCloudProvider
 from .yodeck import YodeckProvider
 
@@ -18,7 +19,11 @@ from .yodeck import YodeckProvider
 # single shared instance each is fine.
 _PROVIDERS: dict[str, ImportProvider] = {
     provider.key: provider
-    for provider in (YodeckProvider(), ScreenCloudProvider())
+    for provider in (
+        YodeckProvider(),
+        ScreenCloudProvider(),
+        OptiSignsProvider(),
+    )
 }
 
 
