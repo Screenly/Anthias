@@ -168,6 +168,31 @@ def test_get_next_asset_should_be_y_and_x(
 
 
 @pytest.mark.django_db
+def test_get_next_asset_missing_extra_asset_warns_and_falls_back(
+    restore_shuffle_setting: None,
+) -> None:
+    """An operator jump to a since-deleted / still-processing asset is
+    a benign race, not a bug — it must log at warning (not error, which
+    pages Sentry) and fall back to the playlist (Sentry ANTHIAS-3V)."""
+    from unittest import mock
+
+    _create_assets([ASSET_X, ASSET_Y])
+    scheduler = Scheduler()
+    scheduler.extra_asset = 'nonexistent-asset-id'
+
+    with (
+        mock.patch('anthias_viewer.scheduling.logging.warning') as m_warn,
+        mock.patch('anthias_viewer.scheduling.logging.error') as m_error,
+    ):
+        result = scheduler.get_next_asset()
+
+    m_warn.assert_called_once()
+    m_error.assert_not_called()
+    assert scheduler.extra_asset is None
+    assert result in (ASSET_X, ASSET_Y)
+
+
+@pytest.mark.django_db
 def test_keep_same_position_on_playlist_update(
     restore_shuffle_setting: None,
 ) -> None:

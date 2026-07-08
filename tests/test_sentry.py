@@ -195,6 +195,36 @@ class TestBeforeSendTransientNoise:
             }
         assert _sentry_before_send({'event_id': 'x'}, hint) is None
 
+    def test_drops_yt_dlp_download_error(self) -> None:
+        # A yt-dlp DownloadError (network timeout, geo-block, private/
+        # deleted video, bad URL) is operator-facing, not a bug — the
+        # download task's on_failure records error_message so the asset
+        # shows a "Failed" pill (Sentry ANTHIAS-3T). Synthesise the
+        # class so the test doesn't depend on importing yt_dlp.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        download_error_cls = type(
+            'DownloadError', (Exception,), {'__module__': 'yt_dlp.utils'}
+        )
+        hint = self._hint_for(download_error_cls('read timed out'))
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_keeps_non_ytdlp_download_error(self) -> None:
+        # The drop is scoped to yt_dlp by module — a same-named
+        # DownloadError from anywhere else must NOT be swallowed.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        other_cls = type(
+            'DownloadError', (Exception,), {'__module__': 'some.other.pkg'}
+        )
+        event: Event = {'event_id': 'x'}
+        hint = self._hint_for(other_cls('a real bug'))
+        assert _sentry_before_send(event, hint) == event
+
     def test_keeps_ordinary_exceptions(self) -> None:
         from anthias_server.django_project.settings import (
             _sentry_before_send,
@@ -228,6 +258,10 @@ class TestBeforeSendTransientNoise:
         # ("Connection to Redis lost: Retry (4/20)") at ERROR
         # (Sentry ANTHIAS-2E).
         assert 'celery.backends.redis' in _IGNORED_LOGGERS
+        # The async result backend logs "Retry limit exceeded while
+        # trying to reconnect to the Celery result store backend" at a
+        # fatal level on a sustained redis outage (Sentry ANTHIAS-3X).
+        assert 'celery.backends.asynchronous' in _IGNORED_LOGGERS
 
 
 class TestGetBoardModel:

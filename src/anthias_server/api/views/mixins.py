@@ -131,8 +131,13 @@ class RecoverViewMixin(APIView):
             except (
                 backup_helper.BackupRecoverError,
                 tarfile.TarError,
-            ):
-                logger.exception('Backup recovery failed')
+            ) as exc:
+                # Operator uploaded something that isn't a valid Anthias
+                # backup (wrong file, truncated, not gzip). That's input
+                # validation, not a bug — the 400 below already tells
+                # them. Log at warning so it doesn't reach the Sentry
+                # logging integration as an error (Sentry ANTHIAS-3W).
+                logger.warning('Backup recovery failed: %s', exc)
                 raise ValidationError(
                     {'backup_upload': 'Invalid backup archive.'}
                 )

@@ -137,7 +137,15 @@ class Scheduler:
                 self.current_asset_id = self.extra_asset
                 self.extra_asset = None
                 return asset
-            logging.error('Asset not found or processed')
+            # An operator asked to jump to a specific asset that has
+            # since been deleted or is still processing — a benign race
+            # between their action and the asset's state, not a bug.
+            # Warning (not error) so it doesn't page Sentry (ANTHIAS-3V).
+            logging.warning(
+                'Requested asset %s not found or still processing; '
+                'falling back to the playlist',
+                self.extra_asset,
+            )
             self.extra_asset = None
 
         self.refresh_playlist()

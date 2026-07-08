@@ -307,6 +307,47 @@ def test_file_asset_content_range_truncates_stale_tmp(
 
 
 @pytest.mark.django_db
+def test_recover_invalid_archive_warns_not_error(
+    api_client: APIClient,
+) -> None:
+    """An operator uploading a non-backup file (here: not a gzip) is
+    input validation, not a bug — the endpoint must 400 and log at
+    warning, not logger.exception (which pages Sentry as an error,
+    Sentry ANTHIAS-3W)."""
+    import tarfile
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch('anthias_server.api.views.mixins.ViewerPublisher'),
+        mock.patch('anthias_server.api.views.mixins.open', mock.mock_open()),
+        mock.patch(
+            'anthias_server.api.views.mixins.path.isfile', return_value=False
+        ),
+        mock.patch(
+            'anthias_server.api.views.mixins.backup_helper.recover',
+            side_effect=tarfile.ReadError('not a gzip file'),
+        ),
+        mock.patch('anthias_server.api.views.mixins.logger') as mock_logger,
+    ):
+        response = api_client.post(
+            reverse('api:recover_v1'),
+            data={
+                'backup_upload': SimpleUploadedFile(
+                    'backup.tar.gz',
+                    b'\n\nnot a real gzip',
+                    content_type='application/x-tar',
+                )
+            },
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'backup_upload' in response.data
+    mock_logger.warning.assert_called_once()
+    mock_logger.exception.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_playlist_order(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:

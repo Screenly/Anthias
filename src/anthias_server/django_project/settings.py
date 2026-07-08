@@ -141,6 +141,13 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         the redis errors because requests wraps it several layers
         deep (urllib3 ``NameResolutionError`` →
         ``requests.ConnectionError``).
+      * yt-dlp ``DownloadError`` — a YouTube/remote-video download that
+        failed (network timeout, geo-block, private/deleted video, bad
+        URL). None of these are Anthias bugs, and the download task's
+        ``on_failure`` already records ``metadata.error_message`` so the
+        asset renders a "Failed" pill with the reason — the operator
+        gets the feedback without a Sentry page (Sentry ANTHIAS-3T).
+        Matched by name+module so we don't import yt_dlp here.
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -164,6 +171,12 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
             return None
         if isinstance(exc, socket.gaierror):
             return None
+        exc_cls = type(exc)
+        if (
+            exc_cls.__name__ == 'DownloadError'
+            and exc_cls.__module__.startswith('yt_dlp')
+        ):
+            return None
     return event
 
 
@@ -179,6 +192,15 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
 ignore_logger('celery.worker.consumer.consumer')
 ignore_logger('celery.beat')
 ignore_logger('celery.backends.redis')
+# The async result backend logs "Retry limit exceeded while trying to
+# reconnect to the Celery result store backend. The Celery application
+# must be restarted." at a fatal level when redis stays unreachable
+# past its reconnect budget — the same transient-redis outage as the
+# loggers above, just from the result-backend's polling side. It self-
+# heals once redis returns (celery re-establishes on the next result
+# fetch); a persistent outage still surfaces via the watchdog restart
+# loop. (Sentry ANTHIAS-3X.)
+ignore_logger('celery.backends.asynchronous')
 
 
 def get_sentry_release() -> str | None:
