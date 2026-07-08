@@ -296,7 +296,7 @@ void View::loadPage(const QString &uri)
 
     startPageLoad(uri, requestId);
 
-    qDebug() << "Loading web page in background web view:" << uri;
+    qDebug() << "Loading web page:" << uri;
 }
 
 void View::startPageLoad(const QString &uri, quint64 requestId)
@@ -335,7 +335,7 @@ void View::startPageLoad(const QString &uri, quint64 requestId)
             if (ok) {
                 pageLoadWatchdog->stop();
                 pendingPageUri.clear();
-                qDebug() << "Background web page loaded successfully";
+                qDebug() << "Web page loaded successfully";
                 nextWebViewReady = true;
                 switchToNextWebView();
             } else {
@@ -347,7 +347,7 @@ void View::startPageLoad(const QString &uri, quint64 requestId)
                 // playlist will ever see — view_webpage() skips the
                 // loadPage D-Bus call when the URL hasn't changed
                 // (issue #2999).
-                qDebug() << "Background web page failed to load";
+                qDebug() << "Web page failed to load";
                 nextWebViewReady = false;
             }
         }
