@@ -678,6 +678,46 @@ def test_view_webpage_setrequestheaders_version_skew_latches_off(
         fake_bus.setRequestHeaders.assert_called_once()
 
 
+def test_view_webpage_transient_header_failure_forces_reload_next_tick(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A *transient* setRequestHeaders failure (not UnknownMethod) must
+    not be cached as applied: ``current_browser_headers`` stays stale so
+    the next asset_loop tick re-issues loadPage + setRequestHeaders.
+    Otherwise a single-asset playlist whose URL never changes would keep
+    hitting the unchanged-URL short-circuit and the headers would never
+    reach the page. Regression guard for the webview-cold-boot race seen
+    on real hardware (#2215)."""
+    fake_bus = mock.Mock()
+    fake_bus.setRequestHeaders.side_effect = Exception(
+        'org.freedesktop.DBus.Error.NoReply: bus busy'
+    )
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    url = 'https://example.com'
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', url),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(
+            viewer_fixtures.u,
+            '_webview_supports_set_request_headers',
+            True,
+        ),
+    ):
+        # URL unchanged from the previous tick, only the headers differ.
+        viewer_fixtures.u.view_webpage(url, headers={'X': '1'})
+
+        # Transient failure did not latch the capability off (retryable).
+        assert viewer_fixtures.u._webview_supports_set_request_headers is True
+        # loadPage was re-issued because headers differed from the stale
+        # cache, and the cache was NOT advanced to the new headers.
+        fake_bus.loadPage.assert_called_once_with(url)
+        assert viewer_fixtures.u.current_browser_headers == {}
+
+
 def test_view_webpage_nocache_busts_url(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:

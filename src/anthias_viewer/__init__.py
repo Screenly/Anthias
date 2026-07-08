@@ -1087,9 +1087,10 @@ def _cache_busted_url(uri: str) -> str:
     return urlunparse(parts._replace(query=new_query))
 
 
-def _apply_request_headers(headers: dict[str, str]) -> None:
+def _apply_request_headers(headers: dict[str, str]) -> bool:
     """Push the current webpage asset's custom request headers to the
-    webview over D-Bus (#2215).
+    webview over D-Bus (#2215). Returns whether the headers are now in
+    effect on the webview.
 
     The payload is a JSON object string rather than a D-Bus ``a{sv}`` map
     — passing JSON keeps the marshaling trivial across pydbus versions
@@ -1100,15 +1101,25 @@ def _apply_request_headers(headers: dict[str, str]) -> None:
     Version-skew tolerant, mirroring ``setReloadInterval``: an older
     AnthiasViewer that predates the slot raises UnknownMethod, which
     latches the capability off for this viewer process so we don't flood
-    journald or keep paying the round-trip. Transient failures are logged
-    at debug and retried next rotation.
+    journald or keep paying the round-trip.
+
+    Returns ``True`` when the call succeeded *or* the slot is
+    unsupported (nothing left to retry), and ``False`` on a transient
+    failure — the C++ interceptor only picks the staged headers up on the
+    next ``loadPage``, so a transient failure on the first load of a
+    single-asset playlist (its URL never changes, so the unchanged-URL
+    short-circuit would otherwise skip ``loadPage`` forever) must force a
+    reload. The caller keys that reload off this return value. Observed on
+    real hardware: the very first ``setRequestHeaders`` can lose the race
+    against a just-spawned webview's D-Bus registration.
     """
     global _webview_supports_set_request_headers
     if not _webview_supports_set_request_headers:
-        return
+        return True
     payload = json.dumps(headers or {})
     try:
         browser_bus.setRequestHeaders(payload)
+        return True
     except Exception as exc:
         message = str(exc)
         method_missing = (
@@ -1121,12 +1132,13 @@ def _apply_request_headers(headers: dict[str, str]) -> None:
                 'skew?); custom headers disabled until viewer restart: %s',
                 exc,
             )
-        else:
-            logging.debug(
-                'Transient setRequestHeaders failure (will retry next '
-                'rotation): %s',
-                exc,
-            )
+            return True
+        logging.debug(
+            'Transient setRequestHeaders failure (will retry next '
+            'rotation): %s',
+            exc,
+        )
+        return False
 
 
 def view_webpage(
@@ -1171,7 +1183,7 @@ def view_webpage(
     # C++ interceptor has them when the navigation fires. Always sent
     # (empty {} for header-less assets) so switching away from a
     # header-carrying asset clears the previous asset's headers.
-    _apply_request_headers(headers)
+    headers_applied = _apply_request_headers(headers)
     # ``!=`` (value comparison): an ``is not`` identity check would
     # only short-circuit when the asset_loop happens to pass the same
     # str object on consecutive ticks, which a JSON-reconstructed URL
@@ -1181,7 +1193,15 @@ def view_webpage(
     if current_browser_url != uri or current_browser_headers != headers:
         _send_to_webview(lambda: browser_bus.loadPage(uri))
         current_browser_url = uri
-        current_browser_headers = headers
+        # Only cache the headers as applied once setRequestHeaders
+        # actually succeeded. If it transiently failed, leave
+        # ``current_browser_headers`` stale so the mismatch persists and
+        # the next tick re-issues both setRequestHeaders and loadPage —
+        # otherwise a single-asset playlist (unchanged URL) would never
+        # reload and the headers would never reach the page. No-op for
+        # the common success path.
+        if headers_applied:
+            current_browser_headers = headers
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
     # against an older AnthiasViewer (version skew across a fleet
     # rollout, where the viewer container has rotated to a newer image
