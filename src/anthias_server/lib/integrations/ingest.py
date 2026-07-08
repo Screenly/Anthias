@@ -20,6 +20,7 @@ from uploaded ones at playback time.
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
@@ -45,28 +46,50 @@ _DOWNLOAD_TIMEOUT_S = 120.0
 
 
 def first_http_url(candidates: Iterable[Any]) -> str | None:
-    """Return the first candidate that is a real http(s) URL."""
+    """Return the first candidate that is a real http(s) URL.
+
+    ``validate_url`` also accepts streaming schemes (rtsp/rtmp/…); this
+    helper feeds webpage URIs and ``requests.get`` downloads, so it is
+    restricted to http(s) to avoid picking a stream endpoint out of a
+    field bag or handing an rtsp URL to ``requests``.
+    """
     for value in candidates:
-        if isinstance(value, str) and value and validate_url(value):
+        if not isinstance(value, str) or not value:
+            continue
+        if validate_url(value) and urlparse(value).scheme in (
+            'http',
+            'https',
+        ):
             return value
     return None
+
+
+def _sanitise_ext(raw: str) -> str:
+    """Reduce a candidate extension to a safe ``.<alnum>`` token.
+
+    The value comes from a third-party API response or a URL path, so it
+    is stripped to alphanumerics and capped — otherwise something like
+    ``"/../../etc/passwd"`` could escape the asset directory when the
+    staged filename is built.
+    """
+    cleaned = re.sub(r'[^A-Za-z0-9]', '', (raw or '').strip().lstrip('.'))
+    cleaned = cleaned[:16]
+    return f'.{cleaned}' if cleaned else ''
 
 
 def file_ext_from(ext_hint: str | None, url: str) -> str:
     """Best on-disk extension for a downloaded original.
 
     Prefers an explicit provider hint ("mp4"), falls back to the
-    extension on the download URL's path, and finally to none. The
-    leading dot is normalised so ``CreateAssetSerializerV2`` renames the
-    file to ``<asset_id>.mp4`` and ffprobe can identify the container.
+    extension on the download URL's path, and finally to none. Both
+    sources are sanitised (see ``_sanitise_ext``) so a hostile value
+    can't escape the asset directory when the staged filename is built.
     """
-    raw = (ext_hint or '').strip().lstrip('.')
-    if raw:
-        return f'.{raw}'
-    _stem, ext = os.path.splitext(url.split('?', 1)[0])
-    if ext and len(ext) <= 8:
+    ext = _sanitise_ext(ext_hint or '')
+    if ext:
         return ext
-    return ''
+    _stem, url_ext = os.path.splitext(url.split('?', 1)[0])
+    return _sanitise_ext(url_ext)
 
 
 def default_window() -> tuple[datetime, datetime]:

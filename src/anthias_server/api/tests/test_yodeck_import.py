@@ -27,7 +27,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from anthias_server.app.models import Asset
-from anthias_server.lib.integrations import yodeck
+from anthias_server.lib.integrations import ingest, yodeck
 from anthias_server.lib.integrations.base import (
     ImportOutcome,
     ProviderImportError,
@@ -284,9 +284,9 @@ class TestFieldMapping:
     def test_first_http_url_rejects_stream_scheme(self) -> None:
         # validate_url accepts rtsp://, but this helper feeds webpage URIs
         # and requests.get downloads — http(s) only.
-        assert yodeck._first_http_url(['rtsp://cam/stream']) is None
+        assert ingest.first_http_url(['rtsp://cam/stream']) is None
         assert (
-            yodeck._first_http_url(['rtsp://cam/stream', 'https://ok/x'])
+            ingest.first_http_url(['rtsp://cam/stream', 'https://ok/x'])
             == 'https://ok/x'
         )
 

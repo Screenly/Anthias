@@ -34,6 +34,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterator
 
+import requests
+
 from . import ingest
 from .base import (
     ImportOutcome,
@@ -283,8 +285,8 @@ class ScreenCloudProvider(ImportProvider):
                     skip_reason=None
                     if importable
                     else (
-                        'Internal ScreenCloud content (not a standard web '
-                        'link) and was skipped.'
+                        'Internal ScreenCloud content, not a standard web '
+                        'link.'
                     ),
                     raw=node,
                 )
@@ -296,11 +298,19 @@ class ScreenCloudProvider(ImportProvider):
     ) -> Iterator[dict[str, Any]]:
         after: str | None = None
         while True:
-            data = _graphql(
-                token,
-                query,
-                {'first': _LIST_PAGE_SIZE, 'after': after},
-            )
+            try:
+                data = _graphql(
+                    token,
+                    query,
+                    {'first': _LIST_PAGE_SIZE, 'after': after},
+                )
+            except ProviderImportError as error:
+                # ``_paginate`` is only used by ``list_media``, whose caller
+                # (the validate API view) handles transport errors but not
+                # ``ProviderImportError`` — surface a GraphQL-level failure
+                # as a transport error so it becomes a controlled 502
+                # rather than a 500.
+                raise requests.RequestException(error.user_message) from error
             block = data.get(connection) or {}
             for node in block.get('nodes') or []:
                 if isinstance(node, dict):

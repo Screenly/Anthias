@@ -163,6 +163,16 @@ class TestListMedia:
         assert by_id['link:l2'].importable is False
         assert by_id['link:l2'].skip_reason
 
+    @patch('anthias_server.lib.integrations.screencloud._session.post')
+    def test_graphql_error_surfaces_as_transport_error(
+        self, post_mock: MagicMock
+    ) -> None:
+        # A GraphQL errors[] during listing must become a RequestException
+        # so the API view returns a controlled 502, not a 500.
+        post_mock.return_value = _gql(200, errors=[{'message': 'boom'}])
+        with pytest.raises(requests.RequestException):
+            PROVIDER.list_media('tok')
+
 
 class TestHelpers:
     def test_media_type_from_mimetype(self) -> None:
