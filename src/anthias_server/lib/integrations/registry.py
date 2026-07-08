@@ -12,6 +12,7 @@ from typing import Any
 
 from .base import ImportProvider
 from .optisigns import OptiSignsProvider
+from .pisignage import PiSignageProvider
 from .screencloud import ScreenCloudProvider
 from .yodeck import YodeckProvider
 
@@ -23,6 +24,7 @@ _PROVIDERS: dict[str, ImportProvider] = {
         YodeckProvider(),
         ScreenCloudProvider(),
         OptiSignsProvider(),
+        PiSignageProvider(),
     )
 }
 
