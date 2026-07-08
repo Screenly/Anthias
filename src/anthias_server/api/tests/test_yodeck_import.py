@@ -14,12 +14,14 @@ is under test independently of Yodeck's real API.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from io import StringIO
 from typing import Any
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+from django.core.management import call_command
 from django.test import Client
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -36,6 +38,13 @@ from anthias_server.lib.integrations.registry import (
     list_provider_meta,
 )
 from anthias_server.settings import settings
+
+
+# Stateless provider (its HTTP session is module-level), so one shared
+# instance is reused across tests. Keeping construction out of the
+# ``pytest.raises`` blocks also means each of those blocks has a single
+# throwing invocation (Sonar S5778).
+PROVIDER = yodeck.YodeckProvider()
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +105,7 @@ class TestValidateToken:
     @patch('anthias_server.lib.integrations.yodeck._session.get')
     def test_returns_true_on_200(self, get_mock: MagicMock) -> None:
         get_mock.return_value = _fake_response(200, {'results': []})
-        assert yodeck.YodeckProvider().validate_token('good') is True
+        assert PROVIDER.validate_token('good') is True
         _, kwargs = get_mock.call_args
         assert kwargs['headers']['Authorization'] == 'Token good'
         assert kwargs['params']['limit'] == 1
@@ -107,19 +116,19 @@ class TestValidateToken:
         self, get_mock: MagicMock, code: int
     ) -> None:
         get_mock.return_value = _fake_response(code, {'detail': 'no'})
-        assert yodeck.YodeckProvider().validate_token('bad') is False
+        assert PROVIDER.validate_token('bad') is False
 
     @patch('anthias_server.lib.integrations.yodeck._session.get')
     def test_raises_on_5xx(self, get_mock: MagicMock) -> None:
         get_mock.return_value = _fake_response(503)
         with pytest.raises(requests.HTTPError):
-            yodeck.YodeckProvider().validate_token('x')
+            PROVIDER.validate_token('x')
 
     @patch('anthias_server.lib.integrations.yodeck._session.get')
     def test_propagates_network_error(self, get_mock: MagicMock) -> None:
         get_mock.side_effect = requests.ConnectionError('boom')
         with pytest.raises(requests.ConnectionError):
-            yodeck.YodeckProvider().validate_token('x')
+            PROVIDER.validate_token('x')
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +176,7 @@ class TestListMedia:
                 },
             }
         )
-        items = yodeck.YodeckProvider().list_media('tok')
+        items = PROVIDER.list_media('tok')
         by_id = {item.remote_id: item for item in items}
 
         assert by_id['1'].media_type == 'image' and by_id['1'].importable
@@ -187,13 +196,13 @@ class TestListMedia:
                             {'id': 1, 'name': 'A'},
                             {'id': 2, 'name': 'B'},
                         ],
-                        'next': 'http://x/?offset=2',
+                        'next': 'https://x/?offset=2',
                     },
                     2: {'results': [{'id': 3, 'name': 'C'}], 'next': None},
                 },
             }
         )
-        items = yodeck.YodeckProvider().list_media('tok')
+        items = PROVIDER.list_media('tok')
         image_ids = sorted(
             i.remote_id for i in items if i.media_type == 'image'
         )
@@ -204,7 +213,7 @@ class TestListMedia:
         get_mock.side_effect = self._pages(
             {'image': {0: {'results': [{'id': 9}], 'next': None}}}
         )
-        items = yodeck.YodeckProvider().list_media('tok')
+        items = PROVIDER.list_media('tok')
         item = next(i for i in items if i.remote_id == '9')
         assert 'Yodeck media 9' == item.name
 
@@ -305,7 +314,7 @@ class TestImportItem:
         with patch(
             'anthias_server.lib.integrations.yodeck._session.get'
         ) as get_mock:
-            outcome = yodeck.YodeckProvider().import_item('tok', '77')
+            outcome = PROVIDER.import_item('tok', '77')
         # Short-circuits before any HTTP call.
         get_mock.assert_not_called()
         assert outcome.skipped is True
@@ -317,7 +326,7 @@ class TestImportItem:
         get_mock.return_value = self._detail_response(
             {'id': 5, 'name': 'Song', 'media_origin': {'type': 'audio'}}
         )
-        outcome = yodeck.YodeckProvider().import_item('tok', '5')
+        outcome = PROVIDER.import_item('tok', '5')
         assert outcome.skipped is True
         assert outcome.success is False
         assert 'supported' in (outcome.reason or '').lower()
@@ -332,7 +341,7 @@ class TestImportItem:
                 'arguments': {},
             }
         )
-        outcome = yodeck.YodeckProvider().import_item('tok', '3')
+        outcome = PROVIDER.import_item('tok', '3')
         assert outcome.skipped is True
 
     @patch('anthias_server.lib.integrations.yodeck._session.get')
@@ -345,7 +354,7 @@ class TestImportItem:
                 'arguments': {},
             }
         )
-        outcome = yodeck.YodeckProvider().import_item('tok', '1')
+        outcome = PROVIDER.import_item('tok', '1')
         assert outcome.skipped is True
         assert 're-upload' in (outcome.reason or '')
 
@@ -370,7 +379,7 @@ class TestImportItem:
                 },
             }
         )
-        outcome = yodeck.YodeckProvider().import_item('tok', '3', enable=True)
+        outcome = PROVIDER.import_item('tok', '3', enable=True)
         assert outcome.success is True and not outcome.skipped
 
         asset = Asset.objects.get(asset_id=outcome.asset_id)
@@ -414,7 +423,7 @@ class TestImportItem:
 
         get_mock.side_effect = _get
 
-        outcome = yodeck.YodeckProvider().import_item('tok', '1', enable=False)
+        outcome = PROVIDER.import_item('tok', '1', enable=False)
         assert outcome.success is True and not outcome.skipped
 
         asset = Asset.objects.get(asset_id=outcome.asset_id)
@@ -449,7 +458,7 @@ class TestImportItem:
         get_mock.side_effect = _get
 
         with pytest.raises(ProviderImportError):
-            yodeck.YodeckProvider().import_item('tok', '1')
+            PROVIDER.import_item('tok', '1')
 
         # Neither the .part nor the staged file survive a failed download.
         assert not list(tmp_path.glob('.import-*'))
@@ -624,6 +633,74 @@ class TestImportItemEndpoint:
 # ---------------------------------------------------------------------------
 # Wizard page + settings entry (template rendering)
 # ---------------------------------------------------------------------------
+
+
+_COMMAND_PROVIDER = (
+    'anthias_server.app.management.commands.import_content.get_provider'
+)
+
+
+class TestImportContentCommand:
+    def _provider(self, items: list[RemoteMediaItem]) -> MagicMock:
+        provider = MagicMock()
+        provider.label = 'Yodeck'
+        provider.validate_token.return_value = True
+        provider.list_media.return_value = items
+        return provider
+
+    @mock.patch(_COMMAND_PROVIDER)
+    def test_dry_run_lists_without_importing(
+        self, provider_mock: MagicMock
+    ) -> None:
+        provider = self._provider(
+            [
+                RemoteMediaItem('1', 'Pic', 'image', True),
+                RemoteMediaItem('4', 'Song', 'audio', False, 'unsupported'),
+            ]
+        )
+        provider_mock.return_value = provider
+        out = StringIO()
+        call_command(
+            'import_content',
+            '--provider',
+            'yodeck',
+            '--token',
+            'x',
+            '--dry-run',
+            stdout=out,
+        )
+        provider.import_item.assert_not_called()
+        assert '1 importable' in out.getvalue()
+
+    @mock.patch(_COMMAND_PROVIDER)
+    def test_import_runs_and_reports_counts(
+        self, provider_mock: MagicMock
+    ) -> None:
+        provider = self._provider([RemoteMediaItem('1', 'Pic', 'image', True)])
+        provider.import_item.return_value = ImportOutcome(
+            success=True, asset_id='a'
+        )
+        provider_mock.return_value = provider
+        out = StringIO()
+        call_command(
+            'import_content',
+            '--provider',
+            'yodeck',
+            '--token',
+            'x',
+            stdout=out,
+        )
+        provider.import_item.assert_called_once()
+        assert '1 imported' in out.getvalue()
+
+    @mock.patch(_COMMAND_PROVIDER, return_value=None)
+    def test_unknown_provider_errors(self, _provider_mock: MagicMock) -> None:
+        from django.core.management.base import CommandError
+
+        with pytest.raises(CommandError):
+            call_command(
+                'import_content', '--provider', 'nope', '--token', 'x'
+            )
 
 
 @pytest.mark.django_db

@@ -116,8 +116,7 @@ def _webpage_url(detail: dict[str, Any]) -> str | None:
     # Fall back to any http(s) value anywhere in ``arguments`` — Yodeck
     # webpage media keep the destination URL there under a key we may not
     # have enumerated above.
-    inner_any = (v for v in arguments.values())
-    return _first_http_url([*top, *inner, *inner_any])
+    return _first_http_url([*top, *inner, *arguments.values()])
 
 
 def _file_url(detail: dict[str, Any]) -> str | None:
@@ -174,10 +173,12 @@ def _availability_window(detail: dict[str, Any]) -> tuple[datetime, datetime]:
 
 def _default_duration(detail: dict[str, Any]) -> int:
     raw = detail.get('default_duration')
-    try:
-        duration = int(raw)
-    except (TypeError, ValueError):
-        duration = 0
+    duration = 0
+    if isinstance(raw, (int, str)):
+        try:
+            duration = int(raw)
+        except (TypeError, ValueError):
+            duration = 0
     if duration > 0:
         return duration
     return int(settings['default_duration'])
@@ -369,10 +370,10 @@ class YodeckProvider(ImportProvider):
                 enable=enable,
             )
         else:
-            asset = self._import_file(
+            imported = self._import_file(
                 token, detail, media_type, name, start_date, end_date, enable
             )
-            if asset is None:
+            if imported is None:
                 return ImportOutcome(
                     success=False,
                     skipped=True,
@@ -381,6 +382,7 @@ class YodeckProvider(ImportProvider):
                         f'this {media_type}; re-upload it manually.'
                     ),
                 )
+            asset = imported
 
         _stamp_import_source(asset, remote_id)
         return ImportOutcome(success=True, asset_id=asset.asset_id)
