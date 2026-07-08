@@ -690,7 +690,14 @@ class _BoundedWebviewOutput:
         self._buf = ''
         self._lock = Lock()
 
-    def __call__(self, chunk: str) -> None:
+    def __call__(self, chunk: str | bytes) -> None:
+        # sh decodes to ``str`` for an ``_out`` callback under the default
+        # encoding (verified with the shipped sh 2.3.0 on a Pi4), but
+        # coerce defensively so an ``_encoding=None`` / raw-bytes
+        # configuration can never turn ``str + bytes`` into a TypeError
+        # that would silently break the handshake scan.
+        if isinstance(chunk, bytes):
+            chunk = chunk.decode('utf-8', errors='replace')
         with self._lock:
             self._buf += chunk
             if len(self._buf) > self._maxlen:
@@ -729,7 +736,12 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     # (issue #3138). With an ``_out`` handler sh stops aggregating
     # ``.process.stdout`` (it stays empty), so the handshake scan and the
     # failure message below read the sink instead.
+    #
+    # Publish the sink now, before the spawn: ``_webview_output`` then
+    # mirrors ``browser`` for the live attempt, so a WEBVIEW_DEBUG read
+    # during launch/retry can't surface a previous process's stale tail.
     output = _BoundedWebviewOutput()
+    _webview_output = output
     try:
         # _bg_exc=False: with the default (True), sh re-raises the exit
         # error (e.g. SignalException_SIGABRT on a Qt init crash, or
@@ -755,7 +767,6 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     # ``startup_timeout`` rather than the two stacking.
     while monotonic() < deadline:
         if BROWSER_HANDSHAKE_LINE in output.text():
-            _webview_output = output
             return candidate
         if not candidate.is_alive():
             raise WebviewLaunchError(

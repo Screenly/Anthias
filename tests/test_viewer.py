@@ -309,6 +309,21 @@ def test_bounded_webview_output_discards_old_data(
     assert text.endswith('duplicate\n')
 
 
+def test_bounded_webview_output_coerces_bytes(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """sh hands the _out callback str under the default encoding, but the
+    sink coerces bytes defensively so an _encoding=None / raw-bytes
+    configuration can't turn ``str + bytes`` into a TypeError that would
+    silently break the handshake scan."""
+    sink = viewer_fixtures.u._BoundedWebviewOutput(maxlen=1024)
+    sink(b'booting\n')
+    sink('Anthias service start\n')
+    text = sink.text()
+    assert viewer_fixtures.u.BROWSER_HANDSHAKE_LINE in text
+    assert isinstance(text, str)
+
+
 def test_bounded_webview_output_preserves_handshake_in_window(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
