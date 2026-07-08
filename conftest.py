@@ -51,6 +51,30 @@ from unittest.mock import MagicMock
 import pytest
 
 # ---------------------------------------------------------------------------
+# 0. App-availability probe
+# ---------------------------------------------------------------------------
+#
+# This conftest lives at the repo root so the Redis/D-Bus/env isolation
+# reaches BOTH ``tests/`` and ``src/anthias_server/api/tests/`` (their only
+# common ancestor). But the root is also an ancestor of
+# ``tools/raspberry_pi_imager/tests/``, which the ``run-python-linter`` CI
+# job runs with ``-p no:django`` in a *minimal* venv that has neither
+# Django nor pytz. Importing the app stack there (``anthias_common.utils``
+# pulls in ``pytz``) would crash conftest collection for those tests.
+#
+# So gate every app-dependent hook on whether the app is importable at
+# all. When it isn't (the rpi-imager lint env), this whole file degrades
+# to a no-op and those app-free tests run untouched. ``os`` import is
+# never a problem; only the app imports are.
+try:
+    import anthias_common.utils as _anthias_common_utils  # noqa: F401
+
+    _APP_AVAILABLE = True
+except Exception:
+    _APP_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
 # 1. ENVIRONMENT=test (settings.py reads this at import time)
 # ---------------------------------------------------------------------------
 
@@ -217,7 +241,8 @@ def _patch_connect_to_redis() -> None:
     _lib_utils.connect_to_redis = lambda: _SESSION_FAKE_REDIS
 
 
-_patch_connect_to_redis()
+if _APP_AVAILABLE:
+    _patch_connect_to_redis()
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -231,6 +256,8 @@ def _ensure_assetdir() -> None:
     Materialise the path once per session so those fixtures don't
     ``FileNotFoundError`` out before the test even runs.
     """
+    if not _APP_AVAILABLE:
+        return
     from anthias_server.settings import settings as _anthias_settings
 
     asset_dir = _anthias_settings.get('assetdir')
@@ -274,7 +301,14 @@ def _mock_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
     Tests that need their own Redis mock (e.g. ``tests/test_telemetry.py``,
     ``tests/test_messaging.py``) override this by patching ``module.r``
     directly — that takes precedence inside the per-test setup chain.
+
+    No-op (yields a bare fake) when the app stack isn't importable — the
+    app-free ``tools/raspberry_pi_imager/tests`` collected under this root
+    conftest must not drag in Django / redis / pytz.
     """
+    if not _APP_AVAILABLE:
+        yield _make_fake_redis()
+        return
     fake = _make_fake_redis()
     monkeypatch.setattr('anthias_common.utils.connect_to_redis', lambda: fake)
 
