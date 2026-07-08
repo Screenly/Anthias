@@ -168,40 +168,48 @@ def test_setup_reraises_unrelated_busget_error(
     assert viewer_fixtures.m_loadb.call_count == 1
 
 
-def _stub_browser_stdout_static(
+def _capture_out_sink(
+    viewer_fixtures: _ViewerFixtures,
     browser_proc: mock.Mock,
-    value: bytes,
-) -> None:
-    """
-    sh.RunningCommand.process.stdout is a @property that returns the
-    latest accumulated buffer on each access. Use PropertyMock so
-    the test exercises the same poll-and-decode pattern as the
-    production loop. Static variant: every read returns the same
-    bytes value, suitable for cases where the loop doesn't depend
-    on stdout changing across iterations (early-exit, timeout).
-    """
-    type(browser_proc.process).stdout = mock.PropertyMock(return_value=value)
+    seed: str = '',
+) -> dict[str, Any]:
+    """Wire the mocked sh command so the ``_BoundedWebviewOutput`` it is
+    handed as ``_out`` is captured for the test to drive.
 
+    Production no longer reads ``.process.stdout`` (sh stops aggregating
+    it once an ``_out`` handler is set — that's the issue #3138 fix);
+    instead the handshake scan and failure message read the bounded sink.
+    When ``seed`` is given it is fed into the sink as the command is
+    invoked, so the handshake is present on the first poll. Returns a
+    holder dict whose ``'sink'`` key is populated when the command runs.
+    """
+    holder: dict[str, Any] = {}
 
-def _stub_browser_stdout_chunks(
-    browser_proc: mock.Mock,
-    chunks: list[bytes],
-) -> None:
-    """As above, but advance through `chunks` across reads — for
-    the success case where the handshake appears in a later poll."""
-    type(browser_proc.process).stdout = mock.PropertyMock(side_effect=chunks)
+    def capture(*args: Any, **kwargs: Any) -> mock.Mock:
+        holder['sink'] = kwargs['_out']
+        if seed:
+            kwargs['_out'](seed)
+        return browser_proc
+
+    viewer_fixtures.m_cmd.return_value.side_effect = capture
+    return holder
 
 
 def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
-    # Two stdout reads: an empty buffer on the first poll, then the
-    # handshake line appended on the second. Verifies that the
-    # polling loop actually re-reads stdout each iteration.
-    _stub_browser_stdout_chunks(
-        browser_proc,
-        [b'starting up\n', b'starting up\nAnthias service start\n'],
-    )
     browser_proc.is_alive.return_value = True
+
+    # The handshake line must arrive across polls, not before the first:
+    # capture the _out sink, leave it empty for the first poll, then feed
+    # the handshake on the first mocked sleep so the second poll finds it
+    # — verifying the loop re-reads the sink each iteration.
+    holder = _capture_out_sink(viewer_fixtures, browser_proc)
+
+    def feed_handshake(*args: Any, **kwargs: Any) -> None:
+        holder['sink']('starting up\nAnthias service start\n')
+
+    viewer_fixtures.m_sleep.side_effect = feed_handshake
+
     viewer_fixtures.p_cmd.start()
     viewer_fixtures.p_sleep.start()
     try:
@@ -218,6 +226,12 @@ def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
     launch_kwargs = viewer_fixtures.m_cmd.return_value.call_args.kwargs
     assert launch_kwargs['_bg'] is True
     assert launch_kwargs['_bg_exc'] is False
+    # _out must be the bounded sink, not sh's default unbounded stdout
+    # aggregation that leaks the viewer's RAM on a chatty decoder
+    # (issue #3138).
+    assert isinstance(
+        launch_kwargs['_out'], viewer_fixtures.u._BoundedWebviewOutput
+    )
 
 
 def test_spawn_webview_once_raises_on_early_exit(
@@ -227,8 +241,8 @@ def test_spawn_webview_once_raises_on_early_exit(
     WebviewLaunchError (a RuntimeError subclass) and does NOT terminate
     (it's already dead)."""
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
-    # The error message also reads stdout, so use the static stub.
-    _stub_browser_stdout_static(browser_proc, b'')
+    # No output is fed, so the bounded _out sink stays empty and the
+    # failure message reads it as such.
     browser_proc.is_alive.return_value = False
     viewer_fixtures.p_cmd.start()
     viewer_fixtures.p_sleep.start()
@@ -249,7 +263,6 @@ def test_spawn_webview_once_terminates_on_timeout(
     would leak a second AnthiasViewer contending for the framebuffer /
     D-Bus name."""
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
-    _stub_browser_stdout_static(browser_proc, b'irrelevant noise')
     # is_alive False so _terminate_webview reaps immediately without a
     # busy-wait; the 0s timeout drives the deadline straight past.
     browser_proc.is_alive.return_value = False
@@ -278,6 +291,35 @@ def test_spawn_webview_once_missing_binary(
             viewer_fixtures.u._spawn_webview_once(30)
     finally:
         viewer_fixtures.p_cmd.stop()
+
+
+def test_bounded_webview_output_discards_old_data(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The _out sink retains only the most recent maxlen chars, so a
+    chatty AnthiasViewer (e.g. ffmpeg spamming 'channel element 0.0
+    duplicate' every frame) can't grow the viewer's RSS without bound —
+    the root cause of issue #3138."""
+    sink = viewer_fixtures.u._BoundedWebviewOutput(maxlen=100)
+    for _ in range(1000):
+        sink('channel element 0.0 duplicate\n')
+    text = sink.text()
+    assert len(text) <= 100
+    # What survives is the tail of the stream, not the head.
+    assert text.endswith('duplicate\n')
+
+
+def test_bounded_webview_output_preserves_handshake_in_window(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The handshake line is emitted early, within the retained window,
+    so it stays visible to the startup scan even after later output and
+    across chunk boundaries."""
+    sink = viewer_fixtures.u._BoundedWebviewOutput(maxlen=1024)
+    sink('booting\nAnthias service ')
+    sink('start\n')
+    sink('more logs after handshake\n')
+    assert viewer_fixtures.u.BROWSER_HANDSHAKE_LINE in sink.text()
 
 
 def test_load_browser_retries_then_succeeds(
@@ -488,9 +530,8 @@ def test_load_browser_resets_set_reload_interval_capability(
     and we shouldn't leave auto-refresh permanently disabled because
     the *old* process didn't have it."""
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
-    _stub_browser_stdout_chunks(
-        browser_proc,
-        [b'Anthias service start\n'],
+    _capture_out_sink(
+        viewer_fixtures, browser_proc, seed='Anthias service start\n'
     )
     browser_proc.is_alive.return_value = True
     viewer_fixtures.p_cmd.start()
@@ -673,9 +714,8 @@ def test_load_browser_resets_current_browser_url(
     unchanged URL (single-asset playlist) the respawned webview would
     otherwise stay blank forever."""
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
-    _stub_browser_stdout_chunks(
-        browser_proc,
-        [b'Anthias service start\n'],
+    _capture_out_sink(
+        viewer_fixtures, browser_proc, seed='Anthias service start\n'
     )
     browser_proc.is_alive.return_value = True
     viewer_fixtures.p_cmd.start()
