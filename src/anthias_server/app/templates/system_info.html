@@ -213,7 +213,12 @@
     var seededMs = Date.parse(el.dataset.iso);
     if (isNaN(seededMs)) return;
     var zone = el.dataset.timezone || undefined;
-    var baseline = performance.now();
+    // Prefer the monotonic clock; fall back to Date.now() where
+    // performance.now() is unavailable (older/embedded browsers).
+    var clock = (window.performance && performance.now)
+      ? function () { return performance.now(); }
+      : function () { return Date.now(); };
+    var baseline = clock();
     var fmt;
     try {
       fmt = new Intl.DateTimeFormat(undefined, {
@@ -230,7 +235,7 @@
       });
     }
     function tick() {
-      var now = new Date(seededMs + (performance.now() - baseline));
+      var now = new Date(seededMs + (clock() - baseline));
       el.textContent = fmt.format(now);
     }
     tick();
