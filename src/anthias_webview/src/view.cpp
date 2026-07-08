@@ -43,6 +43,30 @@
 // called from the UI thread — so the shared state is guarded by a mutex.
 // No Q_OBJECT: the class adds no signals/slots, so it needs no moc and
 // can live entirely in this translation unit.
+
+// Canonical origin key ``scheme://host:port`` (both lower-cased, with the
+// scheme's default port filled in when the URL omits it) so scoping is by
+// full origin, not just host. Matching on host alone would still attach an
+// Authorization token across a scheme downgrade (https→http on the same
+// host) or to a different service on another port; comparing the whole
+// origin closes those leaks while remaining an exact same-origin match for
+// the page's own XHR/subresources.
+static QString originKey(const QUrl& url)
+{
+    int port = url.port();
+    if (port == -1) {
+        const QString scheme = url.scheme().toLower();
+        if (scheme == QLatin1String("https")) {
+            port = 443;
+        } else if (scheme == QLatin1String("http")) {
+            port = 80;
+        }
+    }
+    return url.scheme().toLower() + QStringLiteral("://")
+        + url.host().toLower() + QStringLiteral(":")
+        + QString::number(port);
+}
+
 class RequestHeaderInterceptor : public QWebEngineUrlRequestInterceptor
 {
 public:
@@ -52,32 +76,32 @@ public:
     }
 
     void setHeaders(
-        const QString& host,
+        const QString& origin,
         const QList<QPair<QByteArray, QByteArray>>& headers)
     {
         QMutexLocker locker(&m_mutex);
-        m_host = host;
+        m_origin = origin;
         m_headers = headers;
     }
 
     void clear()
     {
         QMutexLocker locker(&m_mutex);
-        m_host.clear();
+        m_origin.clear();
         m_headers.clear();
     }
 
     void interceptRequest(QWebEngineUrlRequestInfo& info) override
     {
         QMutexLocker locker(&m_mutex);
-        if (m_headers.isEmpty() || m_host.isEmpty()) {
+        if (m_headers.isEmpty() || m_origin.isEmpty()) {
             return;
         }
-        // Exact host match (case-insensitive, per DNS). Anything on a
-        // different host — including a cross-origin redirect target — is
-        // deliberately excluded so the header can't leak off-site.
-        if (info.requestUrl().host().compare(
-                m_host, Qt::CaseInsensitive) != 0) {
+        // Same-origin (scheme + host + port) only. Anything else — a
+        // cross-origin redirect target, an https→http downgrade, or a
+        // different port on the same host — is deliberately excluded so
+        // the operator's headers can't leak off the asset's own origin.
+        if (originKey(info.requestUrl()) != m_origin) {
             return;
         }
         for (const auto& header : m_headers) {
@@ -87,7 +111,7 @@ public:
 
 private:
     QMutex m_mutex;
-    QString m_host;
+    QString m_origin;
     QList<QPair<QByteArray, QByteArray>> m_headers;
 };
 
@@ -276,10 +300,15 @@ View::View(QWidget* parent) : QWidget(parent)
 
     // Per-asset custom request headers (#2215). Installed on the shared
     // profile once; the headers themselves are staged per asset by
-    // setRequestHeaders and scoped to the target host in startPageLoad.
+    // setRequestHeaders and scoped to the target origin in startPageLoad.
     // ``setUrlRequestInterceptor`` on QWebEngineProfile is available
     // identically on Qt 5.13+ and Qt 6, so no version macro is needed.
-    headerInterceptor = new RequestHeaderInterceptor(this);
+    // Parent the interceptor to the *profile* (process-lifetime), not to
+    // ``this``: the default profile can outlive the View, and if the
+    // interceptor were destroyed first the profile would be left holding
+    // a dangling pointer (use-after-free at teardown). ~View also detaches
+    // it defensively.
+    headerInterceptor = new RequestHeaderInterceptor(profile);
     profile->setUrlRequestInterceptor(headerInterceptor);
 
     currentWebView = webView1;
@@ -329,6 +358,11 @@ View::~View()
     if (pageLoadConnection) {
         QObject::disconnect(pageLoadConnection);
     }
+    // Detach the request interceptor from the (process-lifetime) default
+    // profile before we go away, so no request can be intercepted against
+    // torn-down View state. The interceptor object itself is owned by the
+    // profile (see ctor), so we only clear the profile's pointer here.
+    QWebEngineProfile::defaultProfile()->setUrlRequestInterceptor(nullptr);
     stopReloadTimer();
     stopAnimation();
 }
@@ -427,7 +461,7 @@ void View::startPageLoad(const QString &uri, quint64 requestId)
 
     pendingPageUri = uri;
 
-    // Scope the staged headers (#2215) to this URL's host and hand them
+    // Scope the staged headers (#2215) to this URL's origin and hand them
     // to the interceptor before the load fires. An empty ``pendingHeaders``
     // clears any headers left from a previous asset, so a header-less
     // page never inherits the prior page's Authorization.
@@ -436,7 +470,7 @@ void View::startPageLoad(const QString &uri, quint64 requestId)
             headerInterceptor->clear();
         } else {
             headerInterceptor->setHeaders(
-                QUrl(uri).host(), pendingHeaders);
+                originKey(QUrl(uri)), pendingHeaders);
         }
     }
 

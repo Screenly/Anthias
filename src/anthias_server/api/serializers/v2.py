@@ -22,6 +22,7 @@ from anthias_common.utils import SCREEN_ROTATION_CHOICES
 from anthias_server.app.models import (
     Asset,
     DURATION_S_MAX,
+    MAX_ASSET_HEADERS,
     REFRESH_INTERVAL_S_MAX,
     clamp_refresh_interval,
     normalize_asset_headers,
@@ -74,11 +75,22 @@ def _validate_custom_headers(value: Any) -> dict[str, str]:
     Delegates to ``validate_asset_headers`` (the single source of truth
     for the header-name / value rules and the count cap) so the API and
     the viewer read path can't drift apart.
+
+    On failure we raise a fixed, self-authored message rather than
+    surfacing the caught exception's text: the rules are few and the
+    operator supplied the offending value themselves, so a static
+    description is just as actionable and keeps any exception detail off
+    the HTTP response (CodeQL "information exposure through an
+    exception").
     """
     try:
         return validate_asset_headers(value)
-    except ValueError as exc:
-        raise serializers.ValidationError(str(exc))
+    except ValueError:
+        raise serializers.ValidationError(
+            'Invalid custom headers. Each entry needs a valid header-name '
+            "token (letters, digits, and !#$%&'*+-.^_`|~) and a value with "
+            f'no CR/LF, and at most {MAX_ASSET_HEADERS} headers are allowed.'
+        ) from None
 
 
 def _validate_time_window(
