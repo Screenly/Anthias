@@ -108,6 +108,22 @@ _IMPORT_NETWORK_USER_MESSAGE = (
 )
 
 
+def _import_error_body(message: str) -> dict[str, Any]:
+    """Uniform error body for the import-item endpoint.
+
+    Same keys as ``ImportOutcome.as_dict()`` plus ``error`` so every
+    response from the endpoint has one shape regardless of outcome —
+    easier for non-wizard clients and matches the declared schema.
+    """
+    return {
+        'success': False,
+        'asset_id': None,
+        'skipped': False,
+        'reason': None,
+        'error': message,
+    }
+
+
 # Bounded HTTP timeout for the Balena supervisor lookup below. Hit by
 # every poll on Balena devices, so it must stay well under the JS
 # poll cadence (2s) to keep request workers free. A real supervisor
@@ -1314,8 +1330,10 @@ class ImportItemViewV2(APIView):
         except ProviderImportError as error:
             # .user_message is the operator-display string we composed in
             # the provider — using it (not str(error)) keeps the response
-            # free of exception state.
-            return Response({'success': False, 'error': error.user_message})
+            # free of exception state. Keep the same key shape as the
+            # success path (ImportOutcome.as_dict) plus ``error`` so every
+            # response is uniform for non-wizard clients.
+            return Response(_import_error_body(error.user_message))
         except requests.RequestException:
             logger.warning(
                 '%s import_item failed for %s',
@@ -1324,8 +1342,8 @@ class ImportItemViewV2(APIView):
                 exc_info=True,
             )
             return Response(
-                {'success': False, 'error': _IMPORT_NETWORK_USER_MESSAGE},
+                _import_error_body(_IMPORT_NETWORK_USER_MESSAGE),
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        return Response(outcome.as_dict())
+        return Response({**outcome.as_dict(), 'error': None})

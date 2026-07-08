@@ -464,6 +464,66 @@ class TestImportItem:
         assert not list(tmp_path.glob('.import-*'))
         assert Asset.objects.count() == 0
 
+    def _capture_download_headers(
+        self,
+        get_mock: MagicMock,
+        detail: dict[str, Any],
+    ) -> dict[str, str]:
+        captured: dict[str, str] = {}
+
+        def _get(url: str, **kwargs: Any) -> MagicMock:
+            if kwargs.get('stream'):
+                captured.update(kwargs.get('headers') or {})
+                return _fake_stream_response(200, [b'\x89PNG\r\n'])
+            return self._detail_response(detail)
+
+        get_mock.side_effect = _get
+        return captured
+
+    @patch('anthias_server.lib.integrations.yodeck._session.get')
+    def test_download_omits_token_for_foreign_host(
+        self,
+        get_mock: MagicMock,
+        tmp_path: Any,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # A pre-signed CDN original on a non-Yodeck host must NOT receive
+        # the Yodeck API token.
+        monkeypatch.setitem(settings, 'assetdir', str(tmp_path))
+        detail = {
+            'id': 1,
+            'name': 'Pic',
+            'media_origin': {'type': 'image'},
+            'file_extension': 'png',
+            'arguments': {
+                'download_from_url': 'https://cdn.example.com/x.png'
+            },
+        }
+        captured = self._capture_download_headers(get_mock, detail)
+        PROVIDER.import_item('tok', '1')
+        assert 'Authorization' not in captured
+
+    @patch('anthias_server.lib.integrations.yodeck._session.get')
+    def test_download_sends_token_for_yodeck_host(
+        self,
+        get_mock: MagicMock,
+        tmp_path: Any,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setitem(settings, 'assetdir', str(tmp_path))
+        detail = {
+            'id': 1,
+            'name': 'Pic',
+            'media_origin': {'type': 'image'},
+            'file_extension': 'png',
+            'arguments': {
+                'download_from_url': 'https://app.yodeck.com/media/orig/x.png'
+            },
+        }
+        captured = self._capture_download_headers(get_mock, detail)
+        PROVIDER.import_item('tok', '1')
+        assert captured.get('Authorization') == 'Token tok'
+
 
 # ---------------------------------------------------------------------------
 # HTTP endpoints (provider layer mocked)

@@ -23,6 +23,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
+from urllib.parse import urlparse
 
 import requests
 
@@ -42,6 +43,11 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 YODECK_API_BASE = 'https://app.yodeck.com/api/v2'
+# Host the API token is scoped to. Original-file URLs are frequently
+# pre-signed CDN links on a different host; sending the Yodeck token to
+# those would leak the credential and can break the signed request, so
+# auth is attached only when downloading from Yodeck itself.
+_YODECK_HOST = urlparse(YODECK_API_BASE).netloc.lower()
 PROVIDER_KEY = 'yodeck'
 
 # Anthias renders images, videos and web pages. Yodeck audio/document
@@ -309,8 +315,8 @@ class YodeckProvider(ImportProvider):
             for item in results:
                 if isinstance(item, dict):
                     yield item
-            # Stop when the page was short or the API reports no ``next``
-            # cursor — either signals the last page.
+            # Stop when the page came back empty or the API reports no
+            # ``next`` cursor — either signals the last page.
             if not results or not body.get('next'):
                 break
             offset += len(results)
@@ -445,10 +451,17 @@ class YodeckProvider(ImportProvider):
         assetdir = settings['assetdir']
         staged = os.path.join(assetdir, f'.import-{uuid.uuid4().hex}{ext}')
         part = f'{staged}.part'
+        # Only attach the Yodeck token when the download stays on the
+        # Yodeck host — never forward it to a pre-signed CDN original.
+        download_headers = (
+            _auth_headers(token)
+            if urlparse(url).netloc.lower() == _YODECK_HOST
+            else {}
+        )
         try:
             with _session.get(
                 url,
-                headers=_auth_headers(token),
+                headers=download_headers,
                 stream=True,
                 timeout=_DOWNLOAD_TIMEOUT_S,
             ) as response:
