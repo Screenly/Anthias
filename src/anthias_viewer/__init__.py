@@ -1293,6 +1293,52 @@ def _kernel_has_bindable_display() -> bool:
     return False
 
 
+def _cage_output_probe() -> str:
+    """Probe whether cage currently owns any output.
+
+    Returns one of:
+      * ``'has-output'`` — cage lists at least one connector (bound,
+        enabled or not).
+      * ``'no-output'`` — wlr-randr ran cleanly and listed nothing, i.e.
+        cage genuinely has zero outputs.
+      * ``'unknown'`` — wlr-randr itself could not be run: missing binary,
+        nonzero exit, or the 5s timeout (e.g. under sustained QtWebEngine
+        GPU load). The caller MUST treat this as "can't tell", never as
+        "no output" — escalating a tooling failure to a container restart
+        would blank a healthy, displaying board.
+
+    Deliberately separate from ``_wlr_output_names``, which collapses both
+    the ``'no-output'`` and ``'unknown'`` cases to ``[]``. That's fine for
+    the rotation/power callers (they only ever degrade to a no-op) but
+    wrong for the watchdog, which restarts the container on the
+    difference.
+    """
+    try:
+        result = subprocess.run(
+            ['wlr-randr'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        logging.debug('wlr-randr unavailable for output probe: %s', exc)
+        return 'unknown'
+    if result.returncode != 0:
+        logging.debug(
+            'wlr-randr output probe exit %d: %s',
+            result.returncode,
+            result.stderr,
+        )
+        return 'unknown'
+    for line in result.stdout.splitlines():
+        # A connector block's first line starts at column 0; indented
+        # lines are that connector's properties (see _wlr_output_names).
+        if line and not line[0].isspace():
+            return 'has-output'
+    return 'no-output'
+
+
 def _wayland_output_watchdog() -> None:
     """Self-heal a headless-boot display wedge on Wayland (cage) boards.
 
@@ -1319,18 +1365,24 @@ def _wayland_output_watchdog() -> None:
     a deliberately headless unit (nothing plugged in), and a
     marginally-connected cable that asserts hotplug but never delivers
     EDID (connected, no modes) — cage can't bind a mode the kernel never
-    read, so restarting is futile. The persistence window means a
-    transient wlr-randr hiccup or cage's brief socket-setup race at
-    startup can't trigger a spurious exit — any healthy reading in
-    between clears the timer.
+    read, so restarting is futile. A third case is handled by
+    ``_cage_output_probe``: if wlr-randr itself can't be run (missing /
+    nonzero / 5s timeout under GPU load) we get ``'unknown'`` and do
+    nothing, so a tooling failure on a healthy board can't be mistaken
+    for a wedge. The persistence window on top means a transient hiccup
+    or cage's brief socket-setup race at startup can't trigger a spurious
+    exit — any healthy (or unknown) reading in between clears the timer.
     """
     global _headless_wedge_since
     if not _is_wayland_board():
         return
 
-    # Healthy: cage owns at least one output. include_disabled so a
-    # DPMS-blanked-but-bound output still counts as "cage has a display".
-    if _wlr_output_names(include_disabled=True):
+    # Only a *definitive* "cage lists zero outputs" reading is a wedge.
+    # 'has-output' is healthy; 'unknown' means wlr-randr itself failed —
+    # treat that as "can't tell" and degrade to a no-op rather than
+    # restarting a display that is probably fine (the rotation/power
+    # paths degrade the same way; only this watchdog acts on the state).
+    if _cage_output_probe() != 'no-output':
         _headless_wedge_since = None
         return
 

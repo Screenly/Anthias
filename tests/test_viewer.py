@@ -2348,12 +2348,12 @@ def test_output_watchdog_noop_off_wayland(reset_wedge_state: None) -> None:
     with (
         mock.patch.dict(os.environ, {'QT_QPA_PLATFORM': 'eglfs'}, clear=False),
         mock.patch.object(
-            viewer, '_wlr_output_names', return_value=[]
-        ) as names,
+            viewer, '_cage_output_probe', return_value='no-output'
+        ) as probe,
     ):
         viewer._wayland_output_watchdog()  # must not raise SystemExit
 
-    names.assert_not_called()
+    probe.assert_not_called()
     assert viewer._headless_wedge_since is None
 
 
@@ -2367,7 +2367,7 @@ def test_output_watchdog_healthy_clears_timer(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
         mock.patch.object(
-            viewer, '_wlr_output_names', return_value=['HDMI-A-1']
+            viewer, '_cage_output_probe', return_value='has-output'
         ),
     ):
         viewer._wayland_output_watchdog()
@@ -2384,7 +2384,9 @@ def test_output_watchdog_headless_unit_does_not_loop(
         mock.patch.dict(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
-        mock.patch.object(viewer, '_wlr_output_names', return_value=[]),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
         mock.patch.object(
             viewer, '_kernel_has_bindable_display', return_value=False
         ),
@@ -2403,7 +2405,9 @@ def test_output_watchdog_arms_timer_on_first_wedge(
         mock.patch.dict(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
-        mock.patch.object(viewer, '_wlr_output_names', return_value=[]),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
         mock.patch.object(
             viewer, '_kernel_has_bindable_display', return_value=True
         ),
@@ -2422,7 +2426,9 @@ def test_output_watchdog_exits_after_grace(reset_wedge_state: None) -> None:
         mock.patch.dict(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
-        mock.patch.object(viewer, '_wlr_output_names', return_value=[]),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
         mock.patch.object(
             viewer, '_kernel_has_bindable_display', return_value=True
         ),
@@ -2449,7 +2455,7 @@ def test_output_watchdog_recovers_before_grace(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
         mock.patch.object(
-            viewer, '_wlr_output_names', return_value=['HDMI-A-1']
+            viewer, '_cage_output_probe', return_value='has-output'
         ),
         mock.patch.object(
             viewer, '_kernel_has_bindable_display', return_value=True
@@ -2480,6 +2486,61 @@ def _patch_drm_sysfs(files: dict[str, str]) -> Any:
         mock.patch.object(viewer, 'glob', return_value=status_paths),
         mock.patch('builtins.open', side_effect=fake_open),
     )
+
+
+def test_output_watchdog_ignores_wlr_randr_failure(
+    reset_wedge_state: None,
+) -> None:
+    """A wlr-randr tooling failure ('unknown') must not be mistaken for a
+    wedge on a board that is probably displaying fine: no arm, no exit,
+    and any pending timer clears — even with a bindable display present
+    and the grace elapsed."""
+    viewer._headless_wedge_since = 500.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='unknown'
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer,
+            'monotonic',
+            return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
+        ),
+    ):
+        viewer._wayland_output_watchdog()  # must not raise
+
+    assert viewer._headless_wedge_since is None
+
+
+def test_cage_output_probe_classifies_wlr_randr_result() -> None:
+    """has-output when a connector is listed, no-output on a clean empty
+    run, unknown when wlr-randr can't be run (nonzero / missing)."""
+    with mock.patch(
+        'anthias_viewer.subprocess.run',
+        return_value=mock.Mock(
+            returncode=0, stdout='HDMI-A-1 "X"\n  Enabled: yes\n', stderr=''
+        ),
+    ):
+        assert viewer._cage_output_probe() == 'has-output'
+    with mock.patch(
+        'anthias_viewer.subprocess.run',
+        return_value=mock.Mock(returncode=0, stdout='', stderr=''),
+    ):
+        assert viewer._cage_output_probe() == 'no-output'
+    with mock.patch(
+        'anthias_viewer.subprocess.run',
+        return_value=mock.Mock(returncode=1, stdout='', stderr='boom'),
+    ):
+        assert viewer._cage_output_probe() == 'unknown'
+    with mock.patch(
+        'anthias_viewer.subprocess.run', side_effect=FileNotFoundError()
+    ):
+        assert viewer._cage_output_probe() == 'unknown'
 
 
 def test_kernel_has_bindable_display_connected_with_modes() -> None:

@@ -704,12 +704,20 @@ case "$DEVICE_TYPE" in
     # precisely because its stop->start gap gives the controller time to
     # reset; the restart policy inserts no such gap.)
     #
-    # Reproduce that gap here, before cage launches, so cage always
-    # starts against a settled connector with EDID re-read. Only runs
-    # when a display is actually connected (a genuinely headless boot
-    # skips it and pays nothing); the sysfs status node is writable from
-    # inside the privileged container. Scoped to the cage branch — this
-    # is where the vc4/wlroots wedge was reproduced.
+    # Reproduce that gap here, before cage launches, so cage starts
+    # against a settled connector. Two separate mechanisms:
+    #   * the settle sleep gives the controller time to reset and is what
+    #     actually fixes the race — but only matters on a restart, so it
+    #     runs only when a display is connected (a headless boot skips it
+    #     and pays nothing);
+    #   * the forced EDID re-probe (echo detect) is ONLY for the case
+    #     where the fast restart dropped a connector's EDID — connected
+    #     but empty modes. It is therefore gated on empty modes: a healthy
+    #     connector already exposes its modes, and force-re-detecting it
+    #     would needlessly re-negotiate and can flash the screen on an
+    #     ordinary boot. The sysfs status node is writable from inside the
+    #     privileged container. Scoped to the cage branch — this is where
+    #     the vc4/wlroots wedge was reproduced.
     display_connected=0
     for status_file in /sys/class/drm/card*-*/status; do
         [ -r "$status_file" ] || continue
@@ -721,15 +729,18 @@ case "$DEVICE_TYPE" in
         # Settle: let any prior cage's DRM-master release + connector
         # reset drain before this cage grabs the device.
         sleep 4
-        # Force a fresh EDID probe on every connected connector and wait
-        # (bounded) for its mode list to repopulate, so cage never starts
-        # against an empty-modes connector.
         for status_file in /sys/class/drm/card*-*/status; do
             [ -r "$status_file" ] || continue
             [ "$(cat "$status_file" 2>/dev/null)" = 'connected' ] || continue
             modes_file="${status_file%/status}/modes"
+            # Healthy connector already has its EDID modes — nothing to
+            # restore, and forcing a re-detect could re-negotiate the mode
+            # and flash the screen. Only re-probe a connected-but-modeless
+            # connector, which is the fast-restart EDID-drop symptom.
+            [ -n "$(cat "$modes_file" 2>/dev/null)" ] && continue
             connector=$(basename "$(dirname "$status_file")")
-            echo "start_viewer: re-probing $connector before launching cage"
+            echo "start_viewer: $connector connected but no EDID modes;" \
+                "re-probing before launching cage"
             echo detect > "$status_file" 2>/dev/null || true
             waited=0
             while [ -z "$(cat "$modes_file" 2>/dev/null)" ] \
