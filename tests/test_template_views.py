@@ -1900,7 +1900,7 @@ def test_assets_bulk_update_days(
 def test_assets_bulk_update_nocache_sets_flag(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
-    """Ticking the No cache group with the switch on sets nocache on
+    """Ticking the No cache group with the On radio sets nocache on
     every selected asset, videos included (#3137)."""
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
@@ -1923,7 +1923,7 @@ def test_assets_bulk_update_nocache_sets_flag(
 def test_assets_bulk_update_nocache_off_clears_flag(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
-    """The group can clear as well as set: an off switch POSTs
+    """The group can clear as well as set: the Off radio POSTs
     nocache=false and turns the flag off on every selected asset (#3137).
     """
     Asset.objects.filter(
@@ -1950,7 +1950,7 @@ def test_assets_bulk_update_nocache_off_clears_flag(
 def test_assets_bulk_update_skip_asset_check_sets_flag(
     client: Client, bulk_assets: list[Asset]
 ) -> None:
-    """Ticking the Skip asset check group with the switch on sets
+    """Ticking the Skip asset check group with the On radio sets
     skip_asset_check on every selected asset (#3137)."""
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
