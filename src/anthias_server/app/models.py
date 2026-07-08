@@ -37,12 +37,14 @@ DURATION_S_MAX = 365 * 24 * 60 * 60
 # Per-asset custom HTTP request headers for webpage assets (feature
 # #2215). Stored in ``Asset.metadata['headers']`` as a ``{name: value}``
 # object and injected by the C++ webview's request interceptor on
-# same-host requests, so a private dashboard (e.g. a Grafana
-# service-account token) renders without having to be made public.
-# Bounds keep a hostile or typo'd row from bloating the D-Bus payload,
-# the DB blob, or a single request's header block. The C++ interceptor
-# trusts whatever it is handed, so the validation below is the single
-# gate that keeps CR/LF out of the wire (header/response-splitting).
+# same-origin requests (scheme+host+port), so a private dashboard (e.g. a
+# Grafana service-account token) renders without having to be made
+# public. Bounds keep a hostile or typo'd row from bloating the D-Bus
+# payload, the DB blob, or a single request's header block. This
+# server-side validation is the primary gate keeping CR/LF out of the
+# wire (header/response-splitting); the webview re-validates defensively
+# at its D-Bus boundary too. ``MAX_HEADER_VALUE_LEN`` is a byte cap
+# (values go on the wire as UTF-8), matching the webview's check.
 MAX_ASSET_HEADERS = 20
 MAX_HEADER_NAME_LEN = 256
 MAX_HEADER_VALUE_LEN = 4096
@@ -66,7 +68,11 @@ def _is_valid_header_value(value: str) -> bool:
     # through. Everything else reaches the origin byte-for-byte.
     if any(ch in value for ch in ('\r', '\n', '\x00')):
         return False
-    return len(value) <= MAX_HEADER_VALUE_LEN
+    # Cap the UTF-8 *byte* length, not the character count: the value is
+    # sent on the wire as UTF-8 (the webview's toUtf8()), so a string of
+    # multi-byte characters would otherwise exceed the intended byte
+    # budget. Keeps this in lockstep with the webview's byte-based cap.
+    return len(value.encode('utf-8')) <= MAX_HEADER_VALUE_LEN
 
 
 def normalize_asset_headers(value: Any) -> dict[str, str]:

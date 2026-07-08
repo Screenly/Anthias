@@ -24,7 +24,7 @@ Three concerns are handled here, in order:
    default; CI overrides via ``ANTHIAS_TEST_DB_PATH``).
 
 2. Stub ``gi`` / ``gi.repository`` / ``pydbus`` in ``sys.modules`` *before*
-   any application module is imported. ``viewer/__init__.py`` does
+   any application module is imported. ``src/anthias_viewer/__init__.py`` does
    ``import pydbus`` at module load, and ``pydbus`` in turn imports
    ``gi.repository.Gio`` — which only resolves on hosts with the
    distribution's ``python3-gi`` package installed and wired into the
