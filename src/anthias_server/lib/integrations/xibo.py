@@ -1,4 +1,4 @@
-"""Xibo import provider — REST (Xibo CMS API).
+"""Xibo import provider (REST, Xibo CMS API).
 
 Works with both Xibo Cloud (``https://<name>.xibosignage.com``) and
 self-hosted CMS instances (any URL, including a custom host, port or

@@ -97,6 +97,19 @@ class TestTokenRegion:
         post_mock.return_value = _gql(401)
         assert screencloud._resolve('secret') is None
 
+    @patch('anthias_server.lib.integrations.screencloud._session.post')
+    def test_explicit_prefix_overrides_cached_region(
+        self, post_mock: MagicMock
+    ) -> None:
+        # A cached auto-detected region must not win over an explicit prefix.
+        screencloud._endpoint_cache[screencloud._cache_key('secret')] = (
+            screencloud._REGION_ENDPOINTS['eu']
+        )
+        post_mock.return_value = _gql(200, data={'currentOrg': {'id': 'x'}})
+        resolved = screencloud._resolve('us:secret')
+        assert resolved is not None
+        assert '.us.' in resolved[0]
+
 
 class TestValidateToken:
     @patch('anthias_server.lib.integrations.screencloud._session.post')

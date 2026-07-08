@@ -1,4 +1,4 @@
-"""ScreenCloud (Studio) import provider — GraphQL.
+"""ScreenCloud (Studio) import provider (GraphQL).
 
 ScreenCloud's Signage/Studio API is a PostGraphile GraphQL endpoint (not
 REST), which is exactly why the provider interface is transport-agnostic:
@@ -10,27 +10,21 @@ creation + idempotency that every provider shares.
 Media is split across two GraphQL types:
 
 * ``File``  → uploaded images and videos (distinguished by ``mimetype``).
-  The downloadable original comes from ``fileOutputsByFileId``.
+  The downloadable original is ``File.source``.
 * ``Link``  → web pages / URLs (imported as Anthias ``webpage`` assets).
 
 Remote ids are namespaced ``file:<uuid>`` / ``link:<uuid>`` so a single
 ``import_item`` call knows which GraphQL type to fetch.
 
-Endpoint / region: ScreenCloud endpoints are per-organization and region
-(``eu`` / ``us``). The operator can prefix the token with a region
-(``eu:<token>`` / ``us:<token>``); without a prefix the EU endpoint is
-used. See ``token_help``.
-
-TODO(confirm-with-live-token): the production regional hostnames, the
-``fileById`` / ``linkById`` field names, and which ``FileOutput`` is the
-durable original vs a thumbnail are documented behind a ScreenCloud login
-and should be verified against a real account before GA. The resolution
-points are isolated in ``_endpoint_for`` / ``_file_download_url`` /
-``_FILE_BY_ID`` so confirming them is a localized change.
+Endpoint / region: ScreenCloud is regional (``eu`` / ``us``), with the
+region encoded in the endpoint host. The region is auto-detected by
+probing both endpoints with the token; an explicit ``eu:``/``us:`` token
+prefix overrides that. See ``_resolve``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any, Iterator
 
@@ -58,10 +52,15 @@ _REGION_ENDPOINTS = {
     'us': 'https://graphql.us.screencloud.com/graphql',
 }
 
-# Cache the resolved endpoint per token so a wizard run (validate → N
-# item imports) probes only once. The token is already in memory for the
-# duration of the request; this just avoids re-probing every call.
+# Cache the auto-detected endpoint so a wizard run (validate → N item
+# imports) probes only once. Keyed by a one-way hash of the token, never
+# the token itself, so no credential is retained in memory.
 _endpoint_cache: dict[str, str] = {}
+
+
+def _cache_key(bearer: str) -> str:
+    return hashlib.sha256(bearer.encode()).hexdigest()
+
 
 _LIST_PAGE_SIZE = 100
 _VALIDATE_TIMEOUT_S = 15.0
@@ -146,19 +145,23 @@ def _accepts(endpoint: str, bearer: str) -> bool:
 def _resolve(token: str) -> tuple[str, str] | None:
     """Return (endpoint, bearer) for the region that accepts this token.
 
-    Honours an explicit region prefix; otherwise probes each region.
-    Returns None if no region accepts the token; transport errors
-    propagate so the caller can answer 502.
+    An explicit ``eu:``/``us:`` prefix is an override: it's used directly
+    and bypasses the auto-detection cache. Otherwise each region is probed
+    and the hit is cached (by token hash). Returns None if no region
+    accepts the token; transport errors propagate so the caller can
+    answer 502.
     """
     region, bearer = _split_region(token)
-    cached = _endpoint_cache.get(bearer)
+    if region is not None:
+        endpoint = _REGION_ENDPOINTS[region]
+        return (endpoint, bearer) if _accepts(endpoint, bearer) else None
+    key = _cache_key(bearer)
+    cached = _endpoint_cache.get(key)
     if cached is not None:
         return cached, bearer
-    regions = [region] if region else list(_REGION_ENDPOINTS)
-    for name in regions:
-        endpoint = _REGION_ENDPOINTS[name]
+    for endpoint in _REGION_ENDPOINTS.values():
         if _accepts(endpoint, bearer):
-            _endpoint_cache[bearer] = endpoint
+            _endpoint_cache[key] = endpoint
             return endpoint, bearer
     return None
 

@@ -19,8 +19,9 @@ Xibo (Xibo Cloud or self-hosted).
 
 Anthias imports the content types it can play natively:
 
-- **Images** and **videos**: the original file is downloaded onto your
-  player and added to the schedule.
+- **Images** and **videos**: the file is downloaded onto your player and
+  added to the schedule (the original where the platform exposes it, or the
+  best available rendition otherwise).
 - **Web pages**: added as a web asset pointing at the same URL.
 
 Anything Anthias cannot play, or that would not work outside the source
@@ -30,9 +31,9 @@ platform, is **skipped and reported** rather than imported half-way:
 - **Apps and internally-generated content**: weather, clock, RSS, and
   dashboard widgets render inside the source platform, so their internal
   URLs would only produce broken assets on Anthias.
-- **Files the platform does not expose for download**: if the source only
-  offers a preview or thumbnail, the original cannot be copied, so those
-  items are flagged for you to re-upload manually.
+- **Files with no downloadable URL**: when the platform exposes neither the
+  original nor a usable rendition, the item is flagged for you to re-upload
+  manually.
 
 ## Before you start
 

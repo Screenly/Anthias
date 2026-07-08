@@ -1,4 +1,4 @@
-"""piSignage import provider — REST.
+"""piSignage import provider (REST).
 
 piSignage is hosted per-account on a subdomain (``<account>.pisignage.com``)
 and authenticates by exchanging credentials for a JWT at ``POST /session``,
