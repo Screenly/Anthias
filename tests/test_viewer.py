@@ -2367,6 +2367,9 @@ def test_output_watchdog_healthy_clears_timer(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
         mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(
             viewer, '_cage_output_probe', return_value='has-output'
         ),
     ):
@@ -2378,21 +2381,24 @@ def test_output_watchdog_healthy_clears_timer(
 def test_output_watchdog_headless_unit_does_not_loop(
     reset_wedge_state: None,
 ) -> None:
-    """No output AND no bindable display (nothing connected, or a
-    connected-but-no-EDID cable) = must never restart-loop."""
+    """No bindable display (nothing connected, or a connected-but-no-EDID
+    cable) = must never restart-loop, and must not even spawn wlr-randr:
+    the cheap sysfs check short-circuits before the probe so a headless
+    board pays no subprocess (nor its up-to-5s block) on the hot path."""
     with (
         mock.patch.dict(
             os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
         ),
         mock.patch.object(
             viewer, '_cage_output_probe', return_value='no-output'
-        ),
+        ) as probe,
         mock.patch.object(
             viewer, '_kernel_has_bindable_display', return_value=False
         ),
     ):
         viewer._wayland_output_watchdog()  # must not raise
 
+    probe.assert_not_called()
     assert viewer._headless_wedge_since is None
 
 

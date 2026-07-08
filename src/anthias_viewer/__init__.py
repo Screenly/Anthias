@@ -1377,19 +1377,24 @@ def _wayland_output_watchdog() -> None:
     if not _is_wayland_board():
         return
 
+    # Cheap sysfs check first: unless the kernel exposes a display cage
+    # genuinely should be able to bind (connector present + EDID modes),
+    # there is nothing to recover — a headless unit or a half-connected
+    # cable (no modes) is left alone. Doing this before the wlr-randr
+    # probe means a genuinely headless board never spawns wlr-randr on
+    # the asset_loop hot path (nor risks its up-to-5s block per tick); the
+    # subprocess only runs when a display is actually attached.
+    if not _kernel_has_bindable_display():
+        _headless_wedge_since = None
+        return
+
+    # A display is present — now check whether cage actually bound it.
     # Only a *definitive* "cage lists zero outputs" reading is a wedge.
     # 'has-output' is healthy; 'unknown' means wlr-randr itself failed —
     # treat that as "can't tell" and degrade to a no-op rather than
     # restarting a display that is probably fine (the rotation/power
     # paths degrade the same way; only this watchdog acts on the state).
     if _cage_output_probe() != 'no-output':
-        _headless_wedge_since = None
-        return
-
-    # Cage has no output. Only restart if the kernel exposes a display
-    # cage genuinely should be able to bind (connected + EDID modes).
-    # A headless unit or a half-connected cable (no modes) is left alone.
-    if not _kernel_has_bindable_display():
         _headless_wedge_since = None
         return
 
