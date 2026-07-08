@@ -1312,8 +1312,10 @@ class ImportItemViewV2(APIView):
     def post(self, request: Request, provider: str) -> Response:
         provider_impl = get_provider(provider)
         if provider_impl is None:
+            # Keep the uniform shape (asset_id/skipped/reason/error) so a
+            # client can read the same keys on every response.
             return Response(
-                {'success': False, 'error': 'Unknown import provider.'},
+                _import_error_body('Unknown import provider.'),
                 status=status.HTTP_404_NOT_FOUND,
             )
 

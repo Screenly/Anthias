@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator
@@ -108,9 +109,20 @@ def _auth_headers(token: str) -> dict[str, str]:
 
 
 def _first_http_url(candidates: Iterator[Any] | list[Any]) -> str | None:
-    """Return the first candidate that is a real http(s) URL."""
+    """Return the first candidate that is a real http(s) URL.
+
+    ``validate_url`` also accepts streaming schemes (rtsp/rtmp/…); this
+    helper feeds webpage URIs and ``requests.get`` downloads, so it is
+    restricted to http(s) to avoid picking a stream endpoint out of the
+    argument bag or handing an rtsp URL to ``requests``.
+    """
     for value in candidates:
-        if isinstance(value, str) and value and validate_url(value):
+        if not isinstance(value, str) or not value:
+            continue
+        if validate_url(value) and urlparse(value).scheme in (
+            'http',
+            'https',
+        ):
             return value
     return None
 
@@ -144,22 +156,33 @@ def _is_internal_yodeck_url(url: str) -> bool:
     return host == 'yodeck.com' or host.endswith('.yodeck.com')
 
 
+def _sanitise_ext(raw: str) -> str:
+    """Reduce a candidate extension to a safe ``.<alnum>`` token.
+
+    The value comes from a third-party API (Yodeck's ``file_extension``)
+    or a URL path, so it is stripped to alphanumerics and capped —
+    otherwise ``"/../../etc/passwd"`` could escape the asset directory
+    when the staged filename is built.
+    """
+    cleaned = re.sub(r'[^A-Za-z0-9]', '', (raw or '').strip().lstrip('.'))
+    cleaned = cleaned[:16]
+    return f'.{cleaned}' if cleaned else ''
+
+
 def _file_ext(detail: dict[str, Any], url: str) -> str:
     """Best on-disk extension for a downloaded original.
 
     Prefers Yodeck's ``file_extension`` field ("mp4"), falls back to the
     extension on the download URL's path, and finally to no extension.
-    The leading dot is normalised so ``CreateAssetSerializerV2`` renames
-    the file to ``<asset_id>.mp4`` and ffprobe can identify the
-    container.
+    Both sources are sanitised (see ``_sanitise_ext``) so
+    ``CreateAssetSerializerV2`` renames the file to a safe
+    ``<asset_id>.mp4`` and ffprobe can identify the container.
     """
-    raw = (detail.get('file_extension') or '').strip().lstrip('.')
-    if raw:
-        return f'.{raw}'
-    _stem, ext = os.path.splitext(url.split('?', 1)[0])
-    if ext and len(ext) <= 8:
+    ext = _sanitise_ext(detail.get('file_extension') or '')
+    if ext:
         return ext
-    return ''
+    _stem, url_ext = os.path.splitext(url.split('?', 1)[0])
+    return _sanitise_ext(url_ext)
 
 
 def _parse_dt(value: Any) -> datetime | None:

@@ -272,6 +272,24 @@ class TestFieldMapping:
     def test_file_ext_from_url_when_field_missing(self) -> None:
         assert yodeck._file_ext({}, 'https://x/y.png?v=1') == '.png'
 
+    def test_file_ext_sanitises_path_traversal(self) -> None:
+        # A hostile file_extension must not escape the asset directory.
+        assert (
+            yodeck._file_ext(
+                {'file_extension': '/../../etc/passwd'}, 'https://x/y'
+            )
+            == '.etcpasswd'
+        )
+
+    def test_first_http_url_rejects_stream_scheme(self) -> None:
+        # validate_url accepts rtsp://, but this helper feeds webpage URIs
+        # and requests.get downloads — http(s) only.
+        assert yodeck._first_http_url(['rtsp://cam/stream']) is None
+        assert (
+            yodeck._first_http_url(['rtsp://cam/stream', 'https://ok/x'])
+            == 'https://ok/x'
+        )
+
 
 # ---------------------------------------------------------------------------
 # Registry
