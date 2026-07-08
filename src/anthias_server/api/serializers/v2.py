@@ -367,7 +367,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
         value = (value or '').strip()
         if value and not is_valid_time_zone(value):
             raise serializers.ValidationError(
-                f'Unknown or unavailable timezone: {value!r}.'
+                f'Unknown or unavailable timezone: {value}.'
             )
         return value
 

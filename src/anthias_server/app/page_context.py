@@ -118,6 +118,11 @@ def system_info() -> dict[str, Any]:
             severity = 'ok'
         return {'value': value, 'pct': pct, 'severity': severity}
 
+    # Snapshot the local instant once so iso/offset can't straddle a
+    # second boundary, and resolve the active zone name a single time.
+    now_local = timezone.localtime(timezone.now())
+    tz_name = timezone.get_current_timezone_name()
+
     return {
         'loadavg': load_15m,
         'load': {
@@ -178,14 +183,12 @@ def system_info() -> dict[str, Any]:
         # device clock, which trusting the browser would mask. The
         # offset is formatted +HH:MM for readability.
         'device_time': {
-            'iso': timezone.localtime(timezone.now()).isoformat(),
+            'iso': now_local.isoformat(),
             # Raw IANA id for the JS Intl formatter (data-timezone)...
-            'timezone': timezone.get_current_timezone_name(),
+            'timezone': tz_name,
             # ...and a humanised version for the visible sub-label.
-            'timezone_label': timezone.get_current_timezone_name().replace(
-                '_', ' '
-            ),
-            'offset': _format_utc_offset(timezone.localtime(timezone.now())),
+            'timezone_label': tz_name.replace('_', ' '),
+            'offset': _format_utc_offset(now_local),
         },
         'display_power': _redis.get('display_power'),
         'resolution': _resolved_resolution(),

@@ -260,6 +260,12 @@ class TestTimezoneActivationMiddleware:
             seen['during'] = dj_tz.get_current_timezone_name()
             return HttpResponse('ok')
 
+        # Establish a deterministic baseline (the process default) so the
+        # teardown check doesn't assume what settings.TIME_ZONE is — it
+        # could legitimately be Europe/Stockholm on some host.
+        dj_tz.deactivate()
+        baseline = dj_tz.get_current_timezone_name()
+
         monkeypatch.setattr(
             tz_mw, 'resolve_time_zone', lambda: 'Europe/Stockholm'
         )
@@ -270,7 +276,7 @@ class TestTimezoneActivationMiddleware:
         # Active during the request...
         assert seen['during'] == 'Europe/Stockholm'
         # ...and torn back down to the process default afterwards.
-        assert dj_tz.get_current_timezone_name() != 'Europe/Stockholm'
+        assert dj_tz.get_current_timezone_name() == baseline
 
     def test_bad_zone_does_not_crash_the_request(
         self, monkeypatch: pytest.MonkeyPatch
