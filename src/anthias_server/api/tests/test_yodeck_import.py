@@ -345,6 +345,24 @@ class TestImportItem:
         assert outcome.skipped is True
 
     @patch('anthias_server.lib.integrations.yodeck._session.get')
+    def test_internal_yodeck_app_webpage_skipped(
+        self, get_mock: MagicMock
+    ) -> None:
+        # A webpage whose URL is Yodeck-hosted is an internal app/widget
+        # and must not be imported as a (broken) webpage asset.
+        get_mock.return_value = self._detail_response(
+            {
+                'id': 3,
+                'name': 'Weather widget',
+                'media_origin': {'type': 'webpage'},
+                'arguments': {'url': 'https://app.yodeck.com/widgets/weather'},
+            }
+        )
+        outcome = PROVIDER.import_item('tok', '3')
+        assert outcome.skipped is True
+        assert 'app' in (outcome.reason or '').lower()
+
+    @patch('anthias_server.lib.integrations.yodeck._session.get')
     def test_image_without_file_url_skipped(self, get_mock: MagicMock) -> None:
         get_mock.return_value = self._detail_response(
             {

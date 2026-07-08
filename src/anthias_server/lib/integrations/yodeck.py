@@ -132,6 +132,18 @@ def _file_url(detail: dict[str, Any]) -> str | None:
     return _first_http_url([*top, *inner])
 
 
+def _is_internal_yodeck_url(url: str) -> bool:
+    """True when a webpage URL points back at Yodeck-hosted content.
+
+    Yodeck apps/widgets (weather, RSS, dashboards) surface as webpage
+    media whose URL is rendered inside Yodeck. Those only work within
+    Yodeck, so they're filtered out of the import rather than recreated
+    as broken webpage assets.
+    """
+    host = urlparse(url).netloc.lower()
+    return host == 'yodeck.com' or host.endswith('.yodeck.com')
+
+
 def _file_ext(detail: dict[str, Any], url: str) -> str:
     """Best on-disk extension for a downloaded original.
 
@@ -364,6 +376,19 @@ class YodeckProvider(ImportProvider):
                     success=False,
                     skipped=True,
                     reason='Could not determine the web page URL from Yodeck.',
+                )
+            if _is_internal_yodeck_url(url):
+                # A "webpage" that resolves to Yodeck-hosted content is an
+                # internally-rendered app/widget (weather, RSS, dashboards,
+                # …). Its URL only works inside Yodeck, so importing it
+                # would create a broken asset — skip with a clear reason.
+                return ImportOutcome(
+                    success=False,
+                    skipped=True,
+                    reason=(
+                        'This is internally-hosted Yodeck content (an app '
+                        'or widget) and cannot be imported.'
+                    ),
                 )
             asset = self._create_via_serializer(
                 uri=url,
