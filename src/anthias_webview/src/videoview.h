@@ -1,8 +1,12 @@
 #pragma once
 
+#include <QAtomicInteger>
 #include <QAudioDevice>
+#include <QByteArray>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QImage>
+#include <QMutex>
 #include <QHBoxLayout>
 #include <QMediaPlayer>
 #include <QString>
@@ -17,6 +21,7 @@ class QAudioOutput;
 class QQuickItem;
 class QQuickWidget;
 class QVideoSink;
+class RasterVideoWidget;
 
 // VideoView owns the Qt 6 multimedia playback pipeline for the Qt6
 // boards (issue #2904). An earlier revision embedded libmpv via
@@ -145,6 +150,104 @@ private:
     // #2967 blind spot).
     void connectRenderCounter();
 
+    // --- Pi 3 (VideoCore IV) CPU-raster presenter ------------------
+    // pi3-64's GLES2-only GPU can't present the QML VideoOutput RHI
+    // path: the scene renders but the QQuickWidget FBO never reaches
+    // the eglfs scanout, so every video black-screens (issue #3084)
+    // while images/webpages — which composite through the widget
+    // backing store — render fine. When ANTHIAS_VIDEO_RASTER is set
+    // (by the Python side for pi3-64 only, see _build_webview_env),
+    // frames are presented instead by ``QVideoFrame::toImage()`` +
+    // a backing-store blit — the same path images use, and the
+    // pre-#2967 substrate that was visible (if slow, 8–12 fps) on
+    // this GPU. rasterWidget replaces quickWidget in the layout;
+    // videoOutputItem / videoSink stay null.
+    //
+    // presentRasterFrame converts + shows one frame and closes the
+    // one-frame pacing gate; onRasterPainted (called by
+    // RasterVideoWidget::paintEvent) re-opens it and forwards any
+    // frame parked in pendingFrame while the paint was in flight.
+    void presentRasterFrame(const QVideoFrame& frame);
+    void onRasterPainted();
+    friend class RasterVideoWidget;
+
+#ifdef ANTHIAS_GSTREAMER
+public:
+    // GUI-thread drain slot: blits the newest frame the appsink has
+    // stashed in gstLatestFrame. Coalesced — the appsink callback only
+    // posts one invocation until this runs, so a GUI thread slower than
+    // the pipeline drops intermediate frames (keeping the freshest)
+    // instead of growing an unbounded event queue and OOM'ing the 1 GB
+    // board. Q_INVOKABLE so the streaming-thread callback can
+    // QMetaObject::invokeMethod it across the thread boundary.
+    Q_INVOKABLE void onGstFrame();
+    // Streaming-thread entry point: the appsink callback hands each
+    // ISP-converted RGB frame here; it stashes the newest under
+    // gstFrameMutex and posts a single coalesced onGstFrame() drain.
+    void pushGstFrame(const QImage& frame);
+    // Flushing-seek the pipeline to zero to loop the clip. Invoked
+    // (queued, GUI thread) from the appsink EOS callback so the seek
+    // never races stop().
+    Q_INVOKABLE void gstRestartLoop();
+    // Overlay-path instrumentation (streaming thread). onOverlayBuffer:
+    // count each frame reaching kmssink + latch the source framerate from
+    // the pad caps. logOverlayQos: record kmssink's authoritative
+    // rendered/dropped tallies from a bus QoS message.
+    void onOverlayBuffer(struct _GstPad* pad);
+    void logOverlayQos(quint64 rendered, quint64 dropped);
+    // Best-effort audio in its OWN pipeline, decoupled from the video
+    // overlay pipeline so no audio fault can stall the video. gstStartAudio
+    // builds+plays it; gstLoopAudio/gstStopAudio are driven from the audio
+    // bus watch (loop on EOS, tear down on error) and gstStop/gstRestart.
+    void gstStartAudio(const QString& location, const QString& alsaDev);
+    void gstLoopAudio();
+    void gstStopAudio();
+    // Record an AUDIO status/error line to the readable stats log (public
+    // so the audio bus-watch free function can report errors there).
+    void logAudio(const QString& msg);
+    // playbin gapless-loop hook: re-queue gstUri on ``about-to-finish``
+    // (called on a streaming thread; a property set only, no state change).
+    void gstRequeueUri(struct _GstElement* playbin);
+
+private:
+    // In-process GStreamer HW video path for pi3-64 (issue #3084):
+    // filesrc ! qtdemux ! h264parse ! v4l2h264dec ! v4l2convert(ISP) !
+    // RGB16 ! appsink. The bcm2835 ISP does the SAND→RGB conversion in
+    // hardware — the CPU can't (~600 ms/frame, [[toImage]] wall) — so the
+    // decode+convert stays fully on the VideoCore IV hardware and only a
+    // ready-made RGB frame reaches Qt, which rasterWidget blits (~26 fps,
+    // 0 drops measured). Active when rasterMode is built with
+    // ANTHIAS_GSTREAMER; every other board keeps the VideoOutput path.
+    bool gstPlay(const QString& uri, const QVariantMap& options);
+    // HW overlay-plane path (ANTHIAS_VIDEO_OVERLAY): render decoded frames
+    // straight onto a vc4 DRM overlay plane via kmssink, using eglfs's own
+    // DRM master fd / CRTC / connector — the display controller composites
+    // it with the eglfs UI plane in hardware, bypassing the GL compositor
+    // (which caps at ~9 fps on VideoCore IV). Returns false (caller falls
+    // back to the appsink→raster path) if the eglfs DRM resources or a
+    // free overlay plane can't be resolved.
+    bool gstPlayOverlay(const QString& uri, const QVariantMap& options);
+    void gstStop();
+    bool gstOverlayMode = false;
+    bool gstOverlayActive = false;
+    // URI for playbin's gapless re-queue loop (set in gstPlayOverlay).
+    QByteArray gstUri;
+    struct _GstElement* gstPipeline = nullptr;
+    struct _GstElement* gstAudioPipeline = nullptr;
+    struct _GstElement* gstAppSink = nullptr;
+    bool gstMode = false;
+    // Single-slot handoff: the appsink callback (streaming thread) writes
+    // the newest frame under gstFrameMutex and, if no drain is already
+    // queued (gstDrainPending), posts one onGstFrame() to the GUI thread.
+    QImage gstLatestFrame;
+    QMutex gstFrameMutex;
+    QAtomicInt gstDrainPending{0};
+    // Raw appsink delivery count (streaming thread) — logged alongside the
+    // painted count so SAMPLE shows the pipeline's own rate vs what the
+    // GUI actually presented.
+    QAtomicInteger<qint64> gstRawSamples{0};
+#endif
+
 private:
     // Resolve an ALSA device name (``alsa/sysdefault:CARD=vc4hdmi0``,
     // produced by ``anthias_viewer.media_player.get_alsa_audio_device``)
@@ -193,6 +296,25 @@ private:
     QHBoxLayout* videoLayout = nullptr;
     QMetaObject::Connection renderCounterConnection;
     int currentRotation = 0;
+
+    // Raster path (ANTHIAS_VIDEO_RASTER). rasterWidget is non-null and
+    // owns the on-screen surface only when rasterMode is true; it is
+    // mutually exclusive with quickWidget/videoOutputItem/videoSink.
+    RasterVideoWidget* rasterWidget = nullptr;
+    bool rasterMode = false;
+    // One-frame pacing gate for the raster path (the analogue of
+    // sceneReadyForFrame for the VideoOutput path): true once the last
+    // shown frame has been painted, so the next delivery converts and
+    // shows immediately; otherwise the freshest frame parks in
+    // pendingFrame until onRasterPainted() forwards it. Starts true so
+    // the first frame always shows.
+    bool rasterReady = true;
+    // Raster-path instrumentation: total QVideoFrame::toImage() time
+    // (µs) and count since the last SAMPLE, so a per-second RASTER line
+    // exposes the per-frame conversion cost — the suspected VideoCore
+    // IV bottleneck. Reset each SAMPLE.
+    qint64 rasterConvertUsAccum = 0;
+    qint64 rasterConvertCount = 0;
 
     // Stats state. Extends the libmpv-era line shape with a
     // ``frames-rendered=`` field (the presentation-side counter

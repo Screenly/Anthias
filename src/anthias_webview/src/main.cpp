@@ -3,9 +3,40 @@
 #include <QDebug>
 #include <QtDBus>
 
+#include <csignal>
+#include <cstdio>
+#include <execinfo.h>
+#include <unistd.h>
+
 #include "mainwindow.h"
 
 namespace {
+// Fatal-signal backtrace. The pi3-64 overlay video path (VideoView +
+// kmssink on eglfs's DRM fd) segfaults silently — the kernel kills the
+// process and docker logs show only the respawn. Dumping a backtrace to
+// stderr (captured by the start_viewer wrapper) pins the crash frame.
+// Re-raises with the default handler so the exit status is unchanged and
+// the Python supervisor still respawns as before.
+void anthiasCrashHandler(int sig)
+{
+    void* frames[64];
+    const int count = backtrace(frames, 64);
+    fprintf(stderr, "\n=== AnthiasViewer FATAL signal %d — backtrace ===\n",
+            sig);
+    backtrace_symbols_fd(frames, count, STDERR_FILENO);
+    fflush(stderr);
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+void installCrashHandler()
+{
+    signal(SIGSEGV, anthiasCrashHandler);
+    signal(SIGABRT, anthiasCrashHandler);
+    signal(SIGBUS, anthiasCrashHandler);
+    signal(SIGFPE, anthiasCrashHandler);
+}
+
 // Realise the operator's "Prefer dark mode" setting. The Python viewer
 // plumbs the Django setting in via the ANTHIAS_PREFER_DARK_MODE env var
 // (see _build_webview_env in src/anthias_viewer/__init__.py); here we
@@ -57,6 +88,7 @@ void applyDarkModePreference()
 
 int main(int argc, char *argv[])
 {
+    installCrashHandler();
     applyDarkModePreference();
 
     QApplication app(argc, argv);

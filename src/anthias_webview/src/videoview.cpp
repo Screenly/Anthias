@@ -7,6 +7,8 @@
 #include <QFileInfo>
 #include <QMediaDevices>
 #include <QMediaMetaData>
+#include <QPaintEvent>
+#include <QPainter>
 #include <QQmlError>
 #include <QQuickItem>
 #include <QQuickWidget>
@@ -17,6 +19,78 @@
 #include <QVideoSink>
 #include <QtGlobal>
 
+#ifdef ANTHIAS_GSTREAMER
+#include <gst/app/gstappsink.h>
+#include <gst/gst.h>
+#include <gst/video/video.h>
+
+#include <QGuiApplication>
+#include <QScreen>
+#include <qpa/qplatformnativeinterface.h>
+
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+
+#include <cstring>
+#endif
+
+
+// CPU-raster video surface for boards whose GPU can't present the QML
+// VideoOutput RHI path (pi3-64 / VideoCore IV — issue #3084). Holds the
+// latest decoded frame as a QImage and blits it, aspect-fit on black,
+// through the widget backing store — the same compositing path images
+// and webpages use, which those boards DO scan out. No Q_OBJECT: it
+// carries no signals/slots and calls back into VideoView (its
+// friend-owner) directly from paintEvent to re-arm the pacing gate.
+class RasterVideoWidget : public QWidget
+{
+public:
+    explicit RasterVideoWidget(VideoView* owner)
+        : QWidget(owner), owner_(owner)
+    {
+        // The whole surface is repainted (black fill + frame) every
+        // paint, so suppress the default background clear and the
+        // pre-first-frame palette flash.
+        setAttribute(Qt::WA_OpaquePaintEvent);
+    }
+
+    void setImage(const QImage& image)
+    {
+        image_ = image;
+        update();
+    }
+
+    void clear()
+    {
+        image_ = QImage();
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.fillRect(rect(), Qt::black);
+        if (!image_.isNull()) {
+            // Aspect-fit letterbox — matches VideoOutput's
+            // PreserveAspectFit. Nearest-neighbour scale (no
+            // SmoothPixmapTransform): a 1080p frame on a 1080p panel is
+            // ~1:1 and smooth scaling is too costly for the VideoCore IV
+            // GUI thread this path exists to serve.
+            const QSize target =
+                image_.size().scaled(size(), Qt::KeepAspectRatio);
+            QRect dst(QPoint(0, 0), target);
+            dst.moveCenter(rect().center());
+            painter.drawImage(dst, image_);
+        }
+        owner_->onRasterPainted();
+    }
+
+private:
+    VideoView* owner_;
+    QImage image_;
+};
+
 
 VideoView::VideoView(QWidget* parent) : QWidget(parent)
 {
@@ -24,56 +98,90 @@ VideoView::VideoView(QWidget* parent) : QWidget(parent)
     videoLayout->setContentsMargins(0, 0, 0, 0);
     videoLayout->setSpacing(0);
 
-    // QML VideoOutput in a QQuickWidget: frames render through the
-    // RHI scene graph (shader YUV→RGB at composite time) instead of
-    // the QGraphicsVideoItem toImage()-readback-blit chain that
-    // capped presentation at 8–12 fps (issue #2967, see videoview.h).
-    // Black backdrop is two layers with distinct jobs: ``clearColor``
-    // covers the pre-QML-load window, the QML Rectangle provides the
-    // steady-state letterbox fill around PreserveAspectFit. (No
-    // widget-palette layer on top — the QQuickWidget fills the whole
-    // layout, so a palette would be permanently occluded.)
-    quickWidget = new QQuickWidget(this);
-    quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
-    quickWidget->setClearColor(Qt::black);
-    quickWidget->setSource(QUrl(QStringLiteral("qrc:/videoview.qml")));
-    if (quickWidget->status() == QQuickWidget::Error) {
-        const auto errors = quickWidget->errors();
-        for (const QQmlError& error : errors) {
-            qWarning() << "VideoView: QML load error:" << error.toString();
-        }
-    }
-    videoLayout->addWidget(quickWidget);
+    // Board-selected presentation substrate. ANTHIAS_VIDEO_RASTER is
+    // set by the Python side for pi3-64 only (see _build_webview_env):
+    // that board's VideoCore IV / GLES2 GPU can't scan out the QML
+    // VideoOutput RHI path (issue #3084), so it uses the CPU-raster
+    // widget instead. Every other board keeps the fast on-GPU path.
+    rasterMode = qEnvironmentVariableIntValue("ANTHIAS_VIDEO_RASTER") != 0;
 
-    if (quickWidget->rootObject()) {
-        videoOutputItem = quickWidget->rootObject()
-                              ->findChild<QQuickItem*>(
-                                  QStringLiteral("videoOutput"));
+#ifdef ANTHIAS_GSTREAMER
+    // On pi3-64 the raster widget is fed by the in-process GStreamer HW
+    // pipeline (gstPlay), not QMediaPlayer+toImage — the ISP converts in
+    // hardware. gst_init is idempotent; safe to call unconditionally on
+    // this board.
+    gstMode = rasterMode;
+    if (gstMode) {
+        gst_init(nullptr, nullptr);
+        // Prefer the HW overlay-plane path when requested; gstPlay falls
+        // back to the appsink→raster blit if the DRM resources or a free
+        // overlay plane can't be resolved at play time.
+        gstOverlayMode =
+            qEnvironmentVariableIntValue("ANTHIAS_VIDEO_OVERLAY") != 0;
     }
-    if (videoOutputItem) {
-        // VideoOutput exposes its sink as a property; resolving it
-        // here (rather than player->setVideoOutput(item)) keeps an
-        // explicit QVideoSink* around for the frame-delivery counter.
-        videoSink = qvariant_cast<QVideoSink*>(
-            videoOutputItem->property("videoSink"));
-    }
-    if (!videoOutputItem || !videoSink) {
-        // Fail hard rather than limp into decode-but-render-nowhere:
-        // a kiosk that silently black-screens every video while its
-        // logs read "playing" is the exact failure mode the VLC/mmal
-        // era shipped (docs/board-enablement.md, "rendered to
-        // nowhere"). Aborting hands the device to the existing
-        // spawn-retry / container-restart supervision, which is loud
-        // in fleet telemetry. Most likely cause on a device image:
-        // qml6-module-qtquick / qml6-module-qtmultimedia missing —
-        // the QML import fails at runtime, not the C++ link (see
-        // tools/image_builder/utils.py).
-        qFatal("VideoView: QML video scene unavailable (videoOutput "
-               "item or its videoSink missing — check the QML load "
-               "errors above and the qml6-module-qtquick / "
-               "qml6-module-qtmultimedia packages). Aborting so the "
-               "supervisor restarts the viewer instead of decoding "
-               "video to nowhere.");
+#endif
+
+    if (rasterMode) {
+        // No QQuickWidget / VideoOutput / videoSink here: frames are
+        // converted with QVideoFrame::toImage() in
+        // onVideoFrameDelivered() and blitted by rasterWidget. See
+        // videoview.h and RasterVideoWidget above.
+        rasterWidget = new RasterVideoWidget(this);
+        videoLayout->addWidget(rasterWidget);
+    } else {
+        // QML VideoOutput in a QQuickWidget: frames render through the
+        // RHI scene graph (shader YUV→RGB at composite time) instead of
+        // the QGraphicsVideoItem toImage()-readback-blit chain that
+        // capped presentation at 8–12 fps (issue #2967, see
+        // videoview.h). Black backdrop is two layers with distinct
+        // jobs: ``clearColor`` covers the pre-QML-load window, the QML
+        // Rectangle provides the steady-state letterbox fill around
+        // PreserveAspectFit. (No widget-palette layer on top — the
+        // QQuickWidget fills the whole layout, so a palette would be
+        // permanently occluded.)
+        quickWidget = new QQuickWidget(this);
+        quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+        quickWidget->setClearColor(Qt::black);
+        quickWidget->setSource(QUrl(QStringLiteral("qrc:/videoview.qml")));
+        if (quickWidget->status() == QQuickWidget::Error) {
+            const auto errors = quickWidget->errors();
+            for (const QQmlError& error : errors) {
+                qWarning()
+                    << "VideoView: QML load error:" << error.toString();
+            }
+        }
+        videoLayout->addWidget(quickWidget);
+
+        if (quickWidget->rootObject()) {
+            videoOutputItem = quickWidget->rootObject()
+                                  ->findChild<QQuickItem*>(
+                                      QStringLiteral("videoOutput"));
+        }
+        if (videoOutputItem) {
+            // VideoOutput exposes its sink as a property; resolving it
+            // here (rather than player->setVideoOutput(item)) keeps an
+            // explicit QVideoSink* around for the frame-delivery counter.
+            videoSink = qvariant_cast<QVideoSink*>(
+                videoOutputItem->property("videoSink"));
+        }
+        if (!videoOutputItem || !videoSink) {
+            // Fail hard rather than limp into decode-but-render-nowhere:
+            // a kiosk that silently black-screens every video while its
+            // logs read "playing" is the exact failure mode the VLC/mmal
+            // era shipped (docs/board-enablement.md, "rendered to
+            // nowhere"). Aborting hands the device to the existing
+            // spawn-retry / container-restart supervision, which is loud
+            // in fleet telemetry. Most likely cause on a device image:
+            // qml6-module-qtquick / qml6-module-qtmultimedia missing —
+            // the QML import fails at runtime, not the C++ link (see
+            // tools/image_builder/utils.py).
+            qFatal("VideoView: QML video scene unavailable (videoOutput "
+                   "item or its videoSink missing — check the QML load "
+                   "errors above and the qml6-module-qtquick / "
+                   "qml6-module-qtmultimedia packages). Aborting so the "
+                   "supervisor restarts the viewer instead of decoding "
+                   "video to nowhere.");
+        }
     }
 
     player = new QMediaPlayer(this);
@@ -111,8 +219,12 @@ VideoView::VideoView(QWidget* parent) : QWidget(parent)
     // item→window attachment ever lands later than this constructor
     // (qrc setSource is synchronous on Qt 6.8, but a dead counter
     // would silently report frames-rendered=0 — the inverse of the
-    // #2967 blind spot — so don't bet the diagnostic on it).
-    connectRenderCounter();
+    // #2967 blind spot — so don't bet the diagnostic on it). The
+    // raster path has no QQuickWindow; it counts frames-rendered in
+    // RasterVideoWidget::paintEvent via onRasterPainted() instead.
+    if (!rasterMode) {
+        connectRenderCounter();
+    }
 
     openStatsLog();
 
@@ -126,6 +238,9 @@ VideoView::~VideoView()
     if (statsTimer) {
         statsTimer->stop();
     }
+#ifdef ANTHIAS_GSTREAMER
+    gstStop();
+#endif
     if (player) {
         player->stop();
     }
@@ -158,15 +273,23 @@ void VideoView::openStatsLog()
         mode = QIODevice::WriteOnly | QIODevice::Truncate
                | QIODevice::Text;
     }
+    QString backend = QStringLiteral("qtmultimedia/ffmpeg");
+    QString sinkName = rasterMode ? QStringLiteral("raster-cpu")
+                                  : QStringLiteral("quick-videooutput");
+#ifdef ANTHIAS_GSTREAMER
+    if (gstMode) {
+        backend = QStringLiteral("gstreamer/v4l2");
+        sinkName = QStringLiteral("gst-appsink");
+    }
+#endif
     statsFile = new QFile(path, this);
     if (statsFile->open(mode)) {
         statsStream = new QTextStream(statsFile);
         writeStats(
             QStringLiteral("INIT"),
             QStringLiteral(
-                "backend=qtmultimedia/ffmpeg sink=quick-videooutput "
-                "qt=%1 audio_default=%2")
-                .arg(QStringLiteral(QT_VERSION_STR),
+                "backend=%1 sink=%2 qt=%3 audio_default=%4")
+                .arg(backend, sinkName, QStringLiteral(QT_VERSION_STR),
                      QMediaDevices::defaultAudioOutput().description()));
     } else {
         qWarning() << "VideoView: could not open" << path
@@ -236,6 +359,18 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
         QStringLiteral("uri=%1 options={%2}")
             .arg(uri, summary.join(QLatin1Char(' '))));
 
+#ifdef ANTHIAS_GSTREAMER
+    if (gstMode) {
+        // pi3-64: hand off to the GStreamer HW pipeline instead of
+        // QMediaPlayer. Frames arrive via onGstFrame → rasterWidget.
+        gstPlay(uri, options);
+        if (statsTimer) {
+            statsTimer->start();
+        }
+        return;
+    }
+#endif
+
     // Local-path URIs (e.g. ``/data/anthias_assets/abc.mp4``) come
     // through as scheme-less strings; ``QUrl(uri)`` parses them as
     // relative URLs with no host/scheme and QMediaPlayer refuses
@@ -255,6 +390,34 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
 
 void VideoView::stop()
 {
+#ifdef ANTHIAS_GSTREAMER
+    if (gstMode) {
+        if (statsTimer) {
+            statsTimer->stop();
+        }
+        if (statsStream && !currentUri.isEmpty()) {
+            const qint64 elapsedMs =
+                playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
+            writeStats(
+                QStringLiteral("STOP"),
+                QStringLiteral(
+                    "uri=%1 elapsed_ms=%2 frames-delivered=%3 "
+                    "frames-forwarded=%4 frames-rendered=%5 position-ms=%6")
+                    .arg(currentUri)
+                    .arg(elapsedMs)
+                    .arg(framesDelivered)
+                    .arg(framesForwarded)
+                    .arg(framesRendered)
+                    .arg(0));
+        }
+        gstStop();
+        rasterReady = true;
+        if (rasterWidget) {
+            rasterWidget->clear();
+        }
+        return;
+    }
+#endif
     if (!player) {
         return;
     }
@@ -283,10 +446,16 @@ void VideoView::stop()
     // next reveal), nor keep its decoder buffer alive between
     // assets. Pushing an empty frame to the VideoOutput releases the
     // last displayed buffer too — black beats a stale frame when the
-    // widget is next shown.
+    // widget is next shown. The raster path clears rasterWidget for the
+    // same reason.
     pendingFrame = QVideoFrame();
     sceneReadyForFrame = true;
-    if (videoSink) {
+    rasterReady = true;
+    if (rasterMode) {
+        if (rasterWidget) {
+            rasterWidget->clear();
+        }
+    } else if (videoSink) {
         videoSink->setVideoFrame(QVideoFrame());
     }
 }
@@ -394,6 +563,40 @@ void VideoView::onErrorOccurred(
 
 void VideoView::sampleStats()
 {
+#ifdef ANTHIAS_GSTREAMER
+    if (gstOverlayActive) {
+        if (!statsStream) {
+            return;
+        }
+        // Overlay path: frames never touch the CPU, so rendered = the
+        // sink-pad buffer probe count, expected = source_fps × elapsed,
+        // and dropped = the shortfall. kmssink's own late-frame drops are
+        // logged separately as QOS lines from the bus watch.
+        gint64 posNs = 0;
+        const qint64 posMs =
+            gst_element_query_position(gstPipeline, GST_FORMAT_TIME, &posNs)
+                ? posNs / GST_MSECOND
+                : -1;
+        const qint64 elapsedMs =
+            playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
+        const qint64 rendered = gstRawSamples.loadRelaxed();
+        const qreal expected =
+            containerFps > 0.0 ? containerFps * (elapsedMs / 1000.0) : -1.0;
+        const qint64 dropped =
+            expected > 0.0 ? std::max<qint64>(0, qRound(expected) - rendered)
+                           : -1;
+        writeStats(
+            QStringLiteral("SAMPLE"),
+            QStringLiteral("position-ms=%1 frames-rendered=%2 expected=%3 "
+                           "dropped=%4 container-fps=%5")
+                .arg(posMs)
+                .arg(rendered)
+                .arg(qRound(expected))
+                .arg(dropped)
+                .arg(QString::number(containerFps, 'f', 2)));
+        return;
+    }
+#endif
     if (!player || !statsStream) {
         return;
     }
@@ -417,11 +620,64 @@ void VideoView::sampleStats()
             .arg(framesRendered)
             .arg(qRound(expected))
             .arg(dropped));
+
+    // Raster instrumentation: average QVideoFrame::toImage() cost over
+    // the frames converted in this 1 s window. Reset the accumulators
+    // so each RASTER line is a fresh per-second average.
+    if (rasterMode && rasterConvertCount > 0) {
+        const double avgMs =
+            (rasterConvertUsAccum / 1000.0) / rasterConvertCount;
+        writeStats(
+            QStringLiteral("RASTER"),
+            QStringLiteral("convert-avg-ms=%1 n=%2")
+                .arg(QString::number(avgMs, 'f', 1))
+                .arg(rasterConvertCount));
+        rasterConvertUsAccum = 0;
+        rasterConvertCount = 0;
+    }
+
+#ifdef ANTHIAS_GSTREAMER
+    if (gstMode) {
+        // Cumulative appsink deliveries (pipeline's own rate). Compared
+        // against SAMPLE frames-rendered (paint rate) this separates a
+        // pipeline capped at N fps from a pipeline producing more than
+        // the eglfs paint can present.
+        writeStats(
+            QStringLiteral("GSTRAW"),
+            QStringLiteral("appsink-total=%1")
+                .arg(gstRawSamples.loadRelaxed()));
+    }
+#endif
 }
 
 void VideoView::onVideoFrameDelivered(const QVideoFrame& frame)
 {
     ++framesDelivered;
+
+    if (rasterMode) {
+        if (!frame.isValid()) {
+            // Stream end / source change marker — drop any parked frame
+            // and clear the surface to black instead of freezing on the
+            // last one.
+            pendingFrame = QVideoFrame();
+            if (rasterWidget) {
+                rasterWidget->clear();
+            }
+            return;
+        }
+        if (!rasterReady) {
+            // Paint of the previous frame still in flight — park the
+            // freshest frame (replacing any older parked one) for
+            // onRasterPainted() to forward. Self-paces the
+            // toImage()+blit to the widget's paint rate, which is what
+            // bounds this path on VideoCore IV.
+            pendingFrame = frame;
+            return;
+        }
+        presentRasterFrame(frame);
+        return;
+    }
+
     if (!videoSink) {
         return;
     }
@@ -466,6 +722,41 @@ void VideoView::onSceneRendered()
         return;
     }
     sceneReadyForFrame = true;
+}
+
+void VideoView::presentRasterFrame(const QVideoFrame& frame)
+{
+    // Close the one-frame gate, convert the decoded frame to a CPU
+    // QImage (a GPU→CPU readback for HW-decoded frames — the cost this
+    // path trades for actually reaching the VideoCore IV scanout), and
+    // hand it to rasterWidget, whose paintEvent blits it and calls
+    // onRasterPainted() to re-open the gate. A null conversion (e.g. a
+    // frame that can't be mapped) paints black for that frame but still
+    // re-arms, so it degrades to a dropped frame rather than a freeze.
+    rasterReady = false;
+    ++framesForwarded;
+    QElapsedTimer convertTimer;
+    convertTimer.start();
+    const QImage image = frame.toImage();
+    rasterConvertUsAccum += convertTimer.nsecsElapsed() / 1000;
+    ++rasterConvertCount;
+    if (rasterWidget) {
+        rasterWidget->setImage(image);
+    }
+}
+
+void VideoView::onRasterPainted()
+{
+    ++framesRendered;
+    if (pendingFrame.isValid()) {
+        // A newer frame arrived mid-paint — show it right away and keep
+        // the gate closed so delivery stays paced to paint capacity.
+        const QVideoFrame frame = pendingFrame;
+        pendingFrame = QVideoFrame();
+        presentRasterFrame(frame);
+        return;
+    }
+    rasterReady = true;
 }
 
 void VideoView::connectRenderCounter()
@@ -580,3 +871,655 @@ void VideoView::writeStats(const QString& kind, const QString& detail)
                  << QLatin1Char('\n');
     statsStream->flush();
 }
+
+#ifdef ANTHIAS_GSTREAMER
+
+namespace {
+
+// appsink pulled a frame on a GStreamer streaming thread. Wrap the
+// ISP-converted RGB16 buffer as a QImage (deep copy — the GstBuffer is
+// released on return), stash it as the newest frame, and post a single
+// coalesced onGstFrame() to the GUI thread. If a drain is already queued
+// we only overwrite the stashed frame (keeping the freshest) — so a GUI
+// thread slower than the pipeline drops intermediate frames rather than
+// piling QImages in the event queue and OOM'ing the 1 GB board.
+GstFlowReturn anthias_gst_on_new_sample(GstAppSink* sink, gpointer user_data)
+{
+    GstSample* sample = gst_app_sink_pull_sample(sink);
+    if (!sample) {
+        return GST_FLOW_OK;
+    }
+    GstCaps* caps = gst_sample_get_caps(sample);
+    GstBuffer* buffer = gst_sample_get_buffer(sample);
+    GstVideoInfo info;
+    GstMapInfo map;
+    if (caps && buffer && gst_video_info_from_caps(&info, caps)
+        && gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+        const int width = GST_VIDEO_INFO_WIDTH(&info);
+        const int height = GST_VIDEO_INFO_HEIGHT(&info);
+        const int stride = GST_VIDEO_INFO_PLANE_STRIDE(&info, 0);
+        // GStreamer RGB16 is RGB565 — a byte-for-byte match for
+        // QImage::Format_RGB16, so wrapping needs no channel swizzle.
+        // copy() detaches from the soon-to-be-unmapped GstBuffer.
+        const QImage wrapped(
+            map.data, width, height, stride, QImage::Format_RGB16);
+        const QImage frame = wrapped.copy();
+        gst_buffer_unmap(buffer, &map);
+        static_cast<VideoView*>(user_data)->pushGstFrame(frame);
+    }
+    gst_sample_unref(sample);
+    return GST_FLOW_OK;
+}
+
+// Source drained: loop by flushing-seeking back to zero. Marshalled to
+// the GUI thread so it can't race a concurrent stop().
+void anthias_gst_on_eos(GstAppSink* /*sink*/, gpointer user_data)
+{
+    auto* view = static_cast<VideoView*>(user_data);
+    QMetaObject::invokeMethod(view, "gstRestartLoop", Qt::QueuedConnection);
+}
+
+// Find a free OVERLAY plane usable on ``crtcId``. The overlay-plane path
+// (kmssink) needs an explicit plane-id — otherwise kmssink grabs the
+// primary plane, which eglfs already scans out. Skips planes already
+// bound to a CRTC (eglfs's primary) and any non-overlay (primary/cursor)
+// type. Returns 0 if none found (caller falls back to the raster path).
+uint32_t anthias_find_overlay_plane(int fd, uint32_t crtcId)
+{
+    drmModeRes* res = drmModeGetResources(fd);
+    int crtcIndex = -1;
+    if (res) {
+        for (int i = 0; i < res->count_crtcs; ++i) {
+            if (res->crtcs[i] == crtcId) {
+                crtcIndex = i;
+                break;
+            }
+        }
+        drmModeFreeResources(res);
+    }
+    if (crtcIndex < 0) {
+        return 0;
+    }
+
+    drmSetClientCap(fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+    drmModePlaneRes* planes = drmModeGetPlaneResources(fd);
+    if (!planes) {
+        return 0;
+    }
+    uint32_t chosen = 0;
+    for (uint32_t i = 0; i < planes->count_planes && chosen == 0; ++i) {
+        drmModePlane* plane = drmModeGetPlane(fd, planes->planes[i]);
+        if (!plane) {
+            continue;
+        }
+        const bool crtcCapable = (plane->possible_crtcs >> crtcIndex) & 1u;
+        const bool free = plane->crtc_id == 0;
+        if (crtcCapable && free) {
+            drmModeObjectProperties* props = drmModeObjectGetProperties(
+                fd, plane->plane_id, DRM_MODE_OBJECT_PLANE);
+            if (props) {
+                for (uint32_t p = 0; p < props->count_props; ++p) {
+                    drmModePropertyRes* prop =
+                        drmModeGetProperty(fd, props->props[p]);
+                    if (!prop) {
+                        continue;
+                    }
+                    if (std::strcmp(prop->name, "type") == 0
+                        && props->prop_values[p] == DRM_PLANE_TYPE_OVERLAY) {
+                        chosen = plane->plane_id;
+                    }
+                    drmModeFreeProperty(prop);
+                }
+                drmModeFreeObjectProperties(props);
+            }
+        }
+        drmModeFreePlane(plane);
+    }
+    drmModeFreePlaneResources(planes);
+    return chosen;
+}
+
+// Buffer probe on kmssink's sink pad: counts frames that reach the sink
+// (the presentation rate for the overlay path, since there is no appsink)
+// and captures the source framerate once from the caps so sampleStats can
+// compute expected-vs-dropped. Runs on a streaming thread — the counter is
+// atomic and containerFps is a benign same-value race.
+GstPadProbeReturn anthias_gst_kms_probe(GstPad* pad, GstPadProbeInfo* /*info*/,
+                                        gpointer user_data)
+{
+    static_cast<VideoView*>(user_data)->onOverlayBuffer(pad);
+    return GST_PAD_PROBE_OK;
+}
+
+// Pipeline bus watch for the overlay path (kmssink has no appsink EOS
+// callback). Serviced on the GUI thread via Qt's GLib event dispatcher.
+// Loops the clip on EOS; logs kmssink QoS drop stats and errors.
+// Bus watch for the separate audio pipeline. Audio is best-effort: on EOS
+// loop it to stay roughly aligned with the looping video; on error tear it
+// down (a bad audio device/codec must not take the video with it).
+gboolean anthias_gst_audio_bus(GstBus* /*bus*/, GstMessage* message,
+                               gpointer user_data)
+{
+    auto* view = static_cast<VideoView*>(user_data);
+    switch (GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_EOS:
+        view->gstLoopAudio();
+        break;
+    case GST_MESSAGE_ERROR: {
+        GError* err = nullptr;
+        gchar* dbg = nullptr;
+        gst_message_parse_error(message, &err, &dbg);
+        view->logAudio(QStringLiteral("error=%1")
+                           .arg(err ? err->message : QStringLiteral("?")));
+        if (err) {
+            g_error_free(err);
+        }
+        g_free(dbg);
+        view->gstStopAudio();
+        break;
+    }
+    default:
+        break;
+    }
+    return TRUE;
+}
+
+gboolean anthias_gst_bus_loop(GstBus* /*bus*/, GstMessage* message,
+                              gpointer user_data)
+{
+    auto* view = static_cast<VideoView*>(user_data);
+    switch (GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_EOS:
+        view->gstRestartLoop();
+        break;
+    case GST_MESSAGE_QOS: {
+        // kmssink's own accounting: authoritative rendered vs dropped.
+        guint64 rendered = 0;
+        guint64 dropped = 0;
+        GstFormat format = GST_FORMAT_UNDEFINED;
+        gst_message_parse_qos_stats(message, &format, &rendered, &dropped);
+        view->logOverlayQos(rendered, dropped);
+        break;
+    }
+    case GST_MESSAGE_ERROR: {
+        GError* err = nullptr;
+        gchar* dbg = nullptr;
+        gst_message_parse_error(message, &err, &dbg);
+        qWarning() << "VideoView overlay pipeline error:"
+                   << (err ? err->message : "?") << (dbg ? dbg : "");
+        if (err) {
+            g_error_free(err);
+        }
+        g_free(dbg);
+        break;
+    }
+    default:
+        break;
+    }
+    return TRUE;
+}
+
+}  // namespace
+
+bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
+{
+    gstStop();
+
+    // HW overlay-plane path first (if requested and resolvable): it scans
+    // out the video directly on a vc4 overlay plane, bypassing the eglfs
+    // GL compositor that caps at ~9 fps. Falls through to the appsink →
+    // raster blit below on any failure.
+    if (gstOverlayMode && gstPlayOverlay(uri, options)) {
+        return true;
+    }
+
+    // Explicit hardware pipeline. pi3-64 only ever receives H.264/MP4
+    // (the codec gate rejects every other codec for this board), so an
+    // explicit qtdemux ! h264parse ! v4l2h264dec chain is safe and
+    // *guarantees* the bcm2835 hardware decoder — letting decodebin pick
+    // would risk the software avdec_h264, which can't sustain realtime and
+    // thermally reboots the 1 GB board. v4l2convert is the bcm2835 ISP
+    // doing SAND→RGB16 in hardware (the conversion the CPU can't afford,
+    // ~600 ms/frame). sync=true paces the appsink to each frame's PTS;
+    // drop=true / max-buffers=2 bounds latency to the freshest frame.
+    // Audio is a follow-up; this first cut is video-only.
+    QString location = uri;
+    location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
+    location.replace(QLatin1Char('"'), QLatin1String("\\\""));
+    // Optional ISP downscale (ANTHIAS_GST_SCALE="WxH", e.g. 1280x720):
+    // the bcm2835 ISP scales in hardware, so a smaller output cuts the
+    // ISP's per-frame work (and, if the display substrate uploads a
+    // smaller texture, the composite cost too). Empty = native source
+    // resolution. Experimental knob for the pi3-64 fps tuning.
+    QString scaleCaps;
+    const QString scale = qEnvironmentVariable("ANTHIAS_GST_SCALE");
+    static const QRegularExpression scaleRe(
+        QStringLiteral("^(\\d+)x(\\d+)$"));
+    const QRegularExpressionMatch scaleMatch = scaleRe.match(scale);
+    if (scaleMatch.hasMatch()) {
+        scaleCaps = QStringLiteral(",width=%1,height=%2")
+                        .arg(scaleMatch.captured(1), scaleMatch.captured(2));
+    }
+
+    // A queue after v4l2convert runs decode+ISP on their own thread,
+    // decoupled from appsink delivery (leaky=downstream drops the oldest
+    // buffered frame if the GUI falls behind, keeping the pipeline
+    // free-running). sync=false delivers frames as soon as the ISP emits
+    // them rather than clock-pacing in the sink — the GUI-side coalescing
+    // gate (pushGstFrame) bounds what actually reaches the paint.
+    const QString description =
+        QStringLiteral(
+            "filesrc location=\"%1\" ! qtdemux ! h264parse ! v4l2h264dec ! "
+            "v4l2convert ! video/x-raw,format=RGB16%2 ! "
+            "queue max-size-buffers=3 leaky=downstream ! "
+            "appsink name=asink max-buffers=2 drop=true sync=false")
+            .arg(location, scaleCaps);
+
+    GError* error = nullptr;
+    gstPipeline = gst_parse_launch(description.toUtf8().constData(), &error);
+    if (!gstPipeline) {
+        qWarning() << "VideoView::gstPlay: pipeline build failed:"
+                   << (error ? error->message : "unknown");
+        if (error) {
+            g_error_free(error);
+        }
+        return false;
+    }
+    if (error) {
+        // Non-fatal parse warnings still populate error.
+        g_error_free(error);
+    }
+
+    gstAppSink = gst_bin_get_by_name(GST_BIN(gstPipeline), "asink");
+    if (gstAppSink) {
+        GstAppSinkCallbacks callbacks = {};
+        callbacks.eos = anthias_gst_on_eos;
+        callbacks.new_sample = anthias_gst_on_new_sample;
+        gst_app_sink_set_callbacks(
+            GST_APP_SINK(gstAppSink), &callbacks, this, nullptr);
+    }
+
+    playStartedAt.start();
+    if (gst_element_set_state(gstPipeline, GST_STATE_PLAYING)
+        == GST_STATE_CHANGE_FAILURE) {
+        qWarning() << "VideoView::gstPlay: could not start pipeline for"
+                   << uri;
+        gstStop();
+        return false;
+    }
+    return true;
+}
+
+bool VideoView::gstPlayOverlay(const QString& uri, const QVariantMap& options)
+{
+    QPlatformNativeInterface* ni = QGuiApplication::platformNativeInterface();
+    if (!ni) {
+        return false;
+    }
+    QScreen* screen = QGuiApplication::primaryScreen();
+    const int driFd = static_cast<int>(reinterpret_cast<qintptr>(
+        ni->nativeResourceForIntegration(QByteArrayLiteral("dri_fd"))));
+    const quint32 crtcId = static_cast<quint32>(reinterpret_cast<qintptr>(
+        ni->nativeResourceForScreen(QByteArrayLiteral("dri_crtcid"), screen)));
+    const quint32 connId = static_cast<quint32>(reinterpret_cast<qintptr>(
+        ni->nativeResourceForScreen(
+            QByteArrayLiteral("dri_connectorid"), screen)));
+    if (driFd <= 0 || crtcId == 0 || connId == 0) {
+        qWarning() << "VideoView::gstPlayOverlay: eglfs DRM resources"
+                   << "unavailable (fd" << driFd << "crtc" << crtcId
+                   << "connector" << connId << ") — using raster path";
+        return false;
+    }
+
+    const uint32_t planeId = anthias_find_overlay_plane(driFd, crtcId);
+    if (planeId == 0) {
+        qWarning() << "VideoView::gstPlayOverlay: no free overlay plane on"
+                   << "crtc" << crtcId << "— using raster path";
+        return false;
+    }
+
+    // Explicit HW pipeline (reliably reaches the overlay — the playbin
+    // variant hung in set_state). pi3-64 only receives H.264/MP4 (the
+    // codec gate rejects other codecs), so qtdemux ! h264parse !
+    // v4l2h264dec forces the bcm2835 HW decoder. The ``queue`` sits
+    // BEFORE v4l2convert so it decouples the decoder thread from the
+    // convert+present thread WITHOUT hoarding the convert's OUTPUT pool —
+    // queuing the convert's output was the buffer-starvation deadlock.
+    // Here the queue holds decoder buffers (the decoder's larger DPB pool
+    // covers them) while kmssink holds only 1-2 of the convert's output
+    // buffers (the convert pool covers those). v4l2convert (bcm2835 ISP)
+    // pins NV12 — the vc4 plane's native scanout format; the raw decoder
+    // renegotiates I420, which shows wrong colours (blue).
+    QString location = uri;
+    location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
+    location.replace(QLatin1Char('"'), QLatin1String("\\\""));
+    const int queueBuffers =
+        qEnvironmentVariableIsSet("ANTHIAS_GST_QUEUE")
+            ? qEnvironmentVariableIntValue("ANTHIAS_GST_QUEUE")
+            : 4;
+    // The bcm2835 decoder only emits I420 (renders blue on the vc4 plane;
+    // its V4L2 capture won't negotiate NV12), so v4l2convert (bcm2835 ISP)
+    // does I420→NV12. The critical bit is its OUTPUT io-mode: with the
+    // default exported-dmabuf, kmssink zero-copies and PINS the convert's
+    // output buffers on the plane, starving the convert pool → ~18 fps (or
+    // a hard deadlock decoder-direct). Forcing ``capture-io-mode=mmap``
+    // makes the convert output CPU-memory buffers that kmssink cannot
+    // scan out directly, so kmssink COPIES each frame into its own dumb
+    // buffer and releases the convert buffer immediately — exactly how the
+    // legacy fbdevsink avoided the hold. The copy (~NV12 1080p ≈ 3 MB) is
+    // cheap next to the ISP work and buys full-rate, deadlock-free
+    // presentation. Overridable for tuning.
+    const QString convIoMode =
+        qEnvironmentVariable("ANTHIAS_GST_CONVERT_IOMODE",
+                             QStringLiteral("mmap"));
+    // ANTHIAS_GST_ISP_CONVERT=0 → decoder-direct (skip the ~15-18fps ISP
+    // convert): the decoder emits I420 at full rate. To stop kmssink
+    // pinning the decoder's DPB buffers (which deadlocks it), force the
+    // DECODER's output to mmap so kmssink copies + releases immediately.
+    // Default: decoder-direct (I420) with the decoder's output forced to
+    // mmap so kmssink COPIES rather than pinning the decoder's DPB pool —
+    // that combination is what delivers a stable 30 fps with zero ongoing
+    // drops (the ISP-convert path is ~18fps-bound; plain decoder-direct
+    // deadlocks). ANTHIAS_GST_ISP_CONVERT=1 reinstates the ISP-convert
+    // (NV12) path for boards/streams where I420 direct-scanout misbehaves.
+    const bool useConvert =
+        qEnvironmentVariableIsSet("ANTHIAS_GST_ISP_CONVERT")
+            ? qEnvironmentVariableIntValue("ANTHIAS_GST_ISP_CONVERT") != 0
+            : false;
+    const QString decodeStage =
+        useConvert
+            ? QStringLiteral("v4l2h264dec")
+            : QStringLiteral("v4l2h264dec capture-io-mode=mmap");
+    const QString convertStage =
+        !useConvert ? QString()
+        : convIoMode.isEmpty()
+            ? QStringLiteral("v4l2convert ! video/x-raw,format=NV12 ! ")
+            : QStringLiteral(
+                  "v4l2convert capture-io-mode=%1 ! video/x-raw,format=NV12 ! ")
+                  .arg(convIoMode);
+    // Audio plays in a SEPARATE GStreamer pipeline (see gstStartAudio),
+    // NOT a branch off the video's qtdemux. A shared pipeline coupled the
+    // two fatally: any audio condition — a slow/queuing decodebin preroll,
+    // an audio-provided clock that stalls, a missing track — froze the
+    // VIDEO at the first frame. An independent pipeline (own clock, own
+    // preroll, own bus) means the video path below stays byte-for-byte the
+    // proven 30 fps chain and can never be stalled by audio. Resolve the
+    // ALSA device here (same ``audio-device`` option the QMediaPlayer path
+    // uses, e.g. ``alsa/sysdefault:CARD=<hdmi>``; strip the Qt ``alsa/``
+    // scheme). We drive alsasink directly on the HDMI card rather than
+    // pulsesink: pi3-64 no longer routes video through QtMultimedia, and
+    // pulse's default sink is the 3.5mm jack while its vc4hdmi sink sits
+    // suspended (card free) — the legacy GstFbdev path did the same.
+    QString alsaDev =
+        options.value(QStringLiteral("audio-device")).toString();
+    if (alsaDev.startsWith(QLatin1String("alsa/"))) {
+        alsaDev = alsaDev.mid(5);
+    }
+    const QString description =
+        QStringLiteral(
+            "filesrc location=\"%1\" ! qtdemux ! h264parse ! %7 ! "
+            "queue max-size-buffers=%5 max-size-time=0 max-size-bytes=0 ! "
+            "%6"
+            "kmssink name=vsink qos=true fd=%2 connector-id=%3 plane-id=%4 "
+            "force-modesetting=false can-scale=true skip-vsync=true")
+            .arg(location)
+            .arg(driFd)
+            .arg(connId)
+            .arg(planeId)
+            .arg(queueBuffers)
+            .arg(convertStage, decodeStage);
+
+    GError* error = nullptr;
+    gstPipeline = gst_parse_launch(description.toUtf8().constData(), &error);
+    if (!gstPipeline) {
+        qWarning() << "VideoView::gstPlayOverlay: pipeline build failed:"
+                   << (error ? error->message : "unknown")
+                   << "— using raster path";
+        if (error) {
+            g_error_free(error);
+        }
+        return false;
+    }
+    if (error) {
+        g_error_free(error);
+        error = nullptr;
+    }
+
+    // Count frames reaching kmssink (presentation rate) + latch the source
+    // fps for sampleStats.
+    gstRawSamples.storeRelaxed(0);
+    containerFps = 0.0;
+    GstElement* sink = gst_bin_get_by_name(GST_BIN(gstPipeline), "vsink");
+    if (sink) {
+        GstPad* sinkPad = gst_element_get_static_pad(sink, "sink");
+        if (sinkPad) {
+            gst_pad_add_probe(sinkPad, GST_PAD_PROBE_TYPE_BUFFER,
+                              anthias_gst_kms_probe, this, nullptr);
+            gst_object_unref(sinkPad);
+        }
+        gst_object_unref(sink);
+    }
+
+    // Loop the clip: kmssink has no appsink EOS callback, so watch the bus
+    // (serviced on the GUI thread by Qt's GLib dispatcher on Linux).
+    GstBus* bus = gst_element_get_bus(gstPipeline);
+    gst_bus_add_watch(bus, anthias_gst_bus_loop, this);
+    gst_object_unref(bus);
+
+    playStartedAt.start();
+    if (gst_element_set_state(gstPipeline, GST_STATE_PLAYING)
+        == GST_STATE_CHANGE_FAILURE) {
+        qWarning() << "VideoView::gstPlayOverlay: could not start pipeline"
+                   << "for" << uri << "— using raster path";
+        gstStop();
+        return false;
+    }
+
+    // The video lives on the overlay plane now; clear the raster widget so
+    // the eglfs primary plane behind any letterbox bars is black, not a
+    // stale frame.
+    if (rasterWidget) {
+        rasterWidget->clear();
+    }
+    gstOverlayActive = true;
+    writeStats(
+        QStringLiteral("INIT"),
+        QStringLiteral(
+            "backend=gstreamer/v4l2 sink=kms-overlay plane-id=%1 qt=%2")
+            .arg(planeId)
+            .arg(QStringLiteral(QT_VERSION_STR)));
+
+    // Video is up; bring up audio in its own pipeline (best-effort).
+    gstStartAudio(location, alsaDev);
+    return true;
+}
+
+void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
+{
+    const QString audioSink =
+        qEnvironmentVariable("ANTHIAS_GST_AUDIO_SINK",
+                             QStringLiteral("alsasink"));
+    const QString audioDeviceProp =
+        (audioSink == QLatin1String("alsasink") && !alsaDev.isEmpty())
+            ? QStringLiteral(" device=\"%1\"").arg(alsaDev)
+            : QString();
+    // decodebin autoplugs the audio codec (AAC/MP3/…); the sink drives the
+    // HDMI ALSA card directly. Own pipeline → own clock/preroll, fully
+    // isolated from the video overlay pipeline.
+    // Pin the AUDIO pad explicitly: qtdemux exposes both a video and an
+    // audio pad, and a bare ``qtdemux ! decodebin`` links whichever appears
+    // first (often video → audioconvert then can't negotiate and no sound).
+    const QString audioDesc =
+        QStringLiteral(
+            "filesrc location=\"%1\" ! qtdemux name=ademux ademux.audio_0 ! "
+            "queue ! decodebin ! audioconvert ! audioresample ! %2%3")
+            .arg(location, audioSink, audioDeviceProp);
+
+    GError* error = nullptr;
+    gstAudioPipeline =
+        gst_parse_launch(audioDesc.toUtf8().constData(), &error);
+    if (!gstAudioPipeline) {
+        writeStats(QStringLiteral("AUDIO"),
+                   QStringLiteral("build-failed err=%1")
+                       .arg(error ? error->message : QStringLiteral("?")));
+        if (error) {
+            g_error_free(error);
+        }
+        return;
+    }
+    if (error) {
+        g_error_free(error);
+    }
+    GstBus* bus = gst_element_get_bus(gstAudioPipeline);
+    gst_bus_add_watch(bus, anthias_gst_audio_bus, this);
+    gst_object_unref(bus);
+    gst_element_set_state(gstAudioPipeline, GST_STATE_PLAYING);
+    writeStats(QStringLiteral("AUDIO"),
+               QStringLiteral("started sink=%1 device=%2")
+                   .arg(audioSink,
+                        alsaDev.isEmpty() ? QStringLiteral("(default)")
+                                          : alsaDev));
+}
+
+void VideoView::gstLoopAudio()
+{
+    if (!gstAudioPipeline) {
+        return;
+    }
+    gst_element_seek_simple(
+        GST_ELEMENT(gstAudioPipeline), GST_FORMAT_TIME,
+        static_cast<GstSeekFlags>(
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT),
+        0);
+}
+
+void VideoView::logAudio(const QString& msg)
+{
+    writeStats(QStringLiteral("AUDIO"), msg);
+}
+
+void VideoView::gstStopAudio()
+{
+    if (!gstAudioPipeline) {
+        return;
+    }
+    GstBus* bus = gst_element_get_bus(gstAudioPipeline);
+    if (bus) {
+        gst_bus_remove_watch(bus);
+        gst_object_unref(bus);
+    }
+    gst_element_set_state(gstAudioPipeline, GST_STATE_NULL);
+    gst_object_unref(gstAudioPipeline);
+    gstAudioPipeline = nullptr;
+}
+
+void VideoView::gstStop()
+{
+    gstStopAudio();
+    if (gstPipeline) {
+        // Remove the bus watch the overlay path installed (no-op if the
+        // appsink path was used — that has no bus watch).
+        GstBus* bus = gst_element_get_bus(gstPipeline);
+        if (bus) {
+            gst_bus_remove_watch(bus);
+            gst_object_unref(bus);
+        }
+    }
+    gstOverlayActive = false;
+    if (gstAppSink) {
+        gst_object_unref(gstAppSink);
+        gstAppSink = nullptr;
+    }
+    if (gstPipeline) {
+        gst_element_set_state(gstPipeline, GST_STATE_NULL);
+        gst_object_unref(gstPipeline);
+        gstPipeline = nullptr;
+    }
+}
+
+void VideoView::pushGstFrame(const QImage& frame)
+{
+    // Streaming thread: stash the newest frame and post at most one
+    // coalesced drain to the GUI thread.
+    gstRawSamples.fetchAndAddRelaxed(1);
+    {
+        QMutexLocker locker(&gstFrameMutex);
+        gstLatestFrame = frame;
+    }
+    if (gstDrainPending.testAndSetOrdered(0, 1)) {
+        QMetaObject::invokeMethod(this, "onGstFrame", Qt::QueuedConnection);
+    }
+}
+
+void VideoView::onGstFrame()
+{
+    // GUI thread: take the freshest stashed frame and blit it. The paint
+    // that follows setImage() bumps framesRendered in onRasterPainted(),
+    // so SAMPLE reports the true present rate; gstRawSamples (logged in
+    // sampleStats) reports the pipeline's own delivery rate for contrast.
+    gstDrainPending.storeRelaxed(0);
+    QImage frame;
+    {
+        QMutexLocker locker(&gstFrameMutex);
+        frame = gstLatestFrame;
+    }
+    if (frame.isNull()) {
+        return;
+    }
+    ++framesDelivered;
+    ++framesForwarded;
+    if (rasterWidget) {
+        rasterWidget->setImage(frame);
+    }
+}
+
+void VideoView::gstRestartLoop()
+{
+    if (!gstPipeline) {
+        return;
+    }
+    gst_element_seek_simple(
+        GST_ELEMENT(gstPipeline), GST_FORMAT_TIME,
+        static_cast<GstSeekFlags>(
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT),
+        0);
+    // Re-seek audio to the top too so it re-aligns with the video every
+    // loop (the two pipelines otherwise drift on their own clocks).
+    gstLoopAudio();
+}
+
+void VideoView::gstRequeueUri(struct _GstElement* playbin)
+{
+    if (playbin && !gstUri.isEmpty()) {
+        g_object_set(playbin, "uri", gstUri.constData(), nullptr);
+    }
+}
+
+void VideoView::onOverlayBuffer(struct _GstPad* pad)
+{
+    gstRawSamples.fetchAndAddRelaxed(1);
+    if (containerFps <= 0.0 && pad) {
+        GstCaps* caps = gst_pad_get_current_caps(pad);
+        if (caps) {
+            GstStructure* s = gst_caps_get_structure(caps, 0);
+            gint num = 0;
+            gint den = 0;
+            if (s && gst_structure_get_fraction(s, "framerate", &num, &den)
+                && den > 0) {
+                containerFps = static_cast<qreal>(num) / den;
+            }
+            gst_caps_unref(caps);
+        }
+    }
+}
+
+void VideoView::logOverlayQos(quint64 rendered, quint64 dropped)
+{
+    writeStats(
+        QStringLiteral("QOS"),
+        QStringLiteral("sink-rendered=%1 sink-dropped=%2")
+            .arg(rendered)
+            .arg(dropped));
+}
+
+#endif  // ANTHIAS_GSTREAMER

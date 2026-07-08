@@ -1394,6 +1394,38 @@ def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
     assert 'ANTHIAS_PREFER_DARK_MODE' not in env
 
 
+# Video presentation substrate — pi3-64 (VideoCore IV / GLES2) can't
+# scan out the QML VideoOutput RHI path (issue #3084), so the Python
+# side flags it onto the C++ CPU-raster presenter via
+# ANTHIAS_VIDEO_RASTER. Every other board keeps the GPU VideoOutput path.
+
+
+def test_build_webview_env_sets_video_raster_on_pi3_64() -> None:
+    with mock.patch.dict(
+        os.environ,
+        {'QT_QPA_PLATFORM': 'eglfs', 'DEVICE_TYPE': 'pi3-64'},
+        clear=False,
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_VIDEO_RASTER'] == '1'
+
+
+def test_build_webview_env_no_video_raster_on_pi4_64() -> None:
+    # Pi 4 (V3D 4.2) keeps the GPU VideoOutput path; a stale flag
+    # inherited from the process env must not leak onto it.
+    with mock.patch.dict(
+        os.environ,
+        {
+            'QT_QPA_PLATFORM': 'eglfs',
+            'DEVICE_TYPE': 'pi4-64',
+            'ANTHIAS_VIDEO_RASTER': '1',
+        },
+        clear=False,
+    ):
+        env = viewer._build_webview_env()
+    assert 'ANTHIAS_VIDEO_RASTER' not in env
+
+
 # User-Agent token — the C++ webview appends ANTHIAS_UA_TOKEN to
 # QtWebEngine's default User-Agent (the profile setup in
 # src/anthias_webview/src/view.cpp). The token is composed by the
