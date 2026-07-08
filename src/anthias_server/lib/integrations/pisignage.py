@@ -170,11 +170,14 @@ class PiSignageProvider(ImportProvider):
         for entry in dbdata:
             if not isinstance(entry, dict):
                 continue
-            name = entry.get('name')
-            if not name:
+            raw_name = entry.get('name')
+            if not raw_name:
                 continue
+            # Coerce to str so the de-dupe check against the string-only
+            # ``files`` list below is reliable.
+            name = str(raw_name)
             seen.add(name)
-            yield self._item(str(name), _map_type(entry.get('type')))
+            yield self._item(name, _map_type(entry.get('type')))
         for name in data.get('files') or []:
             if isinstance(name, str) and name not in seen:
                 yield self._item(name, _type_from_name(name))
@@ -226,7 +229,9 @@ class PiSignageProvider(ImportProvider):
                 skipped=True,
                 reason='piSignage did not expose a download path for this file.',
             )
-        file_url = f'https://{_media_host(subdomain)}{path}'
+        # Guarantee a single leading slash so the URL is well-formed even if
+        # the API ever returns a path without one.
+        file_url = f'https://{_media_host(subdomain)}/{path.lstrip("/")}'
         start_date, end_date = ingest.default_window()
         asset = ingest.create_file_asset(
             session=_session,
@@ -257,7 +262,7 @@ class PiSignageProvider(ImportProvider):
         self, subdomain: str, headers: dict[str, str], filename: str
     ) -> dict[str, Any]:
         response = _session.get(
-            f'{_base_url(subdomain)}/files/{quote(filename)}',
+            f'{_base_url(subdomain)}/files/{quote(filename, safe="")}',
             headers=headers,
             timeout=_LIST_TIMEOUT_S,
         )
