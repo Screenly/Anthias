@@ -73,7 +73,12 @@ try:
     import anthias_common.utils as _anthias_common_utils  # noqa: F401
 
     _APP_AVAILABLE = True
-except Exception:
+except ImportError:
+    # Only a missing dependency (the rpi-imager lint env lacks Django /
+    # pytz) should flip us to no-op. Catch ImportError specifically, not
+    # bare Exception: a genuine error inside the app package (SyntaxError,
+    # a broken import-time side effect) must surface loudly rather than
+    # silently disabling Redis isolation for the whole app test suite.
     _APP_AVAILABLE = False
 
 

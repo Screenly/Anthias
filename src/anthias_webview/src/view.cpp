@@ -416,31 +416,76 @@ void View::loadPage(const QString &uri)
     qDebug() << "Loading web page in background web view:" << uri;
 }
 
+namespace {
+// Defensive re-validation of the D-Bus header payload. The server side
+// (validate_asset_headers) is the primary gate and the viewer only
+// forwards sanitised headers, but the ``setRequestHeaders`` slot is a
+// trust-no-one boundary (anything on the session bus can call it), so we
+// re-check here rather than put unsafe bytes on the wire — same posture
+// as kMaxReloadIntervalS. Mirrors the server's limits.
+constexpr int kMaxRequestHeaders = 20;
+constexpr int kMaxHeaderNameLen = 256;
+constexpr int kMaxHeaderValueLen = 4096;
+
+// RFC 7230 field-name is 1*tchar.
+bool isValidHeaderName(const QByteArray& name)
+{
+    if (name.isEmpty() || name.size() > kMaxHeaderNameLen) {
+        return false;
+    }
+    for (const char c : name) {
+        const bool tchar =
+            (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9')
+            || QByteArray("!#$%&'*+-.^_`|~").contains(c);
+        if (!tchar) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Reject CR / LF / NUL (header/request splitting) and oversized values.
+bool isValidHeaderValue(const QByteArray& value)
+{
+    if (value.size() > kMaxHeaderValueLen) {
+        return false;
+    }
+    return !value.contains('\r') && !value.contains('\n')
+        && !value.contains('\0');
+}
+}  // namespace
+
 void View::setRequestHeaders(const QString &headersJson)
 {
     // Parse the JSON object the viewer sent into a name/value list. We
     // don't apply it to the interceptor here — startPageLoad does that
-    // once it knows the target host — because the header set is only
+    // once it knows the target origin — because the header set is only
     // meaningful together with the URL it belongs to. Store it so the
     // very next loadPage picks it up. An empty / malformed payload
     // leaves ``pendingHeaders`` empty, which clears any prior headers on
-    // the next load.
+    // the next load. Entries that fail validation are dropped, not
+    // applied.
     QList<QPair<QByteArray, QByteArray>> parsed;
     const QJsonDocument doc = QJsonDocument::fromJson(headersJson.toUtf8());
     if (doc.isObject()) {
         const QJsonObject obj = doc.object();
         for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+            if (parsed.size() >= kMaxRequestHeaders) {
+                break;
+            }
             if (!it.value().isString()) {
                 continue;
             }
             const QByteArray name = it.key().toUtf8();
-            if (name.isEmpty()) {
+            const QByteArray value = it.value().toString().toUtf8();
+            if (!isValidHeaderName(name) || !isValidHeaderValue(value)) {
                 continue;
             }
             // Brace-init the QPair rather than qMakePair(), which Qt 6
             // deprecates — keeps the same source building warning-free
             // on both the Qt 5 and Qt 6 toolchains.
-            parsed.append({name, it.value().toString().toUtf8()});
+            parsed.append({name, value});
         }
     }
     pendingHeaders = parsed;
