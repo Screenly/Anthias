@@ -1105,12 +1105,12 @@ def _apply_request_headers(headers: dict[str, str]) -> bool:
 
     Returns ``True`` when the call succeeded *or* the slot is
     unsupported (nothing left to retry), and ``False`` on a transient
-    failure — the C++ interceptor only picks the staged headers up on the
-    next ``loadPage``, so a transient failure on the first load of a
-    single-asset playlist (its URL never changes, so the unchanged-URL
-    short-circuit would otherwise skip ``loadPage`` forever) must force a
-    reload. The caller keys that reload off this return value. Observed on
-    real hardware: the very first ``setRequestHeaders`` can lose the race
+    failure. The caller keys navigation off this: on ``False`` it must
+    NOT issue ``loadPage``, because the C++ side still holds the previous
+    asset's staged headers and would scope them to the new asset's origin
+    (a cross-asset credential leak). It instead defers and retries next
+    tick, leaving the URL/header mismatch in place. Observed on real
+    hardware: the very first ``setRequestHeaders`` can lose the race
     against a just-spawned webview's D-Bus registration.
     """
     global _webview_supports_set_request_headers
@@ -1191,22 +1191,29 @@ def view_webpage(
     # edit must still refetch so the new headers reach the main document,
     # not just later same-host XHR.
     if current_browser_url != uri or current_browser_headers != headers:
-        _send_to_webview(lambda: browser_bus.loadPage(uri))
-        current_browser_url = uri
-        # Only cache the headers as applied once setRequestHeaders
-        # actually succeeded. If it transiently failed, leave
-        # ``current_browser_headers`` stale so the mismatch persists and
-        # the next tick re-issues both setRequestHeaders and loadPage —
-        # otherwise a single-asset playlist (unchanged URL) would never
-        # reload and the headers would never reach the page. No-op for
-        # the common success path.
         if headers_applied:
+            _send_to_webview(lambda: browser_bus.loadPage(uri))
+            current_browser_url = uri
             # Store a copy, not the caller's dict: aliasing it would let a
             # later in-place mutation of that dict silently change the
-            # cached value, making the next ``!=`` compare equal and skip a
-            # needed reload. The asset_loop currently hands us a fresh dict
-            # each tick, but the copy keeps that a non-assumption.
+            # cached value, making the next ``!=`` compare equal and skip
+            # a needed reload. The asset_loop currently hands us a fresh
+            # dict each tick, but the copy keeps that a non-assumption.
             current_browser_headers = dict(headers)
+        else:
+            # setRequestHeaders failed transiently, so the webview still
+            # holds the PREVIOUS asset's staged headers. Issuing loadPage
+            # now would make the C++ interceptor scope those stale headers
+            # to THIS asset's origin — a cross-asset credential leak (e.g.
+            # the prior asset's Authorization reaching the next asset's
+            # host). Defer navigation and leave current_browser_url /
+            # current_browser_headers stale so the next tick retries once
+            # the D-Bus call succeeds. A single-asset playlist self-heals
+            # the same way (the mismatch persists until the send lands).
+            logging.debug(
+                'Deferring loadPage until request headers apply '
+                '(transient setRequestHeaders failure)'
+            )
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
     # against an older AnthiasViewer (version skew across a fleet
     # rollout, where the viewer container has rotated to a newer image

@@ -678,44 +678,48 @@ def test_view_webpage_setrequestheaders_version_skew_latches_off(
         fake_bus.setRequestHeaders.assert_called_once()
 
 
-def test_view_webpage_transient_header_failure_forces_reload_next_tick(
+def test_view_webpage_transient_header_failure_defers_navigation(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
     """A *transient* setRequestHeaders failure (not UnknownMethod) must
-    not be cached as applied: ``current_browser_headers`` stays stale so
-    the next asset_loop tick re-issues loadPage + setRequestHeaders.
-    Otherwise a single-asset playlist whose URL never changes would keep
-    hitting the unchanged-URL short-circuit and the headers would never
-    reach the page. Regression guard for the webview-cold-boot race seen
-    on real hardware (#2215)."""
+    DEFER loadPage entirely. The C++ side still holds the previous
+    asset's staged headers, so navigating now would scope those stale
+    headers to the new asset's origin — a cross-asset credential leak.
+    The URL/header cache is left stale so the next tick retries once the
+    D-Bus call succeeds. Regression guard (#2215, Copilot review)."""
     fake_bus = mock.Mock()
     fake_bus.setRequestHeaders.side_effect = Exception(
         'org.freedesktop.DBus.Error.NoReply: bus busy'
     )
     fake_browser = mock.Mock()
     fake_browser.is_alive.return_value = True
-    url = 'https://example.com'
+    # Transitioning from a prior asset (different origin) to this one.
+    prev_url = 'https://prev.example.com'
 
     with (
         mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
         mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
-        mock.patch.object(viewer_fixtures.u, 'current_browser_url', url),
-        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', prev_url),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_headers', {'Old': '1'}
+        ),
         mock.patch.object(
             viewer_fixtures.u,
             '_webview_supports_set_request_headers',
             True,
         ),
     ):
-        # URL unchanged from the previous tick, only the headers differ.
-        viewer_fixtures.u.view_webpage(url, headers={'X': '1'})
+        viewer_fixtures.u.view_webpage(
+            'https://new.example.com', headers={'X': '1'}
+        )
 
         # Transient failure did not latch the capability off (retryable).
         assert viewer_fixtures.u._webview_supports_set_request_headers is True
-        # loadPage was re-issued because headers differed from the stale
-        # cache, and the cache was NOT advanced to the new headers.
-        fake_bus.loadPage.assert_called_once_with(url)
-        assert viewer_fixtures.u.current_browser_headers == {}
+        # Navigation is deferred: no loadPage, and the cache stays on the
+        # previous asset so the next tick retries.
+        fake_bus.loadPage.assert_not_called()
+        assert viewer_fixtures.u.current_browser_url == prev_url
+        assert viewer_fixtures.u.current_browser_headers == {'Old': '1'}
 
 
 def test_view_webpage_nocache_busts_url(
