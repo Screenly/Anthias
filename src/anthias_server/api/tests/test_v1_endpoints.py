@@ -191,6 +191,7 @@ def test_file_asset_chunked_out_of_order_reassembles(
         },
         headers={'Content-Range': 'bytes 4-7/8'},
     )
+    assert tail.status_code == status.HTTP_200_OK
     upload_id = tail.data['upload_id']
     head = api_client.post(
         url,
@@ -202,7 +203,6 @@ def test_file_asset_chunked_out_of_order_reassembles(
         headers={'Content-Range': 'bytes 0-3/8', 'X-Upload-Id': upload_id},
     )
 
-    assert tail.status_code == status.HTTP_200_OK
     assert head.status_code == status.HTTP_200_OK
     assert head.data['uri'] == tail.data['uri']
     with open(head.data['uri'], 'rb') as f:
@@ -328,6 +328,7 @@ def test_file_asset_content_range_truncates_on_shrink(
         },
         headers={'Content-Range': 'bytes 0-9/10'},
     )
+    assert first.status_code == status.HTTP_200_OK
     upload_id = first.data['upload_id']
     # Re-write the same session (same upload_id => same .tmp) shorter.
     second = api_client.post(
@@ -339,7 +340,6 @@ def test_file_asset_content_range_truncates_on_shrink(
         },
         headers={'Content-Range': 'bytes 0-3/4', 'X-Upload-Id': upload_id},
     )
-    assert first.status_code == status.HTTP_200_OK
     assert second.status_code == status.HTTP_200_OK
     assert second.data['uri'] == first.data['uri']
     with open(second.data['uri'], 'rb') as f:
@@ -368,6 +368,48 @@ def test_file_asset_malformed_upload_id_returns_400(
         },
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_file_asset_upload_id_ignored_without_content_range(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """A single-shot (no Content-Range) upload takes the ``open('wb')``
+    truncating path, so ``X-Upload-Id`` must be ignored there — otherwise
+    one request could truncate another session's in-progress ``.tmp``.
+    The server mints a fresh id and leaves the named file untouched."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    url = reverse('api:file_asset_v1')
+    # A resumable session leaves a partial ``.tmp`` on disk.
+    session = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 0-3/8'},
+    )
+    assert session.status_code == status.HTTP_200_OK
+    victim_id = session.data['upload_id']
+
+    # A single-shot upload that tries to reuse that id must not touch it.
+    other = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'other.png', b'ZZZZZZZZ', content_type='image/png'
+            )
+        },
+        headers={'X-Upload-Id': victim_id},
+    )
+    assert other.status_code == status.HTTP_200_OK
+    assert other.data['upload_id'] != victim_id
+    assert other.data['uri'] != session.data['uri']
+    # The resumable session's file kept its original bytes.
+    with open(session.data['uri'], 'rb') as f:
+        assert f.read() == b'AAAA'
 
 
 @pytest.mark.django_db

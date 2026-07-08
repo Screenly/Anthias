@@ -303,6 +303,8 @@ class FileAssetViewMixin(APIView):
                 {'file_upload': 'Invalid file type. Expected image or video.'}
             )
 
+        has_range = 'Content-Range' in request.headers
+
         # Stage the upload at a per-request temp path. The id is random
         # (uuid4) and never derived from the filename: a filename-derived
         # path is shared by every upload of that name, so two concurrent
@@ -312,15 +314,23 @@ class FileAssetViewMixin(APIView):
         # upload gets one isolated file per session: the client echoes the
         # ``upload_id`` we return on the first chunk back via ``X-Upload-Id``
         # so every chunk lands in the same file.
-        upload_id = request.headers.get('X-Upload-Id')
+        #
+        # ``X-Upload-Id`` is only honoured alongside ``Content-Range``: a
+        # single-shot upload takes the ``open('wb')`` path below, so an
+        # echoed id there would let one request truncate another session's
+        # in-progress ``.tmp``. Without a range we always mint a fresh id.
+        upload_id = request.headers.get('X-Upload-Id') if has_range else None
         if upload_id is None:
             upload_id = uuid.uuid4().hex
-        elif not UPLOAD_ID_RE.fullmatch(upload_id):
-            raise ValidationError({'X-Upload-Id': 'Malformed upload id.'})
+        else:
+            # Normalise case (the id we mint is lowercase hex) before the
+            # traversal guard so an upper-cased echo doesn't 400.
+            upload_id = upload_id.strip().lower()
+            if not UPLOAD_ID_RE.fullmatch(upload_id):
+                raise ValidationError({'X-Upload-Id': 'Malformed upload id.'})
 
         file_path = path.join(settings['assetdir'], upload_id) + '.tmp'
 
-        has_range = 'Content-Range' in request.headers
         start_bytes = 0
         end_bytes = 0
         total_bytes = 0
