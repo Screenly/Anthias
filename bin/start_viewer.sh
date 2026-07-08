@@ -688,6 +688,58 @@ case "$DEVICE_TYPE" in
     # workflow.
     cage_mode=(-m last)
 
+    # Self-heal a headless-boot display wedge on cage (Pi 5 vc4 in
+    # particular). When the container restarts *from* a state where cage
+    # was running with no output — it booted headless, then the display
+    # was hotplugged but cage, with no udev in-container, never picked it
+    # up, so the viewer's output watchdog exited to force this restart —
+    # the restart-policy path relaunches cage almost immediately. The old
+    # cage is SIGKILLed as the old PID 1 dies, and if its DRM-master
+    # release and the vc4 HDMI connector reset haven't finished when the
+    # fresh cage opens the device, cage's modeset races a half-reset
+    # connector: EDID isn't re-read, the connector reads "connected" with
+    # an EMPTY mode list, and cage comes up headless *again*. It's a
+    # race, so it only bites some restarts — but every time it does the
+    # screen stays black. (A full `docker restart` recovers reliably
+    # precisely because its stop->start gap gives the controller time to
+    # reset; the restart policy inserts no such gap.)
+    #
+    # Reproduce that gap here, before cage launches, so cage always
+    # starts against a settled connector with EDID re-read. Only runs
+    # when a display is actually connected (a genuinely headless boot
+    # skips it and pays nothing); the sysfs status node is writable from
+    # inside the privileged container. Scoped to the cage branch — this
+    # is where the vc4/wlroots wedge was reproduced.
+    display_connected=0
+    for status_file in /sys/class/drm/card*-*/status; do
+        [ -r "$status_file" ] || continue
+        [ "$(cat "$status_file" 2>/dev/null)" = 'connected' ] || continue
+        display_connected=1
+        break
+    done
+    if [ "$display_connected" = 1 ]; then
+        # Settle: let any prior cage's DRM-master release + connector
+        # reset drain before this cage grabs the device.
+        sleep 4
+        # Force a fresh EDID probe on every connected connector and wait
+        # (bounded) for its mode list to repopulate, so cage never starts
+        # against an empty-modes connector.
+        for status_file in /sys/class/drm/card*-*/status; do
+            [ -r "$status_file" ] || continue
+            [ "$(cat "$status_file" 2>/dev/null)" = 'connected' ] || continue
+            modes_file="${status_file%/status}/modes"
+            connector=$(basename "$(dirname "$status_file")")
+            echo "start_viewer: re-probing $connector before launching cage"
+            echo detect > "$status_file" 2>/dev/null || true
+            waited=0
+            while [ -z "$(cat "$modes_file" 2>/dev/null)" ] \
+                && [ "$waited" -lt 5 ]; do
+                sleep 1
+                waited=$((waited + 1))
+            done
+        done
+    fi
+
     # cage runs as root (Dockerfile's USER root) and creates the
     # Wayland socket with root:root 0600 perms, so `sudo -u viewer`
     # below can't connect (Qt: "Failed to create wl_display

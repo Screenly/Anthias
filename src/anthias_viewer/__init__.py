@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable
+from glob import glob
 from os import getenv, path
 from signal import SIGALRM, signal
 from time import monotonic, sleep
@@ -112,6 +113,22 @@ _last_applied_dark_mode: bool = False
 # sets this flag and the main thread consumes it at the top of
 # asset_loop via _consume_pending_rotation_bounce().
 _rotation_bounce_pending: bool = False
+
+# Monotonic timestamp of when the Wayland output watchdog first observed
+# the "wedge" state — cage running with zero wl_outputs while the kernel
+# reports a connector *connected*. None whenever the display is healthy
+# (cage owns an output) or genuinely headless (nothing connected). Once
+# the wedge persists past WAYLAND_OUTPUT_GRACE_S the watchdog exits
+# non-zero so Docker recreates the container and cage re-enumerates DRM.
+# See _wayland_output_watchdog().
+_headless_wedge_since: float | None = None
+
+# Grace window for the Wayland output self-heal watchdog. Cage binds a
+# connected display within ~1-2s of process start, so 60s is comfortably
+# long enough to never fire on a display that's merely slow to sync (HDMI
+# handshake / AVR passthrough) while still recovering a headless-boot
+# wedge within a single restart.
+WAYLAND_OUTPUT_GRACE_S = 60
 
 
 def _rotation_value() -> int:
@@ -1228,6 +1245,114 @@ def _retry_wayland_rotation_if_pending() -> None:
         _last_applied_rotation = rotation
 
 
+def _kernel_has_bindable_display() -> bool:
+    """True when the kernel exposes a display the compositor could bind.
+
+    A DRM connector is *bindable* when its ``status`` reads ``connected``
+    AND it has a non-empty ``modes`` list — the hotplug-detect line is
+    asserted *and* EDID was read, so cage has a mode to drive. Both are
+    kernel DRM sysfs files under ``/sys/class/drm/<connector>/`` (the
+    viewer container shares the host sysfs, so they're visible
+    in-container); ``Writeback`` connectors report ``unknown`` status and
+    never count.
+
+    The mode-list check is load-bearing, not belt-and-suspenders: a
+    connector can be ``connected`` with an *empty* mode list — HPD
+    asserted but EDID unread, e.g. a marginally-seated HDMI cable. That
+    is NOT recoverable by restarting: cage can't conjure a mode the
+    kernel never read, so restarting on a bare ``connected`` would loop
+    forever. Requiring modes means the watchdog only restarts for a
+    display cage genuinely *should* be able to bind (a properly-connected
+    monitor exposes its EDID modes), which is exactly the headless-boot
+    race the fix targets — and leaves a half-connected cable alone.
+    """
+    for status_path in glob('/sys/class/drm/*/status'):
+        try:
+            with open(status_path) as status_file:
+                if status_file.read().strip() != 'connected':
+                    continue
+        except OSError:
+            continue
+        modes_path = path.join(path.dirname(status_path), 'modes')
+        try:
+            with open(modes_path) as modes_file:
+                if modes_file.read().strip():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def _wayland_output_watchdog() -> None:
+    """Self-heal a headless-boot display wedge on Wayland (cage) boards.
+
+    Cage enumerates DRM connectors once at startup. Boot it with no
+    connected+enabled output (display off / unplugged / slow to sync)
+    and it binds zero wl_outputs — then never recovers when the display
+    later appears, because the viewer container has no udev to deliver
+    the hotplug uevent to wlroots. Validated on the Pi 5 testbed: after
+    a headless boot the kernel reports HDMI ``connected`` (with EDID
+    modes) but cage still has no output and the screen stays black until
+    the container is restarted.
+
+    eglfs/linuxfb boards get this recovery for free — Qt exits non-zero
+    when there's no framebuffer and Docker's ``restart: always`` policy
+    recreates the process, which re-enumerates the display. Cage does
+    NOT exit on zero output; it runs headless forever. So replicate the
+    eglfs behaviour explicitly: when a Wayland board has no wl_output
+    while the kernel exposes a *bindable* display (connector connected
+    AND EDID modes present), and that state persists past
+    WAYLAND_OUTPUT_GRACE_S, exit non-zero so the container restarts and
+    cage re-enumerates the now-present display.
+
+    Gating on a *bindable* display keeps two cases from restart-looping:
+    a deliberately headless unit (nothing plugged in), and a
+    marginally-connected cable that asserts hotplug but never delivers
+    EDID (connected, no modes) — cage can't bind a mode the kernel never
+    read, so restarting is futile. The persistence window means a
+    transient wlr-randr hiccup or cage's brief socket-setup race at
+    startup can't trigger a spurious exit — any healthy reading in
+    between clears the timer.
+    """
+    global _headless_wedge_since
+    if not _is_wayland_board():
+        return
+
+    # Healthy: cage owns at least one output. include_disabled so a
+    # DPMS-blanked-but-bound output still counts as "cage has a display".
+    if _wlr_output_names(include_disabled=True):
+        _headless_wedge_since = None
+        return
+
+    # Cage has no output. Only restart if the kernel exposes a display
+    # cage genuinely should be able to bind (connected + EDID modes).
+    # A headless unit or a half-connected cable (no modes) is left alone.
+    if not _kernel_has_bindable_display():
+        _headless_wedge_since = None
+        return
+
+    # Wedge: a bindable display is present but cage never bound it. Start
+    # (or continue) the grace timer; exit once it's clear cage was never
+    # going to bind the output on its own.
+    now = monotonic()
+    if _headless_wedge_since is None:
+        _headless_wedge_since = now
+        logging.warning(
+            'Bindable display present but cage has no wl_output; will '
+            'restart to re-enumerate if this persists past %ss.',
+            WAYLAND_OUTPUT_GRACE_S,
+        )
+        return
+    if now - _headless_wedge_since >= WAYLAND_OUTPUT_GRACE_S:
+        logging.error(
+            'Cage has had no wl_output for %.0fs while a display is '
+            'connected (headless-boot wedge). Exiting so the container '
+            'restarts and re-enumerates the display.',
+            now - _headless_wedge_since,
+        )
+        sys.exit(1)
+
+
 def _consume_pending_rotation_bounce() -> None:
     """Main-thread half of the linuxfb rotation handoff.
 
@@ -1387,6 +1512,12 @@ def asset_loop(scheduler: Any) -> None:
     # attempt in load_browser() raced cage's wayland-socket setup.
     # Cheap early-return when nothing's pending.
     _retry_wayland_rotation_if_pending()
+
+    # Self-heal a headless-boot display wedge (Wayland/cage): if cage
+    # came up with no output but a display is now connected, restart so
+    # it re-enumerates the display. Cheap no-op on healthy/non-Wayland
+    # boards. See _wayland_output_watchdog().
+    _wayland_output_watchdog()
 
     asset = scheduler.get_next_asset()
 

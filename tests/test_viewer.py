@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import contextlib
 import logging
 import os
 from collections.abc import Iterator
@@ -2323,3 +2324,203 @@ def test_play_unblanks_when_display_blanked(
     assert viewer.display_blanked is False
     assert viewer.loop_is_stopped is False
     power.assert_called_once_with(True)
+
+
+# Headless-boot display wedge self-heal (Wayland/cage)
+
+
+@pytest.fixture
+def reset_wedge_state() -> Iterator[None]:
+    """_headless_wedge_since is module state — snapshot and restore so
+    watchdog tests don't bleed into each other."""
+    prior = viewer._headless_wedge_since
+    try:
+        viewer._headless_wedge_since = None
+        yield
+    finally:
+        viewer._headless_wedge_since = prior
+
+
+def test_output_watchdog_noop_off_wayland(reset_wedge_state: None) -> None:
+    """Non-Wayland boards (eglfs/linuxfb) get output recovery from Qt's
+    own no-framebuffer exit, so the watchdog must never touch them —
+    even if it can't list outputs."""
+    with (
+        mock.patch.dict(os.environ, {'QT_QPA_PLATFORM': 'eglfs'}, clear=False),
+        mock.patch.object(
+            viewer, '_wlr_output_names', return_value=[]
+        ) as names,
+    ):
+        viewer._wayland_output_watchdog()  # must not raise SystemExit
+
+    names.assert_not_called()
+    assert viewer._headless_wedge_since is None
+
+
+def test_output_watchdog_healthy_clears_timer(
+    reset_wedge_state: None,
+) -> None:
+    """A bound output clears any pending wedge timer and never exits."""
+    viewer._headless_wedge_since = 100.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_wlr_output_names', return_value=['HDMI-A-1']
+        ),
+    ):
+        viewer._wayland_output_watchdog()
+
+    assert viewer._headless_wedge_since is None
+
+
+def test_output_watchdog_headless_unit_does_not_loop(
+    reset_wedge_state: None,
+) -> None:
+    """No output AND no bindable display (nothing connected, or a
+    connected-but-no-EDID cable) = must never restart-loop."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(viewer, '_wlr_output_names', return_value=[]),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=False
+        ),
+    ):
+        viewer._wayland_output_watchdog()  # must not raise
+
+    assert viewer._headless_wedge_since is None
+
+
+def test_output_watchdog_arms_timer_on_first_wedge(
+    reset_wedge_state: None,
+) -> None:
+    """Display connected but no output: arm the grace timer and warn,
+    but don't exit on the first observation."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(viewer, '_wlr_output_names', return_value=[]),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(viewer, 'monotonic', return_value=500.0),
+    ):
+        viewer._wayland_output_watchdog()  # must not raise
+
+    assert viewer._headless_wedge_since == 500.0
+
+
+def test_output_watchdog_exits_after_grace(reset_wedge_state: None) -> None:
+    """A wedge that persists past the grace window exits non-zero so
+    Docker recreates the container and cage re-enumerates the display."""
+    viewer._headless_wedge_since = 500.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(viewer, '_wlr_output_names', return_value=[]),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer,
+            'monotonic',
+            return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
+        ),
+        pytest.raises(SystemExit) as exc,
+    ):
+        viewer._wayland_output_watchdog()
+
+    assert exc.value.code == 1
+
+
+def test_output_watchdog_recovers_before_grace(
+    reset_wedge_state: None,
+) -> None:
+    """A transient wedge that clears before the grace elapses must not
+    exit — a healthy reading resets the timer."""
+    viewer._headless_wedge_since = 500.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_wlr_output_names', return_value=['HDMI-A-1']
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer,
+            'monotonic',
+            return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
+        ),
+    ):
+        viewer._wayland_output_watchdog()  # must not raise
+
+    assert viewer._headless_wedge_since is None
+
+
+def _patch_drm_sysfs(files: dict[str, str]) -> Any:
+    """Context manager patching glob + open to serve a fake
+    /sys/class/drm tree. ``files`` maps each status/modes path to its
+    contents; glob returns just the status paths (as the real one does)."""
+    status_paths = [p for p in files if p.endswith('/status')]
+
+    def fake_open(path: str, *args: Any, **kwargs: Any) -> Any:
+        if path not in files:
+            raise FileNotFoundError(path)
+        return mock.mock_open(read_data=files[path])()
+
+    return (
+        mock.patch.object(viewer, 'glob', return_value=status_paths),
+        mock.patch('builtins.open', side_effect=fake_open),
+    )
+
+
+def test_kernel_has_bindable_display_connected_with_modes() -> None:
+    """connected + a non-empty EDID mode list = bindable."""
+    files = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
+        '/sys/class/drm/card1-HDMI-A-1/modes': '',
+        '/sys/class/drm/card1-HDMI-A-2/status': 'connected\n',
+        '/sys/class/drm/card1-HDMI-A-2/modes': '3840x2160\n1920x1080\n',
+        '/sys/class/drm/card1-Writeback-1/status': 'unknown\n',
+        '/sys/class/drm/card1-Writeback-1/modes': '',
+    }
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_drm_sysfs(files):
+            stack.enter_context(cm)
+        assert viewer._kernel_has_bindable_display() is True
+
+
+def test_kernel_has_bindable_display_connected_no_modes() -> None:
+    """A connector that's 'connected' but has an EMPTY mode list (HPD
+    asserted, EDID unread — a marginally-seated cable) is NOT bindable:
+    restarting can't recover it, so the watchdog must leave it alone."""
+    files = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
+        '/sys/class/drm/card1-HDMI-A-1/modes': '',
+    }
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_drm_sysfs(files):
+            stack.enter_context(cm)
+        assert viewer._kernel_has_bindable_display() is False
+
+
+def test_kernel_has_bindable_display_all_disconnected() -> None:
+    """Nothing connected = headless."""
+    files = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
+        '/sys/class/drm/card1-HDMI-A-1/modes': '',
+        '/sys/class/drm/card1-Writeback-1/status': 'unknown\n',
+        '/sys/class/drm/card1-Writeback-1/modes': '',
+    }
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_drm_sysfs(files):
+            stack.enter_context(cm)
+        assert viewer._kernel_has_bindable_display() is False
