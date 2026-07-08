@@ -1695,8 +1695,12 @@ def settings_recover(request: HttpRequest) -> HttpResponse:
         try:
             backup_helper.recover(location)
             messages.success(request, 'Recovery successful.')
-        except (backup_helper.BackupRecoverError, tarfile.TarError):
-            logger.exception('Backup recovery failed')
+        except (backup_helper.BackupRecoverError, tarfile.TarError) as exc:
+            # Same operator-input case as the API recover view: a bad /
+            # non-backup upload is validation, not a bug (the error
+            # message below already tells them). Warning, not exception,
+            # so it doesn't page Sentry (ANTHIAS-3W).
+            logger.warning('Backup recovery failed: %s', exc)
             messages.error(request, 'Invalid backup archive.')
     finally:
         if path.isfile(location):
