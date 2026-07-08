@@ -18,6 +18,7 @@ from rest_framework.serializers import (
 )
 
 from anthias_common.utils import SCREEN_ROTATION_CHOICES
+from anthias_server.django_project.settings import is_valid_time_zone
 from anthias_server.app.models import (
     Asset,
     DURATION_S_MAX,
@@ -306,6 +307,7 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     default_duration = IntegerField()
     default_streaming_duration = IntegerField()
     date_format = CharField()
+    timezone = CharField(allow_blank=True)
     auth_backend = CharField()
     show_splash = BooleanField()
     default_assets = BooleanField()
@@ -334,6 +336,11 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
         required=False, min_value=0, max_value=DURATION_S_MAX
     )
     date_format = CharField(required=False)
+    # Blank = "follow the host" (resolve_time_zone precedence). A
+    # non-blank value must be a zone Django will accept, validated the
+    # same way as the host zone so a save can never land a value that
+    # crash-loops the settings module on the next read.
+    timezone = CharField(required=False, allow_blank=True)
     show_splash = BooleanField(required=False)
     default_assets = BooleanField(required=False)
     shuffle_playlist = BooleanField(required=False)
@@ -355,6 +362,14 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
         ],
     )
     current_password = CharField(required=False, allow_blank=True)
+
+    def validate_timezone(self, value: str) -> str:
+        value = (value or '').strip()
+        if value and not is_valid_time_zone(value):
+            raise serializers.ValidationError(
+                f'Unknown or unavailable timezone: {value!r}.'
+            )
+        return value
 
 
 class ViewerPlaylistSerializerV2(Serializer[Any]):

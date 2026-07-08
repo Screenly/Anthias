@@ -48,7 +48,12 @@ django.setup()
 
 # Place imports that uses Django in this block.
 
+from django.utils import timezone  # noqa: E402
+
 from anthias_common.internal_auth import INTERNAL_AUTH_HEADER  # noqa: E402
+from anthias_server.django_project.settings import (  # noqa: E402
+    resolve_time_zone,
+)
 from anthias_common.internal_auth import internal_auth_token  # noqa: E402
 from anthias_common.utils import (  # noqa: E402
     clamp_screen_rotation,
@@ -1208,6 +1213,14 @@ def load_settings() -> None:
     logging.getLogger().setLevel(
         logging.DEBUG if settings['debug_logging'] else logging.INFO
     )
+    # Activate the operator-selected timezone so the scheduler's
+    # timezone.localtime() day-of-week / time-of-day windowing matches
+    # the server. Called at startup and on every `reload`, so a Settings
+    # change reschedules without restarting the viewer.
+    try:
+        timezone.activate(resolve_time_zone())
+    except Exception:
+        timezone.deactivate()
 
 
 def _handle_reload() -> None:

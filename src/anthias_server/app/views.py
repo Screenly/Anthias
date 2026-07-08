@@ -47,6 +47,7 @@ from anthias_common.utils import (
     connect_to_redis,
     is_disk_full,
 )
+from anthias_server.django_project.settings import is_valid_time_zone
 from anthias_server.settings import ViewerPublisher, settings
 
 from .helpers import (
@@ -1615,6 +1616,19 @@ def settings_save(request: HttpRequest) -> HttpResponse:
     auth_backend = request.POST.get('auth_backend', '')
     current_password = request.POST.get('current_password', '')
 
+    # Reject a bad timezone up front (mirrors the v2 serializer's
+    # validate_timezone). Blank = "follow the host". Handled here rather
+    # than inside the try so it stays operator-input (warning-level, no
+    # Sentry event) and can't half-write a value that would crash-loop
+    # the settings module on the next read.
+    tz_value = (request.POST.get('timezone') or '').strip()
+    if tz_value and not is_valid_time_zone(tz_value):
+        logger.warning('Settings save rejected: unknown timezone %r', tz_value)
+        messages.error(
+            request, f'Unknown or unavailable timezone: {tz_value}.'
+        )
+        return redirect(reverse('anthias_app:settings'))
+
     try:
         prev_auth_backend = settings['auth_backend']
         apply_auth_settings(
@@ -1640,6 +1654,7 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         )
         settings['audio_output'] = request.POST.get('audio_output', 'hdmi')
         settings['date_format'] = request.POST.get('date_format', 'mm/dd/yyyy')
+        settings['timezone'] = tz_value
 
         new_default_assets = _checkbox(request, 'default_assets')
         if new_default_assets and not settings['default_assets']:

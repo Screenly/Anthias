@@ -40,6 +40,7 @@ def test_get_device_settings(
         'default_duration': '15',
         'default_streaming_duration': '100',
         'date_format': 'YYYY-MM-DD',
+        'timezone': 'Europe/Stockholm',
         'auth_backend': '',
         'show_splash': True,
         'default_assets': [],
@@ -60,6 +61,7 @@ def test_get_device_settings(
         'default_duration': 15,
         'default_streaming_duration': 100,
         'date_format': 'YYYY-MM-DD',
+        'timezone': 'Europe/Stockholm',
         'auth_backend': '',
         'show_splash': True,
         'default_assets': [],
@@ -185,6 +187,84 @@ def test_patch_device_settings_validation_error(
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.settings')
 @mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_timezone_success(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    """A valid IANA zone is persisted and the viewer is told to reload
+    (so the schedule re-evaluates in the new local time)."""
+    settings_mock.load = mock.MagicMock()
+    settings_mock.save = mock.MagicMock()
+    settings_mock.__getitem__.side_effect = lambda key: {
+        'auth_backend': '',
+    }[key]
+    settings_mock.__setitem__ = mock.MagicMock()
+
+    publisher_instance = mock.MagicMock()
+    publisher_mock.get_instance.return_value = publisher_instance
+
+    response = api_client.patch(
+        device_settings_url,
+        data={'timezone': 'Europe/Stockholm'},
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    settings_mock.save.assert_called_once()
+    settings_mock.__setitem__.assert_any_call('timezone', 'Europe/Stockholm')
+    publisher_instance.send_to_viewer.assert_called_once_with('reload')
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+def test_patch_device_settings_invalid_timezone(
+    settings_mock: Any, api_client: APIClient, device_settings_url: str
+) -> None:
+    """An unknown zone is rejected before anything is written, so a bad
+    value can never reach the settings module and crash-loop it."""
+    response = api_client.patch(
+        device_settings_url,
+        data={'timezone': 'Mars/Phobos'},
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'timezone' in response.data
+    settings_mock.load.assert_not_called()
+    settings_mock.save.assert_not_called()
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_blank_timezone_allowed(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    """Blank = "follow the host"; it must validate and persist."""
+    settings_mock.load = mock.MagicMock()
+    settings_mock.save = mock.MagicMock()
+    settings_mock.__getitem__.side_effect = lambda key: {'auth_backend': ''}[
+        key
+    ]
+    settings_mock.__setitem__ = mock.MagicMock()
+    publisher_mock.get_instance.return_value = mock.MagicMock()
+
+    response = api_client.patch(
+        device_settings_url, data={'timezone': ''}, format='json'
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    settings_mock.__setitem__.assert_any_call('timezone', '')
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
 def test_enable_basic_auth(
     publisher_mock: Any,
     settings_mock: Any,
@@ -275,6 +355,7 @@ def test_disable_basic_auth(
         'default_duration': '15',
         'default_streaming_duration': '100',
         'date_format': 'YYYY-MM-DD',
+        'timezone': '',
         'show_splash': True,
         'default_assets': [],
         'shuffle_playlist': False,

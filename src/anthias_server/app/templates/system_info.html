@@ -48,6 +48,22 @@
       </div>
 
       <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Device time</p>
+        {% comment %}
+        Ticks client-side but is seeded from the server instant in
+        data-iso — never the browser clock — so a wrong device clock is
+        revealed rather than masked (issue #1755). Rendered in the
+        device's own timezone via Intl, so it's correct even when the
+        operator's browser is in another zone. No-JS falls back to the
+        server-rendered value.
+        {% endcomment %}
+        <div class="stat-card__value" id="device-clock"
+             data-iso="{{ device_time.iso }}"
+             data-timezone="{{ device_time.timezone }}">{{ device_time.iso }}</div>
+        <p class="stat-card__label">{{ device_time.timezone }} · {{ device_time.offset }}</p>
+      </div>
+
+      <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Memory</p>
         <div class="resource-card">
           <div
@@ -179,4 +195,41 @@
     </div>
   </section>
 </div>
+
+<script>
+  // Live device clock. Seeded once from the server instant the page was
+  // rendered (data-iso), then advanced with the browser's monotonic
+  // delta — so the display tracks the *device's* clock, not the
+  // viewer's, and stays honest even if the two disagree. Formatted in
+  // the device's own timezone (data-timezone) via Intl.
+  (function () {
+    var el = document.getElementById('device-clock');
+    if (!el) return;
+    var seededMs = Date.parse(el.dataset.iso);
+    if (isNaN(seededMs)) return;
+    var zone = el.dataset.timezone || undefined;
+    var baseline = performance.now();
+    var fmt;
+    try {
+      fmt = new Intl.DateTimeFormat(undefined, {
+        timeZone: zone,
+        weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    } catch (e) {
+      // Unknown zone in this browser's ICU data — fall back to the
+      // browser's local formatting rather than throwing.
+      fmt = new Intl.DateTimeFormat(undefined, {
+        weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    }
+    function tick() {
+      var now = new Date(seededMs + (performance.now() - baseline));
+      el.textContent = fmt.format(now);
+    }
+    tick();
+    setInterval(tick, 1000);
+  })();
+</script>
 {% endblock %}

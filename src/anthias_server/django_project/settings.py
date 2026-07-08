@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import asyncio
+import configparser
 import platform
 import secrets
 import socket
@@ -418,6 +419,10 @@ MIDDLEWARE = [
     # — Sentry ANTHIAS-Y). See anthias_server/lib/whitenoise.py.
     'anthias_server.lib.whitenoise.ResilientWhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Re-resolve + activate the operator-selected timezone per request
+    # so a Settings change is live without a restart. After sessions so
+    # request teardown order is predictable; before the view runs.
+    'anthias_server.lib.timezone.TimezoneActivationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'anthias_server.lib.csrf.SameHostOriginCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -558,36 +563,97 @@ USE_I18N = True
 USE_TZ = True
 
 
+def is_valid_time_zone(
+    time_zone: str,
+    zoneinfo_root: Path = Path('/usr/share/zoneinfo'),
+) -> bool:
+    """True if ``time_zone`` is a zone Django will accept at startup.
+
+    Validate the same way Django does in django.conf.Settings.__init__
+    — a zoneinfo lookup PLUS the /usr/share/zoneinfo file check.
+    Validating with a bundled database alone (the old pytz check) is
+    not enough: it accepts names like ``US/Central`` that the image's
+    tzdata may not ship on disk, and Django then raises ValueError at
+    startup, crash-looping every Django process on the device.
+    """
+    try:
+        zoneinfo.ZoneInfo(time_zone)
+    except (ValueError, zoneinfo.ZoneInfoNotFoundError):
+        return False
+    if (
+        zoneinfo_root.exists()
+        and not zoneinfo_root.joinpath(*time_zone.split('/')).exists()
+    ):
+        return False
+    return True
+
+
 def get_host_time_zone(
     timezone_file: str = '/etc/timezone',
     zoneinfo_root: Path = Path('/usr/share/zoneinfo'),
 ) -> str:
     """Read the host's /etc/timezone, falling back to UTC.
 
-    /etc/timezone is bind-mounted from the host, so its value is
-    whatever the host distro wrote there. Validate it the same way
-    Django does in django.conf.Settings.__init__ — a zoneinfo lookup
-    PLUS the /usr/share/zoneinfo file check. Validating with a bundled
-    database alone (the old pytz check) is not enough: it accepts
-    names like `US/Central` that the image's tzdata may not ship on
-    disk, and Django then raises ValueError at startup, crash-looping
-    every Django process on the device.
+    /etc/timezone is bind-mounted from the host on docker-compose
+    installs, so its value is whatever the host distro wrote there.
+    On balena it is not mounted, so this is the container image's own
+    zone (UTC) — the reason the in-app override below matters most
+    there. An invalid value falls back to UTC, never crash-loops.
     """
     try:
         with open(timezone_file, 'r') as f:
             time_zone = f.read().strip()
-        zoneinfo.ZoneInfo(time_zone)
-        if (
-            zoneinfo_root.exists()
-            and not zoneinfo_root.joinpath(*time_zone.split('/')).exists()
-        ):
-            raise zoneinfo.ZoneInfoNotFoundError(time_zone)
-        return time_zone
-    except (OSError, ValueError, zoneinfo.ZoneInfoNotFoundError):
+    except OSError:
         return 'UTC'
+    return time_zone if is_valid_time_zone(time_zone, zoneinfo_root) else 'UTC'
 
 
-TIME_ZONE = get_host_time_zone()
+def get_configured_time_zone(
+    config_file: str | None = None,
+    zoneinfo_root: Path = Path('/usr/share/zoneinfo'),
+) -> str | None:
+    """Operator-selected timezone from anthias.conf, or None.
+
+    Parsed directly with configparser rather than via AnthiasSettings
+    so this stays import-safe during Django settings evaluation (no
+    dependency on the device-settings object). An empty/absent value
+    means "follow the host"; an invalid value is ignored so a bad
+    hand-edit can never crash-loop Django.
+    """
+    if config_file is None:
+        home = getenv('HOME')
+        if not home:
+            return None
+        config_file = str(Path(home) / '.anthias' / 'anthias.conf')
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(config_file)
+        time_zone = parser.get('main', 'timezone', fallback='').strip()
+    except (configparser.Error, OSError):
+        return None
+    if not time_zone:
+        return None
+    return time_zone if is_valid_time_zone(time_zone, zoneinfo_root) else None
+
+
+def resolve_time_zone() -> str:
+    """Effective Anthias timezone.
+
+    Precedence: anthias.conf ``[main] timezone`` (the in-UI setting) ->
+    ``TZ`` env var (respects a balena dashboard TZ variable) ->
+    host /etc/timezone -> UTC. Every candidate is validated, so no
+    rung can wedge Django at startup.
+    """
+    configured = get_configured_time_zone()
+    if configured:
+        return configured
+    tz_env = (getenv('TZ') or '').strip()
+    if tz_env and is_valid_time_zone(tz_env):
+        return tz_env
+    return get_host_time_zone()
+
+
+TIME_ZONE = resolve_time_zone()
 
 
 # Static files (CSS, JavaScript, Images)

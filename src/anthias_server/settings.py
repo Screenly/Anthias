@@ -25,6 +25,13 @@ DEFAULTS = {
         'database': CONFIG_DIR + 'anthias.db',
         'date_format': 'mm/dd/yyyy',
         'splash_logo_url': '/static/img/logo-full-splash.svg',
+        # Operator-selected IANA timezone. Empty means "follow the host"
+        # — see resolve_time_zone() in django_project/settings.py for the
+        # config -> TZ env -> /etc/timezone -> UTC precedence. Kept
+        # userspace on purpose: balenaOS has no host timezone (always
+        # UTC), so this is the only way to schedule/display in local
+        # time there.
+        'timezone': '',
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
@@ -60,6 +67,7 @@ CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main'][
     'use_24_hour_clock'
 ]
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
+CONFIGURABLE_SETTINGS['timezone'] = DEFAULTS['main']['timezone']
 
 PORT = int(getenv('PORT', 8080))
 LISTEN = getenv('LISTEN', '127.0.0.1')

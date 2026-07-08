@@ -573,6 +573,7 @@ class DeviceSettingsViewV2(APIView):
                     settings['default_streaming_duration']
                 ),
                 'date_format': settings['date_format'],
+                'timezone': settings['timezone'],
                 'auth_backend': settings['auth_backend'],
                 'show_splash': settings['show_splash'],
                 'default_assets': settings['default_assets'],
@@ -649,6 +650,8 @@ class DeviceSettingsViewV2(APIView):
                 settings['audio_output'] = data['audio_output']
             if 'date_format' in data:
                 settings['date_format'] = data['date_format']
+            if 'timezone' in data:
+                settings['timezone'] = data['timezone']
             if 'show_splash' in data:
                 settings['show_splash'] = data['show_splash']
             if 'default_assets' in data:
@@ -898,6 +901,25 @@ class InfoViewV2(InfoViewMixin):
             'low_ram': virtual_memory.total < LOW_RAM_THRESHOLD_KB * 1024,
         }
 
+    def get_time(self) -> dict[str, str]:
+        # The device's active timezone + wall clock. The activation
+        # middleware has already set the request's timezone from the
+        # operator's setting, so localtime()/get_current_timezone_name()
+        # reflect it. Lets an external client detect a wrong device
+        # clock or an unexpected zone (issue #1755).
+        now_local = timezone.localtime(timezone.now())
+        raw_offset = now_local.strftime('%z')
+        offset = (
+            f'UTC{raw_offset[:3]}:{raw_offset[3:]}'
+            if len(raw_offset) >= 5
+            else 'UTC'
+        )
+        return {
+            'iso': now_local.isoformat(),
+            'timezone': timezone.get_current_timezone_name(),
+            'offset': offset,
+        }
+
     def get_ip_addresses(self) -> list[str]:
         # /api/v2/info is auth'd and not polled, so blocking on
         # get_node_ip()'s host-readiness loop is acceptable here —
@@ -945,6 +967,14 @@ class InfoViewV2(InfoViewMixin):
                     },
                     'mac_address': {'type': 'string'},
                     'host_user': {'type': 'string'},
+                    'time': {
+                        'type': 'object',
+                        'properties': {
+                            'iso': {'type': 'string'},
+                            'timezone': {'type': 'string'},
+                            'offset': {'type': 'string'},
+                        },
+                    },
                 },
             }
         },
@@ -972,6 +1002,7 @@ class InfoViewV2(InfoViewMixin):
                 'ip_addresses': self.get_ip_addresses(),
                 'mac_address': get_node_mac_address(),
                 'host_user': getenv('HOST_USER'),
+                'time': self.get_time(),
             }
         )
 

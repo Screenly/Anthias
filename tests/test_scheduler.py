@@ -2,6 +2,7 @@ import logging
 import os
 from collections.abc import Iterator
 from datetime import datetime, time, timedelta
+from datetime import timezone as dt_timezone
 from typing import Any
 
 import pytest
@@ -356,6 +357,38 @@ def test_overnight_window_active_before_and_after_midnight() -> None:
     # Wed 02:30 — post-midnight, "yesterday" was Tue (not in days).
     with time_machine.travel(_aware(2026, 1, 7, 2, 30)):
         assert not _first_asset().is_active()
+
+
+@pytest.mark.django_db
+def test_play_time_window_follows_active_timezone() -> None:
+    """The core of the timezone feature end-to-end: the play-time window
+    is matched in the *active* timezone, so one fixed UTC instant is
+    inside or outside the window purely as a function of the
+    operator-selected zone. This is what makes an in-UI timezone
+    correct scheduling on balena, where the host is always UTC.
+    """
+    Asset.objects.create(
+        **_scheduled_asset(
+            play_time_from=time(9, 0),
+            play_time_to=time(17, 0),
+        ),
+    )
+    # 08:00 UTC on a Monday. Europe/Berlin (UTC+1) sees 09:00 — inside
+    # the 09:00-17:00 window; America/Chicago (UTC-6) sees 02:00 —
+    # outside it.
+    instant = datetime(2026, 1, 5, 8, 0, tzinfo=dt_timezone.utc)
+    with time_machine.travel(instant):
+        timezone.activate('Europe/Berlin')
+        try:
+            assert _first_asset().is_active()
+        finally:
+            timezone.deactivate()
+
+        timezone.activate('America/Chicago')
+        try:
+            assert not _first_asset().is_active()
+        finally:
+            timezone.deactivate()
 
 
 @pytest.mark.django_db

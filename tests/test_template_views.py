@@ -86,6 +86,9 @@ def test_system_info_renders(client: Client) -> None:
     # are environment-dependent.
     for label in ('Load Average', 'Disk', 'Memory', 'Uptime'):
         assert label in body
+    # The device clock card + its seed-from-server ticking hook.
+    assert 'Device time' in body
+    assert 'id="device-clock"' in body
 
 
 @pytest.mark.django_db
@@ -107,12 +110,16 @@ def test_settings_renders(client: Client) -> None:
         'Default duration',
         'Audio output',
         'Date format',
+        'Timezone',
         'Authentication',
         'Show splash screen',
         'Backup',
         'System controls',
     ):
         assert label in body
+    # The timezone dropdown is populated from the IANA list.
+    assert 'name="timezone"' in body
+    assert 'Europe/Stockholm' in body
 
 
 @pytest.mark.django_db
@@ -872,6 +879,74 @@ def test_settings_save_screen_rotation(
         )
     assert response.status_code in (200, 302)
     assert settings['screen_rotation'] == persisted
+
+
+@pytest.mark.django_db
+def test_settings_save_timezone_valid(client: Client) -> None:
+    """A valid IANA zone posted from the HTML form is persisted."""
+    from anthias_server.settings import settings
+
+    original = settings['timezone']
+    try:
+        with mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ):
+            response = client.post(
+                reverse('anthias_app:settings_save'),
+                data={
+                    'player_name': 'Test',
+                    'default_duration': '10',
+                    'default_streaming_duration': '300',
+                    'audio_output': 'hdmi',
+                    'date_format': 'mm/dd/yyyy',
+                    'auth_backend': '',
+                    'timezone': 'Europe/Stockholm',
+                },
+            )
+        assert response.status_code in (200, 302)
+        assert settings['timezone'] == 'Europe/Stockholm'
+    finally:
+        # Persisted to the shared conf; the activation middleware would
+        # otherwise apply it to every later test's request. Restore.
+        settings['timezone'] = original
+        settings.save()
+
+
+@pytest.mark.django_db
+def test_settings_save_timezone_invalid_rejected(client: Client) -> None:
+    """A bad zone is rejected up front and never written — a value that
+    would crash-loop the settings module can't be persisted."""
+    from anthias_server.settings import settings
+
+    original = settings['timezone']
+    settings['timezone'] = 'Europe/Stockholm'
+    settings.save()
+
+    try:
+        with mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ) as publish_mock:
+            response = client.post(
+                reverse('anthias_app:settings_save'),
+                data={
+                    'player_name': 'Test',
+                    'default_duration': '10',
+                    'default_streaming_duration': '300',
+                    'audio_output': 'hdmi',
+                    'date_format': 'mm/dd/yyyy',
+                    'auth_backend': '',
+                    'timezone': 'Mars/Phobos',
+                },
+            )
+        assert response.status_code in (200, 302)
+        # Prior value untouched, and no reload was signalled.
+        assert settings['timezone'] == 'Europe/Stockholm'
+        publish_mock.assert_not_called()
+    finally:
+        settings['timezone'] = original
+        settings.save()
 
 
 @pytest.mark.django_db

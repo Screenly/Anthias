@@ -7,7 +7,9 @@ surfaces stay in lockstep without going through the HTTP API.
 """
 
 from datetime import timedelta
+import functools
 import os
+import zoneinfo
 from os import getenv, statvfs
 from typing import Any
 
@@ -169,6 +171,17 @@ def system_info() -> dict[str, Any]:
             'hours': round(uptime.seconds / 3600, 2),
             'human': timesince(timezone.now() - uptime, depth=2),
         },
+        # The device's own wall clock + active timezone, so an operator
+        # can confirm what "now" the scheduler is using (issue #1755).
+        # Seeded from the server instant (``iso``) rather than the
+        # browser's clock — the whole point is to reveal a *wrong*
+        # device clock, which trusting the browser would mask. The
+        # offset is formatted +HH:MM for readability.
+        'device_time': {
+            'iso': timezone.localtime(timezone.now()).isoformat(),
+            'timezone': timezone.get_current_timezone_name(),
+            'offset': _format_utc_offset(timezone.localtime(timezone.now())),
+        },
         'display_power': _redis.get('display_power'),
         'resolution': _resolved_resolution(),
         'device_model': device_model,
@@ -192,6 +205,27 @@ _DATE_FORMAT_OPTIONS = (
     ('dd.mm.yyyy', 'day.month.year'),
     ('yyyy.mm.dd', 'year.month.day'),
 )
+
+
+def _format_utc_offset(dt: Any) -> str:
+    """Render a datetime's UTC offset as ``UTC+HH:MM`` / ``UTC-HH:MM``."""
+    raw = dt.strftime('%z')  # e.g. '+0200', '' for a naive value
+    if len(raw) < 5:
+        return 'UTC'
+    return f'UTC{raw[:3]}:{raw[3:]}'
+
+
+@functools.lru_cache(maxsize=1)
+def _timezone_options() -> tuple[tuple[str, str], ...]:
+    """(value, label) pairs for the Settings timezone dropdown.
+
+    Leading blank entry = "follow the host". The rest is the sorted
+    IANA zone list; on balena the host is always UTC, so this dropdown
+    is the only way to schedule/display in local time there. Cached —
+    the set is fixed for the life of the process.
+    """
+    zones = sorted(zoneinfo.available_timezones())
+    return (('', 'System default'),) + tuple((z, z) for z in zones)
 
 
 def device_settings() -> dict[str, Any]:
@@ -227,6 +261,7 @@ def device_settings() -> dict[str, Any]:
         'default_streaming_duration': settings['default_streaming_duration'],
         'audio_output': settings['audio_output'],
         'date_format': settings['date_format'],
+        'timezone': settings['timezone'],
         'auth_backend': settings['auth_backend'],
         'username': operator_username(),
         'show_splash': settings['show_splash'],
@@ -248,6 +283,7 @@ def device_settings() -> dict[str, Any]:
         # on that revision (matches the React audio-output dropdown).
         'is_pi5': 'Raspberry Pi 5' in device_model,
         'date_format_options': _DATE_FORMAT_OPTIONS,
+        'timezone_options': _timezone_options(),
         # Render-time gate for the experimental CEC display-power
         # buttons; cec_available() only stats device nodes, so it's
         # cheap enough to call on every settings render.
