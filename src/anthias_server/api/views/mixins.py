@@ -123,8 +123,15 @@ class RecoverViewMixin(APIView):
         try:
             publisher.send_to_viewer('stop')
 
+            # Stream the upload to disk in chunks — ``file_upload.read()``
+            # pulls the whole archive into RAM, and a backup is every
+            # image + video asset on the device, so a multi-GB restore
+            # OOM-kills the worker on a 1 GB Pi. The HTML recover view
+            # (settings_recover) already streams; this brings the API
+            # path in line.
             with open(location, 'wb') as f:
-                f.write(file_upload.read())
+                for chunk in file_upload.chunks():
+                    f.write(chunk)
 
             try:
                 backup_helper.recover(location)

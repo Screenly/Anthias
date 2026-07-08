@@ -352,6 +352,57 @@ def test_recover_invalid_archive_warns_not_error(
 
 
 @pytest.mark.django_db
+def test_recover_streams_large_upload_to_disk(
+    api_client: APIClient,
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The restore endpoint must stream the uploaded backup to disk in
+    chunks, not ``read()`` the whole archive into RAM (which OOM-kills
+    the worker on a Pi restoring a multi-GB backup). Upload content
+    larger than one chunk and assert the staged file the recover step
+    sees is the complete, byte-identical upload.
+
+    The view stages under a relative ``static/`` dir, so run from a tmp
+    cwd that pytest cleans up rather than polluting the checkout.
+    """
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'static').mkdir()
+
+    # > 64 KiB so file_upload.chunks() yields multiple chunks and the
+    # streaming loop is actually exercised.
+    payload = bytes(range(256)) * 1024  # 256 KiB, non-trivial content
+    captured: dict[str, bytes] = {}
+
+    def fake_recover(location: str) -> None:
+        with open(location, 'rb') as staged:
+            captured['content'] = staged.read()
+
+    with (
+        mock.patch('anthias_server.api.views.mixins.ViewerPublisher'),
+        mock.patch(
+            'anthias_server.api.views.mixins.backup_helper.recover',
+            side_effect=fake_recover,
+        ),
+    ):
+        response = api_client.post(
+            reverse('api:recover_v1'),
+            data={
+                'backup_upload': SimpleUploadedFile(
+                    'backup.tar.gz',
+                    payload,
+                    content_type='application/x-tar',
+                )
+            },
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert captured['content'] == payload
+
+
+@pytest.mark.django_db
 def test_playlist_order(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:
