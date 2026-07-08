@@ -47,8 +47,10 @@ r = connect_to_redis()
 
 # A resumable upload's temp file is named ``<upload_id>.tmp``. The id is
 # echoed back by the client on every chunk, so it lands in a filesystem
-# path — pin it to the exact uuid4 hex shape we mint and reject anything
-# else so a crafted value can't traverse out of the asset dir.
+# path — require the 32-lowercase-hex-char shape of the ids we mint
+# (``uuid4().hex``) and reject anything else. This is a path-traversal
+# guard, not a UUID-version check: 32 hex chars simply can't contain a
+# ``/`` or ``..`` to escape the asset dir.
 UPLOAD_ID_RE = re.compile(r'[0-9a-f]{32}')
 
 
@@ -383,8 +385,16 @@ class FileAssetViewMixin(APIView):
                 # arriving together could both see "no file" and clobber
                 # each other. ``r+b`` (not append) so ``seek()`` decides
                 # the offset and an out-of-order chunk lands where the
-                # range says.
-                fd = os.open(file_path, os.O_RDWR | os.O_CREAT, 0o644)
+                # range says. ``0o666`` (masked by the process umask) and
+                # ``O_CLOEXEC`` match what the builtin ``open()`` on the
+                # non-range path below does, so permissions stay
+                # umask-controlled and the fd doesn't leak into forked
+                # subprocesses.
+                fd = os.open(
+                    file_path,
+                    os.O_RDWR | os.O_CREAT | os.O_CLOEXEC,
+                    0o666,
+                )
                 with os.fdopen(fd, 'r+b') as f:
                     f.seek(start_bytes)
                     f.write(data)
