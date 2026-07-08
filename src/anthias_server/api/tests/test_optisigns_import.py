@@ -19,7 +19,7 @@ from anthias_server.api.tests._graphql_helpers import (
     gql_response as _gql,
     stream_response as _stream,
 )
-from anthias_server.lib.integrations import graphql, optisigns
+from anthias_server.lib.integrations import graphql, ingest, optisigns
 from anthias_server.lib.integrations.registry import (
     get_provider,
     list_provider_meta,
@@ -128,6 +128,22 @@ class TestClassify:
             )
             is None
         )
+
+    def test_file_download_url_falls_back_to_signage_url(self) -> None:
+        node = {
+            'fileType': 'image',
+            'path': '/relative/x.png',
+            'signageUrl': 'https://cdn/signage/x.png',
+        }
+        assert (
+            optisigns._file_download_url(node) == 'https://cdn/signage/x.png'
+        )
+
+    def test_extension_derived_from_filename_not_mimetype(self) -> None:
+        # fileExtension/originalFileExtension are mimetypes; deriving the
+        # extension from the filename yields ".jpg", not ".imagejpeg".
+        assert ingest.file_ext_from(None, 'holiday-snap.jpg') == '.jpg'
+        assert ingest.file_ext_from('image/jpeg', 'x') == '.imagejpeg'
 
 
 class TestListMedia:

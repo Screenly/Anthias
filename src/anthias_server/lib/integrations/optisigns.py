@@ -329,8 +329,10 @@ class OptiSignsProvider(ImportProvider):
                     f'{media_type}; re-upload it manually.'
                 ),
             )
-        # ``fileExtension`` is a mimetype (e.g. "image/jpeg"), not an
-        # extension, so derive the extension from the original filename
+        # OptiSigns' ``fileExtension`` (and possibly ``originalFileExtension``)
+        # is a mimetype like "image/jpeg", not an extension, and
+        # ``file_ext_from`` would sanitise that to a bogus ".imagejpeg". So
+        # pass no hint and derive the extension from the original filename
         # (which carries a real ".jpg"/".mp4"), falling back to the URL.
         # No auth on the download: OptiSigns files are CDN/S3-served, so the
         # bearer token must not be forwarded.
@@ -342,8 +344,7 @@ class OptiSignsProvider(ImportProvider):
             mimetype=media_type,
             file_url=file_url,
             ext=ingest.file_ext_from(
-                node.get('originalFileExtension'),
-                node.get('originalFileName') or file_url,
+                None, str(node.get('originalFileName') or file_url)
             ),
             # Video duration is probed server-side; images use the default.
             duration=0 if media_type == 'video' else _default_duration(node),
