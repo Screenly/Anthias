@@ -9,9 +9,9 @@ Every provider implements the transport-agnostic ``ImportProvider``
 interface (``base.py``) and is registered in ``registry.py``. The API
 views, the settings wizard and the ``import_content`` management command
 all speak only that interface + the neutral ``RemoteMediaItem`` /
-``ImportOutcome`` dataclasses, so adding a provider (ScreenCloud,
-OptiSign, NoviSign, PiSignage, …) is a new module plus one registry
-entry — no change to the endpoints, UI, or CLI. Providers may be REST
+``ImportOutcome`` dataclasses, so adding a provider is a new module plus
+one registry entry, with no change to the endpoints, UI, or CLI. Providers
+may be REST
 *or* GraphQL backed; nothing outside a provider module assumes a
 transport.
 """

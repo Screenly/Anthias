@@ -1,6 +1,6 @@
 """Shared response fakes for import-provider tests.
 
-Used by the provider test modules (GraphQL: ScreenCloud/OptiSigns; REST:
+Used by the provider test modules (GraphQL: ScreenCloud; REST:
 Yodeck/piSignage/Xibo) so the canned-response boilerplate lives in one
 place. Not a test module (no ``test_`` prefix), so pytest doesn't collect
 it.

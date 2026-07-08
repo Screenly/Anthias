@@ -12,8 +12,8 @@ platform's API, so no SSH or scripts are required. Your existing Anthias
 assets are left untouched, and re-running an import skips anything already
 brought over, so it is safe to run more than once.
 
-**Supported platforms:** Yodeck, ScreenCloud, OptiSigns, piSignage, and
-Xibo (Xibo Cloud or self-hosted).
+**Supported platforms:** Yodeck, ScreenCloud, piSignage, and Xibo (Xibo
+Cloud or self-hosted).
 
 ## What gets imported
 
@@ -46,7 +46,6 @@ talk to the platform's API while the import runs.
 | --- | --- | --- |
 | **Yodeck** | Your API token | Account Settings → Advanced Settings → API Tokens |
 | **ScreenCloud** | Your API token (the region is detected automatically) | Studio → Account Settings → Developer → New Token |
-| **OptiSigns** | Your API key | Account Settings → API Keys → New API Key |
 | **piSignage** | `subdomain:email:password` (the `<name>` in `<name>.pisignage.com`, plus your login) | Your piSignage account login |
 | **Xibo** | `cms-url client_id client_secret` (space separated; the CMS URL works for Xibo Cloud or self-hosted) | Applications → Add (an API application) |
 
@@ -79,7 +78,6 @@ $ docker compose exec anthias-server \
     python manage.py import_content --provider yodeck --token '<credentials>'
 ```
 
-Use `--provider` with one of `yodeck`, `screencloud`, `optisigns`,
-`pisignage`, or `xibo`, and pass the same credentials you would enter in the
-wizard. Add `--dry-run` to list what would be imported without copying
-anything.
+Use `--provider` with one of `yodeck`, `screencloud`, `pisignage`, or
+`xibo`, and pass the same credentials you would enter in the wizard. Add
+`--dry-run` to list what would be imported without copying anything.

@@ -1,6 +1,6 @@
 """Shared GraphQL helpers for import providers.
 
-The GraphQL-backed providers (ScreenCloud, OptiSigns) all talk the same
+The GraphQL-backed providers (ScreenCloud today) all talk the same
 shape: a Bearer token, a POST of ``{query, variables}``, and a response
 that returns HTTP 200 even on failure (errors surfaced in an ``errors``
 array). This centralises that boilerplate so each provider owns only its

@@ -181,8 +181,8 @@ def import_content(request: HttpRequest, provider: str) -> HttpResponse:
     """Render the import wizard for a given provider.
 
     Provider display copy (label, token help) comes from the registry so
-    the same template serves every provider — Yodeck today, ScreenCloud
-    / OptiSign / NoviSign as they land. An unknown key 404s.
+    the same template serves every provider (Yodeck, ScreenCloud, piSignage
+    and Xibo). An unknown key 404s.
     """
     from anthias_server.lib.integrations.registry import get_provider_meta
 

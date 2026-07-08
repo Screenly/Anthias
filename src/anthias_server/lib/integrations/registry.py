@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any
 
 from .base import ImportProvider
-from .optisigns import OptiSignsProvider
 from .pisignage import PiSignageProvider
 from .screencloud import ScreenCloudProvider
 from .xibo import XiboProvider
@@ -24,7 +23,6 @@ _PROVIDERS: dict[str, ImportProvider] = {
     for provider in (
         YodeckProvider(),
         ScreenCloudProvider(),
-        OptiSignsProvider(),
         PiSignageProvider(),
         XiboProvider(),
     )
