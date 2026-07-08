@@ -36,7 +36,19 @@ class _ViewerFixtures:
 
 
 @pytest.fixture
-def viewer_fixtures() -> Iterator[_ViewerFixtures]:
+def viewer_fixtures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[_ViewerFixtures]:
+    # Keep every spawn/handshake test hermetic against the host's Wayland
+    # env. _spawn_webview_once calls _wait_for_wayland_socket before the
+    # mocked command runs; with sleep mocked, a set-but-dangling
+    # WAYLAND_DISPLAY (some CI/dev containers, or a Wayland desktop whose
+    # socket path doesn't resolve here) would make that wait busy-loop for
+    # the whole startup budget or fire a sleep side effect before the
+    # spawn. Clearing it makes _wayland_socket_path() return None so the
+    # wait is a no-op. The dedicated _wait_for_wayland_socket tests set
+    # their own env and don't use this fixture.
+    monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
     fixtures = _ViewerFixtures()
     original_splash_delay = viewer.SPLASH_DELAY
     viewer.SPLASH_DELAY = 0
@@ -195,20 +207,13 @@ def _capture_out_sink(
     return holder
 
 
-def test_load_browser(
-    viewer_fixtures: _ViewerFixtures, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
     browser_proc.is_alive.return_value = True
 
-    # Keep the pre-spawn Wayland-socket wait a no-op regardless of the
-    # host: _spawn_webview_once calls _wait_for_wayland_socket before the
-    # command runs, and on a Wayland desktop (WAYLAND_DISPLAY set) that
-    # wait would call the mocked sleep — firing feed_handshake before the
-    # _out sink is captured. Clearing it makes _wayland_socket_path()
-    # return None, so sleep is exercised only by the handshake poll loop.
-    monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
-
+    # (viewer_fixtures clears WAYLAND_DISPLAY, so the pre-spawn
+    # _wait_for_wayland_socket is a no-op and sleep is exercised only by
+    # the handshake poll loop below.)
     # The handshake line must arrive across polls, not before the first:
     # capture the _out sink, leave it empty for the first poll, then feed
     # the handshake on the first mocked sleep so the second poll finds it
