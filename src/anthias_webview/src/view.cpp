@@ -135,8 +135,9 @@ View::View(QWidget* parent) : QWidget(parent)
     // ``webView1`` so the rest of the file's historical dual-buffer
     // logic still compiles and runs — every operation that would have
     // targeted the off-screen ``webView2`` now lands on the same
-    // widget, and the visibility swap in switchToNextWebView() is a
-    // no-op. A loadPage() call keeps the current page composited until
+    // widget, and switchToNextWebView() takes its single-view fast path
+    // (show the one view, no hide/show toggle or pointer swap). A
+    // loadPage() call keeps the current page composited until
     // the next one has painted (QtWebEngine holds the last frame across
     // an in-place navigation), so transitions are seamless with at most
     // a brief black frame on a slow load, never a foreign page.
@@ -745,6 +746,24 @@ void View::switchToNextWebView()
         return;
     }
 
+    nextWebViewReady = false;
+
+    if (currentWebView == nextWebView) {
+        // Single-view mode (the only mode today — see the constructor).
+        // There is no off-screen buffer to reveal: the freshly-loaded
+        // page is already in the one view. Just make sure it is shown —
+        // it may have been hidden by a preceding image/video asset
+        // (loadImage()/playVideo() hide the web views) — and skip the
+        // dual-buffer hide/show + pointer swap, which on a single
+        // aliased widget would only toggle its visibility for no reason
+        // (and risk an avoidable flicker).
+        currentWebView->setVisible(true);
+        currentWebView->clearFocus();
+        armReloadTimer();
+        qDebug() << "Showing loaded web page (single-view)";
+        return;
+    }
+
     qDebug() << "Switching to next web view";
 
     currentWebView->setVisible(false);
@@ -754,8 +773,6 @@ void View::switchToNextWebView()
     QWebEngineView* temp = currentWebView;
     currentWebView = nextWebView;
     nextWebView = temp;
-
-    nextWebViewReady = false;
 
     qDebug() << "Successfully switched to next web view";
 
