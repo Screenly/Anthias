@@ -1,23 +1,26 @@
-"""OptiSigns import provider — GraphQL.
+"""OptiSigns import provider (GraphQL).
 
-OptiSigns' API is a single GraphQL endpoint. Media lives under one
-``assets`` connection (there is no per-type query and no single-item
-query — a lookup is a filtered ``assets(query: {_id: …})``). Each asset's
-kind is read from ``fileType`` (image/video) or a populated external
-``webLink`` (web pages); apps, widgets, YouTube and other
-internally-generated content are filtered out.
+OptiSigns' API is a single GraphQL endpoint
+(``graphql-gateway.optisigns.com``) with all media under one ``assets``
+connection (no per-type or single-item query; a lookup is a filtered
+``assets(query: {_id: ...})``). Each asset's kind is read from
+``fileType`` (``image`` / ``video`` / ``web``); a ``web`` asset becomes a
+web page only when its ``webLink`` is a genuine external URL. OptiSigns
+apps (weather, social player, YouTube and other ``*.optisigns.com``
+canvases) are filtered out.
 
 Reuses the shared ingest layer for download + asset creation +
 idempotency, behind the same ``ImportProvider`` interface as the other
 providers.
 
-TODO(confirm-with-live-token): the exact downloadable original-file field
-is undocumented — ``path`` (and ``video_1080p`` for video) are the
-candidates but may be CDN-relative, in which case the item is skipped
-rather than guessed at. The ``QueryAssetInput`` ``_id`` filter shape and
-the ``fileType``/``appType`` vocabularies are also worth confirming
-against a live account. Resolution points are isolated in
-``_file_download_url`` / ``_ASSET_BY_ID`` / ``_classify``.
+File downloads: an uploaded file exposes ``fileType`` and a CDN-relative
+``thumbnail`` key, but the gateway does not always return an absolute
+download URL (``path`` / ``signageUrl`` can be null, and there is no
+public CDN base to build one from). When no absolute URL is present the
+item is skipped with a reason rather than guessing a CDN path. The
+resolution points are isolated in ``_file_download_url`` /
+``_ASSET_BY_ID`` / ``_classify`` so exposing more (e.g. on a plan that
+returns URLs) is a localized change.
 """
 
 from __future__ import annotations
@@ -77,7 +80,7 @@ query($id: String!) {
       edges {
         node {
           _id name fileType appType webType webLink youtubeType embedLink
-          duration path thumbnail video_1080p fileExtension
+          duration path signageUrl thumbnail video_1080p fileExtension
           originalFileExtension originalFileName filename
         }
       }
@@ -125,8 +128,8 @@ def _classify(node: dict[str, Any]) -> str | None:
     """Return 'image' | 'video' | 'webpage', or None for unsupported.
 
     Files are keyed off ``fileType``; a genuine external ``webLink`` (not
-    an OptiSigns/YouTube app) is a web page. Everything else — apps,
-    widgets, YouTube, audio, documents — is unsupported.
+    an OptiSigns/YouTube app) is a web page. Everything else (apps,
+    widgets, YouTube, audio, documents) is unsupported.
     """
     file_type = (node.get('fileType') or '').lower()
     if file_type == 'image':
@@ -159,14 +162,16 @@ def _webpage_url(node: dict[str, Any]) -> str | None:
 def _file_download_url(node: dict[str, Any]) -> str | None:
     """Pick the downloadable original URL (absolute http(s) only).
 
-    ``video_1080p`` is preferred for video; otherwise ``path``. If neither
-    is an absolute URL (e.g. a CDN-relative path), None is returned and the
-    item is skipped rather than guessed at — see the module TODO.
+    ``video_1080p`` is preferred for video; otherwise ``path`` then
+    ``signageUrl``. If none is an absolute URL (e.g. a CDN-relative key),
+    None is returned and the item is skipped rather than guessing a CDN
+    path (see the module docstring).
     """
     candidates = []
     if (node.get('fileType') or '').lower() == 'video':
         candidates.append(node.get('video_1080p'))
     candidates.append(node.get('path'))
+    candidates.append(node.get('signageUrl'))
     return ingest.first_http_url(candidates)
 
 
@@ -324,9 +329,9 @@ class OptiSignsProvider(ImportProvider):
                     f'{media_type}; re-upload it manually.'
                 ),
             )
-        ext_hint = node.get('fileExtension') or node.get(
-            'originalFileExtension'
-        )
+        # ``fileExtension`` is a mimetype (e.g. "image/jpeg"), not an
+        # extension, so derive the extension from the original filename
+        # (which carries a real ".jpg"/".mp4"), falling back to the URL.
         # No auth on the download: OptiSigns files are CDN/S3-served, so the
         # bearer token must not be forwarded.
         asset = ingest.create_file_asset(
@@ -336,7 +341,10 @@ class OptiSignsProvider(ImportProvider):
             name=name,
             mimetype=media_type,
             file_url=file_url,
-            ext=ingest.file_ext_from(ext_hint, file_url),
+            ext=ingest.file_ext_from(
+                node.get('originalFileExtension'),
+                node.get('originalFileName') or file_url,
+            ),
             # Video duration is probed server-side; images use the default.
             duration=0 if media_type == 'video' else _default_duration(node),
             start_date=start_date,
