@@ -432,6 +432,101 @@ def test_view_webpage_default_zero_interval(
     fake_bus.setReloadInterval.assert_called_once_with(0)
 
 
+def test_view_webpage_nocache_busts_url(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A ``nocache`` webpage is loaded with a unique query token so it's
+    fetched fresh instead of served from QtWebEngine's HTTP cache
+    (#3137, restoring refs #11). setReloadInterval still fires."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'time', return_value=1234.567),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com', 30, nocache=True)
+
+    fake_bus.loadPage.assert_called_once_with(
+        'https://example.com?_anthias_nc=1234567'
+    )
+    fake_bus.setReloadInterval.assert_called_once_with(30)
+
+
+def test_view_webpage_nocache_preserves_existing_query(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Cache-busting must merge into an existing query string, not
+    replace it — a dashboard URL's own parameters have to survive."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'time', return_value=2.0),
+    ):
+        viewer_fixtures.u.view_webpage(
+            'https://example.com/dash?tab=sales&x=1', nocache=True
+        )
+
+    (loaded,), _ = fake_bus.loadPage.call_args
+    assert loaded.startswith('https://example.com/dash?')
+    assert 'tab=sales' in loaded
+    assert 'x=1' in loaded
+    assert '_anthias_nc=2000' in loaded
+
+
+def test_view_webpage_nocache_reloads_each_display(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The unique token per display defeats the unchanged-URL
+    short-circuit: showing the same nocache asset twice must issue two
+    distinct loadPage calls (a fresh fetch each rotation), unlike a
+    cached webpage which would skip the second load."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'time', side_effect=[10.0, 20.0]),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com', nocache=True)
+        viewer_fixtures.u.view_webpage('https://example.com', nocache=True)
+
+    assert fake_bus.loadPage.call_count == 2
+    first = fake_bus.loadPage.call_args_list[0].args[0]
+    second = fake_bus.loadPage.call_args_list[1].args[0]
+    assert first != second
+
+
+def test_view_webpage_without_nocache_leaves_url_untouched(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The default (nocache=False) path must load the exact URL — no
+    stray cache-busting parameter for ordinary webpage assets."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+    ):
+        viewer_fixtures.u.view_webpage('https://example.com/dash?tab=1')
+
+    fake_bus.loadPage.assert_called_once_with('https://example.com/dash?tab=1')
+
+
 @pytest.mark.parametrize(
     'error_message,expected_call_count',
     [
@@ -895,6 +990,33 @@ def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
     ):
         viewer.asset_loop(scheduler)
     trigger.assert_called_once_with('remote')
+
+
+def test_asset_loop_passes_nocache_flag_to_view_webpage() -> None:
+    """A webpage asset with ``nocache`` set must reach view_webpage with
+    nocache=True so the URL is fetched fresh (#3137). The default-False
+    case is guarded by the non-nocache webpage path."""
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'web',
+        'name': 'dashboard',
+        'uri': 'https://example.com/dash',
+        'mimetype': 'webpage',
+        'duration': 10,
+        'skip_asset_check': True,
+        'is_reachable': True,
+        'nocache': True,
+        'metadata': {},
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer.view_webpage') as view_webpage,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    _, kwargs = view_webpage.call_args
+    assert kwargs['nocache'] is True
 
 
 def test_asset_loop_clamps_out_of_range_duration() -> None:

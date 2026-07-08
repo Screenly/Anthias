@@ -1042,11 +1042,12 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
     """Apply common schedule fields to a set of assets at once.
 
     Mirrors the per-asset ``assets_update`` parsing for dates,
-    duration, time-of-day, and weekday filters, but each group is
-    opt-in via an ``apply_*`` flag so an operator only overwrites the
-    fields they ticked — an unticked group is left untouched on every
-    selected asset. Everything is parsed before any row is mutated so a
-    bad date/time toasts without leaving a half-applied batch (#3046).
+    duration, time-of-day, weekday filters, and the No cache /
+    Skip asset check flags (#3137), but each group is opt-in via an
+    ``apply_*`` flag so an operator only overwrites the fields they
+    ticked — an unticked group is left untouched on every selected
+    asset. Everything is parsed before any row is mutated so a bad
+    date/time toasts without leaving a half-applied batch (#3046).
     """
     import json as _json
 
@@ -1078,8 +1079,17 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
     apply_duration = request.POST.get('apply_duration') == 'true'
     apply_time = request.POST.get('apply_time') == 'true'
     apply_days = request.POST.get('apply_days') == 'true'
+    apply_nocache = request.POST.get('apply_nocache') == 'true'
+    apply_skip = request.POST.get('apply_skip_asset_check') == 'true'
 
-    if not (apply_dates or apply_duration or apply_time or apply_days):
+    if not (
+        apply_dates
+        or apply_duration
+        or apply_time
+        or apply_days
+        or apply_nocache
+        or apply_skip
+    ):
         return _asset_table_response(
             request,
             toast=('info', 'Nothing to change — pick a field to edit'),
@@ -1196,6 +1206,15 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
         shared['play_time_to'] = None if clear_time else new_time_to
     if apply_days and new_play_days is not None:
         shared['play_days'] = new_play_days
+    # Boolean flags: the group being ticked means "set this flag on every
+    # selected asset to the switch's state" — an absent/off checkbox POSTs
+    # 'false', so a group can clear the flag as well as set it.
+    if apply_nocache:
+        shared['nocache'] = request.POST.get('nocache') == 'true'
+    if apply_skip:
+        shared['skip_asset_check'] = (
+            request.POST.get('skip_asset_check') == 'true'
+        )
 
     if not shared and not apply_duration:
         # e.g. apply_dates ticked but both date fields left blank.
