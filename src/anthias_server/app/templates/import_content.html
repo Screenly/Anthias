@@ -1,0 +1,493 @@
+{% extends "_layout.html" %}
+{% load static %}
+
+{% block title %}{% if player_name %}{{ player_name }} · {% endif %}Import from {{ provider.label }}{% endblock %}
+
+{% block main %}
+<style>
+  /*
+    Native <progress> styled to match the surface, mirroring the
+    Migrate-to-Screenly wizard. The element (rather than a div with
+    role="progressbar") is used so the completion state is announced
+    consistently by assistive tech. Pseudoelement names are
+    vendor-prefixed and can't be set via inline styles, hence the rule
+    block.
+  */
+  .content-import-progress {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    display: block;
+    width: 100%;
+    height: 0.5rem;
+    border: none;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    background: #e5e7eb;
+  }
+  .content-import-progress::-webkit-progress-bar {
+    background: #e5e7eb;
+    border-radius: 0.25rem;
+  }
+  .content-import-progress::-webkit-progress-value {
+    background: #2563eb;
+    border-radius: 0.25rem;
+    transition: width 0.2s linear;
+  }
+  .content-import-progress::-moz-progress-bar {
+    background: #2563eb;
+    border-radius: 0.25rem;
+  }
+</style>
+<div class="app-container" x-data="importContent()" x-init="init()">
+  {# Hidden form just for the CSRF token — the wizard does everything in JS. #}
+  <form style="display:none">{% csrf_token %}</form>
+
+  <div class="page-header-bar">
+    <div class="page-header-bar__title">
+      <h1 class="page-header">Import from {{ provider.label }}</h1>
+      <p class="page-header-bar__lede">
+        Copy media from a {{ provider.label }} account into this player. Existing assets are left alone.
+      </p>
+    </div>
+  </div>
+
+  {# ===== Step 1: Token paste + validate ===== #}
+  <section class="surface" x-show="step === 'token'" x-cloak>
+    <header class="surface__header">
+      <h2><i class="ti ti-key mr-2"></i>{{ provider.label }} API token</h2>
+    </header>
+    <div class="settings-stack">
+      <p class="muted-label m-0">{{ provider.token_help }}</p>
+      <div class="app-floating" style="position: relative;">
+        <input
+          :type="showToken ? 'text' : 'password'"
+          class="app-input"
+          id="import_token"
+          x-model="token"
+          @keydown.enter.prevent="validate()"
+          autocomplete="off"
+          placeholder=" "
+          style="padding-right: 3rem;"
+        >
+        <label for="import_token">API token</label>
+        <button
+          type="button"
+          class="app-btn-icon"
+          @click="showToken = !showToken"
+          :aria-label="showToken ? 'Hide token' : 'Show token'"
+          :aria-pressed="showToken"
+          style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);"
+        >
+          <i class="ti" :class="showToken ? 'ti-eye-off' : 'ti-eye'"></i>
+        </button>
+      </div>
+      <div
+        x-show="tokenError"
+        x-cloak
+        class="text-red-600"
+        role="alert"
+        aria-live="assertive"
+      >
+        <i class="ti ti-alert-triangle"></i>
+        <span x-text="tokenError"></span>
+      </div>
+      <div class="flex justify-between">
+        <a href="{% url 'anthias_app:settings' %}" class="app-btn app-btn-link">
+          <i class="ti ti-arrow-left"></i><span>Back to Settings</span>
+        </a>
+        <button
+          type="button"
+          class="app-btn app-btn-primary"
+          :disabled="!token || validating"
+          @click="validate()"
+        >
+          <i class="ti" :class="validating ? 'ti-loader animate-spin' : 'ti-check'"></i>
+          <span x-text="validating ? 'Checking…' : 'Continue'"></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Step 2: Media selection ===== #}
+  <section class="surface" x-show="step === 'select'" x-cloak>
+    <header class="surface__header">
+      <h2><i class="ti ti-list mr-2"></i>Choose media to import</h2>
+      <p class="muted-label m-0" x-show="items.length">
+        <span x-text="selectedCount()"></span> of <span x-text="importableCount()"></span> importable selected
+        <template x-if="skippedCount()">
+          <span>&middot; <span x-text="skippedCount()"></span> unsupported</span>
+        </template>
+      </p>
+    </header>
+
+    <div class="settings-stack" x-show="loadingItems" x-cloak>
+      <p class="muted-label"><i class="ti ti-loader animate-spin"></i> Loading media…</p>
+    </div>
+
+    <div
+      class="settings-stack"
+      x-show="!loadingItems && !items.length"
+      x-cloak
+    >
+      <div class="empty-state">
+        <div class="empty-state__icon"><i class="ti ti-photo-off"></i></div>
+        <p class="empty-state__title">No media to import</p>
+        <p class="empty-state__description">This {{ provider.label }} account has no media yet.</p>
+      </div>
+      <div class="flex justify-start">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+      </div>
+    </div>
+
+    <div x-show="!loadingItems && items.length" x-cloak>
+      <div class="settings-section__actions mb-3">
+        <button type="button" class="app-btn app-btn-link" @click="selectAll(true)">Select all</button>
+        <button type="button" class="app-btn app-btn-link" @click="selectAll(false)">Select none</button>
+      </div>
+
+      <label class="flex items-center mb-3" style="gap: 0.5rem;">
+        <input type="checkbox" x-model="enableImported">
+        <span>Enable imported assets so they play immediately</span>
+      </label>
+
+      <table class="asset-table">
+        <thead>
+          <tr>
+            <th scope="col" style="width: 3rem"></th>
+            <th scope="col">Name</th>
+            <th scope="col" style="width: 8rem">Type</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="item in items" :key="item.remote_id">
+            <tr :style="item.importable ? '' : 'opacity: 0.55;'">
+              <td>
+                <input
+                  type="checkbox"
+                  :id="`m-${item.remote_id}`"
+                  x-model="selected[item.remote_id]"
+                  :disabled="!item.importable"
+                >
+              </td>
+              <td>
+                <label :for="`m-${item.remote_id}`" x-text="item.name || item.remote_id"></label>
+              </td>
+              <td><span class="muted-label" x-text="item.media_type || '—'"></span></td>
+              <td>
+                <template x-if="item.importable">
+                  <span class="muted-label">Ready to import</span>
+                </template>
+                <template x-if="!item.importable">
+                  <span class="muted-label" x-text="item.skip_reason || 'Not supported'"></span>
+                </template>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <div class="flex justify-between mt-3">
+        <button type="button" class="app-btn app-btn-link" @click="step = 'token'">
+          <i class="ti ti-arrow-left"></i><span>Back</span>
+        </button>
+        <button
+          type="button"
+          class="app-btn app-btn-primary"
+          :disabled="!selectedCount()"
+          @click="startImport()"
+        >
+          <i class="ti ti-download"></i>
+          <span>Import <span x-text="selectedCount()"></span> item<span x-show="selectedCount() !== 1">s</span></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  {# ===== Step 3 + 4: Progress and summary share the same surface ===== #}
+  <section class="surface" x-show="step === 'running' || step === 'done'" x-cloak>
+    <header class="surface__header">
+      <h2 x-show="step === 'running'"><i class="ti ti-download mr-2"></i>Importing…</h2>
+      <h2 x-show="step === 'done' && failureCount() === 0">
+        <i class="ti ti-circle-check mr-2" style="color:#16a34a"></i>Import complete
+      </h2>
+      <h2 x-show="step === 'done' && failureCount() > 0">
+        <i class="ti ti-alert-triangle mr-2" style="color:#d97706"></i>Import finished with errors
+      </h2>
+      <p class="muted-label m-0">
+        <span x-text="completedCount()"></span> of <span x-text="results.length"></span> done
+        &middot; <span x-text="successCount()"></span> imported
+        <template x-if="skippedResultCount()">
+          <span>&middot; <span x-text="skippedResultCount() + ' skipped'"></span></span>
+        </template>
+        <template x-if="failureCount()">
+          <span>&middot; <span class="text-red-600" x-text="failureCount() + ' failed'"></span></span>
+        </template>
+      </p>
+    </header>
+
+    <div class="settings-stack">
+      <progress
+        class="content-import-progress"
+        :value="progressPercent()"
+        max="100"
+      ></progress>
+
+      <table class="asset-table">
+        <thead>
+          <tr>
+            <th scope="col" style="width: 8rem">Status</th>
+            <th scope="col">Media</th>
+            <th scope="col">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="row in results" :key="row.remote_id">
+            <tr>
+              <td>
+                <template x-if="row.status === 'pending'">
+                  <span class="muted-label">Queued</span>
+                </template>
+                <template x-if="row.status === 'running'">
+                  <span><i class="ti ti-loader animate-spin"></i> Importing…</span>
+                </template>
+                <template x-if="row.status === 'success'">
+                  <span style="color:#16a34a"><i class="ti ti-check"></i> Imported</span>
+                </template>
+                <template x-if="row.status === 'skipped'">
+                  <span class="muted-label"><i class="ti ti-minus"></i> Skipped</span>
+                </template>
+                <template x-if="row.status === 'failed'">
+                  <span class="text-red-600"><i class="ti ti-x"></i> Failed</span>
+                </template>
+              </td>
+              <td x-text="row.name || row.remote_id"></td>
+              <td>
+                <template x-if="row.status === 'skipped'">
+                  <span class="muted-label" x-text="row.detail"></span>
+                </template>
+                <template x-if="row.status === 'failed'">
+                  <span class="text-red-600" x-text="row.detail"></span>
+                </template>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <div class="flex justify-end" x-show="step === 'done'" x-cloak>
+        <a href="{% url 'anthias_app:home' %}" class="app-btn app-btn-outline-dark mr-2">
+          <i class="ti ti-list"></i><span>View schedule</span>
+        </a>
+        <button
+          type="button"
+          class="app-btn app-btn-primary"
+          x-show="failureCount() > 0"
+          @click="retryFailed()"
+        >
+          <i class="ti ti-refresh"></i>
+          <span>Retry <span x-text="failureCount()"></span> failed</span>
+        </button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const CONTENT_IMPORT_PROVIDER = '{{ provider.key|escapejs }}'
+const CONTENT_IMPORT_ENDPOINTS = {
+  validate: `/api/v2/integrations/import/${CONTENT_IMPORT_PROVIDER}/validate`,
+  item: `/api/v2/integrations/import/${CONTENT_IMPORT_PROVIDER}/item`,
+}
+
+function contentImportCsrfToken() {
+  const el = document.querySelector('input[name=csrfmiddlewaretoken]')
+  if (el) return el.value
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)
+  return m ? decodeURIComponent(m[1]) : ''
+}
+
+async function contentImportPostJson(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': contentImportCsrfToken(),
+    },
+    body: JSON.stringify(body),
+  })
+  let payload = {}
+  try { payload = await response.json() } catch { /* empty body */ }
+  return { ok: response.ok, status: response.status, payload }
+}
+
+function importContent() {
+  const ENDPOINTS = CONTENT_IMPORT_ENDPOINTS
+  const postJson = contentImportPostJson
+
+  return {
+    step: 'token',
+    token: '',
+    showToken: false,
+    tokenError: '',
+    validating: false,
+    loadingItems: false,
+    items: [],
+    selected: {},
+    enableImported: true,
+    results: [],
+
+    init() {
+      // No-op; media is fetched on demand at the validate step.
+    },
+
+    async validate() {
+      // Re-entrancy guard: the button is disabled while validating, but
+      // @keydown.enter still fires. First call wins.
+      if (this.validating) return
+      this.tokenError = ''
+      const token = (this.token || '').trim()
+      if (!token) {
+        this.tokenError = 'Paste your {{ provider.label|escapejs }} API token first.'
+        return
+      }
+      this.token = token
+      this.validating = true
+      this.loadingItems = true
+      try {
+        const { ok, status, payload } = await postJson(ENDPOINTS.validate, { token })
+
+        if (status >= 500) {
+          this.tokenError = payload.error
+            || 'Anthias couldn\'t reach {{ provider.label|escapejs }}. Check the device\'s internet connection and try again.'
+          return
+        }
+        if (status === 400) {
+          this.tokenError = 'That token looks malformed. Double-check the value you pasted.'
+          return
+        }
+        if (status === 404) {
+          this.tokenError = 'This import provider is not available.'
+          return
+        }
+        if (!ok) {
+          this.tokenError = payload.error
+            || `Anthias returned HTTP ${status} from the validate endpoint.`
+          return
+        }
+        if (!payload.valid) {
+          this.tokenError = payload.error
+            || '{{ provider.label|escapejs }} rejected this token. Double-check it in your dashboard.'
+          return
+        }
+
+        this.items = Array.isArray(payload.items) ? payload.items : []
+        this.selected = {}
+        for (const item of this.items) {
+          // Pre-select importable items only; unsupported ones stay
+          // disabled so the operator can't queue a guaranteed skip.
+          this.selected[item.remote_id] = !!item.importable
+        }
+        this.step = 'select'
+      } catch (e) {
+        this.tokenError = String(e)
+      } finally {
+        this.validating = false
+        this.loadingItems = false
+      }
+    },
+
+    importableCount() {
+      return this.items.filter(i => i.importable).length
+    },
+    skippedCount() {
+      return this.items.filter(i => !i.importable).length
+    },
+    selectedCount() {
+      return this.items.filter(i => i.importable && this.selected[i.remote_id]).length
+    },
+
+    selectAll(value) {
+      for (const item of this.items) {
+        if (item.importable) this.selected[item.remote_id] = value
+      }
+    },
+
+    async startImport() {
+      const queue = this.items.filter(i => i.importable && this.selected[i.remote_id])
+      this.results = queue.map(i => ({
+        remote_id: i.remote_id,
+        name: i.name || i.remote_id,
+        status: 'pending',
+        detail: '',
+      }))
+      this.step = 'running'
+      await this.runQueue()
+      this.step = 'done'
+    },
+
+    async runQueue() {
+      // Sequential on purpose: importing downloads each file through the
+      // device, and N parallel downloads on a slow link would stall.
+      for (const row of this.results) {
+        if (row.status === 'success' || row.status === 'skipped') continue
+        row.status = 'running'
+        try {
+          const { ok, payload } = await postJson(ENDPOINTS.item, {
+            token: this.token,
+            remote_id: row.remote_id,
+            enable: this.enableImported,
+          })
+          if (payload.skipped) {
+            row.status = 'skipped'
+            row.detail = payload.reason || 'Skipped'
+          } else if (ok && payload.success) {
+            row.status = 'success'
+          } else {
+            row.status = 'failed'
+            row.detail = payload.error || payload.reason
+              || `HTTP error (${ok ? 'app-level' : 'transport'})`
+          }
+        } catch (e) {
+          row.status = 'failed'
+          row.detail = String(e)
+        }
+      }
+    },
+
+    async retryFailed() {
+      for (const row of this.results) {
+        if (row.status === 'failed') {
+          row.status = 'pending'
+          row.detail = ''
+        }
+      }
+      this.step = 'running'
+      await this.runQueue()
+      this.step = 'done'
+    },
+
+    completedCount() {
+      return this.results.filter(r => ['success', 'skipped', 'failed'].includes(r.status)).length
+    },
+    successCount() {
+      return this.results.filter(r => r.status === 'success').length
+    },
+    skippedResultCount() {
+      return this.results.filter(r => r.status === 'skipped').length
+    },
+    failureCount() {
+      return this.results.filter(r => r.status === 'failed').length
+    },
+    progressPercent() {
+      if (!this.results.length) return 0
+      return Math.round((this.completedCount() / this.results.length) * 100)
+    },
+  }
+}
+</script>
+{% endblock %}

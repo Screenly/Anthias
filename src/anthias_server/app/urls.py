@@ -40,6 +40,11 @@ urlpatterns = [
         name='migrate_to_screenly',
     ),
     path(
+        'settings/import/<str:provider>/',
+        views.import_content,
+        name='import_content',
+    ),
+    path(
         '_partials/asset-table/',
         views.assets_table_partial,
         name='assets_table',

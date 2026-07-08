@@ -14,6 +14,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login as django_login
 from django.http import (
     FileResponse,
+    Http404,
     HttpRequest,
     HttpResponse,
     StreamingHttpResponse,
@@ -171,6 +172,27 @@ def migrate_to_screenly(request: HttpRequest) -> HttpResponse:
         request,
         'migrate_to_screenly.html',
         {'active_nav': 'settings'},
+    )
+
+
+@authorized
+@require_http_methods(['GET'])
+def import_content(request: HttpRequest, provider: str) -> HttpResponse:
+    """Render the import wizard for a given provider.
+
+    Provider display copy (label, token help) comes from the registry so
+    the same template serves every provider — Yodeck today, ScreenCloud
+    / OptiSign / NoviSign as they land. An unknown key 404s.
+    """
+    from anthias_server.lib.integrations.registry import get_provider_meta
+
+    meta = get_provider_meta(provider)
+    if meta is None:
+        raise Http404('Unknown import provider.')
+    return template(
+        request,
+        'import_content.html',
+        {'active_nav': 'settings', 'provider': meta},
     )
 
 
@@ -1551,8 +1573,13 @@ def review_cta_snooze(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['GET'])
 def settings_view(request: HttpRequest) -> HttpResponse:
+    from anthias_server.lib.integrations.registry import list_provider_meta
+
     context = page_context.device_settings()
     context['active_nav'] = 'settings'
+    # Data-driven so a newly registered provider appears in Settings with
+    # no template edit.
+    context['import_providers'] = list_provider_meta()
     return template(request, 'settings.html', context)
 
 

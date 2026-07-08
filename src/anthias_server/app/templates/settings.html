@@ -165,6 +165,36 @@
     </header>
   </section>
 
+  {% comment %}
+    Import content — one card per registered provider (Yodeck today;
+    ScreenCloud / OptiSign / NoviSign / PiSignage as they land). The list
+    comes from the import-provider registry via the settings view, so a
+    new provider appears here with no template edit.
+  {% endcomment %}
+  {% if import_providers %}
+  <section class="settings-section mt-4">
+    <header>
+      <div>
+        <h2>Import content</h2>
+        <p class="settings-section__lede">Bring media in from another digital signage platform.</p>
+      </div>
+    </header>
+    {% for provider in import_providers %}
+    <div class="settings-section__row">
+      <div>
+        <strong>{{ provider.label }}</strong>
+        <p class="settings-section__lede">{{ provider.description }}</p>
+      </div>
+      <div class="settings-section__actions">
+        <a href="{% url 'anthias_app:import_content' provider.key %}" class="app-btn app-btn-outline-dark">
+          <i class="ti ti-download"></i><span>Import from {{ provider.label }}</span>
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {# ===== Backup & restore ===== #}
   <section class="settings-section mt-4">
     <header>

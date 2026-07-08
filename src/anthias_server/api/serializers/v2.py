@@ -412,3 +412,22 @@ class ScreenlyMigrateAssetSerializerV2(Serializer[Any]):
     token = CharField(write_only=True)
     asset_id = CharField()
     asset_group_id = CharField(required=False, allow_blank=True)
+
+
+class ImportValidateSerializerV2(Serializer[Any]):
+    """Request body for validating an import provider's token."""
+
+    token = CharField(write_only=True)
+
+
+class ImportItemSerializerV2(Serializer[Any]):
+    """Request body for importing a single remote media item.
+
+    ``enable`` defaults to True so the wizard's per-item calls don't have
+    to send it on every request; the operator toggles it once and it
+    rides on each item POST.
+    """
+
+    token = CharField(write_only=True)
+    remote_id = CharField()
+    enable = BooleanField(required=False, default=True)
