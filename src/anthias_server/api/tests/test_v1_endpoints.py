@@ -307,6 +307,51 @@ def test_file_asset_content_range_truncates_stale_tmp(
 
 
 @pytest.mark.django_db
+def test_recover_streams_large_upload_to_disk(
+    api_client: APIClient,
+) -> None:
+    """The restore endpoint must stream the uploaded backup to disk in
+    chunks, not ``read()`` the whole archive into RAM (which OOM-kills
+    the worker on a Pi restoring a multi-GB backup). Upload content
+    larger than one chunk and assert the staged file the recover step
+    sees is the complete, byte-identical upload."""
+    import os
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    # > 64 KiB so file_upload.chunks() yields multiple chunks and the
+    # streaming loop is actually exercised.
+    payload = bytes(range(256)) * 1024  # 256 KiB, non-trivial content
+    captured: dict[str, bytes] = {}
+
+    def fake_recover(location: str) -> None:
+        with open(location, 'rb') as staged:
+            captured['content'] = staged.read()
+
+    os.makedirs('static', exist_ok=True)
+    with (
+        mock.patch('anthias_server.api.views.mixins.ViewerPublisher'),
+        mock.patch(
+            'anthias_server.api.views.mixins.backup_helper.recover',
+            side_effect=fake_recover,
+        ),
+    ):
+        response = api_client.post(
+            reverse('api:recover_v1'),
+            data={
+                'backup_upload': SimpleUploadedFile(
+                    'backup.tar.gz',
+                    payload,
+                    content_type='application/x-tar',
+                )
+            },
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert captured['content'] == payload
+
+
+@pytest.mark.django_db
 def test_playlist_order(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:
