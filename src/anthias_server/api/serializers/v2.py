@@ -336,10 +336,10 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
         required=False, min_value=0, max_value=DURATION_S_MAX
     )
     date_format = CharField(required=False)
-    # Blank = "follow the host" (resolve_time_zone precedence). A
-    # non-blank value must be a zone Django will accept, validated the
-    # same way as the host zone so a save can never land a value that
-    # crash-loops the settings module on the next read.
+    # Blank defers to resolve_time_zone() (TZ env -> /etc/timezone ->
+    # UTC). A non-blank value must be a zone Django will accept,
+    # validated the same way as the host zone so a save can never land a
+    # value that crash-loops the settings module on the next read.
     timezone = CharField(required=False, allow_blank=True)
     show_splash = BooleanField(required=False)
     default_assets = BooleanField(required=False)

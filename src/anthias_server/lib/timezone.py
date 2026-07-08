@@ -16,6 +16,7 @@ change is live. Any failure deactivates back to the process default
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Callable
 
 from django.utils import timezone
@@ -24,6 +25,19 @@ from anthias_server.django_project.settings import resolve_time_zone
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+
+
+def format_utc_offset(dt: datetime) -> str:
+    """Render a datetime's UTC offset as ``UTC+HH:MM`` / ``UTC-HH:MM``.
+
+    ``UTC`` alone for a naive value (``%z`` yields an empty string).
+    Shared by the System Info page and the ``/api/v2/info`` clock so
+    the two never drift.
+    """
+    raw = dt.strftime('%z')  # e.g. '+0200', '' for a naive value
+    if len(raw) < 5:
+        return 'UTC'
+    return f'UTC{raw[:3]}:{raw[3:]}'
 
 
 class TimezoneActivationMiddleware:

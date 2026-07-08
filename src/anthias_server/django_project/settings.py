@@ -617,9 +617,10 @@ def get_configured_time_zone(
 
     Parsed directly with configparser rather than via AnthiasSettings
     so this stays import-safe during Django settings evaluation (no
-    dependency on the device-settings object). An empty/absent value
-    means "follow the host"; an invalid value is ignored so a bad
-    hand-edit can never crash-loop Django.
+    dependency on the device-settings object). ``None`` (empty/absent)
+    lets resolve_time_zone() fall through to TZ env -> /etc/timezone ->
+    UTC; an invalid value is ignored so a bad hand-edit can never
+    crash-loop Django.
     """
     if config_file is None:
         home = getenv('HOME')

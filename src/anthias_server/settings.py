@@ -25,9 +25,9 @@ DEFAULTS = {
         'database': CONFIG_DIR + 'anthias.db',
         'date_format': 'mm/dd/yyyy',
         'splash_logo_url': '/static/img/logo-full-splash.svg',
-        # Operator-selected IANA timezone. Empty means "follow the host"
-        # — see resolve_time_zone() in django_project/settings.py for the
-        # config -> TZ env -> /etc/timezone -> UTC precedence. Kept
+        # Operator-selected IANA timezone. Empty defers to the resolved
+        # default — see resolve_time_zone() in django_project/settings.py
+        # for the config -> TZ env -> /etc/timezone -> UTC precedence. Kept
         # userspace on purpose: balenaOS has no host timezone (always
         # UTC), so this is the only way to schedule/display in local
         # time there.

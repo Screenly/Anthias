@@ -245,7 +245,8 @@ def test_patch_device_settings_blank_timezone_allowed(
     api_client: APIClient,
     device_settings_url: str,
 ) -> None:
-    """Blank = "follow the host"; it must validate and persist."""
+    """Blank defers to the resolved default; it must validate and
+    persist."""
     settings_mock.load = mock.MagicMock()
     settings_mock.save = mock.MagicMock()
     settings_mock.__getitem__.side_effect = lambda key: {'auth_backend': ''}[

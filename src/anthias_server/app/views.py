@@ -1617,7 +1617,8 @@ def settings_save(request: HttpRequest) -> HttpResponse:
     current_password = request.POST.get('current_password', '')
 
     # Reject a bad timezone up front (mirrors the v2 serializer's
-    # validate_timezone). Blank = "follow the host". Handled here rather
+    # validate_timezone). Blank defers to the resolved default (TZ env
+    # -> /etc/timezone -> UTC). Handled here rather
     # than inside the try so it stays operator-input (warning-level, no
     # Sentry event) and can't half-write a value that would crash-loop
     # the settings module on the next read.

@@ -26,6 +26,7 @@ from anthias_common.utils import (
 )
 from anthias_server.lib import diagnostics
 from anthias_server.lib.github import is_up_to_date
+from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import settings
 
 _redis = connect_to_redis()
@@ -191,7 +192,7 @@ def system_info() -> dict[str, Any]:
             'timezone': tz_name,
             # ...and a humanised version for the visible sub-label.
             'timezone_label': tz_name.replace('_', ' '),
-            'offset': _format_utc_offset(now_local),
+            'offset': format_utc_offset(now_local),
         },
         'display_power': _redis.get('display_power'),
         'resolution': _resolved_resolution(),
@@ -218,22 +219,15 @@ _DATE_FORMAT_OPTIONS = (
 )
 
 
-def _format_utc_offset(dt: Any) -> str:
-    """Render a datetime's UTC offset as ``UTC+HH:MM`` / ``UTC-HH:MM``."""
-    raw = dt.strftime('%z')  # e.g. '+0200', '' for a naive value
-    if len(raw) < 5:
-        return 'UTC'
-    return f'UTC{raw[:3]}:{raw[3:]}'
-
-
 @functools.lru_cache(maxsize=1)
 def _timezone_options() -> tuple[tuple[str, str], ...]:
     """(value, label) pairs for the Settings timezone dropdown.
 
-    Leading blank entry = "follow the host". The rest is the sorted
-    IANA zone list; on balena the host is always UTC, so this dropdown
-    is the only way to schedule/display in local time there. Cached —
-    the set is fixed for the life of the process.
+    Leading blank entry ("System default") defers to
+    resolve_time_zone() — TZ env, then /etc/timezone, then UTC. The
+    rest is the sorted IANA zone list; on balena the host is always
+    UTC, so this dropdown is the only way to schedule/display in local
+    time there. Cached — the set is fixed for the life of the process.
     """
     # Value stays the real IANA id (what Django/Intl need); the label
     # humanises the underscore so options read "America/New York".
