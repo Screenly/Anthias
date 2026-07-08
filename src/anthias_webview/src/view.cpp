@@ -97,22 +97,6 @@ QString detectAcceptLanguage()
 
 
 namespace {
-// ``ANTHIAS_LOW_RAM=1`` is exported by bin/upgrade_containers.sh when
-// the host has < 1.5 GiB MemTotal (Pi 2/Pi 3 1GB, Pi 4 1GB, Rock Pi
-// 4 1GB, generic-arm64 1GB SKUs). On those boards we collapse the
-// double-buffer ``webView1`` / ``webView2`` design to a single shared
-// QWebEngineView — the inactive Chromium renderer cost ~100 MB
-// physical RAM per device and was the leading edge of the OOM
-// cascade measured on a Rock Pi 4 1GB. UX trade-off: loadPage
-// switches to in-place (brief blank during navigation), no
-// preloaded-then-swap crossfade. Documented in
-// docs/board-enablement.md.
-bool isLowRamMode()
-{
-    const QByteArray value = qgetenv("ANTHIAS_LOW_RAM");
-    return value == "1";
-}
-
 // Issue #2999 — page-load watchdog interval. Chromium has no overall
 // navigation timeout, so a fetch whose packets stop arriving (WiFi
 // dropout mid-load; the TCP socket stays ESTABLISHED with no FIN/RST)
@@ -146,24 +130,36 @@ View::View(QWidget* parent) : QWidget(parent)
 {
     webView1 = new QWebEngineView(this);
     configureWebView(webView1);
-    if (isLowRamMode()) {
-        // Single-view mode: alias the second pointer onto the first
-        // so the rest of the file's dual-buffer logic still compiles
-        // and runs — every operation that would have targeted the
-        // off-screen ``webView2`` now lands on the same widget, and
-        // the visibility swap in switchToNextWebView() becomes a
-        // no-op. The net effect for the operator: a loadPage call
-        // shows the page's own ``page()->backgroundColor()`` (black)
-        // during the load, then the page itself; no smooth fade
-        // between assets. Acceptable degradation; the alternative
-        // is the box OOM-cycling on 1 GB.
-        webView2 = webView1;
-        qInfo() << "View: ANTHIAS_LOW_RAM=1 — single-QWebEngineView "
-                << "mode (no preloaded crossfade).";
-    } else {
-        webView2 = new QWebEngineView(this);
-        configureWebView(webView2);
-    }
+
+    // Single-QWebEngineView rendering. ``webView2`` is aliased onto
+    // ``webView1`` so the rest of the file's historical dual-buffer
+    // logic still compiles and runs — every operation that would have
+    // targeted the off-screen ``webView2`` now lands on the same
+    // widget, and the visibility swap in switchToNextWebView() is a
+    // no-op. A loadPage() call keeps the current page composited until
+    // the next one has painted (QtWebEngine holds the last frame across
+    // an in-place navigation), so transitions are seamless with at most
+    // a brief black frame on a slow load, never a foreign page.
+    //
+    // This was previously gated behind ``ANTHIAS_LOW_RAM=1`` (1 GB
+    // boards) purely to save the ~100 MB a second resident Chromium
+    // renderer costs. It is now unconditional because the preloaded
+    // second buffer was also *broken*: issue #2954 — on the single
+    // fullscreen surface used by the Qt6 boards (Wayland/cage on
+    // Pi 5 / x86, eglfs on pi4-64) a hidden or sibling-occluded
+    // QWebEngineView is frame-callback-throttled by Chromium and never
+    // composites, so ``loadFinished`` on the off-screen buffer did NOT
+    // mean it had painted the new page. Revealing it in
+    // switchToNextWebView() therefore showed its *stale* GPU surface —
+    // the page it last displayed two rotations earlier — for ~1 frame
+    // before the new page painted, flashing an unrelated asset on every
+    // webpage→webpage transition. Live-reproduced and the fix
+    // live-verified on a Pi 5 (grim burst capture, 2026-07-08): every
+    // transition flashed the (n-2) page before, none after. The Qt5
+    // 1 GB boards already ran this path, so only the 2 GB+ Qt6 boards
+    // change behaviour — exactly where #2954 was reported. See
+    // docs/board-enablement.md.
+    webView2 = webView1;
 
     // Both webViews share the default profile, so the HTTP-cache setup
     // is per-process, not per-view. Use in-memory only — the default

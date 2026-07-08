@@ -21,20 +21,15 @@ export SHM_SIZE_KB="$(echo "$TOTAL_MEMORY_KB" \* 0.3 | bc | cut -d'.' -f1)"
 # against a decompression-bomb fixture or runaway ffprobe, not
 # because routine workloads come anywhere near it.
 export CELERY_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB * 0.6" | bc | cut -d'.' -f1)
-# Low-RAM gate. Boards with < 1.5 GiB MemTotal (Pi 2/Pi 3 1GB, Pi 4 1GB,
-# Rock Pi 4 1GB, generic-arm64 SBCs in that class) can't keep two
-# QtWebEngine renderer processes resident *and* play 1080p+ video
-# without OOM-thrashing through swap. The viewer reads this env to
-# drop into single-WebEngineView mode (no preloaded crossfade); the
-# asset processor reads it via Redis (host:total_mem_kb) and rejects
-# uploads above 1080p. Threshold is 1.5 GiB so 1 GB SKUs land below
-# and 2 GB SKUs sit above; both 1024 MB and 2048 MB boards exist in
-# the supported fleet.
-if [ "${TOTAL_MEMORY_KB:-0}" -lt 1572864 ]; then
-    export ANTHIAS_LOW_RAM=1
-else
-    export ANTHIAS_LOW_RAM=0
-fi
+# NB: the AnthiasViewer used to be gated into single-WebEngineView mode
+# on < 1.5 GiB boards via an ``ANTHIAS_LOW_RAM`` export here. That flag
+# is gone — the viewer now runs a single QWebEngineView on every board
+# (issue #2954: the preloaded second buffer flashed a stale foreign
+# page on every webpage transition, and the fix was to drop it), which
+# also reclaims the ~100 MB the second renderer cost. The independent
+# 1080p upload cap on low-RAM boards is unaffected: it lives in
+# anthias_server (``is_low_ram_device`` reads ``host:total_mem_kb`` from
+# Redis), not this export.
 GIT_BRANCH="${GIT_BRANCH:-master}"
 
 MODE="${MODE:-pull}"

@@ -204,23 +204,30 @@ no public knob today.
 Boards with less than 1.5 GiB MemTotal (Pi 2/Pi 3 1GB, Pi 4 1GB, Rock Pi 4
 1GB, generic-arm64 1GB SKUs) run in a degraded "low-RAM" mode:
 
-* `bin/upgrade_containers.sh` reads `/proc/meminfo` and exports
-  `ANTHIAS_LOW_RAM=1` to the viewer container.
-* `AnthiasViewer` instantiates one `QWebEngineView` instead of two — no
-  preloaded crossfade between URL assets; the page swaps in place with a
-  brief blank during load.
 * `anthias_host_agent` publishes `host:total_mem_kb` to Redis;
   `anthias_server.processing` rejects uploads above 1920×1080 with the
   existing recipe machinery (`-vf scale=1920:1080:force_original_aspect_ratio=decrease`).
 * The diagnostics page's Memory card surfaces a "Low-RAM mode" banner so
   operators can see *why* the device degraded.
 
+The single-`QWebEngineView` renderer is **not** low-RAM-specific — every
+board runs it. The viewer used to instantiate a second, off-screen
+`QWebEngineView` to preload the next URL asset and swap it in, gated on
+`ANTHIAS_LOW_RAM` so 1 GB boards skipped the ~100 MB extra renderer. That
+preload path is gone (issue #2954): on the single fullscreen surface the Qt6
+boards use (Wayland/cage on Pi 5 / x86, eglfs on pi4-64) a hidden
+`QWebEngineView` is frame-throttled by Chromium and never composited the
+preloaded page, so revealing it flashed the *stale* page it had last shown
+two rotations earlier for ~1 frame on every webpage transition. Collapsing
+to one view fixed the flash and reclaimed the ~100 MB on all 2 GB+ boards
+too.
+
 The 1.5 GiB threshold cleanly separates 1 GB SKUs from 2 GB+ SKUs in the
-supported fleet. The cap was sized against on-device measurements: idle
-viewer + 2 QtWebEngine renderers + zygotes consume ~440 MB RSS on Rock Pi 4
-1GB, leaving roughly 500 MB for the kernel, host services, and decode
-pipeline. A 4K HEVC capture-buffer allocation pushes the container past the
-cgroup limit; the kernel logs `global_oom` and the container restart-loops.
+supported fleet. The upload cap was sized against on-device measurements:
+idle viewer + one QtWebEngine renderer + zygotes leave roughly 500 MB on
+Rock Pi 4 1GB for the kernel, host services, and decode pipeline. A 4K HEVC
+capture-buffer allocation pushes the container past the cgroup limit; the
+kernel logs `global_oom` and the container restart-loops.
 
 ### armv7 (Pi 2 / Pi 3) WebEngine-init crash + spawn retry
 
@@ -239,8 +246,8 @@ loaned 64-bit Pi 3B+ running the armv7 `anthias-viewer:*-pi3` image:
   corruption.
 * It is **heap-layout dependent**, firing on ~75–90 % of launches — so a
   *fresh* launch clears it ~10–25 % of the time. No userspace mitigation
-  fixes it: trimming the CJK fonts, `--single-process`, `--no-zygote`, a
-  single `QWebEngineView` (`ANTHIAS_LOW_RAM=1`), a jemalloc preload, and
+  fixes it: trimming the CJK fonts, `--single-process`, `--no-zygote`, the
+  single `QWebEngineView`, a jemalloc preload, and
   disabling glibc's tcache check (which just turns the abort into a raw
   `SIGSEGV`) all still crash.
 
