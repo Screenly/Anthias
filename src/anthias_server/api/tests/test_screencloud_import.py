@@ -29,11 +29,26 @@ from anthias_server.settings import settings
 PROVIDER = screencloud.ScreenCloudProvider()
 
 
+@pytest.fixture(autouse=True)
+def _clear_endpoint_cache() -> Any:
+    # The region cache is module-global; clear it so tests reusing the same
+    # token don't see a previously-resolved endpoint.
+    screencloud._endpoint_cache.clear()
+    yield
+    screencloud._endpoint_cache.clear()
+
+
 def _router(routes: dict[str, MagicMock]) -> Any:
-    """Route a GraphQL POST to a canned response by query substring."""
+    """Route a GraphQL POST to a canned response by query substring.
+
+    The region-detection probe (``currentOrg``) always resolves to a valid
+    org so ``_resolve`` picks the first region and the routed queries run.
+    """
 
     def _post(url: str, **kwargs: Any) -> MagicMock:
         query = kwargs['json']['query']
+        if 'currentOrg' in query:
+            return _gql(200, data={'currentOrg': {'id': 'x'}})
         for needle, resp in routes.items():
             if needle in query:
                 return resp
@@ -57,16 +72,30 @@ class TestAuthAndSession:
 
 
 class TestTokenRegion:
-    def test_default_region(self) -> None:
-        assert screencloud._parse_token('abc') == ('eu', 'abc')
+    def test_no_prefix_means_autodetect(self) -> None:
+        # No explicit region → region is None (auto-detected by probing).
+        assert screencloud._split_region('abc') == (None, 'abc')
 
-    def test_explicit_us(self) -> None:
-        assert screencloud._parse_token('us:abc') == ('us', 'abc')
+    def test_explicit_region_prefix(self) -> None:
+        assert screencloud._split_region('us:secret') == ('us', 'secret')
 
-    def test_endpoint_for_us(self) -> None:
-        endpoint, bearer = screencloud._endpoint_for('us:secret')
+    @patch('anthias_server.lib.integrations.screencloud._session.post')
+    def test_resolve_detects_region(self, post_mock: MagicMock) -> None:
+        # First region probed that returns currentOrg wins; endpoint host
+        # encodes the region.
+        post_mock.return_value = _gql(200, data={'currentOrg': {'id': 'x'}})
+        resolved = screencloud._resolve('secret')
+        assert resolved is not None
+        endpoint, bearer = resolved
         assert bearer == 'secret'
-        assert '.us.' in endpoint
+        assert 'screencloud.com/graphql' in endpoint
+
+    @patch('anthias_server.lib.integrations.screencloud._session.post')
+    def test_resolve_none_when_no_region_accepts(
+        self, post_mock: MagicMock
+    ) -> None:
+        post_mock.return_value = _gql(401)
+        assert screencloud._resolve('secret') is None
 
 
 class TestValidateToken:
@@ -154,18 +183,28 @@ class TestHelpers:
         assert screencloud._file_media_type('audio/mp3') == 'audio'
         assert screencloud._file_media_type('application/pdf') == 'document'
 
-    def test_download_url_prefers_matching_mimetype(self) -> None:
+    def test_download_url_prefers_file_source(self) -> None:
         file_obj = {
-            'mimetype': 'video/mp4',
+            'source': 'https://media.eu.screencloud.com/orig.jpg',
             'fileOutputsByFileId': {
-                'nodes': [
-                    {'url': 'https://cdn/thumb.jpg', 'mimetype': 'image/jpeg'},
-                    {'url': 'https://cdn/orig.mp4', 'mimetype': 'video/mp4'},
-                ]
+                'nodes': [{'url': 'https://cdn/thumb.jpg'}]
             },
         }
         assert (
-            screencloud._file_download_url(file_obj) == 'https://cdn/orig.mp4'
+            screencloud._file_download_url(file_obj)
+            == 'https://media.eu.screencloud.com/orig.jpg'
+        )
+
+    def test_download_url_falls_back_to_outputs(self) -> None:
+        file_obj = {
+            'source': None,
+            'fileOutputsByFileId': {
+                'nodes': [{'url': 'https://cdn/rendition.mp4'}]
+            },
+        }
+        assert (
+            screencloud._file_download_url(file_obj)
+            == 'https://cdn/rendition.mp4'
         )
 
 
@@ -280,14 +319,8 @@ class TestImportItem:
                             'mimetype': 'image/png',
                             'availableAt': None,
                             'expireAt': None,
-                            'fileOutputsByFileId': {
-                                'nodes': [
-                                    {
-                                        'url': 'https://cdn.sc/x.png',
-                                        'mimetype': 'image/png',
-                                    }
-                                ]
-                            },
+                            'source': 'https://media.us.screencloud.com/x.png',
+                            'fileOutputsByFileId': {'nodes': []},
                         }
                     },
                 )

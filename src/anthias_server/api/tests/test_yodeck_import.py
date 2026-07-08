@@ -232,12 +232,52 @@ class TestFieldMapping:
         detail = {'arguments': {'target_location': 'https://example.com/x'}}
         assert yodeck._webpage_url(detail) == 'https://example.com/x'
 
-    def test_file_url_read_from_download_from_url(self) -> None:
-        detail = {'arguments': {'download_from_url': 'https://cdn/x.mp4'}}
-        assert yodeck._file_url(detail) == 'https://cdn/x.mp4'
+    def test_resolve_file_download_from_url(self) -> None:
+        detail = {
+            'file_extension': 'mp4',
+            'arguments': {'download_from_url': 'https://cdn/x.mp4'},
+        }
+        assert yodeck._resolve_file(detail, 'video') == (
+            'https://cdn/x.mp4',
+            '.mp4',
+        )
 
-    def test_file_url_none_when_absent(self) -> None:
-        assert yodeck._file_url({'arguments': {}}) is None
+    def test_resolve_file_play_from_url_for_video(self) -> None:
+        # Uploaded videos expose the transcoded MP4 at play_from_url.
+        detail = {
+            'file_extension': 'mp4',
+            'arguments': {
+                'download_from_url': None,
+                'play_from_url': 'https://cdn/1080p.mp4',
+            },
+        }
+        assert yodeck._resolve_file(detail, 'video') == (
+            'https://cdn/1080p.mp4',
+            '.mp4',
+        )
+
+    def test_resolve_file_image_thumbnail_fallback(self) -> None:
+        # An uploaded image with no source URL falls back to the resized
+        # render; its extension comes from the URL (jpg), not the stored one.
+        detail = {
+            'file_extension': 'png',
+            'arguments': {'download_from_url': None},
+            'thumbnail_url': 'https://cdn/a/b/1/resized.jpg',
+        }
+        assert yodeck._resolve_file(detail, 'image') == (
+            'https://cdn/a/b/1/resized.jpg',
+            '.jpg',
+        )
+
+    def test_resolve_file_none_for_video_without_url(self) -> None:
+        # No file URL and no thumbnail fallback for video → skip.
+        assert (
+            yodeck._resolve_file(
+                {'arguments': {}, 'thumbnail_url': 'https://cdn/x/poster.jpg'},
+                'video',
+            )
+            is None
+        )
 
     def test_file_ext_prefers_field(self) -> None:
         assert (

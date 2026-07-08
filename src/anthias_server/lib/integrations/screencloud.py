@@ -49,16 +49,19 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_KEY = 'screencloud'
 
-# Region → GraphQL endpoint. The staging EU host is the only one the
-# public docs state outright; the production hosts follow the documented
-# ``*.next.sc/graphql`` pattern but are unconfirmed (read the exact value
-# from Studio → Account Settings → DEVELOPER). Kept in one map so a
-# correction is a one-line change.
+# ScreenCloud is regional; the endpoint host encodes the region
+# (``graphql.{eu,us}.screencloud.com``). An account lives in exactly one
+# region, so we probe both and use whichever accepts the token — the
+# operator shouldn't have to know their region.
 _REGION_ENDPOINTS = {
-    'eu': 'https://graphql.eu.next.sc/graphql',
-    'us': 'https://graphql.us.next.sc/graphql',
+    'eu': 'https://graphql.eu.screencloud.com/graphql',
+    'us': 'https://graphql.us.screencloud.com/graphql',
 }
-_DEFAULT_REGION = 'eu'
+
+# Cache the resolved endpoint per token so a wizard run (validate → N
+# item imports) probes only once. The token is already in memory for the
+# duration of the request; this just avoids re-probing every call.
+_endpoint_cache: dict[str, str] = {}
 
 _LIST_PAGE_SIZE = 100
 _VALIDATE_TIMEOUT_S = 15.0
@@ -96,7 +99,7 @@ query($first: Int!, $after: Cursor) {
 _FILE_BY_ID = """
 query($id: UUID!) {
   fileById(id: $id) {
-    id name mimetype availableAt expireAt
+    id name mimetype availableAt expireAt source
     fileOutputsByFileId { nodes { url mimetype } }
   }
 }
@@ -109,18 +112,55 @@ query($id: UUID!) {
 """
 
 
-def _parse_token(token: str) -> tuple[str, str]:
-    """Split an optional ``<region>:`` prefix off the bearer token."""
+def _split_region(token: str) -> tuple[str | None, str]:
+    """Split an optional explicit ``<region>:`` prefix off the token.
+
+    A prefix is an override; without one the region is auto-detected.
+    """
     raw = (token or '').strip()
     prefix, sep, rest = raw.partition(':')
     if sep and prefix.lower() in _REGION_ENDPOINTS:
         return prefix.lower(), rest
-    return _DEFAULT_REGION, raw
+    return None, raw
 
 
-def _endpoint_for(token: str) -> tuple[str, str]:
-    region, bearer = _parse_token(token)
-    return _REGION_ENDPOINTS[region], bearer
+def _accepts(endpoint: str, bearer: str) -> bool:
+    """True if this regional endpoint authenticates the token."""
+    response = graphql.post(
+        _session,
+        endpoint,
+        graphql.bearer_headers(bearer),
+        _VALIDATE_QUERY,
+        None,
+        _VALIDATE_TIMEOUT_S,
+    )
+    if response.status_code in (401, 403):
+        return False
+    response.raise_for_status()
+    body = response.json()
+    if body.get('errors'):
+        return False
+    return bool((body.get('data') or {}).get('currentOrg'))
+
+
+def _resolve(token: str) -> tuple[str, str] | None:
+    """Return (endpoint, bearer) for the region that accepts this token.
+
+    Honours an explicit region prefix; otherwise probes each region.
+    Returns None if no region accepts the token; transport errors
+    propagate so the caller can answer 502.
+    """
+    region, bearer = _split_region(token)
+    cached = _endpoint_cache.get(bearer)
+    if cached is not None:
+        return cached, bearer
+    regions = [region] if region else list(_REGION_ENDPOINTS)
+    for name in regions:
+        endpoint = _REGION_ENDPOINTS[name]
+        if _accepts(endpoint, bearer):
+            _endpoint_cache[bearer] = endpoint
+            return endpoint, bearer
+    return None
 
 
 def _post(
@@ -129,7 +169,10 @@ def _post(
     variables: dict[str, Any] | None,
     timeout: float,
 ) -> Any:
-    endpoint, bearer = _endpoint_for(token)
+    resolved = _resolve(token)
+    if resolved is None:
+        raise ProviderImportError('ScreenCloud rejected this token.')
+    endpoint, bearer = resolved
     return graphql.post(
         _session,
         endpoint,
@@ -164,26 +207,18 @@ def _file_media_type(mimetype: str | None) -> str:
 
 
 def _file_download_url(file_obj: dict[str, Any]) -> str | None:
-    """Pick the downloadable original URL from a File's outputs.
+    """Pick the downloadable original URL for a File.
 
-    Prefers a ``FileOutput`` whose mimetype matches the file's top-level
-    type (image/video), falling back to the first valid URL. Which output
-    is the durable original vs a thumbnail isn't documented — see the
-    module TODO.
+    ``File.source`` is the original on ``media.<region>.screencloud.com``.
+    The ``fileOutputsByFileId`` renditions are kept as a fallback but can
+    be empty.
     """
-    mimetype = file_obj.get('mimetype') or ''
-    top = mimetype.split('/', 1)[0]
+    candidates: list[Any] = [file_obj.get('source')]
     outputs = (file_obj.get('fileOutputsByFileId') or {}).get('nodes') or []
-    for output in outputs:
-        if not isinstance(output, dict):
-            continue
-        url = output.get('url')
-        out_top = (output.get('mimetype') or '').split('/', 1)[0]
-        if out_top and out_top == top and ingest.first_http_url([url]):
-            return url
-    return ingest.first_http_url(
+    candidates += [
         output.get('url') for output in outputs if isinstance(output, dict)
-    )
+    ]
+    return ingest.first_http_url(candidates)
 
 
 def _default_duration() -> int:
@@ -201,25 +236,17 @@ class ScreenCloudProvider(ImportProvider):
     )
     token_help = (
         'Create an API token in ScreenCloud Studio under Account Settings '
-        '→ Developer → New Token. Paste it here; if your account is in the '
-        'US region, prefix the token with "us:" (EU is the default). It is '
-        'used only for this import and is never stored.'
+        '→ Developer → New Token, then paste it here. The region (EU or '
+        'US) is detected automatically. It is used only for this import '
+        'and is never stored.'
     )
 
     # -- token / listing ---------------------------------------------------
 
     def validate_token(self, token: str) -> bool:
-        response = _post(token, _VALIDATE_QUERY, None, _VALIDATE_TIMEOUT_S)
-        if response.status_code in (401, 403):
-            return False
-        response.raise_for_status()
-        body = response.json()
-        # A minimal ``currentOrg`` query returns data for a good token; an
-        # errors[] here means the token was rejected.
-        if body.get('errors'):
-            return False
-        data = body.get('data') or {}
-        return bool(data.get('currentOrg'))
+        # _resolve probes the regions with the same currentOrg query and
+        # caches the hit, so validation doubles as region detection.
+        return _resolve(token) is not None
 
     def list_media(
         self, token: str, *, workspace: str | None = None

@@ -8,46 +8,43 @@ aliases:
 
 Moving to Anthias from another digital signage platform? Anthias ships a
 built-in import wizard that copies your media across using the other
-platform's API — no SSH or scripts required. Your existing Anthias assets
-are left untouched, and re-running an import skips anything already brought
-over, so it is safe to run more than once.
+platform's API, so no SSH or scripts are required. Your existing Anthias
+assets are left untouched, and re-running an import skips anything already
+brought over, so it is safe to run more than once.
 
-**Supported platforms:** [Yodeck](https://www.yodeck.com/),
-[ScreenCloud](https://screencloud.com/),
-[OptiSigns](https://www.optisigns.com/),
-[piSignage](https://pisignage.com/), and
-[Xibo](https://xibosignage.com/) (Xibo Cloud or self-hosted).
+**Supported platforms:** Yodeck, ScreenCloud, OptiSigns, piSignage, and
+Xibo (Xibo Cloud or self-hosted).
 
 ## What gets imported
 
 Anthias imports the content types it can play natively:
 
-- **Images** and **videos** — the original file is downloaded onto your
+- **Images** and **videos**: the original file is downloaded onto your
   player and added to the schedule.
-- **Web pages** — added as a web asset pointing at the same URL.
+- **Web pages**: added as a web asset pointing at the same URL.
 
 Anything Anthias cannot play, or that would not work outside the source
 platform, is **skipped and reported** rather than imported half-way:
 
 - **Audio** and **documents** (PDF, PowerPoint, and similar).
-- **Apps and internally-generated content** — weather, clock, RSS, and
+- **Apps and internally-generated content**: weather, clock, RSS, and
   dashboard widgets render inside the source platform, so their internal
   URLs would only produce broken assets on Anthias.
-- **Files the platform does not expose for download** — if the source only
-  offers a preview or thumbnail, the original cannot be copied; those items
-  are flagged so you can re-upload them manually.
+- **Files the platform does not expose for download**: if the source only
+  offers a preview or thumbnail, the original cannot be copied, so those
+  items are flagged for you to re-upload manually.
 
 ## Before you start
 
 You will need API credentials for the platform you are importing from. What
-to enter differs slightly per platform — the wizard shows a reminder for
+to enter differs slightly per platform, and the wizard shows a reminder for
 each. Credentials are **not** stored on the device; they are only used to
 talk to the platform's API while the import runs.
 
 | Platform | What to enter in the wizard | Where to create it |
 | --- | --- | --- |
-| **Yodeck** | `label:token` | Account Settings → Advanced Settings → API Tokens |
-| **ScreenCloud** | Your API token (add a `us:` prefix if your account is in the US region) | Studio → Account Settings → Developer → New Token |
+| **Yodeck** | Your API token | Account Settings → Advanced Settings → API Tokens |
+| **ScreenCloud** | Your API token (the region is detected automatically) | Studio → Account Settings → Developer → New Token |
 | **OptiSigns** | Your API key | Account Settings → API Keys → New API Key |
 | **piSignage** | `subdomain:email:password` (the `<name>` in `<name>.pisignage.com`, plus your login) | Your piSignage account login |
 | **Xibo** | `cms-url client_id client_secret` (space separated; the CMS URL works for Xibo Cloud or self-hosted) | Applications → Add (an API application) |
@@ -69,7 +66,7 @@ talk to the platform's API while the import runs.
 7. When it finishes, any items that failed can be retried with the **Retry
    _N_ failed** button, without repeating the ones that already succeeded.
 
-That's it — your imported media now lives on your Anthias player, ready to
+That is it. Your imported media now lives on your Anthias player, ready to
 schedule like any other asset.
 
 ## Prefer the command line?

@@ -127,7 +127,7 @@ class XiboProvider(ImportProvider):
     token_help = (
         'In your Xibo CMS create an API application (Applications → Add), '
         'then enter "<cms-url> <client_id> <client_secret>" (space '
-        'separated) — the CMS URL is your Xibo address, e.g. '
+        'separated). The CMS URL is your Xibo address, e.g. '
         'https://name.xibosignage.com, or your self-hosted CMS URL. Used '
         'only for this import and never stored.'
     )

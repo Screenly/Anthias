@@ -126,7 +126,7 @@ class PiSignageProvider(ImportProvider):
         'Copy images and videos from a piSignage account into this player.'
     )
     token_help = (
-        'Enter your piSignage account as "subdomain:email:password" — the '
+        'Enter your piSignage account as "subdomain:email:password". The '
         'subdomain is the "<name>" in <name>.pisignage.com, followed by your '
         'login email (or username) and password. It is used only for this '
         'import and is never stored.'

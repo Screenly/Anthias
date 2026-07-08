@@ -54,17 +54,24 @@ _LIST_PAGE_SIZE = 100
 _VALIDATE_TIMEOUT_S = 10.0
 _LIST_TIMEOUT_S = 30.0
 
-# Candidate fields that may carry a downloadable ORIGINAL file URL for an
+# Candidate fields that may carry a downloadable file URL for an
 # image/video, in priority order — first at the top level, then inside
-# ``arguments``. ``arguments.download_from_url`` is Yodeck's download link
-# for the original and is present for uploaded (``source: local``) media
-# too — it points at Yodeck (app.yodeck.com) and 302-redirects to a signed
-# S3 URL, so the token is attached for the Yodeck host and dropped by
-# ``requests`` on the cross-host redirect. The extra keys cover forward-
-# compatible alternatives; if none resolves, the item is skipped with a
-# clear reason rather than guessed at.
+# ``arguments``:
+#   * ``download_from_url`` — the external source for media added from a
+#     URL (full resolution).
+#   * ``play_from_url`` — the transcoded video Yodeck serves (an MP4).
+# The remaining keys are forward-compatible alternatives. Images that were
+# uploaded (rather than added from a URL) don't expose the original here;
+# they fall back to the resized render (``thumbnail_url``) in
+# ``_resolve_file`` — see there.
 _FILE_URL_KEYS = ('file', 'media_file', 'source_url', 'original_url', 'url')
-_ARGUMENT_FILE_KEYS = ('download_from_url', 'source_url', 'file', 'url')
+_ARGUMENT_FILE_KEYS = (
+    'download_from_url',
+    'play_from_url',
+    'source_url',
+    'file',
+    'url',
+)
 
 # Candidate fields carrying a webpage's destination URL (top level, then
 # inside ``arguments``).
@@ -94,11 +101,32 @@ def _webpage_url(detail: dict[str, Any]) -> str | None:
     return ingest.first_http_url([*top, *inner, *arguments.values()])
 
 
-def _file_url(detail: dict[str, Any]) -> str | None:
+def _resolve_file(
+    detail: dict[str, Any], media_type: str
+) -> tuple[str, str] | None:
+    """Return ``(download_url, extension)`` for an image/video, or None.
+
+    Tries the source/transcoded URLs first (see ``_ARGUMENT_FILE_KEYS``).
+    For an image with no such URL — an uploaded image whose original isn't
+    exposed by the API — it falls back to the resized render
+    (``thumbnail_url``), which Yodeck serves for display; that render is a
+    JPEG, so its extension is taken from the URL rather than the media's
+    stored ``file_extension``.
+    """
     arguments = detail.get('arguments') or {}
-    top = (detail.get(k) for k in _FILE_URL_KEYS)
-    inner = (arguments.get(k) for k in _ARGUMENT_FILE_KEYS)
-    return ingest.first_http_url([*top, *inner])
+    primary = ingest.first_http_url(
+        [
+            *(detail.get(k) for k in _FILE_URL_KEYS),
+            *(arguments.get(k) for k in _ARGUMENT_FILE_KEYS),
+        ]
+    )
+    if primary:
+        return primary, _file_ext(detail, primary)
+    if media_type == 'image':
+        thumb = ingest.first_http_url([detail.get('thumbnail_url')])
+        if thumb:
+            return thumb, ingest.file_ext_from(None, thumb)
+    return None
 
 
 def _is_internal_yodeck_url(url: str) -> bool:
@@ -166,10 +194,9 @@ class YodeckProvider(ImportProvider):
     )
     token_help = (
         'Create an API token in Yodeck under Account Settings → Advanced '
-        'Settings → API Tokens. Enter it as "<label>:<token>" — the name '
-        'you gave the token, a colon, then the copied token value (e.g. '
-        '"mylabel:XXXXXXXX"). It is used only for this import and is never '
-        'stored.'
+        'Settings → API Tokens, then paste the token value here. (You can '
+        'also enter it as "<label>:<token>" if you prefer.) It is used only '
+        'for this import and is never stored.'
     )
 
     # -- token / listing ---------------------------------------------------
@@ -317,28 +344,29 @@ class YodeckProvider(ImportProvider):
                 enable=enable,
             )
         else:
-            file_url = _file_url(detail)
-            if not file_url:
+            resolved = _resolve_file(detail, media_type)
+            if resolved is None:
                 return ImportOutcome(
                     success=False,
                     skipped=True,
                     reason=(
-                        f"Yodeck didn't expose a downloadable original for "
-                        f'this {media_type}; re-upload it manually.'
+                        f"Yodeck didn't expose a downloadable file for this "
+                        f'{media_type}; re-upload it manually.'
                     ),
                 )
+            file_url, ext = resolved
             asset = ingest.create_file_asset(
                 session=_session,
                 headers=_auth_headers(token),
                 # Scope the Yodeck token to the Yodeck host — never forward
-                # it to a pre-signed CDN original.
+                # it to a file on a different (S3/CDN) host.
                 auth_host=_YODECK_HOST,
                 provider_key=PROVIDER_KEY,
                 remote_id=remote_id,
                 name=name,
                 mimetype=media_type,
                 file_url=file_url,
-                ext=_file_ext(detail, file_url),
+                ext=ext,
                 # Video duration is probed server-side (the serializer
                 # requires 0 on input); images carry Yodeck's duration.
                 duration=(
