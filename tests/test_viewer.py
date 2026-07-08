@@ -309,6 +309,20 @@ def test_bounded_webview_output_discards_old_data(
     assert text.endswith('duplicate\n')
 
 
+def test_bounded_webview_output_slices_oversized_chunk(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A single chunk larger than the window is sliced to its tail before
+    being buffered, so a big unbuffered write from the child can't spike a
+    ``buf + chunk`` allocation far past maxlen — the retained buffer never
+    exceeds maxlen and keeps the most recent bytes."""
+    sink = viewer_fixtures.u._BoundedWebviewOutput(maxlen=100)
+    sink('x' * 10000 + 'TAIL')
+    text = sink.text()
+    assert len(text) <= 100
+    assert text.endswith('TAIL')
+
+
 def test_bounded_webview_output_coerces_bytes(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:

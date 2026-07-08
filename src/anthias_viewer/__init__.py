@@ -698,6 +698,14 @@ class _BoundedWebviewOutput:
         # that would silently break the handshake scan.
         if isinstance(chunk, bytes):
             chunk = chunk.decode('utf-8', errors='replace')
+        # A single chunk larger than the window (a big unbuffered write
+        # from the child) would otherwise force a ``buf + chunk``
+        # allocation proportional to the chunk, spiking well past
+        # ``maxlen`` — the very thing this sink exists to prevent. Slice
+        # it to its tail first (same tail-retention result), so both the
+        # retained buffer and the transient stay within ~2x maxlen.
+        if len(chunk) > self._maxlen:
+            chunk = chunk[-self._maxlen :]
         with self._lock:
             self._buf += chunk
             if len(self._buf) > self._maxlen:
