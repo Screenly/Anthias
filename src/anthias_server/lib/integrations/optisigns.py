@@ -22,13 +22,12 @@ against a live account. Resolution points are isolated in
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Iterator
 from urllib.parse import urlparse
 
 import requests
 
-from . import ingest
+from . import graphql, ingest
 from .base import (
     ImportOutcome,
     ImportProvider,
@@ -36,8 +35,6 @@ from .base import (
     RemoteMediaItem,
 )
 from .http import new_import_session
-
-logger = logging.getLogger(__name__)
 
 PROVIDER_KEY = 'optisigns'
 OPTISIGNS_ENDPOINT = 'https://graphql-gateway.optisigns.com/graphql'
@@ -90,24 +87,19 @@ query($id: String!) {
 """
 
 
-def _auth_headers(token: str) -> dict[str, str]:
-    return {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
-    }
-
-
 def _post(
     token: str,
     query: str,
     variables: dict[str, Any] | None,
     timeout: float,
 ) -> Any:
-    return _session.post(
+    return graphql.post(
+        _session,
         OPTISIGNS_ENDPOINT,
-        headers=_auth_headers(token),
-        json={'query': query, 'variables': variables or {}},
-        timeout=timeout,
+        graphql.bearer_headers(token),
+        query,
+        variables,
+        timeout,
     )
 
 
@@ -118,22 +110,9 @@ def _graphql(
     *,
     timeout: float = _QUERY_TIMEOUT_S,
 ) -> dict[str, Any]:
-    """Execute a query and return ``data`` (raises on HTTP / GraphQL errors)."""
-    response = _post(token, query, variables, timeout)
-    response.raise_for_status()
-    body = response.json()
-    errors = body.get('errors')
-    if errors:
-        message = 'OptiSigns query failed.'
-        if isinstance(errors, list) and errors:
-            first = errors[0]
-            if isinstance(first, dict) and first.get('message'):
-                message = str(first['message'])
-        raise ProviderImportError(message)
-    data = body.get('data')
-    if not isinstance(data, dict):
-        raise ProviderImportError('Unexpected response from OptiSigns.')
-    return data
+    return graphql.data_or_raise(
+        _post(token, query, variables, timeout), source='OptiSigns'
+    )
 
 
 def _edges(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -166,7 +145,9 @@ def _webpage_url(node: dict[str, Any]) -> str | None:
     url = ingest.first_http_url([node.get('webLink')])
     if not url:
         return None
-    host = urlparse(url).netloc.lower()
+    # ``hostname`` (not ``netloc``) so an explicit port or userinfo can't
+    # dodge the internal-host match.
+    host = (urlparse(url).hostname or '').lower()
     if any(
         host == internal or host.endswith(f'.{internal}')
         for internal in _INTERNAL_WEB_HOSTS
@@ -190,21 +171,19 @@ def _file_download_url(node: dict[str, Any]) -> str | None:
 
 
 def _default_duration(node: dict[str, Any]) -> int:
-    from anthias_server.settings import settings
-
-    raw = node.get('duration')
-    if isinstance(raw, (int, float)) and raw > 0:
-        return int(raw)
-    return int(settings['default_duration'])
+    return ingest.duration_or_default(node.get('duration'))
 
 
 def _asset_name(node: dict[str, Any]) -> str:
-    return (
+    # Coerce to str: OptiSigns fields are typed loosely, and a non-string
+    # (or falsy non-None) name would otherwise break ``.strip()``.
+    name = (
         node.get('name')
         or node.get('originalFileName')
         or node.get('filename')
         or f'OptiSigns asset {node.get("_id")}'
-    ).strip()
+    )
+    return str(name).strip()
 
 
 class OptiSignsProvider(ImportProvider):

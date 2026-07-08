@@ -36,7 +36,7 @@ from typing import Any, Iterator
 
 import requests
 
-from . import ingest
+from . import graphql, ingest
 from .base import (
     ImportOutcome,
     ImportProvider,
@@ -123,26 +123,20 @@ def _endpoint_for(token: str) -> tuple[str, str]:
     return _REGION_ENDPOINTS[region], bearer
 
 
-def _auth_headers(bearer: str) -> dict[str, str]:
-    return {
-        'Authorization': f'Bearer {bearer}',
-        'Content-Type': 'application/json',
-    }
-
-
 def _post(
     token: str,
     query: str,
     variables: dict[str, Any] | None,
     timeout: float,
 ) -> Any:
-    """Low-level GraphQL POST. Returns the raw ``requests`` response."""
     endpoint, bearer = _endpoint_for(token)
-    return _session.post(
+    return graphql.post(
+        _session,
         endpoint,
-        headers=_auth_headers(bearer),
-        json={'query': query, 'variables': variables or {}},
-        timeout=timeout,
+        graphql.bearer_headers(bearer),
+        query,
+        variables,
+        timeout,
     )
 
 
@@ -153,28 +147,9 @@ def _graphql(
     *,
     timeout: float = _QUERY_TIMEOUT_S,
 ) -> dict[str, Any]:
-    """Execute a query and return ``data``.
-
-    GraphQL answers 200 even on failure, so the ``errors`` array is
-    checked explicitly. HTTP-level and GraphQL errors both raise
-    ``ProviderImportError`` with the first message — callers that need
-    the transport error to propagate (``validate_token``) don't use this.
-    """
-    response = _post(token, query, variables, timeout)
-    response.raise_for_status()
-    body = response.json()
-    errors = body.get('errors')
-    if errors:
-        message = 'ScreenCloud query failed.'
-        if isinstance(errors, list) and errors:
-            first = errors[0]
-            if isinstance(first, dict) and first.get('message'):
-                message = str(first['message'])
-        raise ProviderImportError(message)
-    data = body.get('data')
-    if not isinstance(data, dict):
-        raise ProviderImportError('Unexpected response from ScreenCloud.')
-    return data
+    return graphql.data_or_raise(
+        _post(token, query, variables, timeout), source='ScreenCloud'
+    )
 
 
 def _file_media_type(mimetype: str | None) -> str:
@@ -212,9 +187,9 @@ def _file_download_url(file_obj: dict[str, Any]) -> str | None:
 
 
 def _default_duration() -> int:
-    from anthias_server.settings import settings
-
-    return int(settings['default_duration'])
+    # ScreenCloud files/links don't expose a per-item display duration, so
+    # imported assets always use the device default.
+    return ingest.duration_or_default(None)
 
 
 class ScreenCloudProvider(ImportProvider):

@@ -15,7 +15,11 @@ import pytest
 import requests
 
 from anthias_server.app.models import Asset
-from anthias_server.lib.integrations import screencloud
+from anthias_server.api.tests._graphql_helpers import (
+    gql_response as _gql,
+    stream_response as _stream,
+)
+from anthias_server.lib.integrations import graphql, screencloud
 from anthias_server.lib.integrations.registry import (
     get_provider,
     list_provider_meta,
@@ -23,37 +27,6 @@ from anthias_server.lib.integrations.registry import (
 from anthias_server.settings import settings
 
 PROVIDER = screencloud.ScreenCloudProvider()
-
-
-def _gql(
-    status: int,
-    data: Any = None,
-    errors: Any = None,
-) -> MagicMock:
-    resp = MagicMock(spec=requests.Response)
-    resp.status_code = status
-    resp.ok = 200 <= status < 400
-    body: dict[str, Any] = {}
-    if data is not None:
-        body['data'] = data
-    if errors is not None:
-        body['errors'] = errors
-    resp.json.return_value = body
-    if not resp.ok:
-        resp.raise_for_status.side_effect = requests.HTTPError(
-            f'HTTP {status}', response=resp
-        )
-    return resp
-
-
-def _stream(status: int, chunks: list[bytes]) -> MagicMock:
-    resp = MagicMock(spec=requests.Response)
-    resp.status_code = status
-    resp.ok = 200 <= status < 400
-    resp.iter_content.return_value = iter(chunks)
-    resp.__enter__.return_value = resp
-    resp.__exit__.return_value = False
-    return resp
 
 
 def _router(routes: dict[str, MagicMock]) -> Any:
@@ -71,7 +44,7 @@ def _router(routes: dict[str, MagicMock]) -> Any:
 
 class TestAuthAndSession:
     def test_bearer_header(self) -> None:
-        assert screencloud._auth_headers('abc') == {
+        assert graphql.bearer_headers('abc') == {
             'Authorization': 'Bearer abc',
             'Content-Type': 'application/json',
         }

@@ -92,6 +92,20 @@ def file_ext_from(ext_hint: str | None, url: str) -> str:
     return _sanitise_ext(url_ext)
 
 
+def duration_or_default(raw: Any) -> int:
+    """Return a positive integer duration (seconds), or the device default.
+
+    Providers pass whatever their API gave (int/float/None); a missing or
+    non-positive value falls back to the operator's configured
+    ``default_duration``.
+    """
+    from anthias_server.settings import settings
+
+    if isinstance(raw, (int, float)) and raw > 0:
+        return int(raw)
+    return int(settings['default_duration'])
+
+
 def default_window() -> tuple[datetime, datetime]:
     """The always-on window used when a provider gives no schedule.
 
