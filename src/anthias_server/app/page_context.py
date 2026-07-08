@@ -183,7 +183,10 @@ def system_info() -> dict[str, Any]:
         # device clock, which trusting the browser would mask. The
         # offset is formatted +HH:MM for readability.
         'device_time': {
-            'iso': now_local.isoformat(),
+            # Seconds precision: microseconds from isoformat() aren't
+            # parsed by every JS Date.parse() engine, and a NaN seed
+            # would leave the live clock never starting.
+            'iso': now_local.isoformat(timespec='seconds'),
             # Raw IANA id for the JS Intl formatter (data-timezone)...
             'timezone': tz_name,
             # ...and a humanised version for the visible sub-label.

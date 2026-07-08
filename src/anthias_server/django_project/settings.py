@@ -26,6 +26,7 @@ from sentry_sdk.integrations.logging import ignore_logger
 from sentry_sdk.types import Event, Hint
 
 from anthias_common.version import get_anthias_release
+from anthias_server.settings import CONFIG_DIR, CONFIG_FILE
 from anthias_server.settings import settings as device_settings
 
 # django_stubs_ext.monkeypatch() makes Django generic classes
@@ -624,7 +625,9 @@ def get_configured_time_zone(
         home = getenv('HOME')
         if not home:
             return None
-        config_file = str(Path(home) / '.anthias' / 'anthias.conf')
+        # Reuse the same constants AnthiasSettings uses so the config
+        # location can never drift between the two.
+        config_file = str(Path(home) / CONFIG_DIR / CONFIG_FILE)
     parser = configparser.ConfigParser()
     try:
         parser.read(config_file)

@@ -915,7 +915,9 @@ class InfoViewV2(InfoViewMixin):
             else 'UTC'
         )
         return {
-            'iso': now_local.isoformat(),
+            # Seconds precision (drop microseconds) to match the System
+            # Info clock seed and stay parseable by any JS Date.parse().
+            'iso': now_local.isoformat(timespec='seconds'),
             'timezone': timezone.get_current_timezone_name(),
             'offset': offset,
         }
