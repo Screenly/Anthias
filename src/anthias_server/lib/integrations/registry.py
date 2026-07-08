@@ -11,12 +11,14 @@ from __future__ import annotations
 from typing import Any
 
 from .base import ImportProvider
+from .screencloud import ScreenCloudProvider
 from .yodeck import YodeckProvider
 
 # Providers are stateless (their HTTP session is module-level), so a
 # single shared instance each is fine.
 _PROVIDERS: dict[str, ImportProvider] = {
-    provider.key: provider for provider in (YodeckProvider(),)
+    provider.key: provider
+    for provider in (YodeckProvider(), ScreenCloudProvider())
 }
 
 
