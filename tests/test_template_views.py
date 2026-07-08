@@ -2192,6 +2192,46 @@ def test_assets_upload_disk_full_during_write_cleans_up_partial(
 
 
 @pytest.mark.django_db
+def test_settings_recover_invalid_archive_warns_not_error(
+    client: Client,
+) -> None:
+    """A bad / non-backup upload to the HTML recover view is operator
+    input, not a bug — it must log at warning (not logger.exception,
+    which pages Sentry) and show the error message (Sentry
+    ANTHIAS-3W)."""
+    import tarfile
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    with (
+        mock.patch('anthias_server.app.views.ViewerPublisher'),
+        mock.patch(
+            'anthias_server.app.views.open', mock.mock_open(), create=True
+        ),
+        mock.patch('anthias_server.app.views.path.isfile', return_value=False),
+        mock.patch(
+            'anthias_server.app.views.backup_helper.recover',
+            side_effect=tarfile.ReadError('not a gzip file'),
+        ),
+        mock.patch('anthias_server.app.views.logger') as mock_logger,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_recover'),
+            data={
+                'backup_upload': SimpleUploadedFile(
+                    'backup.tar.gz',
+                    b'\n\nnot a real gzip',
+                    content_type='application/x-tar',
+                )
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    mock_logger.warning.assert_called_once()
+    mock_logger.exception.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_write_endpoint_fires_websocket_notify(
     client: Client, asset: Asset
 ) -> None:
