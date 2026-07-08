@@ -179,7 +179,12 @@ def system_info() -> dict[str, Any]:
         # offset is formatted +HH:MM for readability.
         'device_time': {
             'iso': timezone.localtime(timezone.now()).isoformat(),
+            # Raw IANA id for the JS Intl formatter (data-timezone)...
             'timezone': timezone.get_current_timezone_name(),
+            # ...and a humanised version for the visible sub-label.
+            'timezone_label': timezone.get_current_timezone_name().replace(
+                '_', ' '
+            ),
             'offset': _format_utc_offset(timezone.localtime(timezone.now())),
         },
         'display_power': _redis.get('display_power'),
@@ -224,8 +229,12 @@ def _timezone_options() -> tuple[tuple[str, str], ...]:
     is the only way to schedule/display in local time there. Cached —
     the set is fixed for the life of the process.
     """
+    # Value stays the real IANA id (what Django/Intl need); the label
+    # humanises the underscore so options read "America/New York".
     zones = sorted(zoneinfo.available_timezones())
-    return (('', 'System default'),) + tuple((z, z) for z in zones)
+    return (('', 'System default'),) + tuple(
+        (z, z.replace('_', ' ')) for z in zones
+    )
 
 
 def device_settings() -> dict[str, Any]:

@@ -43,27 +43,6 @@
       </div>
 
       <div class="stat-card stat-card--span-2">
-        <p class="stat-card__label">Uptime</p>
-        <div class="stat-card__value">{{ uptime.human }}</div>
-      </div>
-
-      <div class="stat-card stat-card--span-2">
-        <p class="stat-card__label">Device time</p>
-        {% comment %}
-        Ticks client-side but is seeded from the server instant in
-        data-iso — never the browser clock — so a wrong device clock is
-        revealed rather than masked (issue #1755). Rendered in the
-        device's own timezone via Intl, so it's correct even when the
-        operator's browser is in another zone. No-JS falls back to the
-        server-rendered value.
-        {% endcomment %}
-        <div class="stat-card__value" id="device-clock"
-             data-iso="{{ device_time.iso }}"
-             data-timezone="{{ device_time.timezone }}">{{ device_time.iso }}</div>
-        <p class="stat-card__label">{{ device_time.timezone }} · {{ device_time.offset }}</p>
-      </div>
-
-      <div class="stat-card stat-card--span-2">
         <p class="stat-card__label">Memory</p>
         <div class="resource-card">
           <div
@@ -108,6 +87,32 @@
           below {{ low_ram.threshold_mib|intcomma }} MiB MemTotal.
         </p>
         {% endif %}
+      </div>
+
+      {% comment %}
+      Uptime + Device time are the two short text cards; keeping them in
+      the same grid row (and the two chart cards — Memory above, Disk
+      below — in theirs) avoids a short card stretching to a chart card's
+      height and leaving a dead vertical band.
+      {% endcomment %}
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Uptime</p>
+        <div class="stat-card__value">{{ uptime.human }}</div>
+      </div>
+
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Device time</p>
+        {% comment %}
+        Ticks client-side but is seeded from the server instant in
+        data-iso — never the browser clock — so a wrong device clock is
+        revealed rather than masked (issue #1755). data-timezone carries
+        the raw IANA id for Intl; the visible sub-label is humanised.
+        No-JS falls back to the server-rendered value.
+        {% endcomment %}
+        <div class="stat-card__value" id="device-clock"
+             data-iso="{{ device_time.iso }}"
+             data-timezone="{{ device_time.timezone }}">{{ device_time.iso }}</div>
+        <p class="stat-card__label">{{ device_time.timezone_label }} · {{ device_time.offset }}</p>
       </div>
 
       <div class="stat-card stat-card--span-2">

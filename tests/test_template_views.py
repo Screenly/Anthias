@@ -117,9 +117,12 @@ def test_settings_renders(client: Client) -> None:
         'System controls',
     ):
         assert label in body
-    # The timezone dropdown is populated from the IANA list.
+    # The timezone dropdown is populated from the IANA list, with the
+    # real id as the option value and a humanised (underscore-free)
+    # label shown to the operator.
     assert 'name="timezone"' in body
-    assert 'Europe/Stockholm' in body
+    assert 'value="America/New_York"' in body
+    assert 'America/New York' in body
 
 
 @pytest.mark.django_db
