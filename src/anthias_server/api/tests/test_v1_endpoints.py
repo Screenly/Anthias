@@ -174,7 +174,9 @@ def test_file_asset_chunked_out_of_order_reassembles(
     """A resumable (Content-Range) upload must reassemble correctly
     even when chunks arrive out of order. Append mode ignored the
     seek() and pinned every write to EOF, corrupting the .tmp; r+b
-    honours the offset."""
+    honours the offset. Chunks are tied to one file by the opaque
+    ``upload_id`` echoed via ``X-Upload-Id`` (issue #3135), not by the
+    filename."""
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     url = reverse('api:file_asset_v1')
@@ -189,6 +191,7 @@ def test_file_asset_chunked_out_of_order_reassembles(
         },
         headers={'Content-Range': 'bytes 4-7/8'},
     )
+    upload_id = tail.data['upload_id']
     head = api_client.post(
         url,
         data={
@@ -196,7 +199,7 @@ def test_file_asset_chunked_out_of_order_reassembles(
                 'clip.png', b'AAAA', content_type='image/png'
             )
         },
-        headers={'Content-Range': 'bytes 0-3/8'},
+        headers={'Content-Range': 'bytes 0-3/8', 'X-Upload-Id': upload_id},
     )
 
     assert tail.status_code == status.HTTP_200_OK
@@ -270,16 +273,52 @@ def test_file_asset_content_range_chunk_length_mismatch_returns_400(
 
 
 @pytest.mark.django_db
-def test_file_asset_content_range_truncates_stale_tmp(
+def test_file_asset_same_name_uploads_are_isolated(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:
-    """The .tmp path is deterministic per filename, so a shorter new
-    upload must not inherit trailing bytes from a longer previous
-    attempt. Writing the final chunk truncates to the declared total."""
+    """Two uploads of the same filename must stage at different temp
+    paths so they can't clobber or bleed into each other (issue #3135).
+    Each mints its own opaque ``upload_id`` and lands in its own file."""
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     url = reverse('api:file_asset_v1')
-    # First upload: a 10-byte file in one chunk.
+    first = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+    )
+    second = api_client.post(
+        url,
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'BBBBBBBB', content_type='image/png'
+            )
+        },
+    )
+    assert first.status_code == status.HTTP_200_OK
+    assert second.status_code == status.HTTP_200_OK
+    assert first.data['upload_id'] != second.data['upload_id']
+    assert first.data['uri'] != second.data['uri']
+    with open(first.data['uri'], 'rb') as f:
+        assert f.read() == b'AAAA'
+    with open(second.data['uri'], 'rb') as f:
+        assert f.read() == b'BBBBBBBB'
+
+
+@pytest.mark.django_db
+def test_file_asset_content_range_truncates_on_shrink(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """Within one upload session (shared ``upload_id``), the final chunk
+    truncates to the declared total so a shrunk re-write can't inherit
+    trailing bytes from a longer earlier attempt to the same file."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    url = reverse('api:file_asset_v1')
+    # First write: a 10-byte file in one chunk.
     first = api_client.post(
         url,
         data={
@@ -289,7 +328,8 @@ def test_file_asset_content_range_truncates_stale_tmp(
         },
         headers={'Content-Range': 'bytes 0-9/10'},
     )
-    # Second upload, same filename (=> same .tmp path): shorter content.
+    upload_id = first.data['upload_id']
+    # Re-write the same session (same upload_id => same .tmp) shorter.
     second = api_client.post(
         url,
         data={
@@ -297,13 +337,37 @@ def test_file_asset_content_range_truncates_stale_tmp(
                 'clip.png', b'AAAA', content_type='image/png'
             )
         },
-        headers={'Content-Range': 'bytes 0-3/4'},
+        headers={'Content-Range': 'bytes 0-3/4', 'X-Upload-Id': upload_id},
     )
     assert first.status_code == status.HTTP_200_OK
     assert second.status_code == status.HTTP_200_OK
     assert second.data['uri'] == first.data['uri']
     with open(second.data['uri'], 'rb') as f:
         assert f.read() == b'AAAA'
+
+
+@pytest.mark.django_db
+def test_file_asset_malformed_upload_id_returns_400(
+    api_client: APIClient, cleanup_asset_dir: None
+) -> None:
+    """``X-Upload-Id`` becomes a filesystem path, so a value that isn't
+    the uuid4 hex shape we mint (here a traversal attempt) must 400
+    rather than escape the asset dir."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    response = api_client.post(
+        reverse('api:file_asset_v1'),
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={
+            'Content-Range': 'bytes 0-3/4',
+            'X-Upload-Id': '../../etc/passwd',
+        },
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db

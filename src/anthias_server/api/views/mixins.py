@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import tarfile
 import uuid
@@ -43,6 +44,12 @@ from anthias_server.settings import ViewerPublisher, settings
 logger = logging.getLogger(__name__)
 
 r = connect_to_redis()
+
+# A resumable upload's temp file is named ``<upload_id>.tmp``. The id is
+# echoed back by the client on every chunk, so it lands in a filesystem
+# path — pin it to the exact uuid4 hex shape we mint and reject anything
+# else so a crafted value can't traverse out of the asset dir.
+UPLOAD_ID_RE = re.compile(r'[0-9a-f]{32}')
 
 
 class DeleteAssetViewMixin:
@@ -239,6 +246,20 @@ class DisplayPowerViewMixin(APIView):
 class FileAssetViewMixin(APIView):
     @extend_schema(
         summary='Upload file asset',
+        parameters=[
+            OpenApiParameter(
+                name='X-Upload-Id',
+                location=OpenApiParameter.HEADER,
+                type=OpenApiTypes.STR,
+                required=False,
+                description=(
+                    'Opaque upload session id returned as ``upload_id`` on '
+                    'the first chunk of a resumable (Content-Range) upload. '
+                    'Echo it on every subsequent chunk so they reassemble '
+                    'into the same file. Omit it to start a new upload.'
+                ),
+            ),
+        ],
         request={
             'multipart/form-data': {
                 'type': 'object',
@@ -253,6 +274,7 @@ class FileAssetViewMixin(APIView):
                 'properties': {
                     'uri': {'type': 'string'},
                     'ext': {'type': 'string'},
+                    'upload_id': {'type': 'string'},
                 },
             }
         },
@@ -281,13 +303,22 @@ class FileAssetViewMixin(APIView):
                 {'file_upload': 'Invalid file type. Expected image or video.'}
             )
 
-        file_path = (
-            path.join(
-                settings['assetdir'],
-                uuid.uuid5(uuid.NAMESPACE_URL, filename).hex,
-            )
-            + '.tmp'
-        )
+        # Stage the upload at a per-request temp path. The id is random
+        # (uuid4) and never derived from the filename: a filename-derived
+        # path is shared by every upload of that name, so two concurrent
+        # same-name uploads would interleave into one corrupt file and a
+        # stale ``.tmp`` from an earlier interrupted attempt would bleed
+        # into a later one (issue #3135). A resumable (Content-Range)
+        # upload gets one isolated file per session: the client echoes the
+        # ``upload_id`` we return on the first chunk back via ``X-Upload-Id``
+        # so every chunk lands in the same file.
+        upload_id = request.headers.get('X-Upload-Id')
+        if upload_id is None:
+            upload_id = uuid.uuid4().hex
+        elif not UPLOAD_ID_RE.fullmatch(upload_id):
+            raise ValidationError({'X-Upload-Id': 'Malformed upload id.'})
+
+        file_path = path.join(settings['assetdir'], upload_id) + '.tmp'
 
         has_range = 'Content-Range' in request.headers
         start_bytes = 0
@@ -334,23 +365,25 @@ class FileAssetViewMixin(APIView):
 
         try:
             if has_range:
-                # ``r+b`` (not ``ab``): append mode pins every write to
-                # EOF and silently ignores ``seek()``, so an out-of-
-                # order chunk would land at the wrong offset and corrupt
-                # the ``.tmp``. Open the existing file for in-place
-                # random-access writes; if it doesn't exist yet, ``wb``
-                # creates it.
-                mode = 'r+b' if path.isfile(file_path) else 'wb'
-                with open(file_path, mode) as f:
+                # ``os.open`` with ``O_CREAT`` and no ``O_TRUNC``: create
+                # the file on the first chunk, otherwise open the
+                # in-progress upload for random-access writes without
+                # discarding the bytes already written. This closes the
+                # ``isfile()``-then-``open('wb')`` race where two chunks
+                # arriving together could both see "no file" and clobber
+                # each other. ``r+b`` (not append) so ``seek()`` decides
+                # the offset and an out-of-order chunk lands where the
+                # range says.
+                fd = os.open(file_path, os.O_RDWR | os.O_CREAT, 0o644)
+                with os.fdopen(fd, 'r+b') as f:
                     f.seek(start_bytes)
                     f.write(data)
                     # On the final chunk, truncate to the declared total
-                    # so stale trailing bytes from a previous, longer
-                    # upload to this deterministic path can't survive
-                    # into the reassembled asset. Order-independent: the
-                    # file ends up exactly ``total_bytes`` long whenever
-                    # the last byte is written, regardless of chunk
-                    # arrival order.
+                    # so a resumed session that shrank can't keep trailing
+                    # bytes from a longer earlier attempt. Order-
+                    # independent: the file ends up exactly ``total_bytes``
+                    # long whenever the last byte is written, regardless
+                    # of chunk arrival order.
                     if end_bytes + 1 == total_bytes:
                         f.truncate(total_bytes)
             else:
@@ -368,7 +401,13 @@ class FileAssetViewMixin(APIView):
                 status=status.HTTP_507_INSUFFICIENT_STORAGE,
             )
 
-        return Response({'uri': file_path, 'ext': guess_extension(file_type)})
+        return Response(
+            {
+                'uri': file_path,
+                'ext': guess_extension(file_type),
+                'upload_id': upload_id,
+            }
+        )
 
 
 class AssetContentViewMixin(APIView):
