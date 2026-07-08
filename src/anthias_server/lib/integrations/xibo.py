@@ -18,8 +18,8 @@ attached to the download (scoped to that host by the shared ingest layer).
 
 TODO(confirm-with-live-token): Xibo web pages live on layouts as widgets,
 not in the library, so they aren't imported here. The
-``/library/download/{mediaId}/{mediaType}`` download shape is from the
-Swagger spec and worth confirming against a live CMS.
+``<cms>/api/library/download/{mediaId}/{mediaType}`` download shape is from
+the Swagger spec and worth confirming against a live CMS.
 """
 
 from __future__ import annotations
@@ -244,9 +244,11 @@ class XiboProvider(ImportProvider):
                 reason="This Xibo library item isn't an image or video.",
             )
 
+        # Use the normalised ``media_type`` (not the raw field) so casing
+        # variance in the API response can't produce a wrong download URL.
         file_url = _api_url(
             base,
-            f'/library/download/{remote_id}/{media.get("mediaType")}',
+            f'/library/download/{remote_id}/{media_type}',
         )
         start_date, end_date = ingest.default_window()
         asset = ingest.create_file_asset(
