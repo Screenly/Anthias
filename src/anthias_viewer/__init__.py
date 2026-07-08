@@ -9,8 +9,9 @@ from collections.abc import Callable
 from os import getenv, path
 from signal import SIGALRM, signal
 from threading import Lock
-from time import monotonic, sleep
+from time import monotonic, sleep, time
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import django
 import pydbus
@@ -1024,7 +1025,35 @@ def _send_to_webview(send: Callable[[], Any]) -> None:
     send()
 
 
-def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
+def _cache_busted_url(uri: str) -> str:
+    """Append a unique query parameter so a ``nocache`` webpage is
+    refetched fresh on every rotation.
+
+    Two things otherwise serve stale content for a ``nocache`` asset:
+    QtWebEngine's in-memory HTTP cache (which honours the response's
+    own cache-control headers, so a page that ships a long max-age is
+    reused for the whole session), and view_webpage's unchanged-URL
+    short-circuit (which skips the loadPage D-Bus call entirely when the
+    asset comes back around in the loop). A distinct URL per display
+    defeats both. This restores the per-asset nocache behaviour (refs
+    #11) that the Uzbl→webview migration silently dropped.
+
+    The token is wall-clock milliseconds, matching the original
+    implementation; the key is namespaced so it can't clobber a query
+    parameter the page itself relies on. The existing query string is
+    appended to verbatim — NOT decoded and re-encoded — so a signed or
+    pre-encoded URL (presigned S3, dashboard auth tokens, ``%20`` vs
+    ``+`` distinctions) reaches the origin byte-for-byte as stored.
+    """
+    parts = urlparse(uri)
+    token = f'_anthias_nc={int(time() * 1000)}'
+    new_query = f'{parts.query}&{token}' if parts.query else token
+    return urlunparse(parts._replace(query=new_query))
+
+
+def view_webpage(
+    uri: str, reload_interval_s: int = 0, nocache: bool = False
+) -> None:
     """Display a webpage and arm its per-asset auto-refresh timer.
 
     ``reload_interval_s`` mirrors ``Asset.metadata['refresh_interval_s']``:
@@ -1035,8 +1064,16 @@ def view_webpage(uri: str, reload_interval_s: int = 0) -> None:
     when the URL is unchanged from the previous tick — so an edit that
     only flips the interval (no URI change) takes effect on the next
     asset_loop iteration.
+
+    ``nocache`` mirrors ``Asset.nocache``: when set, the URL is
+    cache-busted (see _cache_busted_url) so the page is fetched fresh
+    each time the asset is shown rather than served from QtWebEngine's
+    HTTP cache or skipped by the unchanged-URL short-circuit below.
     """
     global current_browser_url
+
+    if nocache:
+        uri = _cache_busted_url(uri)
 
     if browser is None or not browser.is_alive():
         # Mid-playback respawn on the asset_loop thread: small, short
@@ -1529,7 +1566,11 @@ def asset_loop(scheduler: Any) -> None:
             interval = clamp_refresh_interval(
                 metadata.get('refresh_interval_s')
             )
-            view_webpage(uri, reload_interval_s=interval)
+            view_webpage(
+                uri,
+                reload_interval_s=interval,
+                nocache=bool(asset.get('nocache')),
+            )
         elif 'video' in mime or 'streaming' in mime:
             # ``'video' or 'streaming' in mime`` parses as ``'video'
             # or ('streaming' in mime)`` — the truthy literal short-

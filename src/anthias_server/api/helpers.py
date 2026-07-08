@@ -6,7 +6,10 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
+from anthias_common.remote_video import dispatch_remote_video_download
+from anthias_common.youtube import dispatch_download
 from anthias_server.app.models import Asset
+from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.settings import ViewerPublisher
 
 
@@ -55,6 +58,57 @@ def custom_exception_handler(
     return Response(
         {'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
     )
+
+
+def persist_new_asset(serializer: Any) -> Asset:
+    """Persist a validated Create*Serializer into an ``Asset`` and fire
+    the deferred pipelines it flagged, then splice the row into the
+    active play ordering.
+
+    Extracted from ``AssetListViewV2.post`` so the v2 create endpoint and
+    the content importer (``lib.integrations``) create assets through one
+    code path: the YouTube / remote-video download hand-off, the
+    image/video normalise dispatch, the post-create ``metadata`` apply
+    and the active-ordering insert must stay identical for both, or an
+    imported asset would behave subtly differently from an uploaded one.
+
+    Expects an already-validated serializer (``is_valid()`` called) that
+    mixes in ``CreateAssetSerializerMixin`` — the ``_pending_*`` hand-off
+    attributes are read here.
+    """
+    active_asset_ids = get_active_asset_ids()
+    asset = Asset.objects.create(**serializer.data)
+
+    # Apply ``metadata`` (set by the create serializer's validate() when
+    # the operator passes ``refresh_interval_s``). It lives in
+    # ``validated_data`` rather than ``serializer.data`` because
+    # ``metadata`` isn't a declared field on the create serializer —
+    # surfacing it as one would open the upload-pipeline-owned bag
+    # (original_ext, transcoded, error_message) for arbitrary writes.
+    post_create_metadata = serializer.validated_data.get('metadata')
+    if post_create_metadata:
+        existing = dict(asset.metadata or {})
+        existing.update(post_create_metadata)
+        asset.metadata = existing
+        asset.save(update_fields=['metadata'])
+    asset.refresh_from_db()
+
+    # Kick off any out-of-band work the serializer flagged. The row is
+    # already persisted with is_processing=True where relevant; the task
+    # fills in the file/duration and clears the flag.
+    if serializer._pending_youtube_uri:
+        dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
+    if serializer._pending_remote_video_uri:
+        dispatch_remote_video_download(
+            asset.asset_id, serializer._pending_remote_video_uri
+        )
+    dispatch_pending_normalize(serializer, asset.asset_id)
+
+    if asset.is_active():
+        active_asset_ids.insert(asset.play_order, asset.asset_id)
+    save_active_assets_ordering(active_asset_ids)
+    asset.refresh_from_db()
+    return asset
 
 
 def get_active_asset_ids() -> list[str]:

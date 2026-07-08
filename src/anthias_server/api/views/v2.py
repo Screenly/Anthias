@@ -27,8 +27,7 @@ from anthias_server.app.models import Asset
 from anthias_server.api.helpers import (
     AssetCreationError,
     finalize_asset_update,
-    get_active_asset_ids,
-    save_active_assets_ordering,
+    persist_new_asset,
 )
 from anthias_server.lib.auth import (
     AuthSettingsError,
@@ -36,13 +35,12 @@ from anthias_server.lib.auth import (
     operator_username,
 )
 from anthias_common.internal_auth import is_internal_request
-from anthias_common.remote_video import dispatch_remote_video_download
-from anthias_common.youtube import dispatch_download
-from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
     DeviceSettingsSerializerV2,
+    ImportItemSerializerV2,
+    ImportValidateSerializerV2,
     IntegrationsSerializerV2,
     ScreenlyMigrateAssetSerializerV2,
     ScreenlyTokenSerializerV2,
@@ -51,6 +49,8 @@ from anthias_server.api.serializers.v2 import (
     ViewerPlaylistSerializerV2,
     ViewerSettingsSerializerV2,
 )
+from anthias_server.lib.integrations.base import ProviderImportError
+from anthias_server.lib.integrations.registry import get_provider
 from anthias_server.lib.screenly_migration import (
     MIGRATION_ASSET_GROUP_TITLE,
     ScreenlyMigrationError,
@@ -98,6 +98,30 @@ _SCREENLY_NETWORK_USER_MESSAGE = (
     "Could not reach Screenly. Check this device's internet "
     'connection and try again.'
 )
+
+# Same posture for inbound content-import providers: one canonical
+# message in place of the raw transport error, so an import provider
+# being unreachable never leaks socket/DNS/proxy state into a response.
+_IMPORT_NETWORK_USER_MESSAGE = (
+    "Could not reach the import provider. Check this device's internet "
+    'connection and try again.'
+)
+
+
+def _import_error_body(message: str) -> dict[str, Any]:
+    """Uniform error body for the import-item endpoint.
+
+    Same keys as ``ImportOutcome.as_dict()`` plus ``error`` so every
+    response from the endpoint has one shape regardless of outcome —
+    easier for non-wizard clients and matches the declared schema.
+    """
+    return {
+        'success': False,
+        'asset_id': None,
+        'skipped': False,
+        'reason': None,
+        'error': message,
+    }
 
 
 # Bounded HTTP timeout for the Balena supervisor lookup below. Hit by
@@ -366,59 +390,11 @@ class AssetListViewV2(APIView):
         except AssetCreationError as error:
             return Response(error.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        active_asset_ids = get_active_asset_ids()
-        asset = Asset.objects.create(**serializer.data)
-        # Apply ``metadata`` (set by CreateAssetSerializerV2.validate()
-        # when the operator passes ``refresh_interval_s``). It lives in
-        # ``validated_data`` rather than ``serializer.data`` because
-        # ``metadata`` isn't a declared field on the create serializer
-        # — surfacing it as one would open the upload-pipeline-owned
-        # bag (original_ext, transcoded, error_message) for arbitrary
-        # client writes. Pulling it from validated_data and applying
-        # post-create keeps the read-only stance on metadata while
-        # still letting the dedicated refresh_interval_s knob round-
-        # trip on POST.
-        post_create_metadata = serializer.validated_data.get('metadata')
-        if post_create_metadata:
-            existing = dict(asset.metadata or {})
-            existing.update(post_create_metadata)
-            asset.metadata = existing
-            asset.save(update_fields=['metadata'])
-        asset.refresh_from_db()
-
-        # Kick off the YouTube download out of band when the
-        # serializer flagged a youtube_asset. The row is already
-        # persisted with is_processing=True; the task fills in the
-        # title + duration once yt-dlp finishes.
-        if serializer._pending_youtube_uri:
-            dispatch_download(asset.asset_id, serializer._pending_youtube_uri)
-
-        # Generic remote video URLs get the same hand-off: the
-        # serializer pointed Asset.uri at a local destination path
-        # and flipped is_processing; the Celery task downloads via
-        # requests and chains into normalize_video_asset. Live
-        # streams (RTSP / HLS / DASH) are excluded by the
-        # serializer's ``is_downloadable_remote_video`` classify.
-        if serializer._pending_remote_video_uri:
-            dispatch_remote_video_download(
-                asset.asset_id, serializer._pending_remote_video_uri
-            )
-
-        # Normalisation pipeline: HEIC/HEIF/TIFF → WebP, exotic video
-        # → H.264 MP4. Dispatched after persistence (same pattern as
-        # the YouTube hop above) so the row's ``asset_id`` is already
-        # written to the DB by the time the worker picks it up. The
-        # row was set ``is_processing=True`` by ``prepare_asset``;
-        # the task clears it once the file lands. Shared with
-        # v1/v1.1/v1.2 via dispatch_pending_normalize so adding a
-        # new API version can't re-open GH #2870.
-        dispatch_pending_normalize(serializer, asset.asset_id)
-
-        if asset.is_active():
-            active_asset_ids.insert(asset.play_order, asset.asset_id)
-
-        save_active_assets_ordering(active_asset_ids)
-        asset.refresh_from_db()
+        # Persist + fire the deferred download / normalise pipelines and
+        # splice into the active ordering. Shared with the content
+        # importer (lib.integrations) so imported and uploaded assets
+        # travel exactly one create path.
+        asset = persist_new_asset(serializer)
 
         return Response(
             AssetSerializerV2(asset).data,
@@ -1235,3 +1211,141 @@ class ScreenlyMigrateAssetViewV2(APIView):
                 'screenly_asset_id': screenly_asset_id,
             }
         )
+
+
+class ImportValidateViewV2(APIView):
+    """Validate an import provider's token and enumerate its media.
+
+    Inbound counterpart to ``ScreenlyValidateTokenViewV2``: validation
+    and listing happen in one round-trip so the wizard's Continue button
+    goes straight from the token field to the item picker. The token is
+    not stored; each request forwards it inline. ``provider`` is the
+    registry key from the URL (``yodeck``, later ``screencloud`` …).
+    """
+
+    serializer_class = ImportValidateSerializerV2
+
+    @extend_schema(
+        summary='Validate an import provider token and list its media',
+        request=ImportValidateSerializerV2,
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'valid': {'type': 'boolean'},
+                    'items': {'type': 'array', 'items': {'type': 'object'}},
+                    'error': {'type': 'string', 'nullable': True},
+                },
+            },
+        },
+    )
+    @authorized
+    def post(self, request: Request, provider: str) -> Response:
+        provider_impl = get_provider(provider)
+        if provider_impl is None:
+            return Response(
+                {'valid': False, 'error': 'Unknown import provider.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data['token']
+
+        try:
+            valid = provider_impl.validate_token(token)
+        except requests.RequestException:
+            # Log transport detail server-side only — see
+            # ScreenlyValidateTokenViewV2.post for the CodeQL rationale.
+            logger.warning('%s token validate failed', provider, exc_info=True)
+            return Response(
+                {'valid': False, 'error': _IMPORT_NETWORK_USER_MESSAGE},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if not valid:
+            return Response({'valid': False})
+
+        try:
+            items = provider_impl.list_media(token)
+        except requests.RequestException:
+            logger.warning('%s list_media failed', provider, exc_info=True)
+            return Response(
+                {'valid': False, 'error': _IMPORT_NETWORK_USER_MESSAGE},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {'valid': True, 'items': [item.as_dict() for item in items]}
+        )
+
+
+class ImportItemViewV2(APIView):
+    """Import a single remote media item as an Anthias asset.
+
+    Per-item (not batch) for the same reason as
+    ``ScreenlyMigrateAssetViewV2``: the wizard shows live progress and
+    keeps going past individual failures. Known per-item failures return
+    200 with ``success: False`` so the queue keeps advancing; only a
+    transport failure is a 502.
+    """
+
+    serializer_class = ImportItemSerializerV2
+
+    @extend_schema(
+        summary='Import one media item from a provider',
+        request=ImportItemSerializerV2,
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'success': {'type': 'boolean'},
+                    'asset_id': {'type': 'string', 'nullable': True},
+                    'skipped': {'type': 'boolean'},
+                    'reason': {'type': 'string', 'nullable': True},
+                    'error': {'type': 'string', 'nullable': True},
+                },
+            },
+        },
+    )
+    @authorized
+    def post(self, request: Request, provider: str) -> Response:
+        provider_impl = get_provider(provider)
+        if provider_impl is None:
+            # Keep the uniform shape (asset_id/skipped/reason/error) so a
+            # client can read the same keys on every response.
+            return Response(
+                _import_error_body('Unknown import provider.'),
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data['token']
+        remote_id = serializer.validated_data['remote_id']
+        enable = serializer.validated_data.get('enable', True)
+
+        try:
+            outcome = provider_impl.import_item(
+                token, remote_id, enable=enable
+            )
+        except ProviderImportError as error:
+            # .user_message is the operator-display string we composed in
+            # the provider — using it (not str(error)) keeps the response
+            # free of exception state. Keep the same key shape as the
+            # success path (ImportOutcome.as_dict) plus ``error`` so every
+            # response is uniform for non-wizard clients.
+            return Response(_import_error_body(error.user_message))
+        except requests.RequestException:
+            logger.warning(
+                '%s import_item failed for %s',
+                provider,
+                remote_id,
+                exc_info=True,
+            )
+            return Response(
+                _import_error_body(_IMPORT_NETWORK_USER_MESSAGE),
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({**outcome.as_dict(), 'error': None})

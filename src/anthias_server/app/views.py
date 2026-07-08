@@ -14,6 +14,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login as django_login
 from django.http import (
     FileResponse,
+    Http404,
     HttpRequest,
     HttpResponse,
     StreamingHttpResponse,
@@ -171,6 +172,27 @@ def migrate_to_screenly(request: HttpRequest) -> HttpResponse:
         request,
         'migrate_to_screenly.html',
         {'active_nav': 'settings'},
+    )
+
+
+@authorized
+@require_http_methods(['GET'])
+def import_content(request: HttpRequest, provider: str) -> HttpResponse:
+    """Render the import wizard for a given provider.
+
+    Provider display copy (label, token help) comes from the registry so
+    the same template serves every registered provider. An unknown key
+    404s.
+    """
+    from anthias_server.lib.integrations.registry import get_provider_meta
+
+    meta = get_provider_meta(provider)
+    if meta is None:
+        raise Http404('Unknown import provider.')
+    return template(
+        request,
+        'import_content.html',
+        {'active_nav': 'settings', 'provider': meta},
     )
 
 
@@ -1042,11 +1064,12 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
     """Apply common schedule fields to a set of assets at once.
 
     Mirrors the per-asset ``assets_update`` parsing for dates,
-    duration, time-of-day, and weekday filters, but each group is
-    opt-in via an ``apply_*`` flag so an operator only overwrites the
-    fields they ticked — an unticked group is left untouched on every
-    selected asset. Everything is parsed before any row is mutated so a
-    bad date/time toasts without leaving a half-applied batch (#3046).
+    duration, time-of-day, weekday filters, and the No cache /
+    Skip asset check flags (#3137), but each group is opt-in via an
+    ``apply_*`` flag so an operator only overwrites the fields they
+    ticked — an unticked group is left untouched on every selected
+    asset. Everything is parsed before any row is mutated so a bad
+    date/time toasts without leaving a half-applied batch (#3046).
     """
     import json as _json
 
@@ -1078,8 +1101,17 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
     apply_duration = request.POST.get('apply_duration') == 'true'
     apply_time = request.POST.get('apply_time') == 'true'
     apply_days = request.POST.get('apply_days') == 'true'
+    apply_nocache = request.POST.get('apply_nocache') == 'true'
+    apply_skip = request.POST.get('apply_skip_asset_check') == 'true'
 
-    if not (apply_dates or apply_duration or apply_time or apply_days):
+    if not (
+        apply_dates
+        or apply_duration
+        or apply_time
+        or apply_days
+        or apply_nocache
+        or apply_skip
+    ):
         return _asset_table_response(
             request,
             toast=('info', 'Nothing to change — pick a field to edit'),
@@ -1196,6 +1228,16 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
         shared['play_time_to'] = None if clear_time else new_time_to
     if apply_days and new_play_days is not None:
         shared['play_days'] = new_play_days
+    # Boolean flags: when a group is applied, its On/Off segmented radio
+    # POSTs the target state ('true'/'false'), so a group can clear the
+    # flag as well as set it. When the group isn't applied the field is
+    # absent (radios disabled) and the stored value is left untouched.
+    if apply_nocache:
+        shared['nocache'] = request.POST.get('nocache') == 'true'
+    if apply_skip:
+        shared['skip_asset_check'] = (
+            request.POST.get('skip_asset_check') == 'true'
+        )
 
     if not shared and not apply_duration:
         # e.g. apply_dates ticked but both date fields left blank.
@@ -1551,8 +1593,13 @@ def review_cta_snooze(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['GET'])
 def settings_view(request: HttpRequest) -> HttpResponse:
+    from anthias_server.lib.integrations.registry import list_provider_meta
+
     context = page_context.device_settings()
     context['active_nav'] = 'settings'
+    # Data-driven so a newly registered provider appears in Settings with
+    # no template edit.
+    context['import_providers'] = list_provider_meta()
     return template(request, 'settings.html', context)
 
 

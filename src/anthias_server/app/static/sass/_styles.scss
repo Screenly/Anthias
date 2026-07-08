@@ -2599,6 +2599,42 @@ body.auth-body {
 }
 .bulk-field__toggle { cursor: pointer; }
 
+// On/Off selector for the boolean flag groups (No cache / Skip asset
+// check) in the bulk-edit modal (#3137). A two-pill radio group makes
+// the target state explicit and keeps it visually distinct from the
+// group's opt-in switch above it — two identical switches would read as
+// duplicates. Shares the weekday pill vocabulary for a consistent look.
+.bulk-flag-choice {
+  display: inline-flex;
+  gap: var(--space-2);
+
+  &__pill {
+    --bg: var(--color-surface-tint);
+    --fg: var(--color-text);
+    border: 1px solid var(--color-border);
+    background: var(--bg);
+    color: var(--fg);
+    font-weight: 600;
+    padding: 0.4rem 1.1rem;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+    input { position: absolute; opacity: 0; pointer-events: none; }
+  }
+  &__pill:has(input:checked) {
+    --bg: #{$anthias-yellow-3};
+    --fg: var(--color-accent-text);
+    border-color: $anthias-yellow-2;
+  }
+  // Keyboard focus lands on the hidden radio — surface it on the pill so
+  // the control is navigable without a mouse.
+  &__pill:has(input:focus-visible) {
+    outline: 2px solid var(--color-accent-edge);
+    outline-offset: 2px;
+  }
+}
+
 // Reserve room at the bottom of the page while a selection is active so
 // the fixed bulk bar never covers the last rows or their action
 // buttons (it floats over them otherwise, blocking clicks on the very

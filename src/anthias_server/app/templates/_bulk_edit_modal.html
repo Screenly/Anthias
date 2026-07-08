@@ -36,7 +36,7 @@
         hx-target="#asset-table"
         hx-swap="outerHTML"
         hx-on::after-request="if (window.bulkSucceeded(event)) window.dispatchEvent(new CustomEvent('bulk-done', {detail: {closeEdit: true}}))"
-        x-data="{ applyDates: false, applyDuration: false, applyTime: false, applyDays: false }"
+        x-data="{ applyDates: false, applyDuration: false, applyTime: false, applyDays: false, applyNocache: false, applySkip: false }"
       >
         {% csrf_token %}
         <input type="hidden" name="ids" :value="selectedIds.join(',')">
@@ -122,12 +122,61 @@
               </div>
             </div>
           </section>
+
+          {% comment %} No cache & Skip asset check (#3137). Both are
+             boolean flags, so — unlike the date/duration groups — the
+             operator picks the target state with an On/Off segmented
+             control once the group is ticked. A segmented radio (rather
+             than a second switch) keeps the value control visually
+             distinct from the group's own opt-in switch above it: two
+             identical switches would read as duplicates. The radios are
+             disabled while the group is unticked so nothing is POSTed and
+             assets_bulk_update leaves the flag untouched.
+          {% endcomment %}
+          <section class="bulk-field" :class="applyNocache && 'is-on'">
+            <label class="app-check app-switch bulk-field__toggle m-0">
+              <input type="checkbox" class="app-check-input" name="apply_nocache" value="true" x-model="applyNocache">
+              <span class="app-check-label ml-2">No cache</span>
+            </label>
+            <div class="mt-3" x-show="applyNocache" x-cloak>
+              <div class="bulk-flag-choice" role="radiogroup" aria-label="No cache value">
+                <label class="bulk-flag-choice__pill">
+                  <input type="radio" name="nocache" value="true" checked :disabled="!applyNocache">
+                  <span>On</span>
+                </label>
+                <label class="bulk-flag-choice__pill">
+                  <input type="radio" name="nocache" value="false" :disabled="!applyNocache">
+                  <span>Off</span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {# ---- Skip asset check ---- #}
+          <section class="bulk-field" :class="applySkip && 'is-on'">
+            <label class="app-check app-switch bulk-field__toggle m-0">
+              <input type="checkbox" class="app-check-input" name="apply_skip_asset_check" value="true" x-model="applySkip">
+              <span class="app-check-label ml-2">Skip asset check</span>
+            </label>
+            <div class="mt-3" x-show="applySkip" x-cloak>
+              <div class="bulk-flag-choice" role="radiogroup" aria-label="Skip asset check value">
+                <label class="bulk-flag-choice__pill">
+                  <input type="radio" name="skip_asset_check" value="true" checked :disabled="!applySkip">
+                  <span>On</span>
+                </label>
+                <label class="bulk-flag-choice__pill">
+                  <input type="radio" name="skip_asset_check" value="false" :disabled="!applySkip">
+                  <span>Off</span>
+                </label>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="modal-card__footer">
           <button type="button" class="app-btn app-btn-link" @click="closeBulkEdit()">Cancel</button>
           <button type="submit" class="app-btn app-btn-primary"
-            :disabled="!(applyDates || applyDuration || applyTime || applyDays)">
+            :disabled="!(applyDates || applyDuration || applyTime || applyDays || applyNocache || applySkip)">
             <i class="ti ti-check"></i><span>Apply to selected</span>
           </button>
         </div>

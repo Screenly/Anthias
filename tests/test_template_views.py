@@ -1897,6 +1897,136 @@ def test_assets_bulk_update_days(
 
 
 @pytest.mark.django_db
+def test_assets_bulk_update_nocache_sets_flag(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Ticking the No cache group with the On radio sets nocache on
+    every selected asset, videos included (#3137)."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_nocache': 'true',
+                'nocache': 'true',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.nocache is True
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_nocache_off_clears_flag(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """The group can clear as well as set: the Off radio POSTs
+    nocache=false and turns the flag off on every selected asset (#3137).
+    """
+    Asset.objects.filter(
+        asset_id__in=[a.asset_id for a in bulk_assets]
+    ).update(nocache=True)
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_nocache': 'true',
+                'nocache': 'false',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.nocache is False
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_skip_asset_check_sets_flag(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """Ticking the Skip asset check group with the On radio sets
+    skip_asset_check on every selected asset (#3137)."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_skip_asset_check': 'true',
+                'skip_asset_check': 'true',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.skip_asset_check is True
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_flag_untouched_when_group_off(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """A flag value POSTed without its apply_* toggle is ignored — an
+    unticked group never overwrites the stored flag (#3137)."""
+    Asset.objects.filter(
+        asset_id__in=[a.asset_id for a in bulk_assets]
+    ).update(nocache=True, skip_asset_check=True)
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                # Duration group is the only one ticked; the stray flag
+                # values below must be ignored.
+                'apply_duration': 'true',
+                'duration': '42',
+                'nocache': 'false',
+                'skip_asset_check': 'false',
+            },
+        )
+    for a in bulk_assets:
+        a.refresh_from_db()
+        assert a.nocache is True
+        assert a.skip_asset_check is True
+
+
+@pytest.mark.django_db
+def test_assets_bulk_update_flag_only_counts_all_matched(
+    client: Client, bulk_assets: list[Asset]
+) -> None:
+    """A flag-only edit touches every matched row (videos included), so
+    the success toast reports the full selection count, not the
+    non-video subset the duration rule uses (#3137)."""
+    import json as _json
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': _bulk_ids_csv(bulk_assets),
+                'apply_nocache': 'true',
+                'nocache': 'true',
+            },
+            HTTP_HX_REQUEST='true',
+        )
+    trigger = _json.loads(response['HX-Trigger'])
+    assert trigger['toast']['message'] == '3 assets updated'
+
+
+@pytest.mark.django_db
 def test_assets_bulk_update_no_flags_is_noop(
     client: Client, bulk_assets: list[Asset]
 ) -> None:

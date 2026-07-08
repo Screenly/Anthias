@@ -87,7 +87,11 @@ def _patched_youtube_dispatch() -> Iterator[dict[str, Any]]:
             'anthias_server.api.views.v1_2.dispatch_download'
         ) as v1_2_dispatch,
         mock.patch(
-            'anthias_server.api.views.v2.dispatch_download'
+            # v2's create view delegates persistence + dispatch to
+            # ``api.helpers.persist_new_asset`` (shared with the content
+            # importer), so the download hand-off is patched there rather
+            # than in the view module.
+            'anthias_server.api.helpers.dispatch_download'
         ) as v2_dispatch,
         mock.patch(
             'anthias_server.api.serializers.mixins.url_fails',
@@ -1060,7 +1064,9 @@ def test_create_remote_video_url_dispatches_download_task(
     }
     asset_list_url = reverse(f'api:asset_list_{version}')
     dispatch_target = (
-        f'anthias_server.api.views.{version}.dispatch_remote_video_download'
+        'anthias_server.api.helpers.dispatch_remote_video_download'
+        if version == 'v2'
+        else f'anthias_server.api.views.{version}.dispatch_remote_video_download'
     )
     with (
         mock.patch(dispatch_target) as mock_dispatch,
@@ -1162,7 +1168,9 @@ def test_create_stream_uri_stays_as_literal(
     }
     asset_list_url = reverse(f'api:asset_list_{version}')
     dispatch_target = (
-        f'anthias_server.api.views.{version}.dispatch_remote_video_download'
+        'anthias_server.api.helpers.dispatch_remote_video_download'
+        if version == 'v2'
+        else f'anthias_server.api.views.{version}.dispatch_remote_video_download'
     )
     with (
         mock.patch(dispatch_target) as mock_dispatch,
