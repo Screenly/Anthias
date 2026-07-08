@@ -9,7 +9,7 @@ from os import getenv, path
 from signal import SIGALRM, signal
 from time import monotonic, sleep, time
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 import django
 import pydbus
@@ -945,13 +945,15 @@ def _cache_busted_url(uri: str) -> str:
 
     The token is wall-clock milliseconds, matching the original
     implementation; the key is namespaced so it can't clobber a query
-    parameter the page itself relies on, and any existing query string
-    is preserved.
+    parameter the page itself relies on. The existing query string is
+    appended to verbatim — NOT decoded and re-encoded — so a signed or
+    pre-encoded URL (presigned S3, dashboard auth tokens, ``%20`` vs
+    ``+`` distinctions) reaches the origin byte-for-byte as stored.
     """
     parts = urlparse(uri)
-    query = parse_qsl(parts.query, keep_blank_values=True)
-    query.append(('_anthias_nc', str(int(time() * 1000))))
-    return urlunparse(parts._replace(query=urlencode(query)))
+    token = f'_anthias_nc={int(time() * 1000)}'
+    new_query = f'{parts.query}&{token}' if parts.query else token
+    return urlunparse(parts._replace(query=new_query))
 
 
 def view_webpage(

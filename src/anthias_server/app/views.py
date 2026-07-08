@@ -1206,9 +1206,10 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
         shared['play_time_to'] = None if clear_time else new_time_to
     if apply_days and new_play_days is not None:
         shared['play_days'] = new_play_days
-    # Boolean flags: the group being ticked means "set this flag on every
-    # selected asset to the switch's state" — an absent/off checkbox POSTs
-    # 'false', so a group can clear the flag as well as set it.
+    # Boolean flags: when a group is applied, its On/Off segmented radio
+    # POSTs the target state ('true'/'false'), so a group can clear the
+    # flag as well as set it. When the group isn't applied the field is
+    # absent (radios disabled) and the stored value is left untouched.
     if apply_nocache:
         shared['nocache'] = request.POST.get('nocache') == 'true'
     if apply_skip:

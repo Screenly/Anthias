@@ -482,6 +482,29 @@ def test_view_webpage_nocache_preserves_existing_query(
     assert '_anthias_nc=2000' in loaded
 
 
+def test_view_webpage_nocache_preserves_encoded_query_verbatim(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The existing query string must reach the origin byte-for-byte —
+    a signed/pre-encoded URL breaks if %20/+ or percent-encoding is
+    normalised. The buster appends, it must not decode/re-encode."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    signed = 'https://s3.example/o?X-Sig=a%2Bb%2Fc%3D&name=q%20r'
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'time', return_value=3.0),
+    ):
+        viewer_fixtures.u.view_webpage(signed, nocache=True)
+
+    (loaded,), _ = fake_bus.loadPage.call_args
+    assert loaded == signed + '&_anthias_nc=3000'
+
+
 def test_view_webpage_nocache_reloads_each_display(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
