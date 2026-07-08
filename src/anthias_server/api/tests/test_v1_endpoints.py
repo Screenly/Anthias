@@ -320,7 +320,11 @@ def test_recover_invalid_archive_warns_not_error(
 
     with (
         mock.patch('anthias_server.api.views.mixins.ViewerPublisher'),
-        mock.patch('anthias_server.api.views.mixins.open', mock.mock_open()),
+        mock.patch(
+            'anthias_server.api.views.mixins.open',
+            mock.mock_open(),
+            create=True,
+        ),
         mock.patch(
             'anthias_server.api.views.mixins.path.isfile', return_value=False
         ),

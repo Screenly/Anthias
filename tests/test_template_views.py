@@ -2201,6 +2201,7 @@ def test_settings_recover_invalid_archive_warns_not_error(
     ANTHIAS-3W)."""
     import tarfile
 
+    from django.contrib.messages import get_messages
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     with (
@@ -2227,6 +2228,8 @@ def test_settings_recover_invalid_archive_warns_not_error(
         )
 
     assert response.status_code in (200, 302)
+    messages = [str(m) for m in get_messages(response.wsgi_request)]
+    assert 'Invalid backup archive.' in messages
     mock_logger.warning.assert_called_once()
     mock_logger.exception.assert_not_called()
 
