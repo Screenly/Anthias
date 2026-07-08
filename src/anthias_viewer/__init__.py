@@ -1248,30 +1248,40 @@ def _retry_wayland_rotation_if_pending() -> None:
 def _kernel_has_bindable_display() -> bool:
     """True when the kernel exposes a display the compositor could bind.
 
-    A DRM connector is *bindable* when its ``status`` reads ``connected``
-    AND it has a non-empty ``modes`` list — the hotplug-detect line is
-    asserted *and* EDID was read, so cage has a mode to drive. Both are
-    kernel DRM sysfs files under ``/sys/class/drm/<connector>/`` (the
-    viewer container shares the host sysfs, so they're visible
-    in-container); ``Writeback`` connectors report ``unknown`` status and
-    never count.
+    A DRM connector is *bindable* when its ``status`` is anything other
+    than ``disconnected`` (or empty/unreadable) AND it has a non-empty
+    ``modes`` list — a display is attached and EDID was read, so cage has
+    a mode to drive. Both are kernel DRM sysfs files under
+    ``/sys/class/drm/<connector>/`` (the viewer container shares the host
+    sysfs, so they're visible in-container).
+
+    Status is matched as "not disconnected" rather than "== connected"
+    on purpose: some HDMI bridges report ``unknown`` for a real display,
+    and bin/start_viewer.sh's own ``eglfs_has_display`` already treats
+    ``unknown`` as present. Keying off ``connected`` alone would miss
+    those and prevent the watchdog from ever self-healing. The mode-list
+    check is what actually gates bindability, so the looser status match
+    is safe.
 
     The mode-list check is load-bearing, not belt-and-suspenders: a
-    connector can be ``connected`` with an *empty* mode list — HPD
-    asserted but EDID unread, e.g. a marginally-seated HDMI cable. That
-    is NOT recoverable by restarting: cage can't conjure a mode the
-    kernel never read, so restarting on a bare ``connected`` would loop
-    forever. Requiring modes means the watchdog only restarts for a
+    connector can be present with an *empty* mode list — HPD asserted but
+    EDID unread, e.g. a marginally-seated HDMI cable. That is NOT
+    recoverable by restarting: cage can't conjure a mode the kernel never
+    read, so restarting on a bare-connected/empty-modes connector would
+    loop forever. Requiring modes means the watchdog only restarts for a
     display cage genuinely *should* be able to bind (a properly-connected
     monitor exposes its EDID modes), which is exactly the headless-boot
-    race the fix targets — and leaves a half-connected cable alone.
+    race the fix targets — and leaves a half-connected cable, and the
+    ``Writeback`` connector (``unknown`` status, always empty modes),
+    alone.
     """
     for status_path in glob('/sys/class/drm/*/status'):
         try:
             with open(status_path) as status_file:
-                if status_file.read().strip() != 'connected':
-                    continue
+                status = status_file.read().strip()
         except OSError:
+            continue
+        if status in ('disconnected', ''):
             continue
         modes_path = path.join(path.dirname(status_path), 'modes')
         try:

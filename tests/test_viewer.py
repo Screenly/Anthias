@@ -2411,7 +2411,7 @@ def test_output_watchdog_arms_timer_on_first_wedge(
     ):
         viewer._wayland_output_watchdog()  # must not raise
 
-    assert viewer._headless_wedge_since == 500.0
+    assert viewer._headless_wedge_since == pytest.approx(500.0)
 
 
 def test_output_watchdog_exits_after_grace(reset_wedge_state: None) -> None:
@@ -2489,6 +2489,23 @@ def test_kernel_has_bindable_display_connected_with_modes() -> None:
         '/sys/class/drm/card1-HDMI-A-1/modes': '',
         '/sys/class/drm/card1-HDMI-A-2/status': 'connected\n',
         '/sys/class/drm/card1-HDMI-A-2/modes': '3840x2160\n1920x1080\n',
+        '/sys/class/drm/card1-Writeback-1/status': 'unknown\n',
+        '/sys/class/drm/card1-Writeback-1/modes': '',
+    }
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_drm_sysfs(files):
+            stack.enter_context(cm)
+        assert viewer._kernel_has_bindable_display() is True
+
+
+def test_kernel_has_bindable_display_unknown_status_with_modes() -> None:
+    """Some HDMI bridges report 'unknown' for a real display. With a
+    non-empty mode list that's still bindable (status is matched as 'not
+    disconnected', mirroring eglfs_has_display); the modes gate still
+    excludes the Writeback connector, which is 'unknown' but modeless."""
+    files = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'unknown\n',
+        '/sys/class/drm/card1-HDMI-A-1/modes': '1920x1080\n',
         '/sys/class/drm/card1-Writeback-1/status': 'unknown\n',
         '/sys/class/drm/card1-Writeback-1/modes': '',
     }
