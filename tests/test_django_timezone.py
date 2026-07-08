@@ -248,22 +248,25 @@ class TestTimezoneActivationMiddleware:
     def test_activates_resolved_zone_then_deactivates(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from django.http import HttpRequest, HttpResponse
+        from django.test import RequestFactory
         from django.utils import timezone as dj_tz
 
         from anthias_server.lib import timezone as tz_mw
 
         seen = {}
 
-        def get_response(request: object) -> str:
+        def get_response(request: HttpRequest) -> HttpResponse:
             seen['during'] = dj_tz.get_current_timezone_name()
-            return 'ok'
+            return HttpResponse('ok')
 
         monkeypatch.setattr(
             tz_mw, 'resolve_time_zone', lambda: 'Europe/Stockholm'
         )
         middleware = tz_mw.TimezoneActivationMiddleware(get_response)
 
-        assert middleware(object()) == 'ok'  # type: ignore[arg-type]
+        response = middleware(RequestFactory().get('/'))
+        assert response.content == b'ok'
         # Active during the request...
         assert seen['during'] == 'Europe/Stockholm'
         # ...and torn back down to the process default afterwards.
@@ -272,13 +275,20 @@ class TestTimezoneActivationMiddleware:
     def test_bad_zone_does_not_crash_the_request(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from django.http import HttpRequest, HttpResponse
+        from django.test import RequestFactory
+
         from anthias_server.lib import timezone as tz_mw
 
         def boom() -> str:
             raise ValueError('bad zone')
 
+        def get_response(request: HttpRequest) -> HttpResponse:
+            return HttpResponse('ok')
+
         monkeypatch.setattr(tz_mw, 'resolve_time_zone', boom)
-        middleware = tz_mw.TimezoneActivationMiddleware(lambda request: 'ok')
+        middleware = tz_mw.TimezoneActivationMiddleware(get_response)
 
         # Falls back to deactivate() rather than 500-ing.
-        assert middleware(object()) == 'ok'  # type: ignore[arg-type]
+        response = middleware(RequestFactory().get('/'))
+        assert response.content == b'ok'
