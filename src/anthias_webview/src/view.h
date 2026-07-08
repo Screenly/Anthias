@@ -19,7 +19,7 @@
 
 // Defined in view.cpp. A QWebEngineUrlRequestInterceptor installed on
 // the shared profile that attaches the current webpage asset's custom
-// headers to same-host requests (#2215). Forward-declared so View can
+// headers to same-origin requests (#2215). Forward-declared so View can
 // hold a pointer without pulling the QtWebEngineCore interceptor headers
 // into every translation unit that includes view.h.
 class RequestHeaderInterceptor;
@@ -39,7 +39,7 @@ public:
     // a JSON object of ``{name: value}`` string pairs (an empty object
     // clears them). The viewer calls this right before loadPage so the
     // interceptor is armed when the navigation fires; the headers are
-    // scoped to the loaded URL's host at load time.
+    // scoped to the loaded URL's origin (scheme+host+port) at load time.
     void setRequestHeaders(const QString &headersJson);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // Hands the URI + option dict to VideoView (QtMultimedia
@@ -112,8 +112,9 @@ private:
 
     // Request interceptor + the headers staged for the next page load
     // (#2215). ``pendingHeaders`` is set by setRequestHeaders and applied
-    // — together with the loaded URL's host — to ``headerInterceptor`` in
-    // startPageLoad. Only touched on the UI thread; the interceptor's own
+    // — together with the loaded URL's origin (scheme+host+port) — to
+    // ``headerInterceptor`` in startPageLoad. Only touched on the UI
+    // thread; the interceptor's own
     // copy is mutex-guarded because Chromium may invoke interceptRequest
     // on a different thread (Qt 5).
     RequestHeaderInterceptor* headerInterceptor;

@@ -63,9 +63,12 @@ import pytest
 # pulls in ``pytz``) would crash conftest collection for those tests.
 #
 # So gate every app-dependent hook on whether the app is importable at
-# all. When it isn't (the rpi-imager lint env), this whole file degrades
-# to a no-op and those app-free tests run untouched. ``os`` import is
-# never a problem; only the app imports are.
+# all. When it isn't (the rpi-imager lint env), those hooks (the
+# connect_to_redis patch, the _mock_redis / _ensure_assetdir autouse
+# fixtures) degrade to no-ops and the app-free tests run untouched. The
+# cheap, dependency-free setup — ENVIRONMENT=test and the gi/pydbus
+# stubs — still runs unconditionally; it's harmless for those tests and
+# needed by everything else.
 try:
     import anthias_common.utils as _anthias_common_utils  # noqa: F401
 

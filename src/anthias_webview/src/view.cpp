@@ -30,13 +30,14 @@
 #include "view.h"
 
 // Attaches the operator-configured per-asset request headers (#2215) to
-// requests whose host matches the asset's own host. Same-host scoping is
-// the security boundary: a bearer token meant for a private Grafana
-// dashboard must never ride along on the requests that page makes to a
-// third-party CDN, font host, or analytics domain. The main-frame
-// navigation and same-host XHR/subresources (which a dashboard needs to
-// carry the token to render panels) get the headers; everything else is
-// left untouched.
+// requests whose origin matches the asset's own origin (scheme + host +
+// port; see originKey). Same-origin scoping is the security boundary: a
+// bearer token meant for a private Grafana dashboard must never ride
+// along on the requests that page makes to a third-party CDN, font host,
+// or analytics domain (nor across a scheme downgrade or a different port
+// on the same host). The main-frame navigation and same-origin
+// XHR/subresources (which a dashboard needs to carry the token to render
+// panels) get the headers; everything else is left untouched.
 //
 // interceptRequest may run on a Chromium worker thread (Qt 5 invokes the
 // profile interceptor off the UI thread), while setHeaders/clear are

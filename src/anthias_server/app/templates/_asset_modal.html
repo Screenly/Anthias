@@ -560,7 +560,7 @@
                   {% comment %}
                     Per-asset custom HTTP request headers (#2215). One
                     "Name: Value" per line; the viewer's browser injects
-                    them on same-site requests so a private dashboard
+                    them on same-origin requests so a private dashboard
                     (e.g. a Grafana service-account token) renders without
                     being made public. Seeded from metadata.headers as
                     joined lines; posted verbatim to assets_update, which
@@ -575,7 +575,7 @@
                     <label for="edit-custom-headers">Custom HTTP headers</label>
                   </div>
                   <p class="modal-section__hint mt-2 mb-0">
-                    One <code>Name: Value</code> per line, sent only with requests to the asset's own host. Leave empty for none.
+                    One <code>Name: Value</code> per line, sent only with requests to the asset's own origin (same scheme, host, and port). Leave empty for none.
                   </p>
                 </div>
               </template>

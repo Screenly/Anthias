@@ -1096,7 +1096,7 @@ def _apply_request_headers(headers: dict[str, str]) -> bool:
     — passing JSON keeps the marshaling trivial across pydbus versions
     and matches how the C++ side (``setRequestHeaders``) parses it. Sent
     on every webpage tick (cheap, idempotent); the C++ interceptor only
-    attaches them to same-host requests.
+    attaches them to same-origin requests (scheme+host+port).
 
     Version-skew tolerant, mirroring ``setReloadInterval``: an older
     AnthiasViewer that predates the slot raises UnknownMethod, which
@@ -1189,7 +1189,7 @@ def view_webpage(
     # str object on consecutive ticks, which a JSON-reconstructed URL
     # would defeat. Reload when the headers change too — a header-only
     # edit must still refetch so the new headers reach the main document,
-    # not just later same-host XHR.
+    # not just later same-origin XHR.
     if current_browser_url != uri or current_browser_headers != headers:
         if headers_applied:
             _send_to_webview(lambda: browser_bus.loadPage(uri))

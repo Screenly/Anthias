@@ -20,7 +20,8 @@ class MainWindow : public QMainWindow
         // Per-asset custom HTTP request headers (#2215). ``headersJson``
         // is a JSON object of ``{name: value}`` pairs. Called by the
         // viewer right before loadPage; forwarded to View which scopes
-        // them to the loaded URL's host. Un-gated (Qt5 + Qt6).
+        // them to the loaded URL's origin (scheme+host+port). Un-gated
+        // (Qt5 + Qt6).
         void setRequestHeaders(const QString &headersJson);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
         // libmpv-in-Qt video playback (issue #2904). Replaces the
