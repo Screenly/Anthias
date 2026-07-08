@@ -1201,7 +1201,12 @@ def view_webpage(
         # reload and the headers would never reach the page. No-op for
         # the common success path.
         if headers_applied:
-            current_browser_headers = headers
+            # Store a copy, not the caller's dict: aliasing it would let a
+            # later in-place mutation of that dict silently change the
+            # cached value, making the next ``!=`` compare equal and skip a
+            # needed reload. The asset_loop currently hands us a fresh dict
+            # each tick, but the copy keeps that a non-assumption.
+            current_browser_headers = dict(headers)
     # ``setReloadInterval`` is a new D-Bus method. A viewer running
     # against an older AnthiasViewer (version skew across a fleet
     # rollout, where the viewer container has rotated to a newer image
