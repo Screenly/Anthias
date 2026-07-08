@@ -195,9 +195,19 @@ def _capture_out_sink(
     return holder
 
 
-def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
+def test_load_browser(
+    viewer_fixtures: _ViewerFixtures, monkeypatch: pytest.MonkeyPatch
+) -> None:
     browser_proc = viewer_fixtures.m_cmd.return_value.return_value
     browser_proc.is_alive.return_value = True
+
+    # Keep the pre-spawn Wayland-socket wait a no-op regardless of the
+    # host: _spawn_webview_once calls _wait_for_wayland_socket before the
+    # command runs, and on a Wayland desktop (WAYLAND_DISPLAY set) that
+    # wait would call the mocked sleep — firing feed_handshake before the
+    # _out sink is captured. Clearing it makes _wayland_socket_path()
+    # return None, so sleep is exercised only by the handshake poll loop.
+    monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
 
     # The handshake line must arrive across polls, not before the first:
     # capture the _out sink, leave it empty for the first poll, then feed
@@ -206,7 +216,10 @@ def test_load_browser(viewer_fixtures: _ViewerFixtures) -> None:
     holder = _capture_out_sink(viewer_fixtures, browser_proc)
 
     def feed_handshake(*args: Any, **kwargs: Any) -> None:
-        holder['sink']('starting up\nAnthias service start\n')
+        # Only the post-spawn poll loop should drive this; guard so a
+        # stray pre-spawn sleep can never KeyError on an uncaptured sink.
+        if 'sink' in holder:
+            holder['sink']('starting up\nAnthias service start\n')
 
     viewer_fixtures.m_sleep.side_effect = feed_handshake
 
