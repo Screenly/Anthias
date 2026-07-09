@@ -367,12 +367,15 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
         // still fails there is no QMediaPlayer fallback on this board (its
         // VideoOutput black-screens on VideoCore IV, issue #3084), so log
         // loudly — the supervisor's respawn is the recovery.
-        if (!gstPlay(uri, options)) {
+        if (gstPlay(uri, options)) {
+            if (statsTimer) {
+                statsTimer->start();
+            }
+        } else {
+            // Don't run the sampler with no pipeline — it would emit SAMPLE
+            // lines with position=-1/elapsed=-1 and bury the real failure.
             qWarning() << "VideoView::play: GStreamer playback failed for"
                        << uri << "(no QMediaPlayer fallback on this board)";
-        }
-        if (statsTimer) {
-            statsTimer->start();
         }
         return;
     }
@@ -1173,13 +1176,20 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     }
 
     gstAppSink = gst_bin_get_by_name(GST_BIN(gstPipeline), "asink");
-    if (gstAppSink) {
-        GstAppSinkCallbacks callbacks = {};
-        callbacks.eos = anthias_gst_on_eos;
-        callbacks.new_sample = anthias_gst_on_new_sample;
-        gst_app_sink_set_callbacks(
-            GST_APP_SINK(gstAppSink), &callbacks, this, nullptr);
+    if (!gstAppSink) {
+        // Without the appsink no frames ever reach Qt — the pipeline would
+        // go PLAYING to a silent black screen. Fail hard so the caller
+        // logs it and the supervisor respawns, rather than limping.
+        qWarning() << "VideoView::gstPlay: appsink 'asink' missing —"
+                   << "tearing down";
+        gstStop();
+        return false;
     }
+    GstAppSinkCallbacks callbacks = {};
+    callbacks.eos = anthias_gst_on_eos;
+    callbacks.new_sample = anthias_gst_on_new_sample;
+    gst_app_sink_set_callbacks(
+        GST_APP_SINK(gstAppSink), &callbacks, this, nullptr);
 
     playStartedAt.start();
     if (gst_element_set_state(gstPipeline, GST_STATE_PLAYING)
@@ -1388,9 +1398,15 @@ void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
     const QString audioSink =
         qEnvironmentVariable("ANTHIAS_GST_AUDIO_SINK",
                              QStringLiteral("alsasink"));
+    // Escape the device string too (same as the filesrc path): it's
+    // interpolated into the gst_parse_launch description, so a quote or
+    // backslash would break the pipeline parse.
+    QString devEsc = alsaDev;
+    devEsc.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
+    devEsc.replace(QLatin1Char('"'), QLatin1String("\\\""));
     const QString audioDeviceProp =
         (audioSink == QLatin1String("alsasink") && !alsaDev.isEmpty())
-            ? QStringLiteral(" device=\"%1\"").arg(alsaDev)
+            ? QStringLiteral(" device=\"%1\"").arg(devEsc)
             : QString();
     // Escape the path for the filesrc string (caller passes a raw path).
     QString loc = location;
@@ -1499,6 +1515,15 @@ void VideoView::gstStop()
         gst_object_unref(gstPipeline);
         gstPipeline = nullptr;
     }
+    // A drain (onGstFrame) may already be queued on the GUI thread from a
+    // late pushGstFrame. Drop the stashed frame so that queued drain is a
+    // no-op (it early-returns on a null image) instead of repainting a
+    // stale frame after teardown; reset the coalescing flag too.
+    {
+        QMutexLocker locker(&gstFrameMutex);
+        gstLatestFrame = QImage();
+    }
+    gstDrainPending.storeRelaxed(0);
 }
 
 void VideoView::pushGstFrame(const QImage& frame)
