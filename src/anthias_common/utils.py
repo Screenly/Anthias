@@ -5,6 +5,7 @@ import os
 import random
 import re
 import string
+import warnings
 from datetime import datetime, timedelta
 from os import getenv, utime
 from platform import machine
@@ -17,6 +18,7 @@ import pytz
 import redis
 import requests
 import sh
+import urllib3
 from tenacity import (
     RetryError,
     Retrying,
@@ -620,11 +622,11 @@ def url_fails(url: str, verify_ssl: bool | None = None) -> bool:
     Try HEAD and GET for URL availability check.
     """
 
-    # Use Certifi module and set to True as default so users stop
-    # seeing InsecureRequestWarning in logs.
     verify_flag = settings['verify_ssl'] if verify_ssl is None else verify_ssl
     verify: str | bool
     if verify_flag:
+        # Pin verification to the certifi CA bundle so a stale system
+        # trust store can't spuriously fail an otherwise-valid origin.
         verify = certifi.where()
     else:
         # verify_ssl is off — the operator has opted into trusting
@@ -639,34 +641,40 @@ def url_fails(url: str, verify_ssl: bool | None = None) -> bool:
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'  # noqa: E501
     }
-    if verify is False:
-        # The operator explicitly disabled verification; silence the
-        # per-request InsecureRequestWarning urllib3 would otherwise
-        # spam into the logs on every reachability sweep.
-        requests.packages.urllib3.disable_warnings(  # type: ignore[attr-defined]
-            requests.packages.urllib3.exceptions.InsecureRequestWarning  # type: ignore[attr-defined]
-        )
     try:
         if not validate_url(url):
             return False
 
-        if requests.head(
-            url,
-            allow_redirects=True,
-            headers=headers,
-            timeout=10,
-            verify=verify,
-        ).ok:
-            return False
+        with warnings.catch_warnings():
+            if verify is False:
+                # The operator explicitly disabled verification; silence
+                # the InsecureRequestWarning urllib3 raises per request so
+                # a reachability sweep doesn't spam the logs. Scoped to
+                # this block rather than a process-global
+                # disable_warnings() so it can't leak to other requests
+                # elsewhere in the process — catch_warnings restores the
+                # prior filter state on exit.
+                warnings.simplefilter(
+                    'ignore', urllib3.exceptions.InsecureRequestWarning
+                )
 
-        if requests.get(
-            url,
-            allow_redirects=True,
-            headers=headers,
-            timeout=10,
-            verify=verify,
-        ).ok:
-            return False
+            if requests.head(
+                url,
+                allow_redirects=True,
+                headers=headers,
+                timeout=10,
+                verify=verify,
+            ).ok:
+                return False
+
+            if requests.get(
+                url,
+                allow_redirects=True,
+                headers=headers,
+                timeout=10,
+                verify=verify,
+            ).ok:
+                return False
 
     except (requests.ConnectionError, requests.exceptions.Timeout):
         pass
