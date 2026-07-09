@@ -1637,37 +1637,53 @@ void VideoView::gstRestartLoop()
     gstLoopAudio();
 }
 
-void VideoView::gstSegmentSeek(GstElement* pipe, bool flush)
+bool VideoView::gstSegmentSeek(GstElement* pipe, bool flush)
 {
     if (!pipe) {
-        return;
+        return false;
     }
     // A SEGMENT seek makes the pipeline post SEGMENT_DONE (not EOS) at the
     // end; re-arming it there WITHOUT flushing loops the clip gaplessly —
     // the HW decoder is never torn down, so no re-prime gap. The first
     // seek must flush to switch the pipeline into segment mode; subsequent
-    // ones must not.
-    GstSeekFlags flags = GST_SEEK_FLAG_SEGMENT;
+    // ones must not. KEY_UNIT matches the flushing loop seeks; the target
+    // is 0, always a keyframe, so it only keeps the flag set consistent.
+    GstSeekFlags flags = static_cast<GstSeekFlags>(GST_SEEK_FLAG_SEGMENT
+                                                   | GST_SEEK_FLAG_KEY_UNIT);
     if (flush) {
         flags = static_cast<GstSeekFlags>(flags | GST_SEEK_FLAG_FLUSH);
     }
-    gst_element_seek(pipe, 1.0, GST_FORMAT_TIME, flags,
-                     GST_SEEK_TYPE_SET, 0,
-                     GST_SEEK_TYPE_SET, GST_CLOCK_TIME_NONE);
+    return gst_element_seek(pipe, 1.0, GST_FORMAT_TIME, flags,
+                            GST_SEEK_TYPE_SET, 0,
+                            GST_SEEK_TYPE_SET, GST_CLOCK_TIME_NONE);
 }
 
 void VideoView::gstVideoSegmentDone()
 {
-    gstSegmentSeek(gstPipeline, false);
-    // Keep audio aligned to the video's loop point.
-    gstSegmentSeek(gstAudioPipeline, false);
+    // Re-arm the video segment without flushing (gapless). If the re-arm
+    // fails, segment mode delivers no EOS, so the pipeline would freeze on
+    // its last frame forever — fall back to the flushing restart (small
+    // seam, but the clip keeps looping) and stop here.
+    if (!gstSegmentSeek(gstPipeline, false)) {
+        gstRestartLoop();
+        return;
+    }
+    // Keep audio aligned to the video's loop point; on failure loop it the
+    // flushing way rather than let it stall silently.
+    if (!gstSegmentSeek(gstAudioPipeline, false)) {
+        gstLoopAudio();
+    }
 }
 
 void VideoView::gstAudioSegmentDone()
 {
     // Video drives re-alignment; if audio finishes its segment first just
-    // re-arm audio so it keeps playing until the video loops it again.
-    gstSegmentSeek(gstAudioPipeline, false);
+    // re-arm audio so it keeps playing until the video loops it again. On
+    // a failed re-arm fall back to the flushing loop so audio doesn't
+    // stall silently at the segment boundary.
+    if (!gstSegmentSeek(gstAudioPipeline, false)) {
+        gstLoopAudio();
+    }
 }
 
 void VideoView::onOverlayBuffer(struct _GstPad* pad)
