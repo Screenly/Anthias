@@ -363,7 +363,14 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
     if (gstMode) {
         // pi3-64: hand off to the GStreamer HW pipeline instead of
         // QMediaPlayer. Frames arrive via onGstFrame → rasterWidget.
-        gstPlay(uri, options);
+        // gstPlay exhausts every GStreamer path (overlay → appsink); if it
+        // still fails there is no QMediaPlayer fallback on this board (its
+        // VideoOutput black-screens on VideoCore IV, issue #3084), so log
+        // loudly — the supervisor's respawn is the recovery.
+        if (!gstPlay(uri, options)) {
+            qWarning() << "VideoView::play: GStreamer playback failed for"
+                       << uri << "(no QMediaPlayer fallback on this board)";
+        }
         if (statsTimer) {
             statsTimer->start();
         }
@@ -1065,11 +1072,32 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
 {
     gstStop();
 
+    // filesrc needs a filesystem path. Anthias passes bare local paths
+    // (e.g. /data/anthias_assets/<id>) today; normalise a file:// URL
+    // defensively so a future caller can't yield a broken location=.
+    // Per-pipeline ``"``/``\`` escaping happens where each filesrc is
+    // built below.
+    QString localPath = uri;
+    if (localPath.startsWith(QLatin1String("file://"))) {
+        localPath = QUrl(uri).toLocalFile();
+    }
+    // Resolve the audio device once and start audio HERE (not inside
+    // gstPlayOverlay) so BOTH the overlay and the appsink-raster fallback
+    // get sound — previously the raster path played silent. Same
+    // audio-device option the QMediaPlayer path uses; strip the Qt
+    // ``alsa/`` scheme prefix for ALSA.
+    QString alsaDev =
+        options.value(QStringLiteral("audio-device")).toString();
+    if (alsaDev.startsWith(QLatin1String("alsa/"))) {
+        alsaDev = alsaDev.mid(5);
+    }
+
     // HW overlay-plane path first (if requested and resolvable): it scans
     // out the video directly on a vc4 overlay plane, bypassing the eglfs
     // GL compositor that caps at ~9 fps. Falls through to the appsink →
     // raster blit below on any failure.
-    if (gstOverlayMode && gstPlayOverlay(uri, options)) {
+    if (gstOverlayMode && gstPlayOverlay(localPath)) {
+        gstStartAudio(localPath, alsaDev);
         return true;
     }
 
@@ -1082,8 +1110,7 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     // doing SAND→RGB16 in hardware (the conversion the CPU can't afford,
     // ~600 ms/frame). sync=true paces the appsink to each frame's PTS;
     // drop=true / max-buffers=2 bounds latency to the freshest frame.
-    // Audio is a follow-up; this first cut is video-only.
-    QString location = uri;
+    QString location = localPath;
     location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
     location.replace(QLatin1Char('"'), QLatin1String("\\\""));
     // Optional ISP downscale (ANTHIAS_GST_SCALE="WxH", e.g. 1280x720):
@@ -1147,10 +1174,12 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
         gstStop();
         return false;
     }
+    // appsink-raster fallback is up; give it audio too.
+    gstStartAudio(localPath, alsaDev);
     return true;
 }
 
-bool VideoView::gstPlayOverlay(const QString& uri, const QVariantMap& options)
+bool VideoView::gstPlayOverlay(const QString& uri)
 {
     QPlatformNativeInterface* ni = QGuiApplication::platformNativeInterface();
     if (!ni) {
@@ -1237,24 +1266,13 @@ bool VideoView::gstPlayOverlay(const QString& uri, const QVariantMap& options)
             : QStringLiteral(
                   "v4l2convert capture-io-mode=%1 ! video/x-raw,format=NV12 ! ")
                   .arg(convIoMode);
-    // Audio plays in a SEPARATE GStreamer pipeline (see gstStartAudio),
-    // NOT a branch off the video's qtdemux. A shared pipeline coupled the
-    // two fatally: any audio condition — a slow/queuing decodebin preroll,
-    // an audio-provided clock that stalls, a missing track — froze the
-    // VIDEO at the first frame. An independent pipeline (own clock, own
-    // preroll, own bus) means the video path below stays byte-for-byte the
-    // proven 30 fps chain and can never be stalled by audio. Resolve the
-    // ALSA device here (same ``audio-device`` option the QMediaPlayer path
-    // uses, e.g. ``alsa/sysdefault:CARD=<hdmi>``; strip the Qt ``alsa/``
-    // scheme). We drive alsasink directly on the HDMI card rather than
-    // pulsesink: pi3-64 no longer routes video through QtMultimedia, and
-    // pulse's default sink is the 3.5mm jack while its vc4hdmi sink sits
-    // suspended (card free) — the legacy GstFbdev path did the same.
-    QString alsaDev =
-        options.value(QStringLiteral("audio-device")).toString();
-    if (alsaDev.startsWith(QLatin1String("alsa/"))) {
-        alsaDev = alsaDev.mid(5);
-    }
+    // Audio is a SEPARATE GStreamer pipeline started by the caller
+    // (gstPlay → gstStartAudio), NOT a branch off this video qtdemux: a
+    // shared pipeline coupled the two fatally (a slow/queuing decodebin
+    // preroll, an audio-provided clock that stalls, or a missing track
+    // froze the VIDEO at the first frame). Keeping it independent means
+    // this overlay chain stays byte-for-byte the proven 30 fps path and
+    // can never be stalled by audio.
     const QString description =
         QStringLiteral(
             "filesrc location=\"%1\" ! qtdemux ! h264parse ! %7 ! "
@@ -1328,9 +1346,8 @@ bool VideoView::gstPlayOverlay(const QString& uri, const QVariantMap& options)
             "backend=gstreamer/v4l2 sink=kms-overlay plane-id=%1 qt=%2")
             .arg(planeId)
             .arg(QStringLiteral(QT_VERSION_STR)));
-
-    // Video is up; bring up audio in its own pipeline (best-effort).
-    gstStartAudio(location, alsaDev);
+    // Audio is started by the caller (gstPlay) so it also covers the
+    // appsink-raster fallback, not just this overlay path.
     return true;
 }
 
@@ -1343,6 +1360,10 @@ void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
         (audioSink == QLatin1String("alsasink") && !alsaDev.isEmpty())
             ? QStringLiteral(" device=\"%1\"").arg(alsaDev)
             : QString();
+    // Escape the path for the filesrc string (caller passes a raw path).
+    QString loc = location;
+    loc.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
+    loc.replace(QLatin1Char('"'), QLatin1String("\\\""));
     // decodebin autoplugs the audio codec (AAC/MP3/…); the sink drives the
     // HDMI ALSA card directly. Own pipeline → own clock/preroll, fully
     // isolated from the video overlay pipeline.
@@ -1353,7 +1374,7 @@ void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
         QStringLiteral(
             "filesrc location=\"%1\" ! qtdemux name=ademux ademux.audio_0 ! "
             "queue ! decodebin ! audioconvert ! audioresample ! %2%3")
-            .arg(location, audioSink, audioDeviceProp);
+            .arg(loc, audioSink, audioDeviceProp);
 
     GError* error = nullptr;
     gstAudioPipeline =

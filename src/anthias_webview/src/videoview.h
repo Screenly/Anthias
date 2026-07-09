@@ -226,7 +226,7 @@ private:
     // (which caps at ~9 fps on VideoCore IV). Returns false (caller falls
     // back to the appsink→raster path) if the eglfs DRM resources or a
     // free overlay plane can't be resolved.
-    bool gstPlayOverlay(const QString& uri, const QVariantMap& options);
+    bool gstPlayOverlay(const QString& uri);
     void gstStop();
     bool gstOverlayMode = false;
     bool gstOverlayActive = false;

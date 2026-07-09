@@ -3,20 +3,25 @@
 #include <QDebug>
 #include <QtDBus>
 
+#ifdef ANTHIAS_GSTREAMER
 #include <csignal>
 #include <cstdio>
 #include <execinfo.h>
 #include <unistd.h>
+#endif
 
 #include "mainwindow.h"
 
 namespace {
-// Fatal-signal backtrace. The pi3-64 overlay video path (VideoView +
-// kmssink on eglfs's DRM fd) segfaults silently — the kernel kills the
-// process and docker logs show only the respawn. Dumping a backtrace to
-// stderr (captured by the start_viewer wrapper) pins the crash frame.
-// Re-raises with the default handler so the exit status is unchanged and
-// the Python supervisor still respawns as before.
+#ifdef ANTHIAS_GSTREAMER
+// Fatal-signal backtrace. Scoped to the pi3-64 build (the only one that
+// links the GStreamer overlay path): VideoView + kmssink on eglfs's DRM
+// fd segfaulted silently while it was being brought up — the kernel
+// killed the process and docker logs showed only the respawn. Dumping a
+// backtrace to stderr (captured by the start_viewer wrapper) pins the
+// crash frame. Re-raises with the default handler so the core dump / exit
+// status are unchanged and the Python supervisor still respawns as
+// before. Other boards keep the default crash behaviour untouched.
 void anthiasCrashHandler(int sig)
 {
     void* frames[64];
@@ -36,6 +41,11 @@ void installCrashHandler()
     signal(SIGBUS, anthiasCrashHandler);
     signal(SIGFPE, anthiasCrashHandler);
 }
+#else
+// No-op on non-pi3-64 builds — leave the platform default crash handling
+// (core dumps) in place.
+void installCrashHandler() {}
+#endif
 
 // Realise the operator's "Prefer dark mode" setting. The Python viewer
 // plumbs the Django setting in via the ANTHIAS_PREFER_DARK_MODE env var
