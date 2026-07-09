@@ -1038,6 +1038,9 @@ gboolean anthias_gst_audio_bus(GstBus* /*bus*/, GstMessage* message,
 {
     auto* view = static_cast<VideoView*>(user_data);
     switch (GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_ASYNC_DONE:
+        view->gstArmAudioSegment();
+        break;
     case GST_MESSAGE_SEGMENT_DONE:
         view->gstAudioSegmentDone();
         break;
@@ -1068,10 +1071,19 @@ gboolean anthias_gst_bus_loop(GstBus* /*bus*/, GstMessage* message,
 {
     auto* view = static_cast<VideoView*>(user_data);
     switch (GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_ASYNC_DONE:
+        // Preroll complete: only now can a segment seek succeed. Enter
+        // segment mode here (once) rather than right after set_state, where
+        // the pipeline is still prerolling and the seek is rejected. Arming
+        // latches only on a successful seek, so an early ASYNC_DONE from a
+        // child bin just retries on the pipeline's own ASYNC_DONE.
+        view->gstArmVideoSegment();
+        break;
     case GST_MESSAGE_SEGMENT_DONE:
-        // Gapless loop: re-arm the segment without flushing so the HW
-        // decoder stays primed (a flushing seek re-primes it and drops
-        // ~0.35s of frames at every loop point).
+        // Reduced-seam loop: re-arm the segment without flushing so the HW
+        // decoder is not fully torn down. On the bcm2835 v4l2 decoder this
+        // roughly halves the loop-point drop vs the flushing restart
+        // (measured ~0.2s -> ~0.1s on real pi3-64; not fully gapless).
         view->gstVideoSegmentDone();
         break;
     case GST_MESSAGE_EOS:
@@ -1420,10 +1432,9 @@ bool VideoView::gstPlayOverlay(const QString& uri)
         rasterWidget->clear();
     }
     gstOverlayActive = true;
-    // Switch to segment playback so the clip loops gaplessly (see
-    // gstSegmentSeek) instead of the flushing-seek restart that dropped
-    // ~0.35s at each loop point.
-    gstSegmentSeek(gstPipeline, true);
+    // Segment mode (for reduced-seam looping) is entered from the
+    // ASYNC_DONE bus message once the pipeline has prerolled — a seek issued
+    // here, right after set_state(PLAYING), races preroll and is rejected.
     writeStats(
         QStringLiteral("INIT"),
         QStringLiteral(
@@ -1496,8 +1507,8 @@ void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
         gstStopAudio();
         return;
     }
-    // Match the video: segment playback so audio loops gaplessly too.
-    gstSegmentSeek(gstAudioPipeline, true);
+    // Match the video: segment mode is entered from the audio pipeline's
+    // ASYNC_DONE (see gstArmAudioSegment) so audio loops the same way.
     writeStats(QStringLiteral("AUDIO"),
                QStringLiteral("started sink=%1 device=%2")
                    .arg(audioSink,
@@ -1544,6 +1555,7 @@ void VideoView::gstStopAudio()
     gst_element_set_state(gstAudioPipeline, GST_STATE_NULL);
     gst_object_unref(gstAudioPipeline);
     gstAudioPipeline = nullptr;
+    gstAudioSegmentArmed = false;
 }
 
 void VideoView::gstStop()
@@ -1560,6 +1572,7 @@ void VideoView::gstStop()
         }
     }
     gstOverlayActive = false;
+    gstSegmentArmed = false;
     if (gstAppSink) {
         gst_object_unref(gstAppSink);
         gstAppSink = nullptr;
@@ -1643,11 +1656,14 @@ bool VideoView::gstSegmentSeek(GstElement* pipe, bool flush)
         return false;
     }
     // A SEGMENT seek makes the pipeline post SEGMENT_DONE (not EOS) at the
-    // end; re-arming it there WITHOUT flushing loops the clip gaplessly —
-    // the HW decoder is never torn down, so no re-prime gap. The first
-    // seek must flush to switch the pipeline into segment mode; subsequent
-    // ones must not. KEY_UNIT matches the flushing loop seeks; the target
-    // is 0, always a keyframe, so it only keeps the flag set consistent.
+    // end; re-arming it there WITHOUT flushing loops the clip without a full
+    // decoder teardown, which roughly halves the loop-point frame drop on
+    // the bcm2835 v4l2 decoder (~0.2s flushing restart -> ~0.1s; the
+    // decoder still partially re-primes, so it is reduced, not eliminated).
+    // The first seek must flush to switch the pipeline into segment mode;
+    // subsequent ones must not. KEY_UNIT matches the flushing loop seeks;
+    // the target is 0, always a keyframe, so it only keeps the flag set
+    // consistent.
     GstSeekFlags flags = static_cast<GstSeekFlags>(GST_SEEK_FLAG_SEGMENT
                                                    | GST_SEEK_FLAG_KEY_UNIT);
     if (flush) {
@@ -1658,12 +1674,35 @@ bool VideoView::gstSegmentSeek(GstElement* pipe, bool flush)
                             GST_SEEK_TYPE_SET, GST_CLOCK_TIME_NONE);
 }
 
+void VideoView::gstArmVideoSegment()
+{
+    if (gstSegmentArmed || !gstPipeline) {
+        return;
+    }
+    // Latch only on success: an early ASYNC_DONE (e.g. from a child bin
+    // mid-preroll) whose seek is rejected leaves the flag clear so the
+    // pipeline's own ASYNC_DONE retries.
+    if (gstSegmentSeek(gstPipeline, true)) {
+        gstSegmentArmed = true;
+    }
+}
+
+void VideoView::gstArmAudioSegment()
+{
+    if (gstAudioSegmentArmed || !gstAudioPipeline) {
+        return;
+    }
+    if (gstSegmentSeek(gstAudioPipeline, true)) {
+        gstAudioSegmentArmed = true;
+    }
+}
+
 void VideoView::gstVideoSegmentDone()
 {
-    // Re-arm the video segment without flushing (gapless). If the re-arm
-    // fails, segment mode delivers no EOS, so the pipeline would freeze on
-    // its last frame forever — fall back to the flushing restart (small
-    // seam, but the clip keeps looping) and stop here.
+    // Re-arm the video segment without flushing. If the re-arm fails,
+    // segment mode delivers no EOS, so the pipeline would freeze on its
+    // last frame forever — fall back to the flushing restart (small seam,
+    // but the clip keeps looping) and stop here.
     if (!gstSegmentSeek(gstPipeline, false)) {
         gstRestartLoop();
         return;

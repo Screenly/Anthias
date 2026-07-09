@@ -189,7 +189,7 @@ public:
     // from the pipeline bus watch (anthias_gst_bus_loop), which GLib
     // services on the GUI thread, so the seek never races stop().
     Q_INVOKABLE void gstRestartLoop();
-    // Gapless loop via SEGMENT seeks: gstSegmentSeek re-arms a pipeline's
+    // Reduced-seam loop via SEGMENT seeks: gstSegmentSeek re-arms a pipeline's
     // segment (flush only on the first, to enter segment mode); the
     // *SegmentDone hooks are called from the bus watches on SEGMENT_DONE.
     // Returns the seek result: in segment mode no EOS is posted, so a
@@ -198,6 +198,11 @@ public:
     bool gstSegmentSeek(struct _GstElement* pipe, bool flush);
     void gstVideoSegmentDone();
     void gstAudioSegmentDone();
+    // Enter segment mode on the first ASYNC_DONE (preroll done). Idempotent
+    // via gstSegmentArmed / gstAudioSegmentArmed. Called from the bus
+    // watches on GST_MESSAGE_ASYNC_DONE.
+    void gstArmVideoSegment();
+    void gstArmAudioSegment();
     // Overlay-path instrumentation (streaming thread). onOverlayBuffer:
     // count each frame reaching kmssink + latch the source framerate from
     // the pad caps. logOverlayQos: record kmssink's authoritative
@@ -245,6 +250,16 @@ private:
     struct _GstElement* gstAudioPipeline = nullptr;
     struct _GstElement* gstAppSink = nullptr;
     bool gstMode = false;
+    // Enter segment mode ONCE, from ASYNC_DONE (preroll complete) rather
+    // than synchronously after set_state(PLAYING) — a segment seek issued
+    // while the pipeline is still prerolling returns FALSE, so the pipeline
+    // never enters segment mode and looping falls back to the flushing EOS
+    // restart (which fully re-primes the decoder, roughly double the
+    // loop-point drop this change reduces to). These guard against
+    // re-arming on the extra ASYNC_DONE the flushing seek itself posts.
+    // Reset in gstPlay/gstStop.
+    bool gstSegmentArmed = false;
+    bool gstAudioSegmentArmed = false;
     // Single-slot handoff: the appsink callback (streaming thread) writes
     // the newest frame under gstFrameMutex and, if no drain is already
     // queued (gstDrainPending), posts one onGstFrame() to the GUI thread.
