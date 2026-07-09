@@ -4,7 +4,7 @@
 
 {{- /* Build sorted list of unique tags */ -}}
 {{- $allTags := slice -}}
-{{- range $path, $ops := sort $spec.paths -}}
+{{- range $path, $ops := $spec.paths -}}
   {{- range $method := $methods -}}
     {{- with index $ops $method -}}
       {{- $op := . -}}
@@ -36,7 +36,7 @@
         <div id="tag-{{ $tag | urlize }}" class="scroll-mt-24">
             <h2 class="text-2xl font-bold text-brand-near-black capitalize">{{ replace $tag "_" " " }}</h2>
             <div class="mt-6 space-y-6">
-                {{- range $path, $ops := sort $spec.paths -}}
+                {{- range $path, $ops := $spec.paths -}}
                   {{- range $method := $methods -}}
                     {{- with index $ops $method -}}
                       {{- $op := . -}}
@@ -95,7 +95,7 @@
                           {{- $contentType := "application/json" -}}
                           {{- if not $body -}}
                             {{- $content := .content -}}
-                            {{- range $ct, $entry := sort $content -}}
+                            {{- range $ct, $entry := $content -}}
                               {{- if not $body -}}{{- $body = $entry -}}{{- $contentType = $ct -}}{{- end -}}
                             {{- end -}}
                           {{- end -}}
@@ -112,7 +112,10 @@
                           <div>
                             <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">Responses</h3>
                             <div class="space-y-3">
-                              {{- range $status, $resp := sort $responses -}}
+                              {{- /* Map range is already key-sorted; `sort`
+                                     would drop the keys and make $status a
+                                     numeric index instead of the HTTP code. */ -}}
+                              {{- range $status, $resp := $responses -}}
                               <details class="border border-zinc-200 rounded">
                                 <summary class="cursor-pointer px-3 py-2 text-sm font-mono flex items-center gap-3 hover:bg-zinc-50">
                                   {{- $statusColor := "bg-zinc-100 text-zinc-700" -}}

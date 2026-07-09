@@ -123,6 +123,14 @@ jobs:
       - name: Build website
         run: hugo --source website --minify
 
+      # Generate llms.txt / llms-full.txt from the rendered public/
+      # tree (llmstxt.org convention). Reading the built HTML keeps
+      # the files in sync with what visitors see, including marketing
+      # copy that lives in Hugo layouts rather than content/*.md.
+      - name: Generate llms.txt
+        run: bun run llms:generate
+        working-directory: website
+
       # Fetch rpi-imager.json from the latest GitHub release. The
       # file is built by build-balena-disk-image.yaml at release time
       # and Hugo serves it at /rpi-imager.json.
