@@ -264,10 +264,11 @@ def _build_webview_env() -> dict[str, str]:
     # the QQuickWidget FBO never reaches the eglfs scanout, so every
     # video black-screens (issue #3084) while images and webpages —
     # which composite through the widget backing store — render fine.
-    # Route ONLY this board to the C++ CPU-raster presenter
-    # (QVideoFrame::toImage() → paintEvent), the same backing-store path
-    # images already use here. Pi 4 (V3D 4.2) and Pi 5 (V3D 7.x) keep
-    # the fast on-GPU VideoOutput path. Gated on the authoritative baked
+    # Route ONLY this board to the C++ non-VideoOutput presenter: the
+    # GStreamer vc4 overlay-plane path (preferred, ANTHIAS_VIDEO_OVERLAY),
+    # falling back to the CPU-raster blit (QVideoFrame::toImage() →
+    # paintEvent, the same backing-store path images use). Pi 4 (V3D 4.2)
+    # and Pi 5 (V3D 7.x) keep the fast on-GPU VideoOutput path. Gated on the authoritative baked
     # DEVICE_TYPE (get_device_type() returns 'pi3' on both Pi 3 streams,
     # so the model string alone can't tell 64-bit from armhf — same
     # reason media_player.force_mpv keys off DEVICE_TYPE). Pop a stale

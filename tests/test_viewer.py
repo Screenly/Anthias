@@ -1574,9 +1574,11 @@ def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
 
 
 # Video presentation substrate — pi3-64 (VideoCore IV / GLES2) can't
-# scan out the QML VideoOutput RHI path (issue #3084), so the Python
-# side flags it onto the C++ CPU-raster presenter via
-# ANTHIAS_VIDEO_RASTER. Every other board keeps the GPU VideoOutput path.
+# scan out the QML VideoOutput RHI path (issue #3084), so the Python side
+# flags it onto the C++ non-VideoOutput presenter: ANTHIAS_VIDEO_OVERLAY
+# selects the GStreamer vc4 overlay-plane path (preferred), with the
+# ANTHIAS_VIDEO_RASTER CPU-raster blit as the fallback. Every other board
+# keeps the GPU VideoOutput path.
 
 
 def test_build_webview_env_sets_video_raster_on_pi3_64() -> None:
