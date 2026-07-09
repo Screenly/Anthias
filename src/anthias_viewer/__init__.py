@@ -1124,7 +1124,12 @@ def _load_via_webview(
                 _send_to_webview(load_without_skip)
             except Exception:
                 # The 1-arg call failed too — not a signature skew.
-                raise exc
+                # Re-raise the original 2-arg failure. ``from None`` drops
+                # the fallback exception from the context so the traceback
+                # points at the real cause instead of a confusing "during
+                # handling of the above exception" chain, while ``exc``
+                # keeps its own original traceback.
+                raise exc from None
             _webview_supports_ssl_arg = False
             logging.warning(
                 'webview predates the loadPage/loadImage skipSslVerify '
