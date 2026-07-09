@@ -408,6 +408,16 @@ void VideoView::stop()
         if (statsStream && !currentUri.isEmpty()) {
             const qint64 elapsedMs =
                 playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
+            // Log the real pipeline position (the pipeline is still up here
+            // — gstStop() runs below), not a hard-coded 0 that reads like
+            // playback never advanced. -1 if the query fails.
+            gint64 posNs = 0;
+            const qint64 posMs =
+                (gstPipeline
+                 && gst_element_query_position(
+                        gstPipeline, GST_FORMAT_TIME, &posNs))
+                    ? posNs / GST_MSECOND
+                    : -1;
             writeStats(
                 QStringLiteral("STOP"),
                 QStringLiteral(
@@ -418,7 +428,7 @@ void VideoView::stop()
                     .arg(framesDelivered)
                     .arg(framesForwarded)
                     .arg(framesRendered)
-                    .arg(0));
+                    .arg(posMs));
         }
         gstStop();
         rasterReady = true;
