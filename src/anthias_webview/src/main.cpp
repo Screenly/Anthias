@@ -38,16 +38,25 @@ void anthiasCrashHandler(int sig)
         // Nothing safe to do if stderr is gone; fall through to re-raise.
     }
     backtrace_symbols_fd(frames, count, STDERR_FILENO);
-    signal(sig, SIG_DFL);
+    // SA_RESETHAND (below) already restored the default disposition, so
+    // re-raising re-runs the default handler (core dump / exit) without an
+    // async-signal-unsafe signal() call here.
     raise(sig);
 }
 
 void installCrashHandler()
 {
-    signal(SIGSEGV, anthiasCrashHandler);
-    signal(SIGABRT, anthiasCrashHandler);
-    signal(SIGBUS, anthiasCrashHandler);
-    signal(SIGFPE, anthiasCrashHandler);
+    struct sigaction sa;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = anthiasCrashHandler;
+    // SA_RESETHAND: reset to the default handler once ours fires, so the
+    // re-raise takes the default path and we never call the
+    // non-async-signal-safe signal() from within the handler.
+    sa.sa_flags = SA_RESETHAND;
+    sigaction(SIGSEGV, &sa, nullptr);
+    sigaction(SIGABRT, &sa, nullptr);
+    sigaction(SIGBUS, &sa, nullptr);
+    sigaction(SIGFPE, &sa, nullptr);
 }
 #else
 // No-op on non-pi3-64 builds — leave the platform default crash handling

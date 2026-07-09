@@ -1598,10 +1598,11 @@ void VideoView::onGstFrame()
     // Clear the coalescing flag at the END: while this drain ran,
     // pushGstFrame kept gstDrainPending==1 (testAndSetOrdered) so no extra
     // onGstFrame was ever queued behind it — frames that arrived meanwhile
-    // just updated gstLatestFrame. Releasing it here lets the next push
-    // queue exactly one fresh drain, keeping the GUI event queue bounded to
+    // just updated gstLatestFrame. storeRelease pairs with the acquire in
+    // pushGstFrame's testAndSetOrdered so this drain's writes land before
+    // the next drain can be queued, keeping the GUI event queue bounded to
     // a single in-flight drain.
-    gstDrainPending.storeRelaxed(0);
+    gstDrainPending.storeRelease(0);
 }
 
 void VideoView::gstRestartLoop()
