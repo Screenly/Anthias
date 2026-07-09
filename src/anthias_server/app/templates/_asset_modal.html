@@ -557,6 +557,26 @@
                   <p class="modal-section__hint mt-2 mb-0">
                     Reload the page on this cadence so dashboards stay current. Empty or 0 disables.
                   </p>
+                  {% comment %}
+                    Per-asset custom HTTP request headers (#2215). One
+                    "Name: Value" per line; the viewer's browser injects
+                    them on same-origin requests so a private dashboard
+                    (e.g. a Grafana service-account token) renders without
+                    being made public. Seeded from metadata.headers as
+                    joined lines; posted verbatim to assets_update, which
+                    parses + sanitises via parse_header_lines.
+                  {% endcomment %}
+                  <div class="modal-section__divider"></div>
+                  <div class="app-floating">
+                    <textarea class="app-input" id="edit-custom-headers"
+                      name="custom_headers" rows="3"
+                      placeholder="Authorization: Bearer <token>"
+                      :value="(editAsset.metadata && editAsset.metadata.headers) ? Object.entries(editAsset.metadata.headers).map(function (e) { return e[0] + ': ' + e[1] }).join('\n') : ''"></textarea>
+                    <label for="edit-custom-headers">Custom HTTP headers</label>
+                  </div>
+                  <p class="modal-section__hint mt-2 mb-0">
+                    One <code>Name: Value</code> per line, sent only with requests to the asset's own origin (same scheme, host, and port). Leave empty for none.
+                  </p>
                 </div>
               </template>
             </div>

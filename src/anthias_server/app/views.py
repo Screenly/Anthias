@@ -33,6 +33,7 @@ from anthias_server.app import page_context
 from anthias_server.app.models import (
     clamp_duration,
     clamp_refresh_interval,
+    parse_header_lines,
 )
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
@@ -875,6 +876,22 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
         metadata['refresh_interval_s'] = clamp_refresh_interval(
             raw_interval.strip() or 0
         )
+        asset.metadata = metadata
+
+    # Per-asset custom request headers — feature #2215. Same
+    # ``metadata``-backed, webpage-only posture as refresh_interval_s: a
+    # missing field means "non-webpage edit, leave the bag alone"; an
+    # empty textarea means "operator cleared the headers" and pops the
+    # key. The form clamps (drops malformed lines via parse_header_lines)
+    # rather than 400ing — the strict reject lives in the v2 API.
+    raw_headers = request.POST.get('custom_headers')
+    if raw_headers is not None:
+        metadata = dict(asset.metadata or {})
+        headers = parse_header_lines(raw_headers)
+        if headers:
+            metadata['headers'] = headers
+        else:
+            metadata.pop('headers', None)
         asset.metadata = metadata
 
     # Store-app reconfiguration. When editing an app asset (one carrying

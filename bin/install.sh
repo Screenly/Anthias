@@ -511,6 +511,40 @@ function run_ansible_playbook() {
         site.yml "${ANSIBLE_PLAYBOOK_ARGS[@]}"
 }
 
+function stop_docker_stack() {
+    # Free the RAM held by the previous-version stack (server, viewer,
+    # webview, celery, redis) before the memory-intensive host work in
+    # the Ansible play: the apt dist-upgrade and, right after it,
+    # `swapoff --all`. With the stack resident, swapoff faults all swap
+    # back into RAM at once and the OOM-killer aborts the upgrade on
+    # memory-tight boards (issue #3165). Taking the stack down here also
+    # de-risks the dist-upgrade itself. upgrade_docker_containers brings
+    # everything back up (`up -d`) once the host work is done, and the
+    # install ends in a reboot regardless.
+    #
+    # No-op on a fresh install: there is no rendered compose file and
+    # nothing is running yet.
+    local compose_file="${ANTHIAS_REPO_DIR}/docker-compose.yml"
+    if [ ! -f "${compose_file}" ]; then
+        return 0
+    fi
+
+    display_section "Stop Docker Containers (free memory for the upgrade)"
+
+    local compose_files=(-f "${compose_file}")
+    local ssl_override="${ANTHIAS_REPO_DIR}/docker-compose.ssl.override.yml"
+    if [ -f "${ssl_override}" ]; then
+        compose_files+=(-f "${ssl_override}")
+    fi
+
+    # Best-effort: a leftover/mismatched compose file from an older
+    # release must not abort the upgrade, so tolerate a non-zero exit.
+    # --remove-orphans also sweeps containers from services since renamed
+    # or removed from the compose file.
+    sudo docker compose "${compose_files[@]}" down --remove-orphans \
+        || true
+}
+
 function upgrade_docker_containers() {
     display_section "Initialize/Upgrade Docker Containers"
 
@@ -729,6 +763,7 @@ function main() {
     post_clone_migrate_legacy_paths
     install_ansible
     provision_host_agent_venv
+    stop_docker_stack
     run_ansible_playbook
 
     upgrade_docker_containers

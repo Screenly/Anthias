@@ -7,6 +7,8 @@
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
+#include <QWebEngineUrlRequestInfo>
+#include <QWebEngineUrlRequestInterceptor>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -16,9 +18,103 @@
 #include <QMovie>
 #include <QBuffer>
 #include <QByteArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QList>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QPair>
 #include <QtGlobal>
 
 #include "view.h"
+
+// Attaches the operator-configured per-asset request headers (#2215) to
+// requests whose origin matches the asset's own origin (scheme + host +
+// port; see originKey). Same-origin scoping is the security boundary: a
+// bearer token meant for a private Grafana dashboard must never ride
+// along on the requests that page makes to a third-party CDN, font host,
+// or analytics domain (nor across a scheme downgrade or a different port
+// on the same host). The main-frame navigation and same-origin
+// XHR/subresources (which a dashboard needs to carry the token to render
+// panels) get the headers; everything else is left untouched.
+//
+// interceptRequest may run on a Chromium worker thread (Qt 5 invokes the
+// profile interceptor off the UI thread), while setHeaders/clear are
+// called from the UI thread — so the shared state is guarded by a mutex.
+// No Q_OBJECT: the class adds no signals/slots, so it needs no moc and
+// can live entirely in this translation unit.
+
+// Canonical origin key ``scheme://host:port`` (both lower-cased, with the
+// scheme's default port filled in when the URL omits it) so scoping is by
+// full origin, not just host. Matching on host alone would still attach an
+// Authorization token across a scheme downgrade (https→http on the same
+// host) or to a different service on another port; comparing the whole
+// origin closes those leaks while remaining an exact same-origin match for
+// the page's own XHR/subresources.
+static QString originKey(const QUrl& url)
+{
+    int port = url.port();
+    if (port == -1) {
+        const QString scheme = url.scheme().toLower();
+        if (scheme == QLatin1String("https")) {
+            port = 443;
+        } else if (scheme == QLatin1String("http")) {
+            port = 80;
+        }
+    }
+    return url.scheme().toLower() + QStringLiteral("://")
+        + url.host().toLower() + QStringLiteral(":")
+        + QString::number(port);
+}
+
+class RequestHeaderInterceptor : public QWebEngineUrlRequestInterceptor
+{
+public:
+    explicit RequestHeaderInterceptor(QObject* parent = nullptr)
+        : QWebEngineUrlRequestInterceptor(parent)
+    {
+    }
+
+    void setHeaders(
+        const QString& origin,
+        const QList<QPair<QByteArray, QByteArray>>& headers)
+    {
+        QMutexLocker locker(&m_mutex);
+        m_origin = origin;
+        m_headers = headers;
+    }
+
+    void clear()
+    {
+        QMutexLocker locker(&m_mutex);
+        m_origin.clear();
+        m_headers.clear();
+    }
+
+    void interceptRequest(QWebEngineUrlRequestInfo& info) override
+    {
+        QMutexLocker locker(&m_mutex);
+        if (m_headers.isEmpty() || m_origin.isEmpty()) {
+            return;
+        }
+        // Same-origin (scheme + host + port) only. Anything else — a
+        // cross-origin redirect target, an https→http downgrade, or a
+        // different port on the same host — is deliberately excluded so
+        // the operator's headers can't leak off the asset's own origin.
+        if (originKey(info.requestUrl()) != m_origin) {
+            return;
+        }
+        for (const auto& header : m_headers) {
+            info.setHttpHeader(header.first, header.second);
+        }
+    }
+
+private:
+    QMutex m_mutex;
+    QString m_origin;
+    QList<QPair<QByteArray, QByteArray>> m_headers;
+};
 
 namespace {
 QString getServerHost()
@@ -200,6 +296,19 @@ View::View(QWidget* parent) : QWidget(parent)
         qDebug() << "User-Agent:" << userAgent;
     }
 
+    // Per-asset custom request headers (#2215). Installed on the shared
+    // profile once; the headers themselves are staged per asset by
+    // setRequestHeaders and scoped to the target origin in startPageLoad.
+    // ``setUrlRequestInterceptor`` on QWebEngineProfile is available
+    // identically on Qt 5.13+ and Qt 6, so no version macro is needed.
+    // Parent the interceptor to the *profile* (process-lifetime), not to
+    // ``this``: the default profile can outlive the View, and if the
+    // interceptor were destroyed first the profile would be left holding
+    // a dangling pointer (use-after-free at teardown). ~View also detaches
+    // it defensively.
+    headerInterceptor = new RequestHeaderInterceptor(profile);
+    profile->setUrlRequestInterceptor(headerInterceptor);
+
     currentWebView = webView1;
     nextWebView = webView2;
     nextWebViewReady = false;
@@ -247,6 +356,11 @@ View::~View()
     if (pageLoadConnection) {
         QObject::disconnect(pageLoadConnection);
     }
+    // Detach the request interceptor from the (process-lifetime) default
+    // profile before we go away, so no request can be intercepted against
+    // torn-down View state. The interceptor object itself is owned by the
+    // profile (see ctor), so we only clear the profile's pointer here.
+    QWebEngineProfile::defaultProfile()->setUrlRequestInterceptor(nullptr);
     stopReloadTimer();
     stopAnimation();
 }
@@ -299,6 +413,81 @@ void View::loadPage(const QString &uri)
     qDebug() << "Loading web page:" << uri;
 }
 
+namespace {
+// Defensive re-validation of the D-Bus header payload. The server side
+// (validate_asset_headers) is the primary gate and the viewer only
+// forwards sanitised headers, but the ``setRequestHeaders`` slot is a
+// trust-no-one boundary (anything on the session bus can call it), so we
+// re-check here rather than put unsafe bytes on the wire — same posture
+// as kMaxReloadIntervalS. Mirrors the server's limits.
+constexpr int kMaxRequestHeaders = 20;
+constexpr int kMaxHeaderNameLen = 256;
+constexpr int kMaxHeaderValueLen = 4096;
+
+// RFC 7230 field-name is 1*tchar.
+bool isValidHeaderName(const QByteArray& name)
+{
+    if (name.isEmpty() || name.size() > kMaxHeaderNameLen) {
+        return false;
+    }
+    for (const char c : name) {
+        const bool tchar =
+            (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9')
+            || QByteArray("!#$%&'*+-.^_`|~").contains(c);
+        if (!tchar) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Reject CR / LF / NUL (header/request splitting) and oversized values.
+bool isValidHeaderValue(const QByteArray& value)
+{
+    if (value.size() > kMaxHeaderValueLen) {
+        return false;
+    }
+    return !value.contains('\r') && !value.contains('\n')
+        && !value.contains('\0');
+}
+}  // namespace
+
+void View::setRequestHeaders(const QString &headersJson)
+{
+    // Parse the JSON object the viewer sent into a name/value list. We
+    // don't apply it to the interceptor here — startPageLoad does that
+    // once it knows the target origin — because the header set is only
+    // meaningful together with the URL it belongs to. Store it so the
+    // very next loadPage picks it up. An empty / malformed payload
+    // leaves ``pendingHeaders`` empty, which clears any prior headers on
+    // the next load. Entries that fail validation are dropped, not
+    // applied.
+    QList<QPair<QByteArray, QByteArray>> parsed;
+    const QJsonDocument doc = QJsonDocument::fromJson(headersJson.toUtf8());
+    if (doc.isObject()) {
+        const QJsonObject obj = doc.object();
+        for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+            if (parsed.size() >= kMaxRequestHeaders) {
+                break;
+            }
+            if (!it.value().isString()) {
+                continue;
+            }
+            const QByteArray name = it.key().toUtf8();
+            const QByteArray value = it.value().toString().toUtf8();
+            if (!isValidHeaderName(name) || !isValidHeaderValue(value)) {
+                continue;
+            }
+            // Brace-init the QPair rather than qMakePair(), which Qt 6
+            // deprecates — keeps the same source building warning-free
+            // on both the Qt 5 and Qt 6 toolchains.
+            parsed.append({name, value});
+        }
+    }
+    pendingHeaders = parsed;
+}
+
 void View::startPageLoad(const QString &uri, quint64 requestId)
 {
     // Drop any prior loadFinished handler before stop() — a synchronous
@@ -314,6 +503,19 @@ void View::startPageLoad(const QString &uri, quint64 requestId)
     nextWebView->stop();
 
     pendingPageUri = uri;
+
+    // Scope the staged headers (#2215) to this URL's origin and hand them
+    // to the interceptor before the load fires. An empty ``pendingHeaders``
+    // clears any headers left from a previous asset, so a header-less
+    // page never inherits the prior page's Authorization.
+    if (headerInterceptor) {
+        if (pendingHeaders.isEmpty()) {
+            headerInterceptor->clear();
+        } else {
+            headerInterceptor->setHeaders(
+                originKey(QUrl(uri)), pendingHeaders);
+        }
+    }
 
     pageLoadConnection = connect(
         nextWebView->page(),

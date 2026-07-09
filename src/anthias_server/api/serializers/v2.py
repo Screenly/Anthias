@@ -9,6 +9,7 @@ from rest_framework.serializers import (
     CharField,
     ChoiceField,
     DateTimeField,
+    DictField,
     IntegerField,
     ListField,
     ModelSerializer,
@@ -22,8 +23,11 @@ from anthias_server.django_project.settings import is_valid_time_zone
 from anthias_server.app.models import (
     Asset,
     DURATION_S_MAX,
+    MAX_ASSET_HEADERS,
     REFRESH_INTERVAL_S_MAX,
     clamp_refresh_interval,
+    normalize_asset_headers,
+    validate_asset_headers,
 )
 from anthias_server.api.serializers import UpdateAssetSerializer
 from anthias_server.api.serializers.mixins import CreateAssetSerializerMixin
@@ -65,6 +69,31 @@ def _normalise_play_days(value: list[int]) -> list[int]:
 # value without drift.
 
 
+def _validate_custom_headers(value: Any) -> dict[str, str]:
+    """Strictly validate the write-side ``custom_headers`` payload,
+    translating the model's ``ValueError`` into a DRF 400.
+
+    Delegates to ``validate_asset_headers`` (the single source of truth
+    for the header-name / value rules and the count cap) so the API and
+    the viewer read path can't drift apart.
+
+    On failure we raise a fixed, self-authored message rather than
+    surfacing the caught exception's text: the rules are few and the
+    operator supplied the offending value themselves, so a static
+    description is just as actionable and keeps any exception detail off
+    the HTTP response (CodeQL "information exposure through an
+    exception").
+    """
+    try:
+        return validate_asset_headers(value)
+    except ValueError:
+        raise serializers.ValidationError(
+            'Invalid custom headers. Each entry needs a valid header-name '
+            "token (letters, digits, and !#$%&'*+-.^_`|~) and a value with "
+            f'no CR/LF, and at most {MAX_ASSET_HEADERS} headers are allowed.'
+        ) from None
+
+
 def _validate_time_window(
     attrs: dict[str, Any],
     instance: Asset | None = None,
@@ -101,6 +130,7 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
     is_active = SerializerMethodField()
     play_days = SerializerMethodField()
     refresh_interval_s = SerializerMethodField()
+    custom_headers = SerializerMethodField()
     metadata = SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.BOOL)
@@ -130,6 +160,17 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             (obj.metadata or {}).get('refresh_interval_s', 0)
         )
 
+    @extend_schema_field(
+        {'type': 'object', 'additionalProperties': {'type': 'string'}}
+    )
+    def get_custom_headers(self, obj: Asset) -> dict[str, str]:
+        # Per-asset custom request headers for webpage assets (#2215),
+        # surfaced as a first-class field like ``refresh_interval_s`` but
+        # written back into ``metadata['headers']``. Sanitised on read so
+        # a legacy / hand-edited row can never echo an unsafe (CR/LF)
+        # value or a non-string blob. Empty {} = no custom headers.
+        return normalize_asset_headers((obj.metadata or {}).get('headers'))
+
     @extend_schema_field({'type': 'object', 'additionalProperties': True})
     def get_metadata(self, obj: Asset) -> dict[str, Any]:
         # Sanitise ``refresh_interval_s`` in the embedded metadata too,
@@ -143,6 +184,11 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             raw['refresh_interval_s'] = clamp_refresh_interval(
                 raw['refresh_interval_s']
             )
+        # Same posture for the custom headers bag: keep the embedded
+        # ``metadata.headers`` consistent with the top-level
+        # ``custom_headers`` field a client also reads off this response.
+        if 'headers' in raw:
+            raw['headers'] = normalize_asset_headers(raw['headers'])
         return raw
 
     class Meta:
@@ -168,6 +214,7 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'last_reachability_check',
             'metadata',
             'refresh_interval_s',
+            'custom_headers',
         ]
         read_only_fields = [
             'is_reachable',
@@ -230,9 +277,24 @@ class CreateAssetSerializerV2(
         min_value=0,
         max_value=REFRESH_INTERVAL_S_MAX,
     )
+    # write_only for the same reason as ``refresh_interval_s`` above:
+    # ``Asset`` has no ``custom_headers`` column — the value lives inside
+    # ``metadata['headers']`` and is surfaced back via
+    # ``AssetSerializerV2.get_custom_headers``. ``DictField`` gives a
+    # clean 400 on a non-object; ``validate_custom_headers`` enforces the
+    # header-name/value rules. No ``child=CharField``: that would *coerce*
+    # a numeric/boolean JSON value (``{"X": 123}`` -> ``"123"``) instead
+    # of rejecting it. The unvalidated child passes values through
+    # verbatim so ``validate_asset_headers``' ``isinstance(str)`` gate
+    # can 400 non-string values (and no CharField trimming mangles a
+    # value we send on the wire byte-for-byte).
+    custom_headers = DictField(required=False, write_only=True)
 
     def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
+
+    def validate_custom_headers(self, value: Any) -> dict[str, str]:
+        return _validate_custom_headers(value)
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         _validate_time_window(data)
@@ -250,6 +312,20 @@ class CreateAssetSerializerV2(
         if 'refresh_interval_s' in data:
             metadata = dict(prepared.get('metadata') or {})
             metadata['refresh_interval_s'] = int(data['refresh_interval_s'])
+            prepared['metadata'] = metadata
+        # POST round-trip for the per-asset custom headers, mirroring the
+        # refresh-interval handling above: fold into ``metadata`` so a
+        # freshly-created webpage asset carries its headers without a
+        # follow-up PATCH. An explicit empty object clears the key rather
+        # than storing ``{}`` so ``metadata`` stays clean for assets that
+        # didn't ask for headers.
+        if 'custom_headers' in data:
+            metadata = dict(prepared.get('metadata') or {})
+            headers = data['custom_headers']
+            if headers:
+                metadata['headers'] = headers
+            else:
+                metadata.pop('headers', None)
             prepared['metadata'] = metadata
         return prepared
 
@@ -271,9 +347,16 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
         min_value=0,
         max_value=REFRESH_INTERVAL_S_MAX,
     )
+    # No ``child=CharField`` — see CreateAssetSerializerV2.custom_headers:
+    # the unvalidated child preserves value types so a non-string value is
+    # rejected (not coerced) and header values aren't trimmed.
+    custom_headers = DictField(required=False)
 
     def validate_play_days(self, value: Any) -> list[int]:
         return _normalise_play_days(value)
+
+    def validate_custom_headers(self, value: Any) -> dict[str, str]:
+        return _validate_custom_headers(value)
 
     def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         return _validate_time_window(data, instance=self.instance)
@@ -297,6 +380,20 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
             metadata['refresh_interval_s'] = int(
                 validated_data['refresh_interval_s']
             )
+            instance.metadata = metadata
+        if 'custom_headers' in validated_data:
+            # Merge into metadata for the same reason as
+            # refresh_interval_s: pipeline-owned keys (original_ext,
+            # transcoded, error_message) must survive. An empty object
+            # clears the headers rather than storing ``{}``. Like
+            # refresh_interval_s, we accept and persist this on any
+            # asset, but the viewer only injects it for webpage assets.
+            metadata = dict(instance.metadata or {})
+            headers = validated_data['custom_headers']
+            if headers:
+                metadata['headers'] = headers
+            else:
+                metadata.pop('headers', None)
             instance.metadata = metadata
         return super().update(instance, validated_data)
 

@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from datetime import datetime
 from typing import Any
@@ -31,6 +32,127 @@ REFRESH_INTERVAL_S_MAX = 86400
 # v1/v1.1/v1.2 create paths, the page-form handlers (clamping), and
 # the viewer's read-side clamp.
 DURATION_S_MAX = 365 * 24 * 60 * 60
+
+
+# Per-asset custom HTTP request headers for webpage assets (feature
+# #2215). Stored in ``Asset.metadata['headers']`` as a ``{name: value}``
+# object and injected by the C++ webview's request interceptor on
+# same-origin requests (scheme+host+port), so a private dashboard (e.g. a
+# Grafana service-account token) renders without having to be made
+# public. Bounds keep a hostile or typo'd row from bloating the D-Bus
+# payload, the DB blob, or a single request's header block. This
+# server-side validation is the primary gate keeping CR/LF out of the
+# wire (header/response-splitting); the webview re-validates defensively
+# at its D-Bus boundary too. ``MAX_HEADER_VALUE_LEN`` is a byte cap
+# (values go on the wire as UTF-8), matching the webview's check.
+MAX_ASSET_HEADERS = 20
+MAX_HEADER_NAME_LEN = 256
+MAX_HEADER_VALUE_LEN = 4096
+
+# RFC 7230 ``field-name`` is ``1*tchar``. Anchored so a name carrying a
+# colon, whitespace, or a control char is rejected outright rather than
+# smuggled onto the wire.
+_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+
+
+def _is_valid_header_name(name: str) -> bool:
+    return len(name) <= MAX_HEADER_NAME_LEN and bool(
+        _HEADER_NAME_RE.match(name)
+    )
+
+
+def _is_valid_header_value(value: str) -> bool:
+    # CR / LF / NUL would let a stored value inject additional headers
+    # (or split the request) once the C++ side writes it verbatim, so
+    # they are rejected here — the one place every write path funnels
+    # through. Everything else reaches the origin byte-for-byte.
+    if any(ch in value for ch in ('\r', '\n', '\x00')):
+        return False
+    # Cap the UTF-8 *byte* length, not the character count: the value is
+    # sent on the wire as UTF-8 (the webview's toUtf8()), so a string of
+    # multi-byte characters would otherwise exceed the intended byte
+    # budget. Keeps this in lockstep with the webview's byte-based cap.
+    return len(value.encode('utf-8')) <= MAX_HEADER_VALUE_LEN
+
+
+def normalize_asset_headers(value: Any) -> dict[str, str]:
+    """Coerce an arbitrary ``metadata['headers']`` value into a safe
+    ``{name: value}`` dict, dropping (not raising on) anything malformed.
+
+    Same defensive posture as ``clamp_refresh_interval``: the strict
+    reject-on-invalid path lives in the v2 serializer's write validation
+    (``validate_asset_headers`` below), but a hand-edited row, a legacy
+    import, or a non-string JSON value must never crash the viewer read
+    path or the API GET. ``Any`` because callers pass whatever JSON the
+    column happens to hold.
+    """
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, str] = {}
+    for raw_name, raw_value in value.items():
+        if len(out) >= MAX_ASSET_HEADERS:
+            break
+        if not isinstance(raw_name, str) or not isinstance(raw_value, str):
+            continue
+        name = raw_name.strip()
+        if not _is_valid_header_name(name):
+            continue
+        if not _is_valid_header_value(raw_value):
+            continue
+        out[name] = raw_value
+    return out
+
+
+def validate_asset_headers(value: Any) -> dict[str, str]:
+    """Strict counterpart to ``normalize_asset_headers``: raises
+    ``ValueError`` (with a human reason) on any malformed entry instead
+    of silently dropping it.
+
+    Used by the v2 API write path so an operator sending a bad header
+    gets a 400 that names the problem, rather than a 200 that quietly
+    discarded half of what they typed. The server-rendered form uses the
+    forgiving ``parse_header_lines`` path instead (mirroring how
+    ``refresh_interval_s`` is 400'd by the API but clamped by the form).
+    """
+    if not isinstance(value, dict):
+        raise ValueError('Headers must be an object of name/value pairs.')
+    if len(value) > MAX_ASSET_HEADERS:
+        raise ValueError(
+            f'At most {MAX_ASSET_HEADERS} custom headers are allowed.'
+        )
+    out: dict[str, str] = {}
+    for raw_name, raw_value in value.items():
+        name = raw_name.strip() if isinstance(raw_name, str) else ''
+        if not _is_valid_header_name(name):
+            raise ValueError(f'Invalid header name: {raw_name!r}')
+        if not isinstance(raw_value, str) or not _is_valid_header_value(
+            raw_value
+        ):
+            raise ValueError(f'Invalid value for header {name!r}')
+        out[name] = raw_value
+    return out
+
+
+def parse_header_lines(text: Any) -> dict[str, str]:
+    """Parse a textarea of ``Name: Value`` lines into a sanitised header
+    dict for the server-rendered edit form.
+
+    Blank lines and lines without a colon are ignored; the value keeps
+    everything after the first colon (so ``Bearer a:b`` survives). The
+    result is funnelled through ``normalize_asset_headers`` so the form
+    clamps (drops bad entries) rather than 400ing, matching the
+    ``refresh_interval_s`` form contract.
+    """
+    if not isinstance(text, str):
+        return {}
+    headers: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or ':' not in line:
+            continue
+        name, _, raw_value = line.partition(':')
+        headers[name.strip()] = raw_value.strip()
+    return normalize_asset_headers(headers)
 
 
 def clamp_duration(value: Any) -> int:

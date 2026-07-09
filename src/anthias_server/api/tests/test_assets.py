@@ -765,6 +765,193 @@ def test_v2_patch_refresh_interval_zero_disables(
     assert response.data['refresh_interval_s'] == 0
 
 
+# --- Per-asset custom HTTP request headers (feature #2215) -----------------
+
+
+@pytest.mark.django_db
+def test_v2_post_with_custom_headers_round_trips(
+    api_client: APIClient,
+) -> None:
+    """POST round-trip for per-asset custom request headers. Like
+    ``refresh_interval_s`` the value lives inside ``Asset.metadata``
+    (under ``headers``) but is surfaced as a top-level ``custom_headers``
+    field and accepted as a write field on create. Verify it lands on
+    the persisted row, not just on the echoed response."""
+    headers = {'Authorization': 'Bearer abc123', 'X-Env': 'prod'}
+    response = api_client.post(
+        reverse('api:asset_list_v2'),
+        data={**ASSET_CREATION_DATA, 'custom_headers': headers},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['custom_headers'] == headers
+    assert response.data['metadata'] == {'headers': headers}
+
+    asset_id = response.data['asset_id']
+    detail = api_client.get(reverse('api:asset_detail_v2', args=[asset_id]))
+    assert detail.status_code == status.HTTP_200_OK
+    assert detail.data['custom_headers'] == headers
+
+
+@pytest.mark.django_db
+def test_v2_post_without_custom_headers_defaults_to_empty(
+    api_client: APIClient,
+) -> None:
+    """A create without ``custom_headers`` reads back as ``{}`` and does
+    not stamp a ``headers`` key into ``metadata``."""
+    response = api_client.post(
+        reverse('api:asset_list_v2'),
+        data=ASSET_CREATION_DATA,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.data['custom_headers'] == {}
+    assert 'headers' not in response.data['metadata']
+
+
+@pytest.mark.django_db
+def test_v2_patch_custom_headers_round_trips(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """PATCH a single ``custom_headers`` object and read it back."""
+    headers = {'Authorization': 'Bearer xyz'}
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'custom_headers': headers},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['custom_headers'] == headers
+    assert response.data['metadata']['headers'] == headers
+
+
+@pytest.mark.django_db
+def test_v2_patch_custom_headers_empty_clears(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """An empty object clears the headers: the ``headers`` key is popped
+    from ``metadata`` rather than stored as ``{}``."""
+    api_client.patch(
+        v2_asset_detail_url,
+        data={'custom_headers': {'Authorization': 'Bearer xyz'}},
+        format='json',
+    )
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'custom_headers': {}},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['custom_headers'] == {}
+    assert 'headers' not in response.data['metadata']
+
+
+@pytest.mark.django_db
+def test_v2_patch_custom_headers_preserves_pipeline_metadata(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """Setting headers must merge into ``metadata`` rather than clobber
+    the upload-pipeline-owned keys — same contract as
+    ``refresh_interval_s``."""
+    from anthias_server.app.models import Asset
+
+    asset_id = v2_asset_detail_url.rstrip('/').split('/')[-1]
+    asset = Asset.objects.get(asset_id=asset_id)
+    asset.metadata = {'original_ext': '.png', 'transcoded': True}
+    asset.save(update_fields=['metadata'])
+
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'custom_headers': {'X-Token': 'v'}},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['metadata'] == {
+        'original_ext': '.png',
+        'transcoded': True,
+        'headers': {'X-Token': 'v'},
+    }
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'headers',
+    [
+        {'Bad Name': 'v'},  # space in name (not a token)
+        {'X-Inject': 'a\r\nEvil: 1'},  # CRLF injection in value
+        {'': 'v'},  # empty name
+        {'X-Colon:': 'v'},  # colon in name
+        {'X-Num': 123},  # non-string value must be rejected, not coerced
+        {'X-Bool': True},  # non-string value must be rejected, not coerced
+        {'X-Null': None},  # non-string value must be rejected
+    ],
+    ids=[
+        'space-in-name',
+        'crlf-in-value',
+        'empty-name',
+        'colon-in-name',
+        'numeric-value',
+        'bool-value',
+        'null-value',
+    ],
+)
+def test_v2_custom_headers_malformed_rejected(
+    api_client: APIClient,
+    v2_asset_detail_url: str,
+    headers: dict[str, Any],
+) -> None:
+    """The strict API write path 400s on any malformed header rather
+    than silently dropping it. CRLF-in-value is the security-critical
+    case (header/response splitting); the non-string cases guard against
+    DRF CharField coercing e.g. 123 -> "123" instead of rejecting it."""
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'custom_headers': headers},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'custom_headers' in response.data
+
+
+@pytest.mark.django_db
+def test_v2_custom_headers_over_count_cap_rejected(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """More than MAX_ASSET_HEADERS entries is a 400 (typo / abuse
+    guard on the D-Bus payload and header block size)."""
+    from anthias_server.app.models import MAX_ASSET_HEADERS
+
+    too_many = {f'X-H{i}': 'v' for i in range(MAX_ASSET_HEADERS + 1)}
+    response = api_client.patch(
+        v2_asset_detail_url,
+        data={'custom_headers': too_many},
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'custom_headers' in response.data
+
+
+@pytest.mark.django_db
+def test_v2_get_sanitises_legacy_headers(
+    api_client: APIClient, v2_asset_detail_url: str
+) -> None:
+    """A hand-edited / legacy row with an unsafe header value must not
+    echo it back — the read path drops it via normalize_asset_headers."""
+    from anthias_server.app.models import Asset
+
+    asset_id = v2_asset_detail_url.rstrip('/').split('/')[-1]
+    asset = Asset.objects.get(asset_id=asset_id)
+    asset.metadata = {
+        'headers': {'Good': 'ok', 'Bad': 'x\r\ny', 'sp ace': 'v'}
+    }
+    asset.save(update_fields=['metadata'])
+
+    detail = api_client.get(reverse('api:asset_detail_v2', args=[asset_id]))
+    assert detail.status_code == status.HTTP_200_OK
+    assert detail.data['custom_headers'] == {'Good': 'ok'}
+    assert detail.data['metadata']['headers'] == {'Good': 'ok'}
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_create_youtube_asset_dispatches_celery_task(
