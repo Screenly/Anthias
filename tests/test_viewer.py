@@ -1619,38 +1619,19 @@ def test_build_webview_env_overwrites_stale_ua_token() -> None:
 # SKUs) with no swap head-room slowly grow past their RAM under a
 # long-lived / cycling web-page asset (forum #6731). Chromium only
 # auto-enables its low-memory profile below ~512 MB, so _build_webview_env
-# forces it on for boards under _LOW_MEMORY_THRESHOLD_KB. HW-validated on a
-# real Pi 3B+: −78 MB (−35 %) steady-state viewer-container RSS.
+# forces it on for boards the shared is_low_ram_device() gate flags — the
+# same gate that drives the video 1080p cap and the system-info badge.
+# HW-validated on a real Pi 3B+: −78 MB (−35 %) steady-state RSS.
 
 _LOW_MEMORY_FLAGS = '--enable-low-end-device-mode'
 
 
-def test_is_low_memory_board_true_below_threshold() -> None:
-    # 806 MB — a 1 GB Raspberry Pi 3 after the GPU carve-out.
-    with mock.patch('anthias_viewer._system_memory_kb', return_value=806228):
-        assert viewer._is_low_memory_board() is True
-
-
-def test_is_low_memory_board_false_on_2gb_board() -> None:
-    with mock.patch(
-        'anthias_viewer._system_memory_kb', return_value=1_900_000
-    ):
-        assert viewer._is_low_memory_board() is False
-
-
-def test_is_low_memory_board_false_when_meminfo_unreadable() -> None:
-    # _system_memory_kb returns 0 on a read/parse failure; the guard
-    # (0 < mem) then fails closed so a roomy board is never mislabelled.
-    with mock.patch('anthias_viewer._system_memory_kb', return_value=0):
-        assert viewer._is_low_memory_board() is False
-
-
-def test_build_webview_env_injects_low_memory_flags_on_1gb_board() -> None:
+def test_build_webview_env_injects_low_memory_flags_on_low_ram_board() -> None:
     with (
         mock.patch.dict(
             os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
         ),
-        mock.patch('anthias_viewer._system_memory_kb', return_value=806228),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
     ):
         env = viewer._build_webview_env()
     flags = env['QTWEBENGINE_CHROMIUM_FLAGS']
@@ -1666,7 +1647,7 @@ def test_build_webview_env_skips_low_memory_flags_on_roomy_board() -> None:
         mock.patch.dict(
             os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
         ),
-        mock.patch('anthias_viewer._system_memory_kb', return_value=1_900_000),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=False),
     ):
         env = viewer._build_webview_env()
     assert _LOW_MEMORY_FLAGS not in env.get('QTWEBENGINE_CHROMIUM_FLAGS', '')
@@ -1685,7 +1666,7 @@ def test_build_webview_env_low_memory_flags_prepend_and_idempotent() -> None:
             },
             clear=False,
         ),
-        mock.patch('anthias_viewer._system_memory_kb', return_value=806228),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
     ):
         first = viewer._build_webview_env()
         # Feed the composed value back in to emulate an inherited respawn.

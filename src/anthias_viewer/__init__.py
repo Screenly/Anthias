@@ -21,6 +21,7 @@ import redis.exceptions
 import requests
 import sh as sh
 
+from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
@@ -214,36 +215,6 @@ def _set_qpa_rotation(qpa: str, rotation: int) -> str:
     return f'{plugin}:{",".join(options)}'
 
 
-# Threshold below which a board is treated as memory-constrained and gets
-# the low-memory Chromium profile in _build_webview_env. ~1.5 GiB sits
-# above every 1 GB SKU's reported MemTotal (a 1 GB board reports well
-# under 1 GiB after the GPU carve-out and kernel reserve) and safely below
-# 2 GB boards (~1.9 GiB), so it cleanly separates the two.
-_LOW_MEMORY_THRESHOLD_KB = 1_536_000
-
-
-def _system_memory_kb() -> int:
-    """Total system RAM in kB from /proc/meminfo (0 if unreadable).
-
-    Read from the host-shared /proc/meminfo — the viewer container runs
-    without a memory cgroup cap, so this reflects the board's real RAM.
-    """
-    try:
-        with open('/proc/meminfo') as meminfo:
-            for line in meminfo:
-                if line.startswith('MemTotal:'):
-                    return int(line.split()[1])
-    except (OSError, ValueError):
-        pass
-    return 0
-
-
-def _is_low_memory_board() -> bool:
-    """True on ~1 GB boards that need Chromium's low-memory profile."""
-    mem_kb = _system_memory_kb()
-    return 0 < mem_kb < _LOW_MEMORY_THRESHOLD_KB
-
-
 def _build_webview_env() -> dict[str, str]:
     """Compose the env to pass when spawning AnthiasViewer.
 
@@ -286,13 +257,15 @@ def _build_webview_env() -> dict[str, str]:
     # screen / thrash after long uptime). Chromium only auto-enables its
     # low-memory profile below ~512 MB, so a ~1 GB board never gets it.
     # Force it on, cap the per-renderer V8 old-space heap, and collapse to
-    # a single renderer to bound steady-state footprint. Gate on measured
-    # RAM, not a board allowlist, so every low-memory SKU is covered and
-    # the roomier boards keep the faster default process model. Prepended
-    # so a device-supplied QTWEBENGINE_CHROMIUM_FLAGS and the dark-mode
+    # a single renderer to bound steady-state footprint. Reuse the shared
+    # ``is_low_ram_device`` gate (anthias_common.board) that already drives
+    # the video 1080p cap and the system-info Low-RAM badge, so the viewer,
+    # asset processor and UI all agree on which boards are constrained
+    # rather than each hard-coding a threshold. Prepended so a
+    # device-supplied QTWEBENGINE_CHROMIUM_FLAGS and the dark-mode
     # --blink-settings switch main.cpp appends still apply; guarded so
     # respawns / an inherited value don't stack duplicates.
-    if _is_low_memory_board():
+    if is_low_ram_device():
         low_mem_flags = (
             '--enable-low-end-device-mode '
             '--js-flags=--max-old-space-size=64 '
