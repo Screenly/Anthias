@@ -676,7 +676,16 @@ def url_fails(url: str, verify_ssl: bool | None = None) -> bool:
             ).ok:
                 return False
 
-    except (requests.ConnectionError, requests.exceptions.Timeout):
+    except requests.exceptions.RequestException:
+        # Any requests-level failure means we could not confirm the URL
+        # is reachable, so fall through to the ``True`` (unreachable)
+        # verdict rather than letting the exception escape and 500 a
+        # caller like asset creation — the probe's contract is a boolean.
+        # Covers DNS / refused connections (ConnectionError), TLS
+        # handshake / untrusted-cert failures (SSLError, a
+        # ConnectionError subclass), slow origins (Timeout), and redirect
+        # loops (TooManyRedirects, which ``allow_redirects=True`` can hit
+        # and which is *not* a ConnectionError) alike.
         pass
 
     return True

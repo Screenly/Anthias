@@ -45,6 +45,30 @@ def test_url_fails_returns_true_on_connection_error() -> None:
         assert url_fails('http://doesnotwork.example.com') is True
 
 
+@pytest.mark.parametrize(
+    'exc',
+    [
+        requests.exceptions.SSLError('untrusted certificate'),
+        requests.exceptions.TooManyRedirects('redirect loop'),
+        requests.exceptions.Timeout('slow origin'),
+        requests.ConnectionError('connection refused'),
+    ],
+)
+@pytest.mark.django_db
+def test_url_fails_returns_true_on_any_requests_error(
+    exc: Exception,
+) -> None:
+    """``url_fails`` is a boolean probe: every requests-level failure
+    must resolve to ``True`` (unreachable) rather than escape and 500 a
+    caller like asset creation. Includes a TLS/untrusted-cert
+    ``SSLError`` and a ``TooManyRedirects`` redirect loop — the latter
+    is a ``RequestException`` but *not* a ``ConnectionError``, so it
+    guards the broadened ``except`` clause specifically."""
+    with patch('anthias_common.utils.requests.head', side_effect=exc):
+        # NOSONAR(S5332): mocked test URL, never fetched over the wire.
+        assert url_fails('https://example.com') is True  # NOSONAR
+
+
 @pytest.mark.django_db
 def test_url_fails_returns_false_on_2xx_response() -> None:
     fake = MagicMock()
