@@ -1106,6 +1106,10 @@ gboolean anthias_gst_bus_loop(GstBus* /*bus*/, GstMessage* message,
 bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
 {
     gstStop();
+    // Reset the raw frame counter here (covers BOTH the overlay and the
+    // appsink paths) so a new asset's stats don't carry over the previous
+    // one's cumulative count.
+    gstRawSamples.storeRelaxed(0);
 
     // filesrc needs a filesystem path. Anthias passes bare local paths
     // (e.g. /data/anthias_assets/<id>) today; normalise a file:// URL
@@ -1362,8 +1366,8 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     }
 
     // Count frames reaching kmssink (presentation rate) + latch the source
-    // fps for sampleStats.
-    gstRawSamples.storeRelaxed(0);
+    // fps for sampleStats. (gstRawSamples is reset once in gstPlay for both
+    // paths.)
     setContainerFps(0.0);
     GstElement* sink = gst_bin_get_by_name(GST_BIN(gstPipeline), "vsink");
     if (sink) {
