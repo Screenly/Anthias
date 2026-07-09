@@ -18,12 +18,45 @@
     owner: root
     group: root
 
+- name: Read memory and swap state for the swapoff guard (KiB)
+  ansible.builtin.command:
+    cmd: >-
+      awk '/^MemAvailable:/{a=$2} /^SwapTotal:/{t=$2} /^SwapFree:/{f=$2}
+      END{print a, t-f}' /proc/meminfo
+  register: system_mem_state
+  changed_when: false
+
 - name: Disable swap
   ansible.builtin.command:
     cmd: /sbin/swapoff --all
-    removes: /var/swap
+  # `swapoff --all` faults every swapped-out page back into RAM at once.
+  # On a memory-tight board that overshoots available memory and the
+  # kernel OOM-killer reaps swapoff (rc -9), aborting the whole upgrade
+  # (issue #3165). Only attempt it when RAM can absorb the used swap
+  # (MemAvailable minus a 64 MiB margin for allocations racing the
+  # swap-in). bin/install.sh stops the container stack before this play
+  # to widen that headroom; disabling swap is best-effort host hygiene,
+  # so skipping here when memory is tight is safe.
+  when: >-
+    system_mem_state.stdout.split()[1] | int
+    < (system_mem_state.stdout.split()[0] | int - 65536)
+  register: system_swapoff_result
+  # Memory pressure from the preceding dist-upgrade eases as its apt/dpkg
+  # processes exit, so retry before giving up. failed_when: false keeps a
+  # persistent OOM from aborting the upgrade — swap simply stays on.
+  retries: 3
+  delay: 5
+  until: system_swapoff_result.rc == 0
+  failed_when: false
+  changed_when: system_swapoff_result.rc == 0
 
 - name: Remove swapfile from disk
   ansible.builtin.file:
     path: /var/swap
     state: absent
+  # Never unlink an active swapfile: only remove it once swapoff actually
+  # succeeded. An undefined rc means the guard above skipped swapoff
+  # (swap still on), so the file stays too.
+  when:
+    - system_swapoff_result.rc is defined
+    - system_swapoff_result.rc == 0
