@@ -185,9 +185,9 @@ public:
     // ISP-converted RGB frame here; it stashes the newest under
     // gstFrameMutex and posts a single coalesced onGstFrame() drain.
     void pushGstFrame(const QImage& frame);
-    // Flushing-seek the pipeline to zero to loop the clip. Invoked
-    // (queued, GUI thread) from the appsink EOS callback so the seek
-    // never races stop().
+    // Flushing-seek the pipeline to zero to loop the clip, on EOS. Called
+    // from the pipeline bus watch (anthias_gst_bus_loop), which GLib
+    // services on the GUI thread, so the seek never races stop().
     Q_INVOKABLE void gstRestartLoop();
     // Overlay-path instrumentation (streaming thread). onOverlayBuffer:
     // count each frame reaching kmssink + latch the source framerate from
@@ -195,6 +195,11 @@ public:
     // rendered/dropped tallies from a bus QoS message.
     void onOverlayBuffer(struct _GstPad* pad);
     void logOverlayQos(quint64 rendered, quint64 dropped);
+    // Latch the source frame rate (once) from the appsink's negotiated
+    // caps, so the appsink-raster path's SAMPLE can compute
+    // expected/dropped instead of reporting -1. Called from the appsink
+    // new-sample callback (streaming thread); setContainerFps is atomic.
+    void latchSourceFps(int fpsNum, int fpsDen);
     // Best-effort audio in its OWN pipeline, decoupled from the video
     // overlay pipeline so no audio fault can stall the video. gstStartAudio
     // builds+plays it; gstLoopAudio/gstStopAudio are driven from the audio
@@ -205,9 +210,6 @@ public:
     // Record an AUDIO status/error line to the readable stats log (public
     // so the audio bus-watch free function can report errors there).
     void logAudio(const QString& msg);
-    // playbin gapless-loop hook: re-queue gstUri on ``about-to-finish``
-    // (called on a streaming thread; a property set only, no state change).
-    void gstRequeueUri(struct _GstElement* playbin);
 
 private:
     // In-process GStreamer HW video path for pi3-64 (issue #3084):
@@ -230,8 +232,6 @@ private:
     void gstStop();
     bool gstOverlayMode = false;
     bool gstOverlayActive = false;
-    // URI for playbin's gapless re-queue loop (set in gstPlayOverlay).
-    QByteArray gstUri;
     struct _GstElement* gstPipeline = nullptr;
     struct _GstElement* gstAudioPipeline = nullptr;
     struct _GstElement* gstAppSink = nullptr;

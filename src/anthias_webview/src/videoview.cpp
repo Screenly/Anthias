@@ -418,6 +418,12 @@ void VideoView::stop()
                         gstPipeline, GST_FORMAT_TIME, &posNs))
                     ? posNs / GST_MSECOND
                     : -1;
+            // On the overlay path frames never touch the CPU counters
+            // (framesDelivered/forwarded/rendered stay 0); the buffer-probe
+            // tally gstRawSamples is the real rendered count, so report it.
+            const qint64 rendered = gstOverlayActive
+                                        ? gstRawSamples.loadRelaxed()
+                                        : framesRendered;
             writeStats(
                 QStringLiteral("STOP"),
                 QStringLiteral(
@@ -427,7 +433,7 @@ void VideoView::stop()
                     .arg(elapsedMs)
                     .arg(framesDelivered)
                     .arg(framesForwarded)
-                    .arg(framesRendered)
+                    .arg(rendered)
                     .arg(posMs));
         }
         gstStop();
@@ -940,7 +946,10 @@ GstFlowReturn anthias_gst_on_new_sample(GstAppSink* sink, gpointer user_data)
             map.data, width, height, stride, QImage::Format_RGB16);
         const QImage frame = wrapped.copy();
         gst_buffer_unmap(buffer, &map);
-        static_cast<VideoView*>(user_data)->pushGstFrame(frame);
+        auto* view = static_cast<VideoView*>(user_data);
+        view->latchSourceFps(
+            GST_VIDEO_INFO_FPS_N(&info), GST_VIDEO_INFO_FPS_D(&info));
+        view->pushGstFrame(frame);
     }
     gst_sample_unref(sample);
     return GST_FLOW_OK;
@@ -1485,6 +1494,15 @@ void VideoView::logAudio(const QString& msg)
     writeStats(QStringLiteral("AUDIO"), msg);
 }
 
+void VideoView::latchSourceFps(int fpsNum, int fpsDen)
+{
+    // Latch once (the overlay pad-probe latches the same way); ignore a
+    // degenerate 0/0 or variable-rate caps.
+    if (fpsDen > 0 && fpsNum > 0 && containerFps() <= 0.0) {
+        setContainerFps(static_cast<qreal>(fpsNum) / fpsDen);
+    }
+}
+
 void VideoView::gstStopAudio()
 {
     if (!gstAudioPipeline) {
@@ -1583,13 +1601,6 @@ void VideoView::gstRestartLoop()
     // Re-seek audio to the top too so it re-aligns with the video every
     // loop (the two pipelines otherwise drift on their own clocks).
     gstLoopAudio();
-}
-
-void VideoView::gstRequeueUri(struct _GstElement* playbin)
-{
-    if (playbin && !gstUri.isEmpty()) {
-        g_object_set(playbin, "uri", gstUri.constData(), nullptr);
-    }
 }
 
 void VideoView::onOverlayBuffer(struct _GstPad* pad)
