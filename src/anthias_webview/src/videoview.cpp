@@ -607,7 +607,22 @@ void VideoView::sampleStats()
     if (!player || !statsStream) {
         return;
     }
-    const qint64 posMs = player->position();
+    // Position source: on the gstMode appsink-raster fallback QMediaPlayer
+    // isn't the one playing, so query the GStreamer pipeline; only the
+    // plain QtMultimedia path reads player->position().
+    qint64 posMs = -1;
+#ifdef ANTHIAS_GSTREAMER
+    if (gstMode && gstPipeline) {
+        gint64 posNs = 0;
+        posMs =
+            gst_element_query_position(gstPipeline, GST_FORMAT_TIME, &posNs)
+                ? posNs / GST_MSECOND
+                : -1;
+    } else
+#endif
+    {
+        posMs = player->position();
+    }
     const qint64 elapsedMs =
         playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
     const qreal expected =
@@ -1186,6 +1201,11 @@ bool VideoView::gstPlayOverlay(const QString& uri)
         return false;
     }
     QScreen* screen = QGuiApplication::primaryScreen();
+    if (!screen) {
+        qWarning() << "VideoView::gstPlayOverlay: no primary screen —"
+                   << "using raster path";
+        return false;
+    }
     const int driFd = static_cast<int>(reinterpret_cast<qintptr>(
         ni->nativeResourceForIntegration(QByteArrayLiteral("dri_fd"))));
     const quint32 crtcId = static_cast<quint32>(reinterpret_cast<qintptr>(
@@ -1193,6 +1213,11 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     const quint32 connId = static_cast<quint32>(reinterpret_cast<qintptr>(
         ni->nativeResourceForScreen(
             QByteArrayLiteral("dri_connectorid"), screen)));
+    // driFd is eglfs's DRM master fd read back through the void*
+    // nativeResource API: a real fd here is always >2 (0/1/2 are the
+    // process's std streams, open before eglfs), and "no fd" comes back as
+    // a null pointer → 0. So ``<= 0`` is the correct not-available test in
+    // this context, not a rejection of a legitimately-0 fd.
     if (driFd <= 0 || crtcId == 0 || connId == 0) {
         qWarning() << "VideoView::gstPlayOverlay: eglfs DRM resources"
                    << "unavailable (fd" << driFd << "crtc" << crtcId

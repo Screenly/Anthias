@@ -23,10 +23,13 @@ namespace {
 // before. Other boards keep the default crash behaviour untouched.
 void anthiasCrashHandler(int sig)
 {
-    // Async-signal-safe only: write() + backtrace_symbols_fd (which writes
-    // via the fd with no malloc, unlike backtrace_symbols/fprintf). The
-    // signal number is omitted from the header (formatting it isn't
-    // AS-safe) — the re-raise below preserves it in the exit status / core.
+    // Best-effort, kept as close to async-signal-safe as practical:
+    // write() is AS-safe; backtrace()/backtrace_symbols_fd() are glibc
+    // extensions that avoid malloc/stdio (unlike backtrace_symbols /
+    // fprintf) but are not formally guaranteed AS-safe — acceptable for a
+    // last-gasp diagnostic. The signal number is omitted from the header
+    // (formatting it isn't AS-safe); the re-raise below preserves it in
+    // the exit status / core dump.
     void* frames[64];
     const int count = backtrace(frames, 64);
     static const char hdr[] =
