@@ -99,6 +99,13 @@ current_browser_headers: dict[str, str] = {}
 # predates it raises UnknownMethod once, after which we stop paying the
 # D-Bus round-trip until the viewer restarts.
 _webview_supports_set_request_headers: bool = True
+# Version-skew latch for the ``skipSslVerify`` argument added to the
+# ``loadPage`` / ``loadImage`` slots in this release. An AnthiasViewer
+# binary that predates it exposes only the 1-arg slots, so the 2-arg
+# call fails; once that's confirmed we fall back to the legacy 1-arg
+# call and skip the doomed 2-arg attempt. Reset on every (re)spawn (a
+# respawn may pick up a newer binary that supports it).
+_webview_supports_ssl_arg: bool = True
 browser: Any = None
 # Bounded sink for the current AnthiasViewer's merged stdout+stderr. See
 # _BoundedWebviewOutput / _spawn_webview_once (issue #3138). Mirrors
@@ -866,7 +873,7 @@ def load_browser(
     persistent failure can't freeze the asset_loop thread for minutes.
     """
     global browser, _webview_supports_set_reload_interval
-    global _webview_supports_set_request_headers
+    global _webview_supports_set_request_headers, _webview_supports_ssl_arg
     global _last_applied_rotation, current_browser_url, current_browser_headers
     global _last_applied_dark_mode, current_browser_skip_ssl
     logging.info('Loading browser...')
@@ -905,6 +912,8 @@ def load_browser(
     # Same re-probe for the custom-headers slot (#2215): a webview
     # restart may bring up a binary that now supports setRequestHeaders.
     _webview_supports_set_request_headers = True
+    # And the same re-probe for the loadPage/loadImage skipSslVerify arg.
+    _webview_supports_ssl_arg = True
 
     # Apply screen rotation *before* the webview starts so it picks up
     # the rotated geometry on first frame: the wlroots compositor
@@ -1076,6 +1085,57 @@ def _send_to_webview(send: Callable[[], Any]) -> None:
     send()
 
 
+def _load_via_webview(
+    load_with_skip: Callable[[], Any],
+    load_without_skip: Callable[[], Any],
+) -> None:
+    """Issue a ``loadPage`` / ``loadImage`` that tolerates a
+    version-skewed webview.
+
+    The ``skipSslVerify`` parameter was added to the loadPage/loadImage
+    D-Bus slots in this release. A webview process still running the
+    previous binary (fleet rollout mid-flight: the viewer container has
+    rotated to a newer image but the separate webview process hasn't
+    restarted yet) exposes only the 1-arg slots, so the 2-arg call
+    fails — as ``UnknownMethod`` from QtDBus, or as a pydbus argument
+    marshalling error, depending on when the proxy was introspected.
+
+    Rather than pattern-match the exception (fragile across pydbus/Qt
+    versions), confirm the skew empirically: if the legacy 1-arg call
+    (``load_without_skip``) succeeds where the 2-arg one failed, it was
+    a skew — latch the capability off so the rest of the process skips
+    the doomed 2-arg attempt, and let the asset display (it loses only
+    the per-asset SSL-skip, which that older webview couldn't honour
+    anyway). If the fallback *also* fails, the extra argument wasn't the
+    problem, so re-raise the original error. A webview-gone error is
+    left to ``_send_to_webview``'s respawn-and-retry. The latch is reset
+    on every (re)spawn in ``load_browser``, mirroring the
+    ``setReloadInterval`` / ``setRequestHeaders`` handling.
+    """
+    global _webview_supports_ssl_arg
+    if _webview_supports_ssl_arg:
+        try:
+            _send_to_webview(load_with_skip)
+            return
+        except Exception as exc:
+            if _is_webview_gone_error(exc):
+                raise
+            try:
+                _send_to_webview(load_without_skip)
+            except Exception:
+                # The 1-arg call failed too — not a signature skew.
+                raise exc
+            _webview_supports_ssl_arg = False
+            logging.warning(
+                'webview predates the loadPage/loadImage skipSslVerify '
+                'argument (version skew?); per-asset SSL-skip disabled '
+                'until the webview restarts: %s',
+                exc,
+            )
+            return
+    _send_to_webview(load_without_skip)
+
+
 def _cache_busted_url(uri: str) -> str:
     """Append a unique query parameter so a ``nocache`` webpage is
     refetched fresh on every rotation.
@@ -1214,8 +1274,9 @@ def view_webpage(
         or current_browser_skip_ssl != skip_ssl_verify
     ):
         if headers_applied:
-            _send_to_webview(
-                lambda: browser_bus.loadPage(uri, skip_ssl_verify)
+            _load_via_webview(
+                lambda: browser_bus.loadPage(uri, skip_ssl_verify),
+                lambda: browser_bus.loadPage(uri),
             )
             current_browser_url = uri
             # Store a copy, not the caller's dict: aliasing it would let a
@@ -1302,7 +1363,10 @@ def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
         current_browser_url != uri
         or current_browser_skip_ssl != skip_ssl_verify
     ):
-        _send_to_webview(lambda: browser_bus.loadImage(uri, skip_ssl_verify))
+        _load_via_webview(
+            lambda: browser_bus.loadImage(uri, skip_ssl_verify),
+            lambda: browser_bus.loadImage(uri),
+        )
         current_browser_url = uri
         current_browser_skip_ssl = skip_ssl_verify
     logging.info('Current url is {0}'.format(current_browser_url))

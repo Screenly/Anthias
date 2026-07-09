@@ -601,6 +601,130 @@ def test_view_image_reissues_when_skip_ssl_flips(
     fake_bus.loadImage.assert_called_once_with('https://h/x.jpg', True)
 
 
+def test_view_webpage_falls_back_to_1arg_loadpage_on_version_skew(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A webview still running the previous binary exposes only the
+    1-arg ``loadPage(s)`` slot. The 2-arg call must not blank the
+    screen: the viewer falls back to the legacy 1-arg call so the page
+    still loads (losing only the per-asset SSL skip that older webview
+    couldn't honour anyway) and latches the capability off so the next
+    tick skips the doomed 2-arg attempt."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    def load_page(*args: object) -> None:
+        if len(args) == 2:
+            raise RuntimeError(
+                'org.freedesktop.DBus.Error.UnknownMethod: no such method'
+            )
+
+    fake_bus.loadPage.side_effect = load_page
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, '_webview_supports_ssl_arg', True
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(
+            'https://example.com', skip_ssl_verify=True
+        )
+        # 2-arg attempt, then the 1-arg fallback that kept the screen up.
+        assert fake_bus.loadPage.call_args_list == [
+            mock.call('https://example.com', True),
+            mock.call('https://example.com'),
+        ]
+        # Latched off so the next rotation goes straight to 1-arg.
+        assert viewer_fixtures.u._webview_supports_ssl_arg is False
+        # The URL cache advanced despite the skew (asset displayed).
+        assert viewer_fixtures.u.current_browser_url == 'https://example.com'
+
+
+def test_view_image_falls_back_to_1arg_loadimage_on_version_skew(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Same version-skew fallback for the image path: a 1-arg-only
+    webview must still get ``loadImage(uri)`` so a self-signed image
+    isn't left blank on a mismatched viewer/webview pair."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    def load_image(*args: object) -> None:
+        if len(args) == 2:
+            raise RuntimeError(
+                'org.freedesktop.DBus.Error.UnknownMethod: no such method'
+            )
+
+    fake_bus.loadImage.side_effect = load_image
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, '_webview_supports_ssl_arg', True
+        ),
+    ):
+        viewer_fixtures.u.view_image('https://h/x.jpg', skip_ssl_verify=True)
+        assert fake_bus.loadImage.call_args_list == [
+            mock.call('https://h/x.jpg', True),
+            mock.call('https://h/x.jpg'),
+        ]
+        assert viewer_fixtures.u._webview_supports_ssl_arg is False
+        assert viewer_fixtures.u.current_browser_url == 'https://h/x.jpg'
+
+
+def test_view_webpage_skew_fallback_reraises_when_1arg_also_fails(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """If the 1-arg fallback also fails, the extra argument wasn't the
+    problem — the original error propagates and the capability is NOT
+    latched off, so a genuinely-supported webview isn't downgraded by a
+    transient failure."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    # Every call fails with a non-"gone" error (so _send_to_webview
+    # doesn't respawn) — both the 2-arg and the 1-arg fallback.
+    fake_bus.loadPage.side_effect = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.Disconnected: closed'
+    )
+    m_load_browser = mock.Mock(name='load_browser')
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, '_webview_supports_ssl_arg', True
+        ),
+        mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+    ):
+        with pytest.raises(RuntimeError, match='Disconnected'):
+            viewer_fixtures.u.view_webpage(
+                'https://example.com', skip_ssl_verify=True
+            )
+        # Not a signature skew — capability stays on, URL not latched.
+        assert viewer_fixtures.u._webview_supports_ssl_arg is True
+        assert viewer_fixtures.u.current_browser_url is None
+
+
 def test_view_webpage_default_zero_interval(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
