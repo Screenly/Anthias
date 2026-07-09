@@ -1110,6 +1110,13 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     // appsink paths) so a new asset's stats don't carry over the previous
     // one's cumulative count.
     gstRawSamples.storeRelaxed(0);
+    // Clear the on-screen raster surface so the previous asset's last frame
+    // can't linger (stale-frame flash) while the new pipeline prerolls or
+    // if it fails to start. The overlay path re-clears it too (the video is
+    // on the plane, not this widget).
+    if (rasterWidget) {
+        rasterWidget->clear();
+    }
 
     // filesrc needs a filesystem path. Anthias passes bare local paths
     // (e.g. /data/anthias_assets/<id>) today; normalise a file:// URL
@@ -1576,20 +1583,25 @@ void VideoView::onGstFrame()
     // that follows setImage() bumps framesRendered in onRasterPainted(),
     // so SAMPLE reports the true present rate; gstRawSamples (logged in
     // sampleStats) reports the pipeline's own delivery rate for contrast.
-    gstDrainPending.storeRelaxed(0);
     QImage frame;
     {
         QMutexLocker locker(&gstFrameMutex);
         frame = gstLatestFrame;
     }
-    if (frame.isNull()) {
-        return;
+    if (!frame.isNull()) {
+        ++framesDelivered;
+        ++framesForwarded;
+        if (rasterWidget) {
+            rasterWidget->setImage(frame);
+        }
     }
-    ++framesDelivered;
-    ++framesForwarded;
-    if (rasterWidget) {
-        rasterWidget->setImage(frame);
-    }
+    // Clear the coalescing flag at the END: while this drain ran,
+    // pushGstFrame kept gstDrainPending==1 (testAndSetOrdered) so no extra
+    // onGstFrame was ever queued behind it — frames that arrived meanwhile
+    // just updated gstLatestFrame. Releasing it here lets the next push
+    // queue exactly one fresh drain, keeping the GUI event queue bounded to
+    // a single in-flight drain.
+    gstDrainPending.storeRelaxed(0);
 }
 
 void VideoView::gstRestartLoop()
