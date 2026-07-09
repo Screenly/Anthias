@@ -61,7 +61,7 @@ server = [
     # docker/Dockerfile.server.j2). Pillow itself is otherwise unused
     # — adding it here instead of relying on a transitive import keeps
     # the dependency explicit.
-    "Pillow==12.2.0",
+    "Pillow==12.3.0",
     "pillow-heif==1.3.0",
     "psutil==7.2.2",
     "pydbus==0.6.0",
@@ -146,7 +146,7 @@ mypy = [
     # pillow-heif is intentionally not pinned here — it's listed in
     # tool.mypy.overrides above so its missing-import error is
     # ignored, mirroring the cec / pydbus / sh pattern.
-    "Pillow==12.2.0",
+    "Pillow==12.3.0",
     "pytz==2026.2",
     "sentry-sdk==2.63.0",
     "whitenoise==6.12.0",
