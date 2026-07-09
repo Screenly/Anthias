@@ -351,7 +351,7 @@ void VideoView::play(const QString& uri, const QVariantMap& options)
     framesDelivered = 0;
     framesForwarded = 0;
     framesRendered = 0;
-    containerFps = 0.0;
+    setContainerFps(0.0);
     sceneReadyForFrame = true;
     pendingFrame = QVideoFrame();
     writeStats(
@@ -471,7 +471,7 @@ void VideoView::onPlaybackStateChanged(QMediaPlayer::PlaybackState state)
 {
     if (state == QMediaPlayer::PlayingState) {
         const QMediaMetaData meta = player->metaData();
-        containerFps = meta.value(QMediaMetaData::VideoFrameRate).toReal();
+        setContainerFps(meta.value(QMediaMetaData::VideoFrameRate).toReal());
         writeStats(
             QStringLiteral("PLAYING"),
             QStringLiteral(
@@ -489,7 +489,7 @@ void VideoView::onPlaybackStateChanged(QMediaPlayer::PlaybackState state)
                                         .toSize()
                                         .height())
                          : QStringLiteral("?"),
-                     QString::number(containerFps),
+                     QString::number(containerFps()),
                      meta.value(QMediaMetaData::AudioCodec).toString(),
                      QString::number(currentRotation)));
     }
@@ -528,7 +528,7 @@ void VideoView::onMediaStatusChanged(QMediaPlayer::MediaStatus status)
         // rendered count far below delivered = paint-bound, the
         // #2967 failure mode the old log could not see.
         const qreal expected =
-            containerFps > 0.0 ? containerFps * (elapsedMs / 1000.0) : -1.0;
+            containerFps() > 0.0 ? containerFps() * (elapsedMs / 1000.0) : -1.0;
         const qint64 dropped =
             expected > 0.0
                 ? std::max<qint64>(0, qRound(expected) - framesDelivered)
@@ -588,7 +588,7 @@ void VideoView::sampleStats()
             playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
         const qint64 rendered = gstRawSamples.loadRelaxed();
         const qreal expected =
-            containerFps > 0.0 ? containerFps * (elapsedMs / 1000.0) : -1.0;
+            containerFps() > 0.0 ? containerFps() * (elapsedMs / 1000.0) : -1.0;
         const qint64 dropped =
             expected > 0.0 ? std::max<qint64>(0, qRound(expected) - rendered)
                            : -1;
@@ -600,7 +600,7 @@ void VideoView::sampleStats()
                 .arg(rendered)
                 .arg(qRound(expected))
                 .arg(dropped)
-                .arg(QString::number(containerFps, 'f', 2)));
+                .arg(QString::number(containerFps(), 'f', 2)));
         return;
     }
 #endif
@@ -611,7 +611,7 @@ void VideoView::sampleStats()
     const qint64 elapsedMs =
         playStartedAt.isValid() ? playStartedAt.elapsed() : -1;
     const qreal expected =
-        containerFps > 0.0 ? containerFps * (elapsedMs / 1000.0) : -1.0;
+        containerFps() > 0.0 ? containerFps() * (elapsedMs / 1000.0) : -1.0;
     const qint64 dropped =
         expected > 0.0
             ? std::max<qint64>(0, qRound(expected) - framesDelivered)
@@ -989,8 +989,8 @@ uint32_t anthias_find_overlay_plane(int fd, uint32_t crtcId)
 // Buffer probe on kmssink's sink pad: counts frames that reach the sink
 // (the presentation rate for the overlay path, since there is no appsink)
 // and captures the source framerate once from the caps so sampleStats can
-// compute expected-vs-dropped. Runs on a streaming thread — the counter is
-// atomic and containerFps is a benign same-value race.
+// compute expected-vs-dropped. Runs on a streaming thread — both the
+// frame counter and containerFps (via setContainerFps) are atomic.
 GstPadProbeReturn anthias_gst_kms_probe(GstPad* pad, GstPadProbeInfo* /*info*/,
                                         gpointer user_data)
 {
@@ -1222,10 +1222,17 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     QString location = uri;
     location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
     location.replace(QLatin1Char('"'), QLatin1String("\\\""));
-    const int queueBuffers =
+    // Clamp to a sane positive count: a 0 / negative / non-numeric
+    // ANTHIAS_GST_QUEUE would make queueBuffers 0, i.e. queue
+    // max-size-buffers=0 with time/bytes also 0 = UNBOUNDED buffering →
+    // OOM on the 1 GB board. Fall back to the default 4 in that case.
+    int queueBuffers =
         qEnvironmentVariableIsSet("ANTHIAS_GST_QUEUE")
             ? qEnvironmentVariableIntValue("ANTHIAS_GST_QUEUE")
             : 4;
+    if (queueBuffers <= 0) {
+        queueBuffers = 4;
+    }
     // The bcm2835 decoder only emits I420 (renders blue on the vc4 plane;
     // its V4L2 capture won't negotiate NV12), so v4l2convert (bcm2835 ISP)
     // does I420→NV12. The critical bit is its OUTPUT io-mode: with the
@@ -1306,7 +1313,7 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     // Count frames reaching kmssink (presentation rate) + latch the source
     // fps for sampleStats.
     gstRawSamples.storeRelaxed(0);
-    containerFps = 0.0;
+    setContainerFps(0.0);
     GstElement* sink = gst_bin_get_by_name(GST_BIN(gstPipeline), "vsink");
     if (sink) {
         GstPad* sinkPad = gst_element_get_static_pad(sink, "sink");
@@ -1394,7 +1401,18 @@ void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
     GstBus* bus = gst_element_get_bus(gstAudioPipeline);
     gst_bus_add_watch(bus, anthias_gst_audio_bus, this);
     gst_object_unref(bus);
-    gst_element_set_state(gstAudioPipeline, GST_STATE_PLAYING);
+    if (gst_element_set_state(gstAudioPipeline, GST_STATE_PLAYING)
+        == GST_STATE_CHANGE_FAILURE) {
+        // Best-effort audio: tear the failed pipeline down and leave the
+        // video playing silently rather than keeping a dead pipeline.
+        writeStats(QStringLiteral("AUDIO"),
+                   QStringLiteral("start-failed sink=%1 device=%2")
+                       .arg(audioSink,
+                            alsaDev.isEmpty() ? QStringLiteral("(default)")
+                                              : alsaDev));
+        gstStopAudio();
+        return;
+    }
     writeStats(QStringLiteral("AUDIO"),
                QStringLiteral("started sink=%1 device=%2")
                    .arg(audioSink,
@@ -1519,7 +1537,7 @@ void VideoView::gstRequeueUri(struct _GstElement* playbin)
 void VideoView::onOverlayBuffer(struct _GstPad* pad)
 {
     gstRawSamples.fetchAndAddRelaxed(1);
-    if (containerFps <= 0.0 && pad) {
+    if (containerFps() <= 0.0 && pad) {
         GstCaps* caps = gst_pad_get_current_caps(pad);
         if (caps) {
             GstStructure* s = gst_caps_get_structure(caps, 0);
@@ -1527,7 +1545,7 @@ void VideoView::onOverlayBuffer(struct _GstPad* pad)
             gint den = 0;
             if (s && gst_structure_get_fraction(s, "framerate", &num, &den)
                 && den > 0) {
-                containerFps = static_cast<qreal>(num) / den;
+                setContainerFps(static_cast<qreal>(num) / den);
             }
             gst_caps_unref(caps);
         }

@@ -1587,10 +1587,13 @@ def test_build_webview_env_sets_video_raster_on_pi3_64() -> None:
     ):
         env = viewer._build_webview_env()
     assert env['ANTHIAS_VIDEO_RASTER'] == '1'
+    # The overlay-plane path is the pi3-64 default too; assert it so the
+    # default can't regress to the (slow) raster blit silently.
+    assert env['ANTHIAS_VIDEO_OVERLAY'] == '1'
 
 
 def test_build_webview_env_no_video_raster_on_pi4_64() -> None:
-    # Pi 4 (V3D 4.2) keeps the GPU VideoOutput path; a stale flag
+    # Pi 4 (V3D 4.2) keeps the GPU VideoOutput path; stale flags
     # inherited from the process env must not leak onto it.
     with mock.patch.dict(
         os.environ,
@@ -1598,11 +1601,13 @@ def test_build_webview_env_no_video_raster_on_pi4_64() -> None:
             'QT_QPA_PLATFORM': 'eglfs',
             'DEVICE_TYPE': 'pi4-64',
             'ANTHIAS_VIDEO_RASTER': '1',
+            'ANTHIAS_VIDEO_OVERLAY': '1',
         },
         clear=False,
     ):
         env = viewer._build_webview_env()
     assert 'ANTHIAS_VIDEO_RASTER' not in env
+    assert 'ANTHIAS_VIDEO_OVERLAY' not in env
 
 
 # User-Agent token — the C++ webview appends ANTHIAS_UA_TOKEN to

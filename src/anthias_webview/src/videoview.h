@@ -334,7 +334,19 @@ private:
     qint64 framesDelivered = 0;
     qint64 framesForwarded = 0;
     qint64 framesRendered = 0;
-    qreal containerFps = 0.0;
+    // Source frame rate as fps×1000. On the overlay path it's latched from
+    // a GStreamer pad probe (streaming thread) and read by sampleStats
+    // (GUI thread), so the handoff is atomic — a plain double would be a
+    // data race / UB. Access via containerFps() / setContainerFps().
+    QAtomicInteger<int> containerFpsMilli { 0 };
+    qreal containerFps() const
+    {
+        return containerFpsMilli.loadRelaxed() / 1000.0;
+    }
+    void setContainerFps(qreal fps)
+    {
+        containerFpsMilli.storeRelaxed(qRound(fps * 1000.0));
+    }
 
     // Intermediate sink between QMediaPlayer and the QML
     // VideoOutput's sink — the pacing gate's tap point (see

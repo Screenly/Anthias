@@ -5,7 +5,6 @@
 
 #ifdef ANTHIAS_GSTREAMER
 #include <csignal>
-#include <cstdio>
 #include <execinfo.h>
 #include <unistd.h>
 #endif
@@ -24,12 +23,18 @@ namespace {
 // before. Other boards keep the default crash behaviour untouched.
 void anthiasCrashHandler(int sig)
 {
+    // Async-signal-safe only: write() + backtrace_symbols_fd (which writes
+    // via the fd with no malloc, unlike backtrace_symbols/fprintf). The
+    // signal number is omitted from the header (formatting it isn't
+    // AS-safe) — the re-raise below preserves it in the exit status / core.
     void* frames[64];
     const int count = backtrace(frames, 64);
-    fprintf(stderr, "\n=== AnthiasViewer FATAL signal %d — backtrace ===\n",
-            sig);
+    static const char hdr[] =
+        "\n=== AnthiasViewer FATAL signal — backtrace ===\n";
+    if (write(STDERR_FILENO, hdr, sizeof(hdr) - 1) < 0) {
+        // Nothing safe to do if stderr is gone; fall through to re-raise.
+    }
     backtrace_symbols_fd(frames, count, STDERR_FILENO);
-    fflush(stderr);
     signal(sig, SIG_DFL);
     raise(sig);
 }
