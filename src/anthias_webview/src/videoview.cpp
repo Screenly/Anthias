@@ -1134,8 +1134,10 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     // would risk the software avdec_h264, which can't sustain realtime and
     // thermally reboots the 1 GB board. v4l2convert is the bcm2835 ISP
     // doing SAND→RGB16 in hardware (the conversion the CPU can't afford,
-    // ~600 ms/frame). sync=true paces the appsink to each frame's PTS;
-    // drop=true / max-buffers=2 bounds latency to the freshest frame.
+    // ~600 ms/frame). sync=false delivers frames as soon as the ISP emits
+    // them (the GUI-side coalescing gate in pushGstFrame paces what
+    // actually paints); drop=true / max-buffers=2 bounds latency to the
+    // freshest frame.
     QString location = localPath;
     location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
     location.replace(QLatin1Char('"'), QLatin1String("\\\""));
@@ -1260,15 +1262,10 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     // Explicit HW pipeline (reliably reaches the overlay — the playbin
     // variant hung in set_state). pi3-64 only receives H.264/MP4 (the
     // codec gate rejects other codecs), so qtdemux ! h264parse !
-    // v4l2h264dec forces the bcm2835 HW decoder. The ``queue`` sits
-    // BEFORE v4l2convert so it decouples the decoder thread from the
-    // convert+present thread WITHOUT hoarding the convert's OUTPUT pool —
-    // queuing the convert's output was the buffer-starvation deadlock.
-    // Here the queue holds decoder buffers (the decoder's larger DPB pool
-    // covers them) while kmssink holds only 1-2 of the convert's output
-    // buffers (the convert pool covers those). v4l2convert (bcm2835 ISP)
-    // pins NV12 — the vc4 plane's native scanout format; the raw decoder
-    // renegotiates I420, which shows wrong colours (blue).
+    // v4l2h264dec forces the bcm2835 HW decoder. Default is decoder-direct
+    // (I420 straight to kmssink — see the decode/convert stage notes
+    // below); the ``queue`` decouples the decoder thread from the scanout
+    // thread.
     QString location = uri;
     location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
     location.replace(QLatin1Char('"'), QLatin1String("\\\""));
@@ -1283,31 +1280,26 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     if (queueBuffers <= 0) {
         queueBuffers = 4;
     }
-    // The bcm2835 decoder only emits I420 (renders blue on the vc4 plane;
-    // its V4L2 capture won't negotiate NV12), so v4l2convert (bcm2835 ISP)
-    // does I420→NV12. The critical bit is its OUTPUT io-mode: with the
-    // default exported-dmabuf, kmssink zero-copies and PINS the convert's
-    // output buffers on the plane, starving the convert pool → ~18 fps (or
-    // a hard deadlock decoder-direct). Forcing ``capture-io-mode=mmap``
-    // makes the convert output CPU-memory buffers that kmssink cannot
-    // scan out directly, so kmssink COPIES each frame into its own dumb
-    // buffer and releases the convert buffer immediately — exactly how the
-    // legacy fbdevsink avoided the hold. The copy (~NV12 1080p ≈ 3 MB) is
-    // cheap next to the ISP work and buys full-rate, deadlock-free
-    // presentation. Overridable for tuning.
+    // io-mode of the ISP convert used ONLY by the fallback path
+    // (ANTHIAS_GST_ISP_CONVERT=1). mmap makes that convert output
+    // CPU-memory buffers so kmssink copies + releases them instead of
+    // pinning its pool — the same copy-not-pin trick the decoder-direct
+    // default applies to the decoder itself (see decodeStage). Overridable.
     const QString convIoMode =
         qEnvironmentVariable("ANTHIAS_GST_CONVERT_IOMODE",
                              QStringLiteral("mmap"));
-    // ANTHIAS_GST_ISP_CONVERT=0 → decoder-direct (skip the ~15-18fps ISP
-    // convert): the decoder emits I420 at full rate. To stop kmssink
-    // pinning the decoder's DPB buffers (which deadlocks it), force the
-    // DECODER's output to mmap so kmssink copies + releases immediately.
-    // Default: decoder-direct (I420) with the decoder's output forced to
-    // mmap so kmssink COPIES rather than pinning the decoder's DPB pool —
-    // that combination is what delivers a stable 30 fps with zero ongoing
-    // drops (the ISP-convert path is ~18fps-bound; plain decoder-direct
-    // deadlocks). ANTHIAS_GST_ISP_CONVERT=1 reinstates the ISP-convert
-    // (NV12) path for boards/streams where I420 direct-scanout misbehaves.
+    // Default (ANTHIAS_GST_ISP_CONVERT unset/0): decoder-direct — the
+    // bcm2835 decoder emits I420, which the vc4 overlay plane scans out
+    // directly, at full rate. The load-bearing bit is the DECODER's output
+    // io-mode: with exported-dmabuf kmssink zero-copies and PINS the
+    // decoder's DPB buffers on the plane, starving the pool → hard
+    // deadlock; ``capture-io-mode=mmap`` makes the decoder output
+    // CPU-memory buffers kmssink can't scan out directly, so it COPIES each
+    // frame (~I420 1080p ≈ 3 MB, cheap) and releases the buffer
+    // immediately — as the legacy fbdevsink did — giving stable 30 fps
+    // with zero ongoing drops. ANTHIAS_GST_ISP_CONVERT=1 inserts the ISP
+    // to emit NV12 instead (a second M2M pass, ~18 fps) for streams where
+    // direct I420 scanout misbehaves.
     const bool useConvert =
         qEnvironmentVariableIsSet("ANTHIAS_GST_ISP_CONVERT")
             ? qEnvironmentVariableIntValue("ANTHIAS_GST_ISP_CONVERT") != 0
@@ -1512,8 +1504,9 @@ void VideoView::gstStop()
 {
     gstStopAudio();
     if (gstPipeline) {
-        // Remove the bus watch the overlay path installed (no-op if the
-        // appsink path was used — that has no bus watch).
+        // Remove the bus watch (both the overlay and the appsink paths
+        // install one; a no-op if it was already dropped, e.g. after an
+        // error watch returned FALSE).
         GstBus* bus = gst_element_get_bus(gstPipeline);
         if (bus) {
             gst_bus_remove_watch(bus);
