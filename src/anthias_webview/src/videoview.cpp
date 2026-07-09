@@ -1038,6 +1038,9 @@ gboolean anthias_gst_audio_bus(GstBus* /*bus*/, GstMessage* message,
 {
     auto* view = static_cast<VideoView*>(user_data);
     switch (GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_SEGMENT_DONE:
+        view->gstAudioSegmentDone();
+        break;
     case GST_MESSAGE_EOS:
         view->gstLoopAudio();
         break;
@@ -1065,7 +1068,15 @@ gboolean anthias_gst_bus_loop(GstBus* /*bus*/, GstMessage* message,
 {
     auto* view = static_cast<VideoView*>(user_data);
     switch (GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_SEGMENT_DONE:
+        // Gapless loop: re-arm the segment without flushing so the HW
+        // decoder stays primed (a flushing seek re-primes it and drops
+        // ~0.35s of frames at every loop point).
+        view->gstVideoSegmentDone();
+        break;
     case GST_MESSAGE_EOS:
+        // Fallback if the pipeline delivered EOS instead of SEGMENT_DONE
+        // (segment seek unsupported); flushing restart, small seam.
         view->gstRestartLoop();
         break;
     case GST_MESSAGE_QOS: {
@@ -1409,6 +1420,10 @@ bool VideoView::gstPlayOverlay(const QString& uri)
         rasterWidget->clear();
     }
     gstOverlayActive = true;
+    // Switch to segment playback so the clip loops gaplessly (see
+    // gstSegmentSeek) instead of the flushing-seek restart that dropped
+    // ~0.35s at each loop point.
+    gstSegmentSeek(gstPipeline, true);
     writeStats(
         QStringLiteral("INIT"),
         QStringLiteral(
@@ -1481,6 +1496,8 @@ void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
         gstStopAudio();
         return;
     }
+    // Match the video: segment playback so audio loops gaplessly too.
+    gstSegmentSeek(gstAudioPipeline, true);
     writeStats(QStringLiteral("AUDIO"),
                QStringLiteral("started sink=%1 device=%2")
                    .arg(audioSink,
@@ -1618,6 +1635,39 @@ void VideoView::gstRestartLoop()
     // Re-seek audio to the top too so it re-aligns with the video every
     // loop (the two pipelines otherwise drift on their own clocks).
     gstLoopAudio();
+}
+
+void VideoView::gstSegmentSeek(GstElement* pipe, bool flush)
+{
+    if (!pipe) {
+        return;
+    }
+    // A SEGMENT seek makes the pipeline post SEGMENT_DONE (not EOS) at the
+    // end; re-arming it there WITHOUT flushing loops the clip gaplessly —
+    // the HW decoder is never torn down, so no re-prime gap. The first
+    // seek must flush to switch the pipeline into segment mode; subsequent
+    // ones must not.
+    GstSeekFlags flags = GST_SEEK_FLAG_SEGMENT;
+    if (flush) {
+        flags = static_cast<GstSeekFlags>(flags | GST_SEEK_FLAG_FLUSH);
+    }
+    gst_element_seek(pipe, 1.0, GST_FORMAT_TIME, flags,
+                     GST_SEEK_TYPE_SET, 0,
+                     GST_SEEK_TYPE_SET, GST_CLOCK_TIME_NONE);
+}
+
+void VideoView::gstVideoSegmentDone()
+{
+    gstSegmentSeek(gstPipeline, false);
+    // Keep audio aligned to the video's loop point.
+    gstSegmentSeek(gstAudioPipeline, false);
+}
+
+void VideoView::gstAudioSegmentDone()
+{
+    // Video drives re-alignment; if audio finishes its segment first just
+    // re-arm audio so it keeps playing until the video loops it again.
+    gstSegmentSeek(gstAudioPipeline, false);
 }
 
 void VideoView::onOverlayBuffer(struct _GstPad* pad)

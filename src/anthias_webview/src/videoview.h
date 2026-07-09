@@ -189,6 +189,12 @@ public:
     // from the pipeline bus watch (anthias_gst_bus_loop), which GLib
     // services on the GUI thread, so the seek never races stop().
     Q_INVOKABLE void gstRestartLoop();
+    // Gapless loop via SEGMENT seeks: gstSegmentSeek re-arms a pipeline's
+    // segment (flush only on the first, to enter segment mode); the
+    // *SegmentDone hooks are called from the bus watches on SEGMENT_DONE.
+    void gstSegmentSeek(struct _GstElement* pipe, bool flush);
+    void gstVideoSegmentDone();
+    void gstAudioSegmentDone();
     // Overlay-path instrumentation (streaming thread). onOverlayBuffer:
     // count each frame reaching kmssink + latch the source framerate from
     // the pad caps. logOverlayQos: record kmssink's authoritative
