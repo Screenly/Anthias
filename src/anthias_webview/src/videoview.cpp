@@ -946,14 +946,6 @@ GstFlowReturn anthias_gst_on_new_sample(GstAppSink* sink, gpointer user_data)
     return GST_FLOW_OK;
 }
 
-// Source drained: loop by flushing-seeking back to zero. Marshalled to
-// the GUI thread so it can't race a concurrent stop().
-void anthias_gst_on_eos(GstAppSink* /*sink*/, gpointer user_data)
-{
-    auto* view = static_cast<VideoView*>(user_data);
-    QMetaObject::invokeMethod(view, "gstRestartLoop", Qt::QueuedConnection);
-}
-
 // Find a free OVERLAY plane usable on ``crtcId``. The overlay-plane path
 // (kmssink) needs an explicit plane-id — otherwise kmssink grabs the
 // primary plane, which eglfs already scans out. Skips planes already
@@ -1080,13 +1072,19 @@ gboolean anthias_gst_bus_loop(GstBus* /*bus*/, GstMessage* message,
         GError* err = nullptr;
         gchar* dbg = nullptr;
         gst_message_parse_error(message, &err, &dbg);
-        qWarning() << "VideoView overlay pipeline error:"
+        qWarning() << "VideoView pipeline error:"
                    << (err ? err->message : "?") << (dbg ? dbg : "");
         if (err) {
             g_error_free(err);
         }
         g_free(dbg);
-        break;
+        // Don't sit on a stale frame with a dead pipeline: tear it down on
+        // the GUI thread (the next asset re-shows and rebuilds). Return
+        // FALSE to remove this bus watch — gstStop() also removes it, which
+        // is a harmless no-op.
+        QMetaObject::invokeMethod(
+            view, [view] { view->stop(); }, Qt::QueuedConnection);
+        return FALSE;
     }
     default:
         break;
@@ -1196,10 +1194,17 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
         return false;
     }
     GstAppSinkCallbacks callbacks = {};
-    callbacks.eos = anthias_gst_on_eos;
     callbacks.new_sample = anthias_gst_on_new_sample;
     gst_app_sink_set_callbacks(
         GST_APP_SINK(gstAppSink), &callbacks, this, nullptr);
+
+    // Bus watch for EOS (loop) and ERROR (tear down) — same handling as the
+    // overlay path, so an appsink pipeline error is surfaced/recovered
+    // instead of silently hanging. EOS looping moves here from the appsink
+    // callback so there's a single loop path.
+    GstBus* bus = gst_element_get_bus(gstPipeline);
+    gst_bus_add_watch(bus, anthias_gst_bus_loop, this);
+    gst_object_unref(bus);
 
     playStartedAt.start();
     if (gst_element_set_state(gstPipeline, GST_STATE_PLAYING)
