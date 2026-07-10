@@ -165,7 +165,9 @@ function serializeMixed(el: HTMLElement, out: string[]): void {
   }
   for (const child of el.childNodes) {
     if (child.nodeType === NodeType.TEXT_NODE) {
-      buf += (child as TextNode).text
+      // Collapse the same way inline() does, so HTML source
+      // indentation/newlines don't leak into the output.
+      buf += collapse((child as TextNode).text)
       continue
     }
     const c = child as HTMLElement
@@ -406,4 +408,7 @@ async function main() {
   )
 }
 
-main()
+main().catch((err) => {
+  console.error(err)
+  process.exitCode = 1
+})
