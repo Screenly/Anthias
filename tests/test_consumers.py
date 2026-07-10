@@ -48,3 +48,19 @@ def test_asset_update_reraises_unrelated_runtime_error() -> None:
 
     with pytest.raises(RuntimeError, match='something actually broke'):
         asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+
+def test_asset_update_reraises_non_close_websocket_send_error() -> None:
+    """The swallow requires the close/completed clause: a RuntimeError
+    that merely mentions 'websocket.send' but is not the send-after-close
+    race (some other ASGI state bug) must still propagate."""
+    consumer = AssetConsumer()
+    consumer.send = mock.AsyncMock(
+        side_effect=RuntimeError(
+            "Unexpected ASGI message 'websocket.send', after sending "
+            "'websocket.accept' was expected"
+        )
+    )
+
+    with pytest.raises(RuntimeError, match='websocket.accept'):
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))

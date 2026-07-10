@@ -30,14 +30,25 @@ class AssetConsumer(AsyncWebsocketConsumer):
             # group_send dispatch and this send, so the ASGI server has
             # already emitted 'websocket.close' and channels raises
             # "Unexpected ASGI message 'websocket.send', after sending
-            # 'websocket.close'" (Sentry ANTHIAS-1K). Match on that
-            # message so a genuine send() failure (a serialization error,
-            # a Channels bug) still propagates instead of being hidden.
-            # group_discard runs in disconnect(), so this stale channel
-            # is on its way out — drop the nudge; the client's 5s poll
-            # keeps it consistent. Log at debug (with the asset_id) so the
-            # race stays diagnosable without becoming a reportable event.
-            if "Unexpected ASGI message 'websocket.send'" not in str(exc):
+            # 'websocket.close' or response already completed." (Sentry
+            # ANTHIAS-1K). Require both the out-of-order 'websocket.send'
+            # and the close/completed clause so a genuine send() failure
+            # (a serialization error, a Channels bug) — even one that
+            # merely mentions websocket.send — still propagates instead
+            # of being hidden. group_discard runs in disconnect(), so
+            # this stale channel is on its way out — drop the nudge; the
+            # client's 5s poll keeps it consistent. Log at debug (with
+            # the asset_id) so the race stays diagnosable without
+            # becoming a reportable event.
+            message = str(exc)
+            is_send_after_close = (
+                "Unexpected ASGI message 'websocket.send'" in message
+                and (
+                    'websocket.close' in message
+                    or 'response already completed' in message
+                )
+            )
+            if not is_send_after_close:
                 raise
             logger.debug(
                 'asset_update: send on a closed websocket for %r; client '
