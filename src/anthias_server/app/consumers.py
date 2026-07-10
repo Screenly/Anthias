@@ -25,17 +25,20 @@ class AssetConsumer(AsyncWebsocketConsumer):
         asset_id = event.get('asset_id', '')
         try:
             await self.send(text_data=asset_id)
-        except RuntimeError:
+        except RuntimeError as exc:
             # The browser can disconnect in the window between the
             # group_send dispatch and this send, so the ASGI server has
             # already emitted 'websocket.close' and channels raises
             # "Unexpected ASGI message 'websocket.send', after sending
-            # 'websocket.close'" (Sentry ANTHIAS-1K). group_discard runs
-            # in disconnect(), so this stale channel is on its way out —
-            # drop the nudge; the client's 5s poll keeps it consistent.
-            # Log the exception and asset_id at debug so this expected
-            # race stays distinguishable from any other RuntimeError out
-            # of send() without upgrading it to a reportable event.
+            # 'websocket.close'" (Sentry ANTHIAS-1K). Match on that
+            # message so a genuine send() failure (a serialization error,
+            # a Channels bug) still propagates instead of being hidden.
+            # group_discard runs in disconnect(), so this stale channel
+            # is on its way out — drop the nudge; the client's 5s poll
+            # keeps it consistent. Log at debug (with the asset_id) so the
+            # race stays diagnosable without becoming a reportable event.
+            if "Unexpected ASGI message 'websocket.send'" not in str(exc):
+                raise
             logger.debug(
                 'asset_update: send on a closed websocket for %r; client '
                 'disconnected mid-broadcast',
