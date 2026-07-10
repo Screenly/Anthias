@@ -92,14 +92,18 @@ def find_module(name, path=None):
     if spec.submodule_search_locations is not None:
         loc = list(spec.submodule_search_locations)
         return (None, loc[0] if loc else origin, ('', '', PKG_DIRECTORY))
-    suffix = os.path.splitext(origin)[1] if origin else ''
+    # A real file-backed module has a path origin; built-in/frozen modules
+    # use the sentinels 'built-in'/'frozen' (and namespace packages None) —
+    # never open() those.
+    is_file = bool(origin) and origin not in ('built-in', 'frozen')
+    suffix = os.path.splitext(origin)[1] if is_file else ''
     if suffix in importlib.machinery.EXTENSION_SUFFIXES:
         kind, mode = C_EXTENSION, 'rb'
     elif suffix in importlib.machinery.BYTECODE_SUFFIXES:
         kind, mode = PY_COMPILED, 'rb'
     else:
         kind, mode = PY_SOURCE, 'r'
-    handle = open(origin, mode) if origin else None
+    handle = open(origin, mode) if is_file else None
     return (handle, origin, (suffix, mode, kind))
 
 
