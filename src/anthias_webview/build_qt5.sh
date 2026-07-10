@@ -41,21 +41,20 @@ fi
 # Chromium 87's grit/build tooling `import six` (and six.moves); trixie's
 # python3.13 ships no six by default, so the gn/ninja codegen actions
 # abort with "No module named 'six.moves'". Install the distro package
-# (six 1.17 supports 3.13); fall back to pip. Both failing is fatal (no
-# trailing `|| true`) — six is required for gn/grit.
+# (six 1.17 supports 3.13). No pip fallback — the builder image has apt
+# but not necessarily python3-pip, and a failed apt install should abort
+# the build (set -e) rather than pretend a missing pip3 could recover it.
 if ! python3 -c 'import six.moves' 2>/dev/null; then
     apt-get update -qq
-    apt-get install -y -qq python3-six \
-        || pip3 install --break-system-packages six
+    apt-get install -y -qq python3-six
 fi
 # Chromium 87's licenses/gyp tooling imports distutils (spawn, version,
 # dir_util, archive_util), removed from the stdlib in Python 3.12.
-# setuptools re-provides it via its distutils-precedence .pth. Required, so
-# both apt and pip failing is fatal.
+# setuptools re-provides it via its distutils-precedence .pth. apt-only for
+# the same reason as six above.
 if ! python3 -c 'import distutils.spawn' 2>/dev/null; then
     apt-get update -qq
-    apt-get install -y -qq python3-setuptools \
-        || pip3 install --break-system-packages setuptools
+    apt-get install -y -qq python3-setuptools
 fi
 
 # Force -mno-unaligned-access on EVERY armhf compile. Modern Debian gcc
