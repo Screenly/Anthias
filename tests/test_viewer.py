@@ -1683,7 +1683,43 @@ def test_build_webview_env_low_memory_flags_prepend_and_idempotent() -> None:
     flags = first['QTWEBENGINE_CHROMIUM_FLAGS']
     assert '--custom-device-flag' in flags
     assert flags.count(_LOW_MEMORY_FLAGS) == 1
+    # Prepended, not appended: the injected switches precede the
+    # device-supplied flag (Chromium keeps the last occurrence, but we
+    # want ours ahead of the operator's so theirs can still override).
+    assert flags.index(_LOW_MEMORY_FLAGS) < flags.index('--custom-device-flag')
     assert second['QTWEBENGINE_CHROMIUM_FLAGS'].count(_LOW_MEMORY_FLAGS) == 1
+
+
+def test_build_webview_env_low_memory_respects_preset_switches() -> None:
+    # A device that already set some of the switches (here a *different*
+    # --js-flags value, plus the bare low-end switch) must keep its own:
+    # we add only the still-missing flags, never a second occurrence of a
+    # switch Chromium would then resolve to the wrong value.
+    with (
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'linuxfb',
+                'QTWEBENGINE_CHROMIUM_FLAGS': (
+                    '--enable-low-end-device-mode '
+                    '--js-flags=--max-old-space-size=256'
+                ),
+            },
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        env = viewer._build_webview_env()
+    flags = env['QTWEBENGINE_CHROMIUM_FLAGS']
+    # Device's own values are untouched — no duplicate switch added.
+    assert flags.count('--js-flags=') == 1
+    assert '--max-old-space-size=256' in flags
+    assert '--max-old-space-size=64' not in flags
+    assert flags.count(_LOW_MEMORY_FLAGS) == 1
+    # The genuinely-missing caps are still injected.
+    assert '--renderer-process-limit=1' in flags
+    assert '--process-per-site' in flags
+    assert '--disable-dev-shm-usage' in flags
 
 
 def test_handle_reload_queues_bounce_on_dark_mode_change(
