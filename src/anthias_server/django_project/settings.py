@@ -150,6 +150,16 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         asset renders a "Failed" pill with the reason — the operator
         gets the feedback without a Sentry page (Sentry ANTHIAS-3T).
         Matched by name+module so we don't import yt_dlp here.
+      * ``RuntimeError: Response content shorter than Content-Length`` —
+        a client that hangs up mid-response while Django's ASGI handler
+        is still streaming a static file (WhiteNoise serving e.g. the
+        splash SVG as the viewer navigates away). Django declared a
+        Content-Length from the file size, then the transfer is cut
+        short by the disconnect — a broken pipe, not a truncated file.
+        Same client-disconnect class as ``CancelledError`` above, but it
+        surfaces as a bare ``RuntimeError``, so it's matched by message
+        text to avoid swallowing unrelated RuntimeErrors (Sentry
+        ANTHIAS-37).
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -172,6 +182,10 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         if isinstance(exc, AuthSettingsError):
             return None
         if isinstance(exc, socket.gaierror):
+            return None
+        if isinstance(exc, RuntimeError) and (
+            'Response content shorter than Content-Length' in str(exc)
+        ):
             return None
         exc_cls = type(exc)
         if exc_cls.__name__ == 'DownloadError' and (
