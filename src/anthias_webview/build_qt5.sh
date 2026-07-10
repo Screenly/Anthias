@@ -233,14 +233,14 @@ function build_qt () {
         # six 1.10 as a *package* (six/__init__.py) there, so overwrite
         # both the six.py files and every six/ package __init__.py with
         # the distro copy.
-        SYS_SIX="$(python3 -c 'import six, sys; sys.stdout.write(six.__file__)' 2>/dev/null || true)"
-        if [ -n "$SYS_SIX" ] && [ -f "$SYS_SIX" ]; then
-            CHROMIUM_DIR="/src/qt$QT_MAJOR/qtwebengine/src/3rdparty/chromium"
-            find "$CHROMIUM_DIR" -path '*/six/six.py' -print \
-                -exec cp "$SYS_SIX" {} \; 2>/dev/null || true
-            find "$CHROMIUM_DIR" -path '*/six/__init__.py' -print \
-                -exec cp "$SYS_SIX" {} \; 2>/dev/null || true
-        fi
+        # No error swallowing: six was installed above, so the import must
+        # succeed, and a failed overwrite would only resurface later as the
+        # "No module named 'six.moves'" grit failure this is meant to fix.
+        SYS_SIX="$(python3 -c 'import six, sys; sys.stdout.write(six.__file__)')"
+        CHROMIUM_DIR="/src/qt$QT_MAJOR/qtwebengine/src/3rdparty/chromium"
+        find "$CHROMIUM_DIR" \
+            \( -path '*/six/six.py' -o -path '*/six/__init__.py' \) \
+            -print -exec cp "$SYS_SIX" {} \;
 
         # Force arm_use_neon=false for the Chromium build (Yocto's fix:
         # OSSystems meta-chromium / lgsvl meta-lgsvl-browser). QtWebEngine
