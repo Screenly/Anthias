@@ -2118,6 +2118,47 @@ class TestPeriodicPokeTimeLimits:
         assert result.successful()
 
 
+class TestReconcileTimeLimits:
+    """The stuck-row reconciler was the last periodic task carrying a
+    bare ``time_limit=300`` with no soft companion, so its unbounded
+    per-row work (SQLite + a kombu ``.delay()`` publish) could still
+    trip the hard limit and SIGKILL the pool child — keeping the
+    ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B group alive after #3017/#3063
+    closed the sibling tasks."""
+
+    def test_reconcile_task_has_soft_limit_headroom(self) -> None:
+        soft = reconcile_stuck_processing.soft_time_limit
+        hard = reconcile_stuck_processing.time_limit
+        assert soft == celery_tasks_module.RECONCILE_STUCK_SOFT_TIME_LIMIT_S
+        assert hard == celery_tasks_module.RECONCILE_STUCK_TIME_LIMIT_S
+        assert soft is not None
+        assert hard is not None
+        assert soft < hard
+
+    @pytest.mark.django_db
+    def test_reconcile_soft_limit_aborts_and_releases_lock(
+        self, eager_celery_reconcile: None
+    ) -> None:
+        old = (
+            timezone.now()
+            - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+        ).isoformat()
+        _make_stuck_asset(processing_started_at=old, mimetype='video')
+
+        # A per-row re-dispatch wedges past the soft budget.
+        with mock.patch(
+            'anthias_server.processing.dispatch_normalize_video',
+            side_effect=SoftTimeLimitExceeded,
+        ):
+            result = reconcile_stuck_processing.apply()
+        # Caught inside the sweep — no exception propagates, so the tick
+        # ends as a clean success instead of a hard-kill task failure.
+        assert result.successful()
+        # The finally block must have released the singleton lock so the
+        # next beat tick can run.
+        assert celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) is None
+
+
 class TestWaitForMigrations:
     """Startup gate for Sentry ANTHIAS-1 — the worker must not consume
     tasks while the server's migrate/dbrestore pass is still rewriting
