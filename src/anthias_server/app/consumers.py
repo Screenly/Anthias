@@ -22,7 +22,20 @@ class AssetConsumer(AsyncWebsocketConsumer):
         # Plain text frame: the client only needs to know "something
         # changed" to fire htmx refresh-assets; carrying the full
         # changeset over WS would duplicate the partial render path.
-        await self.send(text_data=event.get('asset_id', ''))
+        try:
+            await self.send(text_data=event.get('asset_id', ''))
+        except RuntimeError:
+            # The browser can disconnect in the window between the
+            # group_send dispatch and this send, so the ASGI server has
+            # already emitted 'websocket.close' and channels raises
+            # "Unexpected ASGI message 'websocket.send', after sending
+            # 'websocket.close'" (Sentry ANTHIAS-1K). group_discard runs
+            # in disconnect(), so this stale channel is on its way out —
+            # drop the nudge; the client's 5s poll keeps it consistent.
+            logger.debug(
+                'asset_update: send on a closed websocket; client '
+                'disconnected mid-broadcast'
+            )
 
 
 def notify_asset_update(asset_id: str = '*') -> None:
