@@ -18,6 +18,62 @@ QT_MINOR="15"
 QT_BUG_FIX="19"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
 DEBIAN_VERSION=$(lsb_release -cs)
+
+# Debian trixie ships Python 3.13, which removed stdlib modules Chromium
+# 87's build tooling still imports: `imp` (gone 3.12), `pipes`/`cgi`
+# (gone 3.13). Install importlib-backed shims (src/anthias_webview/pyshim/)
+# into python3's site-packages ONLY. Do NOT put them on a shared
+# PYTHONPATH: the build runs some codegen actions under python2.7 (which
+# has real pipes/imp/cgi), and a shared PYTHONPATH would shadow those with
+# the py3-only shim and break it ("cannot import name quote"). python3's
+# site-packages is only consulted after the stdlib, so it fills the gaps
+# for removed modules without shadowing anything that still exists.
+if [ -d /webview/pyshim ]; then
+    PY3_SITE="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))' 2>/dev/null || echo /usr/lib/python3/dist-packages)"
+    cp -f /webview/pyshim/*.py "$PY3_SITE/" 2>/dev/null || true
+fi
+
+# Chromium 87's grit/build tooling `import six` (and six.moves); trixie's
+# python3.13 ships no six by default, so the gn/ninja codegen actions
+# abort with "No module named 'six.moves'". Install the distro package
+# (six 1.17 supports 3.13) once at the start of the build.
+if ! python3 -c 'import six.moves' 2>/dev/null; then
+    apt-get update -qq && apt-get install -y -qq python3-six \
+        || pip3 install --break-system-packages six || true
+fi
+# Chromium 87's licenses/gyp tooling imports distutils (spawn, version,
+# dir_util, archive_util), removed from the stdlib in Python 3.12.
+# setuptools re-provides it via its distutils-precedence .pth, so just
+# ensure setuptools is installed.
+if ! python3 -c 'import distutils.spawn' 2>/dev/null; then
+    apt-get update -qq && apt-get install -y -qq python3-setuptools \
+        || pip3 install --break-system-packages setuptools || true
+fi
+
+# Force -mno-unaligned-access on EVERY armhf compile. Modern Debian gcc
+# lowers struct zero-init/copy of an 8-byte-aligned type into a NEON
+# block-move store with a :64 alignment assertion (arm_block_set_aligned_vect);
+# on the Cortex-A7 (Pi 2) that SIGBUSes whenever the object is only
+# 4-byte-aligned (Chromium/Qt misaligned-pointer UB), blanking the viewer.
+# GCC won't change this (PR 93031 WONTFIX). -mno-unaligned-access makes
+# arm_block_set_vect bail (`... && !unaligned_access) return false`), so gcc
+# emits 4-byte-safe `vstr` instead. arm_use_neon=false (common.pri, below)
+# covers only Chromium's gn C++; Qt's own libs (libQt5Core/Gui/Qml/Quick,
+# built by qmake with -mfpu=neon-vfpv4) and the WebEngine integration layer
+# still emit it, so wrap the compiler itself — both qmake and gn resolve
+# arm-linux-gnueabihf-{gcc,g++} through /usr/bin. Resolve the real binary
+# BEFORE replacing the symlink so the wrapper doesn't recurse.
+for _t in gcc g++; do
+    _real="$(readlink -f "/usr/bin/arm-linux-gnueabihf-$_t")"
+    rm -f "/usr/bin/arm-linux-gnueabihf-$_t"
+    cat > "/usr/bin/arm-linux-gnueabihf-$_t" <<EOF
+#!/bin/sh
+exec "$_real" -mno-unaligned-access "\$@"
+EOF
+    chmod +x "/usr/bin/arm-linux-gnueabihf-$_t"
+done
+echo "Wrapped armhf cross gcc/g++ with -mno-unaligned-access"
+
 # MAKE_CORES caps parallelism. Overridable via env so the wrapper can
 # tune for available memory: each cc1plus under qemu-arm peaks at
 # ~3-4 GB during the chromium compile, so the default `nproc + 2`
@@ -153,6 +209,42 @@ function build_qt () {
 
         # Make sure we have a clean QT 5 tree
         fetch_qt
+
+        # Chromium 87 vendors six 1.14, whose ``six.moves`` meta-path
+        # importer is broken under Python 3.12+ (grit then dies with
+        # "No module named 'six.moves'"). Overwrite every vendored
+        # six.py with the distro's 3.13-compatible six so the gn/grit
+        # codegen actions — which import the vendored copy ahead of any
+        # site-packages — get a working ``six.moves``. Runs after
+        # fetch_qt because that rsync --delete restores the stale copy.
+        # grit inserts tools/grit/third_party at sys.path[0] and vendors
+        # six 1.10 as a *package* (six/__init__.py) there, so overwrite
+        # both the six.py files and every six/ package __init__.py with
+        # the distro copy.
+        SYS_SIX="$(python3 -c 'import six, sys; sys.stdout.write(six.__file__)' 2>/dev/null || true)"
+        if [ -n "$SYS_SIX" ] && [ -f "$SYS_SIX" ]; then
+            CHROMIUM_DIR="/src/qt$QT_MAJOR/qtwebengine/src/3rdparty/chromium"
+            find "$CHROMIUM_DIR" -path '*/six/six.py' -print \
+                -exec cp "$SYS_SIX" {} \; 2>/dev/null || true
+            find "$CHROMIUM_DIR" -path '*/six/__init__.py' -print \
+                -exec cp "$SYS_SIX" {} \; 2>/dev/null || true
+        fi
+
+        # Force arm_use_neon=false for the Chromium build (Yocto's fix:
+        # OSSystems meta-chromium / lgsvl meta-lgsvl-browser). QtWebEngine
+        # leaves arm_use_neon unset, so Chromium's arm.gni default resolves
+        # it to true on Linux and applies -mfpu=neon to EVERY C++ TU. Modern
+        # Debian gcc (12-16) then compiles struct zero-init/copy of 8-byte-
+        # aligned types into a NEON block-move store with a :64 alignment
+        # assertion (arm_block_set_aligned_vect); on the Cortex-A7 (Pi 2)
+        # that faults (SIGBUS) whenever the object lands 4-byte-aligned,
+        # blanking the viewer. With arm_use_neon=false the general C++ path
+        # compiles -mfpu=vfpv3-d16 (no NEON block store), while codec/
+        # graphics (libvpx, Skia) re-add -mfpu=neon per-file with runtime
+        # detection, so hardware SIMD decode is preserved. Appended after
+        # fetch_qt because rsync --delete restores the pristine .pri.
+        echo 'gn_args += arm_use_neon=false' \
+            >> "/src/qt$QT_MAJOR/qtwebengine/src/core/config/common.pri"
 
         if [ "${CLEAN_BUILD-x}" == "1" ]; then
             rm -rf "$SRC_DIR"

@@ -174,7 +174,7 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
     # straight from Debian apt (qt6-*-dev in viewer_extra_apt below).
     qt_version = '6.4.2' if is_qt6 else '5.15.19'
     qt_major_version = qt_version.split('.')[0]
-    qt5_toolchain_url = f'{releases_url}/WebView-v2026.07.0'
+    qt5_toolchain_url = f'{releases_url}/WebView-v2026.07.1'
 
     # Viewer-only apt deps. The shared runtime set (cec-utils, curl,
     # ffmpeg, git, libcec7, procps, psmisc, python-is-python3,
