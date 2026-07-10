@@ -1858,6 +1858,113 @@ def test_build_webview_env_overwrites_stale_ua_token() -> None:
     assert env['ANTHIAS_UA_TOKEN'] == 'Anthias/1.2.3'
 
 
+# Low-memory Chromium profile — ~1 GB boards (Pi 3, plus 1 GB Pi 4 / Pi 5
+# SKUs) with no swap head-room slowly grow past their RAM under a
+# long-lived / cycling web-page asset (forum #6731). Chromium only
+# auto-enables its low-memory profile below ~512 MB, so _build_webview_env
+# forces it on for boards the shared is_low_ram_device() gate flags — the
+# same gate that drives the video 1080p cap and the system-info badge.
+# HW-validated on a real Pi 3B+: −78 MB (−35 %) steady-state RSS.
+
+_LOW_MEMORY_FLAGS = '--enable-low-end-device-mode'
+
+
+def test_build_webview_env_injects_low_memory_flags_on_low_ram_board() -> None:
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        env = viewer._build_webview_env()
+    flags = env['QTWEBENGINE_CHROMIUM_FLAGS']
+    assert _LOW_MEMORY_FLAGS in flags
+    assert '--js-flags=--max-old-space-size=64' in flags
+    assert '--renderer-process-limit=1' in flags
+    assert '--process-per-site' in flags
+    assert '--disable-dev-shm-usage' in flags
+
+
+def test_build_webview_env_skips_low_memory_flags_on_roomy_board() -> None:
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=False),
+    ):
+        env = viewer._build_webview_env()
+    assert _LOW_MEMORY_FLAGS not in env.get('QTWEBENGINE_CHROMIUM_FLAGS', '')
+
+
+def test_build_webview_env_low_memory_flags_prepend_and_idempotent() -> None:
+    # A device-supplied QTWEBENGINE_CHROMIUM_FLAGS must survive (prepended,
+    # not clobbered), and a value already carrying the low-memory switch
+    # (e.g. inherited on a respawn) must not stack a duplicate.
+    with (
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'linuxfb',
+                'QTWEBENGINE_CHROMIUM_FLAGS': '--custom-device-flag',
+            },
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        first = viewer._build_webview_env()
+        # Feed the composed value back in to emulate an inherited respawn.
+        with mock.patch.dict(
+            os.environ,
+            {
+                'QTWEBENGINE_CHROMIUM_FLAGS': first[
+                    'QTWEBENGINE_CHROMIUM_FLAGS'
+                ]
+            },
+            clear=False,
+        ):
+            second = viewer._build_webview_env()
+    flags = first['QTWEBENGINE_CHROMIUM_FLAGS']
+    assert '--custom-device-flag' in flags
+    assert flags.count(_LOW_MEMORY_FLAGS) == 1
+    # Prepended, not appended: the injected switches precede the
+    # device-supplied flag (Chromium keeps the last occurrence, but we
+    # want ours ahead of the operator's so theirs can still override).
+    assert flags.index(_LOW_MEMORY_FLAGS) < flags.index('--custom-device-flag')
+    assert second['QTWEBENGINE_CHROMIUM_FLAGS'].count(_LOW_MEMORY_FLAGS) == 1
+
+
+def test_build_webview_env_low_memory_respects_preset_switches() -> None:
+    # A device that already set some of the switches (here a *different*
+    # --js-flags value, plus the bare low-end switch) must keep its own:
+    # we add only the still-missing flags, never a second occurrence of a
+    # switch Chromium would then resolve to the wrong value.
+    with (
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'linuxfb',
+                'QTWEBENGINE_CHROMIUM_FLAGS': (
+                    '--enable-low-end-device-mode '
+                    '--js-flags=--max-old-space-size=256'
+                ),
+            },
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        env = viewer._build_webview_env()
+    flags = env['QTWEBENGINE_CHROMIUM_FLAGS']
+    # Device's own values are untouched — no duplicate switch added.
+    assert flags.count('--js-flags=') == 1
+    assert '--max-old-space-size=256' in flags
+    assert '--max-old-space-size=64' not in flags
+    assert flags.count(_LOW_MEMORY_FLAGS) == 1
+    # The genuinely-missing caps are still injected.
+    assert '--renderer-process-limit=1' in flags
+    assert '--process-per-site' in flags
+    assert '--disable-dev-shm-usage' in flags
+
+
 def test_handle_reload_queues_bounce_on_dark_mode_change(
     reset_dark_mode_state: None,
 ) -> None:

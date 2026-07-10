@@ -21,6 +21,7 @@ import redis.exceptions
 import requests
 import sh as sh
 
+from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
@@ -260,6 +261,50 @@ def _build_webview_env() -> dict[str, str]:
     # returns below — so every platform plugin gets it and any stale
     # inherited value is overwritten.
     env['ANTHIAS_UA_TOKEN'] = get_anthias_product_token()
+
+    # Boards with ~1 GB RAM (Pi 3, plus 1 GB Pi 4 / Pi 5 SKUs) have no
+    # swap head-room, so QtWebEngine's default multi-process Chromium —
+    # tuned for desktops — slowly grows past what the board can hold when
+    # a web-page asset stays up or cycles for hours (forum #6731: black
+    # screen / thrash after long uptime). Chromium only auto-enables its
+    # low-memory profile below ~512 MB, so a ~1 GB board never gets it.
+    # Force it on, cap the per-renderer V8 old-space heap, and collapse to
+    # a single renderer to bound steady-state footprint. Reuse the shared
+    # ``is_low_ram_device`` gate (anthias_common.board) that already drives
+    # the video 1080p cap and the system-info Low-RAM badge, so the viewer,
+    # asset processor and UI all agree on which boards are constrained
+    # rather than each hard-coding a threshold. Each flag is added only
+    # when its switch isn't already present, so an inherited value on a
+    # respawn isn't duplicated and a switch the device set on purpose
+    # (say a different --js-flags) is neither overridden nor doubled —
+    # Chromium keeps only the last occurrence of a switch. The ones we do
+    # add are prepended, so the device's own flags and the dark-mode
+    # --blink-settings switch main.cpp appends still take effect.
+    if is_low_ram_device():
+        # (switch key, full flag). The key identifies an already-present
+        # switch: the ``--name=`` prefix for a valued flag, the whole
+        # token for a bare one.
+        low_mem_flags = (
+            ('--enable-low-end-device-mode', '--enable-low-end-device-mode'),
+            ('--js-flags=', '--js-flags=--max-old-space-size=64'),
+            ('--renderer-process-limit=', '--renderer-process-limit=1'),
+            ('--process-per-site', '--process-per-site'),
+            ('--disable-dev-shm-usage', '--disable-dev-shm-usage'),
+        )
+        existing = env.get('QTWEBENGINE_CHROMIUM_FLAGS', '')
+        existing_tokens = existing.split()
+        to_add = [
+            flag
+            for key, flag in low_mem_flags
+            if not any(
+                token == key or token.startswith(key)
+                for token in existing_tokens
+            )
+        ]
+        if to_add:
+            env['QTWEBENGINE_CHROMIUM_FLAGS'] = (
+                f'{" ".join(to_add)} {existing}'.strip()
+            )
 
     # "Prefer dark mode" applies to every board (the C++ webview turns
     # this into a Chromium blink flag at launch — see applyDarkModePreference
