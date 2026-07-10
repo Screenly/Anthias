@@ -28,26 +28,32 @@ DEBIAN_VERSION=$(lsb_release -cs)
 # the py3-only shim and break it ("cannot import name quote"). python3's
 # site-packages is only consulted after the stdlib, so it fills the gaps
 # for removed modules without shadowing anything that still exists.
+# These shims are required on Python 3.13, so let a failed copy abort the
+# build (set -e) rather than surface later as a confusing ImportError deep
+# inside a Chromium gn/ninja action.
 if [ -d /webview/pyshim ]; then
-    PY3_SITE="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))' 2>/dev/null || echo /usr/lib/python3/dist-packages)"
-    cp -f /webview/pyshim/*.py "$PY3_SITE/" 2>/dev/null || true
+    PY3_SITE="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+    cp -f /webview/pyshim/*.py "$PY3_SITE/"
 fi
 
 # Chromium 87's grit/build tooling `import six` (and six.moves); trixie's
 # python3.13 ships no six by default, so the gn/ninja codegen actions
 # abort with "No module named 'six.moves'". Install the distro package
-# (six 1.17 supports 3.13) once at the start of the build.
+# (six 1.17 supports 3.13); fall back to pip. Both failing is fatal (no
+# trailing `|| true`) — six is required for gn/grit.
 if ! python3 -c 'import six.moves' 2>/dev/null; then
-    apt-get update -qq && apt-get install -y -qq python3-six \
-        || pip3 install --break-system-packages six || true
+    apt-get update -qq
+    apt-get install -y -qq python3-six \
+        || pip3 install --break-system-packages six
 fi
 # Chromium 87's licenses/gyp tooling imports distutils (spawn, version,
 # dir_util, archive_util), removed from the stdlib in Python 3.12.
-# setuptools re-provides it via its distutils-precedence .pth, so just
-# ensure setuptools is installed.
+# setuptools re-provides it via its distutils-precedence .pth. Required, so
+# both apt and pip failing is fatal.
 if ! python3 -c 'import distutils.spawn' 2>/dev/null; then
-    apt-get update -qq && apt-get install -y -qq python3-setuptools \
-        || pip3 install --break-system-packages setuptools || true
+    apt-get update -qq
+    apt-get install -y -qq python3-setuptools \
+        || pip3 install --break-system-packages setuptools
 fi
 
 # Force -mno-unaligned-access on EVERY armhf compile. Modern Debian gcc
@@ -61,16 +67,17 @@ fi
 # covers only Chromium's gn C++; Qt's own libs (libQt5Core/Gui/Qml/Quick,
 # built by qmake with -mfpu=neon-vfpv4) and the WebEngine integration layer
 # still emit it, so wrap the compiler itself — both qmake and gn resolve
-# arm-linux-gnueabihf-{gcc,g++} through /usr/bin. Resolve the real binary
-# BEFORE replacing the symlink so the wrapper doesn't recurse.
+# arm-linux-gnueabihf-{gcc,g++} through /usr/bin. Move the original aside
+# to <tool>.real first so the wrapper never execs itself (safe whether the
+# original is an alternatives symlink or a real binary).
 for _t in gcc g++; do
-    _real="$(readlink -f "/usr/bin/arm-linux-gnueabihf-$_t")"
-    rm -f "/usr/bin/arm-linux-gnueabihf-$_t"
-    cat > "/usr/bin/arm-linux-gnueabihf-$_t" <<EOF
+    _bin="/usr/bin/arm-linux-gnueabihf-$_t"
+    mv "$_bin" "$_bin.real"
+    cat > "$_bin" <<EOF
 #!/bin/sh
-exec "$_real" -mno-unaligned-access "\$@"
+exec "$_bin.real" -mno-unaligned-access "\$@"
 EOF
-    chmod +x "/usr/bin/arm-linux-gnueabihf-$_t"
+    chmod +x "$_bin"
 done
 echo "Wrapped armhf cross gcc/g++ with -mno-unaligned-access"
 

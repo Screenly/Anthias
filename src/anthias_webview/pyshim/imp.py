@@ -3,7 +3,10 @@ removed in 3.12). Debian trixie ships Python 3.13, but Chromium 87's
 build tooling (mojo codegen, bundled jinja2, build/print_python_deps.py)
 still ``import imp``. This shim reimplements the small subset those tools
 use on top of ``importlib`` so the Qt 5.15 WebEngine build runs on a
-modern interpreter. Placed on PYTHONPATH by build_qt5.sh.
+modern interpreter. build_qt5.sh copies this into python3's
+site-packages (NOT onto a shared PYTHONPATH, which would also shadow
+python2.7's real ``imp`` for the codegen actions that still run under
+python2).
 """
 
 import importlib
@@ -134,5 +137,5 @@ class NullImporter:
         if os.path.isdir(path):
             raise ImportError('existing directory', path=path)
 
-    def find_module(self, fullname):
+    def find_module(self, fullname, path=None):
         return None
