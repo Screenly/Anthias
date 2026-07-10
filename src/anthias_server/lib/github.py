@@ -33,7 +33,7 @@ DEFAULT_REQUESTS_TIMEOUT = 5  # seconds
 # The releases *list*, not ``/releases/latest``: that endpoint returns
 # the newest non-draft, non-prerelease release of ANY kind, and the
 # repo also publishes non-app releases (e.g. the frozen Qt 5 toolchain,
-# tagged ``WebView-v2026.07.0``). The day such a release goes out,
+# tagged ``WebView-v2026.07.1``). The day such a release goes out,
 # ``/releases/latest`` stops pointing at an Anthias CalVer tag and the
 # update check degrades fleet-wide until the next app release (Sentry
 # ANTHIAS-3P). Listing lets us pick the highest CalVer-parseable tag
@@ -81,7 +81,7 @@ def _latest_parseable_tag(payload: object) -> str | None:
     ``/releases`` list payload.
 
     Skips drafts, prereleases, and any release whose tag doesn't parse
-    (non-app releases like ``WebView-v2026.07.0``, hand-edited tags
+    (non-app releases like ``WebView-v2026.07.1``, hand-edited tags
     like ``nightly``). Highest-by-version rather than first-in-list:
     the list is ordered by creation date, and a non-app release
     created after the newest app release would otherwise mask it.

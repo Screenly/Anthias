@@ -31,7 +31,9 @@ DEBIAN_VERSION=$(lsb_release -cs)
 # These shims are required on Python 3.13, so let a failed copy abort the
 # build (set -e) rather than surface later as a confusing ImportError deep
 # inside a Chromium gn/ninja action.
-if [ -d /webview/pyshim ]; then
+# `ls` guard so an empty (or absent) pyshim dir doesn't feed cp a literal
+# unexpanded glob and abort the build under set -e.
+if ls /webview/pyshim/*.py >/dev/null 2>&1; then
     PY3_SITE="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
     cp -f /webview/pyshim/*.py "$PY3_SITE/"
 fi
@@ -69,17 +71,21 @@ fi
 # still emit it, so wrap the compiler itself — both qmake and gn resolve
 # arm-linux-gnueabihf-{gcc,g++} through /usr/bin. Move the original aside
 # to <tool>.real first so the wrapper never execs itself (safe whether the
-# original is an alternatives symlink or a real binary).
+# original is an alternatives symlink or a real binary). Guarded on the
+# tool existing and not already being wrapped, so it's idempotent and
+# doesn't fail before fetch_cross_compile_tool's own presence check.
 for _t in gcc g++; do
     _bin="/usr/bin/arm-linux-gnueabihf-$_t"
-    mv "$_bin" "$_bin.real"
-    cat > "$_bin" <<EOF
+    if [ -e "$_bin" ] && [ ! -e "$_bin.real" ]; then
+        mv "$_bin" "$_bin.real"
+        cat > "$_bin" <<EOF
 #!/bin/sh
 exec "$_bin.real" -mno-unaligned-access "\$@"
 EOF
-    chmod +x "$_bin"
+        chmod +x "$_bin"
+        echo "Wrapped $_bin with -mno-unaligned-access"
+    fi
 done
-echo "Wrapped armhf cross gcc/g++ with -mno-unaligned-access"
 
 # MAKE_CORES caps parallelism. Overridable via env so the wrapper can
 # tune for available memory: each cc1plus under qemu-arm peaks at
@@ -249,9 +255,11 @@ function build_qt () {
         # compiles -mfpu=vfpv3-d16 (no NEON block store), while codec/
         # graphics (libvpx, Skia) re-add -mfpu=neon per-file with runtime
         # detection, so hardware SIMD decode is preserved. Appended after
-        # fetch_qt because rsync --delete restores the pristine .pri.
-        echo 'gn_args += arm_use_neon=false' \
-            >> "/src/qt$QT_MAJOR/qtwebengine/src/core/config/common.pri"
+        # fetch_qt because rsync --delete restores the pristine .pri;
+        # grep-guarded so a re-run in the same workdir doesn't duplicate it.
+        _common_pri="/src/qt$QT_MAJOR/qtwebengine/src/core/config/common.pri"
+        grep -qF 'arm_use_neon=false' "$_common_pri" \
+            || echo 'gn_args += arm_use_neon=false' >> "$_common_pri"
 
         if [ "${CLEAN_BUILD-x}" == "1" ]; then
             rm -rf "$SRC_DIR"
@@ -367,7 +375,7 @@ function build_qt () {
     # (docker/Dockerfile.qt5-webview-builder.j2 includes this Qt 5
     # toolchain at build time). This script only emits the toolchain
     # tarball — bin/rebuild_qt5_toolchain.sh uploads it to the frozen
-    # WebView-v2026.07.0 release.
+    # WebView-v2026.07.1 release.
 }
 
 # Modify paths for build process
