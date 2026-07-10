@@ -228,6 +228,9 @@ exclude = [
     # the file header. Adding type annotations would put the file
     # off-pin and silently break the provenance comment.
     "^src/anthias_webview/sysroot-relativelinks\\.py$",
+    # Build-time-only stdlib shims (imp/pipes/cgi) for Chromium 87's
+    # Python-2-era build tooling; not app code, emulate removed stdlib.
+    "^src/anthias_webview/pyshim/",
 ]
 
 [[tool.mypy.overrides]]
