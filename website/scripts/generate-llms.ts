@@ -273,7 +273,11 @@ function block(node: Node, out: string[]): void {
       for (const tr of el.querySelectorAll('tr')) {
         const cells = tr
           .querySelectorAll('th,td')
-          .map((c) => inline(c).trim().replace(/\|/g, '\\|'))
+          // Escape backslashes before pipes so a literal "\" in a cell
+          // can't combine with the pipe escape.
+          .map((c) =>
+            inline(c).trim().replace(/\\/g, '\\\\').replace(/\|/g, '\\|'),
+          )
         if (cells.length) rows.push(cells)
       }
       if (rows.length) {
