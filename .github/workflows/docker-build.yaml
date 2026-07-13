@@ -47,10 +47,15 @@ jobs:
     # `buildcache-*` registry cache tags written by --cache-backend=
     # registry. `contents: read` is the implicit default but pinned
     # explicitly so a future workflow edit can't silently lose
-    # checkout access.
+    # checkout access. `id-token: write` + `attestations: write` let
+    # the keyless build-provenance step below mint Sigstore-backed
+    # attestations for the pushed images (same OIDC model the SBOM
+    # workflow already uses).
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     strategy:
       # Don't cancel sibling jobs on the first failure: any platform that
       # has already finished building its images will have pushed the
@@ -149,6 +154,94 @@ jobs:
             --service=viewer \
             --service=redis \
             ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
+
+      # Sign the freshly-pushed images with keyless build-provenance
+      # attestations (Sigstore via GitHub OIDC — the same mechanism the
+      # SBOM workflow already uses). Done here, per board, because this
+      # is where the immutable <short-hash>-<board> images are pushed
+      # and their digests are known. The floating latest-<board> tags
+      # added later by publish-latest re-point at these same manifests
+      # (identical digest), so they inherit the attestation for free.
+      #
+      # Attestation is by digest, and GitHub's attestation store is keyed
+      # on (repository, digest) rather than on the container registry, so
+      # a single attestation makes the image verifiable on BOTH registries:
+      #   gh attestation verify \
+      #     oci://ghcr.io/screenly/anthias-server:<short-hash>-<board> \
+      #     --repo ${{ github.repository }}
+      #   gh attestation verify \
+      #     oci://docker.io/screenly/anthias-server:<short-hash>-<board> \
+      #     --repo ${{ github.repository }}
+      # We additionally push an in-registry copy (push-to-registry) to
+      # each registry so registry-native / offline tooling can discover
+      # the attestation without the GitHub API. GHCR is hard-fail; the
+      # Docker Hub copy is best-effort (continue-on-error) because its
+      # referrers API periodically 429s under the free-tier pull limit —
+      # the same reason publish-latest soft-fails its Docker Hub mirror.
+      - name: Resolve pushed image digests
+        if: success() && github.event_name == 'push'
+        id: digests
+        run: |
+          set -euo pipefail
+          short_hash="$(git rev-parse --short=7 HEAD)"
+          for service in server viewer redis; do
+            ref="ghcr.io/screenly/anthias-${service}:${short_hash}-${{ matrix.board }}"
+            digest="$(docker buildx imagetools inspect "${ref}" \
+              --format '{{ .Manifest.Digest }}')"
+            echo "${service}=${digest}" >> "${GITHUB_OUTPUT}"
+            echo "Resolved ${ref} -> ${digest}"
+          done
+
+      - name: Attest anthias-server provenance (GHCR)
+        if: success() && github.event_name == 'push'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: ghcr.io/screenly/anthias-server
+          subject-digest: ${{ steps.digests.outputs.server }}
+          push-to-registry: true
+
+      - name: Attest anthias-viewer provenance (GHCR)
+        if: success() && github.event_name == 'push'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: ghcr.io/screenly/anthias-viewer
+          subject-digest: ${{ steps.digests.outputs.viewer }}
+          push-to-registry: true
+
+      - name: Attest anthias-redis provenance (GHCR)
+        if: success() && github.event_name == 'push'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: ghcr.io/screenly/anthias-redis
+          subject-digest: ${{ steps.digests.outputs.redis }}
+          push-to-registry: true
+
+      - name: Attest anthias-server provenance (Docker Hub)
+        if: success() && github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: docker.io/screenly/anthias-server
+          subject-digest: ${{ steps.digests.outputs.server }}
+          push-to-registry: true
+
+      - name: Attest anthias-viewer provenance (Docker Hub)
+        if: success() && github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: docker.io/screenly/anthias-viewer
+          subject-digest: ${{ steps.digests.outputs.viewer }}
+          push-to-registry: true
+
+      - name: Attest anthias-redis provenance (Docker Hub)
+        if: success() && github.event_name == 'push'
+        continue-on-error: true
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-name: docker.io/screenly/anthias-redis
+          subject-digest: ${{ steps.digests.outputs.redis }}
+          push-to-registry: true
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
