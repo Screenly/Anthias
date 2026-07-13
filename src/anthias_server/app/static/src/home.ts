@@ -35,6 +35,7 @@ interface AssetEdit {
   is_enabled: boolean
   nocache: boolean
   skip_asset_check: boolean
+  skip_ssl_verify: boolean
   start_date_local: string
   end_date_local: string
   play_days_list: number[]

@@ -205,6 +205,7 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'nocache',
             'play_order',
             'skip_asset_check',
+            'skip_ssl_verify',
             'is_active',
             'is_processing',
             'play_days',
@@ -258,6 +259,7 @@ class CreateAssetSerializerV2(
     nocache = BooleanField(required=False)
     play_order = IntegerField(required=False)
     skip_asset_check = BooleanField(required=False)
+    skip_ssl_verify = BooleanField(required=False)
     play_days = ListField(
         child=IntegerField(min_value=1, max_value=7),
         required=False,
@@ -335,6 +337,7 @@ class UpdateAssetSerializerV2(UpdateAssetSerializer):
     is_processing = BooleanField(required=False)
     nocache = BooleanField(required=False)
     skip_asset_check = BooleanField(required=False)
+    skip_ssl_verify = BooleanField(required=False)
     duration = IntegerField(min_value=0, max_value=DURATION_S_MAX)
     play_days = ListField(
         child=IntegerField(min_value=1, max_value=7),
@@ -412,6 +415,7 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
     prefer_dark_mode = BooleanField()
+    verify_ssl = BooleanField()
     # Mirror the PATCH-side ChoiceField so the OpenAPI schema
     # advertises the same enum on both directions — clients can rely
     # on the value being one of {0, 90, 180, 270} when reading too.
@@ -444,6 +448,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     use_24_hour_clock = BooleanField(required=False)
     debug_logging = BooleanField(required=False)
     prefer_dark_mode = BooleanField(required=False)
+    verify_ssl = BooleanField(required=False)
     screen_rotation = ChoiceField(
         required=False, choices=SCREEN_ROTATION_CHOICES
     )

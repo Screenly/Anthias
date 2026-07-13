@@ -3,9 +3,67 @@
 #include <QDebug>
 #include <QtDBus>
 
+#ifdef ANTHIAS_GSTREAMER
+#include <csignal>
+#include <execinfo.h>
+#include <unistd.h>
+#endif
+
 #include "mainwindow.h"
 
 namespace {
+#ifdef ANTHIAS_GSTREAMER
+// Fatal-signal backtrace. Scoped to the pi3-64 build (the only one that
+// links the GStreamer overlay path): VideoView + kmssink on eglfs's DRM
+// fd segfaulted silently while it was being brought up — the kernel
+// killed the process and docker logs showed only the respawn. Dumping a
+// backtrace to stderr (captured by the start_viewer wrapper) pins the
+// crash frame. Re-raises with the default handler so the core dump / exit
+// status are unchanged and the Python supervisor still respawns as
+// before. Other boards keep the default crash behaviour untouched.
+void anthiasCrashHandler(int sig)
+{
+    // Best-effort, kept as close to async-signal-safe as practical:
+    // write() is AS-safe; backtrace()/backtrace_symbols_fd() are glibc
+    // extensions that avoid malloc/stdio (unlike backtrace_symbols /
+    // fprintf) but are not formally guaranteed AS-safe — acceptable for a
+    // last-gasp diagnostic. The signal number is omitted from the header
+    // (formatting it isn't AS-safe); the re-raise below preserves it in
+    // the exit status / core dump.
+    void* frames[64];
+    const int count = backtrace(frames, 64);
+    static const char hdr[] =
+        "\n=== AnthiasViewer FATAL signal — backtrace ===\n";
+    if (write(STDERR_FILENO, hdr, sizeof(hdr) - 1) < 0) {
+        // Nothing safe to do if stderr is gone; fall through to re-raise.
+    }
+    backtrace_symbols_fd(frames, count, STDERR_FILENO);
+    // SA_RESETHAND (below) already restored the default disposition, so
+    // re-raising re-runs the default handler (core dump / exit) without an
+    // async-signal-unsafe signal() call here.
+    raise(sig);
+}
+
+void installCrashHandler()
+{
+    struct sigaction sa;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = anthiasCrashHandler;
+    // SA_RESETHAND: reset to the default handler once ours fires, so the
+    // re-raise takes the default path and we never call the
+    // non-async-signal-safe signal() from within the handler.
+    sa.sa_flags = SA_RESETHAND;
+    sigaction(SIGSEGV, &sa, nullptr);
+    sigaction(SIGABRT, &sa, nullptr);
+    sigaction(SIGBUS, &sa, nullptr);
+    sigaction(SIGFPE, &sa, nullptr);
+}
+#else
+// No-op on non-pi3-64 builds — leave the platform default crash handling
+// (core dumps) in place.
+void installCrashHandler() {}
+#endif
+
 // Realise the operator's "Prefer dark mode" setting. The Python viewer
 // plumbs the Django setting in via the ANTHIAS_PREFER_DARK_MODE env var
 // (see _build_webview_env in src/anthias_viewer/__init__.py); here we
@@ -57,6 +115,7 @@ void applyDarkModePreference()
 
 int main(int argc, char *argv[])
 {
+    installCrashHandler();
     applyDarkModePreference();
 
     QApplication app(argc, argv);

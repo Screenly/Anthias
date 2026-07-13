@@ -20,7 +20,18 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt6-builder-apt-{{ artifact_boar
         qt6-base-dev \
         qt6-declarative-dev \
         qt6-multimedia-dev \
-        qt6-webengine-dev
+{% if board == 'pi3-64' %}        libgstreamer1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libdrm-dev \
+        qt6-base-private-dev \
+{% endif %}        qt6-webengine-dev
+# pi3-64 (VideoCore IV): links GStreamer so VideoView runs the in-process
+# hardware pipeline (v4l2h264dec → v4l2convert/ISP → appsink). That GPU
+# can't present QtMultimedia's VideoOutput (issue #3084) and the CPU is
+# too slow to convert HW frames (~600 ms/frame), so the ISP converts in
+# hardware; libgstreamer1.0-dev + plugins-base1.0-dev provide gstreamer-1.0
+# / gstreamer-app-1.0 / gstreamer-video-1.0 for the CONFIG+=anthias_gstreamer
+# build. Other boards keep the VideoOutput path (no GStreamer link).
 # qt6-multimedia-dev: AnthiasViewer's VideoView wraps QMediaPlayer
 # rendering into a QML ``VideoOutput`` (issue #2904, render path
 # reworked for #2967 — see ``src/anthias_webview/videoview.h``).
@@ -40,7 +51,7 @@ WORKDIR /src/anthias_webview
 # adding ccache would only save a couple of seconds on incremental
 # rebuilds and the cache mount + apt install + PATH wiring would
 # outweigh the saving.
-RUN qmake6 && \
+RUN qmake6 {% if board == 'pi3-64' %}CONFIG+=anthias_gstreamer {% endif %}&& \
     make -j"$(nproc)" && \
     make install
 RUN mkdir -p /out/bin /out/share/AnthiasViewer && \
@@ -68,6 +79,43 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         {{ dependency }}
         {% endif %}
     {% endfor %}
+
+{% if board == 'pi3-64' %}
+# pi3-64 runtime for the in-process GStreamer HW video path (issue #3084):
+# gstreamer1.0-plugins-good carries the V4L2 elements (v4l2h264dec →
+# bcm2835 decoder, v4l2convert → bcm2835 ISP); -base/-bad round out
+# qtdemux / h264parse / appsink / kmssink; -alsa is the audio sink.
+# gstreamer1.0-libav supplies the audio decoders (avdec_ac3 / avdec_aac /
+# avdec_mp3 …) the separate audio pipeline autoplugs — without it decodebin
+# reports "missing a plug-in" on anything but the few codecs -bad ships.
+# Only this board links GStreamer, so only this board ships the plugin set.
+#
+# Pin base/bad/alsa to the RPi archive's ``+rpt3`` builds (the archive +
+# keyring are already configured by _rpt1-ffmpeg-pin.j2 above — pi3-64 is
+# in its board list). These are RPi-tuned for the Broadcom stack; -bad in
+# particular carries the vc4 ``kmssink`` the overlay-plane path scans out
+# through. -good (the V4L2 HW decode/convert elements) and -libav are NOT
+# in the RPi archive, so they stay on Debian (kernel-driven, works). The
+# +rpt3 plugins share upstream 1.26.2 with Debian's ``libgstreamer1.0-0``
+# core (not shipped in the RPi archive), so the ABI matches.
+{% if disable_cache_mounts %}
+RUN \
+{% else %}
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+{% endif %}
+    printf '%s\n' \
+        'Package: gstreamer1.0-plugins-base gstreamer1.0-plugins-bad gstreamer1.0-alsa libgstreamer-plugins-base1.0-0 libgstreamer-plugins-bad1.0-0' \
+        'Pin: origin archive.raspberrypi.com' \
+        'Pin-Priority: 1001' \
+        > /etc/apt/preferences.d/raspberrypi-gstreamer && \
+    apt-get update && \
+    apt-get -y install --no-install-recommends \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-alsa \
+        gstreamer1.0-libav
+{% endif %}
 
 COPY --from=uv-builder /venv /venv
 ENV PATH="/venv/bin:$PATH"

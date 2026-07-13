@@ -14,8 +14,18 @@ class MainWindow : public QMainWindow
         explicit MainWindow();
 
     public slots:
-        void loadPage(const QString &uri);
-        void loadImage(const QString &uri);
+        // ``skipSslVerify`` carries the asset's effective SSL policy
+        // (device-wide verify_ssl composed with per-asset
+        // skip_ssl_verify) computed by the Python viewer. No default
+        // argument: for a slot, moc emits a cloned meta-method for each
+        // trailing default (that clone is why QMetaObject::invokeMethod
+        // can omit the argument), and QtDBus would export each clone as
+        // its own same-named D-Bus method — two ``loadPage`` entries with
+        // signatures ``s`` and ``sb``. Keeping the parameter mandatory
+        // exports a single, unambiguous method the Python side always
+        // calls with the flag.
+        void loadPage(const QString &uri, bool skipSslVerify);
+        void loadImage(const QString &uri, bool skipSslVerify);
         void setReloadInterval(int seconds);
         // Per-asset custom HTTP request headers (#2215). ``headersJson``
         // is a JSON object of ``{name: value}`` pairs. Called by the

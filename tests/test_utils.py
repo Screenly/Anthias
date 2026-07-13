@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import certifi
 import pytest
 import requests
 import sh
@@ -44,12 +45,110 @@ def test_url_fails_returns_true_on_connection_error() -> None:
         assert url_fails('http://doesnotwork.example.com') is True
 
 
+@pytest.mark.parametrize(
+    'exc',
+    [
+        requests.exceptions.SSLError('untrusted certificate'),
+        requests.exceptions.TooManyRedirects('redirect loop'),
+        requests.exceptions.Timeout('slow origin'),
+        requests.ConnectionError('connection refused'),
+    ],
+)
+@pytest.mark.django_db
+def test_url_fails_returns_true_on_any_requests_error(
+    exc: Exception,
+) -> None:
+    """``url_fails`` is a boolean probe: every requests-level failure
+    must resolve to ``True`` (unreachable) rather than escape and 500 a
+    caller like asset creation. Includes a TLS/untrusted-cert
+    ``SSLError`` and a ``TooManyRedirects`` redirect loop — the latter
+    is a ``RequestException`` but *not* a ``ConnectionError``, so it
+    guards the broadened ``except`` clause specifically."""
+    with patch('anthias_common.utils.requests.head', side_effect=exc):
+        # NOSONAR(S5332): mocked test URL, never fetched over the wire.
+        assert url_fails('https://example.com') is True  # NOSONAR
+
+
 @pytest.mark.django_db
 def test_url_fails_returns_false_on_2xx_response() -> None:
     fake = MagicMock()
     fake.ok = True
     with patch('anthias_common.utils.requests.head', return_value=fake):
         assert url_fails('http://example.com') is False
+
+
+@pytest.mark.parametrize(
+    'verify_ssl,expected_verify',
+    [
+        (True, certifi.where()),
+        (False, False),
+    ],
+)
+@pytest.mark.django_db
+def test_url_fails_honours_verify_ssl_toggle(
+    verify_ssl: bool, expected_verify: Any
+) -> None:
+    """The "Verify SSL" setting must actually control TLS verification.
+
+    Regression guard for forum #6726: turning verification off is the
+    documented way to serve signage from a self-signed / private-CA
+    host. The probe used to pass ``verify=True`` no matter what the
+    operator chose, so a self-signed asset stayed unreachable and never
+    displayed. Assert the ``verify`` kwarg handed to ``requests`` tracks
+    the setting: the certifi bundle when on, ``False`` when off.
+    """
+    fake = MagicMock()
+    fake.ok = True
+    with (
+        patch('anthias_common.utils.settings', {'verify_ssl': verify_ssl}),
+        patch(
+            'anthias_common.utils.requests.head', return_value=fake
+        ) as mock_head,
+    ):
+        # NOSONAR(S5332): mocked test URL, never fetched over the wire.
+        assert url_fails('https://self-signed.example') is False  # NOSONAR
+    assert mock_head.call_args.kwargs['verify'] == expected_verify
+
+
+@pytest.mark.parametrize(
+    'verify_ssl_arg,expected_verify',
+    [
+        (True, certifi.where()),
+        (False, False),
+    ],
+)
+@pytest.mark.django_db
+def test_url_fails_explicit_verify_ssl_arg_overrides_setting(
+    verify_ssl_arg: bool, expected_verify: Any
+) -> None:
+    """An explicit ``verify_ssl`` argument wins over the device setting.
+
+    The per-asset ``Asset.skip_ssl_verify`` override is realised by the
+    reachability callers composing an effective flag and passing it here
+    (``settings['verify_ssl'] and not asset.skip_ssl_verify``). Pin the
+    contract: the argument, not the global setting, decides the ``verify``
+    kwarg — the setting is deliberately the opposite of the argument to
+    prove the argument is what's read.
+    """
+    fake = MagicMock()
+    fake.ok = True
+    with (
+        patch(
+            'anthias_common.utils.settings',
+            {'verify_ssl': not verify_ssl_arg},
+        ),
+        patch(
+            'anthias_common.utils.requests.head', return_value=fake
+        ) as mock_head,
+    ):
+        # NOSONAR(S5332): mocked test URL, never fetched over the wire.
+        assert (
+            url_fails(  # NOSONAR
+                'https://self-signed.example', verify_ssl=verify_ssl_arg
+            )
+            is False
+        )
+    assert mock_head.call_args.kwargs['verify'] == expected_verify
 
 
 @pytest.mark.django_db

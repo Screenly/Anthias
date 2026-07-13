@@ -255,6 +255,11 @@ class CreateAssetSerializerMixin:
             else 0
         )
 
+        skip_ssl_raw = data.get('skip_ssl_verify')
+        asset['skip_ssl_verify'] = bool(
+            skip_ssl_raw is not None and int(skip_ssl_raw)
+        )
+
         start_date = data['start_date']
         end_date = data['end_date']
         asset['start_date'] = start_date.replace(tzinfo=None)
@@ -274,7 +279,12 @@ class CreateAssetSerializerMixin:
             not is_youtube
             and not is_remote_video_download
             and not asset['skip_asset_check']
-            and url_fails(asset['uri'])
+            and url_fails(
+                asset['uri'],
+                verify_ssl=(
+                    settings['verify_ssl'] and not asset['skip_ssl_verify']
+                ),
+            )
         ):
             raise AssetCreationError(
                 'Could not retrieve file. Check the asset URL.'

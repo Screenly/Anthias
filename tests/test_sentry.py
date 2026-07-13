@@ -240,6 +240,31 @@ class TestBeforeSendTransientNoise:
         hint = self._hint_for(lookalike_cls('not really yt-dlp'))
         assert _sentry_before_send(event, hint) == event
 
+    def test_drops_short_content_length_runtime_error(self) -> None:
+        # A client that hangs up while Django's ASGI handler is still
+        # streaming a static file raises a bare RuntimeError with this
+        # message — a broken pipe, not a truncated file (Sentry
+        # ANTHIAS-37).
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(
+            RuntimeError('Response content shorter than Content-Length')
+        )
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_keeps_unrelated_runtime_error(self) -> None:
+        # The drop is scoped to the client-disconnect message — any
+        # other RuntimeError is a real bug and must NOT be swallowed.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        event: Event = {'event_id': 'x'}
+        hint = self._hint_for(RuntimeError('something actually broke'))
+        assert _sentry_before_send(event, hint) == event
+
     def test_keeps_ordinary_exceptions(self) -> None:
         from anthias_server.django_project.settings import (
             _sentry_before_send,

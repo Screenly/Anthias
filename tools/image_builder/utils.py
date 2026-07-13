@@ -169,11 +169,15 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
 
     # Qt version is only relevant for the Qt 5 path: pi2/pi3 pull the
     # cross-built Qt 5 toolchain tarball at build time. Qt 5 is frozen
-    # for these boards, so the toolchain stays pinned to the
-    # WebView-v2026.07.1 release (bumped from 07.0 to carry the armv7
-    # NEON-alignment fix — see bin/rebuild_qt5_toolchain.sh /
-    # src/anthias_webview/build_qt5.sh). Qt 6 boards install Qt straight
-    # from Debian apt (qt6-*-dev in viewer_extra_apt below).
+    # for these boards, so the toolchain stays pinned to a WebView-v*
+    # release. Bumped from WebView-v2026.07.0 to WebView-v2026.07.1,
+    # which carries the armv7 NEON-alignment fix (arm_use_neon=false +
+    # a -mno-unaligned-access cross-compiler wrap) that stops the Pi 2/3
+    # blank-screen crash-loop: gcc otherwise lowers struct init of
+    # 8-byte-aligned types into a NEON :64 block store that faults on
+    # the 4-byte-aligned pointers QtWebEngine hands it. Qt 6 boards
+    # install Qt straight from Debian apt (qt6-*-dev in viewer_extra_apt
+    # below).
     qt_version = '6.4.2' if is_qt6 else '5.15.19'
     qt_major_version = qt_version.split('.')[0]
     qt5_toolchain_url = f'{releases_url}/WebView-v2026.07.1'

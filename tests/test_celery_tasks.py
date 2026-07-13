@@ -421,6 +421,7 @@ def _make_revalidation_asset(
     is_enabled: bool = True,
     is_processing: bool = False,
     skip_asset_check: bool = False,
+    skip_ssl_verify: bool = False,
     is_reachable: bool = True,
 ) -> Asset:
     return Asset.objects.create(
@@ -432,6 +433,7 @@ def _make_revalidation_asset(
         is_enabled=is_enabled,
         is_processing=is_processing,
         skip_asset_check=skip_asset_check,
+        skip_ssl_verify=skip_ssl_verify,
         is_reachable=is_reachable,
     )
 
@@ -471,6 +473,41 @@ def test_sweep_marks_reachable_when_url_succeeds(eager_celery: None) -> None:
     ):
         revalidate_asset_urls.apply()
     assert Asset.objects.get(asset_id='a1').is_reachable
+
+
+@pytest.mark.django_db
+def test_sweep_skips_ssl_verification_per_asset(eager_celery: None) -> None:
+    """A per-asset skip_ssl_verify must reach url_fails as
+    verify_ssl=False so a trusted self-signed host isn't marked
+    unreachable. A default asset keeps verification on.
+
+    Pin the device-wide ``verify_ssl`` on explicitly: the effective flag
+    is ``settings['verify_ssl'] and not asset.skip_ssl_verify``, so a
+    host whose ``anthias.conf`` happens to have verification off would
+    otherwise mask the per-asset composition under test."""
+    _make_revalidation_asset('secure', uri='https://secure.example/x.png')
+    _make_revalidation_asset(
+        'selfsigned',
+        uri='https://intranet.example/x.png',
+        skip_ssl_verify=True,
+    )
+
+    with (
+        mock.patch.dict(
+            'anthias_server.celery_tasks.settings', {'verify_ssl': True}
+        ),
+        mock.patch(
+            'anthias_server.celery_tasks.url_fails', return_value=False
+        ) as m,
+    ):
+        revalidate_asset_urls.apply()
+
+    verify_by_url = {
+        call.args[0]: call.kwargs.get('verify_ssl')
+        for call in m.call_args_list
+    }
+    assert verify_by_url['https://secure.example/x.png'] is True
+    assert verify_by_url['https://intranet.example/x.png'] is False
 
 
 @pytest.mark.django_db
@@ -553,7 +590,7 @@ def test_sweep_probe_exception_does_not_kill_sweep(
     _make_revalidation_asset('boom', uri='https://example.com/boom')
     _make_revalidation_asset('ok', uri='https://example.com/ok')
 
-    def fake_url_fails(url: str) -> bool:
+    def fake_url_fails(url: str, verify_ssl: bool | None = None) -> bool:
         if 'boom' in url:
             raise RuntimeError('synthetic')
         return False
@@ -2079,6 +2116,47 @@ class TestPeriodicPokeTimeLimits:
         ):
             result = send_telemetry_task.apply()
         assert result.successful()
+
+
+class TestReconcileTimeLimits:
+    """The stuck-row reconciler was the last periodic task carrying a
+    bare ``time_limit=300`` with no soft companion, so its unbounded
+    per-row work (SQLite + a kombu ``.delay()`` publish) could still
+    trip the hard limit and SIGKILL the pool child — keeping the
+    ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B group alive after #3017/#3063
+    closed the sibling tasks."""
+
+    def test_reconcile_task_has_soft_limit_headroom(self) -> None:
+        soft = reconcile_stuck_processing.soft_time_limit
+        hard = reconcile_stuck_processing.time_limit
+        assert soft == celery_tasks_module.RECONCILE_STUCK_SOFT_TIME_LIMIT_S
+        assert hard == celery_tasks_module.RECONCILE_STUCK_TIME_LIMIT_S
+        assert soft is not None
+        assert hard is not None
+        assert soft < hard
+
+    @pytest.mark.django_db
+    def test_reconcile_soft_limit_aborts_and_releases_lock(
+        self, eager_celery_reconcile: None
+    ) -> None:
+        old = (
+            timezone.now()
+            - timedelta(seconds=RECONCILE_STUCK_THRESHOLD_S + 60)
+        ).isoformat()
+        _make_stuck_asset(processing_started_at=old, mimetype='video')
+
+        # A per-row re-dispatch wedges past the soft budget.
+        with mock.patch(
+            'anthias_server.processing.dispatch_normalize_video',
+            side_effect=SoftTimeLimitExceeded,
+        ):
+            result = reconcile_stuck_processing.apply()
+        # Caught inside the sweep — no exception propagates, so the tick
+        # ends as a clean success instead of a hard-kill task failure.
+        assert result.successful()
+        # The finally block must have released the singleton lock so the
+        # next beat tick can run.
+        assert celery_tasks_module.r.get(RECONCILE_STUCK_LOCK_KEY) is None
 
 
 class TestWaitForMigrations:

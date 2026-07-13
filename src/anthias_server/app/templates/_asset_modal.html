@@ -530,6 +530,11 @@
                   <input type="checkbox" class="app-check-input" id="edit-skip" name="skip_asset_check" value="true" :checked="editAsset.skip_asset_check">
                   <label class="app-check-label ml-2" for="edit-skip">Skip asset check</label>
                 </div>
+                <div class="app-check app-switch m-0" x-show="editAsset.uri && editAsset.uri.startsWith('https://')">
+                  <input type="hidden" name="skip_ssl_verify" value="false">
+                  <input type="checkbox" class="app-check-input" id="edit-skip-ssl" name="skip_ssl_verify" value="true" :checked="editAsset.skip_ssl_verify">
+                  <label class="app-check-label ml-2" for="edit-skip-ssl">Skip SSL verification</label>
+                </div>
               </div>
 
               {% comment %} Per-asset auto-refresh interval (feature #2813).

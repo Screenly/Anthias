@@ -34,7 +34,11 @@
     </thead>
     <tbody>
       {{- $required := default (slice) $schema.required -}}
-      {{- range $name, $prop := sort $schema.properties -}}
+      {{- /* Range directly over the map: Hugo iterates map keys in
+             sorted order, and `sort` here would collapse the map to a
+             slice — making $name the numeric index instead of the
+             property name. */ -}}
+      {{- range $name, $prop := $schema.properties -}}
       {{- $propRef := index $prop "$ref" -}}
       <tr class="border-b border-zinc-100 align-top">
         <td class="py-2 pr-4 font-mono text-brand-purple">

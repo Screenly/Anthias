@@ -22,7 +22,40 @@ class AssetConsumer(AsyncWebsocketConsumer):
         # Plain text frame: the client only needs to know "something
         # changed" to fire htmx refresh-assets; carrying the full
         # changeset over WS would duplicate the partial render path.
-        await self.send(text_data=event.get('asset_id', ''))
+        asset_id = event.get('asset_id', '')
+        try:
+            await self.send(text_data=asset_id)
+        except RuntimeError as exc:
+            # The browser can disconnect in the window between the
+            # group_send dispatch and this send, so the ASGI server has
+            # already emitted 'websocket.close' and channels raises
+            # "Unexpected ASGI message 'websocket.send', after sending
+            # 'websocket.close' or response already completed." (Sentry
+            # ANTHIAS-1K). Require both the out-of-order 'websocket.send'
+            # and the close/completed clause so a genuine send() failure
+            # (a serialization error, a Channels bug) — even one that
+            # merely mentions websocket.send — still propagates instead
+            # of being hidden. group_discard runs in disconnect(), so
+            # this stale channel is on its way out — drop the nudge; the
+            # client's 5s poll keeps it consistent. Log at debug (with
+            # the asset_id) so the race stays diagnosable without
+            # becoming a reportable event.
+            message = str(exc)
+            is_send_after_close = (
+                "Unexpected ASGI message 'websocket.send'" in message
+                and (
+                    'websocket.close' in message
+                    or 'response already completed' in message
+                )
+            )
+            if not is_send_after_close:
+                raise
+            logger.debug(
+                'asset_update: send on a closed websocket for %r; client '
+                'disconnected mid-broadcast',
+                asset_id,
+                exc_info=True,
+            )
 
 
 def notify_asset_update(asset_id: str = '*') -> None:

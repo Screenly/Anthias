@@ -215,6 +215,14 @@ class Asset(models.Model):
     nocache = models.BooleanField(default=False)
     play_order = models.IntegerField(default=0)
     skip_asset_check = models.BooleanField(default=False)
+    # Per-asset opt-out of TLS certificate verification for a remote
+    # HTTPS URI (e.g. media served from an intranet host with a
+    # self-signed / untrusted-CA cert). Composes with the device-wide
+    # ``verify_ssl`` setting: verification is skipped when the global
+    # setting is off OR this flag is set. Only ever loosens, never
+    # tightens. Consulted by the reachability probe (url_fails) and,
+    # for images/web pages, by the C++ webview per load.
+    skip_ssl_verify = models.BooleanField(default=False)
     play_days = models.TextField(default=_default_play_days)
     play_time_from = models.TimeField(blank=True, null=True)
     play_time_to = models.TimeField(blank=True, null=True)

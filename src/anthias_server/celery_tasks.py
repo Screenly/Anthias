@@ -165,6 +165,23 @@ ASSET_REVALIDATION_SOFT_TIME_LIMIT_S = ASSET_REVALIDATION_TIME_LIMIT_S - 60
 PERIODIC_POKE_SOFT_TIME_LIMIT_S = 30
 PERIODIC_POKE_TIME_LIMIT_S = 60
 
+# Time budget for the stuck-row reconciler sweep. It was the last
+# periodic task still carrying a bare ``time_limit=300`` with no soft
+# companion: its inner loop makes unbounded per-row calls (a SQLite
+# SELECT/UPDATE, a kombu ``.delay()`` publish to the Redis broker, and
+# ``r.set``/``r.eval``), so on a memory-pressured board a wedged Redis
+# publish or SQLite lock can push the sweep past 300s. Tripping the
+# *hard* limit SIGKILLs the pool child, which Sentry groups by the kill
+# signature — the same ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B trio the sibling
+# pokes (#3017/#3063) already closed, leaving this task as the last
+# contributor. The soft limit raises ``SoftTimeLimitExceeded`` *inside*
+# the sweep so it aborts cleanly (releasing its Redis lock via the
+# existing ``finally``) and the next tick retries; the hard limit stays
+# as the backstop for a call stuck in C code where the soft signal can't
+# be delivered.
+RECONCILE_STUCK_TIME_LIMIT_S = 300
+RECONCILE_STUCK_SOFT_TIME_LIMIT_S = RECONCILE_STUCK_TIME_LIMIT_S - 30
+
 # Redis key for the sweep singleton lock. Whoever sets it first runs
 # the sweep; later beat ticks observe the key and exit. The TTL matches
 # the time_limit so a worker that crashes mid-sweep doesn't lock the
@@ -1231,13 +1248,20 @@ def _check_asset_reachability(asset: Asset) -> bool:
     Local files: existence check. Remote URIs: defer to ``url_fails``,
     which knows about both HTTP(S) and streaming (RTSP/RTMP) probes.
     Trust ``skip_asset_check`` — operator opted out of validation.
+
+    TLS verification for the remote probe composes the device-wide
+    ``verify_ssl`` setting with the per-asset ``skip_ssl_verify``
+    override: verification is skipped when the global setting is off OR
+    the asset opts out, so a trusted self-signed host isn't marked
+    unreachable (which would make the viewer silently skip the asset).
     """
     if asset.skip_asset_check:
         return True
     uri = asset.uri or ''
     if uri.startswith('/'):
         return path.isfile(uri)
-    return not url_fails(uri)
+    verify_ssl = settings['verify_ssl'] and not asset.skip_ssl_verify
+    return not url_fails(uri, verify_ssl=verify_ssl)
 
 
 @celery.task(
@@ -1369,7 +1393,10 @@ def _parse_processing_started_at(value: Any) -> datetime | None:
     return parsed
 
 
-@celery.task(time_limit=300)
+@celery.task(
+    time_limit=RECONCILE_STUCK_TIME_LIMIT_S,
+    soft_time_limit=RECONCILE_STUCK_SOFT_TIME_LIMIT_S,
+)
 def reconcile_stuck_processing() -> None:
     """Recover ``Asset`` rows stuck at ``is_processing=True``.
 
@@ -1433,7 +1460,7 @@ def reconcile_stuck_processing() -> None:
         RECONCILE_STUCK_LOCK_KEY,
         token,
         nx=True,
-        ex=300,  # matches the task's time_limit
+        ex=RECONCILE_STUCK_TIME_LIMIT_S,  # matches the task's hard time_limit
     ):
         logging.info(
             'reconcile_stuck_processing: previous sweep still running, '
@@ -1507,6 +1534,17 @@ def reconcile_stuck_processing() -> None:
                     'Processing stalled past threshold; flag cleared '
                     'by reconciler. Re-upload the asset to retry.',
                 )
+    except SoftTimeLimitExceeded:
+        # A per-row Redis publish or SQLite lock wedged the sweep past
+        # the soft budget. Abort this tick rather than let the hard
+        # limit SIGKILL the worker (ANTHIAS-A / 9 / B); the finally
+        # below still releases the lock and the next beat tick resumes
+        # from wherever the rows now stand.
+        logging.warning(
+            'reconcile_stuck_processing: sweep exceeded %ss; '
+            'skipping the rest of this tick',
+            RECONCILE_STUCK_SOFT_TIME_LIMIT_S,
+        )
     finally:
         # Compare-and-delete via the shared Lua script: only release
         # if the lock still holds *our* token. If our TTL expired and

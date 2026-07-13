@@ -87,11 +87,16 @@ chown -Rf viewer /data/.anthias
 mkdir -p /data/.local/share/AnthiasViewer/QtWebEngine \
     /data/.cache/AnthiasViewer \
     /data/.cache/fontconfig \
+    /data/.cache/gstreamer-1.0 \
     /data/.pki
 
 chown -Rf viewer /data/.local/share/AnthiasViewer
 chown -Rf viewer /data/.cache/AnthiasViewer/
 chown -Rf viewer /data/.cache/fontconfig
+# pi3-64's video path links GStreamer; without a writable registry cache
+# the viewer rescans every plugin on each launch (slow startup — enough to
+# blow the 30s D-Bus handshake budget on the memory-tight 1GB board).
+chown -Rf viewer /data/.cache/gstreamer-1.0
 chown -Rf viewer /data/.pki
 
 # Qt + dbus + various Linux apps look up XDG_RUNTIME_DIR; without it they

@@ -519,8 +519,210 @@ def test_view_webpage_arms_reload_interval(
     ):
         viewer_fixtures.u.view_webpage('https://example.com', 30)
 
-    fake_bus.loadPage.assert_called_once_with('https://example.com')
+    fake_bus.loadPage.assert_called_once_with('https://example.com', False)
     fake_bus.setReloadInterval.assert_called_once_with(30)
+
+
+@pytest.mark.parametrize('skip_ssl', [True, False])
+def test_view_image_passes_skip_ssl_verify(
+    viewer_fixtures: _ViewerFixtures, skip_ssl: bool
+) -> None:
+    """The per-asset SSL policy must reach the C++ webview's loadImage
+    D-Bus slot so a self-signed HTTPS image can be trusted per-asset."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+    ):
+        viewer_fixtures.u.view_image(
+            'https://example.com/x.jpg', skip_ssl_verify=skip_ssl
+        )
+
+    fake_bus.loadImage.assert_called_once_with(
+        'https://example.com/x.jpg', skip_ssl
+    )
+
+
+@pytest.mark.parametrize('skip_ssl', [True, False])
+def test_view_webpage_passes_skip_ssl_verify(
+    viewer_fixtures: _ViewerFixtures, skip_ssl: bool
+) -> None:
+    """Same per-asset SSL policy must reach loadPage for webpage
+    assets (QWebEngine certificate-error handling on the C++ side)."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(
+            'https://example.com', 0, skip_ssl_verify=skip_ssl
+        )
+
+    fake_bus.loadPage.assert_called_once_with('https://example.com', skip_ssl)
+
+
+def test_view_image_reissues_when_skip_ssl_flips(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Toggling skip_ssl_verify on the currently-displayed asset (URI
+    unchanged) must re-issue loadImage — the URI-only dedup would
+    otherwise swallow it and leave a blank self-signed image."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_url', 'https://h/x.jpg'
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+    ):
+        # Same URI, flag flipped on — must re-send.
+        viewer_fixtures.u.view_image('https://h/x.jpg', skip_ssl_verify=True)
+
+    fake_bus.loadImage.assert_called_once_with('https://h/x.jpg', True)
+
+
+def test_view_webpage_falls_back_to_1arg_loadpage_on_version_skew(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A webview still running the previous binary exposes only the
+    1-arg ``loadPage(s)`` slot. The 2-arg call must not blank the
+    screen: the viewer falls back to the legacy 1-arg call so the page
+    still loads (losing only the per-asset SSL skip that older webview
+    couldn't honour anyway) and latches the capability off so the next
+    tick skips the doomed 2-arg attempt."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    def load_page(*args: object) -> None:
+        if len(args) == 2:
+            raise RuntimeError(
+                'org.freedesktop.DBus.Error.UnknownMethod: no such method'
+            )
+
+    fake_bus.loadPage.side_effect = load_page
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, '_webview_supports_ssl_arg', True
+        ),
+    ):
+        viewer_fixtures.u.view_webpage(
+            'https://example.com', skip_ssl_verify=True
+        )
+        # 2-arg attempt, then the 1-arg fallback that kept the screen up.
+        assert fake_bus.loadPage.call_args_list == [
+            mock.call('https://example.com', True),
+            mock.call('https://example.com'),
+        ]
+        # Latched off so the next rotation goes straight to 1-arg.
+        assert viewer_fixtures.u._webview_supports_ssl_arg is False
+        # The URL cache advanced despite the skew (asset displayed).
+        assert viewer_fixtures.u.current_browser_url == 'https://example.com'
+
+
+def test_view_image_falls_back_to_1arg_loadimage_on_version_skew(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Same version-skew fallback for the image path: a 1-arg-only
+    webview must still get ``loadImage(uri)`` so a self-signed image
+    isn't left blank on a mismatched viewer/webview pair."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+
+    def load_image(*args: object) -> None:
+        if len(args) == 2:
+            raise RuntimeError(
+                'org.freedesktop.DBus.Error.UnknownMethod: no such method'
+            )
+
+    fake_bus.loadImage.side_effect = load_image
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, '_webview_supports_ssl_arg', True
+        ),
+    ):
+        viewer_fixtures.u.view_image('https://h/x.jpg', skip_ssl_verify=True)
+        assert fake_bus.loadImage.call_args_list == [
+            mock.call('https://h/x.jpg', True),
+            mock.call('https://h/x.jpg'),
+        ]
+        assert viewer_fixtures.u._webview_supports_ssl_arg is False
+        assert viewer_fixtures.u.current_browser_url == 'https://h/x.jpg'
+
+
+def test_view_webpage_skew_fallback_reraises_when_1arg_also_fails(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """If the 1-arg fallback also fails, the extra argument wasn't the
+    problem — the original error propagates and the capability is NOT
+    latched off, so a genuinely-supported webview isn't downgraded by a
+    transient failure."""
+    fake_bus = mock.Mock()
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    # Every call fails with a non-"gone" error (so _send_to_webview
+    # doesn't respawn) — both the 2-arg and the 1-arg fallback.
+    fake_bus.loadPage.side_effect = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.Disconnected: closed'
+    )
+    m_load_browser = mock.Mock(name='load_browser')
+
+    with (
+        mock.patch.object(viewer_fixtures.u, 'browser_bus', fake_bus),
+        mock.patch.object(viewer_fixtures.u, 'browser', fake_browser),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_url', None),
+        mock.patch.object(viewer_fixtures.u, 'current_browser_headers', {}),
+        mock.patch.object(
+            viewer_fixtures.u, 'current_browser_skip_ssl', False
+        ),
+        mock.patch.object(
+            viewer_fixtures.u, '_webview_supports_ssl_arg', True
+        ),
+        mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+    ):
+        with pytest.raises(RuntimeError, match='Disconnected'):
+            viewer_fixtures.u.view_webpage(
+                'https://example.com', skip_ssl_verify=True
+            )
+        # Not a signature skew — capability stays on, URL not latched.
+        assert viewer_fixtures.u._webview_supports_ssl_arg is True
+        assert viewer_fixtures.u.current_browser_url is None
 
 
 def test_view_webpage_default_zero_interval(
@@ -565,7 +767,7 @@ def test_view_webpage_sends_custom_headers(
         viewer_fixtures.u.view_webpage('https://example.com', headers=headers)
 
     fake_bus.setRequestHeaders.assert_called_once_with(json.dumps(headers))
-    fake_bus.loadPage.assert_called_once_with('https://example.com')
+    fake_bus.loadPage.assert_called_once_with('https://example.com', False)
 
 
 def test_view_webpage_no_headers_sends_empty_object(
@@ -609,7 +811,7 @@ def test_view_webpage_reloads_when_only_headers_change(
     ):
         viewer_fixtures.u.view_webpage(url, headers={'X-New': '2'})
 
-    fake_bus.loadPage.assert_called_once_with(url)
+    fake_bus.loadPage.assert_called_once_with(url, False)
 
 
 def test_view_webpage_no_reload_when_url_and_headers_unchanged(
@@ -669,7 +871,7 @@ def test_view_webpage_setrequestheaders_version_skew_latches_off(
         assert viewer_fixtures.u._webview_supports_set_request_headers is False
         fake_bus.setRequestHeaders.assert_called_once()
         # Page still loaded despite the missing slot.
-        fake_bus.loadPage.assert_called_once_with('https://example.com')
+        fake_bus.loadPage.assert_called_once_with('https://example.com', False)
 
         # A second webpage tick no longer calls the slot at all.
         viewer_fixtures.u.view_webpage(
@@ -741,7 +943,7 @@ def test_view_webpage_nocache_busts_url(
         viewer_fixtures.u.view_webpage('https://example.com', 30, nocache=True)
 
     fake_bus.loadPage.assert_called_once_with(
-        'https://example.com?_anthias_nc=1234567'
+        'https://example.com?_anthias_nc=1234567', False
     )
     fake_bus.setReloadInterval.assert_called_once_with(30)
 
@@ -765,7 +967,7 @@ def test_view_webpage_nocache_preserves_existing_query(
             'https://example.com/dash?tab=sales&x=1', nocache=True
         )
 
-    (loaded,), _ = fake_bus.loadPage.call_args
+    (loaded, _skip), _ = fake_bus.loadPage.call_args
     assert loaded.startswith('https://example.com/dash?')
     assert 'tab=sales' in loaded
     assert 'x=1' in loaded
@@ -791,7 +993,7 @@ def test_view_webpage_nocache_preserves_encoded_query_verbatim(
     ):
         viewer_fixtures.u.view_webpage(signed, nocache=True)
 
-    (loaded,), _ = fake_bus.loadPage.call_args
+    (loaded, _skip), _ = fake_bus.loadPage.call_args
     assert loaded == signed + '&_anthias_nc=3000'
 
 
@@ -837,7 +1039,9 @@ def test_view_webpage_without_nocache_leaves_url_untouched(
     ):
         viewer_fixtures.u.view_webpage('https://example.com/dash?tab=1')
 
-    fake_bus.loadPage.assert_called_once_with('https://example.com/dash?tab=1')
+    fake_bus.loadPage.assert_called_once_with(
+        'https://example.com/dash?tab=1', False
+    )
 
 
 @pytest.mark.parametrize(
@@ -1573,6 +1777,45 @@ def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
     assert 'ANTHIAS_PREFER_DARK_MODE' not in env
 
 
+# Video presentation substrate — pi3-64 (VideoCore IV / GLES2) can't
+# scan out the QML VideoOutput RHI path (issue #3084), so the Python side
+# flags it onto the C++ non-VideoOutput presenter: ANTHIAS_VIDEO_OVERLAY
+# selects the GStreamer vc4 overlay-plane path (preferred), with the
+# ANTHIAS_VIDEO_RASTER CPU-raster blit as the fallback. Every other board
+# keeps the GPU VideoOutput path.
+
+
+def test_build_webview_env_sets_video_raster_on_pi3_64() -> None:
+    with mock.patch.dict(
+        os.environ,
+        {'QT_QPA_PLATFORM': 'eglfs', 'DEVICE_TYPE': 'pi3-64'},
+        clear=False,
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_VIDEO_RASTER'] == '1'
+    # The overlay-plane path is the pi3-64 default too; assert it so the
+    # default can't regress to the (slow) raster blit silently.
+    assert env['ANTHIAS_VIDEO_OVERLAY'] == '1'
+
+
+def test_build_webview_env_no_video_raster_on_pi4_64() -> None:
+    # Pi 4 (V3D 4.2) keeps the GPU VideoOutput path; stale flags
+    # inherited from the process env must not leak onto it.
+    with mock.patch.dict(
+        os.environ,
+        {
+            'QT_QPA_PLATFORM': 'eglfs',
+            'DEVICE_TYPE': 'pi4-64',
+            'ANTHIAS_VIDEO_RASTER': '1',
+            'ANTHIAS_VIDEO_OVERLAY': '1',
+        },
+        clear=False,
+    ):
+        env = viewer._build_webview_env()
+    assert 'ANTHIAS_VIDEO_RASTER' not in env
+    assert 'ANTHIAS_VIDEO_OVERLAY' not in env
+
+
 # User-Agent token — the C++ webview appends ANTHIAS_UA_TOKEN to
 # QtWebEngine's default User-Agent (the profile setup in
 # src/anthias_webview/src/view.cpp). The token is composed by the
@@ -1613,6 +1856,113 @@ def test_build_webview_env_overwrites_stale_ua_token() -> None:
     ):
         env = viewer._build_webview_env()
     assert env['ANTHIAS_UA_TOKEN'] == 'Anthias/1.2.3'
+
+
+# Low-memory Chromium profile — ~1 GB boards (Pi 3, plus 1 GB Pi 4 / Pi 5
+# SKUs) with no swap head-room slowly grow past their RAM under a
+# long-lived / cycling web-page asset (forum #6731). Chromium only
+# auto-enables its low-memory profile below ~512 MB, so _build_webview_env
+# forces it on for boards the shared is_low_ram_device() gate flags — the
+# same gate that drives the video 1080p cap and the system-info badge.
+# HW-validated on a real Pi 3B+: −78 MB (−35 %) steady-state RSS.
+
+_LOW_MEMORY_FLAGS = '--enable-low-end-device-mode'
+
+
+def test_build_webview_env_injects_low_memory_flags_on_low_ram_board() -> None:
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        env = viewer._build_webview_env()
+    flags = env['QTWEBENGINE_CHROMIUM_FLAGS']
+    assert _LOW_MEMORY_FLAGS in flags
+    assert '--js-flags=--max-old-space-size=64' in flags
+    assert '--renderer-process-limit=1' in flags
+    assert '--process-per-site' in flags
+    assert '--disable-dev-shm-usage' in flags
+
+
+def test_build_webview_env_skips_low_memory_flags_on_roomy_board() -> None:
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=False),
+    ):
+        env = viewer._build_webview_env()
+    assert _LOW_MEMORY_FLAGS not in env.get('QTWEBENGINE_CHROMIUM_FLAGS', '')
+
+
+def test_build_webview_env_low_memory_flags_prepend_and_idempotent() -> None:
+    # A device-supplied QTWEBENGINE_CHROMIUM_FLAGS must survive (prepended,
+    # not clobbered), and a value already carrying the low-memory switch
+    # (e.g. inherited on a respawn) must not stack a duplicate.
+    with (
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'linuxfb',
+                'QTWEBENGINE_CHROMIUM_FLAGS': '--custom-device-flag',
+            },
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        first = viewer._build_webview_env()
+        # Feed the composed value back in to emulate an inherited respawn.
+        with mock.patch.dict(
+            os.environ,
+            {
+                'QTWEBENGINE_CHROMIUM_FLAGS': first[
+                    'QTWEBENGINE_CHROMIUM_FLAGS'
+                ]
+            },
+            clear=False,
+        ):
+            second = viewer._build_webview_env()
+    flags = first['QTWEBENGINE_CHROMIUM_FLAGS']
+    assert '--custom-device-flag' in flags
+    assert flags.count(_LOW_MEMORY_FLAGS) == 1
+    # Prepended, not appended: the injected switches precede the
+    # device-supplied flag (Chromium keeps the last occurrence, but we
+    # want ours ahead of the operator's so theirs can still override).
+    assert flags.index(_LOW_MEMORY_FLAGS) < flags.index('--custom-device-flag')
+    assert second['QTWEBENGINE_CHROMIUM_FLAGS'].count(_LOW_MEMORY_FLAGS) == 1
+
+
+def test_build_webview_env_low_memory_respects_preset_switches() -> None:
+    # A device that already set some of the switches (here a *different*
+    # --js-flags value, plus the bare low-end switch) must keep its own:
+    # we add only the still-missing flags, never a second occurrence of a
+    # switch Chromium would then resolve to the wrong value.
+    with (
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'linuxfb',
+                'QTWEBENGINE_CHROMIUM_FLAGS': (
+                    '--enable-low-end-device-mode '
+                    '--js-flags=--max-old-space-size=256'
+                ),
+            },
+            clear=False,
+        ),
+        mock.patch('anthias_viewer.is_low_ram_device', return_value=True),
+    ):
+        env = viewer._build_webview_env()
+    flags = env['QTWEBENGINE_CHROMIUM_FLAGS']
+    # Device's own values are untouched — no duplicate switch added.
+    assert flags.count('--js-flags=') == 1
+    assert '--max-old-space-size=256' in flags
+    assert '--max-old-space-size=64' not in flags
+    assert flags.count(_LOW_MEMORY_FLAGS) == 1
+    # The genuinely-missing caps are still injected.
+    assert '--renderer-process-limit=1' in flags
+    assert '--process-per-site' in flags
+    assert '--disable-dev-shm-usage' in flags
 
 
 def test_handle_reload_queues_bounce_on_dark_mode_change(

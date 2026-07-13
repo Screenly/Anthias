@@ -44,5 +44,28 @@ greaterThan(QT_MAJOR_VERSION, 5) {
     RESOURCES += src/videoview.qrc
 }
 
+# pi3-64 (VideoCore IV) only: link GStreamer so VideoView can run the
+# hardware pipeline (v4l2h264dec → v4l2convert/ISP → appsink) and blit
+# the ISP-converted RGB frames through RasterVideoWidget. That GPU can't
+# present QtMultimedia's VideoOutput (issue #3084) and its CPU is too slow
+# to convert HW frames itself (~600 ms/frame), so the ISP does the
+# SAND→RGB in hardware. Enabled by the pi3-64 Dockerfile with
+# ``qmake6 CONFIG+=anthias_gstreamer``; every other board builds without
+# it (the code is #ifdef ANTHIAS_GSTREAMER) and keeps the VideoOutput path.
+anthias_gstreamer {
+    CONFIG += link_pkgconfig
+    PKGCONFIG += gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 libdrm
+    # gui-private: QPlatformNativeInterface, to read eglfs's DRM master
+    # fd / CRTC / connector (nativeResourceForIntegration("dri_fd") etc.)
+    # so kmssink can render onto a vc4 overlay plane using eglfs's own fd
+    # — HW scanout, bypassing the GL compositor that caps at ~9 fps.
+    QT += gui-private
+    DEFINES += ANTHIAS_GSTREAMER
+    # -rdynamic: export symbols so the fatal-signal backtrace in main.cpp
+    # resolves AnthiasViewer's own frames (not just addresses) while the
+    # overlay path is being stabilised.
+    QMAKE_LFLAGS += -rdynamic
+}
+
 # Default rules for deployment.
 include(src/deployment.pri)
