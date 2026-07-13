@@ -14,8 +14,18 @@
    Qt 5 is frozen for pi2/pi3 boards, so the toolchain artifact at
    WebView-v2026.07.1 never changes. To CVE-patch the toolchain run
    bin/rebuild_qt5_toolchain.sh and re-upload to that tag.
-#}
-FROM --platform=linux/arm/v7 {{ base_image }}:{{ base_image_tag }} AS qt5-sysroot
+
+   This template is always included into Dockerfile.viewer.j2 (never
+   built standalone), so QT5_HOST_PLATFORM below resolves to the global
+   ARG that template declares before its first FROM. #}
+
+{# No --platform: the sysroot stage builds at the armhf target platform,
+   which is exactly what a bare FROM defaults to (the viewer image's
+   target is linux/arm/v7 for pi2/pi3). A literal --platform=linux/arm/v7
+   here would trip BuildKit's FromPlatformFlagConstDisallowed lint, and
+   spelling it $TARGETPLATFORM would trip RedundantTargetPlatform — so we
+   just let it default. #}
+FROM {{ base_image }}:{{ base_image_tag }} AS qt5-sysroot
 
 USER root
 
@@ -142,15 +152,19 @@ RUN --mount=type=cache,target=/var/cache/apt,id=qt5-sysroot-apt-{{ artifact_boar
     dpkg --purge libraspberrypi-dev
 
 
-FROM --platform=linux/amd64 {{ base_image }}:{{ base_image_tag }} AS webview-builder
+FROM --platform=${QT5_HOST_PLATFORM} {{ base_image }}:{{ base_image_tag }} AS webview-builder
 
 USER root
 
-# Pinned to linux/amd64 (not $BUILDPLATFORM): the pre-built Qt 5
-# toolchain bundle ships an x86_64 host qmake under qt5pi/bin, and the
-# Debian armhf cross-compiler installed below is the x86_64-hosted
-# toolchain — so this stage must run on x86_64. CI is amd64; arm64
-# build hosts (e.g. Apple Silicon) will execute this stage under QEMU.
+# Pinned to linux/amd64 via the QT5_HOST_PLATFORM global ARG (declared
+# in Dockerfile.viewer.j2) rather than $BUILDPLATFORM: the pre-built
+# Qt 5 toolchain bundle ships an x86_64 host qmake under qt5pi/bin, and
+# the Debian armhf cross-compiler installed below is the x86_64-hosted
+# toolchain — so this stage must run on x86_64 regardless of the build
+# host. $BUILDPLATFORM would be arm64 on an Apple Silicon host and break
+# it. CI is amd64; arm64 build hosts will execute this stage under QEMU.
+# The ARG default keeps the pin while avoiding BuildKit's
+# FromPlatformFlagConstDisallowed lint on literal --platform values.
 #
 # Host build tools plus the armhf cross-toolchain. The webview app
 # builds against the pre-built Qt 5 toolchain, so we don't need the
