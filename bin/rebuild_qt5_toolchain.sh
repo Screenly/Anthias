@@ -9,7 +9,7 @@
 # This is an out-of-band prereq: docker/Dockerfile.qt5-webview-builder.j2
 # fetches these tarballs from the release the viewer image references
 # via tools/image_builder/utils.py (qt5_toolchain_url, currently
-# WebView-v2026.07.0). If that release doesn't have trixie-* artifacts
+# WebView-v2026.07.1). If that release doesn't have trixie-* artifacts
 # for both pi2 and pi3, pi2/pi3 viewer image builds fail with
 #     sha256sum: no properly formatted checksum lines found
 # (the curl on the missing .sha256 falls back to a 404 HTML page).
@@ -132,7 +132,7 @@ echo "  (cd '${OUT_DIR}' && sha256sum -c qt5-5.15.19-trixie-*.tar.gz.sha256)"
 echo
 echo "Upload to a WebView-v* release. If you re-use the tag the viewer"
 echo "image references in tools/image_builder/utils.py via qt5_toolchain_url"
-echo "(currently WebView-v2026.07.0), no source change is needed;"
+echo "(currently WebView-v2026.07.1), no source change is needed;"
 echo "otherwise bump that URL to the new tag in the same commit."
 echo "  gh release upload <WebView-vX.Y.Z> \\"
 echo "      '${OUT_DIR}'/qt5-5.15.19-trixie-pi2.tar.gz{,.sha256} \\"
