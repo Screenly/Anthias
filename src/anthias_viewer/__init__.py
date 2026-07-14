@@ -245,7 +245,11 @@ def _build_webview_env() -> dict[str, str]:
       AnthiasViewer is a QWidget app, so webpages, images and video
       all rotate uniformly — no per-content rotation needed (and the
       old ``video-rotate`` path in media_player must stay off here or
-      the video double-rotates).
+      the video double-rotates). Exception: on pi3-64 the HW overlay-
+      plane video path (kmssink on a vc4 DRM plane) is scanned out
+      independently of the QOpenGLCompositor, so QT_QPA_EGLFS_ROTATION
+      does NOT rotate it (forum 6730); it is therefore taken only when
+      the screen is upright — see the pi3-64 block below.
 
     * linuxfb (pi2/pi3, Qt5): the plugin reads ``:rotation=N`` from
       QT_QPA_PLATFORM once at QPA init and rotates the framebuffer for
@@ -330,18 +334,30 @@ def _build_webview_env() -> dict[str, str]:
     # so the model string alone can't tell 64-bit from armhf — same
     # reason media_player.force_mpv keys off DEVICE_TYPE). Pop a stale
     # value so a re-imaged/re-typed device drops the flag on respawn.
+    rotation = _rotation_value()
     if os.environ.get('DEVICE_TYPE') == 'pi3-64':
         env['ANTHIAS_VIDEO_RASTER'] = '1'
-        # Prefer the hardware overlay-plane path (v4l2h264dec → ISP →
-        # kmssink on a vc4 overlay plane, HW-composited with the eglfs UI
-        # plane) for full-rate video; VideoView falls back to the
-        # CPU-raster blit if the DRM overlay resources can't be resolved.
-        env['ANTHIAS_VIDEO_OVERLAY'] = '1'
+        # The hardware overlay-plane path (v4l2h264dec → ISP → kmssink on
+        # a vc4 overlay plane, HW-composited with the eglfs UI plane)
+        # gives full-rate 30 fps video (#3164) — but that plane is
+        # scanned out independently of the eglfs QOpenGLCompositor, so
+        # QT_QPA_EGLFS_ROTATION cannot rotate it: the UI turns portrait
+        # while the video stays landscape (forum 6730). So take the
+        # overlay only when upright. When rotated, drop it and let
+        # VideoView fall back to the CPU-raster blit
+        # (QVideoFrame::toImage() → paintEvent), whose widget composites
+        # through the eglfs-rotated backing store and so inherits the
+        # transform like images/webpages — at a lower frame rate, the
+        # right trade for a rotated screen. (VideoView also falls back to
+        # raster on its own if the DRM overlay can't be resolved.)
+        if rotation == 0:
+            env['ANTHIAS_VIDEO_OVERLAY'] = '1'
+        else:
+            env.pop('ANTHIAS_VIDEO_OVERLAY', None)
     else:
         env.pop('ANTHIAS_VIDEO_RASTER', None)
         env.pop('ANTHIAS_VIDEO_OVERLAY', None)
 
-    rotation = _rotation_value()
     if _is_wayland_board():
         return env
     qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')

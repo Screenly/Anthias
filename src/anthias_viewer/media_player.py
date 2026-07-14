@@ -335,13 +335,18 @@ def _build_video_options(uri: str) -> dict[str, Any]:
         'audio-device': f'alsa/{get_alsa_audio_device()}',
     }
 
-    # No per-video rotation here. Every Qt6 board now rotates at the
-    # platform layer and the QGraphicsVideoItem inherits the transform:
-    # cage/wlroots (x86) via wlr-randr (issue #2856) and eglfs (pi4-64)
-    # via QT_QPA_EGLFS_ROTATION (set in _build_webview_env). Sending
-    # ``video-rotate`` on top of either would double-rotate the frames.
-    # linuxfb boards (pi1/2/3) apply rotation through the GStreamer
-    # ``videoflip`` element in GstFbdevMediaPlayer instead.
+    # No per-video rotation here. Every Qt6 board rotates at the platform
+    # layer and the video (QML VideoOutput / raster widget) inherits the
+    # transform: cage/wlroots (x86) via wlr-randr (issue #2856) and eglfs
+    # (pi4-64) via QT_QPA_EGLFS_ROTATION (set in _build_webview_env).
+    # Sending ``video-rotate`` on top of either would double-rotate the
+    # frames. linuxfb boards (pi1/2/3) apply rotation through the
+    # GStreamer ``videoflip`` element in GstFbdevMediaPlayer instead.
+    # pi3-64 is the one board whose fast video path (a vc4 DRM overlay
+    # plane) is NOT rotated by the compositor; rather than send
+    # ``video-rotate`` there (the overlay path has no transform anyway),
+    # _build_webview_env drops the overlay when the screen is rotated so
+    # the eglfs-composited raster fallback rotates it (forum 6730).
     return options
 
 

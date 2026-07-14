@@ -1786,16 +1786,54 @@ def test_build_webview_env_drops_dark_mode_flag_when_disabled() -> None:
 
 
 def test_build_webview_env_sets_video_raster_on_pi3_64() -> None:
-    with mock.patch.dict(
-        os.environ,
-        {'QT_QPA_PLATFORM': 'eglfs', 'DEVICE_TYPE': 'pi3-64'},
-        clear=False,
+    with (
+        mock.patch.dict(settings, {'screen_rotation': 0}),
+        mock.patch.dict(
+            os.environ,
+            {'QT_QPA_PLATFORM': 'eglfs', 'DEVICE_TYPE': 'pi3-64'},
+            clear=False,
+        ),
     ):
         env = viewer._build_webview_env()
     assert env['ANTHIAS_VIDEO_RASTER'] == '1'
-    # The overlay-plane path is the pi3-64 default too; assert it so the
-    # default can't regress to the (slow) raster blit silently.
+    # Upright: the fast HW overlay-plane path is the pi3-64 default;
+    # assert it so the default can't regress to the (slow) raster blit
+    # silently.
     assert env['ANTHIAS_VIDEO_OVERLAY'] == '1'
+
+
+@pytest.mark.parametrize('rotation', [90, 180, 270])
+def test_build_webview_env_pi3_64_drops_overlay_when_rotated(
+    rotation: int,
+) -> None:
+    """forum 6730: the pi3-64 vc4 overlay plane is scanned out
+    independently of the eglfs QOpenGLCompositor, so QT_QPA_EGLFS_ROTATION
+    can't rotate it — the UI turns portrait while the video stays
+    landscape. When rotated we must drop ANTHIAS_VIDEO_OVERLAY so VideoView
+    falls back to the eglfs-composited raster blit, which inherits the
+    rotation like images/webpages. ANTHIAS_VIDEO_RASTER stays set (it
+    selects the non-VideoOutput presenter regardless of overlay)."""
+    with (
+        mock.patch.dict(settings, {'screen_rotation': rotation}),
+        mock.patch.dict(
+            os.environ,
+            {
+                'QT_QPA_PLATFORM': 'eglfs',
+                'DEVICE_TYPE': 'pi3-64',
+                # A stale overlay flag inherited from the process env must
+                # be actively dropped, not merely left unset.
+                'ANTHIAS_VIDEO_OVERLAY': '1',
+            },
+            clear=False,
+        ),
+    ):
+        env = viewer._build_webview_env()
+    assert env['ANTHIAS_VIDEO_RASTER'] == '1'
+    assert 'ANTHIAS_VIDEO_OVERLAY' not in env
+    # Sanity: the screen itself still rotates via eglfs.
+    assert env['QT_QPA_EGLFS_ROTATION'] == (
+        '-90' if rotation == 270 else str(rotation)
+    )
 
 
 def test_build_webview_env_no_video_raster_on_pi4_64() -> None:
