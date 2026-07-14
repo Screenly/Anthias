@@ -28,6 +28,10 @@ export interface SettingSchema {
   description?: string
   default?: unknown
   enum?: unknown[]
+  // Standard JSON Schema string `format` (e.g. 'date-time', 'date',
+  // 'time'). Apps use it to request a typed input without pinning the
+  // widget; widgetFor() maps it to the matching HTML5 control.
+  format?: string
   minimum?: number
   maximum?: number
   properties?: Record<string, SettingSchema>
