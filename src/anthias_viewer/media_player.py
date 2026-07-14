@@ -343,10 +343,12 @@ def _build_video_options(uri: str) -> dict[str, Any]:
     # frames. linuxfb boards (pi1/2/3) apply rotation through the
     # GStreamer ``videoflip`` element in GstFbdevMediaPlayer instead.
     # pi3-64 is the one board whose fast video path (a vc4 DRM overlay
-    # plane) is NOT rotated by the compositor; rather than send
-    # ``video-rotate`` there (the overlay path has no transform anyway),
-    # _build_webview_env drops the overlay when the screen is rotated so
-    # the eglfs-composited raster fallback rotates it (forum 6730).
+    # plane) is NOT rotated by the compositor. It's handled without
+    # ``video-rotate`` (forum 6730): the vc4 plane can HW-rotate 0°/180°,
+    # so _build_webview_env keeps the overlay for those and VideoView sets
+    # the plane's rotation=180 property; for 90°/270° (no HW plane
+    # rotation) it drops the overlay so the eglfs-composited raster
+    # fallback rotates the frames instead.
     return options
 
 

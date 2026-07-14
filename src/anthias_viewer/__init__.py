@@ -337,20 +337,24 @@ def _build_webview_env() -> dict[str, str]:
     rotation = _rotation_value()
     if os.environ.get('DEVICE_TYPE') == 'pi3-64':
         env['ANTHIAS_VIDEO_RASTER'] = '1'
-        # The hardware overlay-plane path (v4l2h264dec → ISP → kmssink on
-        # a vc4 overlay plane, HW-composited with the eglfs UI plane)
-        # gives full-rate 30 fps video (#3164) — but that plane is
-        # scanned out independently of the eglfs QOpenGLCompositor, so
-        # QT_QPA_EGLFS_ROTATION cannot rotate it: the UI turns portrait
-        # while the video stays landscape (forum 6730). So take the
-        # overlay only when upright. When rotated, drop it and let
-        # VideoView fall back to the CPU-raster blit
-        # (QVideoFrame::toImage() → paintEvent), whose widget composites
-        # through the eglfs-rotated backing store and so inherits the
-        # transform like images/webpages — at a lower frame rate, the
-        # right trade for a rotated screen. (VideoView also falls back to
-        # raster on its own if the DRM overlay can't be resolved.)
-        if rotation == 0:
+        # The hardware overlay-plane path (v4l2h264dec → kmssink on a vc4
+        # overlay plane, HW-composited with the eglfs UI plane) gives
+        # full-rate 30 fps video (#3164) — but that plane is scanned out
+        # independently of the eglfs QOpenGLCompositor, so
+        # QT_QPA_EGLFS_ROTATION does not rotate it: the UI turns while the
+        # video stays landscape (forum 6730). The vc4 plane hardware only
+        # supports 0°/180° rotation (measured: it advertises rotate-0 and
+        # rotate-180 only — no 90/270), so:
+        #   * 0° / 180° — keep the overlay. VideoView sets the plane's
+        #     rotation=180 property for 180° (a free scanout transform:
+        #     measured full 30 fps at ~7% CPU, no thermal cost).
+        #   * 90° / 270° — no HW plane rotation exists, so drop the
+        #     overlay and let VideoView fall back to the eglfs-composited
+        #     CPU-raster blit (QVideoFrame::toImage() → paintEvent), which
+        #     inherits the transform like images/webpages. That path is
+        #     software-bound (~9 fps at 1080p on this SoC) — the only
+        #     option for 90/270 short of a Pi 4/5.
+        if rotation in (0, 180):
             env['ANTHIAS_VIDEO_OVERLAY'] = '1'
         else:
             env.pop('ANTHIAS_VIDEO_OVERLAY', None)
