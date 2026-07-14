@@ -21,7 +21,8 @@ export type SettingValues = Record<string, SettingValue>
 // One JSON Schema property inside `manifest.settings.properties`,
 // augmented with the store's `x-*` UI hints (which JSON Schema
 // validators ignore). The renderer keys off `x-widget` first, then
-// falls back to `type`/`enum`.
+// falls back to `type`/`enum`, and to a string `format` (date-time /
+// date / time) for the native date & time pickers.
 export interface SettingSchema {
   type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array'
   title?: string
