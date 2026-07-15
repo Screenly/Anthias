@@ -1376,7 +1376,8 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     // 180 → DRM_MODE_ROTATE_180 (0x4).
     const QString planeProps =
         (qgetenv("QT_QPA_EGLFS_ROTATION") == "180")
-            ? QStringLiteral(" plane-properties=props,rotation=4")
+            ? QStringLiteral(" plane-properties=props,rotation=%1")
+                  .arg(DRM_MODE_ROTATE_180)
             : QString();
     const QString description =
         QStringLiteral(
