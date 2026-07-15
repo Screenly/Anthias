@@ -1365,19 +1365,34 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     // froze the VIDEO at the first frame). Keeping it independent means
     // this overlay chain stays byte-for-byte the proven 30 fps path and
     // can never be stalled by audio.
+    // pi3-64: the vc4 overlay plane can HW-rotate 0°/180° — a free
+    // scanout-time transform (measured: full 30 fps at ~7% CPU, no
+    // thermal cost, unlike a software videoflip which collapses under
+    // throttling). eglfs rotates the UI plane via QT_QPA_EGLFS_ROTATION
+    // but NOT this independent overlay plane, so at 180° the plane must
+    // rotate itself to match the UI (forum 6730). The Python side only
+    // routes 0°/180° to the overlay (90°/270° have no HW plane rotation
+    // and take the raster path), so the only non-zero value seen here is
+    // 180 → DRM_MODE_ROTATE_180 (0x4).
+    const QString planeProps =
+        (qgetenv("QT_QPA_EGLFS_ROTATION") == "180")
+            ? QStringLiteral(" plane-properties=props,rotation=%1")
+                  .arg(DRM_MODE_ROTATE_180)
+            : QString();
     const QString description =
         QStringLiteral(
             "filesrc location=\"%1\" ! qtdemux ! h264parse ! %7 ! "
             "queue max-size-buffers=%5 max-size-time=0 max-size-bytes=0 ! "
             "%6"
-            "kmssink name=vsink qos=true fd=%2 connector-id=%3 plane-id=%4 "
+            "kmssink name=vsink qos=true fd=%2 connector-id=%3 plane-id=%4%8 "
             "force-modesetting=false can-scale=true skip-vsync=true")
             .arg(location)
             .arg(driFd)
             .arg(connId)
             .arg(planeId)
             .arg(queueBuffers)
-            .arg(convertStage, decodeStage);
+            .arg(convertStage, decodeStage)
+            .arg(planeProps);
 
     GError* error = nullptr;
     gstPipeline = gst_parse_launch(description.toUtf8().constData(), &error);
