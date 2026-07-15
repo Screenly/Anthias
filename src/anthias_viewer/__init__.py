@@ -248,8 +248,10 @@ def _build_webview_env() -> dict[str, str]:
       the video double-rotates). Exception: on pi3-64 the HW overlay-
       plane video path (kmssink on a vc4 DRM plane) is scanned out
       independently of the QOpenGLCompositor, so QT_QPA_EGLFS_ROTATION
-      does NOT rotate it (forum 6730); it is therefore taken only when
-      the screen is upright — see the pi3-64 block below.
+      does NOT rotate it (forum 6730). The vc4 plane can HW-rotate
+      0°/180° only, so the overlay is kept for 0°/180° (VideoView sets
+      the plane rotation for 180°) and dropped for 90°/270° in favour
+      of the raster path — see the pi3-64 block below.
 
     * linuxfb (pi2/pi3, Qt5): the plugin reads ``:rotation=N`` from
       QT_QPA_PLATFORM once at QPA init and rotates the framebuffer for
