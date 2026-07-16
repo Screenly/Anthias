@@ -1,0 +1,10 @@
+---
+# plymouthd starts from the initramfs, so it reads the theme files and
+# plymouthd.conf baked in there rather than the ones on the root fs.
+# Anything this role installs is therefore inert until the initramfs is
+# rebuilt. Running it as a handler means one rebuild at the end of the
+# play, after every file is in place, instead of a `-R` mid-role that
+# would snapshot a half-configured state.
+- name: Regenerate initramfs
+  ansible.builtin.command: update-initramfs -u -k all
+  changed_when: true

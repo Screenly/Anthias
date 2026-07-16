@@ -3,3 +3,13 @@
 [Daemon]
 Theme=anthias
 ShowDelay=2
+# Seconds plymouthd waits for a graphics device before giving up and
+# falling back to the text splash. Without this key plymouthd inherits
+# the distro's 8s, which is too short for the slower Pi boards: on a
+# Pi 2 vc4's /dev/dri/card0 only appears ~14s in, so plymouthd decides
+# there is "no suitable graphics hardware", commits to the text splash,
+# and then ignores card0 when it finally arrives ("ignoring since we're
+# already using text splash") — the Anthias splash never paints. This
+# costs nothing on a genuinely headless board: the wait runs alongside
+# boot and plymouth-quit still tears it down at boot completion.
+DeviceTimeout=30
