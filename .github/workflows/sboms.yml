@@ -48,7 +48,7 @@ jobs:
           else
             echo "v=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           fi
-      - uses: sbomify/sbomify-action@v26.7.0+ad3dc1d
+      - uses: sbomify/sbomify-action@ac8b0d423c90447f3011ef8ab5f9ff2e854c6931  # v26.2.0
         env:
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
