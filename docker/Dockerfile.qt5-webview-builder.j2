@@ -6,8 +6,11 @@
      1. qt5-sysroot  — armhf Debian + Raspbian/Pi userland; provides
         the link-time sysroot the Qt 5 toolchain's qmake.conf points
         at via `-sysroot /sysroot`.
-     2. webview-builder  — host x86 (`$BUILDPLATFORM`); installs the
-        Linaro gcc-7.4.1 cross-compiler plus the pre-built Qt 5
+     2. webview-builder  — host x86, pinned to linux/amd64 via the
+        QT5_HOST_PLATFORM ARG (not $BUILDPLATFORM — see the stage's
+        own comment); installs Debian's armhf cross-compiler
+        (crossbuild-essential-armhf, symlinked under the legacy Linaro
+        path the frozen qmake.conf bakes in) plus the pre-built Qt 5
         toolchain pinned to WebView-v2026.07.1, then compiles the
         in-tree src/anthias_webview/ source.
 
