@@ -70,6 +70,15 @@ private slots:
 
 private:
     void configureWebView(QWebEngineView* view);
+    // Parse the manual image-rotation angle (0/90/180/270) from
+    // QT_QPA_PLATFORM. Non-zero ONLY on linuxfb (Pi 1/2/3, Qt5): that
+    // QPA plugin silently ignores the ``rotation=N`` option, so still
+    // images have to be turned by hand in paintEvent to match the
+    // physically-rotated screen — the way the GStreamer video path
+    // already rotates via ``videoflip``. Returns 0 on eglfs / wayland,
+    // which rotate the whole compositor output, so painting a second
+    // rotation here would double-rotate.
+    static int linuxfbRotationOverride();
     void stopAnimation();
     bool tryLoadAsAnimatedGif(const QByteArray& data);
     void loadAsStaticImage(const QByteArray& data);
@@ -101,6 +110,12 @@ private:
     QMovie* movie;
     bool isAnimatedImage;
     quint64 loadGenerationId;
+
+    // Manual rotation applied to still images in paintEvent, in degrees
+    // clockwise (0/90/180/270). Set once at construction from
+    // linuxfbRotationOverride(); non-zero only on linuxfb boards whose
+    // QPA plugin ignores ``rotation=N``.
+    int imageRotation;
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // QtMultimedia-backed video widget (issue #2904). Sibling of

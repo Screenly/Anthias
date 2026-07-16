@@ -272,6 +272,13 @@ int pageLoadTimeoutMs()
 
 View::View(QWidget* parent) : QWidget(parent)
 {
+    imageRotation = linuxfbRotationOverride();
+    if (imageRotation != 0) {
+        qDebug() << "View: linuxfb screen rotation" << imageRotation
+                 << "— rotating still images in paintEvent (the linuxfb "
+                    "QPA ignores rotation=N)";
+    }
+
     webView1 = new QWebEngineView(this);
     configureWebView(webView1);
 
@@ -840,23 +847,82 @@ void View::loadAsStaticImage(const QByteArray& data)
     }
 }
 
+int View::linuxfbRotationOverride()
+{
+    // eglfs / wayland rotate the whole compositor output, so the image is
+    // already turned by the platform and must NOT be rotated again here.
+    // Only linuxfb needs a manual rotation: its QPA plugin parses but
+    // does not act on the ``rotation=N`` option, so the Python side bakes
+    // the angle into QT_QPA_PLATFORM=linuxfb:...,rotation=N and we honour
+    // it in paintEvent.
+    const QByteArray qpa = qgetenv("QT_QPA_PLATFORM");
+    if (!qpa.startsWith("linuxfb")) {
+        return 0;
+    }
+    const int colon = qpa.indexOf(':');
+    if (colon < 0) {
+        return 0;
+    }
+    const QList<QByteArray> options = qpa.mid(colon + 1).split(',');
+    for (const QByteArray& option : options) {
+        if (!option.startsWith("rotation=")) {
+            continue;
+        }
+        bool ok = false;
+        const int raw = option.mid(9).toInt(&ok);
+        if (!ok) {
+            return 0;
+        }
+        const int normalised = ((raw % 360) + 360) % 360;
+        if (normalised == 90 || normalised == 180 || normalised == 270) {
+            return normalised;
+        }
+        return 0;
+    }
+    return 0;
+}
+
 void View::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.fillRect(rect(), Qt::black);
 
-    if (!currentImage.isNull()) {
+    if (currentImage.isNull()) {
+        return;
+    }
+
+    if (imageRotation == 0) {
         QSize scaledSize = currentImage.size();
         scaledSize.scale(size(), Qt::KeepAspectRatio);
-        QRect targetRect(
-            (width() - scaledSize.width()) / 2,
-            (height() - scaledSize.height()) / 2,
-            scaledSize.width(),
-            scaledSize.height()
-        );
-        painter.drawImage(targetRect, currentImage);
+        painter.drawImage(
+            QRect(
+                (width() - scaledSize.width()) / 2,
+                (height() - scaledSize.height()) / 2,
+                scaledSize.width(),
+                scaledSize.height()),
+            currentImage);
+        return;
     }
+
+    // linuxfb-only manual rotation (see linuxfbRotationOverride): rotate
+    // about the widget centre. A 90/270 turn swaps the drawable box, so
+    // the image is fit into the widget's transposed dimensions and
+    // centred — a landscape image on a portrait-turned screen is
+    // pillar-boxed, matching the GStreamer videoflip path.
+    const QSize box =
+        (imageRotation % 180 == 0) ? size() : QSize(height(), width());
+    QSize scaledSize = currentImage.size();
+    scaledSize.scale(box, Qt::KeepAspectRatio);
+    painter.translate(width() / 2.0, height() / 2.0);
+    painter.rotate(imageRotation);
+    painter.drawImage(
+        QRect(
+            -scaledSize.width() / 2,
+            -scaledSize.height() / 2,
+            scaledSize.width(),
+            scaledSize.height()),
+        currentImage);
 }
 
 void View::resizeEvent(QResizeEvent* event)
