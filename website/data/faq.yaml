@@ -195,7 +195,7 @@
 
     - question: How do I enable HTTPS?
       answer: |
-        From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls-ssl).
+        From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls--ssl).
 
     - question: How do I run Anthias behind my own reverse proxy?
       answer: |

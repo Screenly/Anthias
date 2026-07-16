@@ -6,11 +6,11 @@ aliases:
   - "/docs/installation-options/"
 ---
 
-# Recommended: Raspberry Pi Imager
+## Recommended: Raspberry Pi Imager
 
 > **Recommended for most users**
 >
-> No command line, no scripts &mdash; just flash an SD card and boot. If you're not sure which method to use, use this one. The command-line methods further down are for advanced users who want more control.
+> No command line, no scripts &mdash; just flash an SD card and boot. If you're not sure which method to use, use this one. The [scripted install](#advanced-scripted-install-on-raspberry-pi-os-lite-or-debian) further down is for advanced users who want to install onto an existing Raspberry Pi OS Lite / Debian system or a PC.
 
 The quickest way to get started on a Raspberry Pi is to use [Raspberry Pi Imager](https://www.raspberrypi.com/software/), where you can find Anthias under **Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias**. Pick the entry that matches your Pi (Pi 2, Pi 3, Pi 4, or Pi 5), select your SD card, and flash &mdash; the device boots straight into Anthias.
 
@@ -20,7 +20,7 @@ The quickest way to get started on a Raspberry Pi is to use [Raspberry Pi Imager
 
 ![Raspberry Pi Imager confirming the SD card target before writing Anthias](/docs/images/imager-03.png)
 
-# Using the images from balenaHub
+## Using the images from balenaHub
 
 > **Important**
 >
@@ -45,7 +45,7 @@ Flash the SD card and boot up your Raspberry Pi. It will take a few minutes to b
 
 Alternatively, you can [download our pre-built Balena disk images from the releases](#using-the-images-from-the-releases).
 
-# Using the images from the releases
+## Using the images from the releases
 
 You can find the latest release [here](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
 The image file looks something like `<yyyy>-<mm>-<dd>-anthias-<board>.img.xz`. Take note that the `.img` file is compressed in this `.img.xz` file.
@@ -72,7 +72,7 @@ The image file looks something like `<yyyy>-<mm>-<dd>-anthias-<board>.img.xz`. T
 
 Devices installed from a disk image join the balena fleet and track the latest stable release. The image ships preloaded with the release it was built from, so the device boots and runs fully offline out of the box, then receives later releases automatically over the air once it has connectivity.
 
-# Advanced: scripted install on Raspberry Pi OS Lite or Debian
+## Advanced: scripted install on Raspberry Pi OS Lite or Debian
 
 > **Advanced method**
 >
@@ -107,7 +107,7 @@ $ bash <(curl -sL https://install-anthias.srly.io)
 > Piping a remote script straight into your shell is convenient, but it's perfectly reasonable to want to see what it does first. Download it, review it, then run it:
 >
 > ```
-> curl -sL https://install-anthias.srly.io -o install-anthias.sh
+> curl -fsSL https://install-anthias.srly.io -o install-anthias.sh
 > less install-anthias.sh   # read through it
 > bash install-anthias.sh
 > ```
@@ -174,12 +174,12 @@ You have the option to reboot now or later. On the next boot, make sure to run
 
 Otherwise, if you've selected **No** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
 
-# Installing with Balena
+## Installing with Balena
 
 Go through the steps in [this documentation](/docs/balena/)
 to deploy Anthias on your own Balena fleet.
 
-# Installing on a Raspberry Pi 5 with an SSD
+## Installing on a Raspberry Pi 5 with an SSD
 
 Go through the steps in [this documentation](/docs/pi5-ssd/)
 to deploy Anthias on a Pi5 with an SSD

@@ -89,7 +89,7 @@ Once you can SSH (or log in locally) to the new install:
 
 ## Step 5 — Run the Anthias installer
 
-You're now ready to run the standard installer. Follow the [scripted install steps](/docs/install/#installing-on-raspberry-pi-os-lite-or-debian) — they're the same on PC as on a Raspberry Pi.
+You're now ready to run the standard installer. Follow the [scripted install steps](/docs/install/#advanced-scripted-install-on-raspberry-pi-os-lite-or-debian) — they're the same on PC as on a Raspberry Pi.
 
 ## References
 
