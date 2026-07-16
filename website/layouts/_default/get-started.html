@@ -114,6 +114,11 @@
                         <td class="py-3"><span class="text-zinc-400">Maintenance</span></td>
                     </tr>
                     <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 3 Model A+ (512&nbsp;MB)</td>
+                        <td class="py-3 pr-4">32-bit</td>
+                        <td class="py-3"><span class="text-red-700 font-medium">Not recommended</span></td>
+                    </tr>
+                    <tr class="border-b border-black/5">
                         <td class="py-3 pr-4">x86 PC (NUC or similar)</td>
                         <td class="py-3 pr-4">64-bit</td>
                         <td class="py-3"><span class="text-green-700 font-medium">Recommended</span></td>
@@ -125,6 +130,7 @@
                     </tr>
                 </tbody>
             </table>
+            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">The <strong>Raspberry Pi 3 Model A+</strong> ships with only 512&nbsp;MB of RAM &mdash; too little to run the Anthias stack comfortably, so it&rsquo;s <strong>not recommended</strong>. For a low-cost board, choose a Pi with at least 1&nbsp;GB (Pi 3 Model B/B+ or newer).</p>
             <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on <strong>Debian-based Armbian</strong> (Bookworm / Trixie) with software video decode. Ubuntu-based Armbian builds aren&rsquo;t supported &mdash; the installer wires up the Debian Docker apt repository, so Ubuntu releases fail at &ldquo;apt update&rdquo;. Hardware video decode varies per SoC and isn&rsquo;t wired up out of the box &mdash; expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
         </div>
     </div>
