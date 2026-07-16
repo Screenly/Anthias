@@ -43,15 +43,22 @@
     - anthias.plymouth
     - anthias.script
     - splashscreen.png
+  notify: Regenerate initramfs
 
 - name: Get current plymouth theme
   ansible.builtin.command: plymouth-set-default-theme
   register: splashscreen_plymouth_theme
   changed_when: false
 
+# Deliberately NOT `-R`: that rebuilds the initramfs here, before the
+# config below is written, so the initramfs would embed the *old*
+# plymouthd.conf. plymouthd runs from the initramfs and reads its theme
+# and DeviceTimeout from the copy baked in there, so the rebuild has to
+# happen after every file this role installs — see the handler.
 - name: Set Plymouth default theme to Anthias
-  ansible.builtin.command: plymouth-set-default-theme -R anthias
+  ansible.builtin.command: plymouth-set-default-theme anthias
   changed_when: splashscreen_plymouth_theme.stdout != "anthias"
+  notify: Regenerate initramfs
 
 - name: Install plymouthd defaults
   ansible.builtin.copy:
@@ -60,6 +67,7 @@
     mode: "0644"
     owner: root
     group: root
+  notify: Regenerate initramfs
 
 - name: Install plymouthd.conf
   ansible.builtin.copy:
@@ -68,3 +76,4 @@
     mode: "0644"
     owner: root
     group: root
+  notify: Regenerate initramfs
