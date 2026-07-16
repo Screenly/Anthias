@@ -369,14 +369,21 @@ def _build_webview_env() -> dict[str, str]:
     qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')
     if qpa.partition(':')[0] == 'eglfs':
         if rotation:
-            # eglfs only understands 180, 90 and -90. A literal 270
-            # hits the "Invalid rotation" default branch in
-            # QEglFSScreen::geometry(), so the QOpenGLCompositor still
-            # rotates the content but the screen geometry never swaps
-            # to portrait — the window lays out landscape and renders
-            # stretched (issue #2970). Spell 270° as -90 instead.
+            # ``screen_rotation`` is defined CLOCKWISE — that's the
+            # direction the linuxfb (paintEvent / injected CSS) and the
+            # GStreamer ``videoflip`` paths turn. A raw
+            # ``QT_QPA_EGLFS_ROTATION=N`` turns the QOpenGLCompositor the
+            # OTHER way (anticlockwise), so screen_rotation=90 came out
+            # 90° anticlockwise on eglfs boards while a Pi 2 turned it
+            # clockwise — opposite orientation for the same setting.
+            # Negate so every display stack agrees. eglfs only understands
+            # 180, 90 and -90 — a literal 270 hits the "Invalid rotation"
+            # default branch in QEglFSScreen::geometry() (the compositor
+            # still rotates but the geometry never swaps to portrait, so
+            # the window lays out landscape and renders stretched, issue
+            # #2970) — so 90° CW is spelled -90 and 270° CW is spelled 90.
             env['QT_QPA_EGLFS_ROTATION'] = str(
-                -90 if rotation == 270 else rotation
+                {90: -90, 180: 180, 270: 90}[rotation]
             )
         else:
             # Drop a stale value so dialling back to 0 actually
@@ -388,7 +395,11 @@ def _build_webview_env() -> dict[str, str]:
 
 
 def _wlr_transform_value(rotation_deg: int) -> str:
-    return {0: 'normal', 90: '90', 180: '180', 270: '270'}.get(
+    # wlr-randr transforms turn the output ANTICLOCKWISE, the opposite of
+    # screen_rotation's clockwise convention (linuxfb + videoflip). Map a
+    # 90° clockwise turn to wlr transform '270' and 270° CW to '90' so
+    # wayland boards rotate the same way as every other display stack.
+    return {0: 'normal', 90: '270', 180: '180', 270: '90'}.get(
         rotation_deg, 'normal'
     )
 

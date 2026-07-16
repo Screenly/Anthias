@@ -1830,10 +1830,9 @@ def test_build_webview_env_pi3_64_drops_overlay_for_90_270(
         env = viewer._build_webview_env()
     assert env['ANTHIAS_VIDEO_RASTER'] == '1'
     assert 'ANTHIAS_VIDEO_OVERLAY' not in env
-    # Sanity: the screen itself still rotates via eglfs.
-    assert env['QT_QPA_EGLFS_ROTATION'] == (
-        '-90' if rotation == 270 else str(rotation)
-    )
+    # Sanity: the screen itself still rotates via eglfs (clockwise, so
+    # 90° CW is spelled -90 and 270° CW is spelled 90).
+    assert env['QT_QPA_EGLFS_ROTATION'] == ('-90' if rotation == 90 else '90')
 
 
 def test_build_webview_env_pi3_64_keeps_overlay_at_180() -> None:
@@ -2121,6 +2120,20 @@ def test_build_webview_env_no_op_on_pi5_wayland() -> None:
     assert env['QT_QPA_PLATFORM'] == 'wayland'
 
 
+@pytest.mark.parametrize(
+    ('rotation', 'transform'),
+    [(0, 'normal'), (90, '270'), (180, '180'), (270, '90')],
+)
+def test_wlr_transform_value_is_clockwise(
+    rotation: int, transform: str
+) -> None:
+    """screen_rotation is clockwise but wlr-randr transforms turn the
+    output anticlockwise, so 90° CW maps to '270' and 270° CW to '90'
+    (0/180 are direction-agnostic). Keeps wayland aligned with linuxfb +
+    videoflip."""
+    assert viewer._wlr_transform_value(rotation) == transform
+
+
 def test_apply_wlr_transform_runs_on_pi5() -> None:
     """Issue #3044: the wlr-randr path must actually fire on Pi 5 —
     previously gated behind an x86-only _is_wayland_board(), so the
@@ -2156,7 +2169,8 @@ def test_apply_wlr_transform_runs_on_pi5() -> None:
     ]
     assert len(transform_calls) == 1
     argv = transform_calls[0].args[0]
-    assert argv[argv.index('--transform') + 1] == '90'
+    # 90° clockwise == wlr transform '270' (wlr turns anticlockwise).
+    assert argv[argv.index('--transform') + 1] == '270'
 
 
 def test_build_webview_env_appends_rotation_on_linuxfb() -> None:
@@ -2270,7 +2284,7 @@ def test_build_webview_env_removes_stale_rotation_when_dialed_to_zero() -> (
 
 @pytest.mark.parametrize(
     ('rotation', 'expected'),
-    [(90, '90'), (180, '180'), (270, '-90')],
+    [(90, '-90'), (180, '180'), (270, '90')],
 )
 def test_build_webview_env_sets_eglfs_rotation(
     rotation: int, expected: str
@@ -2278,10 +2292,12 @@ def test_build_webview_env_sets_eglfs_rotation(
     """Pi 4 runs eglfs, which ignores the linuxfb ``:rotation=N`` plugin
     option (that silent no-op was the 2026.06.0 bug). eglfs reads
     QT_QPA_EGLFS_ROTATION at QPA init instead, so we set that and leave
-    QT_QPA_PLATFORM untouched. eglfs only accepts 180/90/-90 — a literal
-    270 rotates the content without swapping the screen geometry to
-    portrait, rendering everything stretched (issue #2970) — so 270°
-    must be emitted as -90."""
+    QT_QPA_PLATFORM untouched. The angle is NEGATED because eglfs turns
+    the compositor anticlockwise while screen_rotation is clockwise
+    (matching linuxfb + videoflip), and eglfs only accepts 180/90/-90 — a
+    literal 270 rotates the content without swapping the screen geometry
+    to portrait, rendering everything stretched (issue #2970). So 90° CW
+    is emitted as -90 and 270° CW as 90."""
     with (
         mock.patch.dict(settings, {'screen_rotation': rotation}),
         mock.patch.dict(
