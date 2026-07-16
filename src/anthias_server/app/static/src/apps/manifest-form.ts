@@ -8,15 +8,17 @@
 // Anthias's modal styling and wired to a callback instead of writing an
 // <input> directly).
 //
-// Supported `x-widget`s (falling back to the JSON Schema type): text,
-// url, number, select (enum), toggle (boolean), timezone, and
-// location-map (a {lat,lng} object). Unknown widgets degrade to a text
-// input; unsupported structural types (arrays, non-location objects)
-// are skipped rather than mis-rendered.
+// Supported `x-widget`s (falling back to the JSON Schema type, or a
+// string `format`): text, url, number, datetime/date/time (from a
+// `date-time`/`date`/`time` format), select (enum), toggle (boolean),
+// timezone, and location-map (a {lat,lng} object). Unknown widgets
+// degrade to a text input; unsupported structural types (arrays,
+// non-location objects) are skipped rather than mis-rendered.
 
 import { initLocationMap } from './location-map'
 import { selectOptionLabel } from './select-label'
 import type { SettingSchema, SettingValue } from './types'
+import { widgetFor } from './widget-for'
 
 type SetFn = (key: string, value: SettingValue) => void
 
@@ -37,23 +39,6 @@ export function teardownHost(host: HTMLElement): void {
   })
   h.__cfgCleanups = []
   host.replaceChildren()
-}
-
-// Which control to render for a settings property.
-function widgetFor(schema: SettingSchema): string {
-  if (schema['x-widget']) return schema['x-widget']
-  if (Array.isArray(schema.enum)) return 'select'
-  if (schema.type === 'boolean') return 'toggle'
-  if (schema.type === 'number' || schema.type === 'integer') return 'number'
-  // Only a {lat,lng} object is a location map; other objects/arrays
-  // have no generic control, so mark them unsupported (skipped) rather
-  // than mis-render.
-  if (schema.type === 'object') {
-    const props = schema.properties || {}
-    return props.lat && props.lng ? 'location-map' : 'unsupported'
-  }
-  if (schema.type === 'array') return 'unsupported'
-  return 'text'
 }
 
 // A labelled wrapper shared by every control. When the control is a
@@ -225,6 +210,15 @@ function renderField(
     if (schema.maximum !== undefined) input.max = String(schema.maximum)
   } else if (widget === 'url') {
     input.type = 'url'
+  } else if (widget === 'datetime') {
+    // A `date-time` string: native picker. Its value is the local
+    // wall-clock (`YYYY-MM-DDTHH:mm`), which apps like Timer resolve
+    // against the separate time-zone field — matching their docs.
+    input.type = 'datetime-local'
+  } else if (widget === 'date') {
+    input.type = 'date'
+  } else if (widget === 'time') {
+    input.type = 'time'
   } else {
     input.type = 'text'
   }

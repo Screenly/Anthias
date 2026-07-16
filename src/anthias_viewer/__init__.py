@@ -245,7 +245,13 @@ def _build_webview_env() -> dict[str, str]:
       AnthiasViewer is a QWidget app, so webpages, images and video
       all rotate uniformly — no per-content rotation needed (and the
       old ``video-rotate`` path in media_player must stay off here or
-      the video double-rotates).
+      the video double-rotates). Exception: on pi3-64 the HW overlay-
+      plane video path (kmssink on a vc4 DRM plane) is scanned out
+      independently of the QOpenGLCompositor, so QT_QPA_EGLFS_ROTATION
+      does NOT rotate it (forum 6730). The vc4 plane can HW-rotate
+      0°/180° only, so the overlay is kept for 0°/180° (VideoView sets
+      the plane rotation for 180°) and dropped for 90°/270° in favour
+      of the raster path — see the pi3-64 block below.
 
     * linuxfb (pi2/pi3, Qt5): the plugin reads ``:rotation=N`` from
       QT_QPA_PLATFORM once at QPA init and rotates the framebuffer for
@@ -330,18 +336,34 @@ def _build_webview_env() -> dict[str, str]:
     # so the model string alone can't tell 64-bit from armhf — same
     # reason media_player.force_mpv keys off DEVICE_TYPE). Pop a stale
     # value so a re-imaged/re-typed device drops the flag on respawn.
+    rotation = _rotation_value()
     if os.environ.get('DEVICE_TYPE') == 'pi3-64':
         env['ANTHIAS_VIDEO_RASTER'] = '1'
-        # Prefer the hardware overlay-plane path (v4l2h264dec → ISP →
-        # kmssink on a vc4 overlay plane, HW-composited with the eglfs UI
-        # plane) for full-rate video; VideoView falls back to the
-        # CPU-raster blit if the DRM overlay resources can't be resolved.
-        env['ANTHIAS_VIDEO_OVERLAY'] = '1'
+        # The hardware overlay-plane path (v4l2h264dec → kmssink on a vc4
+        # overlay plane, HW-composited with the eglfs UI plane) gives
+        # full-rate 30 fps video (#3164) — but that plane is scanned out
+        # independently of the eglfs QOpenGLCompositor, so
+        # QT_QPA_EGLFS_ROTATION does not rotate it: the UI turns while the
+        # video stays landscape (forum 6730). The vc4 plane hardware only
+        # supports 0°/180° rotation (measured: it advertises rotate-0 and
+        # rotate-180 only — no 90/270), so:
+        #   * 0° / 180° — keep the overlay. VideoView sets the plane's
+        #     rotation=180 property for 180° (a free scanout transform:
+        #     measured full 30 fps at ~7% CPU, no thermal cost).
+        #   * 90° / 270° — no HW plane rotation exists, so drop the
+        #     overlay and let VideoView fall back to the eglfs-composited
+        #     CPU-raster blit (QVideoFrame::toImage() → paintEvent), which
+        #     inherits the transform like images/webpages. That path is
+        #     software-bound (~9 fps at 1080p on this SoC) — the only
+        #     option for 90/270 short of a Pi 4/5.
+        if rotation in (0, 180):
+            env['ANTHIAS_VIDEO_OVERLAY'] = '1'
+        else:
+            env.pop('ANTHIAS_VIDEO_OVERLAY', None)
     else:
         env.pop('ANTHIAS_VIDEO_RASTER', None)
         env.pop('ANTHIAS_VIDEO_OVERLAY', None)
 
-    rotation = _rotation_value()
     if _is_wayland_board():
         return env
     qpa = env.get('QT_QPA_PLATFORM', 'linuxfb')
