@@ -2120,6 +2120,20 @@ def test_build_webview_env_no_op_on_pi5_wayland() -> None:
     assert env['QT_QPA_PLATFORM'] == 'wayland'
 
 
+@pytest.mark.parametrize(
+    ('rotation', 'transform'),
+    [(0, 'normal'), (90, '270'), (180, '180'), (270, '90')],
+)
+def test_wlr_transform_value_is_clockwise(
+    rotation: int, transform: str
+) -> None:
+    """screen_rotation is clockwise but wlr-randr transforms turn the
+    output anticlockwise, so 90° CW maps to '270' and 270° CW to '90'
+    (0/180 are direction-agnostic). Keeps wayland aligned with linuxfb +
+    videoflip."""
+    assert viewer._wlr_transform_value(rotation) == transform
+
+
 def test_apply_wlr_transform_runs_on_pi5() -> None:
     """Issue #3044: the wlr-randr path must actually fire on Pi 5 —
     previously gated behind an x86-only _is_wayland_board(), so the
