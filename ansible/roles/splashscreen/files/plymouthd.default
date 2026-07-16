@@ -1,5 +1,15 @@
-# Distribution defaults. Changes to this file will get overwritten during
-# upgrades.
+# Anthias splash configuration, managed by ansible/roles/splashscreen.
+# Edits here are overwritten on the next Ansible run.
+#
+# Installed to two paths, and the distinction matters:
+#   /etc/plymouth/plymouthd.conf         — admin config, read first
+#   /usr/share/plymouth/plymouthd.defaults — distro defaults, fallback
+#     for keys absent from the conf above
+# The defaults copy does not survive: `apt-get install plymouth
+# --reinstall` in install.sh's cleanup() reverts it to the distro's own
+# (Theme=ceratopsian, DeviceTimeout=8). So the /etc copy is the one that
+# actually decides behaviour — every key we rely on must be set here
+# rather than left to fall through.
 [Daemon]
 Theme=anthias
 ShowDelay=2
