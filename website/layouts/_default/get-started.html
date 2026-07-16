@@ -12,12 +12,9 @@
             <div class="flex items-start gap-4">
                 <div class="step-number bg-brand-yellow text-brand-dark">1</div>
                 <div>
-                    <h2 class="text-xl font-bold">Install with one command</h2>
-                    <p class="text-zinc-500 mt-2 leading-relaxed">On a fresh Raspberry Pi OS Lite or Debian installation, run:</p>
-                    <div class="mt-4 bg-brand-dark rounded-lg p-5">
-                        <code class="text-brand-yellow font-mono text-sm md:text-base break-all">bash &lt;(curl -sL https://install-anthias.srly.io)</code>
-                    </div>
-                    <p class="text-zinc-400 text-sm mt-3">The installer will set up Docker, pull the container images, and start Anthias. This takes around 10&ndash;15 minutes depending on your hardware and network speed.</p>
+                    <h2 class="text-xl font-bold">Flash an SD card with Raspberry Pi Imager</h2>
+                    <p class="text-zinc-500 mt-2 leading-relaxed">The recommended way to get started &mdash; no command line, no SSH. Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, choose <strong>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</strong>, pick the entry for your Pi model (Pi 2 through Pi 5), select your SD card, and flash.</p>
+                    <p class="text-zinc-400 text-sm mt-3">Insert the card into your Pi and power it on &mdash; it boots straight into Anthias. Prefer the command line? See the <a class="text-brand-purple no-underline hover:underline" href="#advanced-methods">advanced methods below</a>.</p>
                 </div>
             </div>
         </div>
@@ -46,13 +43,16 @@
 
 <section class="bg-bg-light py-16 lg:py-24 px-6 md:px-12 lg:px-20">
     <div class="max-w-3xl mx-auto">
-        <h2 class="text-2xl font-bold">Alternative installation methods</h2>
+        <h2 id="advanced-methods" class="text-2xl font-bold">Advanced &amp; alternative installation methods</h2>
 
         <div class="mt-8 space-y-6">
             <div class="bg-white border border-black/10 rounded-lg p-6">
-                <h3 class="text-lg font-bold">Raspberry Pi Imager</h3>
-                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">The quickest path for Raspberry Pi. Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, pick <strong>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</strong>, choose your Pi model, and flash the SD card. Boots straight into Anthias.</p>
-                <p class="text-zinc-400 text-xs mt-2">Raspberry Pi 2 through Pi 5.</p>
+                <h3 class="text-lg font-bold">Install with one command <span class="text-zinc-400 font-normal text-sm">(advanced)</span></h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">For users comfortable with the command line who want to install over an existing Raspberry Pi OS Lite or Debian system (including a PC). On a fresh install, run:</p>
+                <div class="mt-3 bg-brand-dark rounded-lg p-4">
+                    <code class="text-brand-yellow font-mono text-xs md:text-sm break-all">bash &lt;(curl -sL https://install-anthias.srly.io)</code>
+                </div>
+                <p class="text-zinc-400 text-xs mt-2">Sets up Docker, pulls the images, and starts Anthias (~10&ndash;15 min). Prefer to read the script before running it? See the <a class="text-brand-purple no-underline hover:underline" href="/docs/install/">installation guide</a>.</p>
             </div>
 
             <div class="bg-white border border-black/10 rounded-lg p-6">
@@ -114,6 +114,11 @@
                         <td class="py-3"><span class="text-zinc-400">Maintenance</span></td>
                     </tr>
                     <tr class="border-b border-black/5">
+                        <td class="py-3 pr-4">Raspberry Pi 3 Model A+ (512&nbsp;MB)</td>
+                        <td class="py-3 pr-4">32-bit</td>
+                        <td class="py-3"><span class="text-red-700 font-medium">Not recommended</span></td>
+                    </tr>
+                    <tr class="border-b border-black/5">
                         <td class="py-3 pr-4">x86 PC (NUC or similar)</td>
                         <td class="py-3 pr-4">64-bit</td>
                         <td class="py-3"><span class="text-green-700 font-medium">Recommended</span></td>
@@ -125,6 +130,7 @@
                     </tr>
                 </tbody>
             </table>
+            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">The <strong>Raspberry Pi 3 Model A+</strong> ships with only 512&nbsp;MB of RAM &mdash; too little to run the Anthias stack comfortably, so it&rsquo;s <strong>not recommended</strong>. For a low-cost board, choose a Pi with at least 1&nbsp;GB (Pi 3 Model B/B+ or newer).</p>
             <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on <strong>Debian-based Armbian</strong> (Bookworm / Trixie) with software video decode. Ubuntu-based Armbian builds aren&rsquo;t supported &mdash; the installer wires up the Debian Docker apt repository, so Ubuntu releases fail at &ldquo;apt update&rdquo;. Hardware video decode varies per SoC and isn&rsquo;t wired up out of the box &mdash; expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
         </div>
     </div>
