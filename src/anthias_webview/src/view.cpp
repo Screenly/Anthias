@@ -14,6 +14,7 @@
 #include <QNetworkRequest>
 #include <QSslError>
 #include <QWebEngineCertificateError>
+#include <QWebEngineScript>
 #include <QImage>
 #include <QImageReader>
 #include <QPainter>
@@ -451,6 +452,36 @@ void View::configureWebView(QWebEngineView* view)
     // Match the widget's black backdrop so dark-themed URL assets don't
     // flash white between the page-load start and the first paint.
     page->setBackgroundColor(Qt::black);
+
+    // linuxfb webpage rotation: the QPA plugin doesn't rotate the
+    // QtWebEngine surface (see linuxfbRotationOverride), so images/video
+    // rotate elsewhere (paintEvent / GStreamer videoflip) but web pages
+    // would stay upright. Inject a stylesheet that turns the page root to
+    // match the physically-rotated screen so every asset type rotates on
+    // linuxfb. No-op on eglfs / wayland (imageRotation is 0 there — those
+    // rotate the whole compositor output already).
+    //
+    // Injected imperatively from loadFinished rather than as a declarative
+    // QWebEngineScript: on this Qt 5.15 (qt5pi) build a page-collection
+    // QWebEngineScript in ApplicationWorld silently never fires, whereas
+    // runJavaScript() executes reliably. ApplicationWorld (an isolated
+    // world) is used so the injection bypasses any page Content-Security-
+    // Policy that would otherwise block a stylesheet. The handler is
+    // persistent (not the one-shot swap handler in startPageLoad) so the
+    // rotation re-applies after every auto-refresh reload; the in-page
+    // MutationObserver (see webpageRotationScript) keeps it asserted across
+    // SPA DOM rewrites within a single document.
+    if (imageRotation != 0) {
+        const QString script = webpageRotationScript(imageRotation);
+        connect(page, &QWebEnginePage::loadFinished, this,
+            [page, script](bool ok) {
+                if (ok) {
+                    page->runJavaScript(
+                        script, QWebEngineScript::ApplicationWorld);
+                }
+            });
+    }
+
     view->setVisible(false);
 }
 
@@ -880,6 +911,43 @@ int View::linuxfbRotationOverride()
         return 0;
     }
     return 0;
+}
+
+QString View::webpageRotationScript(int angle)
+{
+    // 90/270 swap the viewport box so a landscape page fills the
+    // portrait-turned panel (pillar-boxed, like the image/video paths);
+    // 180 keeps the box. Applied as an !important stylesheet so it wins
+    // over the page's own rules, and re-asserted from a subtree
+    // MutationObserver so a page that removes/replaces the injected
+    // <style> node anywhere in the tree (SPAs rewriting <head>) can't
+    // drop the rotation. Injected in an isolated world (ApplicationWorld)
+    // so it never collides with the page's own scripts, but still mutates
+    // the shared DOM.
+    const QString box =
+        (angle % 180 != 0)
+            ? QStringLiteral(
+                  "position:fixed;top:calc((100vh - 100vw)/2);"
+                  "left:calc((100vw - 100vh)/2);width:100vh;height:100vw;")
+            : QStringLiteral("width:100vw;height:100vh;");
+    return QStringLiteral(
+               "(function(){"
+               "var css='html{transform:rotate(%1deg) !important;"
+               "transform-origin:50% 50% !important;"
+               "overflow:hidden !important;%2}';"
+               "function apply(){"
+               "var s=document.getElementById('anthias-rotation');"
+               "if(!s){s=document.createElement('style');"
+               "s.id='anthias-rotation';"
+               "(document.head||document.documentElement).appendChild(s);}"
+               "if(s.textContent!==css){s.textContent=css;}}"
+               "apply();"
+               "try{new MutationObserver(apply).observe("
+               "document.documentElement,{childList:true,subtree:true});}"
+               "catch(e){}"
+               "})();")
+        .arg(angle)
+        .arg(box);
 }
 
 void View::paintEvent(QPaintEvent*)
