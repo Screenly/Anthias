@@ -25,6 +25,13 @@ updates:
       python:
         patterns:
           - "*"
+    # A Django major is a deliberate migration, not something to ride in
+    # on a routine grouped bump. Minor and patch updates still come
+    # through. Matching is case-insensitive and exact, so django-stubs,
+    # django-dbbackup and djangorestframework are unaffected.
+    ignore:
+      - dependency-name: "Django"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
