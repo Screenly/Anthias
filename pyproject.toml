@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=83.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -20,12 +20,12 @@ namespaces = false
 
 [dependency-groups]
 dev-host = [
-    "ansible-lint==26.4.0",
+    "ansible-lint==26.6.0",
     "celery-types==0.26.0",
-    "django-stubs==6.0.5",
+    "django-stubs==6.0.7",
     "djangorestframework-stubs==3.17.0",
-    "mypy==2.1.0",
-    "ruff==0.14.10",
+    "mypy==2.3.0",
+    "ruff==0.15.21",
     "tenacity==9.1.4",
     "types-gunicorn==26.0.0.20260518",
     "types-netifaces==0.11.0.20260408",
@@ -34,7 +34,7 @@ dev-host = [
     "types-PyYAML==6.0.12.20260518",
 ]
 docker-image-builder = [
-    "click==8.4.1",
+    "click==8.4.2",
     "jinja2==3.1.6",
     "pygit2==1.19.3",
     "requests==2.34.2",
@@ -50,7 +50,7 @@ server = [
     "djangorestframework==3.17.1",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.7",
-    "drf-spectacular==0.29.0",
+    "drf-spectacular==0.30.0",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
     "packaging==26.2",
@@ -70,13 +70,13 @@ server = [
     "PyYAML==6.0.3",
     "redis==8.0.1",
     "requests==2.34.2",
-    "sentry-sdk==2.65.0",
+    "sentry-sdk==2.66.0",
     "tenacity==9.1.4",
     "sh==2.3.0",
     "urllib3==2.7.0",
     "uvicorn[standard]==0.51.0",
     "whitenoise==6.12.0",
-    "yt-dlp>=2026.6.9",
+    "yt-dlp>=2026.7.4",
 ]
 viewer = [
     "cec==0.2.8",
@@ -89,7 +89,7 @@ viewer = [
     "pytz==2026.2",
     "redis==8.0.1",
     "requests==2.34.2",
-    "sentry-sdk==2.65.0",
+    "sentry-sdk==2.66.0",
     "tenacity==9.1.4",
     "sh==2.3.0",
     "urllib3==2.7.0",
@@ -100,19 +100,19 @@ dev = [
     "pytest-django==4.12.0",
     "pytest-mock==3.15.1",
     "pytest-xdist==3.8.0",
-    "playwright==1.59.0",
+    "playwright==1.61.0",
     "pytest-playwright==0.8.0",
     "time-machine==3.2.0",
 ]
 host = [
-    "ansible-core==2.21.1",
+    "ansible-core==2.21.2",
     "netifaces2==0.0.22",
     "redis==8.0.1",
     "requests==2.34.2",
     "tenacity==9.1.4",
 ]
 local = [
-    "click==8.4.1",
+    "click==8.4.2",
     "requests==2.34.2",
     "tenacity==9.1.4",
 ]
@@ -139,7 +139,7 @@ mypy = [
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.7",
     "djangorestframework==3.17.1",
-    "drf-spectacular==0.29.0",
+    "drf-spectacular==0.30.0",
     # Pillow ships PEP 561 stubs (py.typed). The processing module
     # imports PIL at top level, so mypy needs the package resolvable
     # to type-check the upload-time normalisation pipeline.
@@ -148,7 +148,7 @@ mypy = [
     # ignored, mirroring the cec / pydbus / sh pattern.
     "Pillow==12.3.0",
     "pytz==2026.2",
-    "sentry-sdk==2.65.0",
+    "sentry-sdk==2.66.0",
     "whitenoise==6.12.0",
 ]
 
