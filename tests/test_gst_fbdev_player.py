@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from anthias_viewer.gst_fbdev_player import (
+    ISP_FLIP_CONTROLS,
     MAX_OUTPUT_FPS,
     build_fit_caps_string,
     build_sink_description,
@@ -112,12 +113,36 @@ def test_sink_description_is_hw_pipeline_with_rate_cap() -> None:
     assert 'fbdevsink device=/dev/fb0' in desc
     # Unrotated panel → no videoflip, pipeline stays fully hardware.
     assert 'videoflip' not in desc
+    assert 'extra-controls' not in desc
 
 
-def test_sink_description_rotation_adds_videoflip() -> None:
-    desc = build_sink_description(_args(rotation=90))
-    assert 'videoflip method=clockwise' in desc
+@pytest.mark.parametrize(
+    ('rotation', 'method'),
+    [(90, 'clockwise'), (270, 'counterclockwise')],
+)
+def test_sink_description_90_270_use_videoflip(
+    rotation: int, method: str
+) -> None:
+    # No bcm2835 device exposes a rotate control, so the quarter turns
+    # have no hardware path and fall back to the software videoflip
+    # ahead of the ISP (issue #3198).
+    desc = build_sink_description(_args(rotation=rotation))
+    assert f'videoflip method={method}' in desc
     assert desc.index('videoflip') < desc.index('v4l2convert')
+    assert 'extra-controls' not in desc
+
+
+def test_sink_description_180_rotates_in_the_isp() -> None:
+    # hflip + vflip compose to a 180 rotation, and the ISP does both as
+    # v4l2 controls on the aspect-fit pass it already runs — so 180
+    # keeps the full-speed hardware pipeline instead of dropping to
+    # ~2 fps through videoflip (issue #3198).
+    desc = build_sink_description(_args(rotation=180))
+    assert 'videoflip' not in desc
+    assert (
+        f'v4l2convert name=fit_convert extra-controls={ISP_FLIP_CONTROLS}'
+        in desc
+    )
 
 
 def test_parse_args_rejects_non_cardinal_rotation() -> None:

@@ -63,6 +63,38 @@ pack below and confirm `dropped: 0` at the source framerate.
 > path is identical; their slower ARM cores only affect demux/parse + the fb
 > memcpy, not the offloaded decode/scale/convert.
 
+#### Screen rotation and video on Pi 1 / 2 / 3
+
+`screen_rotation` interacts badly with video on these boards, and the outcome
+depends on the angle — because VideoCore IV has **no rotate control at all**.
+`v4l2-ctl -l` on the ISP (`/dev/video12`) exposes only `horizontal_flip` and
+`vertical_flip`; no bcm2835 video device exposes `V4L2_CID_ROTATE`. (The same
+limit shows up on the pi3-64 vc4 DRM plane, which offers 0°/180° + reflect
+only — forum 6730.)
+
+| `screen_rotation` | path | Pi 2, 1080p30 |
+|---|---|---|
+| 0 | all hardware | ~27 fps |
+| 180 | ISP `horizontal_flip` + `vertical_flip` | ~27 fps |
+| 90 / 270 | software `videoflip` (no HW path) | **~2 fps** |
+
+* **180 is free.** hflip + vflip compose to a 180 rotation and ride along on
+  the `v4l2convert` pass that already does the aspect-fit scale, so the
+  pipeline stays fully hardware and the result is pixel-identical to the
+  software rotation.
+* **90 / 270 are effectively unsupported for video on Pi 1 / 2 / 3** (issue
+  #3198). The quarter turns need a transpose, which no VideoCore IV block can
+  do, so `videoflip` rotates each full-resolution frame on a single CPU core
+  and 1080p collapses to ~2 fps. The picture is *correct*, just far too slow to
+  use. Rotating still images and web pages costs nothing per frame and is
+  unaffected — this limit is video-only. **Use a Pi 4 / Pi 5 for
+  portrait-mounted video**, where the platform layer rotates instead.
+
+Note that reordering to scale-before-flip does not rescue 90/270: the case that
+actually matters — portrait content on a portrait-mounted panel — rotates to
+exactly fill the framebuffer, so there is no downscale to exploit ahead of the
+flip (measured slightly *worse*, 1.9 vs 2.1 fps).
+
 ## Goal: hardware-accelerated playback on every board
 
 Every clip Anthias displays should decode in hardware on the target board.
