@@ -102,6 +102,13 @@ private:
     bool isAnimatedImage;
     quint64 loadGenerationId;
 
+    // Manual rotation applied in paintEvent to raster image assets —
+    // still images and animated GIFs, which share the ``currentImage``
+    // draw path — in degrees clockwise (0/90/180/270). Set once at
+    // construction from linuxfbRotationOverride(); non-zero only on
+    // linuxfb boards whose QPA plugin ignores ``rotation=N``.
+    int imageRotation;
+
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     // QtMultimedia-backed video widget (issue #2904). Sibling of
     // the web / image widgets — visibility is toggled rather than

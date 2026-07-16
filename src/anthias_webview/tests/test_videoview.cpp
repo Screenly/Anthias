@@ -24,6 +24,7 @@
 // composite into, so we don't try to play media — just exercise the
 // API surface plus the option plumbing.
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QMediaPlayer>
 #include <QQuickItem>
@@ -227,5 +228,23 @@ private:
     }
 };
 
-QTEST_MAIN(TestVideoView)
+// Combined entry point: this binary hosts two independent QtTest
+// classes — TestVideoView (here) and TestRotation (test_rotation.cpp,
+// run via the runRotationTests factory so its class stays private to
+// its own translation unit). QTEST_MAIN can only host one, so we exec
+// each in turn and OR their exit codes. QApplication (not
+// QCoreApplication) because the VideoView tests need the widgets stack.
+extern int runRotationTests(int argc, char** argv);
+
+int main(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    int status = 0;
+    {
+        TestVideoView tc;
+        status |= QTest::qExec(&tc, argc, argv);
+    }
+    status |= runRotationTests(argc, argv);
+    return status;
+}
 #include "test_videoview.moc"

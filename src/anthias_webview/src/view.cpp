@@ -14,6 +14,7 @@
 #include <QNetworkRequest>
 #include <QSslError>
 #include <QWebEngineCertificateError>
+#include <QWebEngineScript>
 #include <QImage>
 #include <QImageReader>
 #include <QPainter>
@@ -30,6 +31,7 @@
 #include <QtGlobal>
 
 #include "view.h"
+#include "rotation.h"
 
 // Attaches the operator-configured per-asset request headers (#2215) to
 // requests whose origin matches the asset's own origin (scheme + host +
@@ -272,6 +274,13 @@ int pageLoadTimeoutMs()
 
 View::View(QWidget* parent) : QWidget(parent)
 {
+    imageRotation = rotation::linuxfbRotationOverride();
+    if (imageRotation != 0) {
+        qDebug() << "View: linuxfb screen rotation" << imageRotation
+                 << "— rotating still images in paintEvent (the linuxfb "
+                    "QPA ignores rotation=N)";
+    }
+
     webView1 = new QWebEngineView(this);
     configureWebView(webView1);
 
@@ -444,6 +453,40 @@ void View::configureWebView(QWebEngineView* view)
     // Match the widget's black backdrop so dark-themed URL assets don't
     // flash white between the page-load start and the first paint.
     page->setBackgroundColor(Qt::black);
+
+    // linuxfb webpage rotation: the QPA plugin doesn't rotate the
+    // QtWebEngine surface (see linuxfbRotationOverride), so images/video
+    // rotate elsewhere (paintEvent / GStreamer videoflip) but web pages
+    // would stay upright. Inject a stylesheet that turns the page root to
+    // match the physically-rotated screen so every asset type rotates on
+    // linuxfb. No-op on eglfs / wayland (imageRotation is 0 there — those
+    // rotate the whole compositor output already).
+    //
+    // Injected imperatively from loadFinished rather than as a declarative
+    // QWebEngineScript: on this Qt 5.15 (qt5pi) build a page-collection
+    // QWebEngineScript in ApplicationWorld silently never fires, whereas
+    // runJavaScript() executes reliably. ApplicationWorld (an isolated
+    // world) is used so the injection bypasses any page Content-Security-
+    // Policy that would otherwise block a stylesheet. The handler is
+    // persistent (not the one-shot swap handler in startPageLoad) so the
+    // rotation re-applies after every auto-refresh reload; the in-page
+    // MutationObserver (see webpageRotationScript) keeps it asserted across
+    // SPA DOM rewrites within a single document.
+    //
+    // Injected regardless of loadFinished's ``ok`` flag: a failed load
+    // (DNS failure, refused connection, captive portal) still leaves a
+    // QtWebEngine error-page document on screen, which must rotate too so
+    // a physically-turned panel never shows sideways text. runJavaScript
+    // on a cancelled/empty document is a harmless no-op.
+    if (imageRotation != 0) {
+        const QString script = rotation::webpageRotationScript(imageRotation);
+        connect(page, &QWebEnginePage::loadFinished, this,
+            [page, script](bool) {
+                page->runJavaScript(
+                    script, QWebEngineScript::ApplicationWorld);
+            });
+    }
+
     view->setVisible(false);
 }
 
@@ -846,17 +889,41 @@ void View::paintEvent(QPaintEvent*)
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.fillRect(rect(), Qt::black);
 
-    if (!currentImage.isNull()) {
+    if (currentImage.isNull()) {
+        return;
+    }
+
+    if (imageRotation == 0) {
         QSize scaledSize = currentImage.size();
         scaledSize.scale(size(), Qt::KeepAspectRatio);
-        QRect targetRect(
-            (width() - scaledSize.width()) / 2,
-            (height() - scaledSize.height()) / 2,
-            scaledSize.width(),
-            scaledSize.height()
-        );
-        painter.drawImage(targetRect, currentImage);
+        painter.drawImage(
+            QRect(
+                (width() - scaledSize.width()) / 2,
+                (height() - scaledSize.height()) / 2,
+                scaledSize.width(),
+                scaledSize.height()),
+            currentImage);
+        return;
     }
+
+    // linuxfb-only manual rotation (see linuxfbRotationOverride): rotate
+    // about the widget centre. A 90/270 turn swaps the drawable box, so
+    // the image is fit into the widget's transposed dimensions and
+    // centred — a landscape image on a portrait-turned screen is
+    // pillar-boxed, matching the GStreamer videoflip path.
+    const QSize box =
+        (imageRotation % 180 == 0) ? size() : QSize(height(), width());
+    QSize scaledSize = currentImage.size();
+    scaledSize.scale(box, Qt::KeepAspectRatio);
+    painter.translate(width() / 2.0, height() / 2.0);
+    painter.rotate(imageRotation);
+    painter.drawImage(
+        QRect(
+            -scaledSize.width() / 2,
+            -scaledSize.height() / 2,
+            scaledSize.width(),
+            scaledSize.height()),
+        currentImage);
 }
 
 void View::resizeEvent(QResizeEvent* event)
