@@ -13,10 +13,18 @@ updates:
       bun:
         patterns:
           - "*"
-  - package-ecosystem: "pip"
+  # "uv", not "pip": the pip ecosystem reads the PEP 621 pins in
+  # pyproject.toml but has no concept of uv.lock, so it opened PRs that
+  # bumped the pin and left the lockfile on the old version. The uv
+  # ecosystem understands both and keeps them in sync.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      python:
+        patterns:
+          - "*"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
