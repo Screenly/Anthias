@@ -18,6 +18,9 @@ namespace
 {
 // RAII guard: set QT_QPA_PLATFORM for one test and restore it after, so
 // the cases don't leak platform strings into each other (or the runner).
+// A null QByteArray means "unset entirely" (qunsetenv) rather than "set
+// to empty string" — so the unset case genuinely exercises the
+// no-variable path, not an empty-string one.
 class QpaGuard
 {
 public:
@@ -25,7 +28,11 @@ public:
         : had_(qEnvironmentVariableIsSet("QT_QPA_PLATFORM"))
         , previous_(qgetenv("QT_QPA_PLATFORM"))
     {
-        qputenv("QT_QPA_PLATFORM", value);
+        if (value.isNull()) {
+            qunsetenv("QT_QPA_PLATFORM");
+        } else {
+            qputenv("QT_QPA_PLATFORM", value);
+        }
     }
     ~QpaGuard()
     {

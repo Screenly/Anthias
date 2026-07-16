@@ -472,14 +472,18 @@ void View::configureWebView(QWebEngineView* view)
     // rotation re-applies after every auto-refresh reload; the in-page
     // MutationObserver (see webpageRotationScript) keeps it asserted across
     // SPA DOM rewrites within a single document.
+    //
+    // Injected regardless of loadFinished's ``ok`` flag: a failed load
+    // (DNS failure, refused connection, captive portal) still leaves a
+    // QtWebEngine error-page document on screen, which must rotate too so
+    // a physically-turned panel never shows sideways text. runJavaScript
+    // on a cancelled/empty document is a harmless no-op.
     if (imageRotation != 0) {
         const QString script = rotation::webpageRotationScript(imageRotation);
         connect(page, &QWebEnginePage::loadFinished, this,
-            [page, script](bool ok) {
-                if (ok) {
-                    page->runJavaScript(
-                        script, QWebEngineScript::ApplicationWorld);
-                }
+            [page, script](bool) {
+                page->runJavaScript(
+                    script, QWebEngineScript::ApplicationWorld);
             });
     }
 

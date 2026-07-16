@@ -13,10 +13,12 @@ CONFIG += c++17 console testcase
 
 # Re-use the production sources verbatim — tests instantiate
 # VideoView directly and call the rotation helpers. ``main.cpp`` is
-# excluded because QTEST_MAIN provides its own entry point. The qrc
-# carries the QML scene (videoview.qml) the production widget loads.
-# rotation.cpp is deliberately QtCore-only (no View / QtWebEngine) so
-# these tests link without the webengine modules.
+# excluded because the test binary provides its own combined entry
+# point (test_videoview.cpp's main() runs both TestVideoView and
+# TestRotation — QTEST_MAIN only hosts one class). The qrc carries the
+# QML scene (videoview.qml) the production widget loads. rotation.cpp is
+# deliberately QtCore-only (no View / QtWebEngine) so these tests link
+# without the webengine modules.
 SOURCES += \
     ../src/videoview.cpp \
     ../src/rotation.cpp \
