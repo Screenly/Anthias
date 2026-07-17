@@ -39,7 +39,8 @@ Deep, hard-won operational and hardware knowledge distilled from long-running de
 - **testbed-qa** — validating changes on the physical hardware fleet
 - **anthias-hardware** — per-board display/codec/rotation/audio internals
 - **anthias-viewer** — viewer/server app internals and subtle bug root-causes
-- **anthias-release** — balena/CalVer/CI/Sentry/telemetry operations
+- **anthias-release** — balena/CalVer/CI/Sentry/telemetry operations (reference)
+- **cut-release** — step-by-step runbook for cutting a tagged release
 
 ## Development Commands
 

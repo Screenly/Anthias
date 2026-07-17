@@ -27,7 +27,11 @@ below is also captured, in depth, in the four committed skills under
   PulseAudio, content-import framework.
 - **[anthias-release](skills/anthias-release/SKILL.md)** — balena cloud API +
   OS track topology, CalVer stamping + release/OTA sequencing, image builder +
-  toolchain, CI behavior, Sentry conventions, telemetry.
+  toolchain, CI behavior, Sentry conventions, telemetry (the reference facts).
+- **[cut-release](skills/cut-release/SKILL.md)** — the actionable step-by-step
+  runbook for cutting a tagged release: bump the version across all manifests +
+  lockfiles, merge, wait for the master Docker build, tag, and publish (auto
+  notes first, then a curated summary).
 
 ## Highest-value cross-cutting facts (the things easiest to get wrong)
 
