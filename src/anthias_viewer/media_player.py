@@ -4,6 +4,7 @@ import re
 import signal
 import subprocess
 import sys
+import time
 from typing import Any, ClassVar
 from urllib.parse import quote
 
@@ -196,9 +197,11 @@ def _pi_alsa_device(device_type: str, audio_output: str) -> str | None:
 
     Pi firmware exposes stable card names (``vc4hdmi*`` for HDMI,
     ``Headphones`` for the 3.5 mm jack), so the audio_output setting
-    maps straight onto them. Returns ``None`` for any non-Pi board
-    (x86, arm64 SBCs) whose card names aren't portable — the caller
-    then falls through to runtime PulseAudio sink discovery.
+    maps straight onto them. The Pi 5 has no analog jack, so its
+    ``local`` selection also resolves to the connected HDMI device
+    (the UI hides the 3.5 mm option there). Returns ``None`` for any
+    non-Pi board (x86, arm64 SBCs) whose card names aren't portable —
+    the caller then falls through to runtime PulseAudio sink discovery.
     """
     if audio_output == 'local':
         if device_type == 'pi5':
@@ -215,15 +218,35 @@ def _pi_alsa_device(device_type: str, audio_output: str) -> str | None:
     return None
 
 
+# get_alsa_audio_device() runs on every play()/set_asset(), so the sink
+# listing is cached for a short window to keep a fast-rotating playlist
+# from spawning a `pactl` subprocess per asset transition. The TTL is
+# short enough that an HDMI hotplug (sink appears/disappears) is picked
+# up within a few seconds. Only successful lists are cached — a transient
+# pactl failure retries on the next call rather than latching an empty
+# list.
+_SINK_CACHE_TTL_SECONDS = 5.0
+_sink_cache: tuple[float, list[str]] | None = None
+
+
 def _list_pulse_sinks() -> list[str]:
     """Return the sink names the running PulseAudio daemon exposes.
 
     Uses ``pactl`` (pulseaudio-utils, which the viewer image ships —
     unlike alsa-utils/``aplay``). The viewer process already runs with
     ``XDG_RUNTIME_DIR`` pointed at the pulse socket that
-    start_pulseaudio() created, so the child inherits it. Returns an
-    empty list if pulse is unreachable.
+    start_pulseaudio() created, so the child inherits it. Result is
+    cached for ``_SINK_CACHE_TTL_SECONDS``. Returns an empty list if
+    pulse is unreachable.
     """
+    global _sink_cache
+    now = time.monotonic()
+    if (
+        _sink_cache is not None
+        and now - _sink_cache[0] < _SINK_CACHE_TTL_SECONDS
+    ):
+        return _sink_cache[1]
+
     try:
         completed = subprocess.run(
             ['pactl', 'list', 'short', 'sinks'],
@@ -243,6 +266,7 @@ def _list_pulse_sinks() -> list[str]:
         fields = line.split('\t')
         if len(fields) >= 2 and fields[1]:
             sinks.append(fields[1])
+    _sink_cache = (now, sinks)
     return sinks
 
 

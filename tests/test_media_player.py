@@ -459,6 +459,7 @@ def test_select_pulse_sink(
 def test_list_pulse_sinks_parses_pactl_output() -> None:
     from anthias_viewer.media_player import _list_pulse_sinks
 
+    media_player_module._sink_cache = None
     stdout = (
         '0\talsa_output.HID.analog-stereo\tmodule-alsa-card.c\t'
         's16le 2ch 48000Hz\tSUSPENDED\n'
@@ -478,11 +479,28 @@ def test_list_pulse_sinks_parses_pactl_output() -> None:
 def test_list_pulse_sinks_returns_empty_when_pactl_missing() -> None:
     from anthias_viewer.media_player import _list_pulse_sinks
 
+    media_player_module._sink_cache = None
     with patch(
         'anthias_viewer.media_player.subprocess.run',
         side_effect=FileNotFoundError('pactl'),
     ):
         assert _list_pulse_sinks() == []
+
+
+def test_list_pulse_sinks_caches_within_ttl() -> None:
+    from anthias_viewer.media_player import _list_pulse_sinks
+
+    media_player_module._sink_cache = None
+    stdout = '0\talsa_output.PCH.hdmi-stereo\tm\ts16le 2ch\tSUSPENDED\n'
+    with patch(
+        'anthias_viewer.media_player.subprocess.run',
+        return_value=MagicMock(stdout=stdout),
+    ) as mock_run:
+        first = _list_pulse_sinks()
+        second = _list_pulse_sinks()
+    assert first == second == ['alsa_output.PCH.hdmi-stereo']
+    # Second call served from cache — pactl invoked only once.
+    mock_run.assert_called_once()
 
 
 class _FakeDirEntry:
