@@ -68,14 +68,37 @@ FB_DEVICE = '/dev/fb0'
 # even half-cadence instead of juddering on irregular sync drops.
 MAX_OUTPUT_FPS = 30
 
-# Operator screen_rotation → GStreamer ``videoflip`` method. None for
-# an unrotated panel (the common case) so the videoflip element is
-# omitted entirely and the pipeline stays fully hardware.
+# Operator screen_rotation → GStreamer ``videoflip`` method. 180 is
+# absent deliberately: the bcm2835 ISP does that one in hardware (see
+# ISP_FLIP_CONTROLS). None for an unrotated panel (the common case) so
+# the videoflip element is omitted entirely and the pipeline stays
+# fully hardware.
+#
+# 90/270 have no hardware path on VideoCore IV (Pi 1/2/3) and cost
+# roughly an order of magnitude in frame rate — measured on a Pi 2 at
+# 1080p30: 27 fps unrotated vs 2 fps rotated, with videoflip pegging a
+# core (issue #3198). The rotation is visually correct, so the element
+# stays as the honest best effort, but rotated 1080p video is
+# documented as unsupported on these boards (docs/board-enablement.md).
+# Reordering to scale-before-flip does not rescue it: the real case —
+# portrait content on a portrait panel — rotates to exactly fill the
+# framebuffer, so there is no downscale to exploit (measured 1.9 fps
+# vs 2.1 fps, i.e. slightly worse).
 GST_VIDEOFLIP_METHODS = {
     90: 'clockwise',
-    180: 'rotate-180',
     270: 'counterclockwise',
 }
+
+# 180 costs nothing on the bcm2835 ISP: a horizontal + vertical flip
+# composes to a 180 rotation, and both are v4l2 controls on the same
+# ``v4l2convert`` pass that already does the aspect-fit scale. Measured
+# on a Pi 2 at 1080p30: 27 fps (vs 2 fps through the software
+# videoflip) and pixel-identical to the software rotation. These are
+# the *only* rotate-ish controls the hardware exposes — there is no
+# V4L2_CID_ROTATE on any bcm2835 video device, which is what rules out
+# 90/270 above.
+ISP_FLIP_CONTROLS = 'c,horizontal_flip=1,vertical_flip=1'
+ISP_FLIP_ROTATION = 180
 
 
 def compute_fit_dims(
@@ -178,7 +201,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         '--rotation',
         type=int,
         default=0,
-        choices=sorted({0, *GST_VIDEOFLIP_METHODS}),
+        # 180 is handled by the ISP rather than videoflip, so it isn't
+        # in GST_VIDEOFLIP_METHODS — it's still an accepted rotation.
+        choices=sorted({0, ISP_FLIP_ROTATION, *GST_VIDEOFLIP_METHODS}),
     )
     parser.add_argument('--audio-device', default='')
     parser.add_argument('--fb-device', default=FB_DEVICE)
@@ -189,16 +214,20 @@ def build_sink_description(args: argparse.Namespace) -> str:
     """gst-parse description for playbin's ``video-sink`` bin.
 
     ``videorate`` caps the frame rate (drop-only — never duplicates),
-    ``videoflip`` is inserted only when the operator rotated the
-    screen, ``v4l2convert`` (bcm2835 ISP) does the scale + colour
-    convert in hardware, and the named capsfilter is the handle the
-    CAPS probe re-pins with the aspect-fit dimensions.
+    ``videoflip`` is inserted only for the 90/270 rotations the
+    hardware can't do, ``v4l2convert`` (bcm2835 ISP) does the scale +
+    colour convert — and, at 180, the rotation — in hardware, and the
+    named capsfilter is the handle the CAPS probe re-pins with the
+    aspect-fit dimensions.
     """
     parts = [f'videorate drop-only=true max-rate={MAX_OUTPUT_FPS}']
     flip = GST_VIDEOFLIP_METHODS.get(args.rotation)
     if flip:
         parts.append(f'videoflip method={flip}')
-    parts.append('v4l2convert name=fit_convert')
+    convert = 'v4l2convert name=fit_convert'
+    if args.rotation == ISP_FLIP_ROTATION:
+        convert += f' extra-controls={ISP_FLIP_CONTROLS}'
+    parts.append(convert)
     parts.append(
         f'capsfilter name=fit_caps '
         f'caps={build_fit_caps_string(args.fb_format)}'
