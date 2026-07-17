@@ -125,13 +125,40 @@ def test_play_omits_libmpv_era_options(mpv: _MPVFixtures) -> None:
         assert legacy not in options, legacy
 
 
-def test_play_uses_default_alsa_device_on_arm64(mpv: _MPVFixtures) -> None:
-    # No portable per-SoC HDMI card name exists across Rockchip /
-    # Allwinner / Amlogic, so arm64 defers to ALSA's `default`
-    # device rather than the Pi-firmware vc4hdmi* / HID cards the
-    # regular dispatch would otherwise pick.
+def test_play_routes_to_hdmi_sink_on_arm64(mpv: _MPVFixtures) -> None:
+    # arm64 SBCs have no portable per-SoC ALSA card name, so the
+    # audio_output setting is resolved against a live PulseAudio sink
+    # (issue #3208). With HDMI selected, playback routes to the HDMI
+    # sink rather than whatever pulse happens to default to.
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
+    with (
+        patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=[
+                'alsa_output.hdmisound.stereo-fallback',
+                'alsa_output.Analog.stereo-fallback',
+            ],
+        ),
+    ):
+        mpv.player.play()
+
+    options = _last_play_options(mpv.mock_bus)
+    assert (
+        options['audio-device'] == 'alsa/alsa_output.hdmisound.stereo-fallback'
+    )
+
+
+def test_play_falls_back_to_default_sink_on_arm64(mpv: _MPVFixtures) -> None:
+    # When pulse is unreachable (no sinks listed), fall back to the
+    # default sink rather than silencing audio.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with (
+        patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks', return_value=[]
+        ),
+    ):
         mpv.player.play()
 
     options = _last_play_options(mpv.mock_bus)
@@ -341,15 +368,121 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
         assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi'
 
 
-def test_hdmi_on_x86_uses_alsa_default(alsa_settings: Any) -> None:
-    # No portable per-SoC ALSA card name across Intel / AMD / Nvidia
-    # HDA chipsets, so x86 defers to `default`, which the C++ side
-    # resolves to the PulseAudio default sink.
+# Real-world `pactl list short sinks` layouts from the testbeds:
+# an HDA x86 box (analog + HDMI on separate cards) and a Rock Pi 4B.
+_X86_SINKS = [
+    'alsa_output.HID.analog-stereo',
+    'alsa_output.PCH.hdmi-stereo',
+]
+_ROCKPI_SINKS = [
+    'alsa_output.hdmisound.stereo-fallback',
+    'alsa_output.Analog.stereo-fallback',
+]
+
+
+def test_hdmi_on_x86_routes_to_hdmi_sink(alsa_settings: Any) -> None:
+    # x86 resolves HDMI to the live HDMI sink instead of the pulse
+    # default (issue #3208).
     alsa_settings.__getitem__.return_value = 'hdmi'
-    with patch(
-        'anthias_viewer.media_player.get_device_type', return_value='x86'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='x86'
+        ),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=_X86_SINKS,
+        ),
+    ):
+        assert get_alsa_audio_device() == 'alsa_output.PCH.hdmi-stereo'
+
+
+def test_local_on_x86_routes_to_analog_sink(alsa_settings: Any) -> None:
+    alsa_settings.__getitem__.return_value = 'local'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='x86'
+        ),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=_X86_SINKS,
+        ),
+    ):
+        assert get_alsa_audio_device() == 'alsa_output.HID.analog-stereo'
+
+
+def test_x86_falls_back_to_default_when_no_matching_sink(
+    alsa_settings: Any,
+) -> None:
+    # HDMI requested but only an analog sink exists -> default sink.
+    alsa_settings.__getitem__.return_value = 'hdmi'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='x86'
+        ),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=['alsa_output.HID.analog-stereo'],
+        ),
     ):
         assert get_alsa_audio_device() == 'default'
+
+
+@pytest.mark.parametrize(
+    'audio_output,sinks,expected',
+    [
+        ('hdmi', _X86_SINKS, 'alsa_output.PCH.hdmi-stereo'),
+        ('local', _X86_SINKS, 'alsa_output.HID.analog-stereo'),
+        ('hdmi', _ROCKPI_SINKS, 'alsa_output.hdmisound.stereo-fallback'),
+        ('local', _ROCKPI_SINKS, 'alsa_output.Analog.stereo-fallback'),
+        # Same HDA card exposes both profiles (forum #6749 Dell): the
+        # profile token, not the card name, disambiguates.
+        (
+            'hdmi',
+            [
+                'alsa_output.pci-0000_00_1f.3.analog-stereo',
+                'alsa_output.pci-0000_00_1f.3.hdmi-stereo',
+            ],
+            'alsa_output.pci-0000_00_1f.3.hdmi-stereo',
+        ),
+        ('hdmi', ['alsa_output.HID.analog-stereo'], None),
+        ('local', [], None),
+    ],
+)
+def test_select_pulse_sink(
+    audio_output: str, sinks: list[str], expected: str | None
+) -> None:
+    from anthias_viewer.media_player import _select_pulse_sink
+
+    assert _select_pulse_sink(sinks, audio_output) == expected
+
+
+def test_list_pulse_sinks_parses_pactl_output() -> None:
+    from anthias_viewer.media_player import _list_pulse_sinks
+
+    stdout = (
+        '0\talsa_output.HID.analog-stereo\tmodule-alsa-card.c\t'
+        's16le 2ch 48000Hz\tSUSPENDED\n'
+        '1\talsa_output.PCH.hdmi-stereo\tmodule-alsa-card.c\t'
+        's16le 2ch 44100Hz\tSUSPENDED\n'
+    )
+    with patch(
+        'anthias_viewer.media_player.subprocess.run',
+        return_value=MagicMock(stdout=stdout),
+    ):
+        assert _list_pulse_sinks() == [
+            'alsa_output.HID.analog-stereo',
+            'alsa_output.PCH.hdmi-stereo',
+        ]
+
+
+def test_list_pulse_sinks_returns_empty_when_pactl_missing() -> None:
+    from anthias_viewer.media_player import _list_pulse_sinks
+
+    with patch(
+        'anthias_viewer.media_player.subprocess.run',
+        side_effect=FileNotFoundError('pactl'),
+    ):
+        assert _list_pulse_sinks() == []
 
 
 class _FakeDirEntry:

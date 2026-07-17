@@ -184,79 +184,148 @@ def _detect_hdmi_audio_device() -> str:
     return device
 
 
-# Once-per-process flag for _log_arm64_alsa_default_once() — we don't
-# want every play() call repeating the same INFO line.
-_arm64_alsa_logged = False
+# Last sink `_resolve_pulse_sink()` returned in this process, so a
+# stable resolution doesn't repeat the same INFO/WARNING line on every
+# play()/set_asset() call — only transitions (a different sink, or the
+# fallback kicking in) are logged loudly.
+_last_pulse_sink: str | None = None
 
 
-def _log_arm64_alsa_default_once() -> None:
-    """Log the kernel's ALSA card listing so silent-HDMI reports are
-    debuggable from journalctl alone. Reads /proc/asound/cards (always
-    present when sound is registered) rather than shelling to
-    `aplay -l` — the viewer image deliberately doesn't ship
-    alsa-utils, so the subprocess form would always fall through to
-    a "not found" error and surface no useful info.
+def _pi_alsa_device(device_type: str, audio_output: str) -> str | None:
+    """Resolve the fixed ALSA card name for a Raspberry Pi board.
+
+    Pi firmware exposes stable card names (``vc4hdmi*`` for HDMI,
+    ``Headphones`` for the 3.5 mm jack), so the audio_output setting
+    maps straight onto them. Returns ``None`` for any non-Pi board
+    (x86, arm64 SBCs) whose card names aren't portable — the caller
+    then falls through to runtime PulseAudio sink discovery.
     """
-    global _arm64_alsa_logged
-    if _arm64_alsa_logged:
-        return
-    _arm64_alsa_logged = True
+    if audio_output == 'local':
+        if device_type == 'pi5':
+            return _detect_hdmi_audio_device()
+        if device_type in ('pi1', 'pi2', 'pi3', 'pi4'):
+            return 'plughw:CARD=Headphones'
+        return None
+
+    # 'hdmi' (the default for any other value)
+    if device_type in ('pi4', 'pi5'):
+        return _detect_hdmi_audio_device()
+    if device_type in ('pi1', 'pi2', 'pi3'):
+        return 'sysdefault:CARD=vc4hdmi'
+    return None
+
+
+def _list_pulse_sinks() -> list[str]:
+    """Return the sink names the running PulseAudio daemon exposes.
+
+    Uses ``pactl`` (pulseaudio-utils, which the viewer image ships —
+    unlike alsa-utils/``aplay``). The viewer process already runs with
+    ``XDG_RUNTIME_DIR`` pointed at the pulse socket that
+    start_pulseaudio() created, so the child inherits it. Returns an
+    empty list if pulse is unreachable.
+    """
     try:
-        with open('/proc/asound/cards') as f:
-            listing = f.read().strip() or '<no cards registered>'
-    except OSError as exc:
-        listing = f'<could not read /proc/asound/cards: {exc}>'
-    logging.info(
-        'arm64: using the default audio device for HDMI audio '
-        '(resolves to the PulseAudio default sink — see '
-        'start_pulseaudio in bin/start_viewer.sh). If audio is '
-        'silent, check `pactl list short sinks` in the viewer '
-        'container. Registered ALSA cards:\n%s',
-        listing,
-    )
+        completed = subprocess.run(
+            ['pactl', 'list', 'short', 'sinks'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logging.debug('Could not list PulseAudio sinks: %s', exc)
+        return []
+
+    sinks = []
+    for line in completed.stdout.splitlines():
+        # `pactl list short sinks` is tab-separated:
+        # index<TAB>name<TAB>module<TAB>sample-spec<TAB>state
+        fields = line.split('\t')
+        if len(fields) >= 2 and fields[1]:
+            sinks.append(fields[1])
+    return sinks
+
+
+def _select_pulse_sink(sinks: list[str], audio_output: str) -> str | None:
+    """Pick the sink matching the requested output, or ``None``.
+
+    module-alsa-card names its sinks ``alsa_output.<card>.<profile>``
+    where <profile> is a standardised token (``hdmi-stereo``,
+    ``analog-stereo``, ``iec958-stereo``, …). That profile token — not
+    the card name — is the reliable HDMI-vs-analog discriminator: the
+    Dell Latitude in forum #6749 puts both an ``analog`` and an
+    ``hdmi`` sink on the *same* HDA card, so matching on the card name
+    alone can't tell them apart.
+    """
+    if audio_output == 'local':
+        keywords = ('analog', 'headphone', 'speaker', 'lineout')
+    else:
+        keywords = ('hdmi', 'displayport', 'iec958')
+
+    for sink in sinks:
+        name = sink.lower()
+        if any(keyword in name for keyword in keywords):
+            return sink
+    return None
+
+
+def _resolve_pulse_sink(audio_output: str) -> str:
+    """Map the audio_output setting onto a live PulseAudio sink.
+
+    x86 and arm64 SBCs run Qt 6 Multimedia, whose only backend on
+    Debian is PulseAudio, and have no portable per-SoC ALSA card name.
+    Rather than hard-code one (the old code returned ``default`` and so
+    always followed whatever sink pulse defaulted to — issue #3208), we
+    ask the running daemon which sinks exist and route the setting to
+    the matching one. The bare sink name is returned;
+    ``_build_video_options`` prepends ``alsa/`` and
+    ``VideoView::resolveAlsaDevice`` matches it against
+    ``QAudioDevice::id()``.
+
+    Falls back to ``default`` — the PulseAudio default sink — when
+    pulse is unreachable or no sink matches, preserving the previous
+    behaviour rather than silencing audio.
+    """
+    sinks = _list_pulse_sinks()
+    chosen = _select_pulse_sink(sinks, audio_output)
+    result = chosen if chosen is not None else 'default'
+
+    global _last_pulse_sink
+    if result != _last_pulse_sink:
+        if chosen is not None:
+            logging.info(
+                'audio_output=%r routed to PulseAudio sink %r',
+                audio_output,
+                chosen,
+            )
+        else:
+            logging.warning(
+                'audio_output=%r: no matching PulseAudio sink among %s; '
+                'falling back to the default sink. Check '
+                '`pactl list short sinks` in the viewer container.',
+                audio_output,
+                sinks or '<none>',
+            )
+        _last_pulse_sink = result
+    return result
 
 
 def get_alsa_audio_device() -> str:
-    # device_helper.get_device_type() reads /proc/device-tree/model and
-    # falls back to 'pi1' for any aarch64 host whose model line isn't a
-    # Pi regex match (Rock Pi, Orange Pi, Banana Pi, …). The Pi-firmware
-    # ALSA card names below (vc4hdmi*, "Headphones") don't exist on
-    # those boards, so route via DEVICE_TYPE env first and only fall
-    # through to the Pi-name dispatch when we're actually on a Pi.
-    if os.environ.get('DEVICE_TYPE') in ARM64_DEVICE_TYPES:
-        # No portable per-SoC HDMI card name across Rockchip /
-        # Allwinner / Amlogic, so defer to the `default` device —
-        # which VideoView::resolveAlsaDevice resolves to the
-        # PulseAudio default sink (the daemon start_viewer.sh runs;
-        # Debian's Qt 6 Multimedia only has a PulseAudio backend).
-        # Log the chosen device at INFO once per process so a
-        # silent-HDMI report carries enough breadcrumbs to debug
-        # from journalctl alone.
-        _log_arm64_alsa_default_once()
-        return 'default'
+    audio_output = settings['audio_output']
 
-    device_type = get_device_type()
-    if settings['audio_output'] == 'local':
-        if device_type == 'pi5':
-            return _detect_hdmi_audio_device()
+    # Raspberry Pi boards have stable, portable ALSA card names, so the
+    # setting maps directly onto them. get_device_type() reads
+    # /proc/device-tree/model; the ARM64_DEVICE_TYPES env gate keeps
+    # non-Pi aarch64 boards (Rock Pi, Orange Pi, …) — which
+    # get_device_type() would misclassify as 'pi1' — out of the Pi
+    # dispatch and on the PulseAudio path below.
+    if os.environ.get('DEVICE_TYPE') not in ARM64_DEVICE_TYPES:
+        pi_device = _pi_alsa_device(get_device_type(), audio_output)
+        if pi_device is not None:
+            return pi_device
 
-        return 'plughw:CARD=Headphones'
-    else:
-        if device_type in ['pi4', 'pi5']:
-            return _detect_hdmi_audio_device()
-        elif device_type in ['pi1', 'pi2', 'pi3']:
-            return 'sysdefault:CARD=vc4hdmi'
-        else:
-            # x86 fallback: ALSA card names vary across Intel / AMD /
-            # Nvidia HDA chipsets, so there's no portable per-SoC name
-            # to hard-code (the old 'sysdefault:CARD=HID' matched no
-            # real card on standard HDA setups). Defer to the `default`
-            # device — which VideoView::resolveAlsaDevice resolves to
-            # the PulseAudio default sink (x86 is a Qt 6 board and
-            # Debian's Qt 6 Multimedia only has a PulseAudio backend;
-            # the daemon is started by start_viewer.sh). Mirrors the
-            # ARM64 path above.
-            return 'default'
+    # x86 + arm64 SBCs: resolve the setting against a live pulse sink.
+    return _resolve_pulse_sink(audio_output)
 
 
 class MediaPlayer:
