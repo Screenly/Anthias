@@ -64,8 +64,20 @@ db.sqlite3
 .anthias-test.db-wal
 .anthias-test.db-shm
 
-# Local agent state (Claude Code)
-.claude/
+# Local agent state (Claude Code). Ignore everything under .claude by default —
+# git worktrees, unfiltered local memory, caches — but keep the curated,
+# PII-scrubbed knowledge base that ships with the repo (so it tracks without a
+# forced add). These are still excluded from Docker images by .dockerignore.
+.claude/*
+!.claude/MEMORY.md
+!.claude/skills/
+
+# Git worktrees must never be committed (each is a nested checkout). The
+# .claude/* rule above already covers .claude/worktrees/; these keep any common
+# worktree folder ignored no matter where the tooling places it.
+.claude/worktrees/
+/worktrees/
+/.worktrees/
 
 # Django
 staticfiles/

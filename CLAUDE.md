@@ -10,7 +10,7 @@ Anthias is an open-source digital signage platform for Raspberry Pi and x86 PCs 
 
 Anthias runs as a set of Docker containers:
 
-- **anthias-server** (port 80 in prod, 8000 in dev) — uvicorn (ASGI) serving the Django web app, REST API, the React frontend's static assets (via WhiteNoise), uploaded media at `/anthias_assets/`, and the WebSocket endpoint at `/ws` (Django Channels with a Redis-backed channel layer). Always plain HTTP — TLS is opt-in and handled by the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs as a compose override (Caddy local CA by default, or auto Let's Encrypt with `--domain`, or BYO cert with `--cert`/`--key`).
+- **anthias-server** (port 80 in prod, 8000 in dev) — uvicorn (ASGI) serving the Django web app (server-rendered templates with Alpine.js + htmx), REST API, the frontend's static assets (thin TypeScript bundles built by bun, served via WhiteNoise), uploaded media at `/anthias_assets/`, and the WebSocket endpoint at `/ws` (Django Channels with a Redis-backed channel layer). Always plain HTTP — TLS is opt-in and handled by the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs as a compose override (Caddy local CA by default, or auto Let's Encrypt with `--domain`, or BYO cert with `--cert`/`--key`).
 - **anthias-celery** — Async task queue (asset downloads, cleanup). Runs the same image as `anthias-server` with a CMD override that starts the Celery worker; the two services share the entire root filesystem to avoid duplicating ~825 MB of identical apt content per device. Publishes asset-update events back to the WebSocket consumers via the Channels Redis layer.
 - **anthias-viewer** — Drives the display, receives instructions over the Redis pub/sub `anthias.viewer` channel, talks to anthias-server over HTTP.
 - **redis** (port 6379) — Celery broker + result backend, Channels channel layer, and the viewer signalling bus (pub/sub channel + per-correlation-ID reply lists).
@@ -20,17 +20,26 @@ Inter-service messaging is all Redis: WebSocket fan-out from Celery to browsers 
 
 ### Key Directories
 
-- `anthias_app/` — Django app (models, views, migrations, management commands)
-- `anthias_django/` — Django project settings, URLs, ASGI/WSGI
-- `api/` — REST API (views, serializers, URLs for v1, v1.1, v1.2, v2)
-- `static/src/` — TypeScript/React frontend (components, Redux store, hooks, tests)
-- `viewer/` — Viewer service (scheduling, media player, Redis pub/sub messaging)
-- `src/anthias_webview/` — C++ Qt-based WebView (Qt5 for Pi 1-4, Qt6 for Pi 5/x86)
-- `lib/` — Shared Python utilities (auth, device helpers, diagnostics)
+All application code lives under `src/` (moved there from the old top-level `anthias_app/`, `anthias_django/`, `api/`, `static/src/`, `viewer/`, `lib/`).
+
+- `src/anthias_server/` — the Django server: `app/` (server-rendered templates + Alpine.js/htmx, views, consumers, models, migrations, management commands, and `app/static/src/` TypeScript bundles), `api/` (REST API views/serializers/URLs for v1, v1.1, v1.2, v2), `django_project/` (settings, URLs, ASGI/WSGI), `lib/`
+- `src/anthias_common/` — shared Python utilities (Redis, board/low-RAM helpers, device helpers)
+- `src/anthias_viewer/` — Viewer service (scheduling, media player, Redis pub/sub messaging)
+- `src/anthias_webview/` — C++ Qt WebView (Qt5 for the 32-bit armhf boards Pi 1/2/3; Qt6 for the arm64/x86 boards Pi 3-64/4/5, x86, Rock Pi 4)
+- `src/anthias_host_agent/` — host-side agent that publishes host facts (memory, board subtype) into Redis for the containers
 - `docker/` — Dockerfile Jinja2 templates for each service
 - `tests/` — Python unit/integration tests
 - `bin/` — Shell scripts for install, dev setup, testing, upgrades
-- `tools/` — Utilities including Docker image builder
+- `tools/` — Utilities including Docker image builder (`tools.image_builder`)
+
+### Project knowledge base
+
+Deep, hard-won operational and hardware knowledge distilled from long-running debugging lives in force-added skills under `.claude/skills/` (auto-discovered on clone) — start at `.claude/MEMORY.md`:
+
+- **testbed-qa** — validating changes on the physical hardware fleet
+- **anthias-hardware** — per-board display/codec/rotation/audio internals
+- **anthias-viewer** — viewer/server app internals and subtle bug root-causes
+- **anthias-release** — balena/CalVer/CI/Sentry/telemetry operations
 
 ## Development Commands
 
@@ -42,7 +51,7 @@ docker compose -f docker-compose.dev.yml down        # Stop dev server
 # Web UI at http://localhost:8000
 ```
 
-### Frontend (TypeScript/React)
+### Frontend (TypeScript + Alpine.js/htmx)
 
 ```bash
 bun install
@@ -133,11 +142,9 @@ docker compose exec anthias-server python manage.py createsuperuser
 - Use type hints
 - Exclude comments in generated code
 
-### TypeScript/React
-- Functional components only (no class components)
-- Redux Toolkit (`createSlice`, `createAsyncThunk`) for state management
+### TypeScript
+- The UI is server-rendered Django templates driven by Alpine.js + htmx; TypeScript is thin page bundles (`home.ts`, `apps.ts`, `splash.ts`, `vendor.ts`) under `src/anthias_server/app/static/src/`, built by bun. There is no React/Redux SPA.
 - No `any` or `unknown` types
-- Don't explicitly import React (handled by `jsx: react-jsx` automatic runtime)
 - Import order: built-in → third-party → local (alphabetically sorted, blank line between groups)
 - Use `rem` instead of `px` in SCSS
 
@@ -147,6 +154,25 @@ docker compose exec anthias-server python manage.py createsuperuser
 ### Django templates
 - `{# … #}` only comments out a single line. Anything that wraps to the next line renders verbatim in the page. Use `{% comment %}…{% endcomment %}` for any comment that does not fit on one line.
 
+## Working conventions
+
+Process and workflow rules for this repo (the deeper "why" for each lives in the knowledge-base skills):
+
+- **Fix the root cause; no hacky fallbacks.** Anthias must work out of the box. Prefer fixes at the install / bootstrap / startup-ordering layer (or upstream) over hardcoded values baked into ship-to-customer config. If only a per-container hardcode is possible, surface the tradeoff explicitly.
+- **Never `network_mode: host`** for any service. Keep bridge isolation; route host-only data (IPs, MACs, interfaces) via the host agent → Redis.
+- **Never break the REST API.** v1, v1.1, v1.2, and v2 are all supported; request/response shape, status codes, and field semantics stay stable per version. A wire-shape change goes through a new API version, never a mutation of an existing one.
+- **No `#NNN` in PR bodies.** GitHub auto-links every `#NNN` to a PR/issue and silently cross-references the wrong one. Spell out external references; reserve `#NNN` for a genuine PR/issue in this repo.
+- **No `# noqa` / `# type: ignore` suppressions** when a proper idiom fixes the root cause (`from mod import name as name` for re-exports, `_arg` for unused callback args, `__all__` for star-imports).
+- **Don't game linters — annotate genuine false positives.** For a real SonarCloud false positive use inline `# NOSONAR` with a reason (http-to-localhost is a safe `python:S5332` FP). Never contort working code to dodge a rule.
+- **Run BOTH `ruff check` AND `ruff format --check`** before any Python push — CI runs both. Also `uv run mypy .` project-wide.
+- **Open PRs ready-for-review, not draft** (drafts don't trigger Copilot review).
+- **Copilot review loop:** re-request via `gh pr edit <pr> --add-reviewer copilot-pull-request-reviewer` (pushes don't auto-trigger); never post `@Copilot` trigger/summary comments; after every push pull Copilot's comments AND resolve the threads the push addressed; iterate until a fresh pass returns no actionable comments.
+- **Forum replies (forums.screenly.io): plain, non-technical language.** Lead with what it means for the user, drop jargon, keep it short and warm. No em-dashes. Always link PRs/releases as markdown links, never bare `#NNN`/version text. Only mark Solved what the code confirms.
+- **US English website copy** (color, customization, organize/recognize). Paraphrase British third-party UI labels rather than quoting them.
+- **New website scripts/bundles are TypeScript** (`.ts`). Apply PageSpeed guardrails by default: defer JS, lazy-load non-LCP images, preload the LCP image WebP-to-WebP only, explicit width/height + `aspect-ratio` for CLS, respect `prefers-reduced-motion`.
+- **Audit whole log spans holistically, not naive grep** — a fixed marker set only finds failure modes you predicted. Verify the positive (is it actually playing the right content?), compare before vs after, and treat first-few-minutes post-OTA crash-loops as possible restart transients (re-check current state before flagging).
+- **No device identifiers in public CI logs** — Actions logs are world-readable; scripts default to aggregate-only output, per-device detail behind a local-only `--verbose` flag.
+
 ## API Versions
 
-The REST API has multiple versions at `/api/v1/`, `/api/v1.1/`, `/api/v1.2/`, and `/api/v2/`. The v2 API (in `api/views/v2.py`) is the current primary API using DRF with drf-spectacular for OpenAPI schema generation.
+The REST API has multiple versions at `/api/v1/`, `/api/v1.1/`, `/api/v1.2/`, and `/api/v2/`. The v2 API (in `src/anthias_server/api/views/v2.py`) is the current primary API using DRF with drf-spectacular for OpenAPI schema generation.
