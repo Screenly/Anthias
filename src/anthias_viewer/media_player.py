@@ -281,6 +281,7 @@ def _select_pulse_sink(sinks: list[str], audio_output: str) -> str | None:
     ``hdmi`` sink on the *same* HDA card, so matching on the card name
     alone can't tell them apart.
     """
+    keywords: tuple[str, ...]
     if audio_output == 'local':
         keywords = ('analog', 'headphone', 'speaker', 'lineout')
     else:
