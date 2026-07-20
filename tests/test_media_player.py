@@ -125,13 +125,40 @@ def test_play_omits_libmpv_era_options(mpv: _MPVFixtures) -> None:
         assert legacy not in options, legacy
 
 
-def test_play_uses_default_alsa_device_on_arm64(mpv: _MPVFixtures) -> None:
-    # No portable per-SoC HDMI card name exists across Rockchip /
-    # Allwinner / Amlogic, so arm64 defers to ALSA's `default`
-    # device rather than the Pi-firmware vc4hdmi* / HID cards the
-    # regular dispatch would otherwise pick.
+def test_play_routes_to_hdmi_sink_on_arm64(mpv: _MPVFixtures) -> None:
+    # arm64 SBCs have no portable per-SoC ALSA card name, so the
+    # audio_output setting is resolved against a live PulseAudio sink
+    # (issue #3208). With HDMI selected, playback routes to the HDMI
+    # sink rather than whatever pulse happens to default to.
     mpv.player.set_asset('file:///test/video.mp4', 30)
-    with patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}):
+    with (
+        patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=[
+                'alsa_output.hdmisound.stereo-fallback',
+                'alsa_output.Analog.stereo-fallback',
+            ],
+        ),
+    ):
+        mpv.player.play()
+
+    options = _last_play_options(mpv.mock_bus)
+    assert (
+        options['audio-device'] == 'alsa/alsa_output.hdmisound.stereo-fallback'
+    )
+
+
+def test_play_falls_back_to_default_sink_on_arm64(mpv: _MPVFixtures) -> None:
+    # When pulse is unreachable (no sinks listed), fall back to the
+    # default sink rather than silencing audio.
+    mpv.player.set_asset('file:///test/video.mp4', 30)
+    with (
+        patch.dict('os.environ', {'DEVICE_TYPE': 'arm64'}),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks', return_value=[]
+        ),
+    ):
         mpv.player.play()
 
     options = _last_play_options(mpv.mock_bus)
@@ -341,15 +368,339 @@ def test_hdmi_on_pi1_pi2_pi3_uses_vc4hdmi(
         assert get_alsa_audio_device() == 'sysdefault:CARD=vc4hdmi'
 
 
-def test_hdmi_on_x86_uses_alsa_default(alsa_settings: Any) -> None:
-    # No portable per-SoC ALSA card name across Intel / AMD / Nvidia
-    # HDA chipsets, so x86 defers to `default`, which the C++ side
-    # resolves to the PulseAudio default sink.
+# Real-world `pactl list short sinks` layouts from the testbeds:
+# an HDA x86 box (analog + HDMI on separate cards) and a Rock Pi 4B.
+_X86_SINKS = [
+    'alsa_output.HID.analog-stereo',
+    'alsa_output.PCH.hdmi-stereo',
+]
+_ROCKPI_SINKS = [
+    'alsa_output.hdmisound.stereo-fallback',
+    'alsa_output.Analog.stereo-fallback',
+]
+
+
+def test_hdmi_on_x86_routes_to_hdmi_sink(alsa_settings: Any) -> None:
+    # x86 resolves HDMI to the live HDMI sink instead of the pulse
+    # default (issue #3208).
     alsa_settings.__getitem__.return_value = 'hdmi'
-    with patch(
-        'anthias_viewer.media_player.get_device_type', return_value='x86'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='x86'
+        ),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=_X86_SINKS,
+        ),
+    ):
+        assert get_alsa_audio_device() == 'alsa_output.PCH.hdmi-stereo'
+
+
+def test_local_on_x86_routes_to_analog_sink(alsa_settings: Any) -> None:
+    alsa_settings.__getitem__.return_value = 'local'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='x86'
+        ),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=_X86_SINKS,
+        ),
+    ):
+        assert get_alsa_audio_device() == 'alsa_output.HID.analog-stereo'
+
+
+def test_x86_falls_back_to_default_when_no_matching_sink(
+    alsa_settings: Any,
+) -> None:
+    # HDMI requested but only an analog sink exists and no HDMI profile
+    # can be activated -> default sink. Patch _activate_output_profile
+    # so the miss-recovery path stays hermetic (no real `pactl`).
+    alsa_settings.__getitem__.return_value = 'hdmi'
+    with (
+        patch(
+            'anthias_viewer.media_player.get_device_type', return_value='x86'
+        ),
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=['alsa_output.HID.analog-stereo'],
+        ),
+        patch(
+            'anthias_viewer.media_player._activate_output_profile',
+            return_value=False,
+        ),
     ):
         assert get_alsa_audio_device() == 'default'
+
+
+@pytest.mark.parametrize(
+    'audio_output,sinks,expected',
+    [
+        ('hdmi', _X86_SINKS, 'alsa_output.PCH.hdmi-stereo'),
+        ('local', _X86_SINKS, 'alsa_output.HID.analog-stereo'),
+        ('hdmi', _ROCKPI_SINKS, 'alsa_output.hdmisound.stereo-fallback'),
+        ('local', _ROCKPI_SINKS, 'alsa_output.Analog.stereo-fallback'),
+        # Same HDA card exposes both profiles (forum #6749 Dell): the
+        # profile token, not the card name, disambiguates.
+        (
+            'hdmi',
+            [
+                'alsa_output.pci-0000_00_1f.3.analog-stereo',
+                'alsa_output.pci-0000_00_1f.3.hdmi-stereo',
+            ],
+            'alsa_output.pci-0000_00_1f.3.hdmi-stereo',
+        ),
+        ('hdmi', ['alsa_output.HID.analog-stereo'], None),
+        ('local', [], None),
+    ],
+)
+def test_select_pulse_sink(
+    audio_output: str, sinks: list[str], expected: str | None
+) -> None:
+    from anthias_viewer.media_player import _select_pulse_sink
+
+    assert _select_pulse_sink(sinks, audio_output) == expected
+
+
+def test_select_pulse_sink_prefers_stereo_among_multiple_hdmi() -> None:
+    # Multi-HDMI box: pactl order isn't guaranteed, so the plain
+    # *-stereo sink must win over surround / secondary-port variants
+    # regardless of listing order.
+    from anthias_viewer.media_player import _select_pulse_sink
+
+    sinks = [
+        'alsa_output.pci.hdmi-surround',
+        'alsa_output.pci.hdmi-stereo-extra1',
+        'alsa_output.pci.hdmi-stereo',
+    ]
+    assert _select_pulse_sink(sinks, 'hdmi') == 'alsa_output.pci.hdmi-stereo'
+
+
+def test_list_pulse_sinks_parses_pactl_output() -> None:
+    from anthias_viewer.media_player import _list_pulse_sinks
+
+    media_player_module._sink_cache = None
+    stdout = (
+        '0\talsa_output.HID.analog-stereo\tmodule-alsa-card.c\t'
+        's16le 2ch 48000Hz\tSUSPENDED\n'
+        '1\talsa_output.PCH.hdmi-stereo\tmodule-alsa-card.c\t'
+        's16le 2ch 44100Hz\tSUSPENDED\n'
+    )
+    with patch(
+        'anthias_viewer.media_player.subprocess.run',
+        return_value=MagicMock(stdout=stdout),
+    ):
+        assert _list_pulse_sinks() == [
+            'alsa_output.HID.analog-stereo',
+            'alsa_output.PCH.hdmi-stereo',
+        ]
+
+
+def test_list_pulse_sinks_returns_empty_when_pactl_missing() -> None:
+    from anthias_viewer.media_player import _list_pulse_sinks
+
+    media_player_module._sink_cache = None
+    with patch(
+        'anthias_viewer.media_player.subprocess.run',
+        side_effect=FileNotFoundError('pactl'),
+    ):
+        assert _list_pulse_sinks() == []
+
+
+def test_list_pulse_sinks_caches_within_ttl() -> None:
+    from anthias_viewer.media_player import _list_pulse_sinks
+
+    media_player_module._sink_cache = None
+    stdout = '0\talsa_output.PCH.hdmi-stereo\tm\ts16le 2ch\tSUSPENDED\n'
+    with patch(
+        'anthias_viewer.media_player.subprocess.run',
+        return_value=MagicMock(stdout=stdout),
+    ) as mock_run:
+        first = _list_pulse_sinks()
+        second = _list_pulse_sinks()
+    assert first == second == ['alsa_output.PCH.hdmi-stereo']
+    # Second call served from cache — pactl invoked only once.
+    mock_run.assert_called_once()
+
+
+# `pactl list cards` excerpt from the forum #6749 Dell Latitude: HDMI
+# and analog share one HDA card, every *pure* HDMI output profile is
+# available: no (the display carries no audio), and the combined
+# output+input profiles read yes only because of the analog input.
+_DELL_CARDS = """\
+Card #0
+\tName: alsa_card.pci-0000_00_1f.3
+\tProfiles:
+\t\toutput:analog-stereo: Analog Stereo Output (sinks: 1, sources: 0, priority: 6500, available: yes)
+\t\toutput:hdmi-stereo: Digital Stereo (HDMI) Output (sinks: 1, sources: 0, priority: 5900, available: no)
+\t\toutput:hdmi-stereo+input:analog-stereo: HDMI + Analog In (sinks: 1, sources: 1, priority: 5965, available: yes)
+\t\toutput:hdmi-surround: Digital Surround 5.1 (HDMI) Output (sinks: 1, sources: 0, priority: 800, available: no)
+\t\toff: Off (sinks: 0, sources: 0, priority: 0, available: yes)
+\tActive Profile: output:analog-stereo
+"""
+
+# A single-card box whose attached display *does* accept HDMI audio:
+# the pure HDMI output profile is available but analog is still active.
+_HDMI_CAPABLE_CARDS = """\
+Card #0
+\tName: alsa_card.pci-0000_00_1f.3
+\tProfiles:
+\t\toutput:analog-stereo: Analog Stereo Output (sinks: 1, sources: 0, priority: 6500, available: yes)
+\t\toutput:hdmi-stereo: Digital Stereo (HDMI) Output (sinks: 1, sources: 0, priority: 5900, available: yes)
+\t\toutput:hdmi-surround: Digital Surround 5.1 (HDMI) Output (sinks: 1, sources: 0, priority: 800, available: yes)
+\tActive Profile: output:analog-stereo
+"""
+
+
+def _cards_from(stdout: str) -> Any:
+    return patch(
+        'anthias_viewer.media_player.subprocess.run',
+        return_value=MagicMock(stdout=stdout),
+    )
+
+
+def test_list_pulse_cards_tracks_only_available_pure_outputs() -> None:
+    from anthias_viewer.media_player import _list_pulse_cards
+
+    with _cards_from(_DELL_CARDS):
+        cards = _list_pulse_cards()
+
+    assert len(cards) == 1
+    card = cards[0]
+    assert card.name == 'alsa_card.pci-0000_00_1f.3'
+    assert card.active_profile == 'output:analog-stereo'
+    # Combined output+input profile is excluded; pure HDMI output is
+    # tracked as unavailable, analog as available.
+    assert card.output_profiles == {
+        'output:analog-stereo': True,
+        'output:hdmi-stereo': False,
+        'output:hdmi-surround': False,
+    }
+
+
+def test_list_pulse_cards_treats_unknown_as_unavailable() -> None:
+    # ``available: unknown`` (driver can't probe the port) is not a
+    # confirmation — must not count as available, or we'd risk switching
+    # a working analog profile for a dead HDMI one.
+    from anthias_viewer.media_player import _list_pulse_cards
+
+    stdout = (
+        'Card #0\n'
+        '\tName: alsa_card.x\n'
+        '\tProfiles:\n'
+        '\t\toutput:hdmi-stereo: Digital Stereo (HDMI) Output '
+        '(sinks: 1, sources: 0, priority: 5900, available: unknown)\n'
+        '\tActive Profile: output:analog-stereo\n'
+    )
+    with _cards_from(stdout):
+        cards = _list_pulse_cards()
+
+    assert cards[0].output_profiles == {'output:hdmi-stereo': False}
+
+
+def test_activate_output_profile_switches_when_available() -> None:
+    # Full path: parse `pactl list cards`, find an available HDMI output
+    # that isn't active, and issue set-card-profile. Both subprocess
+    # calls (list + set) share the patched run.
+    from anthias_viewer.media_player import _activate_output_profile
+
+    with _cards_from(_HDMI_CAPABLE_CARDS) as mock_run:
+        assert _activate_output_profile('hdmi') is True
+
+    set_calls = [
+        call.args[0]
+        for call in mock_run.call_args_list
+        if call.args[0][:2] == ['pactl', 'set-card-profile']
+    ]
+    assert len(set_calls) == 1
+    # Switched the right card to the *stereo* HDMI profile (preferred
+    # over the surround variant).
+    assert set_calls[0] == [
+        'pactl',
+        'set-card-profile',
+        'alsa_card.pci-0000_00_1f.3',
+        'output:hdmi-stereo',
+    ]
+
+
+def test_activate_output_profile_noop_when_hdmi_unavailable() -> None:
+    # The Dell case: no available pure HDMI output -> no switch.
+    from anthias_viewer.media_player import _activate_output_profile
+
+    with _cards_from(_DELL_CARDS):
+        # _cards_from patches subprocess.run for the list; a
+        # set-card-profile call would reuse the same mock, so assert it
+        # only ran the list (no profile change was attempted).
+        assert _activate_output_profile('hdmi') is False
+
+
+def test_activate_output_profile_noop_when_already_active() -> None:
+    from anthias_viewer.media_player import _activate_output_profile
+
+    with _cards_from(_DELL_CARDS):
+        # analog already active -> nothing to switch.
+        assert _activate_output_profile('local') is False
+
+
+def test_resolve_pulse_sink_activates_profile_on_miss() -> None:
+    # Single-card box: analog sink present, hdmi requested. The first
+    # listing misses, profile activation exposes the hdmi sink, and the
+    # refreshed listing resolves to it.
+    from anthias_viewer.media_player import _resolve_pulse_sink
+
+    media_player_module._last_pulse_resolution = None
+    listings = [
+        ['alsa_output.pci.analog-stereo'],
+        ['alsa_output.pci.hdmi-stereo'],
+    ]
+    with (
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            side_effect=listings,
+        ),
+        patch(
+            'anthias_viewer.media_player._activate_output_profile',
+            return_value=True,
+        ) as mock_activate,
+    ):
+        assert _resolve_pulse_sink('hdmi') == 'alsa_output.pci.hdmi-stereo'
+    mock_activate.assert_called_once_with('hdmi')
+
+
+def test_resolve_pulse_sink_falls_back_when_activation_fails() -> None:
+    from anthias_viewer.media_player import _resolve_pulse_sink
+
+    media_player_module._last_pulse_resolution = None
+    with (
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks',
+            return_value=['alsa_output.pci.analog-stereo'],
+        ),
+        patch(
+            'anthias_viewer.media_player._activate_output_profile',
+            return_value=False,
+        ),
+    ):
+        # hdmi unavailable and unswitchable -> default sink.
+        assert _resolve_pulse_sink('hdmi') == 'default'
+
+
+def test_resolve_pulse_sink_skips_activation_when_pulse_unreachable() -> None:
+    # An empty sink list means pulse is unreachable — probing cards
+    # would just fail again, so activation must not be attempted.
+    from anthias_viewer.media_player import _resolve_pulse_sink
+
+    media_player_module._last_pulse_resolution = None
+    with (
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks', return_value=[]
+        ),
+        patch(
+            'anthias_viewer.media_player._activate_output_profile'
+        ) as mock_activate,
+    ):
+        assert _resolve_pulse_sink('hdmi') == 'default'
+    mock_activate.assert_not_called()
 
 
 class _FakeDirEntry:
