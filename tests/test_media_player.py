@@ -413,7 +413,9 @@ def test_local_on_x86_routes_to_analog_sink(alsa_settings: Any) -> None:
 def test_x86_falls_back_to_default_when_no_matching_sink(
     alsa_settings: Any,
 ) -> None:
-    # HDMI requested but only an analog sink exists -> default sink.
+    # HDMI requested but only an analog sink exists and no HDMI profile
+    # can be activated -> default sink. Patch _activate_output_profile
+    # so the miss-recovery path stays hermetic (no real `pactl`).
     alsa_settings.__getitem__.return_value = 'hdmi'
     with (
         patch(
@@ -422,6 +424,10 @@ def test_x86_falls_back_to_default_when_no_matching_sink(
         patch(
             'anthias_viewer.media_player._list_pulse_sinks',
             return_value=['alsa_output.HID.analog-stereo'],
+        ),
+        patch(
+            'anthias_viewer.media_player._activate_output_profile',
+            return_value=False,
         ),
     ):
         assert get_alsa_audio_device() == 'default'
