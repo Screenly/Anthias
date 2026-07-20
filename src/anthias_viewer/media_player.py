@@ -229,6 +229,11 @@ _SINK_CACHE_TTL_SECONDS = 5.0
 _sink_cache: tuple[float, list[str]] | None = None
 
 
+def _invalidate_sink_cache() -> None:
+    global _sink_cache
+    _sink_cache = None
+
+
 def _list_pulse_sinks() -> list[str]:
     """Return the sink names the running PulseAudio daemon exposes.
 
@@ -270,28 +275,144 @@ def _list_pulse_sinks() -> list[str]:
     return sinks
 
 
+# Profile/sink name tokens that identify each output. module-alsa-card
+# names both its sinks (``alsa_output.<card>.hdmi-stereo``) and its
+# profiles (``output:hdmi-stereo``) after the same standardised token,
+# so one keyword set matches both. The token — not the card name — is
+# the HDMI-vs-analog discriminator: the Dell Latitude in forum #6749
+# puts both an analog and an HDMI output on the *same* HDA card.
+_ANALOG_KEYWORDS = ('analog', 'headphone', 'speaker', 'lineout')
+_HDMI_KEYWORDS = ('hdmi', 'displayport', 'iec958')
+
+
+def _output_keywords(audio_output: str) -> tuple[str, ...]:
+    return _ANALOG_KEYWORDS if audio_output == 'local' else _HDMI_KEYWORDS
+
+
 def _select_pulse_sink(sinks: list[str], audio_output: str) -> str | None:
-    """Pick the sink matching the requested output, or ``None``.
-
-    module-alsa-card names its sinks ``alsa_output.<card>.<profile>``
-    where <profile> is a standardised token (``hdmi-stereo``,
-    ``analog-stereo``, ``iec958-stereo``, …). That profile token — not
-    the card name — is the reliable HDMI-vs-analog discriminator: the
-    Dell Latitude in forum #6749 puts both an ``analog`` and an
-    ``hdmi`` sink on the *same* HDA card, so matching on the card name
-    alone can't tell them apart.
-    """
-    keywords: tuple[str, ...]
-    if audio_output == 'local':
-        keywords = ('analog', 'headphone', 'speaker', 'lineout')
-    else:
-        keywords = ('hdmi', 'displayport', 'iec958')
-
+    """Pick the sink matching the requested output, or ``None``."""
+    keywords = _output_keywords(audio_output)
     for sink in sinks:
         name = sink.lower()
         if any(keyword in name for keyword in keywords):
             return sink
     return None
+
+
+class _PulseCard:
+    """A PulseAudio card, its active profile, and its *pure output*
+    profiles (``output:<token>-…`` with no ``+input:`` half) keyed to
+    whether that profile is available.
+
+    Only pure-output profiles are tracked because a combined
+    ``output:hdmi-stereo+input:analog-stereo`` profile reports
+    ``available: yes`` whenever the analog *input* is usable, even
+    when the HDMI output itself is unavailable (forum #6749). The
+    pure-output profile's availability reflects only the output port,
+    so it is the honest signal for "can this output actually play".
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.active_profile: str | None = None
+        self.output_profiles: dict[str, bool] = {}
+
+
+def _list_pulse_cards() -> list[_PulseCard]:
+    """Parse ``pactl list cards`` into `_PulseCard` records."""
+    try:
+        completed = subprocess.run(
+            ['pactl', 'list', 'cards'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logging.debug('Could not list PulseAudio cards: %s', exc)
+        return []
+
+    cards: list[_PulseCard] = []
+    current: _PulseCard | None = None
+    # Pure-output profile line, e.g.:
+    #   output:hdmi-stereo: Digital Stereo (HDMI) ... available: no)
+    # Excludes ports (they don't start with "output:") and combined
+    # output+input profiles (they contain "+input:").
+    profile_re = re.compile(
+        r'^(output:[A-Za-z0-9._-]+):.*available:\s*(yes|no|unknown)\)',
+    )
+    for raw in completed.stdout.splitlines():
+        line = raw.strip()
+        if line.startswith('Name:'):
+            name = line.split(':', 1)[1].strip()
+            current = _PulseCard(name)
+            cards.append(current)
+        elif current is None:
+            continue
+        elif line.startswith('Active Profile:'):
+            current.active_profile = line.split(':', 1)[1].strip()
+        else:
+            match = profile_re.match(line)
+            if match:
+                profile, avail = match.group(1), match.group(2)
+                current.output_profiles[profile] = avail != 'no'
+    return cards
+
+
+def _activate_output_profile(audio_output: str) -> bool:
+    """Activate a card profile for the requested output if one is
+    available but not currently active. Returns True when a profile
+    was switched (so the caller should re-list sinks).
+
+    Needed on single-card HDA systems (laptops/desktops — the forum
+    #6749 topology) where PulseAudio instantiates only the *active*
+    profile's sink, so `pactl list short sinks` never shows the HDMI
+    sink while analog is active, and vice versa. Multi-card boards
+    (Rock Pi's separate ``hdmisound``/``Analog`` cards, a discrete
+    HDMI card next to onboard analog) already expose both sinks, so
+    nothing is switched.
+    """
+    keywords = _output_keywords(audio_output)
+    for card in _list_pulse_cards():
+        # Prefer a plain ``*-stereo`` output; fall back to any
+        # available surround variant for the requested output.
+        candidates = sorted(
+            (
+                profile
+                for profile, available in card.output_profiles.items()
+                if available and any(k in profile for k in keywords)
+            ),
+            key=lambda profile: (0 if 'stereo' in profile else 1, profile),
+        )
+        if not candidates:
+            continue
+        target = candidates[0]
+        if card.active_profile == target:
+            return False
+        try:
+            subprocess.run(
+                ['pactl', 'set-card-profile', card.name, target],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logging.warning(
+                'Could not activate profile %r on card %r: %s',
+                target,
+                card.name,
+                exc,
+            )
+            return False
+        logging.info(
+            'audio_output=%r: activated card %r profile %r to expose its sink',
+            audio_output,
+            card.name,
+            target,
+        )
+        return True
+    return False
 
 
 def _resolve_pulse_sink(audio_output: str) -> str:
@@ -307,12 +428,23 @@ def _resolve_pulse_sink(audio_output: str) -> str:
     ``VideoView::resolveAlsaDevice`` matches it against
     ``QAudioDevice::id()``.
 
-    Falls back to ``default`` — the PulseAudio default sink — when
-    pulse is unreachable or no sink matches, preserving the previous
-    behaviour rather than silencing audio.
+    If the requested sink isn't currently instantiated, try to
+    activate the matching card profile (single-card HDA systems only
+    expose the active profile's sink) and re-list. Falls back to
+    ``default`` — the PulseAudio default sink — when pulse is
+    unreachable or no sink matches, preserving the previous behaviour
+    rather than silencing audio.
     """
     sinks = _list_pulse_sinks()
     chosen = _select_pulse_sink(sinks, audio_output)
+
+    if chosen is None and _activate_output_profile(audio_output):
+        # Switching the card profile instantiated a new sink; drop the
+        # cached listing so the fresh sink is picked up this call.
+        _invalidate_sink_cache()
+        sinks = _list_pulse_sinks()
+        chosen = _select_pulse_sink(sinks, audio_output)
+
     result = chosen if chosen is not None else 'default'
 
     global _last_pulse_sink
