@@ -290,13 +290,30 @@ def _output_keywords(audio_output: str) -> tuple[str, ...]:
 
 
 def _select_pulse_sink(sinks: list[str], audio_output: str) -> str | None:
-    """Pick the sink matching the requested output, or ``None``."""
+    """Pick the sink matching the requested output, or ``None``.
+
+    `pactl list short sinks` order isn't guaranteed, so a stable
+    preference is applied among all matches: plain ``*-stereo`` first,
+    then any non-surround sink, then lexical. That keeps a multi-HDMI
+    box (hdmi-stereo, hdmi-surround, hdmi-stereo-extra1, …) from picking
+    a surround or secondary port unpredictably.
+    """
     keywords = _output_keywords(audio_output)
-    for sink in sinks:
-        name = sink.lower()
-        if any(keyword in name for keyword in keywords):
-            return sink
-    return None
+    matches = [
+        sink
+        for sink in sinks
+        if any(keyword in sink.lower() for keyword in keywords)
+    ]
+    if not matches:
+        return None
+    return min(
+        matches,
+        key=lambda sink: (
+            0 if 'stereo' in sink.lower() else 1,
+            1 if 'surround' in sink.lower() else 0,
+            sink,
+        ),
+    )
 
 
 class _PulseCard:
@@ -355,7 +372,11 @@ def _list_pulse_cards() -> list[_PulseCard]:
             match = profile_re.match(line)
             if match:
                 profile, avail = match.group(1), match.group(2)
-                current.output_profiles[profile] = avail != 'no'
+                # Only a definite ``yes`` counts as available. ``unknown``
+                # (driver can't probe the port) is not a confirmation, so
+                # we don't switch to it — that could swap a working analog
+                # profile for a dead HDMI one.
+                current.output_profiles[profile] = avail == 'yes'
     return cards
 
 

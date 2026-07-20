@@ -462,6 +462,20 @@ def test_select_pulse_sink(
     assert _select_pulse_sink(sinks, audio_output) == expected
 
 
+def test_select_pulse_sink_prefers_stereo_among_multiple_hdmi() -> None:
+    # Multi-HDMI box: pactl order isn't guaranteed, so the plain
+    # *-stereo sink must win over surround / secondary-port variants
+    # regardless of listing order.
+    from anthias_viewer.media_player import _select_pulse_sink
+
+    sinks = [
+        'alsa_output.pci.hdmi-surround',
+        'alsa_output.pci.hdmi-stereo-extra1',
+        'alsa_output.pci.hdmi-stereo',
+    ]
+    assert _select_pulse_sink(sinks, 'hdmi') == 'alsa_output.pci.hdmi-stereo'
+
+
 def test_list_pulse_sinks_parses_pactl_output() -> None:
     from anthias_viewer.media_player import _list_pulse_sinks
 
@@ -562,6 +576,26 @@ def test_list_pulse_cards_tracks_only_available_pure_outputs() -> None:
         'output:hdmi-stereo': False,
         'output:hdmi-surround': False,
     }
+
+
+def test_list_pulse_cards_treats_unknown_as_unavailable() -> None:
+    # ``available: unknown`` (driver can't probe the port) is not a
+    # confirmation — must not count as available, or we'd risk switching
+    # a working analog profile for a dead HDMI one.
+    from anthias_viewer.media_player import _list_pulse_cards
+
+    stdout = (
+        'Card #0\n'
+        '\tName: alsa_card.x\n'
+        '\tProfiles:\n'
+        '\t\toutput:hdmi-stereo: Digital Stereo (HDMI) Output '
+        '(sinks: 1, sources: 0, priority: 5900, available: unknown)\n'
+        '\tActive Profile: output:analog-stereo\n'
+    )
+    with _cards_from(stdout):
+        cards = _list_pulse_cards()
+
+    assert cards[0].output_profiles == {'output:hdmi-stereo': False}
 
 
 def test_activate_output_profile_switches_when_available() -> None:
