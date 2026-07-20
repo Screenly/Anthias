@@ -185,11 +185,11 @@ def _detect_hdmi_audio_device() -> str:
     return device
 
 
-# Last sink `_resolve_pulse_sink()` returned in this process, so a
-# stable resolution doesn't repeat the same INFO/WARNING line on every
-# play()/set_asset() call — only transitions (a different sink, or the
-# fallback kicking in) are logged loudly.
-_last_pulse_sink: str | None = None
+# Last (audio_output, sink) `_resolve_pulse_sink()` resolved in this
+# process, so a stable resolution doesn't repeat the same INFO/WARNING
+# line on every play()/set_asset() call — only transitions (a different
+# setting or a different resolved sink) are logged loudly.
+_last_pulse_resolution: tuple[str, str] | None = None
 
 
 def _pi_alsa_device(device_type: str, audio_output: str) -> str | None:
@@ -438,7 +438,11 @@ def _resolve_pulse_sink(audio_output: str) -> str:
     sinks = _list_pulse_sinks()
     chosen = _select_pulse_sink(sinks, audio_output)
 
-    if chosen is None and _activate_output_profile(audio_output):
+    # Only attempt a profile switch when pulse gave us a sink list but
+    # none matched (the single-card HDA case always has ≥1 active sink).
+    # An empty list means pulse is unreachable, so probing `pactl list
+    # cards` would just fail again — skip it and fall back to default.
+    if chosen is None and sinks and _activate_output_profile(audio_output):
         # Switching the card profile instantiated a new sink; drop the
         # cached listing so the fresh sink is picked up this call.
         _invalidate_sink_cache()
@@ -447,8 +451,11 @@ def _resolve_pulse_sink(audio_output: str) -> str:
 
     result = chosen if chosen is not None else 'default'
 
-    global _last_pulse_sink
-    if result != _last_pulse_sink:
+    # Key the log suppression on (setting, result) so a setting change
+    # that resolves to the same sink (e.g. hdmi→local both falling back
+    # to default) still logs once, staying correlatable in the journal.
+    global _last_pulse_resolution
+    if (audio_output, result) != _last_pulse_resolution:
         if chosen is not None:
             logging.info(
                 'audio_output=%r routed to PulseAudio sink %r',
@@ -463,7 +470,7 @@ def _resolve_pulse_sink(audio_output: str) -> str:
                 audio_output,
                 sinks or '<none>',
             )
-        _last_pulse_sink = result
+        _last_pulse_resolution = (audio_output, result)
     return result
 
 

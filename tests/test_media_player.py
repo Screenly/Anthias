@@ -608,7 +608,7 @@ def test_resolve_pulse_sink_activates_profile_on_miss() -> None:
     # refreshed listing resolves to it.
     from anthias_viewer.media_player import _resolve_pulse_sink
 
-    media_player_module._last_pulse_sink = None
+    media_player_module._last_pulse_resolution = None
     listings = [
         ['alsa_output.pci.analog-stereo'],
         ['alsa_output.pci.hdmi-stereo'],
@@ -630,7 +630,7 @@ def test_resolve_pulse_sink_activates_profile_on_miss() -> None:
 def test_resolve_pulse_sink_falls_back_when_activation_fails() -> None:
     from anthias_viewer.media_player import _resolve_pulse_sink
 
-    media_player_module._last_pulse_sink = None
+    media_player_module._last_pulse_resolution = None
     with (
         patch(
             'anthias_viewer.media_player._list_pulse_sinks',
@@ -643,6 +643,24 @@ def test_resolve_pulse_sink_falls_back_when_activation_fails() -> None:
     ):
         # hdmi unavailable and unswitchable -> default sink.
         assert _resolve_pulse_sink('hdmi') == 'default'
+
+
+def test_resolve_pulse_sink_skips_activation_when_pulse_unreachable() -> None:
+    # An empty sink list means pulse is unreachable — probing cards
+    # would just fail again, so activation must not be attempted.
+    from anthias_viewer.media_player import _resolve_pulse_sink
+
+    media_player_module._last_pulse_resolution = None
+    with (
+        patch(
+            'anthias_viewer.media_player._list_pulse_sinks', return_value=[]
+        ),
+        patch(
+            'anthias_viewer.media_player._activate_output_profile'
+        ) as mock_activate,
+    ):
+        assert _resolve_pulse_sink('hdmi') == 'default'
+    mock_activate.assert_not_called()
 
 
 class _FakeDirEntry:
