@@ -339,23 +339,40 @@ DB_FILE="${CONFIG_DIR}/anthias.db"
 [[ -f "$DB_FILE" ]] || DB_FILE="${CONFIG_DIR}/screenly.db"
 if [[ -f "$DB_FILE" ]]; then
     section "Database file" "$DB" ls -la "$DB_FILE"
+    # `is_reachable` is the single most useful column for triaging a
+    # "web content doesn't display" report: the server marks a remote
+    # asset unreachable when its reachability probe fails, and the
+    # viewer then skips it. Keep it in the inventory on both paths.
+    integrity_q='PRAGMA integrity_check;'
+    journal_q='PRAGMA journal_mode;'
+    tables_q='.tables'
+    count_q='SELECT count(*) AS total, sum(is_enabled) AS enabled, sum(NOT is_reachable) AS unreachable FROM assets;'
+    # Asset inventory without leaking full URLs of private content.
+    inventory_q="SELECT substr(asset_id,1,8), substr(name,1,40), mimetype, is_enabled, is_reachable, substr(uri,1,60) FROM assets;"
     if command -v sqlite3 >/dev/null 2>&1; then
-        section "Integrity check" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" 'PRAGMA integrity_check;'
-        section "Journal mode" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" 'PRAGMA journal_mode;'
-        section "Tables" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" '.tables'
-        section "Asset count" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" \
-            'SELECT count(*) AS total, sum(is_enabled) AS enabled FROM assets;'
-        # Asset inventory without leaking full URLs of private content.
-        section "Assets (truncated)" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" \
-            "SELECT substr(asset_id,1,8), substr(name,1,40), mimetype, is_enabled, substr(uri,1,60) FROM assets;"
+        section "Integrity check" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" "$integrity_q"
+        section "Journal mode" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" "$journal_q"
+        section "Tables" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" "$tables_q"
+        section "Asset count" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" "$count_q"
+        section "Assets (truncated)" "$DB" sqlite3 "file:${DB_FILE}?mode=ro" "$inventory_q"
     else
-        echo "sqlite3 not installed on host — DB inspected via container below" >>"$DB"
-        # Fall back to the sqlite3 inside the server container.
+        echo "sqlite3 not installed on host — DB inspected via the server container" >>"$DB"
+        # Fall back to the sqlite3 inside the server container. The host
+        # config dir is bind-mounted at /data/.anthias, so the same DB
+        # file is reachable there under its original basename.
         cid="$("${DOCKER[@]}" ps -q --filter "name=anthias-server" 2>/dev/null | head -1)"
         if [[ -n "$cid" ]]; then
+            c_db="file:/data/.anthias/$(basename "$DB_FILE")?mode=ro"
+            section "Integrity check (in container)" "$DB" \
+                "${DOCKER[@]}" exec "$cid" sqlite3 "$c_db" "$integrity_q"
+            section "Journal mode (in container)" "$DB" \
+                "${DOCKER[@]}" exec "$cid" sqlite3 "$c_db" "$journal_q"
             section "Asset count (in container)" "$DB" \
-                "${DOCKER[@]}" exec "$cid" python -m anthias_server.manage shell -c \
-                'from anthias_app.models import Asset; print("total", Asset.objects.count(), "enabled", Asset.objects.filter(is_enabled=1).count())'
+                "${DOCKER[@]}" exec "$cid" sqlite3 "$c_db" "$count_q"
+            section "Assets (truncated, in container)" "$DB" \
+                "${DOCKER[@]}" exec "$cid" sqlite3 "$c_db" "$inventory_q"
+        else
+            echo "server container not running — cannot inspect DB" >>"$DB"
         fi
     fi
 else
