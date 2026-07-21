@@ -6,11 +6,12 @@ here. It is **not** an auto-memory index — it is a static handoff. Everything
 below is also captured, in depth, in the four committed skills under
 `.claude/skills/`; this file is the map.
 
-> `.claude/` is gitignored (it normally holds per-checkout worktrees and
-> unfiltered local memory). These handoff files are the deliberate, force-added
-> (`git add -f`) exceptions — same pattern as `.claude/skills/commit` and
-> `create-pr`. Keep them scrubbed: **this is a public repo — never add IPs,
-> usernames, emails, device UUIDs, tokens, ngrok URLs, or forum handles.**
+> `.claude/` is mostly gitignored (worktrees + unfiltered local memory), but
+> `.gitignore` explicitly un-ignores `.claude/MEMORY.md` and `.claude/skills/`
+> so this curated handoff tracks normally (no `git add -f` needed) — alongside
+> the pre-existing `commit`/`create-pr` skills. Keep them scrubbed: **this is a
+> public repo — never add IPs, usernames, emails, device UUIDs, tokens, ngrok
+> URLs, or forum handles.**
 
 ## Skills (read the one that matches your task)
 

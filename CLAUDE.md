@@ -34,7 +34,7 @@ All application code lives under `src/` (moved there from the old top-level `ant
 
 ### Project knowledge base
 
-Deep, hard-won operational and hardware knowledge distilled from long-running debugging lives in force-added skills under `.claude/skills/` (auto-discovered on clone) — start at `.claude/MEMORY.md`:
+Deep, hard-won operational and hardware knowledge distilled from long-running debugging lives in committed skills under `.claude/skills/` (auto-discovered on clone; `.gitignore` un-ignores this path) — start at `.claude/MEMORY.md`:
 
 - **testbed-qa** — validating changes on the physical hardware fleet
 - **anthias-hardware** — per-board display/codec/rotation/audio internals
