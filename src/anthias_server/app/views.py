@@ -1377,15 +1377,23 @@ def assets_download(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     asset = Asset.objects.filter(asset_id=asset_id).first()
     if asset is None or not asset.uri:
         return redirect(reverse('anthias_app:home'))
-    if asset.mimetype in ('webpage', 'streaming'):
-        safe = _safe_redirect_uri(asset.uri)
+    # Any asset whose content lives at a remote http(s) URL — a webpage,
+    # a stream, or a remote-hosted image/video — has no local file to
+    # stream, so we redirect the browser to the source. Only locally
+    # uploaded assets (uri is a filesystem path) are served from disk.
+    # Keying off the URI scheme rather than the mimetype is what fixes
+    # the blank preview/download for remote image/video assets (forum
+    # "web content doesn't display"): those are stored mimetype
+    # image/video but their uri is an http(s) URL, so the old
+    # mimetype-only branch fell through to the local-path lookup, found
+    # nothing, and bounced to the home page.
+    safe = _safe_redirect_uri(asset.uri)
+    if safe is not None:
         # `safe` is whitelisted to http(s):// schemes by _safe_redirect_uri,
         # and the endpoint is gated by @authorized (only operators with a
         # session reach this). The redirect target is the operator's own
         # asset URI — that's the feature, not a sink.
-        return (  # lgtm [py/url-redirection]
-            redirect(safe) if safe else redirect(reverse('anthias_app:home'))
-        )
+        return redirect(safe)  # lgtm [py/url-redirection]
     safe_path = _safe_local_asset_path(asset.uri)
     if safe_path is None:
         return redirect(reverse('anthias_app:home'))
@@ -1408,15 +1416,18 @@ def assets_preview(request: HttpRequest, asset_id: str) -> HttpResponseBase:
     asset = Asset.objects.filter(asset_id=asset_id).first()
     if asset is None or not asset.uri:
         return redirect(reverse('anthias_app:home'))
-    if asset.mimetype in ('webpage', 'streaming'):
-        safe = _safe_redirect_uri(asset.uri)
+    # Remote http(s) assets (webpage, streaming, or a remote-hosted
+    # image/video) redirect to the source; the modal renders those in an
+    # <img>/<video>/<iframe>. Keying off the URI scheme rather than the
+    # mimetype is what makes remote image/video previews work — see
+    # assets_download for the full rationale.
+    safe = _safe_redirect_uri(asset.uri)
+    if safe is not None:
         # `safe` is whitelisted to http(s):// schemes by _safe_redirect_uri,
         # and the endpoint is gated by @authorized (only operators with a
         # session reach this). The redirect target is the operator's own
         # asset URI — that's the feature, not a sink.
-        return (  # lgtm [py/url-redirection]
-            redirect(safe) if safe else redirect(reverse('anthias_app:home'))
-        )
+        return redirect(safe)  # lgtm [py/url-redirection]
     safe_path = _safe_local_asset_path(asset.uri)
     if safe_path is None:
         return redirect(reverse('anthias_app:home'))

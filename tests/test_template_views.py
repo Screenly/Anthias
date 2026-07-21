@@ -2261,6 +2261,65 @@ def test_assets_preview_404_for_unknown_id(client: Client) -> None:
     assert response['Location'].endswith('/')
 
 
+def _remote_media_asset(mimetype: str, uri: str) -> Asset:
+    now = timezone.now()
+    return Asset.objects.create(
+        name=f'Remote {mimetype}',
+        uri=uri,
+        mimetype=mimetype,
+        duration=10,
+        is_enabled=True,
+        is_processing=False,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'mimetype,uri',
+    [
+        ('image', 'https://upload.wikimedia.org/wikipedia/x/cat.jpg'),
+        ('video', 'https://cdn.example.com/clip.mp4'),
+    ],
+)
+def test_assets_preview_redirects_for_remote_media(
+    client: Client, mimetype: str, uri: str
+) -> None:
+    """Regression for the forum "web content doesn't display" report:
+    a remote-hosted image is stored mimetype image with an http(s) uri
+    (unlike remote videos, which Celery downloads to a local file), so
+    the preview must redirect to the source rather than 302-ing to the
+    home page (the blank preview). The endpoint dispatches on the uri
+    scheme, so a remote-uri video row redirects the same way."""
+    asset = _remote_media_asset(mimetype, uri)
+    response = client.get(
+        reverse('anthias_app:assets_preview', args=[asset.asset_id])
+    )
+    assert response.status_code == 302
+    assert response['Location'] == uri
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'mimetype,uri',
+    [
+        ('image', 'https://upload.wikimedia.org/wikipedia/x/cat.jpg'),
+        ('video', 'https://cdn.example.com/clip.mp4'),
+    ],
+)
+def test_assets_download_redirects_for_remote_media(
+    client: Client, mimetype: str, uri: str
+) -> None:
+    asset = _remote_media_asset(mimetype, uri)
+    response = client.get(
+        reverse('anthias_app:assets_download', args=[asset.asset_id])
+    )
+    assert response.status_code == 302
+    assert response['Location'] == uri
+
+
 @pytest.mark.django_db
 def test_settings_save_invalid_default_streaming_duration(
     client: Client,
