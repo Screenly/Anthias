@@ -3,7 +3,7 @@
 This is a curated, PII-scrubbed seed of hard-won project knowledge, distilled
 from a working agent's memory before its VM was retired. A fresh clone starts
 here. It is **not** an auto-memory index — it is a static handoff. Everything
-below is also captured, in depth, in the four committed skills under
+below is also captured, in depth, in the committed skills under
 `.claude/skills/`; this file is the map.
 
 > `.claude/` is mostly gitignored (worktrees + unfiltered local memory), but
@@ -62,7 +62,7 @@ loop, never-break-API, forum-reply tone, US-English website, etc.) live in
 
 ## Rebuilding live auto-memory on a fresh VM
 
-If you use the file-based auto-memory system, treat this file and the four skills
-as the source of truth to re-seed from. Do not copy any environment-specific
+If you use the file-based auto-memory system, treat this file and the skills
+under `.claude/skills/` as the source of truth to re-seed from. Do not copy any environment-specific
 state (testbed IP↔board mapping, SSH user, tunnel URLs) into the repo — that is
 local operator state, kept only on the operator's machine.
