@@ -45,6 +45,22 @@ def test_parse_cpu_info_minimal() -> None:
     assert 'hardware' not in info
 
 
+def test_parse_cpu_info_skips_colonless_lines() -> None:
+    # A colon-less line must be skipped entirely. Under the old
+    # `except Exception: pass` fall-through, a colon-less line whose
+    # token matched a captured key (here 'Model') fell through to the
+    # capture block with `value` carried over from the previous line,
+    # recording a bogus value ('abc123'); a leading colon-less capture
+    # key could even leave `value` unbound and raise NameError.
+    m = mock.mock_open(read_data='processor : 0\nSerial : abc123\nModel\n')
+    with mock.patch('builtins.open', m):
+        info = device_helper.parse_cpu_info()
+    assert info['cpu_count'] == 1
+    assert info['serial'] == 'abc123'
+    # 'Model' had no value → skipped, not mis-recorded as 'abc123'.
+    assert 'model' not in info
+
+
 @pytest.mark.parametrize(
     'content,expected',
     [
