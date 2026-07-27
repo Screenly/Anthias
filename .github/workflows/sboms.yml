@@ -36,8 +36,8 @@ jobs:
             sbom_format: cyclonedx
             output_file: anthias-marketing-site.cdx.json
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: .sbomify-cache
           key: sbomify-${{ runner.os }}
@@ -77,6 +77,6 @@ jobs:
       # If you hit one of the unsupported configurations, either upgrade to
       # GitHub Enterprise Cloud, make the repo public, or remove this step.
       # Reference: https://github.com/actions/attest-build-provenance
-      - uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32  # v4.1.0
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
