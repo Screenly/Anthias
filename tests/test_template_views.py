@@ -825,8 +825,41 @@ def test_assets_download_redirects_for_url_mimetype(
     assert response['Location'] == asset.uri
 
 
+@pytest.fixture
+def _isolated_settings_conf(tmp_path: Any) -> Any:
+    """Redirect the settings singleton's config file to a per-test temp
+    path so ``settings.save()`` writes — whether direct or through the
+    ``settings_save`` view — never touch the real
+    ``~/.anthias/anthias.conf``.
+
+    Without this, a settings-mutating test leaks its posted values onto
+    the shared on-device config and silently breaks later tests that
+    read defaults back from it. Concretely, the integration suite's
+    ``test_add_asset_via_url`` asserts a new asset inherits
+    ``default_duration``; it fails with ``assert 10 == 0`` when a
+    sibling here has already persisted a different value to disk (only
+    when both suites run against the same ``/data`` volume — CI dodges
+    it by isolating the two jobs). Generalises the same conf_file
+    redirect already used by ``_reset_review_cta``.
+    """
+    from anthias_server.settings import settings
+
+    original_conf_file = settings.conf_file
+    settings.conf_file = str(tmp_path / 'anthias.conf')
+    settings.save()
+    try:
+        yield
+    finally:
+        # Point back at the real config and reload so the singleton's
+        # in-memory state is restored for any later test.
+        settings.conf_file = original_conf_file
+        settings.load()
+
+
 @pytest.mark.django_db
-def test_settings_save_round_trip(client: Client) -> None:
+def test_settings_save_round_trip(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
         return_value=None,
@@ -859,7 +892,7 @@ def test_settings_save_round_trip(client: Client) -> None:
     ],
 )
 def test_settings_save_screen_rotation(
-    client: Client, posted: str, persisted: int
+    client: Client, posted: str, persisted: int, _isolated_settings_conf: Any
 ) -> None:
     """Issue #2856 — form path mirrors the v2 PATCH validation."""
     from anthias_server.settings import settings
@@ -885,71 +918,63 @@ def test_settings_save_screen_rotation(
 
 
 @pytest.mark.django_db
-def test_settings_save_timezone_valid(client: Client) -> None:
+def test_settings_save_timezone_valid(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
     """A valid IANA zone posted from the HTML form is persisted."""
     from anthias_server.settings import settings
 
-    original = settings['timezone']
-    try:
-        with mock.patch(
-            'anthias_server.settings.ViewerPublisher.send_to_viewer',
-            return_value=None,
-        ):
-            response = client.post(
-                reverse('anthias_app:settings_save'),
-                data={
-                    'player_name': 'Test',
-                    'default_duration': '10',
-                    'default_streaming_duration': '300',
-                    'audio_output': 'hdmi',
-                    'date_format': 'mm/dd/yyyy',
-                    'auth_backend': '',
-                    'timezone': 'Europe/Stockholm',
-                },
-            )
-        assert response.status_code in (200, 302)
-        assert settings['timezone'] == 'Europe/Stockholm'
-    finally:
-        # Persisted to the shared conf; the activation middleware would
-        # otherwise apply it to every later test's request. Restore.
-        settings['timezone'] = original
-        settings.save()
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test',
+                'default_duration': '10',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': '',
+                'timezone': 'Europe/Stockholm',
+            },
+        )
+    assert response.status_code in (200, 302)
+    assert settings['timezone'] == 'Europe/Stockholm'
 
 
 @pytest.mark.django_db
-def test_settings_save_timezone_invalid_rejected(client: Client) -> None:
+def test_settings_save_timezone_invalid_rejected(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
     """A bad zone is rejected up front and never written — a value that
     would crash-loop the settings module can't be persisted."""
     from anthias_server.settings import settings
 
-    original = settings['timezone']
     settings['timezone'] = 'Europe/Stockholm'
     settings.save()
 
-    try:
-        with mock.patch(
-            'anthias_server.settings.ViewerPublisher.send_to_viewer',
-            return_value=None,
-        ) as publish_mock:
-            response = client.post(
-                reverse('anthias_app:settings_save'),
-                data={
-                    'player_name': 'Test',
-                    'default_duration': '10',
-                    'default_streaming_duration': '300',
-                    'audio_output': 'hdmi',
-                    'date_format': 'mm/dd/yyyy',
-                    'auth_backend': '',
-                    'timezone': 'Mars/Phobos',
-                },
-            )
-        assert response.status_code in (200, 302)
-        # Prior value untouched, and no reload was signalled.
-        assert settings['timezone'] == 'Europe/Stockholm'
-        publish_mock.assert_not_called()
-    finally:
-        settings['timezone'] = original
-        settings.save()
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ) as publish_mock:
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test',
+                'default_duration': '10',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': '',
+                'timezone': 'Mars/Phobos',
+            },
+        )
+    assert response.status_code in (200, 302)
+    # Prior value untouched, and no reload was signalled.
+    assert settings['timezone'] == 'Europe/Stockholm'
+    publish_mock.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -2322,10 +2347,14 @@ def test_assets_download_redirects_for_remote_media(
 
 @pytest.mark.django_db
 def test_settings_save_invalid_default_streaming_duration(
-    client: Client,
+    client: Client, _isolated_settings_conf: Any
 ) -> None:
-    """The save handler catches ValueError and surfaces it via messages
-    instead of 500ing — exercise the except branch."""
+    """A non-numeric duration must not 500. ``clamp_duration`` coerces
+    the junk to a safe ``0`` (it swallows the ValueError rather than
+    letting it reach the handler's except branch), the save returns
+    normally, and the clamped value is what gets persisted."""
+    from anthias_server.settings import settings
+
     with mock.patch(
         'anthias_server.settings.ViewerPublisher.send_to_viewer',
         return_value=None,
@@ -2334,14 +2363,17 @@ def test_settings_save_invalid_default_streaming_duration(
             reverse('anthias_app:settings_save'),
             data={
                 'player_name': 'Test',
-                'default_duration': 'not-a-number',  # int(...) blows up
-                'default_streaming_duration': '300',
+                'default_duration': '10',
+                'default_streaming_duration': 'not-a-number',
                 'audio_output': 'hdmi',
                 'date_format': 'mm/dd/yyyy',
                 'auth_backend': '',
             },
         )
     assert response.status_code in (200, 302)
+    # Persisted as the string '0' — default_streaming_duration's default
+    # is a str, so configparser reads it back with .get, not .getint.
+    assert int(settings['default_streaming_duration']) == 0
 
 
 @pytest.mark.django_db
