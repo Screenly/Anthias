@@ -845,9 +845,12 @@ def _isolated_settings_conf(tmp_path: Any) -> Any:
     from anthias_server.settings import settings
 
     original_conf_file = settings.conf_file
-    settings.conf_file = str(tmp_path / 'anthias.conf')
-    settings.save()
     try:
+        # Inside the try so a failure in the reassignment or the initial
+        # save() can't leave conf_file pointed at the temp path for the
+        # rest of the session — the finally always restores it.
+        settings.conf_file = str(tmp_path / 'anthias.conf')
+        settings.save()
         yield
     finally:
         # Point back at the real config and reload so the singleton's
