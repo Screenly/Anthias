@@ -1,5 +1,18 @@
 - group: About
   items:
+    - question: Is Anthias the same as Screenly OSE?
+      answer: |
+        Yes. Anthias is the current name for the project formerly called
+        **Screenly OSE** (Open Source Edition). It was renamed in December 2022 to
+        clear up the confusion between Screenly, the paid platform, and the
+        open-source project — see the
+        [announcement](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
+
+        Nothing was discontinued in the rename — it is the same project, the same
+        maintainers, and the same [repository](https://github.com/Screenly/Anthias).
+        If you are running an older Screenly OSE install, see the
+        [installation options](/docs/install/) to move to a current release.
+
     - question: What is the difference between Anthias and Screenly?
       answer: |
         Anthias is free, open-source digital signage software built by Screenly, Inc. Screenly is a paid, cloud-managed digital signage platform designed for professional multi-screen deployments. You can learn more about the differences on [screenly.io](https://www.screenly.io/screenly-vs-anthias/).

@@ -89,7 +89,7 @@
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Anthias",
-      "description": {{ $defaultDescription | jsonify }},
+      "description": {{ $defaultDescription | jsonify | safeJS }},
       "url": "{{ site.BaseURL }}",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Linux",
@@ -122,10 +122,10 @@
             {{- $first = false }}
         {
           "@type": "Question",
-          "name": {{ .question | jsonify }},
+          "name": {{ .question | jsonify | safeJS }},
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": {{ .answer | markdownify | plainify | jsonify }}
+            "text": {{ .answer | markdownify | plainify | jsonify | safeJS }}
           }
         }
           {{- end -}}
@@ -153,8 +153,8 @@
     {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      "headline": {{ .Title | jsonify }},
-      "description": {{ $description | jsonify }},
+      "headline": {{ .Title | jsonify | safeJS }},
+      "description": {{ $description | jsonify | safeJS }},
       "url": "{{ .Permalink }}",
       "image": "{{ $pageImage }}",
       "publisher": {
