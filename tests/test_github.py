@@ -441,8 +441,8 @@ def test_handle_github_error_logs_at_warning_not_error(
     exc = requests_exceptions.ConnectionError()
     exc.response = None
     with (
-        mock.patch('anthias_server.lib.github.logging.warning') as m_warning,
-        mock.patch('anthias_server.lib.github.logging.error') as m_error,
+        mock.patch('anthias_server.lib.github.logger.warning') as m_warning,
+        mock.patch('anthias_server.lib.github.logger.error') as m_error,
     ):
         github.handle_github_error(exc, 'latest release')
     m_warning.assert_called_once()
@@ -489,6 +489,6 @@ def test_handle_github_error_surfaces_exception_detail(
     host/timeout info that str(exc) carries."""
     exc = requests_exceptions.ReadTimeout('read timed out')
     exc.response = None
-    with mock.patch('anthias_server.lib.github.logging.warning') as m_warning:
+    with mock.patch('anthias_server.lib.github.logger.warning') as m_warning:
         github.handle_github_error(exc, 'latest release')
     assert m_warning.call_args.args[3] == 'read timed out'

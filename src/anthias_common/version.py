@@ -44,7 +44,7 @@ def get_anthias_release() -> str:
             value = _read_version_from_pyproject()
     except Exception:
         value = ''
-    setattr(get_anthias_release, '_cached', value)
+    get_anthias_release._cached = value  # type: ignore[attr-defined]
     return value
 
 

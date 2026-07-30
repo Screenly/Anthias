@@ -1,8 +1,7 @@
 import logging
 import os
 from collections.abc import Iterator
-from datetime import datetime, time, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 import pytest
@@ -12,8 +11,8 @@ from django.utils import timezone
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings
 from anthias_viewer.scheduling import (
-    Scheduler,
     WINDOWED_DEADLINE_CAP_SECONDS,
+    Scheduler,
     generate_asset_list,
 )
 
@@ -186,8 +185,8 @@ def test_get_next_asset_missing_extra_asset_warns_and_falls_back(
     scheduler.extra_asset = 'nonexistent-asset-id'
 
     with (
-        mock.patch('anthias_viewer.scheduling.logging.warning') as m_warn,
-        mock.patch('anthias_viewer.scheduling.logging.error') as m_error,
+        mock.patch('anthias_viewer.scheduling.logger.warning') as m_warn,
+        mock.patch('anthias_viewer.scheduling.logger.error') as m_error,
     ):
         result = scheduler.get_next_asset()
 
@@ -289,7 +288,7 @@ def _aware(
     year: int, month: int, day: int, hour: int, minute: int = 0
 ) -> datetime:
     return timezone.make_aware(
-        datetime(year, month, day, hour, minute),
+        datetime(year, month, day, hour, minute),  # noqa: DTZ001
         timezone.get_current_timezone(),
     )
 
@@ -380,7 +379,7 @@ def test_play_time_window_follows_active_timezone() -> None:
     # 08:00 UTC on a Monday. Europe/Berlin (UTC+1) sees 09:00 — inside
     # the 09:00-17:00 window; America/Chicago (UTC-6) sees 02:00 —
     # outside it.
-    instant = datetime(2026, 1, 5, 8, 0, tzinfo=dt_timezone.utc)
+    instant = datetime(2026, 1, 5, 8, 0, tzinfo=UTC)
     with time_machine.travel(instant):
         timezone.activate('Europe/Berlin')
         try:

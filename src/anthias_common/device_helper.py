@@ -170,9 +170,12 @@ def get_device_model_parts() -> tuple[str, str]:
     # Corporation' next to an 'Intel Celeron ...' CPU), which would stutter
     # as 'Intel ...' on both the board and CPU lines. Branded OEM boxes
     # (Dell, Lenovo) keep their vendor because it differs from the CPU.
-    if vendor and cpu_brand:
-        if vendor.split()[0].lower() in cpu_brand.lower().split():
-            vendor = ''
+    if (
+        vendor
+        and cpu_brand
+        and vendor.split()[0].lower() in cpu_brand.lower().split()
+    ):
+        vendor = ''
 
     chassis = ' '.join(part for part in (vendor, product) if part).strip()
 

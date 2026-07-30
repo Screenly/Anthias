@@ -5,7 +5,7 @@ import tarfile
 import tempfile
 import threading
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 from os import path
 from unittest import mock
 
@@ -13,6 +13,7 @@ import pytest
 from django.http import StreamingHttpResponse
 
 from anthias_server.lib.backup_helper import (
+    BackupRecoverError,
     astream_backup,
     backup_archive_name,
     create_backup,
@@ -47,7 +48,7 @@ def backup_home() -> Iterator[str]:
 
 
 def test_get_backup_name(backup_home: str) -> None:
-    dt = datetime(2016, 7, 19, 12, 42, 12)
+    dt = datetime(2016, 7, 19, 12, 42, 12, tzinfo=UTC)
     expected_archive_name = 'anthias-backup-2016-07-19T12-42-12.tar.gz'
     with mock.patch(
         'anthias_server.lib.backup_helper.datetime'
@@ -66,7 +67,7 @@ def test_recover(backup_home: str) -> None:
 
 
 def test_backup_archive_name_falls_back_on_empty_name() -> None:
-    dt = datetime(2016, 7, 19, 12, 42, 12)
+    dt = datetime(2016, 7, 19, 12, 42, 12, tzinfo=UTC)
     with mock.patch(
         'anthias_server.lib.backup_helper.datetime'
     ) as mock_datetime:
@@ -265,9 +266,11 @@ def test_recover_rejects_unrelated_archive(legacy_home: str) -> None:
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
-    with mock.patch.dict(os.environ, {'HOME': legacy_home}):
-        with pytest.raises(Exception):
-            recover(archive)
+    with (
+        mock.patch.dict(os.environ, {'HOME': legacy_home}),
+        pytest.raises(BackupRecoverError),
+    ):
+        recover(archive)
 
 
 def test_recover_skips_path_traversal_member(legacy_home: str) -> None:

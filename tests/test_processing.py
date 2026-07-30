@@ -36,8 +36,9 @@ import os
 import shutil
 import subprocess
 from collections.abc import Iterator
+from datetime import UTC
 from os import path
-from typing import Any
+from typing import Any, Self
 from unittest import mock
 
 import pytest
@@ -47,7 +48,6 @@ from PIL import Image, UnidentifiedImageError
 from anthias_server import processing
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
-
 
 # ---------------------------------------------------------------------------
 # Skip markers — keep the suite green on hosts without optional deps
@@ -331,9 +331,11 @@ def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
     _write_corrupt(src, '.tiff')
     asset = _make_processing_asset('img-bad', src)
 
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(UnidentifiedImageError):
-            processing._run_image_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(UnidentifiedImageError),
+    ):
+        processing._run_image_normalisation(asset)
 
     # No webp produced; the source file is left in place for the
     # operator to inspect / re-upload. Staging .webp.tmp must also
@@ -364,13 +366,13 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
         size = bomb_size
         format = 'TIFF'
 
-        def __enter__(self) -> '_FakeImage':
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *_: object) -> None:
             return None
 
-        def convert(self, _mode: str) -> 'mock.MagicMock':
+        def convert(self, _mode: str) -> mock.MagicMock:
             # Should never be reached — the size check raises first.
             raise AssertionError(
                 'convert() called on a bomb input — size check missed'
@@ -385,9 +387,9 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
             'anthias_server.processing.Image.open',
             return_value=_FakeImage(),
         ),
+        pytest.raises(ValueError, match='exceed cap'),
     ):
-        with pytest.raises(ValueError, match='exceed cap'):
-            processing._run_image_normalisation(asset)
+        processing._run_image_normalisation(asset)
 
     # Staging cleanup contract still holds for the bomb path.
     leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
@@ -416,9 +418,9 @@ def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
         mock.patch.object(
             processing, '_convert_image_to_webp', side_effect=half_write
         ),
+        pytest.raises(OSError, match='disk full'),
     ):
-        with pytest.raises(OSError, match='disk full'):
-            processing._run_image_normalisation(asset)
+        processing._run_image_normalisation(asset)
 
     # No leftover .webp.tmp in the asset dir — the runner removed it
     # before the raise propagated.
@@ -448,9 +450,9 @@ def test_image_rename_failure_cleans_staging(asset_dir: str) -> None:
     with (
         mock.patch.object(processing, '_notify'),
         mock.patch('anthias_server.processing.os.replace', side_effect=boom),
+        pytest.raises(OSError, match='cross-device'),
     ):
-        with pytest.raises(OSError, match='cross-device'):
-            processing._run_image_normalisation(asset)
+        processing._run_image_normalisation(asset)
 
     leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
     assert not leftover, f'image staging leftover after rename: {leftover}'
@@ -466,9 +468,11 @@ def test_image_missing_file_raises_filenotfound(asset_dir: str) -> None:
     src = path.join(asset_dir, 'gone.tiff')
     asset = _make_processing_asset('img-gone', src)
 
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(FileNotFoundError):
-            processing._run_image_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(FileNotFoundError),
+    ):
+        processing._run_image_normalisation(asset)
 
 
 @pytest.mark.django_db
@@ -602,9 +606,11 @@ def test_set_processing_error_writes_metadata(asset_dir: str) -> None:
 def test_video_missing_file_raises_filenotfound(asset_dir: str) -> None:
     src = path.join(asset_dir, 'gone.mp4')
     asset = _make_processing_asset('vid-gone', src, mimetype='video')
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(FileNotFoundError):
-            processing._run_video_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(FileNotFoundError),
+    ):
+        processing._run_video_normalisation(asset)
 
 
 @pytest_ffmpeg
@@ -670,9 +676,9 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
     ):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+        processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
@@ -731,9 +737,9 @@ def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
     ):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+        processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
@@ -809,9 +815,9 @@ def test_video_unsupported_codec_still_rejected_on_pi5(
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
     ):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+        processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
@@ -834,9 +840,11 @@ def test_video_unsupported_codec_h264_board_recipe(
     _make_video(src, codec='mpeg2video', container='mpeg', audio=None)
     asset = _make_processing_asset('vid-mpeg2', src, mimetype='video')
 
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
 
     recipe = excinfo.value.recipe
     assert 'libx264' in recipe
@@ -2179,7 +2187,7 @@ def test_prepare_asset_routes_heic_through_image_pipeline(
     """End-to-end-ish: simulate a HEIC upload and verify
     prepare_asset stamps is_processing=True and stashes the pending
     flag the view dispatches on."""
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2192,8 +2200,8 @@ def test_prepare_asset_routes_heic_through_image_pipeline(
             'ext': '.heic',
             'mimetype': 'image',
             'duration': 10,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,
@@ -2219,7 +2227,7 @@ def test_prepare_asset_routes_heic_through_image_pipeline(
 def test_prepare_asset_routes_video_through_video_pipeline(
     asset_dir: str,
 ) -> None:
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2232,8 +2240,8 @@ def test_prepare_asset_routes_video_through_video_pipeline(
             'ext': '.mp4',
             'mimetype': 'video',
             'duration': 0,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,
@@ -2263,7 +2271,7 @@ def test_prepare_asset_skips_pipeline_for_remote_url(
 ) -> None:
     """A webpage / RTSP / HTTP video URL must not get flagged for
     normalisation — only locally-uploaded files do."""
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2273,8 +2281,8 @@ def test_prepare_asset_skips_pipeline_for_remote_url(
             'uri': 'https://example.com/page',
             'mimetype': 'webpage',
             'duration': 30,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,
@@ -2295,7 +2303,7 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
 ) -> None:
     """Common JPEG / PNG / WebP uploads land ready-to-play — never
     enqueue a normalisation task for them."""
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2307,8 +2315,8 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
             'ext': '.jpg',
             'mimetype': 'image',
             'duration': 10,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,

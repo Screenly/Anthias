@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import json
 import logging
 import os
@@ -24,13 +22,13 @@ import sh as sh
 from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
+from anthias_viewer import media_player as _media_player_module
+from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
-from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
-from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.media_player import MediaPlayerProxy
 from anthias_viewer.playback import (
     navigate_to_asset,
@@ -50,26 +48,31 @@ django.setup()
 
 # Place imports that uses Django in this block.
 
-from django.utils import timezone  # noqa: E402
+from django.utils import timezone
 
-from anthias_common.internal_auth import INTERNAL_AUTH_HEADER  # noqa: E402
-from anthias_server.django_project.settings import (  # noqa: E402
-    resolve_time_zone,
+from anthias_common.internal_auth import (
+    INTERNAL_AUTH_HEADER,
+    internal_auth_token,
 )
-from anthias_common.internal_auth import internal_auth_token  # noqa: E402
-from anthias_common.utils import (  # noqa: E402
+from anthias_common.utils import (
     clamp_screen_rotation,
     connect_to_redis,
     detect_screen_resolution,
     string_to_bool,
 )
-from anthias_server.app.models import Asset  # noqa: E402
-from anthias_server.app.models import clamp_duration  # noqa: E402
-from anthias_server.app.models import clamp_refresh_interval  # noqa: E402
-from anthias_server.app.models import normalize_asset_headers  # noqa: E402
-from anthias_viewer.messaging import ViewerSubscriber  # noqa: E402
-from anthias_viewer.scheduling import Scheduler  # noqa: E402
+from anthias_server.app.models import (
+    Asset,
+    clamp_duration,
+    clamp_refresh_interval,
+    normalize_asset_headers,
+)
+from anthias_server.django_project.settings import (
+    resolve_time_zone,
+)
+from anthias_viewer.messaging import ViewerSubscriber
+from anthias_viewer.scheduling import Scheduler
 
+logger = logging.getLogger(__name__)
 
 __author__ = 'Screenly, Inc'
 __copyright__ = 'Copyright 2012-2026, Screenly, Inc'
@@ -439,14 +442,13 @@ def _wlr_output_names(include_disabled: bool = False) -> list[str]:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
     except (FileNotFoundError, subprocess.SubprocessError) as exc:
-        logging.debug('wlr-randr unavailable: %s', exc)
+        logger.debug('wlr-randr unavailable: %s', exc)
         return []
     if result.returncode != 0:
-        logging.debug(
-            'wlr-randr exit %d: %s', result.returncode, result.stderr
-        )
+        logger.debug('wlr-randr exit %d: %s', result.returncode, result.stderr)
         return []
     names: list[str] = []
     current: str | None = None
@@ -511,7 +513,7 @@ def _apply_wlr_transform(rotation_deg: int) -> bool:
                 check=False,
             )
         except (FileNotFoundError, subprocess.SubprocessError) as exc:
-            logging.warning(
+            logger.warning(
                 'wlr-randr --transform failed for %s: %s', name, exc
             )
             continue
@@ -522,12 +524,12 @@ def _apply_wlr_transform(rotation_deg: int) -> bool:
         # returncode==0 as success and surface stderr on failure so a
         # silently-broken rotation is debuggable from journald.
         if result.returncode == 0:
-            logging.info(
+            logger.info(
                 'Applied wlroots transform %s to output %s', transform, name
             )
             any_success = True
         else:
-            logging.warning(
+            logger.warning(
                 'wlr-randr --transform %s on %s exited %d: %s',
                 transform,
                 name,
@@ -566,13 +568,13 @@ def _apply_wlr_power(on: bool) -> bool:
                 check=False,
             )
         except (FileNotFoundError, subprocess.SubprocessError) as exc:
-            logging.warning('wlr-randr %s failed for %s: %s', flag, name, exc)
+            logger.warning('wlr-randr %s failed for %s: %s', flag, name, exc)
             continue
         if result.returncode == 0:
-            logging.info('Set output %s %s', name, flag)
+            logger.info('Set output %s %s', name, flag)
             any_success = True
         else:
-            logging.warning(
+            logger.warning(
                 'wlr-randr %s on %s exited %d: %s',
                 flag,
                 name,
@@ -584,7 +586,7 @@ def _apply_wlr_power(on: bool) -> bool:
 
 def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     if not correlation_id:
-        logging.warning(
+        logger.warning(
             'current_asset_id command received without a correlation ID; '
             'dropping reply.'
         )
@@ -597,7 +599,7 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     # endpoint already treats a falsy id as "no current asset" and
     # returns `[]`, which is the correct answer pre-scheduler-init.
     if scheduler is None:
-        logging.info(
+        logger.info(
             'current_asset_id requested before scheduler was ready; '
             'replying with no current asset.'
         )
@@ -741,7 +743,7 @@ def _terminate_webview(proc: Any) -> None:
     try:
         proc.terminate()
     except Exception:
-        logging.debug('Could not SIGTERM AnthiasViewer', exc_info=True)
+        logger.debug('Could not SIGTERM AnthiasViewer', exc_info=True)
         return
     deadline = monotonic() + BROWSER_TERMINATE_GRACE_SECONDS
     while monotonic() < deadline:
@@ -751,7 +753,7 @@ def _terminate_webview(proc: Any) -> None:
     try:
         proc.kill()
     except Exception:
-        logging.debug('Could not SIGKILL AnthiasViewer', exc_info=True)
+        logger.debug('Could not SIGKILL AnthiasViewer', exc_info=True)
 
 
 def _wayland_socket_path() -> str | None:
@@ -794,7 +796,7 @@ def _wait_for_wayland_socket(deadline: float) -> None:
     socket_path = _wayland_socket_path()
     if socket_path is None or os.path.exists(socket_path):
         return
-    logging.warning(
+    logger.warning(
         'Wayland socket %s not present yet; waiting (within the spawn '
         'budget) before launching the webview',
         socket_path,
@@ -803,7 +805,7 @@ def _wait_for_wayland_socket(deadline: float) -> None:
         if os.path.exists(socket_path):
             return
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
-    logging.warning(
+    logger.warning(
         'Wayland socket %s still absent; launching anyway (the launch '
         'will fail and retry if cage is truly down)',
         socket_path,
@@ -979,7 +981,7 @@ def load_browser(
     global _webview_supports_set_request_headers, _webview_supports_ssl_arg
     global _last_applied_rotation, current_browser_url, current_browser_headers
     global _last_applied_dark_mode, current_browser_skip_ssl
-    logging.info('Loading browser...')
+    logger.info('Loading browser...')
 
     # Latch the dark-mode preference the spawned process is about to be
     # launched with (via _build_webview_env), so a later ``reload`` only
@@ -1077,14 +1079,14 @@ def load_browser(
         except WebviewLaunchError as exc:
             last_error = exc
             if attempt == 1:
-                logging.warning(
+                logger.warning(
                     'AnthiasViewer failed to start (attempt %d/%d): %s',
                     attempt,
                     max_attempts,
                     exc,
                 )
             if attempt < max_attempts:
-                logging.warning(
+                logger.warning(
                     'Retrying AnthiasViewer in %ds (attempt %d/%d)',
                     backoff,
                     attempt,
@@ -1095,7 +1097,7 @@ def load_browser(
             continue
 
         if attempt > 1:
-            logging.info(
+            logger.info(
                 'AnthiasViewer started on attempt %d/%d',
                 attempt,
                 max_attempts,
@@ -1170,7 +1172,7 @@ def _send_to_webview(send: Callable[[], Any]) -> None:
     except Exception as exc:
         if not _is_webview_gone_error(exc):
             raise
-        logging.warning(
+        logger.warning(
             'AnthiasViewer died mid D-Bus call; respawning and retrying '
             'once: %s',
             exc,
@@ -1234,7 +1236,7 @@ def _load_via_webview(
                 # keeps its own original traceback.
                 raise exc from None
             _webview_supports_ssl_arg = False
-            logging.warning(
+            logger.warning(
                 'webview predates the loadPage/loadImage skipSslVerify '
                 'argument (version skew?); per-asset SSL-skip disabled '
                 'until the webview restarts: %s',
@@ -1310,13 +1312,13 @@ def _apply_request_headers(headers: dict[str, str]) -> bool:
         )
         if method_missing:
             _webview_supports_set_request_headers = False
-            logging.warning(
+            logger.warning(
                 'setRequestHeaders not supported by webview (version '
                 'skew?); custom headers disabled until viewer restart: %s',
                 exc,
             )
             return True
-        logging.debug(
+        logger.debug(
             'Transient setRequestHeaders failure (will retry next '
             'rotation): %s',
             exc,
@@ -1405,7 +1407,7 @@ def view_webpage(
             # the next tick retries once the D-Bus call succeeds. A
             # single-asset playlist self-heals the same way (the mismatch
             # persists until the send lands).
-            logging.debug(
+            logger.debug(
                 'Deferring loadPage until request headers apply '
                 '(transient setRequestHeaders failure)'
             )
@@ -1435,19 +1437,19 @@ def view_webpage(
             )
             if method_missing:
                 _webview_supports_set_reload_interval = False
-                logging.warning(
+                logger.warning(
                     'setReloadInterval not supported by webview '
                     '(version skew?); auto-refresh disabled until '
                     'viewer restart: %s',
                     exc,
                 )
             else:
-                logging.debug(
+                logger.debug(
                     'Transient setReloadInterval failure (will retry '
                     'next rotation): %s',
                     exc,
                 )
-    logging.info('Current url is {0}'.format(current_browser_url))
+    logger.info(f'Current url is {current_browser_url}')
 
 
 def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
@@ -1477,14 +1479,14 @@ def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
         )
         current_browser_url = uri
         current_browser_skip_ssl = skip_ssl_verify
-    logging.info('Current url is {0}'.format(current_browser_url))
+    logger.info(f'Current url is {current_browser_url}')
 
     if string_to_bool(getenv('WEBVIEW_DEBUG', '0')) and _webview_output:
-        logging.info(_webview_output.text())
+        logger.info(_webview_output.text())
 
 
 def view_video(uri: str, duration: int | str) -> None:
-    logging.debug('Displaying video %s for %s ', uri, duration)
+    logger.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
     media_player.set_asset(uri, duration)
@@ -1496,12 +1498,12 @@ def view_video(uri: str, duration: int | str) -> None:
         skip_event = get_skip_event()
         skip_event.clear()
         if skip_event.wait(timeout=int(duration)):
-            logging.info('Skip detected during video playback, stopping video')
+            logger.info('Skip detected during video playback, stopping video')
             media_player.stop()
         else:
             pass
     except sh.ErrorReturnCode_1:
-        logging.info(
+        logger.info(
             'Resource URI is not correct, remote host is not responding or '
             'request was rejected.'
         )
@@ -1568,7 +1570,7 @@ def _maybe_reapply_rotation() -> None:
     if rotation == _last_applied_rotation:
         return
 
-    logging.info(
+    logger.info(
         'Screen rotation changed: %d -> %d',
         _last_applied_rotation,
         rotation,
@@ -1606,7 +1608,7 @@ def _maybe_reapply_rotation() -> None:
         if _apply_wlr_transform(rotation):
             _last_applied_rotation = rotation
         else:
-            logging.warning(
+            logger.warning(
                 'wlr-randr could not apply rotation %d on any output; '
                 'will retry on the next asset_loop tick.',
                 rotation,
@@ -1657,7 +1659,7 @@ def _maybe_reapply_dark_mode() -> None:
     if prefer_dark == _last_applied_dark_mode:
         return
 
-    logging.info(
+    logger.info(
         'Prefer-dark-mode changed: %s -> %s',
         _last_applied_dark_mode,
         prefer_dark,
@@ -1771,10 +1773,10 @@ def _cage_output_probe() -> str:
             check=False,
         )
     except (FileNotFoundError, subprocess.SubprocessError) as exc:
-        logging.debug('wlr-randr unavailable for output probe: %s', exc)
+        logger.debug('wlr-randr unavailable for output probe: %s', exc)
         return 'unknown'
     if result.returncode != 0:
-        logging.debug(
+        logger.debug(
             'wlr-randr output probe exit %d: %s',
             result.returncode,
             result.stderr,
@@ -1853,14 +1855,14 @@ def _wayland_output_watchdog() -> None:
     now = monotonic()
     if _headless_wedge_since is None:
         _headless_wedge_since = now
-        logging.warning(
+        logger.warning(
             'Bindable display present but cage has no wl_output; will '
             'restart to re-enumerate if this persists past %ss.',
             WAYLAND_OUTPUT_GRACE_S,
         )
         return
     if now - _headless_wedge_since >= WAYLAND_OUTPUT_GRACE_S:
-        logging.error(
+        logger.error(
             'Cage has had no wl_output for %.0fs while a display is '
             'connected (headless-boot wedge). Exiting so the container '
             'restarts and re-enumerates the display.',
@@ -1881,16 +1883,16 @@ def _consume_pending_rotation_bounce() -> None:
     the value-comparison short-circuit so the fresh webview actually
     gets a loadPage/loadImage on its first asset.
     """
-    global _rotation_bounce_pending, browser, current_browser_url
+    global _rotation_bounce_pending, current_browser_url
     if not _rotation_bounce_pending:
         return
     _rotation_bounce_pending = False
-    logging.info('Consuming pending rotation bounce on main thread')
+    logger.info('Consuming pending rotation bounce on main thread')
     if browser is not None:
         try:
             browser.terminate()
         except Exception as exc:
-            logging.warning(
+            logger.warning(
                 'Could not terminate AnthiasViewer for rotation change: %s',
                 exc,
             )
@@ -1918,13 +1920,13 @@ def _skip_if_current_asset_inactive() -> None:
     try:
         asset = Asset.objects.filter(asset_id=current_id).first()
     except Exception:
-        logging.exception(
+        logger.exception(
             'reload: failed to check current asset %s; skipping skip-decision',
             current_id,
         )
         return
     if asset is None or not asset.is_active():
-        logging.info(
+        logger.info(
             'Current asset %s is no longer active; signalling skip',
             current_id,
         )
@@ -1975,7 +1977,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
         return
     token = internal_auth_token(settings)
     if not token:
-        logging.debug(
+        logger.debug(
             'Skipping recheck for %s: internal token unavailable', asset_id
         )
         return
@@ -1996,7 +1998,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
             headers={INTERNAL_AUTH_HEADER: token},
         )
     except requests.RequestException as e:
-        logging.debug('Failed to trigger recheck for %s: %s', asset_id, e)
+        logger.debug('Failed to trigger recheck for %s: %s', asset_id, e)
         return
 
     if response.status_code != 202:
@@ -2006,7 +2008,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
         # means the recheck didn't actually enqueue. Log at debug so the
         # operator can see the chain is silently broken without spamming
         # the loop on every rotation past the unreachable asset.
-        logging.debug(
+        logger.debug(
             'Recheck request for %s returned unexpected status %s',
             asset_id,
             response.status_code,
@@ -2038,7 +2040,7 @@ def asset_loop(scheduler: Any) -> None:
     asset = scheduler.get_next_asset()
 
     if asset is None:
-        logging.info(
+        logger.info(
             'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY
         )
         view_image(STANDBY_SCREEN)
@@ -2046,9 +2048,7 @@ def asset_loop(scheduler: Any) -> None:
         skip_event.clear()
         if skip_event.wait(timeout=EMPTY_PL_DELAY):
             # Skip was triggered, continue immediately to next iteration
-            logging.info(
-                'Skip detected during empty playlist wait, continuing'
-            )
+            logger.info('Skip detected during empty playlist wait, continuing')
         else:
             # Duration elapsed normally, continue to next iteration
             pass
@@ -2061,8 +2061,8 @@ def asset_loop(scheduler: Any) -> None:
         # rejects such values on write, but a pre-existing row must
         # not take the screen down.
         duration = clamp_duration(asset['duration'])
-        logging.info('Showing asset %s (%s)', name, mime)
-        logging.debug('Asset URI %s', uri)
+        logger.info('Showing asset %s (%s)', name, mime)
+        logger.debug('Asset URI %s', uri)
         watchdog()
 
         # Effective SSL policy for this asset: the C++ webview should
@@ -2111,21 +2111,21 @@ def asset_loop(scheduler: Any) -> None:
             # the ``else: Unknown MimeType`` arm below unreachable.
             view_video(uri, duration)
         else:
-            logging.error('Unknown MimeType %s', mime)
+            logger.error('Unknown MimeType %s', mime)
 
         if 'image' in mime or 'web' in mime:
-            logging.info('Sleeping for %s', duration)
+            logger.info('Sleeping for %s', duration)
             skip_event = get_skip_event()
             skip_event.clear()
             if skip_event.wait(timeout=duration):
                 # Skip was triggered, continue immediately to next iteration
-                logging.info('Skip detected, moving to next asset immediately')
+                logger.info('Skip detected, moving to next asset immediately')
             else:
                 # Duration elapsed normally, continue to next asset
                 pass
 
     else:
-        logging.info(
+        logger.info(
             'Asset %s at %s is not available, skipping.',
             asset['name'],
             asset['uri'],
@@ -2136,7 +2136,7 @@ def asset_loop(scheduler: Any) -> None:
         skip_event.clear()
         if skip_event.wait(timeout=0.5):
             # Skip was triggered, continue immediately to next iteration
-            logging.info(
+            logger.info(
                 'Skip detected during asset unavailability wait, continuing'
             )
         else:
@@ -2148,7 +2148,7 @@ def setup() -> None:
     global HOME, browser_bus
     HOME = getenv('HOME')
     if not HOME:
-        logging.error('No HOME variable')
+        logger.error('No HOME variable')
 
         # Alternatively, we can raise an Exception using a custom message,
         # or we can create a new class that extends Exception.
@@ -2174,7 +2174,7 @@ def setup() -> None:
         # we're still at startup, so spend the generous budget.
         if not _is_webview_gone_error(exc):
             raise
-        logging.warning(
+        logger.warning(
             'AnthiasViewer died between handshake and bus.get; '
             'respawning and retrying once: %s',
             exc,
@@ -2197,9 +2197,8 @@ def setup() -> None:
 
 
 def start_loop() -> None:
-    global loop_is_stopped
 
-    logging.debug('Entering infinite loop.')
+    logger.debug('Entering infinite loop.')
     while True:
         if loop_is_stopped:
             # Paint black once from the main thread (the owner of the
@@ -2240,13 +2239,13 @@ def _publish_display_resolution_once() -> None:
         # semantics already make the System Info card fall back
         # gracefully. Warning, not exception: an ERROR-level log with
         # a traceback would land in Sentry (ANTHIAS-M / ANTHIAS-H).
-        logging.warning(
+        logger.warning(
             'publish_display_resolution skipped, redis unreachable '
             '(will retry): %s',
             exc,
         )
     except Exception:
-        logging.exception('publish_display_resolution failed')
+        logger.exception('publish_display_resolution failed')
 
 
 def _publish_display_resolution_loop() -> None:

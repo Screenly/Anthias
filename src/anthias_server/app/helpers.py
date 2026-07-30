@@ -9,9 +9,9 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
+from anthias_common.utils import get_video_duration
 from anthias_server.app.models import Asset
 from anthias_server.app.page_context import navbar as _navbar_context
-from anthias_common.utils import get_video_duration
 from anthias_server.settings import ViewerPublisher, settings
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ def prepare_default_asset(**kwargs: Any) -> dict[str, Any] | None:
     if kwargs['mimetype'] not in ['image', 'video', 'webpage']:
         return None
 
-    asset_id = 'default_{}'.format(uuid.uuid4().hex)
+    asset_id = f'default_{uuid.uuid4().hex}'
     if 'video' == kwargs['mimetype']:
         video_duration = get_video_duration(kwargs['uri'])
         if video_duration is None:

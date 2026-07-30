@@ -13,7 +13,7 @@ is under test independently of Yodeck's real API.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 from typing import Any
 from unittest import mock
@@ -26,11 +26,13 @@ from django.test import Client
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from anthias_server.app.models import Asset
 from anthias_server.api.tests._graphql_helpers import (
     json_response as _fake_response,
+)
+from anthias_server.api.tests._graphql_helpers import (
     stream_response as _fake_stream_response,
 )
+from anthias_server.app.models import Asset
 from anthias_server.lib.integrations import ingest, yodeck
 from anthias_server.lib.integrations.base import (
     ImportOutcome,
@@ -42,7 +44,6 @@ from anthias_server.lib.integrations.registry import (
     list_provider_meta,
 )
 from anthias_server.settings import settings
-
 
 # Stateless provider (its HTTP session is module-level), so one shared
 # instance is reused across tests. Keeping construction out of the
@@ -209,8 +210,8 @@ class TestFieldMapping:
             }
         }
         start, end = yodeck._availability_window(detail)
-        assert start == datetime(2024, 5, 20, 12, 38, tzinfo=timezone.utc)
-        assert end == datetime(2024, 6, 21, 12, 38, tzinfo=timezone.utc)
+        assert start == datetime(2024, 5, 20, 12, 38, tzinfo=UTC)
+        assert end == datetime(2024, 6, 21, 12, 38, tzinfo=UTC)
 
     def test_availability_window_defaults_when_disabled(self) -> None:
         start, end = yodeck._availability_window({'availability_schedule': {}})
@@ -443,12 +444,8 @@ class TestImportItem:
             'provider': 'yodeck',
             'remote_id': '3',
         }
-        assert asset.start_date == datetime(
-            2024, 5, 20, 12, 38, tzinfo=timezone.utc
-        )
-        assert asset.end_date == datetime(
-            2024, 6, 21, 12, 38, tzinfo=timezone.utc
-        )
+        assert asset.start_date == datetime(2024, 5, 20, 12, 38, tzinfo=UTC)
+        assert asset.end_date == datetime(2024, 6, 21, 12, 38, tzinfo=UTC)
 
     @patch('anthias_server.lib.integrations.yodeck._session.get')
     def test_image_import_downloads_and_creates_asset(

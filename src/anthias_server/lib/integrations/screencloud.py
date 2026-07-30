@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import requests
 
@@ -447,7 +448,7 @@ def _parse_dt(value: Any) -> Any:
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace('Z', '+00:00'))
+        return datetime.fromisoformat(value)
     except ValueError:
         return None
 

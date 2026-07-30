@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import UTC
 from typing import Any
 
 from rest_framework.serializers import (
@@ -27,8 +27,8 @@ class CreateAssetSerializerV1_2(
     ext = CharField(write_only=True, required=False)
     name = CharField()
     uri = CharField()
-    start_date = DateTimeField(default_timezone=timezone.utc)
-    end_date = DateTimeField(default_timezone=timezone.utc)
+    start_date = DateTimeField(default_timezone=UTC)
+    end_date = DateTimeField(default_timezone=UTC)
     duration = CharField()
     mimetype = CharField()
     is_enabled = IntegerField(min_value=0, max_value=1)

@@ -96,3 +96,6 @@ website/.hugo_build.lock
 
 # balena fleet maintenance roller state (bin/balena_fleet_maintenance.py)
 .balena-maint-state.tsv
+
+# mypy
+.mypy_cache/

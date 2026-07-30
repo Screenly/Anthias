@@ -60,6 +60,8 @@ import signal
 import sys
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 FB_DEVICE = '/dev/fb0'
 
 # Ceiling for frames/second pushed into the ISP + framebuffer blit.
@@ -184,7 +186,7 @@ def clear_framebuffer(
                 fb.write(zeros)
         return True
     except (OSError, ValueError) as exc:
-        logging.warning('could not clear %s: %s', fb_device, exc)
+        logger.warning('could not clear %s: %s', fb_device, exc)
         return False
 
 
@@ -253,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         # python3-gi / gir1.2-gstreamer-1.0 ship in the pi1/2/3 viewer
         # image; fail fast with a greppable line rather than a bare
         # traceback if a future image regression drops them.
-        logging.error('GStreamer python bindings unavailable: %s', exc)
+        logger.error('GStreamer python bindings unavailable: %s', exc)
         return 1
 
     Gst.init(None)
@@ -284,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         sink.set_state(Gst.State.NULL)
         if not usable:
-            logging.warning(
+            logger.warning(
                 'audio device %r unusable — playing without audio',
                 device,
             )
@@ -314,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             src_w, src_h, par_n, par_d, args.fb_width, args.fb_height
         )
         caps_str = build_fit_caps_string(args.fb_format, width, height)
-        logging.info(
+        logger.info(
             'source %dx%d par %d/%d -> fit %s',
             src_w,
             src_h,
@@ -348,15 +350,15 @@ def main(argv: list[str] | None = None) -> int:
         """
         playbin = Gst.ElementFactory.make('playbin')
         if playbin is None:
-            logging.error('playbin element unavailable')
+            logger.error('playbin element unavailable')
             return False
 
         sink_description = build_sink_description(args)
-        logging.info('video sink: %s', sink_description)
+        logger.info('video sink: %s', sink_description)
         try:
             video_sink = Gst.parse_bin_from_description(sink_description, True)
         except GLib.Error as exc:
-            logging.error('could not build video sink: %s', exc)
+            logger.error('could not build video sink: %s', exc)
             return False
 
         video_sink.get_by_name('fit_convert').get_static_pad('sink').add_probe(
@@ -392,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
             playbin.set_state(Gst.State.PLAYING)
             == Gst.StateChangeReturn.FAILURE
         ):
-            logging.warning(
+            logger.warning(
                 'could not start playback for %s (audio=%s)',
                 args.uri,
                 with_audio,
@@ -414,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
                 # decoder mid-preroll) and rebuild video-only. A
                 # genuine video error recurs on the rebuilt pipeline
                 # and exits below — one extra attempt, bounded.
-                logging.warning(
+                logger.warning(
                     'pipeline error: %s (%s) — rebuilding without audio',
                     err,
                     debug,
@@ -424,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
                     state['exit'] = 1
                     loop.quit()
                 return True
-            logging.error('pipeline error: %s (%s)', err, debug)
+            logger.error('pipeline error: %s (%s)', err, debug)
             state['exit'] = 1
             loop.quit()
         elif message.type == Gst.MessageType.EOS:
@@ -432,13 +434,13 @@ def main(argv: list[str] | None = None) -> int:
             # EOS never fires. Some sources can't pre-queue; fall back
             # to a flushing seek, then to a full restart for the
             # non-seekable remainder.
-            logging.info('EOS — looping via flush seek')
+            logger.info('EOS — looping via flush seek')
             if not playbin.seek_simple(
                 Gst.Format.TIME,
                 Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT,
                 0,
             ):
-                logging.info('seek refused — restarting pipeline')
+                logger.info('seek refused — restarting pipeline')
                 playbin.set_state(Gst.State.NULL)
                 playbin.set_state(Gst.State.PLAYING)
         return True
@@ -452,11 +454,11 @@ def main(argv: list[str] | None = None) -> int:
     with_audio = bool(args.audio_device) and audio_device_usable(
         args.audio_device
     )
-    if not build_and_start(with_audio):
+    if not build_and_start(with_audio):  # noqa: SIM102
         # Exotic sync failure with audio still enabled (pre-flight
         # passed but activation failed) — one fresh video-only try.
         if not (with_audio and build_and_start(False)):
-            logging.error('could not start playback for %s', args.uri)
+            logger.error('could not start playback for %s', args.uri)
             return 1
 
     try:

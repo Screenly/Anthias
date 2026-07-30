@@ -287,8 +287,9 @@ class TestBeforeSendTransientNoise:
         # logs each attempt at ERROR; the logger is silenced at init.
         # The ignore_logger call happens at settings-module import —
         # import it explicitly so this test passes in isolation too.
-        import anthias_server.django_project.settings  # noqa: F401
         from sentry_sdk.integrations.logging import _IGNORED_LOGGERS
+
+        import anthias_server.django_project.settings  # noqa: F401
 
         assert 'celery.worker.consumer.consumer' in _IGNORED_LOGGERS
         # The embedded beat scheduler retries broker connections the
@@ -309,8 +310,9 @@ class TestBeforeSendTransientNoise:
         # ERROR to django.security.DisallowedHost, which the logging
         # integration would otherwise turn into a Sentry event. It is
         # non-actionable background-scanner noise (Sentry ANTHIAS-2A).
-        import anthias_server.django_project.settings  # noqa: F401
         from sentry_sdk.integrations.logging import _IGNORED_LOGGERS
+
+        import anthias_server.django_project.settings  # noqa: F401
 
         assert 'django.security.DisallowedHost' in _IGNORED_LOGGERS
 

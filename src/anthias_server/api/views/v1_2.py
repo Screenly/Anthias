@@ -5,10 +5,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.models import Asset
 from anthias_common.remote_video import dispatch_remote_video_download
 from anthias_common.youtube import dispatch_download
-from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.helpers import (
     AssetCreationError,
     finalize_asset_update,
@@ -21,7 +19,9 @@ from anthias_server.api.serializers import (
 )
 from anthias_server.api.serializers.v1_2 import CreateAssetSerializerV1_2
 from anthias_server.api.views.mixins import DeleteAssetViewMixin
+from anthias_server.app.models import Asset
 from anthias_server.lib.auth import authorized
+from anthias_server.processing import dispatch_pending_normalize
 
 
 class AssetListViewV1_2(APIView):

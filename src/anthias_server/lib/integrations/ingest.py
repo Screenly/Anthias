@@ -22,8 +22,9 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -112,7 +113,7 @@ def default_window() -> tuple[datetime, datetime]:
     Modelled as "now → +10 years" — the same wide window the schedule UI
     treats as unbounded.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return now, now + timedelta(days=3650)
 
 

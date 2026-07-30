@@ -11,7 +11,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 import anthias_server.celery_tasks as celery_tasks_module
 from anthias_server.app.models import Asset
-from anthias_server.celery_tasks import celery as celeryapp
 from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     asset_recheck_lock_key,
@@ -25,6 +24,7 @@ from anthias_server.celery_tasks import (
     send_telemetry_task,
     shutdown_anthias,
 )
+from anthias_server.celery_tasks import celery as celeryapp
 from anthias_server.settings import settings
 
 
@@ -372,9 +372,9 @@ def test_reboot_anthias_terminal_supervisor_failure_warns_not_raises() -> None:
         ),
         mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
         mock.patch(
-            'anthias_server.celery_tasks.logging.warning'
+            'anthias_server.celery_tasks.logger.warning'
         ) as mock_warning,
-        mock.patch('anthias_server.celery_tasks.logging.error') as mock_error,
+        mock.patch('anthias_server.celery_tasks.logger.error') as mock_error,
     ):
         result = reboot_anthias.apply()
     assert result.successful()
@@ -401,7 +401,7 @@ def test_shutdown_anthias_terminal_supervisor_failure_warns_not_raises() -> (
         ),
         mock.patch.object(celery_tasks_module, 'SUPERVISOR_CMD_WAIT_MAX_S', 0),
         mock.patch(
-            'anthias_server.celery_tasks.logging.warning'
+            'anthias_server.celery_tasks.logger.warning'
         ) as mock_warning,
     ):
         result = shutdown_anthias.apply()
@@ -909,13 +909,13 @@ def fake_youtube_dl() -> Iterator[mock.MagicMock]:
         # setattr keeps mypy happy on a dynamically-created ModuleType
         # (a static `module.attr = ...` assignment is `attr-defined`
         # under --strict).
-        setattr(fake_module, 'YoutubeDL', fake_cls)
+        fake_module.YoutubeDL = fake_cls  # type: ignore[attr-defined]
         utils_mod = types.ModuleType('yt_dlp.utils')
 
         class FakeDownloadError(Exception):
             pass
 
-        setattr(utils_mod, 'DownloadError', FakeDownloadError)
+        utils_mod.DownloadError = FakeDownloadError  # type: ignore[attr-defined]
         sys.modules['yt_dlp'] = fake_module
         sys.modules['yt_dlp.utils'] = utils_mod
         # Exposing the inst lets the test reach `.extract_info` to set
@@ -1136,7 +1136,7 @@ def test_download_youtube_asset_failure_propagates_for_on_failure(
     """yt-dlp DownloadError is permanent — the task re-raises so
     Celery's on_failure path runs (which clears is_processing)."""
     _make_youtube_asset()
-    DownloadError = fake_youtube_dl._download_error  # noqa: N806
+    DownloadError = fake_youtube_dl._download_error
     fake_youtube_dl.extract_info.side_effect = DownloadError('404')
     with pytest.raises(DownloadError):
         download_youtube_asset('yt-1', 'https://youtu.be/dead')
@@ -1291,7 +1291,7 @@ def test_download_youtube_asset_unknown_board_falls_back_to_h264(
 # ---------------------------------------------------------------------------
 
 
-from anthias_server.celery_tasks import (  # noqa: E402
+from anthias_server.celery_tasks import (
     RemoteVideoDownloadError,
     download_remote_video_asset,
 )
@@ -1424,9 +1424,9 @@ def test_download_remote_video_asset_size_cap_aborts(
             'anthias_server.processing.dispatch_normalize_video'
         ) as mock_dispatch,
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='size cap'),
     ):
-        with pytest.raises(RemoteVideoDownloadError, match='size cap'):
-            download_remote_video_asset('rv-1', 'https://example.com/huge.mp4')
+        download_remote_video_asset('rv-1', 'https://example.com/huge.mp4')
     dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
     assert not path.exists(dest)
     assert not path.exists(f'{dest}.part')
@@ -1450,11 +1450,9 @@ def test_download_remote_video_asset_http_404_propagates_for_on_failure(
         ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='HTTP 404'),
     ):
-        with pytest.raises(RemoteVideoDownloadError, match='HTTP 404'):
-            download_remote_video_asset(
-                'rv-1', 'https://example.com/missing.mp4'
-            )
+        download_remote_video_asset('rv-1', 'https://example.com/missing.mp4')
 
 
 @pytest.mark.django_db
@@ -1477,9 +1475,9 @@ def test_download_remote_video_asset_manifest_content_type_aborts(
         ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='manifest'),
     ):
-        with pytest.raises(RemoteVideoDownloadError, match='manifest'):
-            download_remote_video_asset('rv-1', 'https://example.com/sneaky')
+        download_remote_video_asset('rv-1', 'https://example.com/sneaky')
 
 
 @pytest.mark.django_db
@@ -1499,9 +1497,9 @@ def test_download_remote_video_asset_wrong_content_type_aborts(
         ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='Content-Type'),
     ):
-        with pytest.raises(RemoteVideoDownloadError, match='Content-Type'):
-            download_remote_video_asset('rv-1', 'https://example.com/error')
+        download_remote_video_asset('rv-1', 'https://example.com/error')
 
 
 @pytest.mark.django_db
@@ -1549,11 +1547,11 @@ def test_download_remote_video_asset_empty_content_type_aborts(
         ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='Content-Type'),
     ):
-        with pytest.raises(RemoteVideoDownloadError, match='Content-Type'):
-            download_remote_video_asset(
-                'rv-1', 'https://example.com/no-headers.mp4'
-            )
+        download_remote_video_asset(
+            'rv-1', 'https://example.com/no-headers.mp4'
+        )
     # Nothing landed on disk; the staging cleanup wiped the .part too.
     dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
     assert not path.exists(dest)
@@ -1576,11 +1574,9 @@ def test_download_remote_video_asset_zero_bytes_aborts(
         ),
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='zero bytes'),
     ):
-        with pytest.raises(RemoteVideoDownloadError, match='zero bytes'):
-            download_remote_video_asset(
-                'rv-1', 'https://example.com/empty.mp4'
-            )
+        download_remote_video_asset('rv-1', 'https://example.com/empty.mp4')
     dest = path.join(remote_video_asset_dir, 'rv-1.mp4')
     assert not path.exists(dest)
     assert not path.exists(f'{dest}.part')
@@ -1641,13 +1637,9 @@ def test_download_remote_video_asset_refuses_row_with_empty_uri(
         mock.patch('anthias_server.celery_tasks._session.get') as fake_get,
         mock.patch('anthias_server.processing.dispatch_normalize_video'),
         mock.patch('anthias_server.app.consumers.notify_asset_update'),
+        pytest.raises(RemoteVideoDownloadError, match='no destination uri'),
     ):
-        with pytest.raises(
-            RemoteVideoDownloadError, match='no destination uri'
-        ):
-            download_remote_video_asset(
-                'rv-empty', 'https://example.com/x.mp4'
-            )
+        download_remote_video_asset('rv-empty', 'https://example.com/x.mp4')
     # No network call attempted — the guard fires before the GET.
     fake_get.assert_not_called()
 
@@ -1685,11 +1677,11 @@ def test_download_remote_video_asset_on_failure_writes_error_metadata(
 # ---------------------------------------------------------------------------
 
 
-from datetime import timedelta  # noqa: E402
+from datetime import timedelta
 
-from django.utils import timezone  # noqa: E402
+from django.utils import timezone
 
-from anthias_server.celery_tasks import (  # noqa: E402
+from anthias_server.celery_tasks import (
     RECONCILE_STUCK_LOCK_KEY,
     RECONCILE_STUCK_THRESHOLD_S,
     reconcile_stuck_processing,

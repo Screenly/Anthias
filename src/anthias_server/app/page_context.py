@@ -6,10 +6,10 @@ The DRF API views in api/views/v2.py call the same primitives
 surfaces stay in lockstep without going through the HTTP API.
 """
 
-from datetime import timedelta
 import functools
 import os
 import zoneinfo
+from datetime import timedelta
 from os import getenv, statvfs
 from typing import Any
 
@@ -60,8 +60,8 @@ def _resolved_resolution() -> dict[str, Any]:
 
 
 def system_info() -> dict[str, Any]:
-    from django.utils.timesince import timesince
     from django.utils import timezone
+    from django.utils.timesince import timesince
 
     slash = statvfs('/')
     virtual_memory = psutil.virtual_memory()

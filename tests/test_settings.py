@@ -105,7 +105,7 @@ def settings_env() -> Iterator[None]:
 
 
 def test_parse_settings(settings_env: None) -> None:
-    with fake_settings(settings1) as (mod_settings, settings):
+    with fake_settings(settings1) as (_mod_settings, settings):
         assert settings['player_name'] == 'new player'
         assert settings['show_splash'] is False
         assert settings['shuffle_playlist'] is True
@@ -143,13 +143,15 @@ def test_default_settings(settings_env: None) -> None:
 
 
 def test_broken_settings_should_raise_value_error(settings_env: None) -> None:
-    with pytest.raises(ValueError):
-        with fake_settings(broken_settings) as (mod_settings, settings):
-            pass
+    with (
+        pytest.raises(ValueError),
+        fake_settings(broken_settings) as (_mod_settings, _settings),
+    ):
+        pass
 
 
 def test_save_settings(settings_env: None) -> None:
-    with fake_settings(settings1) as (mod_settings, settings):
+    with fake_settings(settings1) as (_mod_settings, settings):
         settings.conf_file = CONFIG_DIR + '/new.conf'
         settings['default_duration'] = 35
         settings['verify_ssl'] = True
@@ -157,7 +159,7 @@ def test_save_settings(settings_env: None) -> None:
 
     with open(CONFIG_DIR + '/new.conf') as f:
         saved = f.read()
-        with fake_settings(saved) as (mod_settings, settings):
+        with fake_settings(saved) as (_mod_settings, settings):
             # changes saved?
             assert settings['default_duration'] == 35
             assert settings['verify_ssl'] is True

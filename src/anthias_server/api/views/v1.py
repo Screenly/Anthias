@@ -12,9 +12,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.models import Asset
 from anthias_common.youtube import dispatch_download
-from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.api.helpers import (
     AssetCreationError,
     parse_request,
@@ -36,7 +34,9 @@ from anthias_server.api.views.mixins import (
     RecoverViewMixin,
     ShutdownViewMixin,
 )
+from anthias_server.app.models import Asset
 from anthias_server.lib.auth import authorized
+from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.settings import ReplyCollector, ViewerPublisher
 
 MODEL_STRING_EXAMPLE = """

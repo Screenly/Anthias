@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 __author__ = 'Nash Kaminski'
 __license__ = 'Dual License: GPLv2 and Commercial License'
@@ -9,16 +8,17 @@ import json
 import logging
 import os
 import subprocess
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import netifaces
 import redis
 import requests
 from tenacity import (
-    before_sleep_log,
-    retry_if_exception_type,
     RetryError,
     Retrying,
+    before_sleep_log,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_fixed,
 )
@@ -31,6 +31,8 @@ from tenacity import (
 # ansible/roles/anthias/templates/anthias-host-agent.service), which
 # is what makes the import resolvable from the host venv.
 from anthias_common.device_helper import detect_board_subtype
+
+logger = logging.getLogger(__name__)
 
 REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
@@ -91,7 +93,7 @@ def set_ip_addresses() -> None:
                 response = requests.get(INTERNET_PROBE_URL, timeout=5)
                 response.raise_for_status()
     except RetryError:
-        logging.warning(
+        logger.warning(
             'Unable to connect to the Internet. '
             'Proceeding with the current IP addresses available.'
         )
@@ -113,27 +115,27 @@ CMD_TO_ARGV: dict[str, list[str] | Callable[[], None]] = {
 def execute_host_command(cmd_name: str) -> None:
     cmd = CMD_TO_ARGV.get(cmd_name, None)
     if cmd is None:
-        logging.warning(
+        logger.warning(
             'Unable to perform host command %s: no such command!', cmd_name
         )
     elif os.getenv('TESTING'):
-        logging.warning(
+        logger.warning(
             'Would have executed %s but not doing so as TESTING is defined',
             cmd,
         )
     elif cmd_name in ['reboot', 'shutdown']:
-        logging.info('Executing host command %s', cmd_name)
+        logger.info('Executing host command %s', cmd_name)
         if not isinstance(cmd, list):
             raise TypeError(f'Expected list for {cmd_name}, got {type(cmd)}')
-        phandle = subprocess.run(cmd)
-        logging.info(
+        phandle = subprocess.run(cmd, check=False)
+        logger.info(
             'Host command %s (%s) returned %s',
             cmd_name,
             cmd,
             phandle.returncode,
         )
     else:
-        logging.info('Calling function %s', cmd)
+        logger.info('Calling function %s', cmd)
         if not callable(cmd):
             raise TypeError(
                 f'Expected callable for {cmd_name}, got {type(cmd)}'
@@ -148,7 +150,7 @@ def process_message(message: dict[str, Any]) -> None:
     ):
         execute_host_command(message.get('data', ''))
     else:
-        logging.info('Received unsolicited message: %s', message)
+        logger.info('Received unsolicited message: %s', message)
 
 
 def detect_total_mem_kb() -> int | None:
@@ -199,13 +201,13 @@ def set_total_mem_kb(rdb: 'redis.Redis') -> None:
     value = detect_total_mem_kb()
     rdb.set('host:total_mem_kb', '' if value is None else str(value))
     if value is None:
-        logging.warning(
+        logger.warning(
             'Could not read MemTotal from /proc/meminfo; low-RAM '
             'detection will fall back to "unknown" and not enforce '
             'the resolution cap.'
         )
     else:
-        logging.info('Published host total_mem_kb=%s to redis', value)
+        logger.info('Published host total_mem_kb=%s to redis', value)
 
 
 def set_board_subtype(rdb: 'redis.Redis') -> None:
@@ -227,9 +229,9 @@ def set_board_subtype(rdb: 'redis.Redis') -> None:
     subtype = detect_board_subtype() or ''
     rdb.set('host:board_subtype', subtype)
     if subtype:
-        logging.info('Published board subtype %r to redis', subtype)
+        logger.info('Published board subtype %r to redis', subtype)
     else:
-        logging.info(
+        logger.info(
             'No known board subtype for /proc/device-tree/model — '
             'staying on DEVICE_TYPE-derived envelope'
         )
@@ -238,7 +240,7 @@ def set_board_subtype(rdb: 'redis.Redis') -> None:
 def subscriber_loop() -> None:
     # On first boot the redis container may not yet accept connections;
     # retry quietly instead of crashing the unit on every attempt.
-    logging.info('Connecting to redis...')
+    logger.info('Connecting to redis...')
     for attempt in Retrying(
         retry=retry_if_exception_type(redis.ConnectionError),
         wait=wait_fixed(5),
@@ -258,7 +260,7 @@ def subscriber_loop() -> None:
     set_board_subtype(rdb)
     set_total_mem_kb(rdb)
     rdb.set('host_agent_ready', 'true')
-    logging.info(
+    logger.info(
         'Subscribed to channel %s, ready to process messages', CHANNEL_NAME
     )
     for message in pubsub.listen():

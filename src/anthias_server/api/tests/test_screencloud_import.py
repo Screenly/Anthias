@@ -14,11 +14,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from anthias_server.app.models import Asset
 from anthias_server.api.tests._graphql_helpers import (
     gql_response as _gql,
+)
+from anthias_server.api.tests._graphql_helpers import (
     stream_response as _stream,
 )
+from anthias_server.app.models import Asset
 from anthias_server.lib.integrations import graphql, screencloud
 from anthias_server.lib.integrations.registry import (
     get_provider,

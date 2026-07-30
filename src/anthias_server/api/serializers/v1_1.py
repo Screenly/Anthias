@@ -1,5 +1,5 @@
 import uuid
-from datetime import timezone
+from datetime import UTC
 from os import path, rename
 from typing import Any
 
@@ -60,8 +60,8 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
 
     name = CharField()
     uri = CharField()
-    start_date = DateTimeField(default_timezone=timezone.utc, required=False)
-    end_date = DateTimeField(default_timezone=timezone.utc, required=False)
+    start_date = DateTimeField(default_timezone=UTC, required=False)
+    end_date = DateTimeField(default_timezone=UTC, required=False)
     duration = CharField(required=False)
     mimetype = CharField()
     is_enabled = IntegerField(min_value=0, max_value=1, required=False)
@@ -206,7 +206,7 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
             and not asset['skip_asset_check']
             and url_fails(asset['uri'])
         ):
-            raise Exception('Could not retrieve file. Check the asset URL.')
+            raise RuntimeError('Could not retrieve file. Check the asset URL.')
 
         # Flag the freshly-uploaded local video for the
         # normalisation pipeline. Fixes GH #2870: pre-fix, v1 / v1.1

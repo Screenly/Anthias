@@ -4,7 +4,6 @@ import pytest
 
 from anthias_common import device_helper
 
-
 PI4_CPUINFO = """\
 processor	: 0
 BogoMIPS	: 108.00

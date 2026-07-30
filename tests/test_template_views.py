@@ -1880,19 +1880,21 @@ def test_assets_bulk_update_issues_single_update_query(
         )
         ids.append(a.asset_id)
 
-    with mock.patch(
-        'anthias_server.settings.ViewerPublisher.send_to_viewer',
-        return_value=None,
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        CaptureQueriesContext(connection) as ctx,
     ):
-        with CaptureQueriesContext(connection) as ctx:
-            client.post(
-                reverse('anthias_app:assets_bulk_update'),
-                data={
-                    'ids': ','.join(ids),
-                    'apply_duration': 'true',
-                    'duration': '55',
-                },
-            )
+        client.post(
+            reverse('anthias_app:assets_bulk_update'),
+            data={
+                'ids': ','.join(ids),
+                'apply_duration': 'true',
+                'duration': '55',
+            },
+        )
 
     updates = [
         q['sql']
@@ -2471,7 +2473,9 @@ def test_assets_upload_disk_full_during_write_cleans_up_partial(
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     write_fails = mock.mock_open()
-    write_fails.return_value.write.side_effect = OSError(
+    # The view streams chunks via f.writelines(...); that is where the
+    # simulated ENOSPC must surface.
+    write_fails.return_value.writelines.side_effect = OSError(
         errno.ENOSPC, 'No space left on device'
     )
     with (
