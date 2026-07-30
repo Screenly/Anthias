@@ -23,14 +23,14 @@ dev-host = [
     "ansible-lint==26.6.0",
     "celery-types==0.26.0",
     "django-stubs==6.0.7",
-    "djangorestframework-stubs==3.17.0",
+    "djangorestframework-stubs==3.17.1",
     "mypy==2.3.0",
-    "ruff==0.15.22",
+    "ruff==0.16.0",
     "tenacity==9.1.4",
-    "types-gunicorn==26.0.0.20260518",
+    "types-gunicorn==26.0.0.20260728",
     "types-netifaces==0.11.0.20260408",
     "types-python-dateutil==2.9.0.20260716",
-    "types-pytz==2026.2.0.20260518",
+    "types-pytz==2026.3.1.20260727",
     "types-PyYAML==6.0.12.20260518",
 ]
 docker-image-builder = [
@@ -75,15 +75,15 @@ server = [
     "psutil==7.2.2",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
-    "pytz==2026.2",
+    "pytz==2026.3.post1",
     "PyYAML==6.0.3",
     "redis==8.0.1",
     "requests==2.34.2",
     "sentry-sdk==2.66.1",
     "tenacity==9.1.4",
-    "sh==2.3.0",
+    "sh==2.4.0",
     "urllib3==2.7.0",
-    "uvicorn[standard]==0.51.0",
+    "uvicorn[standard]==0.52.0",
     "whitenoise==6.12.0",
     "yt-dlp>=2026.7.4",
 ]
@@ -95,12 +95,12 @@ viewer = [
     "netifaces==0.11.0",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
-    "pytz==2026.2",
+    "pytz==2026.3.post1",
     "redis==8.0.1",
     "requests==2.34.2",
     "sentry-sdk==2.66.1",
     "tenacity==9.1.4",
-    "sh==2.3.0",
+    "sh==2.4.0",
     "urllib3==2.7.0",
 ]
 dev = [
@@ -156,7 +156,7 @@ mypy = [
     # tool.mypy.overrides above so its missing-import error is
     # ignored, mirroring the cec / pydbus / sh pattern.
     "Pillow==12.3.0",
-    "pytz==2026.2",
+    "pytz==2026.3.post1",
     "sentry-sdk==2.66.1",
     "whitenoise==6.12.0",
 ]
