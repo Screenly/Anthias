@@ -14,5 +14,14 @@ exclude = [
 ]
 target-version = "py313"
 
+[lint]
+# Pin the legacy default rule set (pycodestyle E4/E7/E9 + Pyflakes F).
+# Ruff 0.16.0 expanded its *default* selection from 59 to 413 rules, so
+# without an explicit `select` a routine ruff bump silently enables ~350
+# new rules (464 findings on this tree at the time of writing). Keeping
+# the historical default here makes ruff upgrades behaviour-preserving;
+# adopting new rule families is a deliberate, separate change.
+select = ["E4", "E7", "E9", "F"]
+
 [format]
 quote-style = "single"
