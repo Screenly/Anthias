@@ -59,7 +59,7 @@ from typing import Any
 
 import sh
 from celery import Task
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import is_low_ram_device, resolve_device_key
 from anthias_server.app.models import Asset
@@ -561,6 +561,14 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
                 f'image dimensions {width}x{height} exceed cap '
                 f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
             )
+        # Bake the EXIF Orientation into the pixels before we drop the
+        # metadata. WebP output carries no Orientation tag and Pillow's
+        # convert/save never auto-applies it, so a portrait HEIC / AVIF
+        # / TIFF (Orientation 6/8 — e.g. a phone photo) would otherwise
+        # be stored rotated 90° (issue 3232). ``in_place`` transposes
+        # the open image without allocating a second full pixel buffer,
+        # keeping the memory discipline noted above.
+        ImageOps.exif_transpose(image, in_place=True)
         # ``convert('RGBA')`` is a no-op when the source is already
         # RGBA (e.g. an HEIC with alpha) and a colour-correct upcast
         # otherwise. The result is a new Image (its own pixel
