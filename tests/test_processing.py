@@ -323,6 +323,38 @@ def test_image_heif_converts_to_lossless_webp(
 
 
 @pytest.mark.django_db
+def test_image_normalisation_applies_exif_orientation(asset_dir: str) -> None:
+    """A portrait photo shot on a rotated camera is stored with
+    landscape pixels plus an EXIF Orientation tag (6 or 8). WebP output
+    carries no Orientation tag and Pillow never auto-applies it, so
+    without an explicit transpose the asset would be baked rotated 90°
+    on screen (issue 3232). Feed ``_convert_image_to_webp`` a 24x16
+    (landscape) source tagged Orientation=6 and assert the WebP comes
+    out 16x24 (upright portrait)."""
+    src = path.join(asset_dir, 'rotated.jpg')
+    landscape = Image.new('RGB', (24, 16), (10, 20, 30))
+    exif = landscape.getexif()
+    exif[0x0112] = 6  # Orientation: rotate 90° CW to display upright
+    landscape.save(src, 'JPEG', exif=exif)
+
+    # Sanity-check the fixture: pixels are landscape, tag says portrait.
+    with Image.open(src) as probe:
+        assert probe.size == (24, 16)
+        assert probe.getexif().get(0x0112) == 6
+
+    out = path.join(asset_dir, 'rotated.webp')
+    processing._convert_image_to_webp(src, out)
+
+    # Without the exif_transpose the WebP would be a landscape 24x16
+    # (pixels copied verbatim, tag dropped); with it the orientation is
+    # baked so the stored image is upright 16x24.
+    with Image.open(out) as result:
+        assert result.size == (16, 24), (
+            f'expected orientation applied (16x24), got {result.size}'
+        )
+
+
+@pytest.mark.django_db
 def test_image_downscaled_to_cap_on_low_ram(asset_dir: str) -> None:
     """On a low-RAM board a >1080p image is downscaled to the pixel cap
     before the RGBA convert + lossless WebP encode. At full resolution a
@@ -1423,7 +1455,8 @@ def test_format_subprocess_stderr_decodes_and_trims() -> None:
         truncate=False,
     )
     out = processing._format_subprocess_stderr(exc)
-    assert 'broken' in out and 'byte' in out
+    assert 'broken' in out
+    assert 'byte' in out
 
     # 3) Long stderr is tail-trimmed with an ellipsis prefix so the
     # operator sees the diagnostic, not 4 KB of build-info preamble.
@@ -1861,10 +1894,8 @@ def test_normalize_on_failure_writes_error_metadata(
 
     asset.refresh_from_db()
     assert asset.is_processing is False
-    assert (
-        'cannot decode' in asset.metadata['error_message']
-        and 'UnidentifiedImageError' in asset.metadata['error_message']
-    )
+    assert 'cannot decode' in asset.metadata['error_message']
+    assert 'UnidentifiedImageError' in asset.metadata['error_message']
     # Earlier metadata keys are preserved.
     assert asset.metadata['original_ext'] == '.tiff'
     notify.assert_called_once_with(asset.asset_id)
