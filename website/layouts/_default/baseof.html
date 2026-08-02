@@ -52,7 +52,7 @@
     <meta name="twitter:image:alt" content="{{ $pageImageAlt }}">
 
     {{- $favicon := resources.Get "images/favicon.ico" -}}
-    {{- $style := resources.Get "styles/style.css" | fingerprint -}}
+    {{- $style := resources.Get "styles/style.css" | minify | fingerprint -}}
     <link rel="icon" href="{{ $favicon.RelPermalink }}">
 
     {{- /* Preload primary font weights so text renders without a FOUT.
@@ -79,7 +79,7 @@
            and we have to special-case it. */ -}}
     {{- $needsChroma := or (strings.Contains .Content `class="chroma"`) (eq .Layout "faq") -}}
     {{- if $needsChroma -}}
-      {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
+      {{- $chroma := resources.Get "styles/chroma.css" | minify | fingerprint -}}
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
     {{- end }}
 
@@ -89,7 +89,7 @@
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Anthias",
-      "description": {{ $defaultDescription | jsonify }},
+      "description": {{ $defaultDescription | jsonify | safeJS }},
       "url": "{{ site.BaseURL }}",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Linux",
@@ -122,10 +122,10 @@
             {{- $first = false }}
         {
           "@type": "Question",
-          "name": {{ .question | jsonify }},
+          "name": {{ .question | jsonify | safeJS }},
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": {{ .answer | markdownify | plainify | jsonify }}
+            "text": {{ .answer | markdownify | plainify | jsonify | safeJS }}
           }
         }
           {{- end -}}
@@ -153,8 +153,8 @@
     {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      "headline": {{ .Title | jsonify }},
-      "description": {{ $description | jsonify }},
+      "headline": {{ .Title | jsonify | safeJS }},
+      "description": {{ $description | jsonify | safeJS }},
       "url": "{{ .Permalink }}",
       "image": "{{ $pageImage }}",
       "publisher": {

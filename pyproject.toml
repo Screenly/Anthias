@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anthias"
-version = "2026.07.3"
+version = "2026.07.4"
 description = "The world's most popular open source digital signage project."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -25,7 +25,7 @@ dev-host = [
     "django-stubs==6.0.7",
     "djangorestframework-stubs==3.17.0",
     "mypy==2.3.0",
-    "ruff==0.15.21",
+    "ruff==0.15.22",
     "tenacity==9.1.4",
     "types-gunicorn==26.0.0.20260518",
     "types-netifaces==0.11.0.20260408",
@@ -43,7 +43,7 @@ docker-image-builder = [
 server = [
     "cec==0.2.8",
     "celery==5.6.3",
-    "certifi==2026.6.17",
+    "certifi==2026.7.22",
     "channels==4.3.2",
     "channels-redis==4.3.0",
     "Django==5.2.14",
@@ -61,6 +61,15 @@ server = [
     # docker/Dockerfile.server.j2). Pillow itself is otherwise unused
     # — adding it here instead of relying on a transitive import keeps
     # the dependency explicit.
+    #
+    # Pinned to 1.4.0: 1.5.0 requires libheif >= 1.23.1 to build from
+    # source, but Debian trixie ships libheif 1.19.8. arm64/x86 install
+    # a prebuilt wheel so they don't compile and were unaffected, but
+    # armhf (pi2/pi3) has no wheel — uv builds from source and the
+    # compile fails ("pillow_heif requires libheif >= 1.23.1"), breaking
+    # the 32-bit board images and the whole master build matrix. Hold at
+    # 1.4.0 until trixie carries libheif >= 1.23.1 (or a 1.5.x with armhf
+    # wheels lands). Do not let dependabot bump this past 1.4.0.
     "Pillow==12.3.0",
     "pillow-heif==1.4.0",
     "psutil==7.2.2",
@@ -70,7 +79,7 @@ server = [
     "PyYAML==6.0.3",
     "redis==8.0.1",
     "requests==2.34.2",
-    "sentry-sdk==2.66.0",
+    "sentry-sdk==2.66.1",
     "tenacity==9.1.4",
     "sh==2.3.0",
     "urllib3==2.7.0",
@@ -80,7 +89,7 @@ server = [
 ]
 viewer = [
     "cec==0.2.8",
-    "certifi==2026.6.17",
+    "certifi==2026.7.22",
     "Django==5.2.14",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
@@ -89,7 +98,7 @@ viewer = [
     "pytz==2026.2",
     "redis==8.0.1",
     "requests==2.34.2",
-    "sentry-sdk==2.66.0",
+    "sentry-sdk==2.66.1",
     "tenacity==9.1.4",
     "sh==2.3.0",
     "urllib3==2.7.0",
@@ -148,7 +157,7 @@ mypy = [
     # ignored, mirroring the cec / pydbus / sh pattern.
     "Pillow==12.3.0",
     "pytz==2026.2",
-    "sentry-sdk==2.66.0",
+    "sentry-sdk==2.66.1",
     "whitenoise==6.12.0",
 ]
 

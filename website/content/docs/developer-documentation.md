@@ -178,7 +178,7 @@ you can also run it locally. There are several ways to do this.
 ### Run the linter using `act`
 
 [`act`](https://nektosact.com/) lets you run GitHub Actions locally. This is useful for testing the CI/CD pipeline locally.
-Installation instructions can be found [here](https://nektosact.com/installation/index.html).
+See the [act installation instructions](https://nektosact.com/installation/index.html).
 
 After installing and setting up `act`, run the following command:
 
@@ -191,8 +191,8 @@ on a specific file, you can try the commands in the next section.
 
 ### Running the linter using `uv`
 
-You have to install `uv` first. You can find the installation instructions
-[here](https://docs.astral.sh/uv/getting-started/installation/).
+You have to install `uv` first. See the
+[uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
 After installing uv, run the following commands:
 
@@ -288,4 +288,11 @@ export QT_QPA_EGLFS_DEBUG=1
 The Anthias WebView is a custom-built web browser based on the [Qt](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by a `src/anthias_webview/build_qt#.sh` script.
 
-For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/src/anthias_webview](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview)
+For further info on these files and more, browse the [`anthias_webview` source directory on GitHub](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview).
+
+## Related documentation
+
+- [QA checklist](/docs/qa/) — the manual testing guide referenced above.
+- [Installation options](/docs/install/) — set up a device to test your changes on.
+- [API reference](/api/) — the REST API you'll build against.
+- [All documentation](/docs/) — the full Anthias documentation index.

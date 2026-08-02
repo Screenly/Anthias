@@ -47,7 +47,7 @@ Alternatively, you can [download our pre-built Balena disk images from the relea
 
 ## Using the images from the releases
 
-You can find the latest release [here](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
+You can find the [latest release on GitHub](https://github.com/Screenly/Anthias/releases/latest). From there, you can download the disk image that you need and flash it to your SD card.
 The image file looks something like `<yyyy>-<mm>-<dd>-anthias-<board>.img.xz`. Take note that the `.img` file is compressed in this `.img.xz` file.
 
 > **Note**
