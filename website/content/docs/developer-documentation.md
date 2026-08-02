@@ -288,7 +288,7 @@ export QT_QPA_EGLFS_DEBUG=1
 The Anthias WebView is a custom-built web browser based on the [Qt](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by a `src/anthias_webview/build_qt#.sh` script.
 
-For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/src/anthias_webview](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview)
+For further info on these files and more, browse the [`anthias_webview` source directory on GitHub](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview).
 
 ## Related documentation
 

@@ -30,6 +30,14 @@
     </div>
 </header>
 
+{{- with .Content -}}
+<section class="bg-white pt-16 lg:pt-20 px-6 md:px-12 lg:px-20">
+    <article class="docs-prose max-w-3xl mx-auto">
+        {{ . }}
+    </article>
+</section>
+{{- end -}}
+
 <section class="bg-white py-16 lg:py-20 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto space-y-16">
         {{- range $tag := $tags -}}

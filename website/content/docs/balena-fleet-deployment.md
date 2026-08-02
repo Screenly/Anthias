@@ -28,7 +28,7 @@ Balena fleet.
 
 ## Create and configure a new fleet
 
-Open your browser and go to https://dashboard.balena-cloud.com. Login to your
+Open your browser and go to the [balenaCloud dashboard](https://dashboard.balena-cloud.com). Login to your
 balenaCloud account if you haven't already. You should be redirected to the
 dashboard.
 
@@ -145,7 +145,7 @@ the fleet and they should be able to download the new release.
 
 Insert a microSD card to your computer.
 
-Open your browser and go to https://dashboard.balena-cloud.com. You should be
+Open your browser and go to the [balenaCloud dashboard](https://dashboard.balena-cloud.com). You should be
 redirected to your balenaCloud dashboard. Click on the fleet you created earlier.
 
 Click "Add device" on the fleet's summary page. The "Add new device" page should
