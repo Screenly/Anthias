@@ -561,6 +561,32 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
                 f'image dimensions {width}x{height} exceed cap '
                 f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
             )
+        # On a low-RAM board, downscale a large photo to the 1080p
+        # pixel budget before the memory-heavy ``convert('RGBA')`` +
+        # lossless WebP encode below. At full resolution a ~24 MP image
+        # drives peak RSS to ~770 MB (measured); a Pi 2/3 normalisation
+        # container is capped around 540 MiB, so the encode OOM-kills
+        # and can reboot the board — and ``method=6`` lossless is
+        # minutes-slow on that CPU. A 1080p board can't display more
+        # detail anyway, so this is lossless for signage. Unlike the
+        # video path (which *rejects* over-cap uploads — a 4K clip can't
+        # be re-encoded on-device), an image downscales cleanly here.
+        # ``thumbnail`` shrinks in place, preserves aspect ratio, and
+        # for JPEG uses libjpeg draft decoding so even the decode of the
+        # oversized source stays cheap.
+        if _exceeds_low_ram_pixel_cap(width, height):
+            # Floor (not round) both target dimensions so the box area
+            # stays at or below the cap — ``thumbnail`` fits within the
+            # box, so the result is guaranteed <= _LOW_RAM_MAX_PIXELS.
+            scale = (_LOW_RAM_MAX_PIXELS / (width * height)) ** 0.5
+            image.thumbnail(
+                # ``max(1, …)`` guards a pathological aspect ratio (a
+                # crafted <5 px tall image that still slips under the
+                # 50 MP bomb cap) from flooring a side to 0, which
+                # ``thumbnail`` rejects.
+                (max(1, int(width * scale)), max(1, int(height * scale))),
+                Image.Resampling.LANCZOS,
+            )
         # ``convert('RGBA')`` is a no-op when the source is already
         # RGBA (e.g. an HEIC with alpha) and a colour-correct upcast
         # otherwise. The result is a new Image (its own pixel
@@ -910,13 +936,14 @@ _LOW_RAM_MAX_PIXELS = 1920 * 1080
 def _exceeds_low_ram_pixel_cap(width: int | None, height: int | None) -> bool:
     """``True`` when this board is low-RAM and the asset exceeds 1080p.
 
-    Returns ``False`` when the host's MemTotal couldn't be measured
-    (host_agent never ran, Redis down) — same "don't block on a
-    measurement gap" principle as ``is_low_ram_device`` itself.
-    Returns ``False`` when ffprobe couldn't read dimensions — that
-    upload already collapsed to ``video_codec='unknown'`` and the
-    codec gate will reject it; we don't pile on a second rejection
-    against a None dimension.
+    Shared by the video gate (which *rejects* over-cap uploads) and the
+    image normaliser (which *downscales* to the cap). Returns ``False``
+    when the host's MemTotal couldn't be measured (host_agent never ran,
+    Redis down) — same "don't block on a measurement gap" principle as
+    ``is_low_ram_device`` itself. Returns ``False`` when the dimensions
+    are unknown (``None``): for video that upload already collapsed to
+    ``video_codec='unknown'`` and the codec gate rejects it; image
+    callers always pass a decoded ``Image.size`` so never hit this.
     """
     if not is_low_ram_device():
         return False
