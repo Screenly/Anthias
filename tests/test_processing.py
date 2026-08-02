@@ -366,6 +366,24 @@ def test_image_full_resolution_on_normal_ram(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
+def test_image_under_cap_not_downscaled_on_low_ram(asset_dir: str) -> None:
+    """Even on a low-RAM board, an image already within the 1080p cap is
+    left untouched — the downscale only kicks in above the budget."""
+    src = path.join(asset_dir, 'small.jpg')
+    # 1280x720 = 0.92 MP, comfortably under the 2.07 MP cap.
+    Image.new('RGB', (1280, 720), (10, 20, 30)).save(src, 'JPEG')
+    out = path.join(asset_dir, 'small.webp')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        processing._convert_image_to_webp(src, out)
+
+    with Image.open(out) as result:
+        assert result.size == (1280, 720)
+
+
+@pytest.mark.django_db
 def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
     """Pillow's UnidentifiedImageError must bubble out so the
     on_failure hook can write metadata.error_message — never leave a

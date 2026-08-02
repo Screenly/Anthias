@@ -580,7 +580,11 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
             # box, so the result is guaranteed <= _LOW_RAM_MAX_PIXELS.
             scale = (_LOW_RAM_MAX_PIXELS / (width * height)) ** 0.5
             image.thumbnail(
-                (int(width * scale), int(height * scale)),
+                # ``max(1, …)`` guards a pathological aspect ratio (a
+                # crafted <5 px tall image that still slips under the
+                # 50 MP bomb cap) from flooring a side to 0, which
+                # ``thumbnail`` rejects.
+                (max(1, int(width * scale)), max(1, int(height * scale))),
                 Image.Resampling.LANCZOS,
             )
         # ``convert('RGBA')`` is a no-op when the source is already
