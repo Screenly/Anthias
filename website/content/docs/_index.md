@@ -153,7 +153,7 @@ $ ./bin/enable_ssl.sh
 
 # Auto Let's Encrypt — needs the domain to resolve to this host and
 # port 80 to be reachable from the internet for the HTTP-01 challenge.
-$ ./bin/enable_ssl.sh --domain example.com --email you@example.com
+$ ./bin/enable_ssl.sh --domain example.com --email <your-email>
 $ ./bin/enable_ssl.sh --domain example.com --staging   # ACME staging
 
 # Bring your own certificate.
@@ -181,4 +181,4 @@ a private CA, install the CA into the `anthias-server` and
 > $ ./bin/add_certificate.sh /path/to/certificate.crt
 > ```
 
-More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
+For more details, see this [guide to generating self-signed certificates with OpenSSL](https://devopscube.com/create-self-signed-certificates-openssl/).

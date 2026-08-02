@@ -40,3 +40,45 @@ You'll need a Screenly API token:
    succeeded.
 
 That's it — your selected assets now live in your Screenly account.
+
+## What gets migrated
+
+The wizard copies the **media assets** stored on the device — images, videos,
+and web-page URLs — up to your Screenly account. Each asset keeps its name and
+its underlying file. What does **not** transfer automatically:
+
+- **Schedules and playlists.** Screenly and Anthias model scheduling
+  differently, so start/end times, durations, and playlist order are not carried
+  over. You rebuild those in the Screenly dashboard once the assets have landed.
+- **Device settings.** Network, SSL, and display configuration are specific to
+  the Anthias host and stay on the device.
+- **Assets already in Screenly.** The wizard skips anything it detects is
+  already present, so re-running a migration will not create duplicates.
+
+## Good to know
+
+- The migration is **non-destructive**: your assets remain on the Anthias
+  device after they are copied. Nothing is deleted locally.
+- You can run the wizard as many times as you like — for example, to push a
+  new batch of assets you added after the first run.
+- Large videos take longer to upload; the per-asset progress bar shows which
+  asset is in flight so you can leave it running unattended.
+
+## Troubleshooting
+
+- **"Invalid token."** Double-check that you copied the whole token (they look
+  like `abcdef.123456…`) and that it has not been revoked in **Settings →
+  Security → API Tokens** on Screenly.
+- **An asset fails to upload.** Use the **Retry _N_ failed** button — it
+  re-uploads only the assets that did not succeed, so you never re-send the ones
+  that already made it across.
+- **The device can't reach Screenly.** The migration talks to Screenly's API
+  over HTTPS, so the device needs outbound internet access. Confirm the player
+  is online before starting.
+
+## Related documentation
+
+- [Importing content from other platforms](/docs/import-content/) — bring assets
+  *into* Anthias from other digital-signage tools.
+- [Asset scheduling](/docs/asset-scheduling/) — how scheduling works on Anthias.
+- [All documentation](/docs/) — the full Anthias documentation index.
