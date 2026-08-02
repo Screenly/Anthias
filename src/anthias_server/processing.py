@@ -568,7 +568,11 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
         # be stored rotated 90° (issue 3232). ``in_place`` transposes
         # the open image without allocating a second full pixel buffer,
         # keeping the memory discipline noted above.
-        ImageOps.exif_transpose(image, in_place=True)
+        #
+        # NOSONAR: ``in_place`` is valid from Pillow 9.5 (we pin
+        # 12.3.0 and mypy passes); SonarCloud's bundled Pillow stubs
+        # are stale and flag it as python:S930 — a false positive.
+        ImageOps.exif_transpose(image, in_place=True)  # NOSONAR
         # ``convert('RGBA')`` is a no-op when the source is already
         # RGBA (e.g. an HEIC with alpha) and a colour-correct upcast
         # otherwise. The result is a new Image (its own pixel
