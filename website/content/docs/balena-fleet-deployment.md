@@ -18,15 +18,13 @@ Balena fleet.
 - Install the [balena CLI](https://docs.balena.io/reference/balena-cli/) on your
   computer. It's recommended to install it on a Linux machine but it should work
   on Windows and macOS as well. If you're on Windows, you can use the Windows
-  Subsystem for Linux (WSL) to install the CLI. Click
-  [here](https://github.com/balena-io/balena-cli/blob/master/INSTALL.md) for the
-  installation instructions.
+  Subsystem for Linux (WSL) to install the CLI. See the
+  [balena CLI installation instructions](https://github.com/balena-io/balena-cli/blob/master/INSTALL.md).
 - On your terminal, login to your balenaCloud account using the CLI by running
   `balena login`.  You'll be prompted to select a login method. Select
   **Web authorization**, which is the recommended way to login. The browser will
   open a new tab. Click **Authorize** to proceed.
-- Install balenaEtcher on your computer. You can download it from
-  [here](https://etcher.balena.io/).
+- Install [balenaEtcher](https://etcher.balena.io/) on your computer.
 
 ## Create and configure a new fleet
 
@@ -94,7 +92,7 @@ Open your terminal and clone the Anthias repository if you haven't already:
 
 ```bash
 $ cd $WORKSPACE_DIRECTORY
-$ git clone git@github.com:Screenly/Anthias.git
+$ git clone https://github.com/Screenly/Anthias.git
 $ cd Anthias/
 ```
 
