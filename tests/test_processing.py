@@ -323,6 +323,49 @@ def test_image_heif_converts_to_lossless_webp(
 
 
 @pytest.mark.django_db
+def test_image_downscaled_to_cap_on_low_ram(asset_dir: str) -> None:
+    """On a low-RAM board a >1080p image is downscaled to the pixel cap
+    before the RGBA convert + lossless WebP encode. At full resolution a
+    many-MP photo drives peak RSS past what a Pi 2/3 normalisation
+    container is capped at and OOM-kills / reboots the board. The
+    downscale is aspect-preserving (a 1080p board can't show more)."""
+    src = path.join(asset_dir, 'big.jpg')
+    # 4000x3000 = 12 MP, ~6x over the 1080p (2.07 MP) cap.
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, 'JPEG')
+    out = path.join(asset_dir, 'big.webp')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        processing._convert_image_to_webp(src, out)
+
+    with Image.open(out) as result:
+        w, h = result.size
+        assert w * h <= processing._LOW_RAM_MAX_PIXELS, (
+            f'{w}x{h} still exceeds the low-RAM cap'
+        )
+        # Aspect ratio (4:3) preserved.
+        assert abs((w / h) - (4000 / 3000)) < 0.02
+
+
+@pytest.mark.django_db
+def test_image_full_resolution_on_normal_ram(asset_dir: str) -> None:
+    """A normal-RAM board keeps full resolution — the downscale is a
+    low-RAM concession, not a global quality drop."""
+    src = path.join(asset_dir, 'big.jpg')
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, 'JPEG')
+    out = path.join(asset_dir, 'big.webp')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=False
+    ):
+        processing._convert_image_to_webp(src, out)
+
+    with Image.open(out) as result:
+        assert result.size == (4000, 3000)
+
+
+@pytest.mark.django_db
 def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
     """Pillow's UnidentifiedImageError must bubble out so the
     on_failure hook can write metadata.error_message — never leave a
