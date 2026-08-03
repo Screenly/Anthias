@@ -1370,7 +1370,8 @@ def test_format_subprocess_stderr_decodes_and_trims() -> None:
         truncate=False,
     )
     out = processing._format_subprocess_stderr(exc)
-    assert 'broken' in out and 'byte' in out
+    assert 'broken' in out
+    assert 'byte' in out
 
     # 3) Long stderr is tail-trimmed with an ellipsis prefix so the
     # operator sees the diagnostic, not 4 KB of build-info preamble.
@@ -1808,10 +1809,8 @@ def test_normalize_on_failure_writes_error_metadata(
 
     asset.refresh_from_db()
     assert asset.is_processing is False
-    assert (
-        'cannot decode' in asset.metadata['error_message']
-        and 'UnidentifiedImageError' in asset.metadata['error_message']
-    )
+    assert 'cannot decode' in asset.metadata['error_message']
+    assert 'UnidentifiedImageError' in asset.metadata['error_message']
     # Earlier metadata keys are preserved.
     assert asset.metadata['original_ext'] == '.tiff'
     notify.assert_called_once_with(asset.asset_id)
