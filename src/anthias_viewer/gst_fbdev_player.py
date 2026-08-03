@@ -251,11 +251,11 @@ def main(argv: list[str] | None = None) -> int:
 
         gi.require_version('Gst', '1.0')
         from gi.repository import GLib, Gst
-    except (ImportError, ValueError) as exc:
+    except (ImportError, ValueError):
         # python3-gi / gir1.2-gstreamer-1.0 ship in the pi1/2/3 viewer
-        # image; fail fast with a greppable line rather than a bare
-        # traceback if a future image regression drops them.
-        logger.error('GStreamer python bindings unavailable: %s', exc)
+        # image; log a clear, greppable line (with traceback) and fail
+        # fast if a future image regression drops them.
+        logger.exception('GStreamer python bindings unavailable')
         return 1
 
     Gst.init(None)
@@ -357,8 +357,8 @@ def main(argv: list[str] | None = None) -> int:
         logger.info('video sink: %s', sink_description)
         try:
             video_sink = Gst.parse_bin_from_description(sink_description, True)
-        except GLib.Error as exc:
-            logger.error('could not build video sink: %s', exc)
+        except GLib.Error:
+            logger.exception('could not build video sink')
             return False
 
         video_sink.get_by_name('fit_convert').get_static_pad('sink').add_probe(

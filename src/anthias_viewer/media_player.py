@@ -652,12 +652,12 @@ class MPVMediaPlayer(MediaPlayer):
                 lambda: bus.playVideo(self.uri, _marshal_dbus_options(options))
             )
             self._playing = True
-        except Exception as exc:
+        except Exception:
             # pydbus surfaces transport / signature errors as
             # generic exceptions. Log + clear local state so a
             # transient AnthiasViewer crash doesn't leave the
             # player thinking a video is on screen.
-            logger.error('MPVMediaPlayer.play failed: %s', exc)
+            logger.exception('MPVMediaPlayer.play failed')
             self._playing = False
 
     def stop(self) -> None:
@@ -667,8 +667,8 @@ class MPVMediaPlayer(MediaPlayer):
             return
         try:
             _call_webview(lambda: bus.stopVideo())
-        except Exception as exc:
-            logger.error('MPVMediaPlayer.stop failed: %s', exc)
+        except Exception:
+            logger.exception('MPVMediaPlayer.stop failed')
 
     def is_playing(self) -> bool:
         return self._playing
@@ -848,8 +848,8 @@ class GstFbdevMediaPlayer(MediaPlayer):
                 stderr=None,
                 start_new_session=True,
             )
-        except OSError as exc:
-            logger.error('GstFbdev: failed to spawn player: %s', exc)
+        except OSError:
+            logger.exception('GstFbdev: failed to spawn player')
             self._proc = None
 
     def stop(self) -> None:
