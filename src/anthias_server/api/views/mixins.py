@@ -8,7 +8,7 @@ from contextlib import suppress
 from inspect import cleandoc
 from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
-from typing import Any, cast
+from typing import Any
 
 from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import filesizeformat
@@ -114,10 +114,13 @@ class RecoverViewMixin(APIView):
     @authorized
     def post(self, request: Request) -> Response:
         publisher = ViewerPublisher.get_instance()
-        # request.data is dict | list per DRF stubs; these upload
-        # endpoints always receive a form/dict body.
-        data = cast(dict[str, Any], request.data)
-        file_upload = data.get('backup_upload')
+        # DRF types request.data as dict | list; a JSON list body would
+        # make .get() raise (500). Treat any non-dict body as "no
+        # upload" so it falls through to the 400 below.
+        data = request.data
+        file_upload = (
+            data.get('backup_upload') if isinstance(data, dict) else None
+        )
         if file_upload is None:
             raise ValidationError(
                 {'backup_upload': 'No backup file uploaded.'}
@@ -289,8 +292,10 @@ class FileAssetViewMixin(APIView):
         # spools the body to a temp file — on a full disk that write
         # is where ENOSPC actually surfaces (Sentry ANTHIAS-3K).
         try:
-            data = cast(dict[str, Any], request.data)
-            file_upload = data.get('file_upload')
+            data = request.data
+            file_upload = (
+                data.get('file_upload') if isinstance(data, dict) else None
+            )
         except OSError as exc:
             if not is_disk_full(exc):
                 raise
@@ -498,7 +503,11 @@ class PlaylistOrderViewMixin(APIView):
     )
     @authorized
     def post(self, request: Request) -> Response:
-        data = cast(dict[str, Any], request.data)
+        data = request.data
+        if not isinstance(data, dict):
+            raise ValidationError(
+                {'ids': 'Expected an object body with an "ids" field.'}
+            )
         asset_ids = data.get('ids', '').split(',')
         save_active_assets_ordering(asset_ids)
 
