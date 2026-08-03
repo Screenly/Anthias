@@ -114,6 +114,7 @@ dev-host = [
     { name = "tenacity" },
     { name = "types-gunicorn" },
     { name = "types-netifaces" },
+    { name = "types-psutil" },
     { name = "types-python-dateutil" },
     { name = "types-pytz" },
     { name = "types-pyyaml" },
@@ -162,6 +163,7 @@ mypy = [
     { name = "tenacity" },
     { name = "types-gunicorn" },
     { name = "types-netifaces" },
+    { name = "types-psutil" },
     { name = "types-python-dateutil" },
     { name = "types-pytz" },
     { name = "types-pyyaml" },
@@ -281,6 +283,7 @@ dev-host = [
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "types-gunicorn", specifier = "==26.0.0.20260728" },
     { name = "types-netifaces", specifier = "==0.11.0.20260408" },
+    { name = "types-psutil", specifier = "==7.2.2.20260408" },
     { name = "types-python-dateutil", specifier = "==2.9.0.20260716" },
     { name = "types-pytz", specifier = "==2026.3.1.20260727" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260518" },
@@ -329,6 +332,7 @@ mypy = [
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "types-gunicorn", specifier = "==26.0.0.20260728" },
     { name = "types-netifaces", specifier = "==0.11.0.20260408" },
+    { name = "types-psutil", specifier = "==7.2.2.20260408" },
     { name = "types-python-dateutil", specifier = "==2.9.0.20260716" },
     { name = "types-pytz", specifier = "==2026.3.1.20260727" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260518" },
@@ -2231,6 +2235,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fb/12/dc9ecb086c06c533206ccd21de7525873c4daa5a563854a90f0d0b2530fd/types_netifaces-0.11.0.20260408.tar.gz", hash = "sha256:5237ed095d79067d9c02f7618511c745332b8bce5bb2a217ff22c49614a80a6b", size = 7352, upload-time = "2026-04-08T04:32:57.855Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/d6/29bc5d805a02938a5804a2ed3351b569c59aefd8dce404487470bed35358/types_netifaces-0.11.0.20260408-py3-none-any.whl", hash = "sha256:e34d79960e820fb279c053d16727b1bad400763ec3f4f399c4651ccab536aa8d", size = 7719, upload-time = "2026-04-08T04:32:57.028Z" },
+]
+
+[[package]]
+name = "types-psutil"
+version = "7.2.2.20260408"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/14/279fd5defebbd560ede04aecd38f7651cccee7336f2264d0889d8c9a9d43/types_psutil-7.2.2.20260408.tar.gz", hash = "sha256:e8053450685965b8cd52afb62569073d00ea9967ae78bb45dff5f606847f97f2", size = 26556, upload-time = "2026-04-08T04:27:44.349Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/af/40/2fd92a4a1ee088c4dbcc44c977908d9869838d9cd2a2fa2e001352f56694/types_psutil-7.2.2.20260408-py3-none-any.whl", hash = "sha256:0c334f6f6bc9e9c24fca5c7d1f0b6971c961a0a2e3956dc5ce704722c01f9762", size = 32861, upload-time = "2026-04-08T04:27:42.929Z" },
 ]
 
 [[package]]

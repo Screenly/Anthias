@@ -29,6 +29,10 @@ dev-host = [
     "tenacity==9.1.4",
     "types-gunicorn==26.0.0.20260728",
     "types-netifaces==0.11.0.20260408",
+    # Direct dev dep: types-psutil used to arrive transitively via
+    # djangorestframework-stubs, which dropped it in 3.17.1 — pin it
+    # directly so the psutil import in the server keeps its stubs.
+    "types-psutil==7.2.2.20260408",
     "types-python-dateutil==2.9.0.20260716",
     "types-pytz==2026.3.1.20260727",
     "types-PyYAML==6.0.12.20260518",

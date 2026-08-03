@@ -8,7 +8,7 @@ from contextlib import suppress
 from inspect import cleandoc
 from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
-from typing import Any
+from typing import Any, cast
 
 from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import filesizeformat
@@ -114,7 +114,10 @@ class RecoverViewMixin(APIView):
     @authorized
     def post(self, request: Request) -> Response:
         publisher = ViewerPublisher.get_instance()
-        file_upload = request.data.get('backup_upload')
+        # request.data is dict | list per DRF stubs; these upload
+        # endpoints always receive a form/dict body.
+        data = cast(dict[str, Any], request.data)
+        file_upload = data.get('backup_upload')
         if file_upload is None:
             raise ValidationError(
                 {'backup_upload': 'No backup file uploaded.'}
@@ -286,7 +289,8 @@ class FileAssetViewMixin(APIView):
         # spools the body to a temp file — on a full disk that write
         # is where ENOSPC actually surfaces (Sentry ANTHIAS-3K).
         try:
-            file_upload = request.data.get('file_upload')
+            data = cast(dict[str, Any], request.data)
+            file_upload = data.get('file_upload')
         except OSError as exc:
             if not is_disk_full(exc):
                 raise
@@ -494,7 +498,8 @@ class PlaylistOrderViewMixin(APIView):
     )
     @authorized
     def post(self, request: Request) -> Response:
-        asset_ids = request.data.get('ids', '').split(',')
+        data = cast(dict[str, Any], request.data)
+        asset_ids = data.get('ids', '').split(',')
         save_active_assets_ordering(asset_ids)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
