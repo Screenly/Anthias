@@ -120,21 +120,17 @@ def _install_dbus_stubs() -> None:
         # touches these when a bus is actually constructed (e.g.
         # ``pydbus.SessionBus()`` inside a function body); tests that
         # hit those paths mock them themselves.
-        setattr(gi_repository, 'Gio', MagicMock(name='gi.repository.Gio'))
-        setattr(gi_repository, 'GLib', MagicMock(name='gi.repository.GLib'))
-        setattr(
-            gi_repository, 'GObject', MagicMock(name='gi.repository.GObject')
-        )
-        setattr(gi_module, 'repository', gi_repository)
+        gi_repository.Gio = MagicMock(name='gi.repository.Gio')  # type: ignore[attr-defined]
+        gi_repository.GLib = MagicMock(name='gi.repository.GLib')  # type: ignore[attr-defined]
+        gi_repository.GObject = MagicMock(name='gi.repository.GObject')  # type: ignore[attr-defined]
+        gi_module.repository = gi_repository  # type: ignore[attr-defined]
         sys.modules['gi'] = gi_module
         sys.modules['gi.repository'] = gi_repository
 
     if pydbus_missing or gi_missing:
         pydbus_module = types.ModuleType('pydbus')
-        setattr(
-            pydbus_module, 'SessionBus', MagicMock(name='pydbus.SessionBus')
-        )
-        setattr(pydbus_module, 'SystemBus', MagicMock(name='pydbus.SystemBus'))
+        pydbus_module.SessionBus = MagicMock(name='pydbus.SessionBus')  # type: ignore[attr-defined]
+        pydbus_module.SystemBus = MagicMock(name='pydbus.SystemBus')  # type: ignore[attr-defined]
         sys.modules['pydbus'] = pydbus_module
 
 

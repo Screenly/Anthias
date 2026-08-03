@@ -16,8 +16,9 @@ change is live. Any failure deactivates back to the process default
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
@@ -46,7 +47,7 @@ class TimezoneActivationMiddleware:
     ) -> None:
         self.get_response = get_response
 
-    def __call__(self, request: 'HttpRequest') -> 'HttpResponse':
+    def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
             timezone.activate(resolve_time_zone())
         except Exception:

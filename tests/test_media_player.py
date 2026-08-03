@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from anthias_viewer import media_player as media_player_module
 from anthias_viewer.media_player import (
     GstFbdevMediaPlayer,
-    MPVMediaPlayer,
     MediaPlayerProxy,
+    MPVMediaPlayer,
     get_alsa_audio_device,
 )
-from anthias_viewer import media_player as media_player_module
 
 logging.disable(logging.CRITICAL)
 
@@ -828,8 +828,8 @@ def test_detect_hdmi_logs_only_on_transitions() -> None:
         # 1. Three identical "no HDMI" calls — WARN once, DEBUG twice.
         with (
             patch('anthias_viewer.media_player.os.scandir', return_value=[]),
-            patch('anthias_viewer.media_player.logging.warning') as mock_warn,
-            patch('anthias_viewer.media_player.logging.debug') as mock_debug,
+            patch('anthias_viewer.media_player.logger.warning') as mock_warn,
+            patch('anthias_viewer.media_player.logger.debug') as mock_debug,
         ):
             for _ in range(3):
                 assert (
@@ -855,8 +855,8 @@ def test_detect_hdmi_logs_only_on_transitions() -> None:
         with (
             scandir_patch,
             open_patch,
-            patch('anthias_viewer.media_player.logging.info') as mock_info,
-            patch('anthias_viewer.media_player.logging.debug') as mock_debug,
+            patch('anthias_viewer.media_player.logger.info') as mock_info,
+            patch('anthias_viewer.media_player.logger.debug') as mock_debug,
         ):
             assert mp._detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi1'
             assert mp._detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi1'
@@ -871,7 +871,7 @@ def test_detect_hdmi_logs_only_on_transitions() -> None:
         # 3. Cable yanked: back to fallback — WARN re-fires on transition.
         with (
             patch('anthias_viewer.media_player.os.scandir', return_value=[]),
-            patch('anthias_viewer.media_player.logging.warning') as mock_warn,
+            patch('anthias_viewer.media_player.logger.warning') as mock_warn,
         ):
             assert mp._detect_hdmi_audio_device() == 'sysdefault:CARD=vc4hdmi0'
             assert mock_warn.call_count == 1

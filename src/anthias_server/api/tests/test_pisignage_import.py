@@ -15,11 +15,13 @@ from urllib.parse import unquote
 import pytest
 import requests
 
-from anthias_server.app.models import Asset
 from anthias_server.api.tests._graphql_helpers import (
     json_response as _resp,
+)
+from anthias_server.api.tests._graphql_helpers import (
     stream_response as _stream,
 )
+from anthias_server.app.models import Asset
 from anthias_server.lib.integrations import pisignage
 from anthias_server.lib.integrations.base import ProviderImportError
 from anthias_server.lib.integrations.registry import (

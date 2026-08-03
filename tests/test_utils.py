@@ -1,7 +1,5 @@
-# coding=utf-8
-
 import io
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -32,7 +30,7 @@ def test_unicode_correctness_in_bottle_templates() -> None:
 
 
 def test_json_tz() -> None:
-    json_str = handler(datetime(2016, 7, 19, 12, 42))
+    json_str = handler(datetime(2016, 7, 19, 12, 42, tzinfo=UTC))
     assert json_str == '2016-07-19T12:42:00+00:00'
 
 
@@ -294,7 +292,7 @@ def test_generate_perfect_paper_password_no_symbols_excludes_punctuation() -> (
 
 
 def test_json_dump_serialises_datetime() -> None:
-    out = json_dump({'when': datetime(2026, 1, 1, 12, 0, 0)})
+    out = json_dump({'when': datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)})
     assert '"2026-01-01T12:00:00+00:00"' in out
 
 

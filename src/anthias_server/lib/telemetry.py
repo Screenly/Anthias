@@ -8,11 +8,13 @@ from collections import Counter
 from requests import exceptions
 from requests import post as requests_post
 
-from anthias_server.app.models import Asset
 from anthias_common.device_helper import parse_cpu_info
-from anthias_server.lib.diagnostics import get_git_branch, get_git_short_hash
 from anthias_common.utils import connect_to_redis, is_balena_app, is_ci
+from anthias_server.app.models import Asset
+from anthias_server.lib.diagnostics import get_git_branch, get_git_short_hash
 from anthias_server.settings import settings
+
+logger = logging.getLogger(__name__)
 
 ANALYTICS_MEASURE_ID = 'G-S3VX8HTPK7'
 ANALYTICS_API_SECRET = 'G8NcBpRIS9qBsOj3ODK8gw'
@@ -58,7 +60,7 @@ def _get_asset_counts() -> dict[str, int]:
     except Exception as exc:
         # Telemetry must never crash the worker — DB unreachable, table
         # missing pre-migrate, etc., all degrade to zeros.
-        logging.debug('asset count query failed: %s', exc)
+        logger.debug('asset count query failed: %s', exc)
         counts = Counter()
 
     result: dict[str, int] = {'asset_count': sum(counts.values())}
@@ -116,7 +118,7 @@ def send_telemetry() -> bool:
         )
     except exceptions.RequestException as exc:
         # Don't set the cooldown — let the next beat tick retry.
-        logging.debug('Telemetry POST failed: %s', exc)
+        logger.debug('Telemetry POST failed: %s', exc)
         return False
 
     # Single SET with ex= so the value and its TTL are written

@@ -24,7 +24,8 @@ the Swagger spec and worth confirming against a live CMS.
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 from urllib.parse import urlparse
 
 import requests

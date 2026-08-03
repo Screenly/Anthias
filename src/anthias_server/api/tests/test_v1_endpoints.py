@@ -14,8 +14,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from anthias_server.app.models import Asset
 from anthias_server.api.tests.test_common import ASSET_CREATION_DATA
+from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
 
 

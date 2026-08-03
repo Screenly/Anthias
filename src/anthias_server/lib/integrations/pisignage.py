@@ -21,7 +21,8 @@ needs the token are worth confirming against a live hosted account.
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 from urllib.parse import quote
 
 import requests

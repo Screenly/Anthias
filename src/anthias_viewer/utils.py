@@ -10,6 +10,8 @@ import requests
 from anthias_common.errors import SigalrmError
 from anthias_server.settings import LISTEN, PORT
 
+logger = logging.getLogger(__name__)
+
 WATCHDOG_PATH = '/tmp/anthias.watchdog'
 
 
@@ -30,7 +32,7 @@ def get_skip_event() -> threading.Event:
 
 
 def command_not_found(*args: Any, **kwargs: Any) -> None:
-    logging.error('Command not found')
+    logger.error('Command not found')
 
 
 def watchdog() -> None:

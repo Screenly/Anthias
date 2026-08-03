@@ -245,7 +245,7 @@ def is_streaming_uri(uri: str) -> bool:
 def remote_video_destination_path(
     asset_id: str,
     ext: str,
-    settings: 'AnthiasSettings | None' = None,
+    settings: AnthiasSettings | None = None,
 ) -> str:
     """Resolve where the downloaded file will land on disk.
 

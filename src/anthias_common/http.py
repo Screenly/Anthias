@@ -16,7 +16,6 @@ import requests
 
 from anthias_common.version import get_anthias_release
 
-
 ANTHIAS_HOMEPAGE = 'https://anthias.screenly.io'
 
 

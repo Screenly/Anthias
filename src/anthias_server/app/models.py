@@ -7,7 +7,6 @@ from typing import Any
 from django.db import models
 from django.utils import timezone
 
-
 ALL_DAYS = [1, 2, 3, 4, 5, 6, 7]
 
 # Upper bound for ``Asset.metadata['refresh_interval_s']`` (seconds).
@@ -115,7 +114,11 @@ def validate_asset_headers(value: Any) -> dict[str, str]:
     ``refresh_interval_s`` is 400'd by the API but clamped by the form).
     """
     if not isinstance(value, dict):
-        raise ValueError('Headers must be an object of name/value pairs.')
+        # ValueError (not TypeError) is intentional: the v2 API write path
+        # maps ValueError -> HTTP 400; a TypeError would surface as 500.
+        raise ValueError(  # noqa: TRY004
+            'Headers must be an object of name/value pairs.'
+        )
     if len(value) > MAX_ASSET_HEADERS:
         raise ValueError(
             f'At most {MAX_ASSET_HEADERS} custom headers are allowed.'

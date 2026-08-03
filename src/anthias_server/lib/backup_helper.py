@@ -6,9 +6,11 @@ import tarfile
 import threading
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import UTC, datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 directories = ['.anthias', 'anthias_assets']
 # Tarballs created by older releases used these top-level entry names.
@@ -48,9 +50,7 @@ def _safe_tar_member(member: tarfile.TarInfo, dest_root: str) -> bool:
     # under dest_root. Catches any normalisation gap above.
     target = path.realpath(path.join(dest_root, name))
     root = path.realpath(dest_root)
-    if not (target == root or target.startswith(root + os.sep)):
-        return False
-    return True
+    return target == root or target.startswith(root + os.sep)
 
 
 class BackupRecoverError(Exception):
@@ -75,11 +75,11 @@ _STREAM_CHUNK_BYTES = 64 * 1024
 def backup_archive_name(name: str = default_archive_name) -> str:
     return '{}-{}.tar.gz'.format(
         name if name else default_archive_name,
-        datetime.now().strftime('%Y-%m-%dT%H-%M-%S'),
+        datetime.now(UTC).strftime('%Y-%m-%dT%H-%M-%S'),
     )
 
 
-def stream_backup() -> Generator[bytes, None, None]:
+def stream_backup() -> Generator[bytes]:
     """Yield a backup tar.gz as it is being built.
 
     The download path used to write the whole archive to disk before
@@ -105,18 +105,20 @@ def stream_backup() -> Generator[bytes, None, None]:
 
     def produce() -> None:
         try:
-            with os.fdopen(write_fd, 'wb') as write_file:
-                with tarfile.open(
+            with (
+                os.fdopen(write_fd, 'wb') as write_file,
+                tarfile.open(
                     fileobj=write_file,
                     mode='w|gz',
                     compresslevel=BACKUP_COMPRESSLEVEL,
-                ) as tar:
-                    for directory in directories:
-                        tar.add(path.join(home, directory), arcname=directory)
+                ) as tar,
+            ):
+                for directory in directories:
+                    tar.add(path.join(home, directory), arcname=directory)
         except BrokenPipeError:
-            logging.info('backup download cancelled by the client')
+            logger.info('backup download cancelled by the client')
         except Exception as exc:
-            logging.exception('backup stream failed')
+            logger.exception('backup stream failed')
             produce_error.append(exc)
 
     producer = threading.Thread(
@@ -138,7 +140,7 @@ def stream_backup() -> Generator[bytes, None, None]:
             raise produce_error[0]
 
 
-async def astream_backup() -> AsyncGenerator[bytes, None]:
+async def astream_backup() -> AsyncGenerator[bytes]:
     """Async front-end to stream_backup() for the ASGI download view.
 
     StreamingHttpResponse only *streams* an asynchronous iterator under
@@ -211,9 +213,9 @@ def create_backup(name: str = default_archive_name) -> str:
             for directory in directories:
                 path_to_dir = path.join(home, directory)
                 tar.add(path_to_dir, arcname=directory)
-    except IOError as e:
+    except OSError:
         remove(file_path)
-        raise e
+        raise
 
     return archive_name
 
@@ -221,7 +223,7 @@ def create_backup(name: str = default_archive_name) -> str:
 def recover(file_path: str) -> None:
     home = getenv('HOME')
     if not home:
-        logging.error('No HOME variable')
+        logger.error('No HOME variable')
         # Alternatively, we can raise an Exception using a custom message,
         # or we can create a new class that extends Exception.
         sys.exit(1)
@@ -245,7 +247,7 @@ def recover(file_path: str) -> None:
             extract_kwargs['filter'] = 'data'
         for member in tar.getmembers():
             if not _safe_tar_member(member, home):
-                logging.warning(
+                logger.warning(
                     'Skipping unsafe tar member during recover: %r',
                     member.name,
                 )

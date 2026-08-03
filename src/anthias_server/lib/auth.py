@@ -68,13 +68,12 @@ from __future__ import annotations
 import logging
 import os.path
 import re
+from collections.abc import Callable
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ParamSpec,
-    TypeAlias,
     TypeVar,
     cast,
 )
@@ -94,7 +93,7 @@ if TYPE_CHECKING:
     # forward-ref ``'AnyRequest'`` as a type rather than a module
     # variable — the implicit form flipped to "not valid as a type"
     # once settings.py started importing this module (ANTHIAS-3D).
-    AnyRequest: TypeAlias = HttpRequest | DRFRequest
+    type AnyRequest = HttpRequest | DRFRequest
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -320,7 +319,7 @@ def __getattr__(name: str) -> Any:
     return classes[name]
 
 
-def _is_safe_login_next_source(request: 'HttpRequest') -> bool:
+def _is_safe_login_next_source(request: HttpRequest) -> bool:
     """Decide whether a request's path is worth round-tripping through
     the login form's ``?next=`` parameter.
 
@@ -341,12 +340,10 @@ def _is_safe_login_next_source(request: 'HttpRequest') -> bool:
     """
     if request.method != 'GET':
         return False
-    if request.headers.get('HX-Request') is not None:
-        return False
-    return True
+    return request.headers.get('HX-Request') is None
 
 
-def _login_redirect(request: 'HttpRequest') -> 'HttpResponse':
+def _login_redirect(request: HttpRequest) -> HttpResponse:
     """Send an unauthenticated request to the login page, preserving
     the original destination via ``?next=`` when it's safe to do so."""
     from urllib.parse import urlencode
@@ -365,9 +362,9 @@ def _login_redirect(request: 'HttpRequest') -> 'HttpResponse':
     )
 
 
-def authorized(
+def authorized[**P, R](
     orig: Callable[P, R],
-) -> 'Callable[P, R | HttpResponse]':
+) -> Callable[P, R | HttpResponse]:
     """Feature-flagged ``@login_required`` shim.
 
     * When ``settings['auth_backend']`` is empty the call passes
@@ -393,7 +390,7 @@ def authorized(
     from anthias_server.settings import settings
 
     @wraps(orig)
-    def decorated(*args: P.args, **kwargs: P.kwargs) -> 'R | HttpResponse':
+    def decorated(*args: P.args, **kwargs: P.kwargs) -> R | HttpResponse:
         if not settings['auth_backend']:
             return orig(*args, **kwargs)
 
@@ -462,8 +459,8 @@ _VALID_AUTH_BACKENDS = frozenset({'', 'auth_basic'})
 
 
 def _operator_user(
-    request: 'AnyRequest',
-) -> 'User | None':
+    request: AnyRequest,
+) -> User | None:
     """The User row whose credentials gate this device.
 
     When auth is currently enabled the calling view is gated by
@@ -482,7 +479,7 @@ def _operator_user(
     return cast('User', user)
 
 
-def _persisted_operator() -> 'User | None':
+def _persisted_operator() -> User | None:
     """The first persisted operator-account User row, if any.
 
     Used by ``apply_auth_settings`` to detect the case where auth is
@@ -526,7 +523,7 @@ def _require_current_password_correct(
 
 def _validate_password_strength(
     new_pwd: str,
-    user: 'User | None',
+    user: User | None,
 ) -> None:
     """Run the project's ``AUTH_PASSWORD_VALIDATORS`` against the
     proposed password and translate any rejection into
@@ -549,7 +546,7 @@ def _validate_password_strength(
 
 
 def _check_username_available(
-    operator: 'User',
+    operator: User,
     new_username: str,
 ) -> None:
     """Reject a username change that would collide with another row
@@ -568,7 +565,7 @@ def _check_username_available(
 
 
 def _update_existing_operator(
-    operator: 'User',
+    operator: User,
     *,
     new_username: str,
     new_pwd: str,
@@ -648,7 +645,7 @@ def _create_initial_operator(
 
 
 def apply_auth_settings(
-    request: 'AnyRequest',
+    request: AnyRequest,
     *,
     new_auth_backend: str,
     current_pwd: str,

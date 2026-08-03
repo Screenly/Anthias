@@ -8,12 +8,14 @@ os.environ.setdefault(
 
 django_asgi_app = get_asgi_application()
 
-from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
-from channels.security.websocket import (  # noqa: E402
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import (
     AllowedHostsOriginValidator,
 )
 
-from anthias_server.django_project.routing import websocket_urlpatterns  # noqa: E402
+from anthias_server.django_project.routing import (
+    websocket_urlpatterns,
+)
 
 # AllowedHostsOriginValidator gates WebSocket handshakes on the same
 # ALLOWED_HOSTS list as Django's HTTP layer. With ALLOWED_HOSTS=['*']

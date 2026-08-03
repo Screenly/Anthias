@@ -1,5 +1,5 @@
-from datetime import timezone
-from typing import Any
+from datetime import UTC
+from typing import Any, ClassVar
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
@@ -19,18 +19,18 @@ from rest_framework.serializers import (
 )
 
 from anthias_common.utils import SCREEN_ROTATION_CHOICES
-from anthias_server.django_project.settings import is_valid_time_zone
+from anthias_server.api.serializers import UpdateAssetSerializer
+from anthias_server.api.serializers.mixins import CreateAssetSerializerMixin
 from anthias_server.app.models import (
-    Asset,
     DURATION_S_MAX,
     MAX_ASSET_HEADERS,
     REFRESH_INTERVAL_S_MAX,
+    Asset,
     clamp_refresh_interval,
     normalize_asset_headers,
     validate_asset_headers,
 )
-from anthias_server.api.serializers import UpdateAssetSerializer
-from anthias_server.api.serializers.mixins import CreateAssetSerializerMixin
+from anthias_server.django_project.settings import is_valid_time_zone
 
 
 def _normalise_play_days(value: list[int]) -> list[int]:
@@ -193,7 +193,7 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
 
     class Meta:
         model = Asset
-        fields = [
+        fields: ClassVar = [
             'asset_id',
             'name',
             'uri',
@@ -217,7 +217,7 @@ class AssetSerializerV2(ModelSerializer[Asset], CreateAssetSerializerMixin):
             'refresh_interval_s',
             'custom_headers',
         ]
-        read_only_fields = [
+        read_only_fields: ClassVar = [
             'is_reachable',
             'last_reachability_check',
             # ``metadata`` is owned by the upload-pipeline tasks
@@ -250,8 +250,8 @@ class CreateAssetSerializerV2(
     ext = CharField(write_only=True, required=False)
     name = CharField()
     uri = CharField()
-    start_date = DateTimeField(default_timezone=timezone.utc)
-    end_date = DateTimeField(default_timezone=timezone.utc)
+    start_date = DateTimeField(default_timezone=UTC)
+    end_date = DateTimeField(default_timezone=UTC)
     duration = IntegerField(min_value=0, max_value=DURATION_S_MAX)
     mimetype = CharField()
     is_enabled = BooleanField()

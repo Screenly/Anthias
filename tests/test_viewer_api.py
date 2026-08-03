@@ -25,7 +25,6 @@ from anthias_common.internal_auth import (
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
 
-
 _DEFAULT_PLAY_DAYS = '[1, 2, 3, 4, 5, 6, 7]'
 
 # Mirrors anthias_server.api.views.v2._VIEWER_WINDOWED_DEADLINE_CAP_S
@@ -241,7 +240,7 @@ def test_playlist_deadline_caps_when_asset_has_time_window(
     # exactly and the windowed cap should land at ``now + 60s`` with
     # no slack to account for. Parse rather than string-compare so
     # the assertion isn't sensitive to DRF's exact ISO format.
-    deadline = datetime.fromisoformat(body['deadline'].replace('Z', '+00:00'))
+    deadline = datetime.fromisoformat(body['deadline'])
     assert deadline == now + timedelta(seconds=_VIEWER_WINDOWED_DEADLINE_CAP_S)
 
 

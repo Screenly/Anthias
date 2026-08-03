@@ -20,8 +20,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.helpers import delete_asset_with_file
-from anthias_server.app.models import Asset
+from anthias_common.utils import (
+    DISK_FULL_ERROR,
+    connect_to_redis,
+    is_disk_full,
+)
 from anthias_server.api.helpers import save_active_assets_ordering
 from anthias_server.api.serializers.mixins import (
     BackupViewSerializerMixin,
@@ -30,15 +33,12 @@ from anthias_server.api.serializers.mixins import (
     RebootViewSerializerMixin,
     ShutdownViewSerializerMixin,
 )
+from anthias_server.app.helpers import delete_asset_with_file
+from anthias_server.app.models import Asset
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import authorized
 from anthias_server.lib.github import is_up_to_date
-from anthias_common.utils import (
-    DISK_FULL_ERROR,
-    connect_to_redis,
-    is_disk_full,
-)
 from anthias_server.settings import ViewerPublisher, settings
 
 logger = logging.getLogger(__name__)
@@ -139,8 +139,7 @@ class RecoverViewMixin(APIView):
             # (settings_recover) already streams; this brings the API
             # path in line.
             with open(location, 'wb') as f:
-                for chunk in file_upload.chunks():
-                    f.write(chunk)
+                f.writelines(file_upload.chunks())
 
             try:
                 backup_helper.recover(location)

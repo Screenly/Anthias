@@ -1,6 +1,6 @@
-from datetime import timezone
+from datetime import UTC
 from os import path
-from typing import Any
+from typing import Any, ClassVar
 
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
@@ -12,9 +12,8 @@ from rest_framework.serializers import (
     Serializer,
 )
 
-from anthias_server.app.models import Asset, DURATION_S_MAX
 from anthias_common.utils import validate_url
-
+from anthias_server.app.models import DURATION_S_MAX, Asset
 
 DURATION_RANGE_ERROR = (
     f'duration must be between 0 and {DURATION_S_MAX} seconds.'
@@ -103,7 +102,7 @@ class AssetSerializer(ModelSerializer[Asset]):
 
     class Meta:
         model = Asset
-        fields = [
+        fields: ClassVar = [
             'asset_id',
             'name',
             'uri',
@@ -121,7 +120,7 @@ class AssetSerializer(ModelSerializer[Asset]):
             'last_reachability_check',
             'metadata',
         ]
-        read_only_fields = [
+        read_only_fields: ClassVar = [
             'is_reachable',
             'last_reachability_check',
             # Owned by the upload-pipeline tasks; v1 exposes it read-only
@@ -140,8 +139,8 @@ class UpdateAssetSerializer(Serializer[Asset]):
     # NOT widen any other field "for consistency" — only widen those that
     # are actually overridden in subclasses.
     name = CharField()
-    start_date = DateTimeField(default_timezone=timezone.utc)
-    end_date = DateTimeField(default_timezone=timezone.utc)
+    start_date = DateTimeField(default_timezone=UTC)
+    end_date = DateTimeField(default_timezone=UTC)
     duration: Field[Any, Any, Any, Any] = CharField()
     is_enabled: Field[Any, Any, Any, Any] = IntegerField(
         min_value=0, max_value=1

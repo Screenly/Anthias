@@ -29,6 +29,7 @@ straight DOM query.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -49,7 +50,6 @@ from tests._seed_data import (
     home_seed_assets,
 )
 from tests.conftest import MarketingShotFn
-
 
 BASE_URL = 'http://localhost:8080'
 SETTINGS_URL = f'{BASE_URL}/settings/'
@@ -93,7 +93,7 @@ class _TemporaryCopy:
         shutil.copy2(self.original_path, self.path)
         return self.path
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(self, *_: object) -> None:
         try:
             os.remove(self.path)
         except FileNotFoundError:
@@ -1865,11 +1865,9 @@ def test_skip_buttons_publish_correct_command(
             f'expected viewer publish {expected_command!r}, got {published!r}'
         )
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sub.unsubscribe()
             sub.close()
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------

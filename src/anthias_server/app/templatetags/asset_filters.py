@@ -16,8 +16,8 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from django.template import Library
-from django.utils.safestring import SafeString, mark_safe
 from django.utils import timezone
+from django.utils.safestring import SafeString, mark_safe
 
 from anthias_server.settings import settings
 

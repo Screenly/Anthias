@@ -13,6 +13,7 @@ from anthias_common.device_helper import get_device_type
 from anthias_common.utils import clamp_screen_rotation
 from anthias_server.settings import settings
 
+logger = logging.getLogger(__name__)
 
 # Lazy import for the pydbus proxy: the viewer service hands
 # MPVMediaPlayer the same ``browser_bus`` object it uses for
@@ -119,7 +120,7 @@ def _detect_hdmi_audio_device() -> str:
     try:
         entries = list(os.scandir('/sys/class/drm'))
     except OSError as exc:
-        logging.debug('Could not scan /sys/class/drm: %s', exc)
+        logger.debug('Could not scan /sys/class/drm: %s', exc)
         entries = []
 
     hdmi_to_alsa = {'HDMI-A-1': 'vc4hdmi0', 'HDMI-A-2': 'vc4hdmi1'}
@@ -127,7 +128,7 @@ def _detect_hdmi_audio_device() -> str:
     # `os.DirEntry[str]` is subscriptable on 3.9+, but quoting it keeps
     # this module loadable on any interpreter without depending on
     # PEP-585 runtime support.
-    ports: 'list[tuple[str, os.DirEntry[str]]]' = []
+    ports: list[tuple[str, os.DirEntry[str]]] = []
     for entry in entries:
         for suffix in hdmi_to_alsa:
             if entry.name.endswith(suffix):
@@ -150,7 +151,7 @@ def _detect_hdmi_audio_device() -> str:
                     detected_card = card_name
                     break
         except OSError as exc:
-            logging.debug(
+            logger.debug(
                 'HDMI status read failed for %s: %s', status_path, exc
             )
 
@@ -158,13 +159,13 @@ def _detect_hdmi_audio_device() -> str:
     if detected_card is not None:
         device = f'sysdefault:CARD={detected_card}'
         if device != _last_detected_device:
-            logging.info(
+            logger.info(
                 'Detected connected HDMI: %s -> %s',
                 detected_entry_name,
                 device,
             )
         else:
-            logging.debug(
+            logger.debug(
                 'Detected connected HDMI: %s -> %s',
                 detected_entry_name,
                 device,
@@ -176,11 +177,11 @@ def _detect_hdmi_audio_device() -> str:
     if device != _last_detected_device:
         # First call, or we just lost a previously detected
         # connection — be loud so the cause is visible in logs.
-        logging.warning(
+        logger.warning(
             'No connected HDMI detected, falling back to %s', device
         )
     else:
-        logging.debug('No connected HDMI detected, falling back to %s', device)
+        logger.debug('No connected HDMI detected, falling back to %s', device)
     _last_detected_device = device
     return device
 
@@ -261,7 +262,7 @@ def _list_pulse_sinks() -> list[str]:
             check=True,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        logging.debug('Could not list PulseAudio sinks: %s', exc)
+        logger.debug('Could not list PulseAudio sinks: %s', exc)
         return []
 
     sinks = []
@@ -346,7 +347,7 @@ def _list_pulse_cards() -> list[_PulseCard]:
             check=True,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        logging.debug('Could not list PulseAudio cards: %s', exc)
+        logger.debug('Could not list PulseAudio cards: %s', exc)
         return []
 
     cards: list[_PulseCard] = []
@@ -419,14 +420,14 @@ def _activate_output_profile(audio_output: str) -> bool:
                 check=True,
             )
         except (OSError, subprocess.SubprocessError) as exc:
-            logging.warning(
+            logger.warning(
                 'Could not activate profile %r on card %r: %s',
                 target,
                 card.name,
                 exc,
             )
             return False
-        logging.info(
+        logger.info(
             'audio_output=%r: activated card %r profile %r to expose its sink',
             audio_output,
             card.name,
@@ -478,13 +479,13 @@ def _resolve_pulse_sink(audio_output: str) -> str:
     global _last_pulse_resolution
     if (audio_output, result) != _last_pulse_resolution:
         if chosen is not None:
-            logging.info(
+            logger.info(
                 'audio_output=%r routed to PulseAudio sink %r',
                 audio_output,
                 chosen,
             )
         else:
-            logging.warning(
+            logger.warning(
                 'audio_output=%r: no matching PulseAudio sink among %s; '
                 'falling back to the default sink. Check '
                 '`pactl list short sinks` in the viewer container.',
@@ -634,7 +635,7 @@ class MPVMediaPlayer(MediaPlayer):
 
         bus = get_browser_bus()
         if bus is None:
-            logging.error(
+            logger.error(
                 'MPVMediaPlayer.play: AnthiasViewer D-Bus proxy not '
                 'set — call set_browser_bus() after the webview '
                 'handshake (src/anthias_viewer/__init__.py).'
@@ -651,12 +652,12 @@ class MPVMediaPlayer(MediaPlayer):
                 lambda: bus.playVideo(self.uri, _marshal_dbus_options(options))
             )
             self._playing = True
-        except Exception as exc:
+        except Exception:
             # pydbus surfaces transport / signature errors as
             # generic exceptions. Log + clear local state so a
             # transient AnthiasViewer crash doesn't leave the
             # player thinking a video is on screen.
-            logging.error('MPVMediaPlayer.play failed: %s', exc)
+            logger.exception('MPVMediaPlayer.play failed')
             self._playing = False
 
     def stop(self) -> None:
@@ -666,8 +667,8 @@ class MPVMediaPlayer(MediaPlayer):
             return
         try:
             _call_webview(lambda: bus.stopVideo())
-        except Exception as exc:
-            logging.error('MPVMediaPlayer.stop failed: %s', exc)
+        except Exception:
+            logger.exception('MPVMediaPlayer.stop failed')
 
     def is_playing(self) -> bool:
         return self._playing
@@ -828,7 +829,7 @@ class GstFbdevMediaPlayer(MediaPlayer):
     def play(self) -> None:
         self.stop()  # never leave a previous pipeline holding the fb
         argv = self._build_command()
-        logging.info('GstFbdev play: %s', ' '.join(argv))
+        logger.info('GstFbdev play: %s', ' '.join(argv))
         # The helper loops the clip for the whole on-screen slot (the
         # asset_loop sleeps for ``duration`` then stop()s us) and exits
         # non-zero on a pipeline error so a persistent failure doesn't
@@ -847,8 +848,8 @@ class GstFbdevMediaPlayer(MediaPlayer):
                 stderr=None,
                 start_new_session=True,
             )
-        except OSError as exc:
-            logging.error('GstFbdev: failed to spawn player: %s', exc)
+        except OSError:
+            logger.exception('GstFbdev: failed to spawn player')
             self._proc = None
 
     def stop(self) -> None:
@@ -940,5 +941,5 @@ class MediaPlayerProxy:
             try:
                 cls.INSTANCE.stop()
             except Exception as exc:
-                logging.debug('reset(): stop() raised: %s', exc)
+                logger.debug('reset(): stop() raised: %s', exc)
         cls.INSTANCE = None

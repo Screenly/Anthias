@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import contextlib
 import logging
 import os
@@ -102,7 +99,7 @@ def test_empty(viewer_fixtures: _ViewerFixtures) -> None:
     with mock.patch(
         'anthias_viewer.scheduling.generate_asset_list', m_asset_list
     ):
-        setattr(viewer_fixtures.u, 'scheduler', Scheduler())
+        viewer_fixtures.u.scheduler = Scheduler()
 
         m_asset_list.assert_called_once()
 
@@ -171,9 +168,9 @@ def test_setup_reraises_unrelated_busget_error(
         with (
             mock.patch('pydbus.SessionBus', mock.Mock(return_value=fake_bus)),
             mock.patch.object(viewer_fixtures.u, 'browser', None),
+            pytest.raises(RuntimeError, match='Disconnected'),
         ):
-            with pytest.raises(RuntimeError, match='Disconnected'):
-                viewer_fixtures.u.setup()
+            viewer_fixtures.u.setup()
     finally:
         viewer_fixtures.p_loadb.stop()
 
@@ -442,9 +439,9 @@ def test_load_browser_raises_after_exhausting_retries(
             mock.patch.object(
                 viewer_fixtures.u, 'BROWSER_SPAWN_MAX_ATTEMPTS', 4
             ),
+            pytest.raises(viewer_fixtures.u.WebviewLaunchError),
         ):
-            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
-                viewer_fixtures.u.load_browser()
+            viewer_fixtures.u.load_browser()
     finally:
         viewer_fixtures.p_sleep.stop()
 
@@ -462,11 +459,15 @@ def test_load_browser_missing_binary_short_circuits(
 
     viewer_fixtures.p_sleep.start()
     try:
-        with mock.patch.object(
-            viewer_fixtures.u, '_spawn_webview_once', side_effect=fake_spawn
+        with (
+            mock.patch.object(
+                viewer_fixtures.u,
+                '_spawn_webview_once',
+                side_effect=fake_spawn,
+            ),
+            pytest.raises(viewer_fixtures.u.WebviewBinaryMissingError),
         ):
-            with pytest.raises(viewer_fixtures.u.WebviewBinaryMissingError):
-                viewer_fixtures.u.load_browser()
+            viewer_fixtures.u.load_browser()
     finally:
         viewer_fixtures.p_sleep.stop()
 
@@ -487,13 +488,17 @@ def test_load_browser_inline_budget_limits_attempts(
 
     viewer_fixtures.p_sleep.start()
     try:
-        with mock.patch.object(
-            viewer_fixtures.u, '_spawn_webview_once', side_effect=fake_spawn
+        with (
+            mock.patch.object(
+                viewer_fixtures.u,
+                '_spawn_webview_once',
+                side_effect=fake_spawn,
+            ),
+            pytest.raises(viewer_fixtures.u.WebviewLaunchError),
         ):
-            with pytest.raises(viewer_fixtures.u.WebviewLaunchError):
-                viewer_fixtures.u.load_browser(
-                    max_attempts=2, backoff_cap=2, startup_timeout=5
-                )
+            viewer_fixtures.u.load_browser(
+                max_attempts=2, backoff_cap=2, startup_timeout=5
+            )
     finally:
         viewer_fixtures.p_sleep.stop()
 
@@ -1052,8 +1057,10 @@ def test_view_webpage_without_nocache_leaves_url_untouched(
         # so the next rotation skips the D-Bus hop instead of
         # refilling journald.
         (
-            'GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: '
-            "No such method 'setReloadInterval'",
+            (
+                'GDBus.Error:org.freedesktop.DBus.Error.UnknownMethod: '
+                "No such method 'setReloadInterval'"
+            ),
             1,
         ),
         # Transient D-Bus error (bus disconnect, timeout, race during
@@ -1268,9 +1275,9 @@ def test_send_to_webview_raises_when_retry_also_fails(
     with (
         mock.patch.object(viewer_fixtures.u, 'browser', None),
         mock.patch.object(viewer_fixtures.u, 'load_browser', m_load_browser),
+        pytest.raises(RuntimeError, match='NoReply'),
     ):
-        with pytest.raises(RuntimeError, match='NoReply'):
-            viewer_fixtures.u._send_to_webview(send)
+        viewer_fixtures.u._send_to_webview(send)
 
     assert send.call_count == 2
     m_load_browser.assert_called_once_with(**_INLINE_BUDGET_KWARGS)

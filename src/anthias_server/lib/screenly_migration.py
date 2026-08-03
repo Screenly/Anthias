@@ -24,7 +24,6 @@ from anthias_common.http import AnthiasSession
 from anthias_server.app.models import Asset
 from anthias_server.app.views_files import ANTHIAS_ASSETS_ROOT
 
-
 SCREENLY_API_BASE = 'https://api.screenlyapp.com/api/v4.1'
 
 # Module-level session so every outbound migration call carries the

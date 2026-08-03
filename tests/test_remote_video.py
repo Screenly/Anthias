@@ -26,7 +26,6 @@ from anthias_common.remote_video import (
 )
 from anthias_server.settings import AnthiasSettings
 
-
 # ---------------------------------------------------------------------------
 # Extension-based classify (no HEAD call)
 # ---------------------------------------------------------------------------

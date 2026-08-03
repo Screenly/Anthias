@@ -349,7 +349,7 @@ if not DEBUG:
 else:
     # SECURITY WARNING: keep the secret key used in production secret!
     SECRET_KEY = (
-        'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
+        'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'
     )
 
 # Anthias is a local-network signage device with no fixed public
@@ -614,12 +614,10 @@ def is_valid_time_zone(
         zoneinfo.ZoneInfo(time_zone)
     except (ValueError, zoneinfo.ZoneInfoNotFoundError):
         return False
-    if (
+    return not (
         zoneinfo_root.exists()
         and not zoneinfo_root.joinpath(*time_zone.split('/')).exists()
-    ):
-        return False
-    return True
+    )
 
 
 def get_host_time_zone(

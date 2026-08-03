@@ -52,7 +52,7 @@ def is_youtube_url(uri: str) -> bool:
 
 def youtube_destination_path(
     asset_id: str,
-    settings: 'AnthiasSettings | None' = None,
+    settings: AnthiasSettings | None = None,
 ) -> str:
     """Resolve where the downloaded mp4 will land.
 

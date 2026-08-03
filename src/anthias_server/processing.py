@@ -64,6 +64,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from anthias_common.board import is_low_ram_device, resolve_device_key
 from anthias_server.app.models import Asset
 
+logger = logging.getLogger(__name__)
 
 # Image extensions we route through the conversion task. The
 # motivation differs by format:
@@ -407,11 +408,11 @@ def _notify(asset_id: str, *, reload_viewer: bool = True) -> None:
             # The viewer poll picks up the change ~1 tick later; a
             # Redis flake here doesn't block the operator from
             # seeing the new asset.
-            logging.exception('normalize task: viewer reload publish failed')
+            logger.exception('normalize task: viewer reload publish failed')
     try:
         notify_asset_update(asset_id)
     except Exception:
-        logging.exception(
+        logger.exception(
             'normalize task: notify_asset_update failed for %s', asset_id
         )
 
@@ -436,7 +437,7 @@ try:  # pragma: no cover - import-time registration
 
     pillow_heif.register_heif_opener()
 except Exception:  # pragma: no cover - graceful no-op on hosts w/o libheif
-    logging.info(
+    logger.info(
         'pillow-heif not available; HEIC/HEIF uploads will fail until '
         'libheif1 + pillow-heif are installed in this environment.'
     )
@@ -510,7 +511,7 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
                 _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
             _notify(asset_id)
         except Exception:
-            logging.exception(
+            logger.exception(
                 'normalize on_failure cleanup failed for %s', asset_id
             )
 
@@ -693,7 +694,7 @@ def _run_image_normalisation(asset: Asset) -> None:
         try:
             os.remove(src_uri)
         except OSError:
-            logging.exception(
+            logger.exception(
                 'normalize_image_asset: removing original %s failed',
                 src_uri,
             )
@@ -1112,13 +1113,19 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
     else:
         return []
     steps = [
-        f'Download and install HandBrake — it is free — from '
-        f'{HANDBRAKE_URL} (Windows, macOS, and Linux).',
-        'Open HandBrake. When it asks for a source, pick your video '
-        'file (or drag the file onto the window).',
-        'In the Presets panel on the right, choose "Fast 1080p30" '
-        '(under the "General" group). This makes a 1080p MP4 — the '
-        'format this screen plays.',
+        (
+            f'Download and install HandBrake — it is free — from '
+            f'{HANDBRAKE_URL} (Windows, macOS, and Linux).'
+        ),
+        (
+            'Open HandBrake. When it asks for a source, pick your video '
+            'file (or drag the file onto the window).'
+        ),
+        (
+            'In the Presets panel on the right, choose "Fast 1080p30" '
+            '(under the "General" group). This makes a 1080p MP4 — the '
+            'format this screen plays.'
+        ),
     ]
     if not prefers_h264:
         # Pi 5 and friends reject H.264; nudge the encoder to HEVC.
@@ -1129,8 +1136,10 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
         )
     steps.extend(
         [
-            'Click "Browse" next to "Save As" at the bottom and pick '
-            'where to save the converted file.',
+            (
+                'Click "Browse" next to "Save As" at the bottom and pick '
+                'where to save the converted file.'
+            ),
             'Click the green "Start Encode" button at the top.',
             'When it finishes, upload the new MP4 to Anthias as a new asset.',
         ]

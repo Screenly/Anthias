@@ -1,10 +1,8 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import hashlib
 import hmac
+from collections.abc import Mapping
 from os import getenv
-from typing import Any, Mapping
+from typing import Any
 
 INTERNAL_AUTH_HEADER = 'X-Anthias-Internal-Token'
 INTERNAL_AUTH_ENV = 'ANTHIAS_INTERNAL_TOKEN'

@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import configparser
 import json
 import logging
@@ -12,6 +9,8 @@ from anthias_common.errors import ReplyTimeoutError
 
 if TYPE_CHECKING:
     import redis
+
+logger = logging.getLogger(__name__)
 
 VIEWER_CHANNEL = 'anthias.viewer'
 REPLY_KEY_PREFIX = 'anthias.reply.'
@@ -69,7 +68,7 @@ CONFIGURABLE_SETTINGS['use_24_hour_clock'] = DEFAULTS['main'][
 CONFIGURABLE_SETTINGS['date_format'] = DEFAULTS['main']['date_format']
 CONFIGURABLE_SETTINGS['timezone'] = DEFAULTS['main']['timezone']
 
-PORT = int(getenv('PORT', 8080))
+PORT = int(getenv('PORT', '8080'))
 LISTEN = getenv('LISTEN', '127.0.0.1')
 
 # Initiate logging
@@ -82,7 +81,7 @@ logging.basicConfig(
 requests_log = logging.getLogger('requests')
 requests_log.setLevel(logging.WARNING)
 
-logging.debug('Starting viewer')
+logger.debug('Starting viewer')
 
 
 class AnthiasSettings(UserDict[str, Any]):
@@ -95,14 +94,14 @@ class AnthiasSettings(UserDict[str, Any]):
             # Without HOME, all config/state paths (config file, DB,
             # asset dir) would silently resolve relative to the cwd.
             # Fail loudly instead of writing to unexpected locations.
-            raise EnvironmentError(
+            raise OSError(
                 'HOME environment variable must be set for AnthiasSettings.'
             )
         self.home = home
         self.conf_file = self.get_configfile()
 
         if not path.isfile(self.conf_file):
-            logging.error(
+            logger.error(
                 'Config-file %s missing. Using defaults.', self.conf_file
             )
             self.use_defaults()
@@ -125,7 +124,7 @@ class AnthiasSettings(UserDict[str, Any]):
             else:
                 self[field] = config.get(section, field)
         except configparser.Error as e:
-            logging.debug(
+            logger.debug(
                 "Could not parse setting '%s.%s': %s. "
                 "Using default value: '%s'.",
                 section,
@@ -153,7 +152,7 @@ class AnthiasSettings(UserDict[str, Any]):
 
     def load(self) -> None:
         """Loads the latest settings from anthias.conf into memory."""
-        logging.debug('Reading config-file...')
+        logger.debug('Reading config-file...')
         config = configparser.ConfigParser()
         config.read(self.conf_file)
 
@@ -196,7 +195,7 @@ class ViewerPublisher:
 
         from anthias_common.utils import connect_to_redis
 
-        self._redis: 'redis.Redis' = connect_to_redis()
+        self._redis: redis.Redis = connect_to_redis()
 
     @classmethod
     def get_instance(cls) -> 'ViewerPublisher':
@@ -205,7 +204,7 @@ class ViewerPublisher:
         return cls.INSTANCE
 
     def send_to_viewer(self, msg: str) -> None:
-        self._redis.publish(VIEWER_CHANNEL, 'viewer {}'.format(msg))
+        self._redis.publish(VIEWER_CHANNEL, f'viewer {msg}')
 
 
 class ReplySender:
@@ -238,7 +237,7 @@ class ReplyCollector:
 
         from anthias_common.utils import connect_to_redis
 
-        self._redis: 'redis.Redis' = connect_to_redis()
+        self._redis: redis.Redis = connect_to_redis()
 
     @classmethod
     def get_instance(cls) -> 'ReplyCollector':

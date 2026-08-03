@@ -19,22 +19,21 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.helpers import (
-    add_default_assets,
-    remove_default_assets,
+from anthias_common import device_helper
+from anthias_common.internal_auth import is_internal_request
+from anthias_common.utils import (
+    clamp_screen_rotation,
+    connect_to_redis,
+    get_balena_device_info,
+    get_node_ip,
+    get_node_mac_address,
+    is_balena_app,
 )
-from anthias_server.app.models import Asset
 from anthias_server.api.helpers import (
     AssetCreationError,
     finalize_asset_update,
     persist_new_asset,
 )
-from anthias_server.lib.auth import (
-    AuthSettingsError,
-    apply_auth_settings,
-    operator_username,
-)
-from anthias_common.internal_auth import is_internal_request
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -49,15 +48,6 @@ from anthias_server.api.serializers.v2 import (
     ViewerPlaylistSerializerV2,
     ViewerSettingsSerializerV2,
 )
-from anthias_server.lib.integrations.base import ProviderImportError
-from anthias_server.lib.integrations.registry import get_provider
-from anthias_server.lib.screenly_migration import (
-    MIGRATION_ASSET_GROUP_TITLE,
-    ScreenlyMigrationError,
-    ensure_asset_group,
-    migrate_asset,
-    validate_token,
-)
 from anthias_server.api.views.mixins import (
     AssetContentViewMixin,
     AssetsControlViewMixin,
@@ -71,19 +61,29 @@ from anthias_server.api.views.mixins import (
     RecoverViewMixin,
     ShutdownViewMixin,
 )
-from anthias_common import device_helper
-from anthias_server.lib import diagnostics
-from anthias_server.lib.auth import authorized
-from anthias_server.lib.github import is_up_to_date
-from anthias_server.lib.timezone import format_utc_offset
-from anthias_common.utils import (
-    clamp_screen_rotation,
-    connect_to_redis,
-    get_balena_device_info,
-    get_node_ip,
-    get_node_mac_address,
-    is_balena_app,
+from anthias_server.app.helpers import (
+    add_default_assets,
+    remove_default_assets,
 )
+from anthias_server.app.models import Asset
+from anthias_server.lib import diagnostics
+from anthias_server.lib.auth import (
+    AuthSettingsError,
+    apply_auth_settings,
+    authorized,
+    operator_username,
+)
+from anthias_server.lib.github import is_up_to_date
+from anthias_server.lib.integrations.base import ProviderImportError
+from anthias_server.lib.integrations.registry import get_provider
+from anthias_server.lib.screenly_migration import (
+    MIGRATION_ASSET_GROUP_TITLE,
+    ScreenlyMigrationError,
+    ensure_asset_group,
+    migrate_asset,
+    validate_token,
+)
+from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import ViewerPublisher, settings
 
 r = connect_to_redis()
@@ -562,7 +562,7 @@ class DeviceSettingsViewV2(APIView):
             # Force reload of settings
             settings.load()
         except Exception as e:
-            logging.error(f'Failed to reload settings: {str(e)}')
+            logger.error(f'Failed to reload settings: {e!s}')
             # Continue with existing settings if reload fails
 
         return Response(

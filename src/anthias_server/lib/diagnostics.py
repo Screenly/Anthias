@@ -3,7 +3,7 @@
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 from anthias_common import device_helper, utils
 
@@ -11,8 +11,9 @@ from anthias_common import device_helper, utils
 # this as an explicit re-export so it stays importable from the old
 # diagnostics path without a lint suppression). Layer-agnostic code
 # imports it from ``anthias_common.version`` directly.
-from anthias_common.version import get_anthias_release as get_anthias_release
-
+from anthias_common.version import (
+    get_anthias_release as get_anthias_release,  # noqa: PLC0414
+)
 
 # Never let this probe reach normal interpreter teardown. On hardware
 # without a usable CEC adapter (e.g. Raspberry Pi 5) libcec's adapter
@@ -92,6 +93,7 @@ def get_display_power() -> str | bool:
             [sys.executable, '-c', _CEC_QUERY_SCRIPT],
             capture_output=True,
             timeout=10,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return 'CEC error'
@@ -118,6 +120,7 @@ def set_display_power(on: bool) -> tuple[bool, str]:
             [sys.executable, '-c', script],
             capture_output=True,
             timeout=10,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return (
@@ -277,14 +280,14 @@ def try_connectivity() -> list[str]:
     result = []
     for url in urls:
         if utils.url_fails(url):
-            result.append('{}: Error'.format(url))
+            result.append(f'{url}: Error')
         else:
-            result.append('{}: OK'.format(url))
+            result.append(f'{url}: OK')
     return result
 
 
 def get_utc_isodate() -> str:
-    return datetime.isoformat(datetime.utcnow())
+    return datetime.now(UTC).isoformat()
 
 
 def get_debian_version() -> str:
