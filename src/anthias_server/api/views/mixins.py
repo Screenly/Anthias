@@ -114,7 +114,13 @@ class RecoverViewMixin(APIView):
     @authorized
     def post(self, request: Request) -> Response:
         publisher = ViewerPublisher.get_instance()
-        file_upload = request.data.get('backup_upload')
+        # DRF types request.data as dict | list; a JSON list body would
+        # make .get() raise (500). Treat any non-dict body as "no
+        # upload" so it falls through to the 400 below.
+        data = request.data
+        file_upload = (
+            data.get('backup_upload') if isinstance(data, dict) else None
+        )
         if file_upload is None:
             raise ValidationError(
                 {'backup_upload': 'No backup file uploaded.'}
@@ -286,7 +292,10 @@ class FileAssetViewMixin(APIView):
         # spools the body to a temp file — on a full disk that write
         # is where ENOSPC actually surfaces (Sentry ANTHIAS-3K).
         try:
-            file_upload = request.data.get('file_upload')
+            data = request.data
+            file_upload = (
+                data.get('file_upload') if isinstance(data, dict) else None
+            )
         except OSError as exc:
             if not is_disk_full(exc):
                 raise
@@ -494,7 +503,12 @@ class PlaylistOrderViewMixin(APIView):
     )
     @authorized
     def post(self, request: Request) -> Response:
-        asset_ids = request.data.get('ids', '').split(',')
+        data = request.data
+        if not isinstance(data, dict):
+            raise ValidationError(
+                {'ids': 'Expected an object body with an "ids" field.'}
+            )
+        asset_ids = data.get('ids', '').split(',')
         save_active_assets_ordering(asset_ids)
 
         return Response(status=status.HTTP_204_NO_CONTENT)

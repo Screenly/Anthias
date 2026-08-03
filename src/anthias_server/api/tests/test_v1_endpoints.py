@@ -71,6 +71,19 @@ def test_file_asset(api_client: APIClient, cleanup_asset_dir: None) -> None:
 
 
 @pytest.mark.django_db
+def test_file_asset_rejects_list_body(api_client: APIClient) -> None:
+    # DRF parses a JSON array body into a list, so request.data.get(...)
+    # would raise AttributeError (500). The endpoint must reject a
+    # non-dict body with a 400 instead.
+    response = api_client.post(
+        reverse('api:file_asset_v1'),
+        data=['not', 'a', 'dict'],
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
 def test_file_asset_disk_full_returns_507(
     api_client: APIClient, cleanup_asset_dir: None
 ) -> None:
