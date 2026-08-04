@@ -3588,6 +3588,27 @@ def test_record_recovery_restart_write_failure_returns_false() -> None:
         assert viewer._record_recovery_restart() is False
 
 
+def test_current_boot_id_prefers_boot_id() -> None:
+    with mock.patch('builtins.open', mock.mock_open(read_data='abc-123\n')):
+        assert viewer._current_boot_id() == 'abc-123'
+
+
+def test_current_boot_id_falls_back_to_btime() -> None:
+    """If boot_id is unreadable, fall back to /proc/stat btime — which
+    also changes on reboot — so the per-boot cap still resets and a stale
+    '' can't pin a give-up across reboots."""
+
+    def fake_open(file_path: str, *args: Any, **kwargs: Any) -> Any:
+        if 'boot_id' in file_path:
+            raise OSError('unreadable')
+        if file_path == '/proc/stat':
+            return mock.mock_open(read_data='cpu 1 2 3\nbtime 1700000000\n')()
+        raise FileNotFoundError(file_path)
+
+    with mock.patch('builtins.open', side_effect=fake_open):
+        assert viewer._current_boot_id() == 'btime:1700000000'
+
+
 def test_cage_output_probe_classifies_wlr_randr_result() -> None:
     """has-output when a connector is listed, no-output on a clean empty
     run, unknown when wlr-randr can't be run (nonzero / missing)."""

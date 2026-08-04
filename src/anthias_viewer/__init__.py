@@ -1742,12 +1742,29 @@ def _recovery_state_path() -> str:
 
 
 def _current_boot_id() -> str:
-    """The kernel's per-boot UUID; '' if unreadable. Changes on reboot."""
+    """A value stable within a boot and different across reboots.
+
+    Prefers the kernel's per-boot UUID. If that's unreadable, falls back
+    to ``btime`` (boot time in epoch seconds) from ``/proc/stat``, which
+    also changes on every reboot — so the per-boot restart cap still
+    resets on a real reboot rather than a stale '' persisting and pinning
+    a give-up forever. '' only if nothing identifying can be read.
+    """
     try:
         with open('/proc/sys/kernel/random/boot_id') as boot_id_file:
-            return boot_id_file.read().strip()
+            boot_id = boot_id_file.read().strip()
+        if boot_id:
+            return boot_id
     except OSError:
-        return ''
+        pass
+    try:
+        with open('/proc/stat') as stat_file:
+            for line in stat_file:
+                if line.startswith('btime '):
+                    return 'btime:' + line.split()[1]
+    except (OSError, IndexError):
+        pass
+    return ''
 
 
 def _recovery_restarts_this_boot() -> int:
@@ -1987,8 +2004,9 @@ def _wayland_output_watchdog() -> None:
             _recovery_gave_up_logged = True
         return
     if not _record_recovery_restart():
-        # Could not bound the attempt — refuse to restart rather than risk
-        # an unbounded loop on a filesystem we can't record against.
+        # The restart count could not be persisted (unwritable counter),
+        # so the per-boot cap can't be enforced — refuse to restart rather
+        # than risk an unbounded loop.
         return
     logger.error(
         'Cage has had no wl_output for %.0fs while a display is connected '
