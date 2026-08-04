@@ -171,6 +171,22 @@ _headless_wedge_since: float | None = None
 # wedge within a single restart.
 WAYLAND_OUTPUT_GRACE_S = 60
 
+# Hard cap on how many times the watchdog will restart the container to
+# recover a wedge *within one device boot*. A real display binds on the
+# first restart and resets the count; a connector we can never bind (dead
+# cable, a display that asserts hotplug but never delivers EDID) would
+# otherwise restart-loop forever. After the cap we give up and stay quiet
+# for the rest of the boot — a failed display must not keep the container
+# churning (and the SoC warm) for an unattended 8h overnight. The count is
+# boot-scoped (keyed on /proc/.../boot_id) so a real reboot always starts
+# fresh, and it is cleared the moment a display binds or goes away.
+WAYLAND_MAX_RECOVERY_RESTARTS = 3
+
+# Set once we've hit the cap so the "giving up" line is logged a single
+# time per wedge episode rather than every asset_loop tick. Cleared
+# whenever the wedge does — see _wayland_output_watchdog().
+_recovery_gave_up_logged: bool = False
+
 
 def _rotation_value() -> int:
     """Coerce settings['screen_rotation'] to a known cardinal angle.
@@ -1696,6 +1712,115 @@ def _retry_wayland_rotation_if_pending() -> None:
         _last_applied_rotation = rotation
 
 
+def _kernel_has_connected_display() -> bool:
+    """True when a DRM connector reports a strictly ``connected`` status.
+
+    Broader than ``_kernel_has_bindable_display``: it does NOT require a
+    populated ``modes`` list. The headless-boot wedge leaves a real,
+    plugged-in display ``connected`` with an *empty* mode list — cage
+    holds the output disabled so the kernel never re-read its EDID
+    (validated on the Pi 5, issue 3239). A container restart makes cage
+    re-enumerate DRM and the EDID then gets read, so a connected display
+    is worth one recovery restart even before its modes appear.
+
+    Matched as strict ``connected`` (not the looser "not disconnected"
+    used for bindability) so the ``Writeback`` connector — ``unknown``
+    status, always modeless — never counts as a display to recover.
+    """
+    for status_path in glob('/sys/class/drm/*/status'):
+        try:
+            with open(status_path) as status_file:
+                if status_file.read().strip() == 'connected':
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def _recovery_state_path() -> str:
+    return path.join(settings.get_configdir(), '.wayland_recovery')
+
+
+def _current_boot_id() -> str:
+    """A value stable within a boot and different across reboots.
+
+    Prefers the kernel's per-boot UUID. If that's unreadable, falls back
+    to ``btime`` (boot time in epoch seconds) from ``/proc/stat``, which
+    also changes on every reboot — so the per-boot restart cap still
+    resets on a real reboot rather than a stale '' persisting and pinning
+    a give-up forever. '' only if nothing identifying can be read.
+    """
+    try:
+        with open('/proc/sys/kernel/random/boot_id') as boot_id_file:
+            boot_id = boot_id_file.read().strip()
+        if boot_id:
+            return boot_id
+    except OSError:
+        pass
+    try:
+        with open('/proc/stat') as stat_file:
+            for line in stat_file:
+                if line.startswith('btime '):
+                    return 'btime:' + line.split()[1]
+    except (OSError, IndexError):
+        pass
+    return ''
+
+
+def _recovery_restarts_this_boot() -> int:
+    """Recovery restarts recorded for the *current* boot, else 0.
+
+    A boot_id mismatch (real reboot), a missing/corrupt file, or any read
+    error all read as 0 — fail toward allowing a recovery, never toward a
+    permanently dark screen.
+    """
+    try:
+        with open(_recovery_state_path()) as state_file:
+            state = json.load(state_file)
+        if state.get('boot_id') == _current_boot_id():
+            return int(state.get('restarts', 0))
+    except (OSError, ValueError, TypeError):
+        pass
+    return 0
+
+
+def _record_recovery_restart() -> bool:
+    """Persist an incremented boot-scoped restart count.
+
+    Returns False if it could not be written — the caller then must NOT
+    restart, so a filesystem we cannot record against can never become an
+    unbounded restart loop.
+    """
+    state = {
+        'boot_id': _current_boot_id(),
+        'restarts': _recovery_restarts_this_boot() + 1,
+    }
+    try:
+        with open(_recovery_state_path(), 'w') as state_file:
+            json.dump(state, state_file)
+        return True
+    except OSError as exc:
+        logger.error('could not persist wayland recovery counter: %s', exc)
+        return False
+
+
+def _reset_recovery_restarts() -> None:
+    """Clear the recovery budget once the wedge is gone (a display bound,
+    or nothing connected). Only writes when there is something to clear,
+    to avoid churning the file every healthy tick."""
+    global _recovery_gave_up_logged
+    _recovery_gave_up_logged = False
+    if _recovery_restarts_this_boot() == 0:
+        return
+    try:
+        with open(_recovery_state_path(), 'w') as state_file:
+            json.dump(
+                {'boot_id': _current_boot_id(), 'restarts': 0}, state_file
+            )
+    except OSError as exc:
+        logger.debug('could not clear wayland recovery counter: %s', exc)
+
+
 def _kernel_has_bindable_display() -> bool:
     """True when the kernel exposes a display the compositor could bind.
 
@@ -1714,17 +1839,14 @@ def _kernel_has_bindable_display() -> bool:
     check is what actually gates bindability, so the looser status match
     is safe.
 
-    The mode-list check is load-bearing, not belt-and-suspenders: a
-    connector can be present with an *empty* mode list — HPD asserted but
-    EDID unread, e.g. a marginally-seated HDMI cable. That is NOT
-    recoverable by restarting: cage can't conjure a mode the kernel never
-    read, so restarting on a bare-connected/empty-modes connector would
-    loop forever. Requiring modes means the watchdog only restarts for a
-    display cage genuinely *should* be able to bind (a properly-connected
-    monitor exposes its EDID modes), which is exactly the headless-boot
-    race the fix targets — and leaves a half-connected cable, and the
-    ``Writeback`` connector (``unknown`` status, always empty modes),
-    alone.
+    A connector present with an *empty* mode list is handled separately,
+    by the watchdog, via ``_kernel_has_connected_display`` plus a bounded
+    restart: on a Wayland board that empty list is usually the wedge
+    itself (cage blocked the EDID re-read), and the restart re-reads it.
+    This function stays the strict "EDID modes are readable right now"
+    check — the watchdog treats that as bindable without spending recovery
+    budget. The ``Writeback`` connector (``unknown`` status, always empty
+    modes) fails both checks and is left alone.
     """
     for status_path in glob('/sys/class/drm/*/status'):
         try:
@@ -1807,68 +1929,94 @@ def _wayland_output_watchdog() -> None:
     recreates the process, which re-enumerates the display. Cage does
     NOT exit on zero output; it runs headless forever. So replicate the
     eglfs behaviour explicitly: when a Wayland board has no wl_output
-    while the kernel exposes a *bindable* display (connector connected
-    AND EDID modes present), and that state persists past
+    while a display is connected, and that state persists past
     WAYLAND_OUTPUT_GRACE_S, exit non-zero so the container restarts and
-    cage re-enumerates the now-present display.
+    cage re-enumerates the now-present display. The restart is also what
+    forces the kernel to re-read EDID, so a display that powered on after
+    a headless boot — ``connected`` but with an empty mode list, because
+    cage held the output disabled — recovers too (issue 3239).
 
-    Gating on a *bindable* display keeps two cases from restart-looping:
-    a deliberately headless unit (nothing plugged in), and a
-    marginally-connected cable that asserts hotplug but never delivers
-    EDID (connected, no modes) — cage can't bind a mode the kernel never
-    read, so restarting is futile. A third case is handled by
-    ``_cage_output_probe``: if wlr-randr itself can't be run (missing /
-    nonzero / 5s timeout under GPU load) we get ``'unknown'`` and do
-    nothing, so a tooling failure on a healthy board can't be mistaken
-    for a wedge. The persistence window on top means a transient hiccup
-    or cage's brief socket-setup race at startup can't trigger a spurious
-    exit — any healthy (or unknown) reading in between clears the timer.
+    Crash-loop safety is the load-bearing part. Restarts are capped per
+    boot at WAYLAND_MAX_RECOVERY_RESTARTS: a real display binds on the
+    first restart and clears the count, but a connector we can never bind
+    (dead cable, a display asserting hotplug but never delivering EDID)
+    would otherwise churn forever. After the cap we log once and stay
+    quiet for the rest of the boot, so a failed display can't keep the
+    SoC warm through an unattended 8h. The budget is boot-scoped (a real
+    reboot starts fresh) and cleared the moment a display binds or nothing
+    is connected. Three further guards avoid spurious restarts: the
+    ``Writeback`` connector never counts (it's ``unknown`` + modeless);
+    ``_cage_output_probe`` returning ``'unknown'`` (wlr-randr missing /
+    nonzero / 5s timeout under GPU load) is a no-op, never a restart; and
+    the grace window rides out cage's brief startup socket race.
     """
-    global _headless_wedge_since
+    global _headless_wedge_since, _recovery_gave_up_logged
     if not _is_wayland_board():
         return
 
-    # Cheap sysfs check first: unless the kernel exposes a display cage
-    # genuinely should be able to bind (connector present + EDID modes),
-    # there is nothing to recover — a headless unit or a half-connected
-    # cable (no modes) is left alone. Doing this before the wlr-randr
-    # probe means a genuinely headless board never spawns wlr-randr on
-    # the asset_loop hot path (nor risks its up-to-5s block per tick); the
-    # subprocess only runs when a display is actually attached.
-    if not _kernel_has_bindable_display():
+    # Cheap sysfs check first (before the wlr-randr subprocess): is there
+    # a display worth recovering at all? Either a bindable connector
+    # (EDID modes readable now) or a strictly-``connected`` one whose
+    # modes are still empty — the headless-boot wedge. Nothing connected
+    # is a headless unit: clear the timer AND the recovery budget so a
+    # display plugged in later gets a fresh set of attempts.
+    if not (_kernel_has_bindable_display() or _kernel_has_connected_display()):
         _headless_wedge_since = None
+        _reset_recovery_restarts()
         return
 
-    # A display is present — now check whether cage actually bound it.
-    # Only a *definitive* "cage lists zero outputs" reading is a wedge.
-    # 'has-output' is healthy; 'unknown' means wlr-randr itself failed —
-    # treat that as "can't tell" and degrade to a no-op rather than
-    # restarting a display that is probably fine (the rotation/power
-    # paths degrade the same way; only this watchdog acts on the state).
+    # A display is present — did cage actually bind it? Only a definitive
+    # "cage lists zero outputs" is a wedge. 'has-output' is healthy;
+    # 'unknown' means wlr-randr itself failed — treat as "can't tell" and
+    # no-op rather than restarting a display that is probably fine. Either
+    # non-wedge reading ends the episode: clear the timer and the budget.
     if _cage_output_probe() != 'no-output':
         _headless_wedge_since = None
+        _reset_recovery_restarts()
         return
 
-    # Wedge: a bindable display is present but cage never bound it. Start
-    # (or continue) the grace timer; exit once it's clear cage was never
-    # going to bind the output on its own.
+    # Wedge: a display is present but cage bound no output. Start (or
+    # continue) the grace timer; act only once it's clear cage will not
+    # bind the output on its own.
     now = monotonic()
     if _headless_wedge_since is None:
         _headless_wedge_since = now
         logger.warning(
-            'Bindable display present but cage has no wl_output; will '
-            'restart to re-enumerate if this persists past %ss.',
+            'Display present but cage has no wl_output; will restart to '
+            're-enumerate if this persists past %ss.',
             WAYLAND_OUTPUT_GRACE_S,
         )
         return
-    if now - _headless_wedge_since >= WAYLAND_OUTPUT_GRACE_S:
-        logger.error(
-            'Cage has had no wl_output for %.0fs while a display is '
-            'connected (headless-boot wedge). Exiting so the container '
-            'restarts and re-enumerates the display.',
-            now - _headless_wedge_since,
-        )
-        sys.exit(1)
+    if now - _headless_wedge_since < WAYLAND_OUTPUT_GRACE_S:
+        return
+
+    # Persisted past the grace. Restart to recover — but only up to the
+    # per-boot cap, so a connector we can never bind can't loop.
+    restarts = _recovery_restarts_this_boot()
+    if restarts >= WAYLAND_MAX_RECOVERY_RESTARTS:
+        if not _recovery_gave_up_logged:
+            logger.error(
+                'Display still not bound after %d recovery restarts this '
+                'boot; giving up until it binds, is unplugged, or the '
+                'device reboots — not restarting further, to avoid a loop.',
+                restarts,
+            )
+            _recovery_gave_up_logged = True
+        return
+    if not _record_recovery_restart():
+        # The restart count could not be persisted (unwritable counter),
+        # so the per-boot cap can't be enforced — refuse to restart rather
+        # than risk an unbounded loop.
+        return
+    logger.error(
+        'Cage has had no wl_output for %.0fs while a display is connected '
+        '(headless-boot wedge). Exiting so the container restarts and '
+        're-enumerates the display (recovery restart %d/%d).',
+        now - _headless_wedge_since,
+        restarts + 1,
+        WAYLAND_MAX_RECOVERY_RESTARTS,
+    )
+    sys.exit(1)
 
 
 def _consume_pending_rotation_bounce() -> None:
