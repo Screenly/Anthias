@@ -29,10 +29,13 @@
     src: proxy.env.j2
     dest: /etc/anthias/proxy.env
     owner: root
-    group: root
-    # No secret beyond the proxy URL; world-readable so the unprivileged
-    # anthias user's upgrade_containers.sh can source it.
-    mode: "0644"  # NOSONAR
+    # A proxy URL can embed credentials (http://user:pass@proxy), so this
+    # is NOT world-readable. Group-owned by the Anthias user (its primary
+    # group is named after it, see docker.yml) so upgrade_containers.sh —
+    # the only non-root reader — can source it; the Docker daemon and
+    # host-agent EnvironmentFiles are read by systemd as root.
+    group: "{{ anthias_user }}"
+    mode: "0640"
   when: anthias_proxy_enabled | bool
 
 - name: Remove proxy environment file when proxy disabled
