@@ -98,7 +98,9 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    # Standard 0755 for a systemd unit drop-in dir (systemd must traverse
+    # it); world-traversable is expected here, same as /etc/apt/keyrings.
+    mode: "0755"  # NOSONAR
   when: anthias_proxy_enabled | bool
 
 - name: Install Docker daemon HTTP proxy drop-in

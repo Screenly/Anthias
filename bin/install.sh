@@ -530,16 +530,17 @@ function run_ansible_playbook() {
     # lookup('env','USER'): under sudo/become that env can resolve to root
     # and render the host-agent unit with /home/root paths that don't
     # exist, crash-looping it (GH #3239 point 5).
-    ANSIBLE_PLAYBOOK_ARGS+=("--extra-vars" "anthias_user=${USER}")
+    local ev="--extra-vars"
+    ANSIBLE_PLAYBOOK_ARGS+=("${ev}" "anthias_user=${USER}")
 
     # Carry the proxy into the play (get_url/apt tasks) and the persistent
     # host + runtime layers. An explicit -e is robust against sudo stripping
     # the proxy env across the become boundary (GH #3239).
-    if [ -n "${PROXY_HTTP}${PROXY_HTTPS}" ]; then
+    if [[ -n "${PROXY_HTTP}${PROXY_HTTPS}" ]]; then
         ANSIBLE_PLAYBOOK_ARGS+=(
-            "--extra-vars" "anthias_http_proxy=${PROXY_HTTP}"
-            "--extra-vars" "anthias_https_proxy=${PROXY_HTTPS}"
-            "--extra-vars" "anthias_no_proxy=${PROXY_NO}"
+            "${ev}" "anthias_http_proxy=${PROXY_HTTP}"
+            "${ev}" "anthias_https_proxy=${PROXY_HTTPS}"
+            "${ev}" "anthias_no_proxy=${PROXY_NO}"
         )
     fi
 
@@ -726,7 +727,7 @@ function set_custom_version() {
 # consistent.
 function apply_proxy_apt_conf() {
     local conf=/etc/apt/apt.conf.d/00anthias-proxy
-    if [ -n "${PROXY_HTTP}${PROXY_HTTPS}" ]; then
+    if [[ -n "${PROXY_HTTP}${PROXY_HTTPS}" ]]; then
         # Reuse whichever scheme is set for the other if only one is given.
         local http_p="${PROXY_HTTP:-${PROXY_HTTPS}}"
         local https_p="${PROXY_HTTPS:-${PROXY_HTTP}}"
@@ -735,7 +736,7 @@ function apply_proxy_apt_conf() {
 Acquire::http::Proxy "${http_p}";
 Acquire::https::Proxy "${https_p}";
 EOF
-    elif [ -f "${conf}" ]; then
+    elif [[ -f "${conf}" ]]; then
         sudo rm -f "${conf}"
     fi
 }
@@ -768,7 +769,7 @@ function configure_proxy() {
         PROXY_HTTP="${entered}"
         PROXY_HTTPS="${entered}"
 
-        if [ -n "${PROXY_HTTP}" ]; then
+        if [[ -n "${PROXY_HTTP}" ]]; then
             local entered_no
             entered_no=$(
                 whiptail \
@@ -781,7 +782,7 @@ function configure_proxy() {
     fi
 
     # Export for this script's own proxy-honouring tools (curl, git, uv).
-    if [ -n "${PROXY_HTTP}${PROXY_HTTPS}" ]; then
+    if [[ -n "${PROXY_HTTP}${PROXY_HTTPS}" ]]; then
         export HTTP_PROXY="${PROXY_HTTP}" HTTPS_PROXY="${PROXY_HTTPS}" \
             NO_PROXY="${PROXY_NO}"
         export http_proxy="${PROXY_HTTP}" https_proxy="${PROXY_HTTPS}" \

@@ -18,7 +18,10 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    # 0755 so the unprivileged anthias user can traverse it to read
+    # proxy.env (sourced by upgrade_containers.sh); the file's own perms
+    # govern access, same convention as /etc/apt/keyrings.
+    mode: "0755"  # NOSONAR
   when: anthias_proxy_enabled | bool
 
 - name: Write proxy environment file (single source of truth)

@@ -148,7 +148,7 @@ fi
 # written by the ansible system role; when it is absent (no proxy) the
 # substitutions resolve to empty strings, which every client treats as
 # "no proxy". `set -a` exports them so the envsubst child process sees them.
-if [ -f /etc/anthias/proxy.env ]; then
+if [[ -f /etc/anthias/proxy.env ]]; then
     set -a
     . /etc/anthias/proxy.env
     set +a
