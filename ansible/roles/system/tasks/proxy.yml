@@ -1,0 +1,60 @@
+---
+# HTTP(S) proxy propagation (GH #3239).
+#
+# This writes the on-disk source of truth (/etc/anthias/proxy.env) that the
+# Docker daemon drop-in (docker.yml), the anthias-host-agent unit, and
+# bin/upgrade_containers.sh all consume, plus an apt proxy config so the
+# user's own later `apt` runs stay proxied. In-play apt/get_url tasks are
+# already proxied by the play-level environment: block in site.yml; this
+# file is about persistence beyond the install run.
+#
+# Every task is idempotent in both directions: when no proxy is configured
+# the managed files are removed, so disabling the proxy on a re-run cleans
+# up after itself.
+
+- name: Ensure /etc/anthias exists
+  ansible.builtin.file:
+    path: /etc/anthias
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: anthias_proxy_enabled | bool
+
+- name: Write proxy environment file (single source of truth)
+  ansible.builtin.template:
+    src: proxy.env.j2
+    dest: /etc/anthias/proxy.env
+    owner: root
+    group: root
+    # No secret beyond the proxy URL; world-readable so the unprivileged
+    # anthias user's upgrade_containers.sh can source it.
+    mode: "0644"  # NOSONAR
+  when: anthias_proxy_enabled | bool
+
+- name: Remove proxy environment file when proxy disabled
+  ansible.builtin.file:
+    path: /etc/anthias/proxy.env
+    state: absent
+  when: not (anthias_proxy_enabled | bool)
+
+- name: Configure apt proxy
+  # If only one of http/https is set, reuse it for the other — a single
+  # proxy for both schemes is the common case and matches user intent
+  # better than leaving one scheme direct.
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/00anthias-proxy
+    owner: root
+    group: root
+    mode: "0644"  # NOSONAR
+    content: |
+      // Managed by Anthias — HTTP proxy support (GH #3239).
+      Acquire::http::Proxy "{{ anthias_http_proxy or anthias_https_proxy }}";
+      Acquire::https::Proxy "{{ anthias_https_proxy or anthias_http_proxy }}";
+  when: anthias_proxy_enabled | bool
+
+- name: Remove apt proxy when proxy disabled
+  ansible.builtin.file:
+    path: /etc/apt/apt.conf.d/00anthias-proxy
+    state: absent
+  when: not (anthias_proxy_enabled | bool)

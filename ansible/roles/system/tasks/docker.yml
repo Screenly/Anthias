@@ -9,6 +9,16 @@
     # be world-traversable so the unprivileged `_apt` user can read keys.
     mode: "0755"  # NOSONAR
 
+# get_url still contacts the server even with the default force: no when
+# dest exists (it issues a conditional request), so it needs network/proxy
+# access every run. Guard it behind a stat so a host with the key already
+# in place (e.g. pre-provisioned, or a re-run) needs no network at all
+# (GH #3239 point 2).
+- name: Check for existing Docker apt key
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/docker.asc
+  register: system_docker_apt_key
+
 - name: Add Docker apt key
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/debian/gpg
@@ -17,6 +27,7 @@
     group: root
     # World-readable required so the `_apt` user can verify packages.
     mode: "0644"  # NOSONAR
+  when: not system_docker_apt_key.stat.exists
 
 - name: Set system_architecture
   ansible.builtin.set_fact:
@@ -75,6 +86,40 @@
       - docker-buildx-plugin:{{ system_architecture }}
     update_cache: true
     install_recommends: false
+
+# Give dockerd the proxy (GH #3239) so it can pull images from ghcr.io
+# behind an HTTP proxy. This must come after Docker is installed (the
+# unit has to exist), unlike the early apt/env proxy config in proxy.yml.
+# The drop-in points at /etc/anthias/proxy.env (written by proxy.yml) so
+# the daemon shares the single source of truth.
+- name: Create docker.service.d drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: anthias_proxy_enabled | bool
+
+- name: Install Docker daemon HTTP proxy drop-in
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/http-proxy.conf
+    owner: root
+    group: root
+    mode: "0644"  # NOSONAR
+    content: |
+      # Managed by Anthias — HTTP proxy support (GH #3239).
+      [Service]
+      EnvironmentFile=-/etc/anthias/proxy.env
+  when: anthias_proxy_enabled | bool
+  notify: Restart docker
+
+- name: Remove Docker daemon HTTP proxy drop-in when proxy disabled
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d/http-proxy.conf
+    state: absent
+  when: not (anthias_proxy_enabled | bool)
+  notify: Restart docker
 
 # Several of these groups (netdev, input, plugdev, gpio) are normally
 # created by udev / network-manager / raspi-config. On a minimal

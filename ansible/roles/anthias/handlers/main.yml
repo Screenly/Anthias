@@ -1,0 +1,10 @@
+---
+- name: Restart Anthias systemd units
+  # Runs when a unit template changes (e.g. the proxy EnvironmentFile
+  # added for GH #3239) so a running service re-reads it. daemon_reload
+  # picks up the new unit file first.
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+    daemon_reload: true
+  with_items: "{{ anthias_systemd_units }}"
