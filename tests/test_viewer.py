@@ -3194,14 +3194,37 @@ def test_play_unblanks_when_display_blanked(
 
 @pytest.fixture
 def reset_wedge_state() -> Iterator[None]:
-    """_headless_wedge_since is module state — snapshot and restore so
-    watchdog tests don't bleed into each other."""
-    prior = viewer._headless_wedge_since
+    """_headless_wedge_since / _recovery_gave_up_logged are module state —
+    snapshot and restore so watchdog tests don't bleed into each other."""
+    prior_since = viewer._headless_wedge_since
+    prior_gave_up = viewer._recovery_gave_up_logged
     try:
         viewer._headless_wedge_since = None
+        viewer._recovery_gave_up_logged = False
         yield
     finally:
-        viewer._headless_wedge_since = prior
+        viewer._headless_wedge_since = prior_since
+        viewer._recovery_gave_up_logged = prior_gave_up
+
+
+@contextlib.contextmanager
+def _mock_recovery_budget(
+    count: int = 0, record: bool = True
+) -> Iterator[Any]:
+    """Patch the boot-scoped recovery-budget helpers off the filesystem.
+    ``count`` is what _recovery_restarts_this_boot reports; ``record`` is
+    whether _record_recovery_restart claims it persisted. Yields the
+    _record_recovery_restart mock so callers can assert on it."""
+    with (
+        mock.patch.object(
+            viewer, '_recovery_restarts_this_boot', return_value=count
+        ),
+        mock.patch.object(
+            viewer, '_record_recovery_restart', return_value=record
+        ) as record_mock,
+        mock.patch.object(viewer, '_reset_recovery_restarts'),
+    ):
+        yield record_mock
 
 
 def test_output_watchdog_noop_off_wayland(reset_wedge_state: None) -> None:
@@ -3235,6 +3258,7 @@ def test_output_watchdog_healthy_clears_timer(
         mock.patch.object(
             viewer, '_cage_output_probe', return_value='has-output'
         ),
+        _mock_recovery_budget(),
     ):
         viewer._wayland_output_watchdog()
 
@@ -3258,6 +3282,10 @@ def test_output_watchdog_headless_unit_does_not_loop(
         mock.patch.object(
             viewer, '_kernel_has_bindable_display', return_value=False
         ),
+        mock.patch.object(
+            viewer, '_kernel_has_connected_display', return_value=False
+        ),
+        _mock_recovery_budget(),
     ):
         viewer._wayland_output_watchdog()  # must not raise
 
@@ -3306,6 +3334,7 @@ def test_output_watchdog_exits_after_grace(reset_wedge_state: None) -> None:
             'monotonic',
             return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
         ),
+        _mock_recovery_budget(count=0, record=True),
         pytest.raises(SystemExit) as exc,
     ):
         viewer._wayland_output_watchdog()
@@ -3334,6 +3363,7 @@ def test_output_watchdog_recovers_before_grace(
             'monotonic',
             return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
         ),
+        _mock_recovery_budget(),
     ):
         viewer._wayland_output_watchdog()  # must not raise
 
@@ -3380,10 +3410,182 @@ def test_output_watchdog_ignores_wlr_randr_failure(
             'monotonic',
             return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
         ),
+        _mock_recovery_budget(),
     ):
         viewer._wayland_output_watchdog()  # must not raise
 
     assert viewer._headless_wedge_since is None
+
+
+def test_output_watchdog_recovers_empty_modes_wedge(
+    reset_wedge_state: None,
+) -> None:
+    """The #6758 fix: a display that powered on after a headless boot is
+    ``connected`` but modeless (not bindable). It must still be recovered
+    — the restart re-reads its EDID — so the watchdog exits past grace,
+    spending one unit of recovery budget."""
+    viewer._headless_wedge_since = 500.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=False
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_connected_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
+        mock.patch.object(
+            viewer,
+            'monotonic',
+            return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
+        ),
+        _mock_recovery_budget(count=0, record=True) as record,
+        pytest.raises(SystemExit) as exc,
+    ):
+        viewer._wayland_output_watchdog()
+
+    assert exc.value.code == 1
+    record.assert_called_once()
+
+
+def test_output_watchdog_gives_up_after_max_restarts(
+    reset_wedge_state: None,
+) -> None:
+    """Crash-loop guard: once the per-boot restart cap is reached, a
+    persistent wedge must NOT exit again. It gives up quietly (logged
+    once) so a display that never binds can't churn the container — and
+    warm the SoC — for an unattended 8h."""
+    viewer._headless_wedge_since = 500.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
+        mock.patch.object(
+            viewer,
+            'monotonic',
+            return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
+        ),
+        _mock_recovery_budget(
+            count=viewer.WAYLAND_MAX_RECOVERY_RESTARTS, record=True
+        ) as record,
+    ):
+        viewer._wayland_output_watchdog()  # must NOT raise SystemExit
+
+    record.assert_not_called()
+    assert viewer._recovery_gave_up_logged is True
+
+
+def test_output_watchdog_no_restart_when_counter_unwritable(
+    reset_wedge_state: None,
+) -> None:
+    """If the recovery counter can't be persisted, refuse to restart: an
+    unbounded loop is worse than a still screen."""
+    viewer._headless_wedge_since = 500.0
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_bindable_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
+        mock.patch.object(
+            viewer,
+            'monotonic',
+            return_value=500.0 + viewer.WAYLAND_OUTPUT_GRACE_S,
+        ),
+        _mock_recovery_budget(count=0, record=False),
+    ):
+        viewer._wayland_output_watchdog()  # must NOT raise SystemExit
+
+
+def test_kernel_has_connected_display_true_for_modeless_connected() -> None:
+    """A strictly-``connected`` connector counts even with an empty mode
+    list — that's the wedge we recover."""
+    files = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'connected\n',
+        '/sys/class/drm/card1-HDMI-A-1/modes': '',
+    }
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_drm_sysfs(files):
+            stack.enter_context(cm)
+        assert viewer._kernel_has_connected_display() is True
+
+
+def test_kernel_has_connected_display_excludes_unknown_writeback() -> None:
+    """Writeback is ``unknown`` + modeless, and a disconnected HDMI is
+    disconnected — neither is a display to recover."""
+    files = {
+        '/sys/class/drm/card1-HDMI-A-1/status': 'disconnected\n',
+        '/sys/class/drm/card1-HDMI-A-1/modes': '',
+        '/sys/class/drm/card1-Writeback-1/status': 'unknown\n',
+        '/sys/class/drm/card1-Writeback-1/modes': '',
+    }
+    with contextlib.ExitStack() as stack:
+        for cm in _patch_drm_sysfs(files):
+            stack.enter_context(cm)
+        assert viewer._kernel_has_connected_display() is False
+
+
+def test_recovery_counter_is_boot_scoped(tmp_path: Any) -> None:
+    """The restart count resets when boot_id changes (a real reboot), so a
+    stale give-up never blocks recovery after the device reboots."""
+    state = tmp_path / '.wayland_recovery'
+    with mock.patch.object(
+        viewer, '_recovery_state_path', return_value=str(state)
+    ):
+        with mock.patch.object(
+            viewer, '_current_boot_id', return_value='boot-A'
+        ):
+            assert viewer._record_recovery_restart() is True
+            assert viewer._record_recovery_restart() is True
+            assert viewer._recovery_restarts_this_boot() == 2
+        with mock.patch.object(
+            viewer, '_current_boot_id', return_value='boot-B'
+        ):
+            assert viewer._recovery_restarts_this_boot() == 0
+
+
+def test_recovery_counter_reset_and_corrupt_read(tmp_path: Any) -> None:
+    state = tmp_path / '.wayland_recovery'
+    with (
+        mock.patch.object(
+            viewer, '_recovery_state_path', return_value=str(state)
+        ),
+        mock.patch.object(viewer, '_current_boot_id', return_value='boot-A'),
+    ):
+        viewer._record_recovery_restart()
+        assert viewer._recovery_restarts_this_boot() == 1
+        viewer._reset_recovery_restarts()
+        assert viewer._recovery_restarts_this_boot() == 0
+        # A corrupt file reads as 0, never a crash.
+        state.write_text('{not json')
+        assert viewer._recovery_restarts_this_boot() == 0
+
+
+def test_record_recovery_restart_write_failure_returns_false() -> None:
+    """A write that can't land returns False so the caller won't restart."""
+    with (
+        mock.patch.object(
+            viewer,
+            '_recovery_state_path',
+            return_value='/no/such/dir/.wayland_recovery',
+        ),
+        mock.patch.object(viewer, '_current_boot_id', return_value='boot-A'),
+    ):
+        assert viewer._record_recovery_restart() is False
 
 
 def test_cage_output_probe_classifies_wlr_randr_result() -> None:
