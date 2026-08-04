@@ -15,16 +15,23 @@
 # recreates the network after DNS is up, which is exactly why the manual
 # workaround "fixes" it.
 #
-# systemd-resolved removes the race: /etc/resolv.conf becomes a static
-# symlink to the 127.0.0.53 stub that exists from install time and never
-# goes empty, and resolved tracks the live upstream (updated by whatever
-# manages the link — NetworkManager, systemd-networkd, or a DHCP client)
-# behind that fixed address. Docker, seeing a loopback-only resolv.conf,
-# forwards to the real upstreams from /run/systemd/resolve/resolv.conf.
-# Ordering is already correct in Docker's packaged unit
-# (`After=network-online.target nss-lookup.target`) paired with
-# resolved's `Before=nss-lookup.target`, so once resolved is enabled
-# dockerd genuinely waits for name resolution to be ready.
+# systemd-resolved removes the race by decoupling what Docker reads from
+# the DHCP client's timing. /etc/resolv.conf becomes a symlink to
+# resolved's stub, whose nameserver is always the fixed loopback address
+# 127.0.0.53 no matter which upstream is live; resolved tracks the real
+# upstream (updated by whatever manages the link — NetworkManager,
+# systemd-networkd, or a DHCP client) behind that address. So the value
+# Docker bakes into its embedded DNS is a stable local resolver rather
+# than a nameserver that might still be empty or unreachable. Docker,
+# seeing a loopback-only resolv.conf, forwards to the real upstreams from
+# /run/systemd/resolve/resolv.conf.
+#
+# What guarantees the stub is answering in time is unit ordering, not the
+# symlink target being present since install (it is not — resolved
+# generates it at boot, see the task below). Docker's packaged unit is
+# `After=network-online.target nss-lookup.target` and resolved is
+# `Before=nss-lookup.target`, so once resolved is enabled dockerd only
+# creates the network after name resolution is genuinely up.
 #
 # Scoped to x86: the issue is reported there, the Pi images have a
 # different (working) network/boot stack, and changing DNS resolution
