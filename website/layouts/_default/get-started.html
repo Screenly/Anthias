@@ -13,8 +13,8 @@
                 <div class="step-number bg-brand-yellow text-brand-dark">1</div>
                 <div>
                     <h2 class="text-xl font-bold">Flash an SD card with Raspberry Pi Imager</h2>
-                    <p class="text-zinc-500 mt-2 leading-relaxed">The recommended way to get started &mdash; no command line, no SSH. Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, choose <strong>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</strong>, pick the entry for your Pi model (Pi 2 through Pi 5), select your SD card, and flash.</p>
-                    <p class="text-zinc-400 text-sm mt-3">Insert the card into your Pi and power it on &mdash; it boots straight into Anthias. Prefer the command line? See the <a class="text-brand-purple no-underline hover:underline" href="#advanced-methods">advanced methods below</a>.</p>
+                    <p class="text-zinc-500 mt-2 leading-relaxed">The recommended way to get started: no command line, no SSH. Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, choose <strong>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</strong>, pick the entry for your Pi model (Pi 2 through Pi 5), select your SD card, and flash.</p>
+                    <p class="text-zinc-400 text-sm mt-3">Insert the card into your Pi and power it on. It boots straight into Anthias. Prefer the command line? See the <a class="text-brand-purple no-underline hover:underline" href="#advanced-methods">advanced methods below</a>.</p>
                 </div>
             </div>
         </div>
@@ -130,8 +130,8 @@
                     </tr>
                 </tbody>
             </table>
-            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">The <strong>Raspberry Pi 3 Model A+</strong> ships with only 512&nbsp;MB of RAM &mdash; too little to run the Anthias stack comfortably, so it&rsquo;s <strong>not recommended</strong>. For a low-cost board, choose a Pi with at least 1&nbsp;GB (Pi 3 Model B/B+ or newer).</p>
-            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on <strong>Debian-based Armbian</strong> (Bookworm / Trixie) with software video decode. Ubuntu-based Armbian builds aren&rsquo;t supported &mdash; the installer wires up the Debian Docker apt repository, so Ubuntu releases fail at &ldquo;apt update&rdquo;. Hardware video decode varies per SoC and isn&rsquo;t wired up out of the box &mdash; expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
+            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">The <strong>Raspberry Pi 3 Model A+</strong> ships with only 512&nbsp;MB of RAM, too little to run the Anthias stack comfortably, so it&rsquo;s <strong>not recommended</strong>. For a low-cost board, choose a Pi with at least 1&nbsp;GB (Pi 3 Model B/B+ or newer).</p>
+            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on <strong>Debian-based Armbian</strong> (Bookworm / Trixie) with software video decode. Ubuntu-based Armbian builds aren&rsquo;t supported: the installer wires up the Debian Docker apt repository, so Ubuntu releases fail at &ldquo;apt update&rdquo;. Hardware video decode varies per SoC and isn&rsquo;t wired up out of the box, so expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
         </div>
     </div>
 </section>

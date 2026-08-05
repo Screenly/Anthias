@@ -7,7 +7,7 @@ layout: api
 ## Overview
 
 Anthias exposes a REST API so you can manage a player without touching the web
-interface — script asset uploads, rotate playlists, trigger backups, or wire the
+interface: script asset uploads, rotate playlists, trigger backups, or wire the
 device into your own tooling. Everything the dashboard does is available over
 HTTP, which makes Anthias straightforward to automate across a fleet of screens.
 
@@ -28,10 +28,10 @@ asset uploads, which use `multipart/form-data`.
 The API is versioned in the path, and several versions are served side by side so
 existing integrations keep working as new ones are added:
 
-- **v2** (`/api/v2/…`) — the current version. Use this for new integrations. It
+- **v2** (`/api/v2/…`): the current version. Use this for new integrations. It
   exposes the full asset model, including the scheduling fields (`play_order`,
   duration, and the active date window).
-- **v1, v1.1, v1.2** (`/api/v1/…`, `/api/v1.1/…`, `/api/v1.2/…`) — retained for
+- **v1, v1.1, v1.2** (`/api/v1/…`, `/api/v1.1/…`, `/api/v1.2/…`): retained for
   backwards compatibility. Their request and response shapes stay stable, but the
   older versions do not expose the newer scheduling fields.
 
@@ -42,7 +42,7 @@ shape of the responses you depend on.
 
 The API is designed for use on a trusted local network and does not require an
 API token. Because there is no authentication layer in front of it, do **not**
-expose a device's HTTP port directly to the public internet — keep it behind your
+expose a device's HTTP port directly to the public internet. Keep it behind your
 LAN, a VPN, or a reverse proxy that adds its own access control.
 
 ## Responses and errors
@@ -51,7 +51,7 @@ Successful requests return a `2xx` status with a JSON body. Client mistakes (a
 missing field, a malformed asset) return `4xx` with a JSON error describing what
 went wrong; unexpected server-side failures return `5xx`. Each endpoint below
 lists the response codes it can return and the schema of the body that comes with
-them — expand a response to see the full field list.
+them. Expand a response to see the full field list.
 
 ## Endpoints
 

@@ -83,7 +83,7 @@ For example, an asset with `play_days=[1]` (Mon) and `22:00 → 06:00`:
 
 ## Related documentation
 
-- [Importing content from other platforms](/docs/import-content/) — add assets
+- [Importing content from other platforms](/docs/import-content/): add assets
   you can then schedule.
-- [API reference](/api/) — set scheduling fields programmatically with the v2 API.
-- [All documentation](/docs/) — the full Anthias documentation index.
+- [API reference](/api/): set scheduling fields programmatically with the v2 API.
+- [All documentation](/docs/): the full Anthias documentation index.

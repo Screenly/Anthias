@@ -14,7 +14,7 @@ Anthias runs on any 64-bit PC (something like an Intel NUC works well) once you'
 
 > **No desktop environment required (or wanted)**
 >
-> The host runs headless — no GNOME, no KDE, no Xorg, no display manager. The Anthias viewer container ships its own minimal Wayland compositor (`cage`, a wlroots-based kiosk compositor) which acquires DRM master directly from the kernel and renders straight to the HDMI output. A pre-installed desktop would compete with it for the display and break the boot-to-content experience.
+> The host runs headless, no GNOME, no KDE, no Xorg, no display manager. The Anthias viewer container ships its own minimal Wayland compositor (`cage`, a wlroots-based kiosk compositor) which acquires DRM master directly from the kernel and renders straight to the HDMI output. A pre-installed desktop would compete with it for the display and break the boot-to-content experience.
 >
 > If you already installed Debian with a desktop, remove it (`sudo apt purge --auto-remove gnome\* xserver-xorg\* lightdm gdm3 sddm` and reboot) before continuing.
 
@@ -24,7 +24,7 @@ Anthias runs on any 64-bit PC (something like an Intel NUC works well) once you'
 * A USB drive (4 GB or larger) to write the Debian installer to.
 * A keyboard, monitor, and network cable for the PC during install.
 
-## Step 1 — Download Debian
+## Step 1: Download Debian
 
 Download the **netinst** image for AMD64 from the [official Debian website](https://www.debian.org/download). The filename will look like:
 
@@ -32,30 +32,30 @@ Download the **netinst** image for AMD64 from the [official Debian website](http
 debian-13.x.x-amd64-netinst.iso
 ```
 
-## Step 2 — Write the installer to a USB drive
+## Step 2: Write the installer to a USB drive
 
 Flash the ISO to a USB drive using one of:
 
-* [balenaEtcher](https://www.balena.io/etcher/) — recommended, cross-platform.
-* Raspberry Pi Imager — pick **Use custom** and select the ISO.
+* [balenaEtcher](https://www.balena.io/etcher/): recommended, cross-platform.
+* Raspberry Pi Imager: pick **Use custom** and select the ISO.
 
-## Step 3 — Install Debian
+## Step 3: Install Debian
 
 1. Plug the USB drive into the PC.
 2. Set the boot order in BIOS/UEFI to boot from USB first.
 3. Power on the PC and follow the Debian installer prompts. When you reach these screens, choose:
-   * **Root password:** leave it blank. When you skip the root password, the Debian installer installs `sudo` and adds your regular user to the `sudo` group automatically. If you *set* a root password instead, Debian does **neither** — `sudo` won't even be installed — and you'll have extra work to do in Step 4. Leaving it blank is strongly recommended.
+   * **Root password:** leave it blank. When you skip the root password, the Debian installer installs `sudo` and adds your regular user to the `sudo` group automatically. If you *set* a root password instead, Debian does **neither**: `sudo` won't even be installed, and you'll have extra work to do in Step 4. Leaving it blank is strongly recommended.
    * **Partitioning:** use the entire disk.
-   * **Software selection:** check only **SSH server** and **standard system utilities**. **Uncheck every desktop environment** (GNOME, Xfce, KDE Plasma, …) — Anthias renders from inside a container and does not use any host-side graphical session.
+   * **Software selection:** check only **SSH server** and **standard system utilities**. **Uncheck every desktop environment** (GNOME, Xfce, KDE Plasma, …): Anthias renders from inside a container and does not use any host-side graphical session.
 4. When the installer finishes, remove the USB drive **before** the system reboots into the freshly installed Debian.
 
-## Step 4 — Prepare the system for Anthias
+## Step 4: Prepare the system for Anthias
 
 Once you can SSH (or log in locally) to the new install:
 
 > **If you set a root password in Step 3**
 >
-> Your user can't run `sudo` yet — in fact `sudo` isn't installed, so every command below will fail with `sudo: command not found`. Fix this once, as `root`, then continue:
+> Your user can't run `sudo` yet. In fact `sudo` isn't installed, so every command below will fail with `sudo: command not found`. Fix this once, as `root`, then continue:
 >
 > ```bash
 > $ su -          # enter the root password you set
@@ -64,7 +64,7 @@ Once you can SSH (or log in locally) to the new install:
 > # exit
 > ```
 >
-> Log out and back in (so your new group membership takes effect), then continue below. If you left the root password blank, skip this box — `sudo` already works.
+> Log out and back in (so your new group membership takes effect), then continue below. If you left the root password blank, skip this box. `sudo` already works.
 
 1. Install `curl` if it isn't already there:
 
@@ -73,7 +73,7 @@ Once you can SSH (or log in locally) to the new install:
    $ sudo apt install -y curl
    ```
 
-2. Allow your user to run `sudo` without entering a password — the Anthias installer expects this. Open the sudoers file:
+2. Allow your user to run `sudo` without entering a password. The Anthias installer expects this. Open the sudoers file:
 
    ```bash
    $ sudo visudo
@@ -87,9 +87,9 @@ Once you can SSH (or log in locally) to the new install:
 
    Save and exit the editor.
 
-## Step 5 — Run the Anthias installer
+## Step 5: Run the Anthias installer
 
-You're now ready to run the standard installer. Follow the [scripted install steps](/docs/install/#advanced-scripted-install-on-raspberry-pi-os-lite-or-debian) — they're the same on PC as on a Raspberry Pi.
+You're now ready to run the standard installer. Follow the [scripted install steps](/docs/install/#advanced-scripted-install-on-raspberry-pi-os-lite-or-debian). They're the same on PC as on a Raspberry Pi.
 
 ## References
 
