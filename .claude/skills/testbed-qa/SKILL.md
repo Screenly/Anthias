@@ -115,10 +115,35 @@ video=HDMI-A-1:1920x1080@60e     # trailing 'e' forces the connector enabled/con
 
 After reboot the connector reads `connected`, the viewer starts, and video
 HW-decodes (`/dev/video10`, frames in playback-stats). Revert by restoring the
-`.bak-qa` copy and rebooting. Wayland boards (Pi 5, x86, Rock Pi 4) and linuxfb
-(Pi 2) do NOT need this — cage tolerates a missing output and linuxfb has
-`/dev/fb0` regardless. Since all testbeds are headless, you are always verifying
-the *software pipeline* (decode→sink→fb/compositor), not physical HDMI pixels.
+`.bak-qa` copy and rebooting. Wayland boards (Pi 5, x86, Rock Pi 4) do NOT need
+this — cage tolerates a missing output. Since all testbeds are headless, you are
+always verifying the *software pipeline* (decode→sink→fb/compositor), not
+physical HDMI pixels.
+
+**Don't decide by the board's nominal Qt platform — check the display driver.**
+"linuxfb board" is not the same as "has `/dev/fb0`". The Pi 3 A+ (32-bit)
+runs `QT_QPA_PLATFORM=linuxfb` but boots `dtoverlay=vc4-kms-v3d`, so headless it
+has **no** `/dev/fb0` at all (DRM finds no CRTC → no fbdev emulation) and the
+viewer sits on `no framebuffer (/dev/fb0) yet — waiting`. It needs the same
+force-display treatment as the eglfs boards. The Pi 2 is the genuine legacy-fbdev
+case and does have `/dev/fb0` regardless. Check `ls /dev/fb*` and
+`grep dtoverlay /boot/firmware/config.txt` rather than assuming from the Qt
+platform name.
+
+Also note the forced mode is a *request*, not a guarantee: on both the Pi 3 A+
+and the Pi 3 64-bit the fbdev/scanout surface came up **1024x768** despite
+`video=HDMI-A-1:1920x1080@60e` on the cmdline and `resolution = 1920x1080` in
+`anthias.conf`. Read the actual surface geometry (fb0 byte size, or the DRM mode)
+before computing expected pixel geometry for a capture comparison.
+
+**Check for a pre-existing modifier before you add one, and leave a `.bak-qa`.**
+The Pi 3 64-bit carried a force-display cmdline from an earlier session for
+weeks with no backup — which both means the board was silently *not*
+representative of a headless device, and left later sessions with nothing safe to
+restore. A `cmdline.txt.orig` is **not** a substitute: on that board `.orig` is
+the imaging-time file (`console=tty1`, `ds=nocloud`, no cgroup-memory flags), so
+"restoring" it would silently change the console and drop the cgroup flags the
+stack needs.
 
 ## 5. Standing rules
 
@@ -131,9 +156,21 @@ the *software pipeline* (decode→sink→fb/compositor), not physical HDMI pixel
   into unrelated containers. Target by exact PID (`kill $(pgrep -fa "<unique
   substring>")` after confirming) or cancel a harness-spawned background job by
   its task id. List before killing.
-- **No persistent logs in `/tmp`.** It is tmpfs and is wiped on reboot — exactly
-  the event a hotplug/power logger is trying to capture. Write to the user's home
-  or `/var/log`.
+- **`pkill -f` / `pgrep -f` match their own command line.** The self-match trap
+  isn't only a `pgrep` watcher problem: a `pkill -f "<pattern>"` sent over SSH
+  matches the pattern *inside its own ssh command line* and kills the session
+  running it (observed mid-run; the board was unaffected but the agent lost its
+  shell). Use an exact PID, or a bracketed pattern (`[m]y-sampler`) that cannot
+  match the literal string in the invoking command.
+- **No persistent logs in `/tmp`, and no large fixtures either.** `/tmp` is a
+  ~948 MB tmpfs: it is wiped on reboot — exactly the event a hotplug/power logger
+  is trying to capture — **and** it is mounted `usrquota` with the quota shared
+  across every concurrent session. Filling it does more than fail a write: once
+  the quota is hit, the harness's own Bash output capture breaks and even `echo`
+  fails. Multi-megapixel fixtures blow the budget fast (a 24 MP BMP is 72 MB, a
+  24 MP TIFF 95 MB), so build media and write logs under the user's home
+  (`/home/<user>/<task>-<board>/`) or `/var/log`. Check with `df -h /tmp`; note
+  hidden dirs (`.venv`-style) don't show up in `du -sh <dir>/*/`.
 - **Disable idle testbeds' assets.** After a run, PATCH every asset
   `{"is_enabled": false}` via the v2 API so the viewer idles to black.
   Re-enable only the board currently under measurement. Idle rotation wears the
@@ -156,13 +193,34 @@ the *software pipeline* (decode→sink→fb/compositor), not physical HDMI pixel
 
 ## 6. Per-board memory / hardware quirks
 
-- **Low-RAM boards OOM-wedge on the latest viewer even at idle.** The 1 GB
-  Rock Pi 4 could not settle the latest viewer image even with an empty playlist
-  — the merged Chromium/QWebEngine baseline alone exceeds the ~1 GB ceiling; it
-  wedged into an SSH banner-exchange timeout and needed physical power cycles.
-  Read any "wedge / drop / SSH unresponsive" on a 1 GB board as memory pressure
-  first, not CPU. To exercise an arm64 code path, override `DEVICE_TYPE=arm64`
-  on a stable board (Pi 4 / Pi 5) instead.
+- **On the 1 GB Rock Pi 4 it is celery, not the viewer, that exhausts swap.**
+  This bullet previously claimed the board "could not settle the latest viewer
+  even with an empty playlist" and blamed the Chromium/QWebEngine baseline. That
+  was measured on a board whose playlist was **not** actually empty — four assets
+  were still enabled, including a webpage and a streaming asset, left over from an
+  earlier run (see the "disable idle testbeds' assets" rule in §5, which is
+  exactly the trap). Re-measured with the playlist genuinely disabled:
+  * viewer alone (201 MB RSS + 188 MB QtWebEngine, under its ~773 MB cgroup cap)
+    sits comfortably; the board holds at ~173 MB available.
+  * bringing celery up on top drives swap to zero on **both** the release build
+    and the previous baseline — i.e. it is the steady state of this board, not a
+    regression in any given build.
+  * with celery stopped (§6's sanctioned mitigation) it is stable at 390-405 MB
+    available and 368-396 MB swap free.
+  So: read a wedge here as *total* memory pressure and suspect celery + leftover
+  enabled assets first. **Verify the playlist is really disabled before quoting
+  any idle memory number** — an "idle" measurement on a board that is quietly
+  rendering a webpage is worthless. A genuine wedge (SSH banner-exchange timeout
+  while ICMP and TCP/22 stay up) still needs a physical power cycle.
+- **Read any "wedge / drop / SSH unresponsive" on a ≤1 GB board as memory
+  pressure first, not CPU.** To exercise an arm64 code path without the RAM
+  ceiling, override `DEVICE_TYPE=arm64` on a stable board (Pi 4 / Pi 5) instead.
+- **A self-sustaining wedge won't survive a power cycle either.** If the wedge is
+  caused by an *enabled* asset (a 1080p video on a 512 MB board), rebooting just
+  replays it: the board boots, the viewer loads the same asset, and it wedges
+  again. Break the loop instead — race a `docker stop anthias-anthias-viewer-1`
+  against the boot (poll SSH in a tight loop and fire the moment it answers),
+  then disable the asset before restarting the viewer.
 - **512 MB is too little for Anthias.** On a 512 MB Pi 3 A+ the official
   installer dogfoods cleanly, but the running stack OOM-wedges: idle already
   leans on swap, and the moment the viewer loads a **webpage** the QtWebEngine
