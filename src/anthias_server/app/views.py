@@ -685,10 +685,10 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     #     The set lives in one place so adding a new format only
     #     touches that constant — this comment is intentionally
     #     not the source of truth.
-    from anthias_server.processing import needs_image_normalisation
+    from anthias_server.processing import needs_image_processing
 
     is_video = mimetype == 'video'
-    needs_image_normalize = mimetype == 'image' and needs_image_normalisation(
+    needs_image_normalize = mimetype == 'image' and needs_image_processing(
         final_path
     )
     is_processing = is_video or needs_image_normalize

@@ -88,8 +88,10 @@ logger = logging.getLogger(__name__)
 #     upload guarantees the viewer renders correctly across the
 #     fleet without per-board branching.
 #
-# JPEG / PNG / WebP / GIF / SVG stay untouched — already
-# viewer-friendly *and* well-compressed.
+# JPEG / PNG / WebP / GIF / SVG are not *converted* — already
+# viewer-friendly *and* well-compressed. The large ones among them
+# still get resized on low-RAM boards; see
+# ``DOWNSCALE_ONLY_IMAGE_EXTS`` below.
 #
 # All formats above are handled by Pillow's built-in decoders (no
 # extra apt or wheel dependency beyond pillow-heif, which is
@@ -129,6 +131,84 @@ def needs_image_normalisation(uri_or_filename: str) -> bool:
     assert "this filename would route through normalize".
     """
     return _ext(uri_or_filename) in NORMALIZE_IMAGE_EXTS
+
+
+# Formats we deliberately do *not* transcode (they are already
+# viewer-friendly and well-compressed) but which still routinely
+# arrive far larger than any signage screen can show: a modern phone
+# photo is a 12-50 MP JPEG, and design tools export oversized PNGs.
+#
+# On a low-RAM board those bypass ``NORMALIZE_IMAGE_EXTS`` entirely,
+# so before this set existed nothing capped them: the file stayed at
+# full resolution on disk and the *viewer* paid the decode at render
+# time. Measured on a Pi 4 (787 MB, arm64): a 24 MP JPEG drives the
+# viewer to ~120 MB RSS and 615 MB of swap — it survives, but only by
+# swapping, and the margin disappears on the 512 MB boards.
+#
+# Deliberately narrow:
+#   * GIF and animated WebP would need per-frame handling; a resize
+#     that silently dropped the animation would be worse than leaving
+#     the file alone.
+#   * SVG is vector — there is no pixel buffer to cap.
+# So this is exactly the two single-frame raster formats that carry
+# real-world oversized photos.
+DOWNSCALE_ONLY_IMAGE_EXTS = frozenset({'.jpg', '.jpeg', '.png'})
+
+
+def needs_low_ram_image_downscale(uri_or_filename: str) -> bool:
+    """``True`` for an over-cap JPEG/PNG upload on a low-RAM board.
+
+    Complements ``needs_image_normalisation``: that one asks "does
+    this format need converting?", this one asks "is this file too
+    big for this board to render comfortably?". A file can need the
+    pipeline for either reason, and ``needs_image_processing`` below
+    is the union the upload paths actually branch on.
+
+    Unlike ``needs_image_normalisation`` (a pure extension check) this
+    reads the file header to learn the dimensions. ``Image.open`` is
+    lazy — ``.size`` comes from the format header without decoding a
+    single pixel — so the cost is one small read even for a 90 MB
+    source.
+
+    Returns ``False`` (never blocks or delays an upload) when:
+      * the board is not low-RAM — a Pi 4 / 5 / x86 renders these
+        fine, and resizing an operator's photo unasked would be
+        surprising;
+      * the extension isn't one we resize in place;
+      * the header can't be read at all (missing file, truncated
+        upload, Pillow doesn't recognise it). A genuinely corrupt
+        upload fails later with a real decode error and a message the
+        operator can act on — guessing here would turn "corrupt file"
+        into the far more confusing "silently skipped resize".
+    """
+    if _ext(uri_or_filename) not in DOWNSCALE_ONLY_IMAGE_EXTS:
+        return False
+    if not is_low_ram_device():
+        return False
+    try:
+        with Image.open(uri_or_filename) as image:
+            width, height = image.size
+    except (OSError, UnidentifiedImageError, ValueError):
+        return False
+    return _exceeds_low_ram_pixel_cap(width, height)
+
+
+def needs_image_processing(uri_or_filename: str) -> bool:
+    """``True`` if this image upload needs the normalisation pipeline.
+
+    The union the upload paths branch on: a file earns a Celery hop
+    either because its format needs converting to WebP
+    (``needs_image_normalisation``) or because it is too large for a
+    low-RAM board and needs resizing in place
+    (``needs_low_ram_image_downscale``).
+
+    Kept separate from the two predicates so each stays independently
+    testable — and so the extension-only check remains a cheap pure
+    function for callers that only care about format.
+    """
+    return needs_image_normalisation(uri_or_filename) or (
+        needs_low_ram_image_downscale(uri_or_filename)
+    )
 
 
 def stamp_processing_start(asset_id: str) -> None:
@@ -536,72 +616,19 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
     where the pixel buffer is ~200 MB. By saving inside the
     context manager we hold exactly one decoded copy at a time.
 
-    Decompression-bomb guard: an attacker can craft a tiny image
-    file (e.g. a few KB on disk) that decodes to billions of
-    pixels and exhausts worker memory. Pillow ships
-    ``MAX_IMAGE_PIXELS`` (default ~89 MP) which raises
-    ``DecompressionBombError`` past 2× that threshold, but it warns
-    only at the first level — and pillow-heif's own decoder can
-    bypass the check entirely on certain HEIF/AVIF inputs. We add
-    an explicit ``image.size`` cap at ``_MAX_IMAGE_PIXELS`` so the
-    pipeline rejects oversized inputs deterministically before any
-    pixel buffer is allocated. A 50 MP cap is well above any phone
-    camera output (modern flagships top out around 200 MP only on
-    the sensor — JPEG/HEIC files compress to a max of ~50 MP at the
-    common 4:3 aspect ratios) but tiny compared to the ~10 GP
-    payloads typical bomb fixtures advertise.
+    The decompression-bomb cap and the low-RAM downscale both live in
+    ``_guard_and_fit_for_board``, shared with the in-place JPEG/PNG
+    downscale path.
     """
     with Image.open(input_path) as image:
-        # Reject decompression bombs *before* any decode work
-        # happens. ``image.size`` is read from the format header
-        # and doesn't trigger pixel decode, so this guard is cheap
-        # even on a malicious file.
-        width, height = image.size
-        if width * height > _MAX_IMAGE_PIXELS:
-            raise ValueError(
-                f'image dimensions {width}x{height} exceed cap '
-                f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
-            )
-        # On a low-RAM board, downscale a large photo to the 1080p
-        # pixel budget before the memory-heavy ``convert('RGBA')`` +
-        # lossless WebP encode below. At full resolution a ~24 MP image
-        # drives peak RSS to ~770 MB (measured); a Pi 2/3 normalisation
-        # container is capped around 540 MiB, so the encode OOM-kills
-        # and can reboot the board — and ``method=6`` lossless is
-        # minutes-slow on that CPU. A 1080p board can't display more
-        # detail anyway, so this is lossless for signage. Unlike the
-        # video path (which *rejects* over-cap uploads — a 4K clip can't
-        # be re-encoded on-device), an image downscales cleanly here.
-        # ``thumbnail`` shrinks in place, preserves aspect ratio, and
-        # for JPEG uses libjpeg draft decoding so even the decode of the
-        # oversized source stays cheap.
-        if _exceeds_low_ram_pixel_cap(width, height):
-            # Floor (not round) both target dimensions so the box area
-            # stays at or below the cap — ``thumbnail`` fits within the
-            # box, so the result is guaranteed <= _LOW_RAM_MAX_PIXELS.
-            scale = (_LOW_RAM_MAX_PIXELS / (width * height)) ** 0.5
-            image.thumbnail(
-                # ``max(1, …)`` guards a pathological aspect ratio (a
-                # crafted <5 px tall image that still slips under the
-                # 50 MP bomb cap) from flooring a side to 0, which
-                # ``thumbnail`` rejects.
-                (max(1, int(width * scale)), max(1, int(height * scale))),
-                Image.Resampling.LANCZOS,
-            )
+        _guard_and_fit_for_board(image)
         # Bake the EXIF Orientation into the pixels before we drop the
-        # metadata. WebP output carries no Orientation tag and Pillow's
-        # convert/save never auto-applies it, so a portrait HEIC / AVIF
-        # / TIFF (Orientation 6/8 — e.g. a phone photo) would otherwise
-        # be stored rotated 90° (issue 3232). Runs *after* the low-RAM
-        # downscale above, so on a constrained board the rotate works on
-        # the already-shrunk image. ``in_place`` transposes the open
-        # image without allocating a second full pixel buffer, keeping
-        # the memory discipline noted above.
-        #
-        # NOSONAR: ``in_place`` is valid from Pillow 9.5 (we pin
-        # 12.3.0 and mypy passes); SonarCloud's bundled Pillow stubs
-        # are stale and flag it as python:S930 — a false positive.
-        ImageOps.exif_transpose(image, in_place=True)  # NOSONAR
+        # metadata. WebP output carries no Orientation tag, so a
+        # portrait HEIC / AVIF (Orientation 6/8 — e.g. a phone photo)
+        # would otherwise be stored rotated 90° (issue 3232). See
+        # ``_bake_exif_orientation`` for which decoders make this a
+        # no-op versus load-bearing.
+        _bake_exif_orientation(image)
         # ``convert('RGBA')`` is a no-op when the source is already
         # RGBA (e.g. an HEIC with alpha) and a colour-correct upcast
         # otherwise. The result is a new Image (its own pixel
@@ -610,6 +637,134 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
         # source decoder state *and* the converted buffer at once.
         rgba = image.convert('RGBA')
         rgba.save(output_path, 'WEBP', lossless=True, method=6)
+
+
+def _guard_and_fit_for_board(image: Image.Image) -> None:
+    """Reject decompression bombs, then fit ``image`` to the board.
+
+    Mutates ``image`` in place (via ``thumbnail``) and is shared by
+    both image paths — the WebP conversion and the JPEG/PNG in-place
+    downscale — so the bomb cap and the low-RAM budget can never drift
+    apart between them.
+
+    Bomb guard: an attacker can craft a tiny file (a few KB on disk)
+    that decodes to billions of pixels and exhausts worker memory.
+    Pillow ships ``MAX_IMAGE_PIXELS`` (default ~89 MP) which raises
+    ``DecompressionBombError`` past 2x that threshold, but it warns
+    only at the first level — and pillow-heif's own decoder can bypass
+    the check entirely on certain HEIF/AVIF inputs. The explicit
+    ``image.size`` cap rejects oversized inputs deterministically
+    before any pixel buffer is allocated. ``image.size`` is read from
+    the format header and doesn't trigger a decode, so the guard is
+    cheap even on a malicious file. A 50 MP cap is well above any
+    phone camera output but tiny compared to the ~10 GP payloads
+    typical bomb fixtures advertise.
+
+    Low-RAM fit: at full resolution a ~24 MP image drives peak RSS to
+    ~770 MB (measured); a Pi 2/3 normalisation container is capped
+    around 540 MiB, so an encode OOM-kills and can reboot the board.
+    A 1080p board can't display more detail anyway, so this is
+    lossless for signage. Unlike the video path (which *rejects*
+    over-cap uploads — a 4K clip can't be re-encoded on-device), an
+    image downscales cleanly. ``thumbnail`` shrinks in place,
+    preserves aspect ratio, and for JPEG uses libjpeg draft decoding
+    so even the decode of the oversized source stays cheap.
+    """
+    width, height = image.size
+    if width * height > _MAX_IMAGE_PIXELS:
+        raise ValueError(
+            f'image dimensions {width}x{height} exceed cap '
+            f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
+        )
+    if not _exceeds_low_ram_pixel_cap(width, height):
+        return
+    # Floor (not round) both target dimensions so the box area stays
+    # at or below the cap — ``thumbnail`` fits within the box, so the
+    # result is guaranteed <= _LOW_RAM_MAX_PIXELS.
+    scale = (_LOW_RAM_MAX_PIXELS / (width * height)) ** 0.5
+    image.thumbnail(
+        # ``max(1, …)`` guards a pathological aspect ratio (a crafted
+        # <5 px tall image that still slips under the 50 MP bomb cap)
+        # from flooring a side to 0, which ``thumbnail`` rejects.
+        (max(1, int(width * scale)), max(1, int(height * scale))),
+        Image.Resampling.LANCZOS,
+    )
+
+
+def _bake_exif_orientation(image: Image.Image) -> None:
+    """Rotate ``image``'s pixels per its EXIF Orientation, in place.
+
+    Both output paths drop EXIF (WebP carries no Orientation tag, and
+    the in-place downscale saves without one deliberately), so the
+    rotation has to live in the pixels or a portrait phone photo would
+    display sideways — issue 3232.
+
+    Whether this is load-bearing depends on the decoder, which is
+    worth stating because it is easy to test the wrong leg and
+    conclude the fix works when it never ran:
+
+      * **JPEG / HEIC / AVIF** — Pillow does *not* auto-apply
+        Orientation on load, so this call is what actually rotates.
+      * **TIFF** — Pillow's TIFF reader already applies Orientation
+        while loading, so this is a defensive no-op there. Verified on
+        the armhf and arm64 testbeds: a stored-landscape TIFF tagged
+        Orientation=6 loads already transposed, and
+        ``exif_transpose`` reports no change.
+
+    Must run *after* any low-RAM downscale so a constrained board
+    rotates the already-shrunk buffer. ``in_place`` transposes the
+    open image without allocating a second full pixel buffer.
+
+    NOSONAR: ``in_place`` is valid from Pillow 9.5 (we pin 12.3.0 and
+    mypy passes); SonarCloud's bundled Pillow stubs are stale and flag
+    it as python:S930 — a false positive.
+    """
+    ImageOps.exif_transpose(image, in_place=True)  # NOSONAR
+
+
+def _downscale_image_in_place(input_path: str, output_path: str) -> None:
+    """Resize an over-cap JPEG/PNG to the board's budget, same format.
+
+    The counterpart to ``_convert_image_to_webp`` for the formats we
+    deliberately don't transcode. JPEG and PNG are already
+    viewer-friendly, so re-encoding them to lossless WebP would be
+    actively harmful — a photographic JPEG balloons several times over
+    as lossless WebP. Instead we keep the format (and therefore the
+    asset's URI and extension) and only shed pixels.
+
+    EXIF is deliberately **not** carried over to the output. The
+    orientation is baked into the pixels first, so re-attaching the
+    original EXIF block would leave an Orientation tag describing a
+    rotation that has already been applied, and the viewer's
+    ``QImageReader::setAutoTransform`` would rotate a second time —
+    turning a correct portrait into a sideways one. Dropping EXIF
+    keeps the viewer's auto-transform a no-op, which is the same
+    contract the WebP path already relies on.
+
+    Quality 90 with ``optimize`` is visually indistinguishable from
+    the source at signage viewing distance while keeping the file
+    small; the resize has already discarded far more information than
+    the re-encode does. PNG stays lossless, so it only takes
+    ``optimize``.
+    """
+    with Image.open(input_path) as image:
+        source_format = (image.format or '').upper()
+        _guard_and_fit_for_board(image)
+        _bake_exif_orientation(image)
+        if source_format == 'PNG':
+            # PNG keeps its mode (and any alpha channel) as-is.
+            image.save(output_path, 'PNG', optimize=True)
+            return
+        # JPEG cannot hold an alpha channel: a source with one (rare
+        # but legal for a CMYK/LA JPEG, and reachable if Pillow picked
+        # a mode like ``P`` or ``LA``) has to be flattened or ``save``
+        # raises. Convert only when needed so the common RGB path
+        # allocates nothing extra.
+        if image.mode not in ('RGB', 'L'):
+            flattened = image.convert('RGB')
+            flattened.save(output_path, 'JPEG', quality=90, optimize=True)
+            return
+        image.save(output_path, 'JPEG', quality=90, optimize=True)
 
 
 def _run_image_normalisation(asset: Asset) -> None:
@@ -621,9 +776,16 @@ def _run_image_normalisation(asset: Asset) -> None:
         raise FileNotFoundError(f'image source missing: {src_uri!r}')
 
     src_ext = _ext(src_uri)
-    if src_ext not in NORMALIZE_IMAGE_EXTS:
-        # Defensive: caller routed something we don't convert.
-        # Treat as a no-op success rather than re-encoding a JPEG.
+    # Two distinct jobs land in this task. A format in
+    # ``NORMALIZE_IMAGE_EXTS`` gets converted to WebP (and its URI
+    # changes extension). A JPEG/PNG that is merely too large for a
+    # low-RAM board gets resized in place, keeping its format and URI —
+    # re-encoding a photographic JPEG as lossless WebP would inflate
+    # it several times over, so "convert" is the wrong tool there.
+    downscale_only = src_ext not in NORMALIZE_IMAGE_EXTS
+    if downscale_only and not needs_low_ram_image_downscale(src_uri):
+        # Defensive: caller routed something we neither convert nor
+        # need to shrink. Treat as a no-op success.
         # Clearing ``error_message`` matters when the row is being
         # re-uploaded after a previous failed attempt — without it
         # the operator would still see the "Failed" pill on a row
@@ -636,11 +798,34 @@ def _run_image_normalisation(asset: Asset) -> None:
         _notify(asset_id)
         return
 
-    base_no_ext = path.splitext(src_uri)[0]
-    final_uri = f'{base_no_ext}.webp'
+    src_width = src_height = 0
+    if downscale_only:
+        # Same extension in and out, so the row's ``uri`` never moves
+        # and the viewer needs no cache invalidation beyond the mtime
+        # bump it already watches.
+        final_uri = src_uri
+        # Record the pre-resize dimensions for the metadata below.
+        # Header-only read (``Image.open`` is lazy), and any failure
+        # here is not worth failing the task over — the resize itself
+        # will raise a real decode error a moment later if the file is
+        # genuinely broken.
+        try:
+            with Image.open(src_uri) as probe:
+                src_width, src_height = probe.size
+        except (OSError, UnidentifiedImageError, ValueError):
+            logger.warning(
+                'normalize_image_asset: could not read dimensions of %s',
+                src_uri,
+            )
+    else:
+        base_no_ext = path.splitext(src_uri)[0]
+        final_uri = f'{base_no_ext}.webp'
     # Stage to a sibling .tmp first so a crashed save doesn't leave a
-    # half-written .webp behind for the viewer to choke on. cleanup()
-    # already sweeps stale .tmp after 1h.
+    # half-written file behind for the viewer to choke on. cleanup()
+    # already sweeps stale .tmp after 1h. For the in-place downscale
+    # this staging step is what keeps the operation atomic: the
+    # original stays readable until the replace lands, so a crash
+    # mid-encode can never destroy the only copy of the upload.
     staging = f'{final_uri}.tmp'
 
     def _drop_image_staging() -> None:
@@ -655,7 +840,10 @@ def _run_image_normalisation(asset: Asset) -> None:
             pass
 
     try:
-        _convert_image_to_webp(src_uri, staging)
+        if downscale_only:
+            _downscale_image_in_place(src_uri, staging)
+        else:
+            _convert_image_to_webp(src_uri, staging)
     except UnidentifiedImageError as exc:
         # Pillow couldn't decode — almost always a corrupt upload.
         # Re-raise with a clearer name; on_failure formats the message.
@@ -701,7 +889,17 @@ def _run_image_normalisation(asset: Asset) -> None:
 
     metadata = dict(asset.metadata or {})
     metadata['original_ext'] = src_ext
-    metadata['converted'] = True
+    # ``converted`` means "the bytes were re-encoded to a different
+    # format"; it stays False for an in-place downscale so existing
+    # consumers of the flag don't start seeing JPEGs reported as
+    # converted. ``downscaled`` records the resize independently, and
+    # carries the original dimensions so an operator asking "why is my
+    # photo softer than the file I uploaded?" can see what happened.
+    metadata['converted'] = not downscale_only
+    if downscale_only:
+        metadata['downscaled'] = True
+        if src_width and src_height:
+            metadata['original_resolution'] = f'{src_width}x{src_height}'
     metadata.pop('error_message', None)
 
     Asset.objects.filter(asset_id=asset_id).update(
