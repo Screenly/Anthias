@@ -248,18 +248,82 @@
 </section>
 
 <section class="bg-white py-20 lg:py-28 px-6 md:px-12 lg:px-20">
-    <div class="max-w-3xl mx-auto">
+    <div class="max-w-7xl mx-auto">
         <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Open source digital signage you control</h2>
-        <div class="mt-6 space-y-5 text-zinc-600 text-lg leading-relaxed">
-            <p>
-                Anthias is a free, self-hosted digital signage platform for Raspberry Pi and x86 PCs. Formerly known as Screenly OSE, it has been developed in the open since 2012 and is one of the most widely deployed open source signage projects in the world. There are no subscriptions, no per-screen fees, and no cloud account you have to sign up for. You install it on hardware you already own and your content stays on your own network.
-            </p>
-            <p>
-                Once a screen is running, you manage it from a simple web interface: upload an image or video, point to a web page or a free <a class="text-brand-purple no-underline hover:underline" href="https://signage-apps.com/?utm_source=anthias.screenly.io&amp;utm_medium=referral&amp;utm_campaign=home-body">signage app</a> such as weather, world clock, or a news feed, set how long each asset shows, and give it a start and end date. Anthias loops through the active playlist automatically, so a Pi tucked behind a display can run unattended for months. Because every device also exposes a REST API, you can automate the same actions across dozens of screens, pull content from your own systems, or schedule backups without ever opening the dashboard.
-            </p>
-            <p>
-                Teams use Anthias for menu boards in cafes and restaurants, wayfinding and reception screens in offices, live dashboards for factories and operations centers, in-store promotions for retail, and information displays in schools, churches, and community spaces. It runs on Raspberry Pi 2 through Pi 5 as well as ordinary x86 hardware, so an old mini-PC or a spare Pi is usually all you need to get started. The full source is on GitHub under a permissive license, and the project is actively maintained by Screenly with a large community of contributors.
-            </p>
+        <p class="text-zinc-500 mt-3 text-lg max-w-xl">Free and self-hosted, developed in the open since 2012, running on hardware you already own.</p>
+
+        <div class="mt-12 grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
+            <div class="space-y-5 text-zinc-600 text-base lg:text-lg leading-relaxed">
+                <p>Anthias is a free, self-hosted digital signage platform for Raspberry Pi and x86 PCs. Formerly known as Screenly OSE, it has been developed in the open since 2012 and is one of the most widely deployed open source signage projects in the world.</p>
+                <p>Once a screen is running, you manage it from a simple web interface: upload an image or video, point to a web page or a free <a class="text-brand-purple no-underline hover:underline" href="https://signage-apps.com/?utm_source=anthias.screenly.io&amp;utm_medium=referral&amp;utm_campaign=home-body">signage app</a> such as weather, a world clock, or a news feed, then set how long each asset shows and give it a start and end date. Anthias loops through the active playlist automatically, so a Pi tucked behind a display can run unattended for months.</p>
+                <div class="pt-2">
+                    <a class="text-brand-purple font-semibold text-sm no-underline hover:underline" href="/features/">Explore all features &rarr;</a>
+                </div>
+            </div>
+
+            <div class="bg-bg-light rounded-2xl border border-black/5 p-8">
+                <h3 class="text-lg font-bold">Why teams choose Anthias</h3>
+                <ul class="mt-6 space-y-5 list-none m-0 p-0">
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Free and open source</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">On GitHub under a permissive license, maintained by Screenly with a large community of contributors.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Self-hosted and private</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Your content stays on your own network, with no cloud account to sign up for.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">No per-screen fees</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Run one screen or a hundred at no software cost.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Runs on hardware you own</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Raspberry Pi 2 through Pi 5, and ordinary x86 PCs.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Automate with a REST API</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Manage and update dozens of screens programmatically.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-14">
+            <p class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Where teams use it</p>
+            <div class="mt-4 flex flex-wrap gap-2.5">
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Menu boards</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Wayfinding &amp; reception</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Operations dashboards</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Retail promotions</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Schools</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Churches</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Community spaces</span>
+            </div>
         </div>
     </div>
 </section>
