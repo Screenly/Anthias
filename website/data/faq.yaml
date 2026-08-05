@@ -210,6 +210,10 @@
       answer: |
         From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls--ssl).
 
+    - question: Is there a software bill of materials (SBOM) for Anthias?
+      answer: |
+        Yes. Anthias publishes a software bill of materials (SBOM) that lists the components it ships, so you can audit its dependencies for security and compliance. View and download the current SBOMs from the [Anthias Trust Center](https://trust.screenly.io/product/anthias/).
+
     - question: How do I run Anthias behind my own reverse proxy?
       answer: |
         Most reverse proxies — nginx, Apache (`mod_proxy`), IIS ARR — rewrite the upstream `Host` header by default. When that happens, Django's CSRF protection rejects every POST with `Origin checking failed` and uploads, asset changes, and settings updates all fail.
