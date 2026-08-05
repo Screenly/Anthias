@@ -181,6 +181,23 @@ def needs_low_ram_image_downscale(uri_or_filename: str) -> bool:
         upload fails later with a real decode error and a message the
         operator can act on — guessing here would turn "corrupt file"
         into the far more confusing "silently skipped resize".
+
+    **This function runs inside the upload request**, so it must not
+    raise. In particular a decompression bomb has to be caught here:
+    this module tightens ``Image.MAX_IMAGE_PIXELS``, so ``Image.open``
+    raises ``DecompressionBombError`` — which derives straight from
+    ``Exception``, *not* from ``OSError``/``ValueError`` — on a header
+    declaring more than twice the cap. Uncaught, that surfaced as a 500
+    on the upload instead of a handled asset.
+
+    A bomb returns ``True`` rather than ``False``: routing it into the
+    Celery task is what gets the operator a real answer. The task's
+    ``_guard_and_fit_for_board`` rejects it deterministically and
+    ``on_failure`` writes ``metadata.error_message`` and clears
+    ``is_processing``, so the row shows a "Failed" pill explaining the
+    dimensions — exactly how an over-cap HEIC/TIFF already behaves.
+    Returning ``False`` would instead store the bomb silently and leave
+    the viewer to choke on it at render time.
     """
     if _ext(uri_or_filename) not in DOWNSCALE_ONLY_IMAGE_EXTS:
         return False
@@ -189,6 +206,13 @@ def needs_low_ram_image_downscale(uri_or_filename: str) -> bool:
     try:
         with Image.open(uri_or_filename) as image:
             width, height = image.size
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        # Over the bomb cap. Hand it to the task, which rejects it with
+        # an operator-visible message. ``DecompressionBombWarning`` is
+        # listed because a warnings filter of ``error`` promotes it, and
+        # it is a ``RuntimeWarning`` subclass that the tuple below would
+        # otherwise miss too.
+        return True
     except (OSError, UnidentifiedImageError, ValueError):
         return False
     return _exceeds_low_ram_pixel_cap(width, height)

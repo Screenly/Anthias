@@ -34,7 +34,9 @@ import io
 import json
 import os
 import shutil
+import struct
 import subprocess
+import zlib
 from collections.abc import Iterator
 from datetime import UTC
 from os import path
@@ -2170,6 +2172,52 @@ def test_needs_low_ram_image_downscale_unreadable_file_is_false(
     ):
         assert processing.needs_low_ram_image_downscale(missing) is False
         assert processing.needs_low_ram_image_downscale(corrupt) is False
+
+
+@pytest.mark.django_db
+def test_needs_low_ram_downscale_routes_bomb_instead_of_raising(
+    asset_dir: str,
+) -> None:
+    """A decompression bomb must not raise out of the predicate.
+
+    This runs inside the upload request, and the module tightens
+    ``Image.MAX_IMAGE_PIXELS``, so ``Image.open`` raises
+    ``DecompressionBombError`` on a header declaring more than twice the
+    cap. That exception derives straight from ``Exception``, so an
+    ``except (OSError, ValueError)`` misses it and the upload 500s.
+
+    It returns ``True`` — routing the bomb into the Celery task, which
+    rejects it deterministically and surfaces a "Failed" pill with the
+    dimensions, the same way an over-cap HEIC/TIFF already does."""
+    src = path.join(asset_dir, 'bomb.png')
+    # A ~24 KB PNG whose IHDR declares 400 MP — 8x the 50 MP cap, and
+    # over the 2x threshold at which Pillow raises rather than warns.
+    side = 20000
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(src, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        # The assertion that matters is "does not raise"; the True is
+        # what gets the operator a real error message.
+        assert processing.needs_low_ram_image_downscale(src) is True
+        assert processing.needs_image_processing(src) is True
 
 
 @pytest.mark.django_db

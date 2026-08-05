@@ -688,10 +688,12 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     from anthias_server.processing import needs_image_processing
 
     is_video = mimetype == 'video'
-    needs_image_normalize = mimetype == 'image' and needs_image_processing(
+    # Either reason earns the Celery hop: a format that needs converting
+    # to WebP, or a JPEG/PNG too large for a low-RAM board to render.
+    needs_image_pipeline = mimetype == 'image' and needs_image_processing(
         final_path
     )
-    is_processing = is_video or needs_image_normalize
+    is_processing = is_video or needs_image_pipeline
 
     duration = settings['default_duration']
 
@@ -740,7 +742,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             ),
             offer_review_cta=True,
         )
-    if needs_image_normalize:
+    if needs_image_pipeline:
         from anthias_server.processing import dispatch_normalize_image
 
         dispatch_normalize_image(asset.asset_id)
