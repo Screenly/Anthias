@@ -100,6 +100,21 @@ For server/viewer/common Python changes on a full-stack testbed:
    --force-recreate <services>` drops the overlay writable layer back to the
    pinned image. Delete any injected assets first.
 
+**Never build the overlay from the shared working tree — extract from the commit
+object.** The dev-host checkout is shared across concurrent sessions and *will*
+be switched to another branch mid-run (observed twice in one validation, and the
+branch under test also gained new commits while it was being tested). Use
+`git archive <sha> -- src/ | tar x -C <staging>` (or `git show <sha>:<path>`) and
+then assert the in-container blob md5 matches that commit, so the report names a
+commit you can actually stand behind. Never `git checkout` on the shared tree to
+set up your own run.
+
+**Beware: the pinned image can be older than your branch base.** Overlaying
+`<branch>`'s files onto an image built from an older commit also carries every
+unrelated change to those files between the two. Diff
+`<image-commit>..<branch-base>` for the files you overlay and say in the report
+what else came along, or you are attributing a mixed result to one commit.
+
 ## 4. Force-display on headless eglfs boards
 
 The eglfs boards (Pi 3 64-bit, Pi 4) refuse to start the viewer when headless —
@@ -190,6 +205,22 @@ stack needs.
   service spawning the real asset-rotation → player path) is where a whole class
   of bugs — arg plumbing, service wiring, audio defaults, rotation — surfaces
   that a standalone module never shows.
+- **Never tick a PR's device-testing box from intent.** It goes back only with
+  measured numbers attached. Writing the checklist before the run is how an
+  unverified claim ships.
+- **Measure viewer memory as an A/B inside ONE viewer lifetime.** Settled-idle
+  `AnthiasViewer` RSS varies enormously between restarts on the same board with
+  the same image and an empty playlist (86.9 / 199 / 209 MB observed on the Pi 2,
+  depending on whether splash-page memory was still resident). A
+  restart-to-restart before/after comparison is therefore meaningless. Drive both
+  cases through one running viewer and sample the phase label alongside memory so
+  each number is attributable.
+- **`memory.peak` is fd-local, and that silently corrupts results.** Linux's
+  resettable cgroup peak resets per open file descriptor, so a `cat` issued after
+  a `tee`-based reset returns the *since-boot* peak, not the peak since your
+  reset. A naive reset-then-read reports garbage that looks plausible. Either hold
+  one fd across reset and read, or sample `memory.current` on an interval and take
+  the maximum yourself.
 
 ## 6. Per-board memory / hardware quirks
 
