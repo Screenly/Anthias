@@ -780,7 +780,28 @@ def _downscale_image_in_place(input_path: str, output_path: str) -> None:
     small; the resize has already discarded far more information than
     the re-encode does. PNG stays lossless, so it only takes
     ``optimize``.
+
+    **A resized PNG can be larger on disk than its source, and that is
+    accepted deliberately.** Measured on the Pi 2 testbed: a flat
+    3000x2400 RGBA PNG went 608 KB -> 3.52 MB (5.8x) because lossless
+    resampling replaces large single-colour runs — which PNG's filters
+    compress almost to nothing — with gradients that they cannot. A
+    photographic PNG shrinks normally (9.28 MB -> 3.44 MB).
+
+    A "keep whichever file is smaller" guard would be the obvious
+    reflex and would be **wrong**: the objective here is the decode
+    buffer, not the file. Keeping that 608 KB source means the viewer
+    still allocates 3000x2400x4 = ~28 MB of ARGB at render time, which
+    is the entire problem this function exists to solve; the resized
+    3.52 MB file decodes to ~8 MB. Trading a few MB of SD card for tens
+    of MB of RAM on a 512 MB board is the right way round. The growth
+    is logged so it stays observable rather than surprising.
     """
+    source_bytes = 0
+    try:
+        source_bytes = os.path.getsize(input_path)
+    except OSError:
+        pass
     with Image.open(input_path) as image:
         source_format = (image.format or '').upper()
         _guard_and_fit_for_board(image)
@@ -788,6 +809,7 @@ def _downscale_image_in_place(input_path: str, output_path: str) -> None:
         if source_format == 'PNG':
             # PNG keeps its mode (and any alpha channel) as-is.
             image.save(output_path, 'PNG', optimize=True)
+            _log_if_output_grew(input_path, output_path, source_bytes)
             return
         # JPEG cannot hold an alpha channel: a source with one (rare
         # but legal for a CMYK/LA JPEG, and reachable if Pillow picked
@@ -797,8 +819,39 @@ def _downscale_image_in_place(input_path: str, output_path: str) -> None:
         if image.mode not in ('RGB', 'L'):
             flattened = image.convert('RGB')
             flattened.save(output_path, 'JPEG', quality=90, optimize=True)
+            _log_if_output_grew(input_path, output_path, source_bytes)
             return
         image.save(output_path, 'JPEG', quality=90, optimize=True)
+        _log_if_output_grew(input_path, output_path, source_bytes)
+
+
+def _log_if_output_grew(
+    input_path: str, output_path: str, source_bytes: int
+) -> None:
+    """Log when a resize made the file bigger, so it stays observable.
+
+    Expected for a flat/low-entropy PNG (see ``_downscale_image_in_place``)
+    and accepted: the point is the decode buffer, not the file. Logged
+    rather than silently tolerated so "my asset directory grew after
+    upload" is answerable from the journal instead of a mystery.
+    """
+    if not source_bytes:
+        return
+    try:
+        output_bytes = os.path.getsize(output_path)
+    except OSError:
+        return
+    if output_bytes <= source_bytes:
+        return
+    logger.info(
+        'normalize_image_asset: %s grew on resize, %d -> %d bytes '
+        '(%.1fx) — expected for low-entropy PNG; the decode buffer is '
+        'what shrank',
+        input_path,
+        source_bytes,
+        output_bytes,
+        output_bytes / source_bytes,
+    )
 
 
 def _run_image_normalisation(asset: Asset) -> None:
