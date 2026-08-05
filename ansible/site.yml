@@ -3,11 +3,46 @@
   user: "{{ lookup('env', 'USER') }}"
   become: true
   vars:
-    anthias_user: "{{ lookup('env', 'USER') }}"
+    # install.sh passes -e anthias_user explicitly (robust under sudo).
+    # For a direct `ansible-playbook` run, fall back to the connection
+    # user (ansible_user_id) rather than only env USER, which resolves to
+    # root under sudo/become and renders /home/root host-agent paths that
+    # crash-loop the unit (GH #3239 point 5).
+    anthias_user: "{{ lookup('env', 'USER') | default(ansible_user_id, true) }}"
     anthias_branch: "{{ lookup('env', 'ANTHIAS_BRANCH') | default('master', true) }}"
     manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
     docker_tag: "{{ lookup('env', 'DOCKER_TAG') }}"
     device_type: "{{ lookup('env', 'DEVICE_TYPE') }}"
+
+    # HTTP(S) proxy support (GH #3239). install.sh passes these as
+    # --extra-vars; the env fallbacks let a direct `ansible-playbook`
+    # invocation pick them up from the shell too. Empty means "no proxy".
+    anthias_http_proxy: "{{ lookup('env', 'HTTP_PROXY') | default(lookup('env', 'http_proxy'), true) }}"
+    anthias_https_proxy: "{{ lookup('env', 'HTTPS_PROXY') | default(lookup('env', 'https_proxy'), true) }}"
+    anthias_no_proxy: "{{ lookup('env', 'NO_PROXY') | default(lookup('env', 'no_proxy'), true) }}"
+    anthias_proxy_enabled: "{{ (anthias_http_proxy | length > 0) or (anthias_https_proxy | length > 0) }}"
+    # Container-to-container traffic goes over the Compose bridge by
+    # service name (anthias-server, redis), so those names MUST bypass
+    # the proxy or internal API/Redis calls get force-proxied and break
+    # (GH #3239 point 9). requests matches NO_PROXY on the URL hostname,
+    # so the service names — not the resolved bridge IP — are what count.
+    # Harmless to also carry on the host/daemon (the names never match
+    # there), which keeps a single source of truth.
+    anthias_no_proxy_effective: >-
+      {{ ('localhost,127.0.0.1,::1,anthias-server,redis' +
+          ((',' + anthias_no_proxy) if (anthias_no_proxy | length > 0) else ''))
+         if anthias_proxy_enabled else '' }}
+
+  # Applied to every task so install-time fetches (get_url, apt, the
+  # Docker repo/key) traverse the proxy. Empty strings when no proxy is
+  # configured, which every tool treats as "no proxy".
+  environment:
+    HTTP_PROXY: "{{ anthias_http_proxy }}"
+    HTTPS_PROXY: "{{ anthias_https_proxy }}"
+    NO_PROXY: "{{ anthias_no_proxy_effective }}"
+    http_proxy: "{{ anthias_http_proxy }}"
+    https_proxy: "{{ anthias_https_proxy }}"
+    no_proxy: "{{ anthias_no_proxy_effective }}"
 
   pre_tasks:
     - name: Validate required environment variables

@@ -142,6 +142,18 @@ if [ -f /etc/default/locale ]; then
     set +a
 fi
 
+# Pull the configured HTTP proxy into our shell env so envsubst renders
+# HTTP_PROXY/HTTPS_PROXY/NO_PROXY into the server/viewer/celery service
+# blocks (GH #3239). /etc/anthias/proxy.env is the single source of truth
+# written by the ansible system role; when it is absent (no proxy) the
+# substitutions resolve to empty strings, which every client treats as
+# "no proxy". `set -a` exports them so the envsubst child process sees them.
+if [[ -f /etc/anthias/proxy.env ]]; then
+    set -a
+    . /etc/anthias/proxy.env
+    set +a
+fi
+
 cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml
