@@ -54,7 +54,9 @@ server/viewer/redis on merge to master.
 
 Deploy (non-destructive, preserves the board's WIP git state):
 
-1. `cp docker-compose.yml docker-compose.yml.bak-predeploy-<hash>`
+1. `cp docker-compose.yml docker-compose.yml.bak-<CURRENT-tag>` — name the backup
+   after the tag it **contains**, i.e. the one you will restore *to*, never after
+   the tag you are about to deploy. See the warning below.
 2. `sed -i -E 's#(ghcr\.io/screenly/anthias-(server|viewer|redis):)[0-9a-zA-Z]+-#\1<hash>-#g' docker-compose.yml`
    (the `[0-9a-zA-Z]+-` eats only the hash prefix, leaving a hyphenated board
    suffix like `pi4-64` intact)
@@ -64,6 +66,22 @@ Deploy (non-destructive, preserves the board's WIP git state):
 
 Verify: `curl -sw '%{http_code}' localhost/api/v2/assets` → 200; then read the
 viewer logs.
+
+**`bak-predeploy-<hash>` is ambiguous and has already caused near-misses — always
+`grep` a backup before restoring it.** The old wording named the backup after the
+hash being *deployed*, so `docker-compose.yml.bak-predeploy-fbe83e9` holds
+whatever was pinned *before* fbe83e9 — frequently `latest-<board>`. But agents
+following the same wording have also read it the other way and produced files
+named for their *contents*, so both conventions now exist side by side on the
+fleet with opposite meanings. Live examples: on the Pi 4 and Rock Pi 4,
+`bak-predeploy-fbe83e9` pins `latest-<board>`, while `bak-predeploy-fbe83e9-qa2`
+on the same box really does pin `fbe83e9`. Restoring by filename alone silently
+moves a board onto a floating `latest` tag — which then quietly invalidates the
+next "baseline" measurement taken on it.
+
+So: name new backups after their contents (step 1), and before *any* restore run
+`grep -oE 'anthias-server:[0-9a-zA-Z]+-[a-z0-9-]+' <backup>` and confirm it is the
+tag you actually want. Never trust the name.
 
 **Streaming a locally-built image** (skip GHCR): `docker save <img> | ssh
 <USER>@<BOARD_IP> 'sudo docker load'` — **no gzip**. On a fast LAN the wire is
