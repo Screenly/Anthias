@@ -79,7 +79,21 @@ gh release create v2026.06.0 \
 ```
 
 `--generate-notes` populates the body with GitHub's PR-based changelog (the
-"first round"). The tag `v2026.06.0` is created by this command.
+"first round").
+
+**A draft release does NOT create the tag.** GitHub defers tag creation until the
+release is published, so after this command `git ls-remote --tags upstream
+refs/tags/v2026.06.0` returns nothing and the release URL is a placeholder
+(`releases/tag/untagged-<hash>`). That is a feature: nothing is outward-facing
+yet, so if QA turns up a blocker you can delete the draft without burning a
+version number or deleting a published tag. The tag appears — at the
+`--target` SHA — at step 6.
+
+Also note the board matrix is 7 boards (`pi2`, `pi3`, `pi3-64`, `pi4-64`, `pi5`,
+`x86`, `arm64`); there is no `pi1` or 32-bit `pi4` image, so a preflight loop that
+invents those tags will report false gaps. On the release-asset side only 4 Pi
+boards get an rpi-imager entry and the 32-bit `pi3` has no per-board `.json` (the
+imager's "Raspberry Pi 3" entry uses the 64-bit image) — expected, not a gap.
 
 ## 5. Layer our curated notes on top (keep the auto-generated list)
 

@@ -54,7 +54,9 @@ server/viewer/redis on merge to master.
 
 Deploy (non-destructive, preserves the board's WIP git state):
 
-1. `cp docker-compose.yml docker-compose.yml.bak-predeploy-<hash>`
+1. `cp docker-compose.yml docker-compose.yml.bak-<CURRENT-tag>` — name the backup
+   after the tag it **contains**, i.e. the one you will restore *to*, never after
+   the tag you are about to deploy. See the warning below.
 2. `sed -i -E 's#(ghcr\.io/screenly/anthias-(server|viewer|redis):)[0-9a-zA-Z]+-#\1<hash>-#g' docker-compose.yml`
    (the `[0-9a-zA-Z]+-` eats only the hash prefix, leaving a hyphenated board
    suffix like `pi4-64` intact)
@@ -64,6 +66,22 @@ Deploy (non-destructive, preserves the board's WIP git state):
 
 Verify: `curl -sw '%{http_code}' localhost/api/v2/assets` → 200; then read the
 viewer logs.
+
+**`bak-predeploy-<hash>` is ambiguous and has already caused near-misses — always
+`grep` a backup before restoring it.** The old wording named the backup after the
+hash being *deployed*, so `docker-compose.yml.bak-predeploy-fbe83e9` holds
+whatever was pinned *before* fbe83e9 — frequently `latest-<board>`. But agents
+following the same wording have also read it the other way and produced files
+named for their *contents*, so both conventions now exist side by side on the
+fleet with opposite meanings. Live examples: on the Pi 4 and Rock Pi 4,
+`bak-predeploy-fbe83e9` pins `latest-<board>`, while `bak-predeploy-fbe83e9-qa2`
+on the same box really does pin `fbe83e9`. Restoring by filename alone silently
+moves a board onto a floating `latest` tag — which then quietly invalidates the
+next "baseline" measurement taken on it.
+
+So: name new backups after their contents (step 1), and before *any* restore run
+`grep -oE 'anthias-server:[0-9a-zA-Z]+-[a-z0-9-]+' <backup>` and confirm it is the
+tag you actually want. Never trust the name.
 
 **Streaming a locally-built image** (skip GHCR): `docker save <img> | ssh
 <USER>@<BOARD_IP> 'sudo docker load'` — **no gzip**. On a fast LAN the wire is
@@ -100,6 +118,21 @@ For server/viewer/common Python changes on a full-stack testbed:
    --force-recreate <services>` drops the overlay writable layer back to the
    pinned image. Delete any injected assets first.
 
+**Never build the overlay from the shared working tree — extract from the commit
+object.** The dev-host checkout is shared across concurrent sessions and *will*
+be switched to another branch mid-run (observed twice in one validation, and the
+branch under test also gained new commits while it was being tested). Use
+`git archive <sha> -- src/ | tar x -C <staging>` (or `git show <sha>:<path>`) and
+then assert the in-container blob md5 matches that commit, so the report names a
+commit you can actually stand behind. Never `git checkout` on the shared tree to
+set up your own run.
+
+**Beware: the pinned image can be older than your branch base.** Overlaying
+`<branch>`'s files onto an image built from an older commit also carries every
+unrelated change to those files between the two. Diff
+`<image-commit>..<branch-base>` for the files you overlay and say in the report
+what else came along, or you are attributing a mixed result to one commit.
+
 ## 4. Force-display on headless eglfs boards
 
 The eglfs boards (Pi 3 64-bit, Pi 4) refuse to start the viewer when headless —
@@ -115,10 +148,35 @@ video=HDMI-A-1:1920x1080@60e     # trailing 'e' forces the connector enabled/con
 
 After reboot the connector reads `connected`, the viewer starts, and video
 HW-decodes (`/dev/video10`, frames in playback-stats). Revert by restoring the
-`.bak-qa` copy and rebooting. Wayland boards (Pi 5, x86, Rock Pi 4) and linuxfb
-(Pi 2) do NOT need this — cage tolerates a missing output and linuxfb has
-`/dev/fb0` regardless. Since all testbeds are headless, you are always verifying
-the *software pipeline* (decode→sink→fb/compositor), not physical HDMI pixels.
+`.bak-qa` copy and rebooting. Wayland boards (Pi 5, x86, Rock Pi 4) do NOT need
+this — cage tolerates a missing output. Since all testbeds are headless, you are
+always verifying the *software pipeline* (decode→sink→fb/compositor), not
+physical HDMI pixels.
+
+**Don't decide by the board's nominal Qt platform — check the display driver.**
+"linuxfb board" is not the same as "has `/dev/fb0`". The Pi 3 A+ (32-bit)
+runs `QT_QPA_PLATFORM=linuxfb` but boots `dtoverlay=vc4-kms-v3d`, so headless it
+has **no** `/dev/fb0` at all (DRM finds no CRTC → no fbdev emulation) and the
+viewer sits on `no framebuffer (/dev/fb0) yet — waiting`. It needs the same
+force-display treatment as the eglfs boards. The Pi 2 is the genuine legacy-fbdev
+case and does have `/dev/fb0` regardless. Check `ls /dev/fb*` and
+`grep dtoverlay /boot/firmware/config.txt` rather than assuming from the Qt
+platform name.
+
+Also note the forced mode is a *request*, not a guarantee: on both the Pi 3 A+
+and the Pi 3 64-bit the fbdev/scanout surface came up **1024x768** despite
+`video=HDMI-A-1:1920x1080@60e` on the cmdline and `resolution = 1920x1080` in
+`anthias.conf`. Read the actual surface geometry (fb0 byte size, or the DRM mode)
+before computing expected pixel geometry for a capture comparison.
+
+**Check for a pre-existing modifier before you add one, and leave a `.bak-qa`.**
+The Pi 3 64-bit carried a force-display cmdline from an earlier session for
+weeks with no backup — which both means the board was silently *not*
+representative of a headless device, and left later sessions with nothing safe to
+restore. A `cmdline.txt.orig` is **not** a substitute: on that board `.orig` is
+the imaging-time file (`console=tty1`, `ds=nocloud`, no cgroup-memory flags), so
+"restoring" it would silently change the console and drop the cgroup flags the
+stack needs.
 
 ## 5. Standing rules
 
@@ -131,9 +189,21 @@ the *software pipeline* (decode→sink→fb/compositor), not physical HDMI pixel
   into unrelated containers. Target by exact PID (`kill $(pgrep -fa "<unique
   substring>")` after confirming) or cancel a harness-spawned background job by
   its task id. List before killing.
-- **No persistent logs in `/tmp`.** It is tmpfs and is wiped on reboot — exactly
-  the event a hotplug/power logger is trying to capture. Write to the user's home
-  or `/var/log`.
+- **`pkill -f` / `pgrep -f` match their own command line.** The self-match trap
+  isn't only a `pgrep` watcher problem: a `pkill -f "<pattern>"` sent over SSH
+  matches the pattern *inside its own ssh command line* and kills the session
+  running it (observed mid-run; the board was unaffected but the agent lost its
+  shell). Use an exact PID, or a bracketed pattern (`[m]y-sampler`) that cannot
+  match the literal string in the invoking command.
+- **No persistent logs in `/tmp`, and no large fixtures either.** `/tmp` is a
+  ~948 MB tmpfs: it is wiped on reboot — exactly the event a hotplug/power logger
+  is trying to capture — **and** it is mounted `usrquota` with the quota shared
+  across every concurrent session. Filling it does more than fail a write: once
+  the quota is hit, the harness's own Bash output capture breaks and even `echo`
+  fails. Multi-megapixel fixtures blow the budget fast (a 24 MP BMP is 72 MB, a
+  24 MP TIFF 95 MB), so build media and write logs under the user's home
+  (`/home/<user>/<task>-<board>/`) or `/var/log`. Check with `df -h /tmp`; note
+  hidden dirs (`.venv`-style) don't show up in `du -sh <dir>/*/`.
 - **Disable idle testbeds' assets.** After a run, PATCH every asset
   `{"is_enabled": false}` via the v2 API so the viewer idles to black.
   Re-enable only the board currently under measurement. Idle rotation wears the
@@ -153,16 +223,53 @@ the *software pipeline* (decode→sink→fb/compositor), not physical HDMI pixel
   service spawning the real asset-rotation → player path) is where a whole class
   of bugs — arg plumbing, service wiring, audio defaults, rotation — surfaces
   that a standalone module never shows.
+- **Never tick a PR's device-testing box from intent.** It goes back only with
+  measured numbers attached. Writing the checklist before the run is how an
+  unverified claim ships.
+- **Measure viewer memory as an A/B inside ONE viewer lifetime.** Settled-idle
+  `AnthiasViewer` RSS varies enormously between restarts on the same board with
+  the same image and an empty playlist (86.9 / 199 / 209 MB observed on the Pi 2,
+  depending on whether splash-page memory was still resident). A
+  restart-to-restart before/after comparison is therefore meaningless. Drive both
+  cases through one running viewer and sample the phase label alongside memory so
+  each number is attributable.
+- **`memory.peak` is fd-local, and that silently corrupts results.** Linux's
+  resettable cgroup peak resets per open file descriptor, so a `cat` issued after
+  a `tee`-based reset returns the *since-boot* peak, not the peak since your
+  reset. A naive reset-then-read reports garbage that looks plausible. Either hold
+  one fd across reset and read, or sample `memory.current` on an interval and take
+  the maximum yourself.
 
 ## 6. Per-board memory / hardware quirks
 
-- **Low-RAM boards OOM-wedge on the latest viewer even at idle.** The 1 GB
-  Rock Pi 4 could not settle the latest viewer image even with an empty playlist
-  — the merged Chromium/QWebEngine baseline alone exceeds the ~1 GB ceiling; it
-  wedged into an SSH banner-exchange timeout and needed physical power cycles.
-  Read any "wedge / drop / SSH unresponsive" on a 1 GB board as memory pressure
-  first, not CPU. To exercise an arm64 code path, override `DEVICE_TYPE=arm64`
-  on a stable board (Pi 4 / Pi 5) instead.
+- **On the 1 GB Rock Pi 4 it is celery, not the viewer, that exhausts swap.**
+  This bullet previously claimed the board "could not settle the latest viewer
+  even with an empty playlist" and blamed the Chromium/QWebEngine baseline. That
+  was measured on a board whose playlist was **not** actually empty — four assets
+  were still enabled, including a webpage and a streaming asset, left over from an
+  earlier run (see the "disable idle testbeds' assets" rule in §5, which is
+  exactly the trap). Re-measured with the playlist genuinely disabled:
+  * viewer alone (201 MB RSS + 188 MB QtWebEngine, under its ~773 MB cgroup cap)
+    sits comfortably; the board holds at ~173 MB available.
+  * bringing celery up on top drives swap to zero on **both** the release build
+    and the previous baseline — i.e. it is the steady state of this board, not a
+    regression in any given build.
+  * with celery stopped (§6's sanctioned mitigation) it is stable at 390-405 MB
+    available and 368-396 MB swap free.
+  So: read a wedge here as *total* memory pressure and suspect celery + leftover
+  enabled assets first. **Verify the playlist is really disabled before quoting
+  any idle memory number** — an "idle" measurement on a board that is quietly
+  rendering a webpage is worthless. A genuine wedge (SSH banner-exchange timeout
+  while ICMP and TCP/22 stay up) still needs a physical power cycle.
+- **Read any "wedge / drop / SSH unresponsive" on a ≤1 GB board as memory
+  pressure first, not CPU.** To exercise an arm64 code path without the RAM
+  ceiling, override `DEVICE_TYPE=arm64` on a stable board (Pi 4 / Pi 5) instead.
+- **A self-sustaining wedge won't survive a power cycle either.** If the wedge is
+  caused by an *enabled* asset (a 1080p video on a 512 MB board), rebooting just
+  replays it: the board boots, the viewer loads the same asset, and it wedges
+  again. Break the loop instead — race a `docker stop anthias-anthias-viewer-1`
+  against the boot (poll SSH in a tight loop and fire the moment it answers),
+  then disable the asset before restarting the viewer.
 - **512 MB is too little for Anthias.** On a 512 MB Pi 3 A+ the official
   installer dogfoods cleanly, but the running stack OOM-wedges: idle already
   leans on swap, and the moment the viewer loads a **webpage** the QtWebEngine
