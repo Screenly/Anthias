@@ -36,7 +36,7 @@
       {{- $required := default (slice) $schema.required -}}
       {{- /* Range directly over the map: Hugo iterates map keys in
              sorted order, and `sort` here would collapse the map to a
-             slice — making $name the numeric index instead of the
+             slice, making $name the numeric index instead of the
              property name. */ -}}
       {{- range $name, $prop := $schema.properties -}}
       {{- $propRef := index $prop "$ref" -}}

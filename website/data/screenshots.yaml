@@ -1,7 +1,7 @@
 # Marketing screenshots rendered on the home-page hero slider.
 #
 # Each entry maps to a <name>@3x.png source under
-# assets/images/screenshots/. That directory is gitignored — no
+# assets/images/screenshots/. That directory is gitignored: no
 # captures are committed. The marketing-screenshots.yaml workflow
 # produces them from the Playwright integration suite (see the
 # tests/conftest.py marketing_screenshot fixture for the call sites);
@@ -20,7 +20,7 @@ slides:
     alt: "Add Asset dialog with URL, file upload, and schedule fields"
     caption: "Upload media or point at any URL"
   - name: settings
-    alt: "Anthias system settings — display, network, and player options"
+    alt: "Anthias system settings, display, network, and player options"
     caption: "Configure the player without touching the CLI"
   - name: system-info
     alt: "System Info dashboard with load average, memory, disk and version"

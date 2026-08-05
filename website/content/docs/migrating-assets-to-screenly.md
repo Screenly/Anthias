@@ -8,7 +8,7 @@ aliases:
 
 [Screenly](https://www.screenly.io/) is the commercial, cloud-managed
 sibling of Anthias. If you want to move a player's assets up to a Screenly
-account, Anthias ships a built-in migration wizard — no SSH or scripts
+account, Anthias ships a built-in migration wizard, no SSH or scripts
 required. Existing assets already on Screenly are left untouched.
 
 ## Before you start
@@ -20,7 +20,7 @@ You'll need a Screenly API token:
 2. In the Screenly dashboard, go to **Settings → Security → API Tokens**
    and create a new token.
 3. Keep the token handy. It looks like `abcdef.123456…`. The token is not
-   stored on the device — it is only used to talk to Screenly's API while
+   stored on the device. It is only used to talk to Screenly's API while
    the migration runs.
 
 ## Run the migration
@@ -39,12 +39,12 @@ You'll need a Screenly API token:
    **Retry _N_ failed** button, without repeating the ones that already
    succeeded.
 
-That's it — your selected assets now live in your Screenly account.
+That's it. Your selected assets now live in your Screenly account.
 
 ## What gets migrated
 
-The wizard copies the **media assets** stored on the device — images, videos,
-and web-page URLs — up to your Screenly account. Each asset keeps its name and
+The wizard copies the **media assets** stored on the device, images, videos,
+and web-page URLs, up to your Screenly account. Each asset keeps its name and
 its underlying file. What does **not** transfer automatically:
 
 - **Schedules and playlists.** Screenly and Anthias model scheduling
@@ -59,7 +59,7 @@ its underlying file. What does **not** transfer automatically:
 
 - The migration is **non-destructive**: your assets remain on the Anthias
   device after they are copied. Nothing is deleted locally.
-- You can run the wizard as many times as you like — for example, to push a
+- You can run the wizard as many times as you like, for example, to push a
   new batch of assets you added after the first run.
 - Large videos take longer to upload; the per-asset progress bar shows which
   asset is in flight so you can leave it running unattended.
@@ -69,7 +69,7 @@ its underlying file. What does **not** transfer automatically:
 - **"Invalid token."** Double-check that you copied the whole token (they look
   like `abcdef.123456…`) and that it has not been revoked in **Settings →
   Security → API Tokens** on Screenly.
-- **An asset fails to upload.** Use the **Retry _N_ failed** button — it
+- **An asset fails to upload.** Use the **Retry _N_ failed** button. It
   re-uploads only the assets that did not succeed, so you never re-send the ones
   that already made it across.
 - **The device can't reach Screenly.** The migration talks to Screenly's API
@@ -78,7 +78,7 @@ its underlying file. What does **not** transfer automatically:
 
 ## Related documentation
 
-- [Importing content from other platforms](/docs/import-content/) — bring assets
+- [Importing content from other platforms](/docs/import-content/): bring assets
   *into* Anthias from other digital-signage tools.
-- [Asset scheduling](/docs/asset-scheduling/) — how scheduling works on Anthias.
-- [All documentation](/docs/) — the full Anthias documentation index.
+- [Asset scheduling](/docs/asset-scheduling/): how scheduling works on Anthias.
+- [All documentation](/docs/): the full Anthias documentation index.
