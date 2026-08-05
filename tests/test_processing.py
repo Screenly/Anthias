@@ -2255,6 +2255,73 @@ def test_run_normalisation_downscales_jpeg_without_changing_uri(
 
 
 @pytest.mark.django_db
+def test_original_resolution_reports_display_orientation(
+    asset_dir: str,
+) -> None:
+    """``original_resolution`` must name the dimensions the operator
+    saw, not the stored buffer.
+
+    A phone photo is stored landscape with Orientation=6 ("rotate 90°
+    CW to display"), so a 6000x4000 stored buffer is a 4000x6000
+    portrait to the person who took it. The field exists to answer "why
+    is my photo softer than the file I uploaded?", so reporting the
+    pre-transpose orientation would name an orientation they never
+    saw. Caught on the Pi 3-64 testbed."""
+    src = path.join(asset_dir, 'portrait.jpg')
+    image = Image.new('RGB', (6000, 4000), (10, 20, 30))
+    exif = image.getexif()
+    exif[0x0112] = 6
+    image.save(src, 'JPEG', exif=exif)
+    asset = _make_processing_asset('img-jpeg-portrait', src)
+
+    with (
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        mock.patch.object(processing, '_notify'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.metadata['original_resolution'] == '4000x6000', (
+        'expected the display orientation the operator uploaded'
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'orientation,expected',
+    [
+        # Identity and the pure mirrors keep the stored aspect.
+        (None, (6000, 4000)),
+        (1, (6000, 4000)),
+        (2, (6000, 4000)),
+        (3, (6000, 4000)),
+        (4, (6000, 4000)),
+        # 90°/270°, with or without a mirror, swap the axes.
+        (5, (4000, 6000)),
+        (6, (4000, 6000)),
+        (7, (4000, 6000)),
+        (8, (4000, 6000)),
+    ],
+)
+def test_display_size_per_orientation(
+    asset_dir: str, orientation: int | None, expected: tuple[int, int]
+) -> None:
+    src = path.join(asset_dir, 'probe.jpg')
+    image = Image.new('RGB', (6000, 4000), (10, 20, 30))
+    if orientation is None:
+        image.save(src, 'JPEG')
+    else:
+        exif = image.getexif()
+        exif[0x0112] = orientation
+        image.save(src, 'JPEG', exif=exif)
+
+    with Image.open(src) as probe:
+        assert processing._display_size(probe) == expected
+
+
+@pytest.mark.django_db
 def test_run_normalisation_leaves_small_jpeg_untouched(
     asset_dir: str,
 ) -> None:

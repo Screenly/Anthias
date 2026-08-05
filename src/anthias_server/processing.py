@@ -54,6 +54,7 @@ import json
 import logging
 import os
 import shlex
+import struct
 from os import path
 from typing import Any
 
@@ -722,6 +723,39 @@ def _bake_exif_orientation(image: Image.Image) -> None:
     ImageOps.exif_transpose(image, in_place=True)  # NOSONAR
 
 
+# EXIF Orientation values whose rotation swaps width and height (90°
+# or 270°, with or without a mirror). 1-4 are identity/flips that keep
+# the aspect the way it is stored.
+_TRANSPOSING_ORIENTATIONS = frozenset({5, 6, 7, 8})
+
+
+def _display_size(image: Image.Image) -> tuple[int, int]:
+    """``image``'s dimensions *as the operator sees them*.
+
+    A phone photo is usually stored landscape with EXIF Orientation=6,
+    meaning "rotate 90° CW to display" — so a 6000x4000 stored buffer
+    is a 4000x6000 portrait to the person who took it. Reporting the
+    stored numbers back to them in ``metadata.original_resolution``
+    (which exists precisely to answer "why is my photo softer than the
+    file I uploaded?") would name an orientation they never saw.
+
+    Header-only: both ``size`` and ``getexif()`` read the format
+    header, so this triggers no pixel decode. A missing or unreadable
+    Orientation tag falls through to the stored size, which is correct
+    for every format that has no tag at all.
+    """
+    width, height = image.size
+    try:
+        orientation = image.getexif().get(0x0112)
+    except (OSError, ValueError, TypeError, struct.error):
+        # Malformed EXIF must never fail an upload; the stored size is
+        # a safe answer and the resize itself still runs.
+        return width, height
+    if orientation in _TRANSPOSING_ORIENTATIONS:
+        return height, width
+    return width, height
+
+
 def _downscale_image_in_place(input_path: str, output_path: str) -> None:
     """Resize an over-cap JPEG/PNG to the board's budget, same format.
 
@@ -811,7 +845,7 @@ def _run_image_normalisation(asset: Asset) -> None:
         # genuinely broken.
         try:
             with Image.open(src_uri) as probe:
-                src_width, src_height = probe.size
+                src_width, src_height = _display_size(probe)
         except (OSError, UnidentifiedImageError, ValueError):
             logger.warning(
                 'normalize_image_asset: could not read dimensions of %s',
