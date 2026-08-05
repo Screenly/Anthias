@@ -31,6 +31,10 @@
 - name: Install/remove apt packages
   ansible.builtin.include_tasks: packages.yml
 
+- name: Ensure a stable local DNS resolver before Docker starts (x86)
+  ansible.builtin.include_tasks: dns.yml
+  when: device_type == 'x86'
+
 - name: Install and configure Docker
   ansible.builtin.include_tasks: docker.yml
 

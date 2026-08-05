@@ -1,0 +1,61 @@
+---
+# Ensure a stable local DNS resolver (systemd-resolved) exists before
+# Docker starts, so URL/web assets resolve reliably after a cold boot.
+#
+# Root cause of GH #3230 (URL assets fail on x86 until a manual
+# `docker restart`): on a headless x86 box the DHCP client writes the
+# upstream nameservers straight into /etc/resolv.conf, and that file
+# can still be empty (or hold a not-yet-reachable server) at the moment
+# dockerd first brings up the Anthias bridge network. Docker reads the
+# host resolver config when it creates the network and bakes those
+# nameservers into the embedded DNS (127.0.0.11); it does not re-derive
+# them afterwards, so the containers stay stuck with a dead upstream for
+# the life of that network. The asset revalidation loop then marks every
+# URL asset unreachable and the viewer skips them. A `docker restart`
+# recreates the network after DNS is up, which is exactly why the manual
+# workaround "fixes" it.
+#
+# systemd-resolved removes the race by decoupling what Docker reads from
+# the DHCP client's timing. /etc/resolv.conf becomes a symlink to
+# resolved's stub, whose nameserver is always the fixed loopback address
+# 127.0.0.53 no matter which upstream is live; resolved tracks the real
+# upstream (updated by whatever manages the link — NetworkManager,
+# systemd-networkd, or a DHCP client) behind that address. So the value
+# Docker bakes into its embedded DNS is a stable local resolver rather
+# than a nameserver that might still be empty or unreachable. Docker,
+# seeing a loopback-only resolv.conf, forwards to the real upstreams from
+# /run/systemd/resolve/resolv.conf.
+#
+# What guarantees the stub is answering in time is unit ordering, not the
+# symlink target being present since install (it is not — resolved
+# generates it at boot, see the task below). Docker's packaged unit is
+# `After=network-online.target nss-lookup.target` and resolved is
+# `Before=nss-lookup.target`, so once resolved is enabled dockerd only
+# creates the network after name resolution is genuinely up.
+#
+# Scoped to x86: the issue is reported there, the Pi images have a
+# different (working) network/boot stack, and changing DNS resolution
+# fleet-wide is out of scope for this fix.
+
+- name: Install systemd-resolved
+  ansible.builtin.apt:
+    name: systemd-resolved
+    state: present
+
+- name: Enable and start systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    enabled: true
+    state: started
+
+- name: Point /etc/resolv.conf at the systemd-resolved stub
+  ansible.builtin.file:
+    src: /run/systemd/resolve/stub-resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    # The stub file is created by resolved at runtime, so the link is
+    # briefly dangling on first boot before the service starts; that is
+    # expected and harmless. force overwrites a static resolv.conf left
+    # behind by the DHCP client / installer.
+    force: true
+    follow: false
