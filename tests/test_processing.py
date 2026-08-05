@@ -44,7 +44,7 @@ from unittest import mock
 
 import pytest
 import sh
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_server import processing
 from anthias_server.app.models import Asset
@@ -294,6 +294,49 @@ def test_image_normalises_to_lossless_webp_across_formats(
     with Image.open(expected_uri) as im:
         assert im.format == 'WEBP'
         assert im.size == (16, 16)
+
+
+@pytest_heif
+@pytest.mark.django_db
+def test_heif_decoder_owns_orientation_not_exif_transpose(
+    asset_dir: str,
+) -> None:
+    """pillow-heif normalises EXIF Orientation away, so HEIC rotation is
+    the decoder's job — and a synthetic HEIC fixture cannot test it.
+
+    Real camera HEICs encode rotation in the HEIF ``irot`` box rather
+    than as EXIF Orientation, and pillow-heif applies ``irot`` at decode
+    *and* rewrites the Orientation tag to 1. Two consequences worth
+    pinning:
+
+    1. ``_bake_exif_orientation`` is a defensive no-op for HEIC. If a
+       future pillow-heif stopped normalising, this test fails and warns
+       that the HEIC leg needs rethinking — including the possibility of
+       a double rotation, since ``irot`` would already have been applied.
+    2. Injecting Orientation into a HEIC to build a test fixture is
+       futile: the tag does not survive the round-trip. This was
+       independently mistaken for a bug twice during release QA. The
+       real behaviour was confirmed against genuine iPhone 12 Pro files
+       (``irot`` 90 and 270, stored 3024x4032) which decode to the
+       correct portrait with the tag reading 1.
+    """
+    src = path.join(asset_dir, 'injected.heic')
+    image = Image.new('RGB', (400, 200), (200, 30, 30))
+    exif = image.getexif()
+    exif[0x0112] = 6
+    image.save(src, 'HEIF', exif=exif)
+
+    with Image.open(src) as reopened:
+        assert reopened.getexif().get(0x0112) in (None, 1), (
+            'pillow-heif no longer normalises injected EXIF Orientation — '
+            'the HEIC orientation path needs re-verifying against a real '
+            'camera file, and may now double-rotate'
+        )
+        stored = reopened.size
+        transposed = ImageOps.exif_transpose(reopened)
+        assert transposed.size == stored, (
+            'exif_transpose became load-bearing for HEIC; see docstring'
+        )
 
 
 @pytest_heif

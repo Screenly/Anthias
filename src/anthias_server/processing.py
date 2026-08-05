@@ -704,13 +704,28 @@ def _bake_exif_orientation(image: Image.Image) -> None:
     worth stating because it is easy to test the wrong leg and
     conclude the fix works when it never ran:
 
-      * **JPEG / HEIC / AVIF** — Pillow does *not* auto-apply
-        Orientation on load, so this call is what actually rotates.
+      * **JPEG / AVIF** — Pillow does *not* auto-apply Orientation on
+        load, so this call is what actually rotates. Verified for JPEG
+        on the armhf and arm64 testbeds via display capture, and for
+        AVIF locally (a 400x200 source tagged Orientation=6 comes back
+        200x400 only after this call).
       * **TIFF** — Pillow's TIFF reader already applies Orientation
         while loading, so this is a defensive no-op there. Verified on
         the armhf and arm64 testbeds: a stored-landscape TIFF tagged
         Orientation=6 loads already transposed, and
         ``exif_transpose`` reports no change.
+      * **HEIC / HEIF** — also a defensive no-op, for a different
+        reason. Real camera HEICs encode rotation in the HEIF ``irot``
+        box, not as EXIF Orientation, and pillow-heif applies ``irot``
+        at decode *and* normalises the EXIF Orientation tag to 1. So
+        the buffer is already upright and there is nothing left to
+        transpose. Verified against two genuine iPhone 12 Pro files
+        (``irot`` 90 and 270, stored 3024x4032) on both the pinned
+        pillow-heif 1.4.0 and 1.5.0: Pillow reports the already-rotated
+        portrait size, the tag reads 1, and ``exif_transpose`` is a
+        no-op. Note the corollary — an EXIF Orientation *injected* into
+        an HEIC is normalised away by pillow-heif, so a synthetic
+        fixture built that way tests nothing. Use a real camera file.
 
     Must run *after* any low-RAM downscale so a constrained board
     rotates the already-shrunk buffer. ``in_place`` transposes the
