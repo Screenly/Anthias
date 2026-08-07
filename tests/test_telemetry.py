@@ -98,6 +98,11 @@ def test_sends_event_when_no_cooldown(
     assert params['resolution'] == '1920x1080'
     assert params['audio_output'] == 'hdmi'
     assert params['tls_enabled'] is False
+    # The released CalVer, which GA4's "Version distribution" report
+    # reads via its version_name dimension. Never sent before, so that
+    # report showed ~3,700 devices as "(not reported)".
+    assert params['version_name']
+    assert params['version_name'] != 'unknown'
 
 
 @patch.object(telemetry, 'requests_post')
@@ -198,3 +203,41 @@ def test_generates_and_persists_new_device_id(
     assert (
         len(redis_data[telemetry.DEVICE_ID_KEY]) == telemetry.DEVICE_ID_LENGTH
     )
+
+
+@patch.object(telemetry, 'requests_post')
+def test_version_name_carries_the_released_calver(
+    mock_post: Any, telemetry_env: None
+) -> None:
+    """GA4's "Version distribution" report keys on `version_name`, and
+    nothing ever sent it — not this payload, and not the pre-#2798 one
+    either, whose `Pi_Version` was the *hardware* model. So the report
+    could only ever show "(not reported)".
+
+    Sourced from get_anthias_release() (pyproject.toml, shipped in the
+    image) rather than an env var, because env vars are the known
+    failure mode for telemetry params."""
+    with patch.object(
+        telemetry, 'get_anthias_release', return_value='2026.8.0'
+    ):
+        assert telemetry.send_telemetry() is True
+    params = json.loads(mock_post.call_args.kwargs['data'])['events'][0][
+        'params'
+    ]
+    assert params['version_name'] == '2026.8.0'
+
+
+@patch.object(telemetry, 'requests_post')
+def test_version_name_falls_back_to_an_explicit_bucket(
+    mock_post: Any, telemetry_env: None
+) -> None:
+    """get_anthias_release() returns '' when both its sources fail. Send
+    'unknown' rather than the empty string, so such a device shows up as
+    its own bucket in GA4 instead of silently rejoining the
+    "(not reported)" pile that hid this bug in the first place."""
+    with patch.object(telemetry, 'get_anthias_release', return_value=''):
+        assert telemetry.send_telemetry() is True
+    params = json.loads(mock_post.call_args.kwargs['data'])['events'][0][
+        'params'
+    ]
+    assert params['version_name'] == 'unknown'
