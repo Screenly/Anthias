@@ -172,8 +172,12 @@ def _run_bounded(argv: list[str], timeout: int) -> tuple[str, str, int] | None:
     exactly one sentinel token, and libcec is prone to writing chatter
     to stderr, so merging them would corrupt the token.
 
-    Returns ``(stdout, stderr, returncode)``, or ``None`` if the child
-    had to be killed.
+    Returns ``(stdout, stderr, returncode)`` on a completed run, or
+    ``None`` for **either** failure mode — the child had to be killed,
+    *or* the fork/exec never happened (out of memory, missing
+    interpreter). Callers must not read ``None`` as "timed out"
+    specifically; both mean "no answer", which is all the CEC callers
+    need to distinguish. (Copilot review of #3264.)
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         try:
@@ -274,9 +278,13 @@ def get_display_power() -> str | bool:
         [sys.executable, '-c', _CEC_QUERY_SCRIPT], _CEC_TIMEOUT_S
     )
     if completed is None:
-        # Timed out and was killed — libcec hung rather than raising.
-        # Verified on the vchiq-only Pi 3 A+, where this is the normal
-        # outcome on every tick, not an exceptional one.
+        # No answer. Overwhelmingly this means libcec hung and the probe
+        # was killed — verified on the vchiq-only Pi 3 A+, where that is
+        # the normal outcome on every tick rather than an exceptional
+        # one. It also covers the fork/exec never happening at all (out
+        # of memory), which is rarer and has larger symptoms of its own;
+        # 'unresponsive' is a fair description of both from the
+        # operator's side.
         return 'CEC adapter unresponsive'
     output = completed[0]
     if output == 'True':
@@ -300,6 +308,9 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     # request rather than a celery worker (GH #3264).
     completed = _run_bounded([sys.executable, '-c', script], _CEC_TIMEOUT_S)
     if completed is None:
+        # As in get_display_power: either the probe was killed after
+        # hanging, or the fork/exec never happened. Both are "no answer"
+        # to the operator.
         return (
             False,
             f'Display turn-{verb} timed out — CEC adapter unresponsive.',
