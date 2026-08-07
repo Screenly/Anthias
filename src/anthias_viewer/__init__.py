@@ -236,7 +236,28 @@ _NO_SCREEN_SIGNATURES = (
     'Unable to figure out framebuffer device',
     'linuxfb: Failed to initialize screen',
     'no screens available',
+    # Emitted when the node exists but cannot be opened. Observed on the
+    # armhf testbed while deliberately probing for false positives; the
+    # list is a sample of Qt's phrasings, not an exhaustive set, which is
+    # why the device check below is the load-bearing condition.
+    'Failed to open framebuffer',
 )
+
+
+def _linuxfb_device() -> str:
+    """The framebuffer node this board's Qt platform will actually open.
+
+    ``linuxfb`` accepts ``fb=/dev/fbN``, so a board configured onto
+    ``fb1`` must not be judged by ``/dev/fb0``'s presence. Falls back to
+    ``/dev/fb0``, which is both Qt's default and what every current
+    board uses.
+    """
+    platform = os.environ.get('QT_QPA_PLATFORM', 'linuxfb')
+    for option in platform.split(':')[1:]:
+        key, _, value = option.partition('=')
+        if key == 'fb' and value:
+            return value
+    return '/dev/fb0'
 
 
 def _display_device_vanished(failure_text: str) -> bool:
@@ -259,9 +280,18 @@ def _display_device_vanished(failure_text: str) -> bool:
     Deliberately conservative: it requires *both* one of Qt's own
     no-screen messages **and** the framebuffer device actually being
     absent, so a transient Qt init crash still gets its full retry
-    budget. Wayland and eglfs boards are excluded — they do not consume
-    ``/dev/fb0``, and the equivalent Wayland wedge already has its own
-    bounded-restart watchdog.
+    budget. The device check is the load-bearing half — verified on the
+    armhf testbed by replacing ``/dev/fb0`` with an unopenable node, so
+    that Qt emitted two of the three signatures while the device still
+    existed: the guard correctly declined and spent its full budget.
+    Wayland and eglfs boards are excluded — they do not consume a
+    framebuffer node, and the equivalent Wayland wedge already has its
+    own bounded-restart watchdog.
+
+    Note this cannot fire on the *handshake-timeout* flavour of
+    ``WebviewLaunchError``, whose message carries no Qt output to match.
+    An absent framebuffer makes Qt exit in about a second, so in
+    practice the crash flavour is the one that occurs here.
     """
     if _is_wayland_board():
         return False
@@ -269,7 +299,7 @@ def _display_device_vanished(failure_text: str) -> bool:
         return False
     if not any(sig in failure_text for sig in _NO_SCREEN_SIGNATURES):
         return False
-    return not os.path.exists('/dev/fb0')
+    return not os.path.exists(_linuxfb_device())
 
 
 def _set_qpa_rotation(qpa: str, rotation: int) -> str:
@@ -2381,6 +2411,13 @@ def asset_loop(scheduler: Any) -> None:
         # enough on its own to evict crash diagnostics from the ~15 MB
         # volatile journal. Log once per distinct asset, then stay quiet
         # until the offender changes (GH #3268).
+        # The playlist is NOT empty here — there is an asset, it just
+        # isn't displayable — so clear the empty-playlist latch. Without
+        # this, "empty -> unavailable asset appears -> empty again" left
+        # the latch stuck and the notice was never logged again: exactly
+        # the permanently-silent failure the latch is supposed to avoid.
+        # Caught on the armhf testbed.
+        _empty_playlist_logged = False
         asset_key = f'{asset.get("asset_id")}:{asset["uri"]}'
         if _unavailable_asset_logged != asset_key:
             logger.info(

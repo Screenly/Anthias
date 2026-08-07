@@ -360,10 +360,22 @@ def get_display_power() -> None:
     # On those, cec_available() is True (vchiq exists) so this
     # short-circuit does NOT engage and a doomed subprocess still runs
     # every tick.
-    if not diagnostics.cec_available():
-        r.set('display_power', 'Not available', ex=3600)
-        return
     try:
+        if not diagnostics.cec_available():
+            # This SET used to sit outside the handler below, which made
+            # it the one unprotected blocking call in the task — on
+            # exactly the boards that take this branch (x86, Pi 5).
+            #
+            # It is not unbounded: redis-py 8.0.1 defaults
+            # socket_timeout=5. But the default Retry(retries=10) means a
+            # blackhole redis costs 11 x 5s plus backoff — measured at
+            # 58.83s on the x86 testbed. That blows the 30s soft limit
+            # and clears the 60s hard limit by only ~1.2s, and because
+            # the call was outside the try the soft limit escaped
+            # uncaught, failing the task and filing a Sentry event: the
+            # very noise this change set is removing.
+            r.set('display_power', 'Not available', ex=3600)
+            return
         # Single SET with ex= so the value and its TTL are written
         # atomically — a soft-limit signal landing between a separate
         # SET and EXPIRE would otherwise leave the key without a TTL

@@ -3863,3 +3863,121 @@ def test_unavailable_asset_logs_once_per_offender(caplog: Any) -> None:
     )
     assert '/missing/one.png' in msgs[0]
     assert '/missing/two.png' in msgs[1]
+
+
+def test_load_browser_short_circuits_a_vanished_display(caplog: Any) -> None:
+    """Integration for the guard: the retry loop must abandon its budget
+    on the FIRST failure, with the distinct message.
+
+    Measured on the armhf testbed: 3 attempts / 6.02s before, 1 attempt /
+    2.94s after. On the 30-attempt startup path the saving is ~6.5min of
+    black screen, and the distinct wording also stops this grouping with
+    genuine Qt init crashes in Sentry."""
+    qt_text = (
+        'AnthiasViewer exited before emitting D-Bus handshake; stdout: '
+        'Unable to figure out framebuffer device. Specify it manually.'
+    )
+    spawn = mock.Mock(side_effect=viewer.WebviewLaunchError(qt_text))
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+        mock.patch.object(viewer, '_spawn_webview_once', spawn),
+        mock.patch.object(viewer, 'sleep') as slept,
+        pytest.raises(viewer.WebviewLaunchError) as excinfo,
+    ):
+        viewer.load_browser(max_attempts=30, startup_timeout=30)
+    assert spawn.call_count == 1, (
+        f'expected 1 attempt, spent {spawn.call_count} of a 30 budget'
+    )
+    slept.assert_not_called()
+    assert 'the display device is gone' in str(excinfo.value)
+
+
+def test_load_browser_keeps_its_budget_when_the_device_is_present() -> None:
+    """The false-positive guard, in the loop. Same Qt no-screen text, but
+    the device exists — so this must spend the full budget rather than
+    abandon a retry that would have succeeded. Verified on hardware by
+    swapping /dev/fb0 for an unopenable node."""
+    qt_text = 'linuxfb: Failed to initialize screen'
+    spawn = mock.Mock(side_effect=viewer.WebviewLaunchError(qt_text))
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=True),
+        mock.patch.object(viewer, '_spawn_webview_once', spawn),
+        mock.patch.object(viewer, 'sleep'),
+        pytest.raises(viewer.WebviewLaunchError) as excinfo,
+    ):
+        viewer.load_browser(max_attempts=3, startup_timeout=10)
+    assert spawn.call_count == 3
+    assert 'did not start after 3 attempts' in str(excinfo.value)
+    assert 'the display device is gone' not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    'platform,fb_option,expected',
+    [
+        ('linuxfb', None, '/dev/fb0'),
+        ('linuxfb:rotation=90', None, '/dev/fb0'),
+        ('linuxfb:fb=/dev/fb1', None, '/dev/fb1'),
+        ('linuxfb:fb=/dev/fb1:rotation=180', None, '/dev/fb1'),
+    ],
+)
+def test_linuxfb_device_honours_the_fb_option(
+    platform: str, fb_option: None, expected: str
+) -> None:
+    """linuxfb accepts fb=/dev/fbN, so a board configured onto fb1 must
+    not be judged by fb0's presence."""
+    with mock.patch.dict(
+        os.environ, {'QT_QPA_PLATFORM': platform}, clear=False
+    ):
+        assert viewer._linuxfb_device() == expected
+
+
+def test_wayland_recovery_logs_at_warning_not_error(caplog: Any) -> None:
+    """#3265: the Sentry logging integration promotes ERROR records to
+    events, so logging a *successful* self-heal at ERROR filed a Sentry
+    issue on every recovery (ANTHIAS-4M). Demoted to WARNING.
+
+    Verified end to end on the Pi 5 by inducing a real cage no-output
+    state: recovery logged at WARNING(30), give-up at ERROR(40), and a
+    capturing-transport A/B confirmed ERROR -> 1 event, WARNING -> 0."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_connected_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
+        mock.patch.object(
+            viewer, '_recovery_restarts_this_boot', return_value=0
+        ),
+        mock.patch.object(
+            viewer, '_record_recovery_restart', return_value=True
+        ),
+        mock.patch.object(viewer, 'sys') as fake_sys,
+        caplog.at_level(logging.WARNING, logger=viewer.logger.name),
+    ):
+        fake_sys.exit.side_effect = SystemExit(1)
+        viewer._headless_wedge_since = 0.0
+        logging.disable(logging.NOTSET)
+        try:
+            with pytest.raises(SystemExit):
+                viewer._wayland_output_watchdog()
+        finally:
+            logging.disable(logging.CRITICAL)
+            viewer._headless_wedge_since = None
+    recovery = [
+        r for r in caplog.records if 'headless-boot wedge' in r.getMessage()
+    ]
+    assert recovery, 'the recovery message was not logged at all'
+    assert all(r.levelno == logging.WARNING for r in recovery), (
+        f'recovery must be WARNING; got {[r.levelname for r in recovery]} — '
+        'at ERROR the Sentry integration files an issue per self-heal'
+    )

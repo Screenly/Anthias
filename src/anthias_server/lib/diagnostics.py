@@ -95,23 +95,38 @@ _REAP_GRACE_S = 2
 def _run_bounded(argv: list[str], timeout: int) -> tuple[str, str, int] | None:
     """Run ``argv`` without ever blocking much past ``timeout``.
 
-    ``subprocess.run(..., capture_output=True, timeout=N)`` looks like
-    it does this and does not. Two of its wait paths are unbounded:
+    The measured problem with ``subprocess.run(..., capture_output=True,
+    timeout=N)`` is that a **pipe the child's descendants still hold
+    open makes it burn the entire timeout**, even when the direct child
+    exited immediately. `run()` drains stdout/stderr via
+    ``communicate()``, so a surviving grandchild holding the inherited
+    write end keeps the read blocked until the deadline.
 
-      * ``except TimeoutExpired:`` does ``process.kill()`` then a bare
-        ``process.wait()`` with no timeout;
-      * its bare ``except:`` defers to ``Popen.__exit__``, which also
-        ends in an unbounded ``self.wait()``.
+    Measured on three testbeds (armhf, arm64 and x86_64), fast-exiting
+    child with a grandchild holding stdout: **0.07-0.12s here versus
+    8.0s for ``subprocess.run``**. On a task that runs every 5 minutes
+    against a 30s soft limit, repeatedly spending the whole budget for
+    nothing is the real cost.
 
-    Celery raises its soft time limit **once**. That signal interrupts
-    the first ``waitpid``, but unwinding then re-enters an unbounded
-    wait with no second signal coming, so the task sails past the hard
-    limit and the worker is SIGKILLed — taking asset normalisation,
-    downloads and the cleanup sweep with it. That is the mechanism
-    behind Sentry ANTHIAS-A / 9 / B / 31 (GH #3264), which kept firing
-    on builds that already carried the ``SoftTimeLimitExceeded`` guard
-    from #3063 precisely because the guard cannot help if the
-    interpreter never regains control.
+    Two honest caveats, because the first version of this comment
+    overstated the mechanism and three boards refuted it:
+
+      * The theory that ``SoftTimeLimitExceeded`` re-enters an unbounded
+        ``wait()`` and lets the task "sail past the hard limit" does
+        **not** reproduce on CPython 3.13, which calls
+        ``process.kill()`` before every ``wait()``. Overshoot measured
+        0.00s for both implementations.
+      * The genuinely unbounded case needs an *uninterruptible*
+        (D-state) child. One was produced on the arm64 board with
+        O_DIRECT writes to the SD card (98.7% D, wchan
+        ``mmc_blk_rw_wait``) and this helper still reaped it in 31.5ms,
+        because SIGKILL lands as soon as the task returns from the
+        block-layer wait. A reap that actually overruns
+        ``_REAP_GRACE_S`` needs a driver that never returns.
+
+    So this is a robustness and latency fix (Sentry ANTHIAS-A / 9 / B /
+    31, GH #3264), not a proven cure for the hard-limit SIGKILL — the
+    root cause of those events is still open.
 
     Three deliberate differences from ``subprocess.run``:
 
