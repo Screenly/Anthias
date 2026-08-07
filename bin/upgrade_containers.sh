@@ -183,6 +183,31 @@ case "$DEVICE_TYPE" in
                 /home/${USER}/anthias/docker-compose.yml
         fi
         ;;
+    pi2|pi3|pi3-64|pi4-64)
+        # These fell through the case entirely, which is why display power
+        # never worked on them (#3267). The comment above assumed Pi 1-4
+        # reach libcec via /dev/vchiq on the closed VideoCore firmware, but
+        # these boards now boot dtoverlay=vc4-kms-v3d: libcec cannot open
+        # vchiq there at all, and the real adapter is /dev/cec0.
+        #
+        # Measured on the pi4-64 testbed, with /dev/cec0 passed into a
+        # throwaway container: libcec opens the adapter (init 1.19s,
+        # Device 1.43s) and the query completes in ~2.9s. With vchiq only
+        # it fails in 82ms — or, on the pi3-32, hangs until the caller's
+        # timeout, which is why operators saw a bare 'CEC error'.
+        #
+        # Only swap when /dev/cec0 actually exists, and otherwise leave
+        # vchiq exactly as-is: docker compose refuses to start a container
+        # whose listed host node is missing, so an unconditional rewrite
+        # would be a fleet-wide outage on any board without it. /dev/cec1
+        # is deliberately NOT added — it exists on some of these boards
+        # and not others, and the second HDMI output is not needed to read
+        # display power.
+        if [ -e /dev/cec0 ]; then
+            sed -i 's|/dev/vchiq:/dev/vchiq|/dev/cec0:/dev/cec0|g' \
+                /home/${USER}/anthias/docker-compose.yml
+        fi
+        ;;
 esac
 
 COMPOSE_FILES=(-f /home/${USER}/anthias/docker-compose.yml)
