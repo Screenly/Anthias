@@ -187,6 +187,16 @@ WAYLAND_MAX_RECOVERY_RESTARTS = 3
 # whenever the wedge does — see _wayland_output_watchdog().
 _recovery_gave_up_logged: bool = False
 
+# One-shot latch so the empty-playlist notice is logged on the edge
+# rather than every poll. See the asset_loop() comment for why the
+# volume matters in production (GH #3268).
+_empty_playlist_logged: bool = False
+
+# Which asset we last reported as unavailable, so the 0.5s retry arm
+# logs once per offender instead of ~2 lines/second. Holds
+# "<asset_id>:<uri>" so a changed URI on the same row still reports.
+_unavailable_asset_logged: str | None = None
+
 
 def _rotation_value() -> int:
     """Coerce settings['screen_rotation'] to a known cardinal angle.
@@ -216,6 +226,90 @@ def _is_wayland_board() -> bool:
     because neither the linuxfb ``:rotation=`` option nor the wlr-randr
     path ran (issue #3044)."""
     return os.environ.get('QT_QPA_PLATFORM', '').startswith('wayland')
+
+
+# Qt's own words when the QPA plugin has no screen to draw on. Matched by
+# substring against the failed launch's captured output. Kept narrow on
+# purpose: a false positive here would abandon a retry budget that would
+# otherwise have succeeded.
+_NO_SCREEN_SIGNATURES = (
+    'Unable to figure out framebuffer device',
+    'linuxfb: Failed to initialize screen',
+    'no screens available',
+    # Emitted when the node exists but cannot be opened. Observed on the
+    # armhf testbed while deliberately probing for false positives; the
+    # list is a sample of Qt's phrasings, not an exhaustive set, which is
+    # why the device check below is the load-bearing condition.
+    'Failed to open framebuffer',
+)
+
+
+def _linuxfb_device() -> str:
+    """The framebuffer node this board's Qt platform will actually open.
+
+    ``linuxfb`` accepts ``fb=/dev/fbN``, so a board configured onto
+    ``fb1`` must not be judged by ``/dev/fb0``'s presence. Falls back to
+    ``/dev/fb0``, which is both Qt's default and what every current
+    board uses.
+
+    Parsed the same way as ``_set_qpa_rotation``: the Qt QPA syntax is
+    ``<plugin>[:opt1=val1,opt2=val2,...]`` — a *single* colon, then
+    **comma-separated** options. Splitting the options on ``:`` instead
+    would return ``/dev/fb1,rotation=90`` as the device path for
+    ``linuxfb:fb=/dev/fb1,rotation=90``, so ``os.path.exists`` would say
+    False and the caller would abandon a retry budget that should have
+    been spent — a false positive in exactly the guard this feeds
+    (Copilot review of #3266).
+    """
+    platform = os.environ.get('QT_QPA_PLATFORM', 'linuxfb')
+    _, _, options_str = platform.partition(':')
+    for option in options_str.split(','):
+        key, _, value = option.strip().partition('=')
+        if key == 'fb' and value:
+            return value
+    return '/dev/fb0'
+
+
+def _display_device_vanished(failure_text: str) -> bool:
+    """True when a launch failed because the display device is gone.
+
+    The container's ``/dev`` is a **start-time snapshot**, and
+    ``wait_for_framebuffer`` (``bin/lib/viewer/platform_linuxfb.sh``)
+    only runs once, at container start. So a linuxfb board whose display
+    disappears *after* that point keeps a stale view of ``/dev``: the
+    already-running webview is fine, but a newly spawned one cannot open
+    the framebuffer and dies before its D-Bus handshake.
+
+    Retrying cannot fix that — no amount of backoff re-snapshots
+    ``/dev`` — so burning the whole attempt budget just delays the only
+    real recovery (container restart) by ~6.5 min on the 30-attempt
+    startup path, or ~21 min if each attempt instead runs its timeout
+    out. Reproduced deterministically on the armhf/Qt5/linuxfb testbed
+    for GH #3266.
+
+    Deliberately conservative: it requires *both* one of Qt's own
+    no-screen messages **and** the framebuffer device actually being
+    absent, so a transient Qt init crash still gets its full retry
+    budget. The device check is the load-bearing half — verified on the
+    armhf testbed by replacing ``/dev/fb0`` with an unopenable node, so
+    that Qt emitted two of the three signatures while the device still
+    existed: the guard correctly declined and spent its full budget.
+    Wayland and eglfs boards are excluded — they do not consume a
+    framebuffer node, and the equivalent Wayland wedge already has its
+    own bounded-restart watchdog.
+
+    Note this cannot fire on the *handshake-timeout* flavour of
+    ``WebviewLaunchError``, whose message carries no Qt output to match.
+    An absent framebuffer makes Qt exit in about a second, so in
+    practice the crash flavour is the one that occurs here.
+    """
+    if _is_wayland_board():
+        return False
+    if os.environ.get('QT_QPA_PLATFORM', 'linuxfb').startswith('eglfs'):
+        return False
+    if not any(sig in failure_text for sig in _NO_SCREEN_SIGNATURES):
+        return False
+    return not os.path.exists(_linuxfb_device())
 
 
 def _set_qpa_rotation(qpa: str, rotation: int) -> str:
@@ -1094,6 +1188,18 @@ def load_browser(
             raise
         except WebviewLaunchError as exc:
             last_error = exc
+            if _display_device_vanished(str(exc)):
+                # No retry can re-snapshot the container's /dev, so stop
+                # immediately rather than spend the budget (GH #3266).
+                # The distinct message also stops this grouping with
+                # genuine Qt init crashes in Sentry.
+                raise WebviewLaunchError(
+                    'AnthiasViewer cannot start: the display device is '
+                    f'gone ({_linuxfb_device()} absent inside the '
+                    'container, and Qt reports no usable screen). The '
+                    'container needs to restart to re-enumerate /dev; '
+                    f'retrying in-process cannot help. Last error: {exc}'
+                ) from exc
             if attempt == 1:
                 logger.warning(
                     'AnthiasViewer failed to start (attempt %d/%d): %s',
@@ -1465,7 +1571,12 @@ def view_webpage(
                     'next rotation): %s',
                     exc,
                 )
-    logger.info(f'Current url is {current_browser_url}')
+    # debug, not info: this fires on every rotation tick — including the
+    # standby image while the playlist is empty — and in production feeds
+    # a ~15 MB volatile journal shared with every other container. The
+    # URL is still available at debug level when diagnosing rotation
+    # (GH #3268).
+    logger.debug(f'Current url is {current_browser_url}')
 
 
 def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
@@ -1495,7 +1606,12 @@ def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
         )
         current_browser_url = uri
         current_browser_skip_ssl = skip_ssl_verify
-    logger.info(f'Current url is {current_browser_url}')
+    # debug, not info: this fires on every rotation tick — including the
+    # standby image while the playlist is empty — and in production feeds
+    # a ~15 MB volatile journal shared with every other container. The
+    # URL is still available at debug level when diagnosing rotation
+    # (GH #3268).
+    logger.debug(f'Current url is {current_browser_url}')
 
     if string_to_bool(getenv('WEBVIEW_DEBUG', '0')) and _webview_output:
         logger.info(_webview_output.text())
@@ -2008,7 +2124,14 @@ def _wayland_output_watchdog() -> None:
         # so the per-boot cap can't be enforced — refuse to restart rather
         # than risk an unbounded loop.
         return
-    logger.error(
+    # WARNING, not ERROR: this is the recovery *working*. The Sentry
+    # logging integration promotes ERROR records to events, so logging a
+    # successful self-heal at ERROR filed a Sentry issue on every
+    # recovery and made designed behaviour indistinguishable from a
+    # failure (GH #3265). The give-up-after-cap branch above stays at
+    # ERROR — that is the point where recovery has failed and a human is
+    # genuinely needed.
+    logger.warning(
         'Cage has had no wl_output for %.0fs while a display is connected '
         '(headless-boot wedge). Exiting so the container restarts and '
         're-enumerates the display (recovery restart %d/%d).',
@@ -2164,6 +2287,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
 
 
 def asset_loop(scheduler: Any) -> None:
+    global _empty_playlist_logged, _unavailable_asset_logged
     # Issue #2856 — consume any pending rotation bounce queued by the
     # subscriber thread BEFORE we do anything else this tick. The
     # subscriber can only set the flag (it doesn't own ``browser`` or
@@ -2188,9 +2312,20 @@ def asset_loop(scheduler: Any) -> None:
     asset = scheduler.get_next_asset()
 
     if asset is None:
-        logger.info(
-            'Playlist is empty. Sleeping for %s seconds', EMPTY_PL_DELAY
-        )
+        # Log the *transition* into an empty playlist, not every tick.
+        # In production the docker journald driver feeds a volatile
+        # journal capped at ~10% of /run — about 15 MB on an 800 MB
+        # board — and this line plus its sibling below emitted ~1250
+        # lines/hour on a wholly idle device, evicting crash
+        # diagnostics inside ~8 hours (GH #3268). The steady state
+        # carries no information; the edges do.
+        if not _empty_playlist_logged:
+            logger.info(
+                'Playlist is empty. Sleeping for %s seconds between '
+                'checks; will log again when an asset appears.',
+                EMPTY_PL_DELAY,
+            )
+            _empty_playlist_logged = True
         view_image(STANDBY_SCREEN)
         skip_event = get_skip_event()
         skip_event.clear()
@@ -2202,6 +2337,12 @@ def asset_loop(scheduler: Any) -> None:
             pass
 
     elif _asset_is_displayable(asset):
+        if _empty_playlist_logged:
+            logger.info('Playlist is no longer empty; resuming rotation.')
+            _empty_playlist_logged = False
+        # A playable asset means whatever was unavailable is no longer the
+        # thing blocking rotation, so let the next failure speak up again.
+        _unavailable_asset_logged = None
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         # Both waits below feed this into ``threading.Event.wait``,
         # where an out-of-range timeout raises OverflowError and
@@ -2273,11 +2414,29 @@ def asset_loop(scheduler: Any) -> None:
                 pass
 
     else:
-        logger.info(
-            'Asset %s at %s is not available, skipping.',
-            asset['name'],
-            asset['uri'],
-        )
+        # Same journal-budget problem as the empty-playlist arm above, but
+        # worse: this one loops on a 0.5s wait, so a single unreachable
+        # asset emitted ~7180 lines/hour (measured on the arm64 testbed) —
+        # roughly 5x the idle-playlist rate this change set out to fix, and
+        # enough on its own to evict crash diagnostics from the ~15 MB
+        # volatile journal. Log once per distinct asset, then stay quiet
+        # until the offender changes (GH #3268).
+        # The playlist is NOT empty here — there is an asset, it just
+        # isn't displayable — so clear the empty-playlist latch. Without
+        # this, "empty -> unavailable asset appears -> empty again" left
+        # the latch stuck and the notice was never logged again: exactly
+        # the permanently-silent failure the latch is supposed to avoid.
+        # Caught on the armhf testbed.
+        _empty_playlist_logged = False
+        asset_key = f'{asset.get("asset_id")}:{asset["uri"]}'
+        if _unavailable_asset_logged != asset_key:
+            logger.info(
+                'Asset %s at %s is not available, skipping. Will stay quiet '
+                'about this one until a different asset is unavailable.',
+                asset['name'],
+                asset['uri'],
+            )
+            _unavailable_asset_logged = asset_key
         if not _asset_is_local_file(asset):
             _trigger_asset_recheck(asset.get('asset_id'))
         skip_event = get_skip_event()
