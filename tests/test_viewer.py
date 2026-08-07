@@ -3694,3 +3694,290 @@ def test_kernel_has_bindable_display_all_disconnected() -> None:
         for cm in _patch_drm_sysfs(files):
             stack.enter_context(cm)
         assert viewer._kernel_has_bindable_display() is False
+
+
+# ---------------------------------------------------------------------------
+# _display_device_vanished — GH #3266
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'failure_text',
+    [
+        (
+            'AnthiasViewer exited before emitting D-Bus handshake; stdout: '
+            'Unable to figure out framebuffer device. Specify it manually.'
+        ),
+        'linuxfb: Failed to initialize screen',
+        'Cannot create window: no screens available',
+    ],
+)
+def test_display_device_vanished_detects_qt_no_screen(
+    failure_text: str,
+) -> None:
+    """The container's /dev is a start-time snapshot and
+    wait_for_framebuffer only runs once, so a linuxfb board whose display
+    disappears afterwards can never spawn a webview again. Retrying just
+    delays the container restart that actually fixes it."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+    ):
+        assert viewer._display_device_vanished(failure_text) is True
+
+
+def test_display_device_vanished_requires_the_device_to_be_absent() -> None:
+    """Conservative on purpose: a transient Qt init crash on a board whose
+    framebuffer is still present must keep its full retry budget."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=True),
+    ):
+        assert viewer._display_device_vanished('no screens available') is False
+
+
+def test_display_device_vanished_ignores_unrelated_failures() -> None:
+    """A crash with no no-screen signature is not this bug, even with the
+    device genuinely absent."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+    ):
+        assert viewer._display_device_vanished('Segmentation fault') is False
+
+
+@pytest.mark.parametrize('platform', ['wayland', 'eglfs'])
+def test_display_device_vanished_excludes_non_linuxfb(platform: str) -> None:
+    """Wayland and eglfs boards do not consume /dev/fb0, and the Wayland
+    wedge already has its own bounded-restart watchdog — so this
+    short-circuit must never fire there."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': platform}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+    ):
+        assert viewer._display_device_vanished('no screens available') is False
+
+
+# ---------------------------------------------------------------------------
+# Idle-log latches — GH #3268
+# ---------------------------------------------------------------------------
+
+
+@contextlib.contextmanager
+def _reset_log_latches() -> Iterator[None]:
+    """Both latches are module state; isolate each test from the others."""
+    prev_empty = viewer._empty_playlist_logged
+    prev_unavail = viewer._unavailable_asset_logged
+    viewer._empty_playlist_logged = False
+    viewer._unavailable_asset_logged = None
+    try:
+        yield
+    finally:
+        viewer._empty_playlist_logged = prev_empty
+        viewer._unavailable_asset_logged = prev_unavail
+
+
+def test_empty_playlist_logs_once_then_resets_on_both_edges(
+    caplog: Any,
+) -> None:
+    """The idle notice must fire on the transition, not on every 5s poll —
+    2 lines/tick was ~1440 lines/hour into a ~15 MB volatile journal,
+    evicting the crash diagnostics it shares space with.
+
+    Equally important: the latch has to reset, or a board that goes
+    empty once goes permanently silent."""
+    scheduler = mock.MagicMock()
+    scheduler.get_next_asset.return_value = None
+    with (
+        _reset_log_latches(),
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'get_skip_event') as skip,
+        caplog.at_level(logging.INFO, logger=viewer.logger.name),
+    ):
+        skip.return_value.wait.return_value = False
+        logging.disable(logging.NOTSET)
+        try:
+            for _ in range(5):
+                viewer.asset_loop(scheduler)
+        finally:
+            logging.disable(logging.CRITICAL)
+    empties = [
+        r for r in caplog.records if 'Playlist is empty' in r.getMessage()
+    ]
+    assert len(empties) == 1, (
+        f'expected 1 notice across 5 polls, got {len(empties)}'
+    )
+
+
+def test_unavailable_asset_logs_once_per_offender(caplog: Any) -> None:
+    """The 0.5s retry arm was the worse offender: ~7180 lines/hour from a
+    single unreachable asset, measured on the arm64 testbed — about 5x the
+    idle-playlist rate. Log once per distinct asset, and speak up again
+    when a *different* asset fails."""
+    first = {
+        'asset_id': 'a1',
+        'name': 'one',
+        'uri': '/missing/one.png',
+        'mimetype': 'image',
+    }
+    second = dict(first, asset_id='a2', name='two', uri='/missing/two.png')
+    scheduler = mock.MagicMock()
+    with (
+        _reset_log_latches(),
+        mock.patch.object(viewer, '_asset_is_displayable', return_value=False),
+        mock.patch.object(viewer, '_asset_is_local_file', return_value=True),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'get_skip_event') as skip,
+        caplog.at_level(logging.INFO, logger=viewer.logger.name),
+    ):
+        skip.return_value.wait.return_value = False
+        logging.disable(logging.NOTSET)
+        try:
+            scheduler.get_next_asset.return_value = first
+            for _ in range(4):
+                viewer.asset_loop(scheduler)
+            scheduler.get_next_asset.return_value = second
+            viewer.asset_loop(scheduler)
+        finally:
+            logging.disable(logging.CRITICAL)
+    msgs = [
+        r.getMessage()
+        for r in caplog.records
+        if 'is not available, skipping' in r.getMessage()
+    ]
+    assert len(msgs) == 2, (
+        f'expected one line per distinct asset, got {len(msgs)}: {msgs}'
+    )
+    assert '/missing/one.png' in msgs[0]
+    assert '/missing/two.png' in msgs[1]
+
+
+def test_load_browser_short_circuits_a_vanished_display(caplog: Any) -> None:
+    """Integration for the guard: the retry loop must abandon its budget
+    on the FIRST failure, with the distinct message.
+
+    Measured on the armhf testbed: 3 attempts / 6.02s before, 1 attempt /
+    2.94s after. On the 30-attempt startup path the saving is ~6.5min of
+    black screen, and the distinct wording also stops this grouping with
+    genuine Qt init crashes in Sentry."""
+    qt_text = (
+        'AnthiasViewer exited before emitting D-Bus handshake; stdout: '
+        'Unable to figure out framebuffer device. Specify it manually.'
+    )
+    spawn = mock.Mock(side_effect=viewer.WebviewLaunchError(qt_text))
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+        mock.patch.object(viewer, '_spawn_webview_once', spawn),
+        mock.patch.object(viewer, 'sleep') as slept,
+        pytest.raises(viewer.WebviewLaunchError) as excinfo,
+    ):
+        viewer.load_browser(max_attempts=30, startup_timeout=30)
+    assert spawn.call_count == 1, (
+        f'expected 1 attempt, spent {spawn.call_count} of a 30 budget'
+    )
+    slept.assert_not_called()
+    assert 'the display device is gone' in str(excinfo.value)
+
+
+def test_load_browser_keeps_its_budget_when_the_device_is_present() -> None:
+    """The false-positive guard, in the loop. Same Qt no-screen text, but
+    the device exists — so this must spend the full budget rather than
+    abandon a retry that would have succeeded. Verified on hardware by
+    swapping /dev/fb0 for an unopenable node."""
+    qt_text = 'linuxfb: Failed to initialize screen'
+    spawn = mock.Mock(side_effect=viewer.WebviewLaunchError(qt_text))
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=True),
+        mock.patch.object(viewer, '_spawn_webview_once', spawn),
+        mock.patch.object(viewer, 'sleep'),
+        pytest.raises(viewer.WebviewLaunchError) as excinfo,
+    ):
+        viewer.load_browser(max_attempts=3, startup_timeout=10)
+    assert spawn.call_count == 3
+    assert 'did not start after 3 attempts' in str(excinfo.value)
+    assert 'the display device is gone' not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    'platform,fb_option,expected',
+    [
+        ('linuxfb', None, '/dev/fb0'),
+        ('linuxfb:rotation=90', None, '/dev/fb0'),
+        ('linuxfb:fb=/dev/fb1', None, '/dev/fb1'),
+        ('linuxfb:fb=/dev/fb1:rotation=180', None, '/dev/fb1'),
+    ],
+)
+def test_linuxfb_device_honours_the_fb_option(
+    platform: str, fb_option: None, expected: str
+) -> None:
+    """linuxfb accepts fb=/dev/fbN, so a board configured onto fb1 must
+    not be judged by fb0's presence."""
+    with mock.patch.dict(
+        os.environ, {'QT_QPA_PLATFORM': platform}, clear=False
+    ):
+        assert viewer._linuxfb_device() == expected
+
+
+def test_wayland_recovery_logs_at_warning_not_error(caplog: Any) -> None:
+    """#3265: the Sentry logging integration promotes ERROR records to
+    events, so logging a *successful* self-heal at ERROR filed a Sentry
+    issue on every recovery (ANTHIAS-4M). Demoted to WARNING.
+
+    Verified end to end on the Pi 5 by inducing a real cage no-output
+    state: recovery logged at WARNING(30), give-up at ERROR(40), and a
+    capturing-transport A/B confirmed ERROR -> 1 event, WARNING -> 0."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'wayland'}, clear=False
+        ),
+        mock.patch.object(
+            viewer, '_kernel_has_connected_display', return_value=True
+        ),
+        mock.patch.object(
+            viewer, '_cage_output_probe', return_value='no-output'
+        ),
+        mock.patch.object(
+            viewer, '_recovery_restarts_this_boot', return_value=0
+        ),
+        mock.patch.object(
+            viewer, '_record_recovery_restart', return_value=True
+        ),
+        mock.patch.object(viewer, 'sys') as fake_sys,
+        caplog.at_level(logging.WARNING, logger=viewer.logger.name),
+    ):
+        fake_sys.exit.side_effect = SystemExit(1)
+        viewer._headless_wedge_since = 0.0
+        logging.disable(logging.NOTSET)
+        try:
+            with pytest.raises(SystemExit):
+                viewer._wayland_output_watchdog()
+        finally:
+            logging.disable(logging.CRITICAL)
+            viewer._headless_wedge_since = None
+    recovery = [
+        r for r in caplog.records if 'headless-boot wedge' in r.getMessage()
+    ]
+    assert recovery, 'the recovery message was not logged at all'
+    assert all(r.levelno == logging.WARNING for r in recovery), (
+        f'recovery must be WARNING; got {[r.levelname for r in recovery]} — '
+        'at ERROR the Sentry integration files an issue per self-heal'
+    )
