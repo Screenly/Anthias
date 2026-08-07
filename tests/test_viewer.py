@@ -3764,3 +3764,102 @@ def test_display_device_vanished_excludes_non_linuxfb(platform: str) -> None:
         mock.patch.object(os.path, 'exists', return_value=False),
     ):
         assert viewer._display_device_vanished('no screens available') is False
+
+
+# ---------------------------------------------------------------------------
+# Idle-log latches — GH #3268
+# ---------------------------------------------------------------------------
+
+
+@contextlib.contextmanager
+def _reset_log_latches() -> Iterator[None]:
+    """Both latches are module state; isolate each test from the others."""
+    prev_empty = viewer._empty_playlist_logged
+    prev_unavail = viewer._unavailable_asset_logged
+    viewer._empty_playlist_logged = False
+    viewer._unavailable_asset_logged = None
+    try:
+        yield
+    finally:
+        viewer._empty_playlist_logged = prev_empty
+        viewer._unavailable_asset_logged = prev_unavail
+
+
+def test_empty_playlist_logs_once_then_resets_on_both_edges(
+    caplog: Any,
+) -> None:
+    """The idle notice must fire on the transition, not on every 5s poll —
+    2 lines/tick was ~1440 lines/hour into a ~15 MB volatile journal,
+    evicting the crash diagnostics it shares space with.
+
+    Equally important: the latch has to reset, or a board that goes
+    empty once goes permanently silent."""
+    scheduler = mock.MagicMock()
+    scheduler.get_next_asset.return_value = None
+    with (
+        _reset_log_latches(),
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'get_skip_event') as skip,
+        caplog.at_level(logging.INFO, logger=viewer.logger.name),
+    ):
+        skip.return_value.wait.return_value = False
+        logging.disable(logging.NOTSET)
+        try:
+            for _ in range(5):
+                viewer.asset_loop(scheduler)
+        finally:
+            logging.disable(logging.CRITICAL)
+    empties = [
+        r for r in caplog.records if 'Playlist is empty' in r.getMessage()
+    ]
+    assert len(empties) == 1, (
+        f'expected 1 notice across 5 polls, got {len(empties)}'
+    )
+
+
+def test_unavailable_asset_logs_once_per_offender(caplog: Any) -> None:
+    """The 0.5s retry arm was the worse offender: ~7180 lines/hour from a
+    single unreachable asset, measured on the arm64 testbed — about 5x the
+    idle-playlist rate. Log once per distinct asset, and speak up again
+    when a *different* asset fails."""
+    first = {
+        'asset_id': 'a1',
+        'name': 'one',
+        'uri': '/missing/one.png',
+        'mimetype': 'image',
+    }
+    second = dict(first, asset_id='a2', name='two', uri='/missing/two.png')
+    scheduler = mock.MagicMock()
+    with (
+        _reset_log_latches(),
+        mock.patch.object(viewer, '_asset_is_displayable', return_value=False),
+        mock.patch.object(viewer, '_asset_is_local_file', return_value=True),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_skip_if_current_asset_inactive'),
+        mock.patch.object(viewer, 'get_skip_event') as skip,
+        caplog.at_level(logging.INFO, logger=viewer.logger.name),
+    ):
+        skip.return_value.wait.return_value = False
+        logging.disable(logging.NOTSET)
+        try:
+            scheduler.get_next_asset.return_value = first
+            for _ in range(4):
+                viewer.asset_loop(scheduler)
+            scheduler.get_next_asset.return_value = second
+            viewer.asset_loop(scheduler)
+        finally:
+            logging.disable(logging.CRITICAL)
+    msgs = [
+        r.getMessage()
+        for r in caplog.records
+        if 'is not available, skipping' in r.getMessage()
+    ]
+    assert len(msgs) == 2, (
+        f'expected one line per distinct asset, got {len(msgs)}: {msgs}'
+    )
+    assert '/missing/one.png' in msgs[0]
+    assert '/missing/two.png' in msgs[1]

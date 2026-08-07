@@ -123,8 +123,30 @@ def _run_bounded(argv: list[str], timeout: int) -> tuple[str, str, int] | None:
         surviving grandchild holding the write end cannot stall us.
       * **every wait has a timeout.** If the process group is somehow
         still alive after ``_REAP_GRACE_S`` (uninterruptible D-state,
-        e.g. a wedged ioctl), we return and let init reap the orphan.
-        A leaked zombie is vastly cheaper than a SIGKILLed worker.
+        e.g. a wedged ioctl), we return rather than block. A leaked
+        zombie is vastly cheaper than a SIGKILLed worker.
+
+    On zombies, precisely: only the *direct* child is reaped, by the
+    ``wait()`` above. A killed **grandchild** is not, and PID 1 in the
+    celery container is the celery worker rather than an init that
+    reaps — so such a zombie persists for the container's lifetime.
+    That is acceptable here because the CEC helper scripts spawn no
+    grandchildren (libcec uses threads, not child processes), which was
+    confirmed on the testbeds: 25 consecutive real invocations left
+    zero zombies and no fd growth. Anything that *does* spawn
+    grandchildren should not use this helper without adding a reaper
+    (``docker --init`` or an explicit wrapper).
+
+    Two further limits of a process-group kill, measured on the arm64
+    testbed and also unreachable from the CEC scripts, but worth knowing
+    before reusing this helper:
+
+      * a grandchild that calls ``setpgid(0, 0)`` leaves the group and
+        survives the ``killpg``. The reap stays bounded; the escapee
+        just outlives it.
+      * a child that double-forks and exits *quickly* leaves its orphan
+        running, because no timeout fires and so no ``killpg`` runs at
+        all.
 
     Note the Popen is deliberately **not** used as a context manager:
     ``Popen.__exit__``'s unbounded ``wait()`` is one of the very

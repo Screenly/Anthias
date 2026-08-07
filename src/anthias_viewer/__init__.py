@@ -192,6 +192,11 @@ _recovery_gave_up_logged: bool = False
 # volume matters in production (GH #3268).
 _empty_playlist_logged: bool = False
 
+# Which asset we last reported as unavailable, so the 0.5s retry arm
+# logs once per offender instead of ~2 lines/second. Holds
+# "<asset_id>:<uri>" so a changed URI on the same row still reports.
+_unavailable_asset_logged: str | None = None
+
 
 def _rotation_value() -> int:
     """Coerce settings['screen_rotation'] to a known cardinal angle.
@@ -2242,7 +2247,7 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
 
 
 def asset_loop(scheduler: Any) -> None:
-    global _empty_playlist_logged
+    global _empty_playlist_logged, _unavailable_asset_logged
     # Issue #2856 — consume any pending rotation bounce queued by the
     # subscriber thread BEFORE we do anything else this tick. The
     # subscriber can only set the flag (it doesn't own ``browser`` or
@@ -2295,6 +2300,9 @@ def asset_loop(scheduler: Any) -> None:
         if _empty_playlist_logged:
             logger.info('Playlist is no longer empty; resuming rotation.')
             _empty_playlist_logged = False
+        # A playable asset means whatever was unavailable is no longer the
+        # thing blocking rotation, so let the next failure speak up again.
+        _unavailable_asset_logged = None
         name, mime, uri = asset['name'], asset['mimetype'], asset['uri']
         # Both waits below feed this into ``threading.Event.wait``,
         # where an out-of-range timeout raises OverflowError and
@@ -2366,11 +2374,22 @@ def asset_loop(scheduler: Any) -> None:
                 pass
 
     else:
-        logger.info(
-            'Asset %s at %s is not available, skipping.',
-            asset['name'],
-            asset['uri'],
-        )
+        # Same journal-budget problem as the empty-playlist arm above, but
+        # worse: this one loops on a 0.5s wait, so a single unreachable
+        # asset emitted ~7180 lines/hour (measured on the arm64 testbed) —
+        # roughly 5x the idle-playlist rate this change set out to fix, and
+        # enough on its own to evict crash diagnostics from the ~15 MB
+        # volatile journal. Log once per distinct asset, then stay quiet
+        # until the offender changes (GH #3268).
+        asset_key = f'{asset.get("asset_id")}:{asset["uri"]}'
+        if _unavailable_asset_logged != asset_key:
+            logger.info(
+                'Asset %s at %s is not available, skipping. Will stay quiet '
+                'about this one until a different asset is unavailable.',
+                asset['name'],
+                asset['uri'],
+            )
+            _unavailable_asset_logged = asset_key
         if not _asset_is_local_file(asset):
             _trigger_asset_recheck(asset.get('asset_id'))
         skip_event = get_skip_event()
