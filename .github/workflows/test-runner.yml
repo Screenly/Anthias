@@ -12,6 +12,19 @@ on:
         required: false
         default: '3.13'
         type: string
+      caller-event-name:
+        description: >-
+          The caller's `github.event_name`, passed explicitly rather than
+          read from the `github` context here.
+
+          The context is believed to carry the caller's event through a
+          `workflow_call`, but the failure mode of being wrong is silent:
+          the token warning below would simply never fire, which is the
+          exact class of bug this change exists to stop. An explicit
+          input costs one line and cannot be wrong. (Copilot review.)
+        required: false
+        default: ''
+        type: string
     secrets:
       CODECOV_TOKEN:
         description: >-
@@ -140,9 +153,6 @@ jobs:
           echo "All $max_attempts attempts failed"
           exit 1
 
-      # The /usr/src/app bind-mount means coverage.xml lands directly on
-      # the runner workspace, so no docker cp is needed. Codecov picks it
-      # up via the explicit `files:` argument.
       # Surface a missing token instead of letting the upload fail
       # silently. codecov-action defaults to fail_ci_if_error: false, and
       # deliberately stays that way here — a Codecov outage must not block
@@ -151,7 +161,7 @@ jobs:
       # protected" while the step still reported success, so no baseline
       # was ever stored and every PR warned about a missing BASE report.
       - name: Warn when Codecov has no token for a protected ref
-        if: inputs.test-type == 'python' && github.event_name == 'push'
+        if: inputs.test-type == 'python' && inputs.caller-event-name == 'push'
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
@@ -159,6 +169,9 @@ jobs:
             echo "::warning title=Codecov baseline will not be stored::CODECOV_TOKEN is empty, so this push's coverage upload will be rejected (\"Token required because branch is protected\"). Every PR will then report a missing BASE report. Set the CODECOV_TOKEN repo secret."
           fi
 
+      # The /usr/src/app bind-mount means coverage.xml lands directly on
+      # the runner workspace, so no docker cp is needed. Codecov picks it
+      # up via the explicit `files:` argument.
       - name: Upload coverage reports to Codecov
         if: inputs.test-type == 'python'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
@@ -167,6 +180,12 @@ jobs:
           # The documented input. Also exported below because the
           # bundled CLI reads CODECOV_TOKEN from the environment.
           token: ${{ secrets.CODECOV_TOKEN }}
+          # Pinned explicitly rather than relying on the action's
+          # default, which could change across major versions while the
+          # comment above still claimed we depend on it. A Codecov
+          # outage must never block a merge; the warning step above is
+          # what keeps a *misconfiguration* from being silent.
+          fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
