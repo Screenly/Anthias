@@ -1,5 +1,7 @@
 import os
-import subprocess
+import sys
+import tempfile
+import time
 from typing import Any
 from unittest import mock
 
@@ -114,73 +116,69 @@ def test_get_raspberry_model_unknown() -> None:
 
 
 def test_get_display_power_true() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'True'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('True', '', 0)
+    ):
         assert diagnostics.get_display_power() is True
 
 
 def test_get_display_power_false() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'False'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('False', '', 0)
+    ):
         assert diagnostics.get_display_power() is False
 
 
 def test_get_display_power_cec_error() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'CEC error'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('CEC error', '', 0)
+    ):
         assert diagnostics.get_display_power() == 'CEC error'
 
 
 def test_get_display_power_unknown() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'Unknown'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('Unknown', '', 0)
+    ):
         assert diagnostics.get_display_power() == 'Unknown'
 
 
 def test_get_display_power_empty_output_returns_cec_error() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('', '', 0)
+    ):
         assert diagnostics.get_display_power() == 'CEC error'
 
 
 def test_set_display_power_on_success() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'OK'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('OK', '', 0)
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is True
     assert 'on' in msg
 
 
 def test_set_display_power_off_success() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'OK'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('OK', '', 0)
+    ):
         ok, msg = diagnostics.set_display_power(on=False)
     assert ok is True
     assert 'off' in msg
 
 
 def test_set_display_power_cec_error_passes_through_reason() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'ERROR: no adapter'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=('ERROR: no adapter', '', 0)
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'no adapter' in msg
 
 
 def test_set_display_power_timeout_returns_failure_message() -> None:
-    with mock.patch.object(
-        subprocess,
-        'run',
-        side_effect=subprocess.TimeoutExpired(cmd='python', timeout=10),
-    ):
+    with mock.patch.object(diagnostics, '_run_bounded', return_value=None):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'timed out' in msg.lower()
@@ -190,11 +188,12 @@ def test_set_display_power_unexpected_stdout_falls_through_to_stdout() -> None:
     """No 'OK' / 'ERROR:' sentinel — the helper still has to return
     something actionable. With non-empty stdout and a clean exit, that
     becomes the raw line itself (capped)."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'something weird'
-    completed.stderr = b''
-    completed.returncode = 0
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    stderr_text = (b'').decode()
+    with mock.patch.object(
+        diagnostics,
+        '_run_bounded',
+        return_value=('something weird', stderr_text, 0),
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'something weird' in msg
@@ -205,15 +204,16 @@ def test_set_display_power_subprocess_crash_surfaces_stderr() -> None:
     libcec writing to stderr), the last line of stderr is what reaches
     the toast — gives the operator a real reason instead of a generic
     'unexpected response.'"""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    completed.stderr = (
-        b'Traceback (most recent call last):\n'
-        b'  File "<string>", line 4, in <module>\n'
-        b'RuntimeError: cec init failed: no adapter\n'
+    stderr_text = (
+        'Traceback (most recent call last):\n'
+        '  File "<string>", line 4, in <module>\n'
+        'RuntimeError: cec init failed: no adapter\n'
     )
-    completed.returncode = 1
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics,
+        '_run_bounded',
+        return_value=('', stderr_text, 1),
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'RuntimeError: cec init failed: no adapter' in msg
@@ -224,11 +224,12 @@ def test_set_display_power_subprocess_crash_with_empty_streams_reports_status() 
 ):
     """Last-resort fallback: subprocess exits non-zero with no stderr
     and no stdout. Still has to report something — surface the returncode."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    completed.stderr = b''
-    completed.returncode = 137
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    stderr_text = (b'').decode()
+    with mock.patch.object(
+        diagnostics,
+        '_run_bounded',
+        return_value=('', stderr_text, 137),
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert '137' in msg
@@ -237,11 +238,12 @@ def test_set_display_power_subprocess_crash_with_empty_streams_reports_status() 
 def test_set_display_power_caps_long_error_message() -> None:
     """libcec can spew kilobytes of diagnostic output; the toast / API
     body must not carry an unbounded blob."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    completed.stderr = ('X' * 4000).encode()
-    completed.returncode = 1
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    stderr_text = (('X' * 4000).encode()).decode()
+    with mock.patch.object(
+        diagnostics,
+        '_run_bounded',
+        return_value=('', stderr_text, 1),
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     # Cap is 240; message has prefix "Display turn-on failed: " so total
@@ -256,11 +258,11 @@ def test_set_display_power_caps_long_error_sentinel_reason() -> None:
     chatty libcec build could otherwise smuggle a multi-line / huge
     string into the toast via the contract path."""
     long_reason = 'X' * 4000
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = f'ERROR: {long_reason}'.encode()
-    completed.stderr = b''
-    completed.returncode = 0
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    with mock.patch.object(
+        diagnostics,
+        '_run_bounded',
+        return_value=(f'ERROR: {long_reason}', '', 0),
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert len(msg) < 300
@@ -270,11 +272,16 @@ def test_set_display_power_caps_long_error_sentinel_reason() -> None:
 def test_set_display_power_error_sentinel_strips_multiline() -> None:
     """Multi-line reason on the ERROR: branch — we keep only the last
     non-empty line so the toast stays one row tall."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'ERROR: first line\nmiddle line\nactual failure reason'
-    completed.stderr = b''
-    completed.returncode = 0
-    with mock.patch.object(subprocess, 'run', return_value=completed):
+    stderr_text = (b'').decode()
+    with mock.patch.object(
+        diagnostics,
+        '_run_bounded',
+        return_value=(
+            'ERROR: first line\nmiddle line\nactual failure reason',
+            stderr_text,
+            0,
+        ),
+    ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'actual failure reason' in msg
@@ -302,12 +309,13 @@ def test_cec_available_false_when_neither_present() -> None:
 
 
 def test_get_display_power_subprocess_timeout() -> None:
-    with mock.patch.object(
-        subprocess,
-        'run',
-        side_effect=subprocess.TimeoutExpired(cmd='cec', timeout=10),
-    ):
-        assert diagnostics.get_display_power() == 'CEC error'
+    """A timeout is 'the adapter hung', which is a different state from
+    'libcec raised'. Verified on the vchiq-only Pi 3 A+, where cec.init()
+    hangs on every tick rather than raising — so reporting this as a
+    generic 'CEC error' left the operator unable to tell 'no hardware'
+    from 'hardware wedged' (GH #3267)."""
+    with mock.patch.object(diagnostics, '_run_bounded', return_value=None):
+        assert diagnostics.get_display_power() == 'CEC adapter unresponsive'
 
 
 def test_try_connectivity_all_succeed() -> None:
@@ -342,3 +350,115 @@ def test_try_connectivity_mixed() -> None:
     assert results[1].endswith(': OK')
     assert results[2].endswith(': Error')
     assert results[3].endswith(': OK')
+
+
+# ---------------------------------------------------------------------------
+# _run_bounded — the bounded-reap fix for GH #3264
+# ---------------------------------------------------------------------------
+
+
+def test_run_bounded_returns_stdout_stderr_and_status() -> None:
+    """Happy path: separate streams, both captured, real returncode."""
+    argv = [
+        sys.executable,
+        '-c',
+        "import sys; sys.stdout.write('out'); sys.stderr.write('err')",
+    ]
+    result = diagnostics._run_bounded(argv, timeout=30)
+    assert result is not None
+    stdout, stderr, returncode = result
+    assert stdout == 'out'
+    assert stderr == 'err'
+    assert returncode == 0
+
+
+def test_run_bounded_keeps_streams_separate() -> None:
+    """The CEC scripts' contract is that stdout carries exactly one
+    sentinel token, and libcec is prone to chattering on stderr —
+    merging the two would corrupt the token."""
+    argv = [
+        sys.executable,
+        '-c',
+        "import sys; sys.stdout.write('True'); sys.stderr.write('libcec noise')",
+    ]
+    result = diagnostics._run_bounded(argv, timeout=30)
+    assert result is not None
+    assert result[0] == 'True', 'stderr must not leak into the token'
+
+
+def test_run_bounded_kills_a_hanging_child_within_its_budget() -> None:
+    """A child that ignores everything must not outlast the budget.
+
+    This is the regression that matters: the old ``subprocess.run``
+    reaped with an *unbounded* ``wait()`` on the timeout path, so celery's
+    single soft-limit signal could not save the worker and the 60s hard
+    limit SIGKILLed it (Sentry ANTHIAS-A/9/B/31)."""
+    argv = [sys.executable, '-c', 'import time; time.sleep(60)']
+    start = time.monotonic()
+    result = diagnostics._run_bounded(argv, timeout=1)
+    elapsed = time.monotonic() - start
+    assert result is None, 'a killed child must report as None'
+    assert elapsed < 1 + diagnostics._REAP_GRACE_S + 3, (
+        f'took {elapsed:.1f}s — the reap is not bounded'
+    )
+
+
+def test_run_bounded_kills_the_whole_process_group() -> None:
+    """``start_new_session=True`` + killpg means a grandchild cannot
+    survive the kill, nor stall the reap by holding a handle.
+
+    The child spawns a grandchild that would outlive it, writes the
+    grandchild's pid, then hangs. After the timeout, neither should be
+    alive."""
+    with tempfile.NamedTemporaryFile('w+') as pidfile:
+        # The grandchild's pid goes to a file rather than stdout, because
+        # _run_bounded deliberately discards output when it has to kill.
+        child_script = (
+            'import subprocess, sys, time\n'
+            "grandchild = subprocess.Popen([sys.executable, '-c',"
+            " 'import time; time.sleep(60)'])\n"
+            f'open({pidfile.name!r}, "w").write(str(grandchild.pid))\n'
+            'time.sleep(60)\n'
+        )
+        argv = [sys.executable, '-c', child_script]
+        assert diagnostics._run_bounded(argv, timeout=2) is None
+        pidfile.seek(0)
+        raw = pidfile.read().strip()
+    assert raw, 'child never reported its grandchild pid'
+    grandchild = int(raw)
+    # Give the group kill a moment to be reaped by init.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    pytest.fail(f'grandchild {grandchild} survived the process-group kill')
+
+
+def test_run_bounded_handles_unspawnable_argv() -> None:
+    """Fork/exec failing (no such binary) must return None, not raise —
+    this runs inside an upload request and a celery beat."""
+    assert diagnostics._run_bounded(['/nonexistent/binary'], timeout=5) is None
+
+
+# ---------------------------------------------------------------------------
+# CEC status strings — GH #3267
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'sentinel',
+    ['No CEC adapter', 'No CEC display detected'],
+)
+def test_get_display_power_passes_through_distinct_cec_states(
+    sentinel: str,
+) -> None:
+    """'CEC error' used to cover three different situations, and reported
+    the most common one — a plain monitor with no CEC support — to the
+    operator as a fault. The distinct states must survive to the caller."""
+    with mock.patch.object(
+        diagnostics, '_run_bounded', return_value=(sentinel, '', 0)
+    ):
+        assert diagnostics.get_display_power() == sentinel
