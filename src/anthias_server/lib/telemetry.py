@@ -10,6 +10,7 @@ from requests import post as requests_post
 
 from anthias_common.device_helper import parse_cpu_info
 from anthias_common.utils import connect_to_redis, is_balena_app, is_ci
+from anthias_common.version import get_anthias_release
 from anthias_server.app.models import Asset
 from anthias_server.lib.diagnostics import get_git_branch, get_git_short_hash
 from anthias_server.settings import settings
@@ -76,6 +77,24 @@ def _build_payload() -> dict[str, object]:
     # (pi4-64, pi5, x86, ...) and `hardware_model` is /proc/cpuinfo's
     # free-text model.
     params: dict[str, object] = {
+        # The released CalVer (e.g. '2026.8.0'), which is what the GA4
+        # "Version distribution" report reads via its `version_name`
+        # dimension. It was never sent — not by this payload and not by
+        # the pre-#2798 one either, whose `Pi_Version` was the *hardware*
+        # model — so that report showed ~3,700 devices as
+        # "(not reported)" and could never have worked.
+        #
+        # Sourced from get_anthias_release() rather than an env var
+        # precisely because env vars are the failure mode here: it reads
+        # pyproject.toml's [project].version, which ships inside the
+        # image, so it resolves in the celery container with no
+        # additional plumbing (verified on the pi5 testbed: returns
+        # '2026.7.3' inside anthias-anthias-celery-1).
+        #
+        # Falls back to 'unknown' rather than '' so the GA4 dimension
+        # shows an explicit bucket instead of silently re-joining the
+        # "(not reported)" pile if both version sources ever fail.
+        'version_name': get_anthias_release() or 'unknown',
         'branch': str(get_git_branch()),
         'commit_short': str(get_git_short_hash()),
         'device_type': os.getenv('DEVICE_TYPE', 'unknown'),
@@ -94,9 +113,13 @@ def _build_payload() -> dict[str, object]:
 
 def send_telemetry() -> bool:
     """
-    Emit a single GA4 `version` event for this device. Rate-limited to
-    once per TELEMETRY_COOLDOWN_TTL via Redis so frequent celery
-    restarts don't multiply traffic. Returns True if an event was sent.
+    Emit a single GA4 ``device_active`` event for this device.
+    Rate-limited to once per TELEMETRY_COOLDOWN_TTL via Redis so
+    frequent celery restarts don't multiply traffic. Returns True if an
+    event was sent.
+
+    (The event was renamed from ``version`` to ``device_active`` in
+    #2798; this docstring said ``version`` until it was corrected here.)
     """
     if settings['analytics_opt_out'] or is_ci():
         return False
