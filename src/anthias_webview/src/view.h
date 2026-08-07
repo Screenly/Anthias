@@ -98,6 +98,20 @@ private:
     QNetworkAccessManager* networkManager;
     QImage currentImage;
     QImage nextImage;
+    // Last successfully decoded raster image (static or first GIF
+    // frame), kept independently of ``currentImage``. When a real
+    // ``loadImage()`` request starts from a blanked state (most
+    // commonly right after a video asset, since playVideo() /
+    // the ``"null"`` sentinel blank ``currentImage``), paintEvent()
+    // shows this instead of a black frame while the new image's
+    // QNetworkReply is in flight. Never used as a fallback for the
+    // video-onset blank itself or for loadPage(), those blanks are
+    // intentional (see playVideo()) and must stay pure black.
+    QImage lastRasterImage;
+    // True only while a real (non-"null") loadImage() fetch is
+    // outstanding. Gates the lastRasterImage fallback in paintEvent()
+    // so it never fires for the video-onset or loadPage() blanks.
+    bool fallbackToLastImageOnBlank = false;
     QMovie* movie;
     bool isAnimatedImage;
     quint64 loadGenerationId;
