@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
 import os
+import signal
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 
 from anthias_common import device_helper, utils
@@ -37,11 +39,17 @@ try:
     cec.init()
     tv = cec.Device(cec.CECDEVICE_TV)
 except Exception:
-    _done('CEC error')
+    # libcec could not open an adapter at all. On a mainline-KMS Pi the
+    # container only gets /dev/vchiq, which libcec cannot use, so this
+    # is the normal answer there rather than a fault (GH #3267).
+    _done('No CEC adapter')
 try:
     _done('True' if tv.is_on() else 'False')
-except IOError:
-    _done('Unknown')
+except (IOError, OSError):
+    # The adapter works but no peer answered — the expected state for a
+    # plain monitor with no CEC support. Reported distinctly so the
+    # operator is not told their hardware is broken.
+    _done('No CEC display detected')
 """
 
 # Issued from the settings page / REST endpoint, *not* from a celery
@@ -78,27 +86,146 @@ except Exception as exc:
 """
 
 
-def get_display_power() -> str | bool:
-    """
-    Queries the TV using CEC.
+# Wall-clock budget for one CEC subprocess, and the extra grace we
+# allow for the kill to land before giving up on reaping at all.
+_CEC_TIMEOUT_S = 10
+_REAP_GRACE_S = 2
 
-    The CEC stack can block inside libcec (no HDMI link, TV asleep,
-    adapter unresponsive) in a C call that ignores Python signals,
-    which would tie up the celery worker until it hits its hard
-    time_limit and gets SIGKILL'd. Run the query in a subprocess so
-    we can enforce a timeout and recover cleanly.
+
+def _run_bounded(argv: list[str], timeout: int) -> tuple[str, str, int] | None:
+    """Run ``argv`` without ever blocking much past ``timeout``.
+
+    ``subprocess.run(..., capture_output=True, timeout=N)`` looks like
+    it does this and does not. Two of its wait paths are unbounded:
+
+      * ``except TimeoutExpired:`` does ``process.kill()`` then a bare
+        ``process.wait()`` with no timeout;
+      * its bare ``except:`` defers to ``Popen.__exit__``, which also
+        ends in an unbounded ``self.wait()``.
+
+    Celery raises its soft time limit **once**. That signal interrupts
+    the first ``waitpid``, but unwinding then re-enters an unbounded
+    wait with no second signal coming, so the task sails past the hard
+    limit and the worker is SIGKILLed — taking asset normalisation,
+    downloads and the cleanup sweep with it. That is the mechanism
+    behind Sentry ANTHIAS-A / 9 / B / 31 (GH #3264), which kept firing
+    on builds that already carried the ``SoftTimeLimitExceeded`` guard
+    from #3063 precisely because the guard cannot help if the
+    interpreter never regains control.
+
+    Three deliberate differences from ``subprocess.run``:
+
+      * **``start_new_session=True``** puts the child in its own
+        process group, so the kill reaches any grandchild it spawned
+        rather than only the direct child.
+      * **output goes to a temp file, not a pipe.** With no pipe there
+        is nothing to drain, so reaping is a plain ``wait()`` and a
+        surviving grandchild holding the write end cannot stall us.
+      * **every wait has a timeout.** If the process group is somehow
+        still alive after ``_REAP_GRACE_S`` (uninterruptible D-state,
+        e.g. a wedged ioctl), we return and let init reap the orphan.
+        A leaked zombie is vastly cheaper than a SIGKILLed worker.
+
+    Note the Popen is deliberately **not** used as a context manager:
+    ``Popen.__exit__``'s unbounded ``wait()`` is one of the very
+    hazards this helper exists to avoid.
+
+    stdout and stderr go to *separate* temp files rather than being
+    merged: the CEC helper scripts' contract is that stdout carries
+    exactly one sentinel token, and libcec is prone to writing chatter
+    to stderr, so merging them would corrupt the token.
+
+    Returns ``(stdout, stderr, returncode)``, or ``None`` if the child
+    had to be killed.
+    """
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        try:
+            process = subprocess.Popen(
+                argv,
+                stdout=out,
+                stderr=err,
+                start_new_session=True,
+            )
+        except OSError:
+            # Fork/exec itself failed (out of memory, no interpreter).
+            return None
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_process_group(process)
+            try:
+                process.wait(timeout=_REAP_GRACE_S)
+            except subprocess.TimeoutExpired:
+                # Unkillable for now. Walk away rather than block.
+                pass
+            return None
+        out.seek(0)
+        err.seek(0)
+        return (
+            out.read().decode('utf-8', errors='replace').strip(),
+            err.read().decode('utf-8', errors='replace').strip(),
+            process.returncode,
+        )
+
+
+def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
+    """SIGKILL the child's whole process group, falling back to the child.
+
+    ``start_new_session=True`` made the child a group leader, so its pid
+    is also its process-group id and one ``killpg`` reaches everything it
+    spawned. The fallbacks cover the child already having exited
+    (``ProcessLookupError``) and the group being unsignalable
+    (``PermissionError``).
     """
     try:
-        result = subprocess.run(
-            [sys.executable, '-c', _CEC_QUERY_SCRIPT],
-            capture_output=True,
-            timeout=10,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return 'CEC error'
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            process.kill()
+        except OSError:
+            pass
 
-    output = result.stdout.decode('utf-8', errors='replace').strip()
+
+def get_display_power() -> str | bool:
+    """Query the attached display's power state over CEC.
+
+    The CEC stack can block inside libcec (no HDMI link, TV asleep,
+    adapter unresponsive) in a C call that ignores Python signals, so
+    the query runs in a subprocess we can bound — see
+    ``_run_bounded`` for why ``subprocess.run`` is not sufficient.
+
+    Return values are deliberately distinct, because "CEC error" used
+    to cover three very different situations and reported the most
+    common one to the operator as a fault (GH #3267). A probe cannot
+    predict CEC usability — that depends on the *peer* display, which
+    is not observable from ``/dev`` — so the states are only
+    distinguishable by actually asking:
+
+      * ``'No CEC adapter'`` — libcec found no usable adapter. On a
+        mainline-KMS Pi the container is handed ``/dev/vchiq``, which
+        libcec cannot open, so this is the normal answer there.
+      * ``'No CEC display detected'`` — the adapter works but nothing
+        answered. This is the expected state for a plain monitor
+        without CEC support, which is a large share of signage
+        installs. Not an error.
+      * ``'CEC error'`` — genuinely unexpected.
+      * ``True`` / ``False`` — a real answer from a real peer.
+
+    The ``str | bool`` return and the ``True``/``False`` values are
+    deliberately left as they were. They are the *data* the v2 System
+    Info API surfaces for ``display_power`` (its caller in
+    ``celery_tasks`` coerces with ``str()`` because redis-py rejects a
+    bool — Sentry ANTHIAS-2C), so changing them would be a
+    field-semantics change for external clients. #3267 is about the
+    error strings misreporting a working setup as a fault, not about
+    renaming the values.
+    """
+    completed = _run_bounded(
+        [sys.executable, '-c', _CEC_QUERY_SCRIPT], _CEC_TIMEOUT_S
+    )
+    if completed is None:
+        return 'CEC error'
+    output = completed[0]
     if output == 'True':
         return True
     if output == 'False':
@@ -115,20 +242,17 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     """
     script = _CEC_SET_SCRIPT.format(on='True' if on else 'False')
     verb = 'on' if on else 'off'
-    try:
-        result = subprocess.run(
-            [sys.executable, '-c', script],
-            capture_output=True,
-            timeout=10,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
+    # Same bounded-reap treatment as the query path: this one runs on the
+    # request thread, so an unbounded wait would hang the operator's HTTP
+    # request rather than a celery worker (GH #3264).
+    completed = _run_bounded([sys.executable, '-c', script], _CEC_TIMEOUT_S)
+    if completed is None:
         return (
             False,
             f'Display turn-{verb} timed out — CEC adapter unresponsive.',
         )
 
-    output = result.stdout.decode('utf-8', errors='replace').strip()
+    output, stderr, returncode = completed
     if output == 'OK':
         return True, f'Display turn-{verb} command sent.'
     if output.startswith('ERROR: '):
@@ -144,10 +268,9 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     # detail, which is useless to an operator. Fall back to stderr (or
     # the raw stdout if non-empty) so the toast / API response carries
     # something actionable.
-    stderr = result.stderr.decode('utf-8', errors='replace').strip()
     detail = (
         stderr or output
-    ) or f'subprocess exited with status {result.returncode}'
+    ) or f'subprocess exited with status {returncode}'
     return False, f'Display turn-{verb} failed: {_trim_cec_detail(detail)}'
 
 

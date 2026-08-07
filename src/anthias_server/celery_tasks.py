@@ -333,15 +333,14 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     time_limit=PERIODIC_POKE_TIME_LIMIT_S,
 )
 def get_display_power() -> None:
-    # diagnostics.get_display_power() returns ``str | bool`` (bool for
-    # a clean CEC True/False, str for the error fallbacks). redis-py
-    # refuses a bool — ``DataError: Invalid input of type: 'bool'`` —
-    # so every successful power query crashed this task and left the
-    # key unset (Sentry ANTHIAS-2C). Coerce to str: the v2 System Info
-    # API exposes ``display_power`` as ``string | null`` and just
-    # passes the value through, so 'True'/'False'/'CEC error' all fit
-    # — and the on/off state now actually populates instead of only
-    # the error cases ever landing.
+    # diagnostics.get_display_power() now always returns ``str``. It used
+    # to return ``str | bool``, and redis-py refuses a bool outright
+    # (``DataError: Invalid input of type: 'bool'``), so every successful
+    # power query crashed this task and left the key unset (Sentry
+    # ANTHIAS-2C). The ``str()`` below is kept as belt-and-braces. The v2
+    # System Info API exposes ``display_power`` as ``string | null`` and
+    # passes the value through, so 'True'/'False' and the diagnostic
+    # strings all fit.
     #
     # Boards without a CEC adapter (x86, and any host that doesn't pass
     # /dev/cec0 or /dev/vchiq into the container — e.g. Pi 5) can only
