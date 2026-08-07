@@ -333,28 +333,50 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     time_limit=PERIODIC_POKE_TIME_LIMIT_S,
 )
 def get_display_power() -> None:
-    # diagnostics.get_display_power() returns ``str | bool`` (bool for
-    # a clean CEC True/False, str for the error fallbacks). redis-py
-    # refuses a bool — ``DataError: Invalid input of type: 'bool'`` —
-    # so every successful power query crashed this task and left the
-    # key unset (Sentry ANTHIAS-2C). Coerce to str: the v2 System Info
-    # API exposes ``display_power`` as ``string | null`` and just
-    # passes the value through, so 'True'/'False'/'CEC error' all fit
-    # — and the on/off state now actually populates instead of only
-    # the error cases ever landing.
+    # diagnostics.get_display_power() now always returns ``str``. It used
+    # to return ``str | bool``, and redis-py refuses a bool outright
+    # (``DataError: Invalid input of type: 'bool'``), so every successful
+    # power query crashed this task and left the key unset (Sentry
+    # ANTHIAS-2C). The ``str()`` below is kept as belt-and-braces. The v2
+    # System Info API exposes ``display_power`` as ``string | null`` and
+    # passes the value through, so 'True'/'False' and the diagnostic
+    # strings all fit.
     #
-    # Boards without a CEC adapter (x86, and any host that doesn't pass
-    # /dev/cec0 or /dev/vchiq into the container — e.g. Pi 5) can only
-    # ever fail the libcec probe, which used to surface on the System
-    # Info card and the v2 /info API as 'CEC error' — reading like a
-    # fault when CEC simply isn't a thing on the hardware. Short-circuit
-    # on the same cec_available() gate the settings UI and the display-
-    # power SET endpoint already use: record a clear 'Not available'
-    # rather than spawning a doomed subprocess every tick.
-    if not diagnostics.cec_available():
-        r.set('display_power', 'Not available', ex=3600)
-        return
+    # Boards with no CEC device node passed in at all (x86) can only ever
+    # fail the libcec probe, which used to surface on the System Info card
+    # and the v2 /info API as 'CEC error' — reading like a fault when CEC
+    # simply isn't a thing on the hardware. Short-circuit on the same
+    # cec_available() gate the settings UI and the display-power SET
+    # endpoint already use: record a clear 'Not available' rather than
+    # spawning a doomed subprocess every tick.
+    #
+    # Pi 5 was previously listed here as an example and that was wrong:
+    # `bin/upgrade_containers.sh` rewrites vchiq -> /dev/cec0 for it, so a
+    # Pi 5 *does* get a working adapter and real CEC (measured on the
+    # testbed: the adapter opens, and a monitor without CEC yields
+    # 'No CEC display detected').
+    #
+    # Note this short-circuit only engages where NO CEC node is passed in
+    # at all. A board handed the vchiq node instead makes
+    # cec_available() True even where libcec cannot use it, so it still
+    # spawns a doomed subprocess every tick — see #3267 for which boards
+    # those are and the passthrough fix for them.
     try:
+        if not diagnostics.cec_available():
+            # This SET used to sit outside the handler below, which made
+            # it the one unprotected blocking call in the task — on
+            # exactly the boards that take this branch (x86, Pi 5).
+            #
+            # It is not unbounded: redis-py 8.0.1 defaults
+            # socket_timeout=5. But the default Retry(retries=10) means a
+            # blackhole redis costs 11 x 5s plus backoff — measured at
+            # 58.83s on the x86 testbed. That blows the 30s soft limit
+            # and clears the 60s hard limit by only ~1.2s, and because
+            # the call was outside the try the soft limit escaped
+            # uncaught, failing the task and filing a Sentry event: the
+            # very noise this change set is removing.
+            r.set('display_power', 'Not available', ex=3600)
+            return
         # Single SET with ex= so the value and its TTL are written
         # atomically — a soft-limit signal landing between a separate
         # SET and EXPIRE would otherwise leave the key without a TTL
