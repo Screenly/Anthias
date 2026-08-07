@@ -45,3 +45,13 @@ jobs:
     with:
       test-type: 'python'
       python-version: '3.13'
+      # Passed explicitly: relying on `github.event_name` inside the
+      # called workflow would fail silently if the context does not carry
+      # it through, and silence is the bug being fixed.
+      caller-event-name: ${{ github.event_name }}
+    # `workflow_call` does NOT inherit secrets, so without this the
+    # reusable workflow saw an empty CODECOV_TOKEN however the repo was
+    # configured. Passed explicitly rather than via `secrets: inherit` so
+    # the test workflow only receives the one secret it needs.
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
