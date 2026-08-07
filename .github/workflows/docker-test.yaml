@@ -45,3 +45,9 @@ jobs:
     with:
       test-type: 'python'
       python-version: '3.13'
+    # `workflow_call` does NOT inherit secrets, so without this the
+    # reusable workflow saw an empty CODECOV_TOKEN however the repo was
+    # configured. Passed explicitly rather than via `secrets: inherit` so
+    # the test workflow only receives the one secret it needs.
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
