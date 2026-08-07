@@ -3918,16 +3918,23 @@ def test_load_browser_keeps_its_budget_when_the_device_is_present() -> None:
 
 
 @pytest.mark.parametrize(
-    'platform,fb_option,expected',
+    'platform,expected',
     [
-        ('linuxfb', None, '/dev/fb0'),
-        ('linuxfb:rotation=90', None, '/dev/fb0'),
-        ('linuxfb:fb=/dev/fb1', None, '/dev/fb1'),
-        ('linuxfb:fb=/dev/fb1:rotation=180', None, '/dev/fb1'),
+        ('linuxfb', '/dev/fb0'),
+        ('linuxfb:rotation=90', '/dev/fb0'),
+        ('linuxfb:fb=/dev/fb1', '/dev/fb1'),
+        # Qt's syntax is <plugin>:opt=val,opt=val — ONE colon, then
+        # comma-separated options. Parsing the options on ':' instead
+        # returned '/dev/fb1,rotation=90' as the device path, so
+        # os.path.exists said False and the guard fired on a board whose
+        # framebuffer was fine. Copilot review of #3266.
+        ('linuxfb:fb=/dev/fb1,rotation=90', '/dev/fb1'),
+        ('linuxfb:rotation=90,fb=/dev/fb1', '/dev/fb1'),
+        ('linuxfb:tty=/dev/tty1,fb=/dev/fb2,rotation=270', '/dev/fb2'),
     ],
 )
 def test_linuxfb_device_honours_the_fb_option(
-    platform: str, fb_option: None, expected: str
+    platform: str, expected: str
 ) -> None:
     """linuxfb accepts fb=/dev/fbN, so a board configured onto fb1 must
     not be judged by fb0's presence."""

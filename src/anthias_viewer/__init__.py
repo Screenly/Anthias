@@ -251,10 +251,20 @@ def _linuxfb_device() -> str:
     ``fb1`` must not be judged by ``/dev/fb0``'s presence. Falls back to
     ``/dev/fb0``, which is both Qt's default and what every current
     board uses.
+
+    Parsed the same way as ``_set_qpa_rotation``: the Qt QPA syntax is
+    ``<plugin>[:opt1=val1,opt2=val2,...]`` — a *single* colon, then
+    **comma-separated** options. Splitting the options on ``:`` instead
+    would return ``/dev/fb1,rotation=90`` as the device path for
+    ``linuxfb:fb=/dev/fb1,rotation=90``, so ``os.path.exists`` would say
+    False and the caller would abandon a retry budget that should have
+    been spent — a false positive in exactly the guard this feeds
+    (Copilot review of #3266).
     """
     platform = os.environ.get('QT_QPA_PLATFORM', 'linuxfb')
-    for option in platform.split(':')[1:]:
-        key, _, value = option.partition('=')
+    _, _, options_str = platform.partition(':')
+    for option in options_str.split(','):
+        key, _, value = option.strip().partition('=')
         if key == 'fb' and value:
             return value
     return '/dev/fb0'
@@ -1184,11 +1194,11 @@ def load_browser(
                 # The distinct message also stops this grouping with
                 # genuine Qt init crashes in Sentry.
                 raise WebviewLaunchError(
-                    'AnthiasViewer cannot start: the display device is gone '
-                    '(/dev/fb0 absent inside the container, and Qt reports '
-                    'no usable screen). The container needs to restart to '
-                    're-enumerate /dev; retrying in-process cannot help. '
-                    f'Last error: {exc}'
+                    'AnthiasViewer cannot start: the display device is '
+                    f'gone ({_linuxfb_device()} absent inside the '
+                    'container, and Qt reports no usable screen). The '
+                    'container needs to restart to re-enumerate /dev; '
+                    f'retrying in-process cannot help. Last error: {exc}'
                 ) from exc
             if attempt == 1:
                 logger.warning(
