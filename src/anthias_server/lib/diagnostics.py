@@ -201,15 +201,28 @@ def get_display_power() -> str | bool:
     is not observable from ``/dev`` — so the states are only
     distinguishable by actually asking:
 
-      * ``'No CEC adapter'`` — libcec found no usable adapter. On a
-        mainline-KMS Pi the container is handed ``/dev/vchiq``, which
-        libcec cannot open, so this is the normal answer there.
+      * ``'No CEC adapter'`` — libcec *raised* because it found no
+        usable adapter.
       * ``'No CEC display detected'`` — the adapter works but nothing
         answered. This is the expected state for a plain monitor
         without CEC support, which is a large share of signage
         installs. Not an error.
+      * ``'CEC adapter unresponsive'`` — libcec neither answered nor
+        raised within the timeout, so we killed it. Measured on the
+        vchiq-only Pi 3 A+: ``cec.init()`` simply **hangs** there
+        rather than raising, so the subprocess always hits the bound.
+        This is a distinct state from a raise, and reporting it as a
+        generic error is what made #3267 unactionable — an operator
+        cannot tell "no hardware" from "hardware wedged".
       * ``'CEC error'`` — genuinely unexpected.
       * ``True`` / ``False`` — a real answer from a real peer.
+
+    Note the hang case is the *common* one on Pi 1-4, where the
+    container is handed ``/dev/vchiq`` and never ``/dev/cec0``. Those
+    boards therefore burn the full ``_CEC_TIMEOUT_S`` on every beat
+    tick. Skipping the doomed probe entirely needs a reliable way to
+    tell "vchiq is usable here" from "vchiq is vestigial", which is not
+    yet established across the fleet — see #3267.
 
     The ``str | bool`` return and the ``True``/``False`` values are
     deliberately left as they were. They are the *data* the v2 System
@@ -224,7 +237,10 @@ def get_display_power() -> str | bool:
         [sys.executable, '-c', _CEC_QUERY_SCRIPT], _CEC_TIMEOUT_S
     )
     if completed is None:
-        return 'CEC error'
+        # Timed out and was killed — libcec hung rather than raising.
+        # Verified on the vchiq-only Pi 3 A+, where this is the normal
+        # outcome on every tick, not an exceptional one.
+        return 'CEC adapter unresponsive'
     output = completed[0]
     if output == 'True':
         return True

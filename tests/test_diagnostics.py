@@ -309,8 +309,13 @@ def test_cec_available_false_when_neither_present() -> None:
 
 
 def test_get_display_power_subprocess_timeout() -> None:
+    """A timeout is 'the adapter hung', which is a different state from
+    'libcec raised'. Verified on the vchiq-only Pi 3 A+, where cec.init()
+    hangs on every tick rather than raising — so reporting this as a
+    generic 'CEC error' left the operator unable to tell 'no hardware'
+    from 'hardware wedged' (GH #3267)."""
     with mock.patch.object(diagnostics, '_run_bounded', return_value=None):
-        assert diagnostics.get_display_power() == 'CEC error'
+        assert diagnostics.get_display_power() == 'CEC adapter unresponsive'
 
 
 def test_try_connectivity_all_succeed() -> None:
