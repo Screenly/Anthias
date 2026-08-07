@@ -3694,3 +3694,73 @@ def test_kernel_has_bindable_display_all_disconnected() -> None:
         for cm in _patch_drm_sysfs(files):
             stack.enter_context(cm)
         assert viewer._kernel_has_bindable_display() is False
+
+
+# ---------------------------------------------------------------------------
+# _display_device_vanished — GH #3266
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'failure_text',
+    [
+        (
+            'AnthiasViewer exited before emitting D-Bus handshake; stdout: '
+            'Unable to figure out framebuffer device. Specify it manually.'
+        ),
+        'linuxfb: Failed to initialize screen',
+        'Cannot create window: no screens available',
+    ],
+)
+def test_display_device_vanished_detects_qt_no_screen(
+    failure_text: str,
+) -> None:
+    """The container's /dev is a start-time snapshot and
+    wait_for_framebuffer only runs once, so a linuxfb board whose display
+    disappears afterwards can never spawn a webview again. Retrying just
+    delays the container restart that actually fixes it."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+    ):
+        assert viewer._display_device_vanished(failure_text) is True
+
+
+def test_display_device_vanished_requires_the_device_to_be_absent() -> None:
+    """Conservative on purpose: a transient Qt init crash on a board whose
+    framebuffer is still present must keep its full retry budget."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=True),
+    ):
+        assert viewer._display_device_vanished('no screens available') is False
+
+
+def test_display_device_vanished_ignores_unrelated_failures() -> None:
+    """A crash with no no-screen signature is not this bug, even with the
+    device genuinely absent."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': 'linuxfb'}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+    ):
+        assert viewer._display_device_vanished('Segmentation fault') is False
+
+
+@pytest.mark.parametrize('platform', ['wayland', 'eglfs'])
+def test_display_device_vanished_excludes_non_linuxfb(platform: str) -> None:
+    """Wayland and eglfs boards do not consume /dev/fb0, and the Wayland
+    wedge already has its own bounded-restart watchdog — so this
+    short-circuit must never fire there."""
+    with (
+        mock.patch.dict(
+            os.environ, {'QT_QPA_PLATFORM': platform}, clear=False
+        ),
+        mock.patch.object(os.path, 'exists', return_value=False),
+    ):
+        assert viewer._display_device_vanished('no screens available') is False
