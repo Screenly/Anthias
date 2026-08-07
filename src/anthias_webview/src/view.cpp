@@ -521,6 +521,7 @@ void View::loadPage(const QString &uri, bool skipSslVerify)
     hideVideoSurface();
 #endif
     currentImage = QImage();
+    fallbackToLastImageOnBlank = false;
     stopAnimation();
     // Drop any per-asset reload timer left over from the previous
     // webpage AND the prior asset's pending interval — the viewer
@@ -774,10 +775,15 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
 
         src = url.toString();
         qDebug() << "Generated URL:" << src;
+        fallbackToLastImageOnBlank = true;
     }
     else if (preUri == "null")
     {
         qDebug() << "Black page";
+        // Intentional blank ahead of video, must stay pure black, so
+        // the fallback stays off (see the lastRasterImage comment in
+        // view.h and the matching comment in playVideo()).
+        fallbackToLastImageOnBlank = false;
         currentImage = QImage();
         update();
         return;
@@ -786,6 +792,7 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
     {
         qDebug() << "Location: Remote URL";
         src = preUri;
+        fallbackToLastImageOnBlank = true;
     }
 
     qDebug() << "Loading image from:" << src;
@@ -889,6 +896,8 @@ void View::loadAsStaticImage(const QByteArray& data)
         webView1->setVisible(false);
         webView2->setVisible(false);
         currentImage = nextImage;
+        lastRasterImage = nextImage;
+        fallbackToLastImageOnBlank = false;
         update();
     } else {
         qDebug() << "Failed to load image from data:" << reader.errorString();
@@ -901,12 +910,23 @@ void View::paintEvent(QPaintEvent*)
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.fillRect(rect(), Qt::black);
 
-    if (currentImage.isNull()) {
+    // Issue #3262, a real image fetch that starts from a blanked
+    // state (typically right after a video asset) would otherwise
+    // paint solid black for the whole QNetworkReply round-trip.
+    // Fall back to the last real frame in that case only; the
+    // video-onset / loadPage() blanks leave the flag off and stay
+    // pure black, unchanged from before.
+    const QImage &imageToPaint =
+        (currentImage.isNull() && fallbackToLastImageOnBlank)
+            ? lastRasterImage
+            : currentImage;
+
+    if (imageToPaint.isNull()) {
         return;
     }
 
     if (imageRotation == 0) {
-        QSize scaledSize = currentImage.size();
+        QSize scaledSize = imageToPaint.size();
         scaledSize.scale(size(), Qt::KeepAspectRatio);
         painter.drawImage(
             QRect(
@@ -914,7 +934,7 @@ void View::paintEvent(QPaintEvent*)
                 (height() - scaledSize.height()) / 2,
                 scaledSize.width(),
                 scaledSize.height()),
-            currentImage);
+            imageToPaint);
         return;
     }
 
@@ -925,7 +945,7 @@ void View::paintEvent(QPaintEvent*)
     // pillar-boxed, matching the GStreamer videoflip path.
     const QSize box =
         (imageRotation % 180 == 0) ? size() : QSize(height(), width());
-    QSize scaledSize = currentImage.size();
+    QSize scaledSize = imageToPaint.size();
     scaledSize.scale(box, Qt::KeepAspectRatio);
     painter.translate(width() / 2.0, height() / 2.0);
     painter.rotate(imageRotation);
@@ -935,7 +955,7 @@ void View::paintEvent(QPaintEvent*)
             -scaledSize.height() / 2,
             scaledSize.width(),
             scaledSize.height()),
-        currentImage);
+        imageToPaint);
 }
 
 void View::resizeEvent(QResizeEvent* event)
@@ -972,9 +992,12 @@ void View::playVideo(const QString &uri, const QVariantMap &options)
     webView1->setVisible(false);
     webView2->setVisible(false);
     // Blank the image canvas so an old still doesn't flash through
-    // before the first mpv frame paints.
+    // before the first mpv frame paints. Deliberate blank, leave the
+    // lastRasterImage fallback off (see the comment on
+    // fallbackToLastImageOnBlank in view.h).
     stopAnimation();
     currentImage = QImage();
+    fallbackToLastImageOnBlank = false;
     update();
 
     if (!videoView) {
@@ -1040,6 +1063,8 @@ void View::setupAnimation()
     movie->start();
     movie->jumpToFrame(0);
     currentImage = movie->currentImage();
+    lastRasterImage = currentImage;
+    fallbackToLastImageOnBlank = false;
     update();
 }
 
