@@ -218,6 +218,18 @@ _DATE_FORMAT_OPTIONS = (
     ('yyyy.mm.dd', 'year.month.day'),
 )
 
+# Python weekday numbering (Monday=0 ... Sunday=6), matching what
+# lib/display_power.py parses and what datetime.weekday() returns.
+_WEEKDAY_OPTIONS = (
+    (0, 'Mon'),
+    (1, 'Tue'),
+    (2, 'Wed'),
+    (3, 'Thu'),
+    (4, 'Fri'),
+    (5, 'Sat'),
+    (6, 'Sun'),
+)
+
 
 @functools.lru_cache(maxsize=1)
 def _timezone_options() -> tuple[tuple[str, str], ...]:
@@ -295,9 +307,25 @@ def device_settings() -> dict[str, Any]:
         'date_format_options': _DATE_FORMAT_OPTIONS,
         'timezone_options': _timezone_options(),
         # Render-time gate for the experimental CEC display-power
-        # buttons; cec_available() only stats device nodes, so it's
-        # cheap enough to call on every settings render.
+        # buttons. cec_available() enumerates /dev/cec* and reads each
+        # adapter's capabilities — measured at 0.0-0.1ms per adapter on
+        # every board in the testbed fleet, so it stays cheap enough to
+        # call on every settings render.
         'cec_available': diagnostics.cec_available(),
+        # The schedule is NOT gated on cec_available(): when no CEC
+        # display answers it falls back to the viewer's local blanking,
+        # so it is useful on boards with a plain monitor too.
+        'display_power_schedule_enabled': settings[
+            'display_power_schedule_enabled'
+        ],
+        'display_power_on_time': settings['display_power_on_time'],
+        'display_power_off_time': settings['display_power_off_time'],
+        'display_power_days': [
+            int(d)
+            for d in str(settings['display_power_days']).split(',')
+            if d.strip().isdigit()
+        ],
+        'weekday_options': _WEEKDAY_OPTIONS,
     }
 
 

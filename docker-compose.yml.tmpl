@@ -37,8 +37,13 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # No `devices:` here on purpose. The only device this service ever
+    # needed was /dev/vchiq, and that existed solely for libcec's
+    # display-power probe — which is gone (CEC now speaks the kernel
+    # uABI directly). CEC nodes are instead supplied by the generated
+    # docker-compose.cec.override.yml, because which /dev/cec* exist is
+    # a property of the host, not of the board name. See
+    # bin/upgrade_containers.sh.
     restart: always
     volumes:
       - resin-data:/data
@@ -170,8 +175,10 @@ services:
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
       - no_proxy=${no_proxy}
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # See the note on anthias-server: CEC device nodes come from the
+    # generated docker-compose.cec.override.yml, not from here. Celery
+    # is the service that actually runs the periodic display-power
+    # query, so it needs the same nodes the server does.
     restart: always
     volumes:
       - resin-data:/data

@@ -688,9 +688,9 @@ def test_display_power_returns_503_when_no_cec_adapter(
     _cec_available_mock: Any,
     api_client: APIClient,
 ) -> None:
-    """The endpoint must fail fast (no 10 s subprocess) when neither
-    /dev/cec0 nor /dev/vchiq exists. 503 telegraphs 'this server lacks
-    the hardware to satisfy the request' more accurately than 502."""
+    """The endpoint must fail fast when the device has no CEC adapter
+    at all. 503 telegraphs 'this server lacks the hardware to satisfy
+    the request' more accurately than 502."""
     response = api_client.post(
         reverse('api:display_power_v2', kwargs={'state': 'on'})
     )

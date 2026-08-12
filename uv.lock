@@ -170,7 +170,6 @@ mypy = [
     { name = "whitenoise" },
 ]
 server = [
-    { name = "cec" },
     { name = "celery" },
     { name = "certifi" },
     { name = "channels" },
@@ -201,7 +200,6 @@ server = [
     { name = "yt-dlp" },
 ]
 test = [
-    { name = "cec" },
     { name = "celery" },
     { name = "certifi" },
     { name = "channels" },
@@ -240,7 +238,6 @@ test = [
     { name = "yt-dlp" },
 ]
 viewer = [
-    { name = "cec" },
     { name = "certifi" },
     { name = "django" },
     { name = "jinja2" },
@@ -339,7 +336,6 @@ mypy = [
     { name = "whitenoise", specifier = "==6.12.0" },
 ]
 server = [
-    { name = "cec", specifier = "==0.2.8" },
     { name = "celery", specifier = "==5.6.3" },
     { name = "certifi", specifier = "==2026.7.22" },
     { name = "channels", specifier = "==4.3.2" },
@@ -370,7 +366,6 @@ server = [
     { name = "yt-dlp", specifier = ">=2026.7.4" },
 ]
 test = [
-    { name = "cec", specifier = "==0.2.8" },
     { name = "celery", specifier = "==5.6.3" },
     { name = "certifi", specifier = "==2026.7.22" },
     { name = "channels", specifier = "==4.3.2" },
@@ -409,7 +404,6 @@ test = [
     { name = "yt-dlp", specifier = ">=2026.7.4" },
 ]
 viewer = [
-    { name = "cec", specifier = "==0.2.8" },
     { name = "certifi", specifier = "==2026.7.22" },
     { name = "django", specifier = "==5.2.14" },
     { name = "jinja2", specifier = "==3.1.6" },
@@ -544,12 +538,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/63/9a/fec38644694abfaae
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9d/2a/9186535ce58db529927f6cf5990a849aa9e052eea3e2cfefe20b9e1802da/bracex-2.6-py3-none-any.whl", hash = "sha256:0b0049264e7340b3ec782b5cb99beb325f36c3782a32e36e876452fd49a09952", size = 11508, upload-time = "2025-06-22T19:12:29.781Z" },
 ]
-
-[[package]]
-name = "cec"
-version = "0.2.8"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/9f/8f/a6a5facdc328562fda583e1278ad6e53605d91a1afc194777e309628f2c6/cec-0.2.8.tar.gz", hash = "sha256:81e59d85dffdd5552b9bec556779e97fb1d6bd120c7320c216c020743a46083a", size = 20316, upload-time = "2022-01-05T20:35:43.739Z" }
 
 [[package]]
 name = "celery"

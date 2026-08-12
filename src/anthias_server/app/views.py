@@ -1635,6 +1635,34 @@ def review_cta_snooze(request: HttpRequest) -> HttpResponse:
     return HttpResponse(status=204)
 
 
+def _apply_display_power_schedule_settings(request: HttpRequest) -> None:
+    """Persist the scheduled display-power fields from the settings form.
+
+    Times are normalised through ``parse_hhmm`` so a malformed value is
+    rejected here and the stored setting keeps its previous value —
+    the Celery beat must never read a time it cannot parse.
+    """
+    from anthias_server.lib import display_power
+
+    settings['display_power_schedule_enabled'] = _checkbox(
+        request, 'display_power_schedule_enabled'
+    )
+
+    for field in ('display_power_on_time', 'display_power_off_time'):
+        raw = (request.POST.get(field) or '').strip()
+        parsed = display_power.parse_hhmm(raw)
+        if parsed is not None:
+            settings[field] = parsed.strftime('%H:%M')
+
+    # An empty selection means "every day" rather than "no days", which
+    # would leave an enabled schedule silently inert.
+    days = [d for d in request.POST.getlist('display_power_days') if d.strip()]
+    parsed_days = display_power.parse_days(','.join(days))
+    settings['display_power_days'] = ','.join(
+        str(d) for d in sorted(parsed_days)
+    )
+
+
 @authorized
 @require_http_methods(['GET'])
 def settings_view(request: HttpRequest) -> HttpResponse:
@@ -1725,6 +1753,8 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['screen_rotation'] = clamp_screen_rotation(
             request.POST.get('screen_rotation')
         )
+
+        _apply_display_power_schedule_settings(request)
 
         settings.save()
         ViewerPublisher.get_instance().send_to_viewer('reload')

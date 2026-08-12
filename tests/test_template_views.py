@@ -22,6 +22,7 @@ from django.utils import timezone
 from anthias_server.app import page_context
 from anthias_server.app.models import DURATION_S_MAX, Asset
 from anthias_server.app.templatetags.asset_filters import to_json
+from anthias_server.settings import settings
 
 
 @pytest.fixture
@@ -113,6 +114,9 @@ def test_settings_renders(client: Client) -> None:
         'Timezone',
         'Authentication',
         'Show splash screen',
+        'Display schedule',
+        'Turn on at',
+        'Turn off at',
         'Backup',
         'System controls',
     ):
@@ -210,6 +214,11 @@ def test_page_context_device_settings_keys() -> None:
         'screen_rotation',
         'date_format_options',
         'is_pi5',
+        'display_power_schedule_enabled',
+        'display_power_on_time',
+        'display_power_off_time',
+        'display_power_days',
+        'weekday_options',
     ):
         assert key in ctx
 
@@ -3574,3 +3583,83 @@ def test_review_cta_suppressed_while_snoozed(
         )
     assert response.status_code == 200
     assert 'review-cta' not in response.headers.get('HX-Trigger', '')
+
+
+# ---------------------------------------------------------------------------
+# Scheduled display power — settings form round trip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_settings_save_display_schedule(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'auth_backend': '',
+                'display_power_schedule_enabled': 'true',
+                'display_power_on_time': '07:30',
+                'display_power_off_time': '19:45',
+                'display_power_days': ['0', '2', '4'],
+            },
+        )
+    assert response.status_code in (200, 302)
+    settings.load()
+    assert settings['display_power_schedule_enabled'] is True
+    assert settings['display_power_on_time'] == '07:30'
+    assert settings['display_power_off_time'] == '19:45'
+    assert settings['display_power_days'] == '0,2,4'
+
+
+@pytest.mark.django_db
+def test_settings_save_display_schedule_rejects_bad_time(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """A malformed time must leave the stored value untouched — the beat
+    reads it every minute and must never see something unparsable."""
+    settings.load()
+    settings['display_power_on_time'] = '06:15'
+    settings.save()
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'auth_backend': '',
+                'display_power_on_time': 'not-a-time',
+                'display_power_off_time': '19:45',
+            },
+        )
+    settings.load()
+    assert settings['display_power_on_time'] == '06:15'
+
+
+@pytest.mark.django_db
+def test_settings_save_display_schedule_empty_days_means_every_day(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """Posting no day checkboxes must not leave an enabled schedule
+    silently inert."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'auth_backend': '',
+                'display_power_schedule_enabled': 'true',
+                'display_power_on_time': '08:00',
+                'display_power_off_time': '18:00',
+            },
+        )
+    settings.load()
+    assert settings['display_power_days'] == '0,1,2,3,4,5,6'

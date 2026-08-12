@@ -16,8 +16,15 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - redis
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # No `devices:` here. /dev/vchiq existed solely for libcec's
+    # display-power probe, which is gone. CEC passthrough is NOT wired
+    # up on balena: unlike the docker-compose install path there is no
+    # on-device step that can enumerate the host's /dev/cec* nodes, and
+    # a statically-listed node that turns out to be absent stops the
+    # container from starting at all. Balena fleets therefore report
+    # display power as "not available" — which is what they already did
+    # in practice, since the deploy scripts stripped the vchiq mount on
+    # pi5/x86/arm64 and libcec could not use it on the other boards.
     restart: always
     volumes:
       - resin-data:/data
@@ -69,8 +76,15 @@ services:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # No `devices:` here. /dev/vchiq existed solely for libcec's
+    # display-power probe, which is gone. CEC passthrough is NOT wired
+    # up on balena: unlike the docker-compose install path there is no
+    # on-device step that can enumerate the host's /dev/cec* nodes, and
+    # a statically-listed node that turns out to be absent stops the
+    # container from starting at all. Balena fleets therefore report
+    # display power as "not available" — which is what they already did
+    # in practice, since the deploy scripts stripped the vchiq mount on
+    # pi5/x86/arm64 and libcec could not use it on the other boards.
     restart: always
     volumes:
       - resin-data:/data

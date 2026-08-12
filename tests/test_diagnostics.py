@@ -1,13 +1,11 @@
+import glob
 import os
-import sys
-import tempfile
-import time
 from typing import Any
 from unittest import mock
 
 import pytest
 
-from anthias_server.lib import diagnostics
+from anthias_server.lib import cec, diagnostics
 
 
 @pytest.mark.parametrize(
@@ -115,209 +113,6 @@ def test_get_raspberry_model_unknown() -> None:
         assert diagnostics.get_raspberry_model() == 'Unknown'
 
 
-def test_get_display_power_true() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('True', '', 0)
-    ):
-        assert diagnostics.get_display_power() is True
-
-
-def test_get_display_power_false() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('False', '', 0)
-    ):
-        assert diagnostics.get_display_power() is False
-
-
-def test_get_display_power_cec_error() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('CEC error', '', 0)
-    ):
-        assert diagnostics.get_display_power() == 'CEC error'
-
-
-def test_get_display_power_unknown() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('Unknown', '', 0)
-    ):
-        assert diagnostics.get_display_power() == 'Unknown'
-
-
-def test_get_display_power_empty_output_returns_cec_error() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('', '', 0)
-    ):
-        assert diagnostics.get_display_power() == 'CEC error'
-
-
-def test_set_display_power_on_success() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('OK', '', 0)
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is True
-    assert 'on' in msg
-
-
-def test_set_display_power_off_success() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('OK', '', 0)
-    ):
-        ok, msg = diagnostics.set_display_power(on=False)
-    assert ok is True
-    assert 'off' in msg
-
-
-def test_set_display_power_cec_error_passes_through_reason() -> None:
-    with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=('ERROR: no adapter', '', 0)
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'no adapter' in msg
-
-
-def test_set_display_power_timeout_returns_failure_message() -> None:
-    with mock.patch.object(diagnostics, '_run_bounded', return_value=None):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'timed out' in msg.lower()
-
-
-def test_set_display_power_unexpected_stdout_falls_through_to_stdout() -> None:
-    """No 'OK' / 'ERROR:' sentinel — the helper still has to return
-    something actionable. With non-empty stdout and a clean exit, that
-    becomes the raw line itself (capped)."""
-    stderr_text = (b'').decode()
-    with mock.patch.object(
-        diagnostics,
-        '_run_bounded',
-        return_value=('something weird', stderr_text, 0),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'something weird' in msg
-
-
-def test_set_display_power_subprocess_crash_surfaces_stderr() -> None:
-    """When stdout is empty and stderr has content (interpreter crash,
-    libcec writing to stderr), the last line of stderr is what reaches
-    the toast — gives the operator a real reason instead of a generic
-    'unexpected response.'"""
-    stderr_text = (
-        'Traceback (most recent call last):\n'
-        '  File "<string>", line 4, in <module>\n'
-        'RuntimeError: cec init failed: no adapter\n'
-    )
-    with mock.patch.object(
-        diagnostics,
-        '_run_bounded',
-        return_value=('', stderr_text, 1),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'RuntimeError: cec init failed: no adapter' in msg
-
-
-def test_set_display_power_subprocess_crash_with_empty_streams_reports_status() -> (
-    None
-):
-    """Last-resort fallback: subprocess exits non-zero with no stderr
-    and no stdout. Still has to report something — surface the returncode."""
-    stderr_text = (b'').decode()
-    with mock.patch.object(
-        diagnostics,
-        '_run_bounded',
-        return_value=('', stderr_text, 137),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert '137' in msg
-
-
-def test_set_display_power_caps_long_error_message() -> None:
-    """libcec can spew kilobytes of diagnostic output; the toast / API
-    body must not carry an unbounded blob."""
-    stderr_text = (('X' * 4000).encode()).decode()
-    with mock.patch.object(
-        diagnostics,
-        '_run_bounded',
-        return_value=('', stderr_text, 1),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    # Cap is 240; message has prefix "Display turn-on failed: " so total
-    # is under ~280 chars and ends with the ellipsis sentinel.
-    assert len(msg) < 300
-    assert msg.endswith('...')
-
-
-def test_set_display_power_caps_long_error_sentinel_reason() -> None:
-    """The ERROR: sentinel branch must apply the same length cap +
-    last-line trim as the unexpected-stdout fallback; a hostile or
-    chatty libcec build could otherwise smuggle a multi-line / huge
-    string into the toast via the contract path."""
-    long_reason = 'X' * 4000
-    with mock.patch.object(
-        diagnostics,
-        '_run_bounded',
-        return_value=(f'ERROR: {long_reason}', '', 0),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert len(msg) < 300
-    assert msg.endswith('...')
-
-
-def test_set_display_power_error_sentinel_strips_multiline() -> None:
-    """Multi-line reason on the ERROR: branch — we keep only the last
-    non-empty line so the toast stays one row tall."""
-    stderr_text = (b'').decode()
-    with mock.patch.object(
-        diagnostics,
-        '_run_bounded',
-        return_value=(
-            'ERROR: first line\nmiddle line\nactual failure reason',
-            stderr_text,
-            0,
-        ),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'actual failure reason' in msg
-    assert 'first line' not in msg
-    assert 'middle line' not in msg
-
-
-def test_cec_available_true_when_cec0_present() -> None:
-    with mock.patch.object(
-        os.path, 'exists', side_effect=lambda p: p == '/dev/cec0'
-    ):
-        assert diagnostics.cec_available() is True
-
-
-def test_cec_available_true_when_vchiq_present() -> None:
-    with mock.patch.object(
-        os.path, 'exists', side_effect=lambda p: p == '/dev/vchiq'
-    ):
-        assert diagnostics.cec_available() is True
-
-
-def test_cec_available_false_when_neither_present() -> None:
-    with mock.patch.object(os.path, 'exists', return_value=False):
-        assert diagnostics.cec_available() is False
-
-
-def test_get_display_power_subprocess_timeout() -> None:
-    """A timeout is 'the adapter hung', which is a different state from
-    'libcec raised'. Verified on the vchiq-only Pi 3 A+, where cec.init()
-    hangs on every tick rather than raising — so reporting this as a
-    generic 'CEC error' left the operator unable to tell 'no hardware'
-    from 'hardware wedged' (GH #3267)."""
-    with mock.patch.object(diagnostics, '_run_bounded', return_value=None):
-        assert diagnostics.get_display_power() == 'CEC adapter unresponsive'
-
-
 def test_try_connectivity_all_succeed() -> None:
     with mock.patch(
         'anthias_server.lib.diagnostics.utils.url_fails', return_value=False
@@ -353,112 +148,120 @@ def test_try_connectivity_mixed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _run_bounded — the bounded-reap fix for GH #3264
-# ---------------------------------------------------------------------------
-
-
-def test_run_bounded_returns_stdout_stderr_and_status() -> None:
-    """Happy path: separate streams, both captured, real returncode."""
-    argv = [
-        sys.executable,
-        '-c',
-        "import sys; sys.stdout.write('out'); sys.stderr.write('err')",
-    ]
-    result = diagnostics._run_bounded(argv, timeout=30)
-    assert result is not None
-    stdout, stderr, returncode = result
-    assert stdout == 'out'
-    assert stderr == 'err'
-    assert returncode == 0
-
-
-def test_run_bounded_keeps_streams_separate() -> None:
-    """The CEC scripts' contract is that stdout carries exactly one
-    sentinel token, and libcec is prone to chattering on stderr —
-    merging the two would corrupt the token."""
-    argv = [
-        sys.executable,
-        '-c',
-        "import sys; sys.stdout.write('True'); sys.stderr.write('libcec noise')",
-    ]
-    result = diagnostics._run_bounded(argv, timeout=30)
-    assert result is not None
-    assert result[0] == 'True', 'stderr must not leak into the token'
-
-
-def test_run_bounded_kills_a_hanging_child_within_its_budget() -> None:
-    """A child that ignores everything must not outlast the budget.
-
-    This is the regression that matters: the old ``subprocess.run``
-    reaped with an *unbounded* ``wait()`` on the timeout path, so celery's
-    single soft-limit signal could not save the worker and the 60s hard
-    limit SIGKILLed it (Sentry ANTHIAS-A/9/B/31)."""
-    argv = [sys.executable, '-c', 'import time; time.sleep(60)']
-    start = time.monotonic()
-    result = diagnostics._run_bounded(argv, timeout=1)
-    elapsed = time.monotonic() - start
-    assert result is None, 'a killed child must report as None'
-    assert elapsed < 1 + diagnostics._REAP_GRACE_S + 3, (
-        f'took {elapsed:.1f}s — the reap is not bounded'
-    )
-
-
-def test_run_bounded_kills_the_whole_process_group() -> None:
-    """``start_new_session=True`` + killpg means a grandchild cannot
-    survive the kill, nor stall the reap by holding a handle.
-
-    The child spawns a grandchild that would outlive it, writes the
-    grandchild's pid, then hangs. After the timeout, neither should be
-    alive."""
-    with tempfile.NamedTemporaryFile('w+') as pidfile:
-        # The grandchild's pid goes to a file rather than stdout, because
-        # _run_bounded deliberately discards output when it has to kill.
-        child_script = (
-            'import subprocess, sys, time\n'
-            "grandchild = subprocess.Popen([sys.executable, '-c',"
-            " 'import time; time.sleep(60)'])\n"
-            f'open({pidfile.name!r}, "w").write(str(grandchild.pid))\n'
-            'time.sleep(60)\n'
-        )
-        argv = [sys.executable, '-c', child_script]
-        assert diagnostics._run_bounded(argv, timeout=2) is None
-        pidfile.seek(0)
-        raw = pidfile.read().strip()
-    assert raw, 'child never reported its grandchild pid'
-    grandchild = int(raw)
-    # Give the group kill a moment to be reaped by init.
-    deadline = time.monotonic() + 5
-    while time.monotonic() < deadline:
-        try:
-            os.kill(grandchild, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.1)
-    pytest.fail(f'grandchild {grandchild} survived the process-group kill')
-
-
-def test_run_bounded_handles_unspawnable_argv() -> None:
-    """Fork/exec failing (no such binary) must return None, not raise —
-    this runs inside an upload request and a celery beat."""
-    assert diagnostics._run_bounded(['/nonexistent/binary'], timeout=5) is None
-
-
-# ---------------------------------------------------------------------------
-# CEC status strings — GH #3267
+# Display power — the translation layer over lib/cec.py.
+#
+# These assert the *legacy wire values* the v2 System Info API has always
+# exposed (``display_power`` is ``string | null``, with 'True'/'False'
+# alongside diagnostic strings). The mechanism underneath changed
+# completely when libcec was dropped for the kernel CEC uABI; the values
+# deliberately did not, because Anthias never breaks a published API.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    'sentinel',
-    ['No CEC adapter', 'No CEC display detected'],
+    ('status', 'expected'),
+    [
+        (cec.PowerStatus.ON, True),
+        (cec.PowerStatus.STANDBY, False),
+        (cec.PowerStatus.NO_ADAPTER, 'No CEC adapter'),
+        (cec.PowerStatus.NO_LINK, 'No CEC display detected'),
+        (cec.PowerStatus.NO_PEER, 'No CEC display detected'),
+        (cec.PowerStatus.UNKNOWN, 'Mixed'),
+        (cec.PowerStatus.ERROR, 'CEC error'),
+    ],
 )
-def test_get_display_power_passes_through_distinct_cec_states(
-    sentinel: str,
+def test_get_display_power_maps_status_to_legacy_value(
+    status: 'cec.PowerStatus', expected: Any
 ) -> None:
-    """'CEC error' used to cover three different situations, and reported
-    the most common one — a plain monitor with no CEC support — to the
-    operator as a fault. The distinct states must survive to the caller."""
+    with mock.patch.object(cec, 'power_status', return_value=status):
+        assert diagnostics.get_display_power() == expected
+
+
+def test_get_display_power_no_peer_is_not_reported_as_an_error() -> None:
+    """A plain monitor with no CEC support is the common case, not a
+    fault. Reporting it as 'CEC error' is what made GH #3267
+    unactionable for operators."""
     with mock.patch.object(
-        diagnostics, '_run_bounded', return_value=(sentinel, '', 0)
+        cec, 'power_status', return_value=cec.PowerStatus.NO_PEER
     ):
-        assert diagnostics.get_display_power() == sentinel
+        assert diagnostics.get_display_power() == 'No CEC display detected'
+
+
+@pytest.mark.parametrize(
+    'error', [OSError('boom'), cec.CecError('boom'), TimeoutError('boom')]
+)
+def test_get_display_power_survives_adapter_failure(
+    error: Exception,
+) -> None:
+    with mock.patch.object(cec, 'power_status', side_effect=error):
+        assert diagnostics.get_display_power() == 'CEC error'
+
+
+def test_set_display_power_reports_every_display_it_reached() -> None:
+    """Fan-out is the point: a device can have two monitors attached and
+    the operator needs to know both got the message."""
+    with mock.patch.object(cec, 'set_power', return_value=(2, 2)):
+        ok, msg = diagnostics.set_display_power(on=False)
+    assert ok is True
+    assert 'off' in msg
+    assert '2 displays' in msg
+
+
+def test_set_display_power_singular_message_for_one_display() -> None:
+    with mock.patch.object(cec, 'set_power', return_value=(1, 1)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is True
+    assert '1 display.' in msg
+
+
+def test_set_display_power_partial_success_is_reported() -> None:
+    """Two displays attached, only one answered — that is a success with
+    a caveat, not a silent win."""
+    with mock.patch.object(cec, 'set_power', return_value=(1, 2)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is True
+    assert '1 of 2' in msg
+
+
+def test_set_display_power_unacknowledged_is_a_failure() -> None:
+    with mock.patch.object(cec, 'set_power', return_value=(0, 1)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'not acknowledged' in msg
+
+
+def test_set_display_power_without_a_live_link_says_so() -> None:
+    with mock.patch.object(cec, 'set_power', return_value=(0, 0)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'no CEC link' in msg
+
+
+def test_set_display_power_surfaces_adapter_errors() -> None:
+    with mock.patch.object(
+        cec, 'set_power', side_effect=cec.CecError('cannot open /dev/cec0')
+    ):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'cannot open /dev/cec0' in msg
+
+
+def test_cec_available_delegates_to_adapter_enumeration() -> None:
+    with mock.patch.object(cec, 'available', return_value=True):
+        assert diagnostics.cec_available() is True
+    with mock.patch.object(cec, 'available', return_value=False):
+        assert diagnostics.cec_available() is False
+
+
+def test_cec_available_no_longer_counts_vchiq() -> None:
+    """/dev/vchiq was only ever meaningful to libcec, which is gone. On a
+    mainline-KMS kernel libcec could not use it anyway. A board handed
+    vchiq and nothing else must now report 'no adapter' and skip the
+    probe rather than burning a timeout every beat tick (GH #3267)."""
+    with (
+        mock.patch.object(
+            os.path, 'exists', side_effect=lambda p: p == '/dev/vchiq'
+        ),
+        mock.patch.object(glob, 'glob', return_value=[]),
+    ):
+        assert diagnostics.cec_available() is False

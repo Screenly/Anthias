@@ -1,0 +1,138 @@
+"""Scheduled display power — turn the screen off out of hours.
+
+Two layers, because CEC alone only works for the subset of installs that
+have a CEC-capable TV attached:
+
+  * **CEC** (``lib/cec.py``) genuinely powers the display down, and is
+    what an operator wants on a real TV.
+  * **Local blanking** — the viewer's ``blank`` / ``unblank`` commands
+    added in #3065 — is the fallback. On wayland boards that is a real
+    DPMS off via ``wlr-randr``; on eglfs/linuxfb the viewer paints the
+    screen black, because the Qt app holds DRM master and an external
+    blank is rejected.
+
+Without the fallback the feature would do nothing on the large share of
+the fleet running plain monitors, which is exactly the population the
+testbed measurements showed cannot answer CEC at all.
+
+The schedule itself is deliberately pure and separated from the Celery
+task so the wrap-around-midnight cases are unit-testable without a
+worker, a clock, or hardware.
+"""
+
+import logging
+from datetime import datetime, time
+
+from anthias_server.lib import cec
+
+logger = logging.getLogger(__name__)
+
+#: ``settings`` stores the selected weekdays as a comma-separated list
+#: of Python weekday numbers (Monday=0 ... Sunday=6).
+ALL_DAYS = '0,1,2,3,4,5,6'
+
+
+def parse_hhmm(value: str | None) -> time | None:
+    """Parse an ``HH:MM`` string, returning ``None`` if unusable.
+
+    Returns ``None`` rather than raising because this reads operator
+    input from a config file that may predate the field entirely; a
+    malformed value must degrade to "no schedule", never crash the beat.
+    """
+    if not value:
+        return None
+    try:
+        hours, _, minutes = str(value).strip().partition(':')
+        parsed = time(int(hours), int(minutes))
+    except (TypeError, ValueError):
+        logger.warning('Ignoring malformed display-power time %r', value)
+        return None
+    return parsed
+
+
+def parse_days(value: str | None) -> set[int]:
+    """Parse the comma-separated weekday list into a set.
+
+    An empty or unparsable value means "every day" — the schedule's
+    on/off times are the meaningful part, and silently selecting *no*
+    days would make an enabled schedule do nothing at all.
+    """
+    if value is None or not str(value).strip():
+        return set(range(7))
+    days = set()
+    for token in str(value).split(','):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            day = int(token)
+        except ValueError:
+            continue
+        if 0 <= day <= 6:
+            days.add(day)
+    return days or set(range(7))
+
+
+def should_be_on(
+    now: datetime,
+    on_time: time | None,
+    off_time: time | None,
+    days: set[int],
+) -> bool | None:
+    """Whether the display should be powered on at ``now``.
+
+    ``None`` means "no opinion, leave the display alone" — returned when
+    the schedule is not usable (a missing time, or identical on/off
+    times, which describes neither an on-period nor an off-period).
+
+    ``days`` selects the weekdays on which an on-period *begins*. That
+    distinction matters for a schedule that wraps past midnight (on
+    18:00, off 06:00): the small hours of Tuesday belong to Monday's
+    on-period, so they are governed by Monday's checkbox, not Tuesday's.
+    Getting this wrong would cut the display at midnight every night a
+    following day was deselected.
+    """
+    if on_time is None or off_time is None or on_time == off_time:
+        return None
+
+    today = now.weekday()
+    yesterday = (today - 1) % 7
+    current = now.time()
+
+    if on_time < off_time:
+        # Ordinary same-day window, e.g. 08:00 -> 18:00.
+        return today in days and on_time <= current < off_time
+
+    # Wraps past midnight, e.g. 18:00 -> 06:00.
+    if current >= on_time:
+        return today in days
+    if current < off_time:
+        return yesterday in days
+    return False
+
+
+def apply_power(on: bool) -> str:
+    """Drive every display to ``on``, returning a human-readable summary.
+
+    Tries CEC first and falls back to the viewer's local blanking when
+    nothing acknowledges. The fallback is not an error path — a plain
+    monitor never acknowledges CEC, and blanking is the only thing that
+    can work there.
+    """
+    try:
+        acknowledged, attempted = cec.set_power(on)
+    except (OSError, cec.CecError, TimeoutError) as exc:
+        logger.warning('Scheduled CEC power command failed: %s', exc)
+        acknowledged, attempted = 0, 0
+
+    if acknowledged:
+        return f'CEC ({acknowledged}/{attempted} display(s) acknowledged)'
+
+    # Imported here rather than at module scope: settings pulls in the
+    # Redis connection machinery, and this module is imported by the
+    # unit tests for its pure schedule helpers.
+    from anthias_server.settings import ViewerPublisher
+
+    ViewerPublisher.get_instance().send_to_viewer('unblank' if on else 'blank')
+    detail = 'no CEC display acknowledged' if attempted else 'no CEC link'
+    return f'local blanking ({detail})'

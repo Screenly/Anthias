@@ -151,6 +151,73 @@
       </template>
     </section>
 
+    {% comment %}
+      Scheduled display power. Deliberately NOT gated on cec_available:
+      when no CEC display answers, the schedule falls back to the
+      viewer's local blanking, so it is useful on a plain monitor too.
+    {% endcomment %}
+    <section class="settings-section">
+      <header>
+        <div>
+          <h2>Display schedule</h2>
+          <p class="settings-section__lede">
+            Turn the screen off outside opening hours. Uses HDMI-CEC where the
+            display supports it, and blanks the screen locally where it does not.
+          </p>
+        </div>
+      </header>
+
+      <div x-data="{ enabled: {{ display_power_schedule_enabled|yesno:'true,false' }} }">
+        <div @change="enabled = $event.target.checked">
+          {% include "_settings_toggle.html" with name="display_power_schedule_enabled" label="Enable display schedule" hint="Switch the screen off outside the hours below." checked=display_power_schedule_enabled %}
+        </div>
+
+        <div x-show="enabled" class="mt-3">
+        <div class="app-form-grid mb-3">
+          <div class="app-floating">
+            <input
+              type="time"
+              class="app-input"
+              id="display_power_on_time"
+              name="display_power_on_time"
+              value="{{ display_power_on_time }}"
+              placeholder=" ">
+            <label for="display_power_on_time">Turn on at</label>
+          </div>
+          <div class="app-floating">
+            <input
+              type="time"
+              class="app-input"
+              id="display_power_off_time"
+              name="display_power_off_time"
+              value="{{ display_power_off_time }}"
+              placeholder=" ">
+            <label for="display_power_off_time">Turn off at</label>
+          </div>
+        </div>
+
+        <p class="settings-section__lede mb-2">
+          Active days. An overnight schedule (for example on at 18:00, off at
+          06:00) belongs to the day it starts.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          {% for value, label in weekday_options %}
+          <div class="app-check m-0">
+            <input
+              class="app-check-input"
+              type="checkbox"
+              id="display_power_day_{{ value }}"
+              name="display_power_days"
+              value="{{ value }}"
+              {% if value in display_power_days %}checked{% endif %}>
+            <label class="text-sm ml-1" for="display_power_day_{{ value }}">{{ label }}</label>
+          </div>
+          {% endfor %}
+        </div>
+        </div>
+      </div>
+    </section>
+
     <div class="flex justify-end">
       <button type="submit" class="app-btn app-btn-primary">
         <i class="ti ti-check"></i><span>Save settings</span>

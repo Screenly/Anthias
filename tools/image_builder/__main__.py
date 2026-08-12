@@ -65,22 +65,22 @@ def build_image(
     # Runtime-only base set. Compilers and *-dev headers live in the
     # uv-builder stage (docker/uv-builder.j2); the runtime image gets
     # the venv COPY'd in pre-built, so anything builder-only would just
-    # be dead weight here. `libcec7` is the runtime SONAME the cec
-    # Python wheel (built in uv-builder) dlopens at import time —
-    # debian:trixie shipped libcec 7.0 (Ubuntu still has libcec6, easy
-    # to mix up). `iproute2` is needed by bin/wait.py — debian:trixie's
-    # base image ships neither iproute2 nor net-tools by default, so
-    # we install it explicitly. `python3-gi` stays because pydbus does
-    # `from gi.repository import GLib, Gio` at import — viewer's
-    # `--system-site-packages` venv picks it up from the system
+    # be dead weight here. `iproute2` is needed by bin/wait.py —
+    # debian:trixie's base image ships neither iproute2 nor net-tools by
+    # default, so we install it explicitly. `python3-gi` stays because
+    # pydbus does `from gi.repository import GLib, Gio` at import —
+    # viewer's `--system-site-packages` venv picks it up from the system
     # site-packages.
+    #
+    # `cec-utils` and `libcec7` used to live here for the libcec-based
+    # display-power feature. Both are gone: CEC now talks to the kernel
+    # uABI (`/dev/cec*`) from pure stdlib, so there is no native library
+    # to dlopen and no `cec-client` to shell out to.
     base_apt_dependencies = [
-        'cec-utils',
         'curl',
         'ffmpeg',
         'git',
         'iproute2',
-        'libcec7',
         # Runtime dep for pillow-heif's libheif binding. ~1 MB
         # extracted, in base so anthias-server (image normalisation
         # pipeline) and anthias-celery (the worker that actually runs

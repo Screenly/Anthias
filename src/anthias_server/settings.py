@@ -45,6 +45,16 @@ DEFAULTS = {
         # until it passes.
         'review_cta_dismissed': False,
         'review_cta_snooze_until': '',
+        # Scheduled display power (see lib/display_power.py). Times are
+        # 'HH:MM' in the device's configured timezone; days is a
+        # comma-separated list of Python weekday numbers (Monday=0)
+        # selecting the days an on-period *begins*. Off by default —
+        # a device that has always stayed on must not start switching
+        # itself off after an upgrade.
+        'display_power_schedule_enabled': False,
+        'display_power_on_time': '08:00',
+        'display_power_off_time': '18:00',
+        'display_power_days': '0,1,2,3,4,5,6',
     },
     'viewer': {
         'audio_output': 'hdmi',
