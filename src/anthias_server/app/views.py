@@ -1653,6 +1653,14 @@ def _apply_display_power_schedule_settings(request: HttpRequest) -> None:
         parsed = display_power.parse_hhmm(raw)
         if parsed is not None:
             settings[field] = parsed.strftime('%H:%M')
+        elif raw:
+            # Keep the previous value, but say so. Silently discarding
+            # the edit while still reporting "successfully saved" would
+            # show the operator the old time with no sign it was
+            # rejected.
+            messages.error(
+                request, f'Ignored invalid display schedule time: {raw}'
+            )
 
     # An empty selection means "every day" rather than "no days", which
     # would leave an enabled schedule silently inert.

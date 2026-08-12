@@ -14,6 +14,7 @@ from anthias_server.app.models import Asset
 from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     DISPLAY_POWER_STATE_KEY,
+    DISPLAY_POWER_STATE_TTL_S,
     apply_display_power_schedule,
     asset_recheck_lock_key,
     cleanup,
@@ -2308,7 +2309,9 @@ def test_schedule_applies_the_desired_state_on_first_tick() -> None:
     says it should be in rather than waiting for the next boundary."""
     fake_redis, apply_power = _run_schedule(stored=None, desired=False)
     apply_power.assert_called_once_with(False)
-    fake_redis.set.assert_called_once_with(DISPLAY_POWER_STATE_KEY, 'off')
+    fake_redis.set.assert_called_once_with(
+        DISPLAY_POWER_STATE_KEY, 'off', ex=DISPLAY_POWER_STATE_TTL_S
+    )
 
 
 def test_schedule_is_edge_triggered() -> None:
@@ -2322,7 +2325,9 @@ def test_schedule_is_edge_triggered() -> None:
 def test_schedule_acts_on_a_transition() -> None:
     fake_redis, apply_power = _run_schedule(stored=b'on', desired=False)
     apply_power.assert_called_once_with(False)
-    fake_redis.set.assert_called_once_with(DISPLAY_POWER_STATE_KEY, 'off')
+    fake_redis.set.assert_called_once_with(
+        DISPLAY_POWER_STATE_KEY, 'off', ex=DISPLAY_POWER_STATE_TTL_S
+    )
 
 
 def test_schedule_handles_a_decoded_redis_client() -> None:

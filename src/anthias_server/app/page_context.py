@@ -24,7 +24,7 @@ from anthias_common.utils import (
     get_node_mac_address,
     is_balena_app,
 )
-from anthias_server.lib import diagnostics
+from anthias_server.lib import diagnostics, display_power
 from anthias_server.lib.github import is_up_to_date
 from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import settings
@@ -320,11 +320,14 @@ def device_settings() -> dict[str, Any]:
         ],
         'display_power_on_time': settings['display_power_on_time'],
         'display_power_off_time': settings['display_power_off_time'],
-        'display_power_days': [
-            int(d)
-            for d in str(settings['display_power_days']).split(',')
-            if d.strip().isdigit()
-        ],
+        # Parsed with the same helper the beat uses. An inline
+        # comprehension here had the opposite empty-input behaviour —
+        # it rendered *zero* days checked where parse_days reads the
+        # same value as *every* day, so the settings page would show a
+        # schedule running on no days while it actually ran daily.
+        'display_power_days': sorted(
+            display_power.parse_days(settings['display_power_days'])
+        ),
         'weekday_options': _WEEKDAY_OPTIONS,
     }
 

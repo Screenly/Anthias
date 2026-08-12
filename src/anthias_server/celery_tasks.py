@@ -173,12 +173,25 @@ DISPLAY_POWER_SCHEDULE_INTERVAL_S = 60
 
 # Redis key holding the last power state the scheduler actually applied
 # ('on'/'off'). The tick acts only when the desired state differs from
-# this, so a CEC command goes out at the schedule boundary rather than
-# every single minute. No TTL: it must survive longer than the gap
-# between boundaries, and it is rewritten on every transition. A worker
-# restart clears nothing, so the first tick after boot re-asserts the
-# state the schedule says it should be in.
+# this, so a command goes out at the schedule boundary rather than every
+# single minute.
 DISPLAY_POWER_STATE_KEY = 'display_power_schedule_state'
+
+# ...but the key expires, so the state is re-asserted periodically.
+#
+# The viewer's blanked flag is an in-process global that is lost on
+# every viewer restart (OOM, upgrade, host reboot), and redis is
+# persisted across those restarts. Without an expiry, a viewer that
+# restarted at 22:00 would come back lit and playing while this key
+# still said 'off', and the tick would return early every minute until
+# morning — the screen stays on all night.
+#
+# Re-asserting is cheap and idempotent: a standby to an already-off TV
+# and a blank to an already-blank viewer are both no-ops. The cost is
+# that an operator who manually turns the screen on mid-off-period sees
+# it go back off within this window, which is the correct behaviour for
+# a schedule anyway.
+DISPLAY_POWER_STATE_TTL_S = 60 * 10
 
 # Time budget for the stuck-row reconciler sweep. It was the last
 # periodic task still carrying a bare ``time_limit=300`` with no soft
@@ -462,9 +475,9 @@ def apply_display_power_schedule() -> None:
 
         how = display_power.apply_power(desired)
         # Recorded only after the command was actually issued, so a
-        # failure mid-way retries on the next tick instead of being
-        # latched as done.
-        r.set(DISPLAY_POWER_STATE_KEY, wanted)
+        # failure mid-way (including a contended CEC bus, which raises)
+        # retries on the next tick instead of being latched as done.
+        r.set(DISPLAY_POWER_STATE_KEY, wanted, ex=DISPLAY_POWER_STATE_TTL_S)
         logger.info('Display power schedule: turned %s via %s', wanted, how)
     except SoftTimeLimitExceeded:
         logger.warning(

@@ -44,6 +44,11 @@ _STATUS_TO_LEGACY: dict[cec.PowerStatus, str | bool] = {
     cec.PowerStatus.NO_LINK: _NO_DISPLAY,
     cec.PowerStatus.NO_PEER: _NO_DISPLAY,
     cec.PowerStatus.UNKNOWN: _MIXED,
+    # A display that is warming up or shutting down is not a fault. The
+    # module-level aggregate currently folds this into UNKNOWN, but
+    # CecAdapter.power_status() returns it directly, so mapping it here
+    # stops a future caller reporting a healthy TV as broken.
+    cec.PowerStatus.TRANSITIONING: 'Transitioning',
     # "We could not ask" — the node would not open, an ioctl failed, or
     # we could not claim a place on the bus. Kept distinct from
     # _NO_DISPLAY on purpose: only this one is a fault.

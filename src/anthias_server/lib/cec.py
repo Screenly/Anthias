@@ -112,9 +112,20 @@ CEC_LOG_ADDR_UNREGISTERED = 15
 # Logical-address types / primary device types. We present as a
 # playback device: that is what a signage player is, and TVs accept
 # power commands from it.
-CEC_LOG_ADDR_TYPE_PLAYBACK = 4
-CEC_OP_PRIM_DEVTYPE_PLAYBACK = 4
-CEC_OP_ALL_DEVTYPE_PLAYBACK = 0x08
+#
+# These three come from *different* enumerations in linux/cec.h and do
+# not share numbering — a trap worth spelling out, because an earlier
+# version of this file used the audio-system values for two of them.
+# The kernel picks the candidate logical address from ``log_addr_type``
+# (``type2addr[]`` in cec-adap.c), so claiming type 4 took LA 5 (Audio
+# System) instead of LA 4 (Playback Device 1) and advertised an audio
+# system in ``all_device_types``. A TV that sees an audio system appear
+# on the bus commonly enables System Audio Control / ARC and mutes its
+# own speakers — which would silence a signage player every time the
+# 5-minutely power probe ran.
+CEC_LOG_ADDR_TYPE_PLAYBACK = 3  # NOT 4 — that is AUDIOSYSTEM
+CEC_OP_PRIM_DEVTYPE_PLAYBACK = 4  # different enum; 4 is correct here
+CEC_OP_ALL_DEVTYPE_PLAYBACK = 0x10  # NOT 0x08 — that is AUDIOSYSTEM
 CEC_OP_CEC_VERSION_1_4 = 5
 CEC_VENDOR_ID_NONE = 0xFFFFFFFF
 
@@ -187,6 +198,14 @@ class PowerStatus(StrEnum):
 
 class CecError(Exception):
     """A CEC device could not be opened or driven."""
+
+
+class CecBusyError(CecError):
+    """Another process holds the CEC bus, so nothing was transmitted.
+
+    Distinct from a failed transmit: callers that latch state on the
+    outcome must retry rather than record the command as delivered.
+    """
 
 
 def _run_bounded[T](fn: Callable[[], T], timeout: float) -> T:
@@ -392,6 +411,80 @@ class CecAdapter:
 # ---------------------------------------------------------------------
 
 
+#: Redis key serialising CEC access across processes.
+_LOCK_KEY = 'anthias:cec:lock'
+#: Comfortably longer than a full fan-out (two adapters at ~0.6s each,
+#: each already bounded by _OPERATION_TIMEOUT_S) but short enough that a
+#: process killed mid-operation frees the adapter quickly.
+_LOCK_TTL_S = 30
+_LOCK_WAIT_S = 6.0
+_LOCK_POLL_S = 0.1
+
+# Compare-and-delete so a lock whose TTL expired mid-operation — and was
+# then taken by someone else — is not deleted by the original holder.
+_LOCK_RELEASE_LUA = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then "
+    "return redis.call('del', KEYS[1]) "
+    'else return 0 end'
+)
+
+
+@contextmanager
+def _bus_lock() -> Iterator[bool]:
+    """Serialise CEC access across every process on the device.
+
+    ``_claim_logical_address`` has to clear the adapter before
+    configuring it (the kernel returns EBUSY otherwise), and a clear
+    issued on one file descriptor unconfigures the adapter out from
+    under an operation in flight on another. That is not theoretical
+    here: celery runs ``get_display_power`` every 300s and
+    ``apply_display_power_schedule`` every 60s — they coincide every 5
+    minutes — and anthias-server drives the same nodes from the
+    display-power endpoint on a request thread.
+
+    Redis is the only thing shared by the server and celery containers,
+    so it is what the lock lives in. Yields ``False`` when the lock
+    could not be taken; callers must treat that as "did not run"
+    rather than "failed", so a contended tick retries instead of
+    reporting a fault.
+    """
+    from anthias_common.utils import connect_to_redis
+
+    token = f'{os.getpid()}-{time.monotonic_ns()}'
+    try:
+        client = connect_to_redis()
+    except Exception:  # pragma: no cover - redis unreachable
+        # Without redis we cannot serialise. Proceed unlocked rather
+        # than disabling CEC entirely: a single-writer device is the
+        # common case and still works.
+        logger.warning('CEC lock unavailable (redis); proceeding unlocked')
+        yield True
+        return
+
+    deadline = _LOCK_WAIT_S
+    acquired = False
+    while deadline > 0:
+        if client.set(_LOCK_KEY, token, nx=True, ex=_LOCK_TTL_S):
+            acquired = True
+            break
+        time.sleep(_LOCK_POLL_S)
+        deadline -= _LOCK_POLL_S
+
+    if not acquired:
+        logger.warning('CEC bus busy; skipping this operation')
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        try:
+            client.eval(_LOCK_RELEASE_LUA, 1, _LOCK_KEY, token)
+        except Exception as exc:  # pragma: no cover - best effort
+            # The TTL releases it anyway; log so a redis fault is
+            # visible rather than presenting as mysterious contention.
+            logger.warning('Could not release the CEC lock: %s', exc)
+
+
 def available() -> bool:
     """Whether this device has any CEC adapter at all.
 
@@ -419,17 +512,22 @@ def power_status() -> PowerStatus:
         return PowerStatus.NO_LINK
 
     results = []
-    for adapter in live:
-        try:
-            results.append(adapter.power_status())
-        except (OSError, CecError, TimeoutError) as exc:
-            # Logged rather than silently folded in: a failure here used
-            # to be indistinguishable from a plain monitor not answering,
-            # which hides real faults behind a benign-looking status.
-            logger.warning(
-                'CEC power query failed on %s: %s', adapter.node, exc
-            )
-            results.append(PowerStatus.ERROR)
+    with _bus_lock() as locked:
+        if not locked:
+            # Another process holds the bus. "We could not ask" — not a
+            # fault, and not a claim about the display's state.
+            return PowerStatus.ERROR
+        for adapter in live:
+            try:
+                results.append(adapter.power_status())
+            except (OSError, CecError, TimeoutError) as exc:
+                # Logged rather than silently folded in: a failure here
+                # used to be indistinguishable from a plain monitor not
+                # answering, hiding real faults behind a benign status.
+                logger.warning(
+                    'CEC power query failed on %s: %s', adapter.node, exc
+                )
+                results.append(PowerStatus.ERROR)
 
     real_states = (
         PowerStatus.ON,
@@ -457,18 +555,33 @@ def set_power(on: bool) -> tuple[int, int]:
     Returns ``(acknowledged, attempted)``. Fanning out rather than
     picking one adapter is the whole point: a device with two monitors
     attached must not leave the second one lit.
+
+    Raises ``CecError`` if the bus is held by another process, so a
+    caller cannot mistake "we never transmitted" for "nothing
+    acknowledged" — the scheduler latches its state on the latter and
+    would otherwise skip the rest of the night.
     """
     live = CecAdapter.live()
+    if not live:
+        # Nothing to drive, so do not pay for the lock. Measured at
+        # 0.3-1.4s of pure redis round-trip on the boards with no CEC
+        # link, which is most of the fleet and every scheduled
+        # transition on them.
+        return 0, 0
+
     acknowledged = 0
-    for adapter in live:
-        try:
-            if adapter.set_power(on):
-                acknowledged += 1
-        except (OSError, CecError, TimeoutError) as exc:
-            logger.warning(
-                'CEC power command failed on %s: %s', adapter.node, exc
-            )
-            continue
+    with _bus_lock() as locked:
+        if not locked:
+            raise CecBusyError('CEC bus busy; command not sent')
+        for adapter in live:
+            try:
+                if adapter.set_power(on):
+                    acknowledged += 1
+            except (OSError, CecError, TimeoutError) as exc:
+                logger.warning(
+                    'CEC power command failed on %s: %s', adapter.node, exc
+                )
+                continue
     return acknowledged, len(live)
 
 

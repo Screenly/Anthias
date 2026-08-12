@@ -41,9 +41,15 @@ def parse_hhmm(value: str | None) -> time | None:
     """
     if not value:
         return None
+    # ``HH:MM:SS`` is accepted because an <input type="time"> with any
+    # sub-minute ``step`` posts seconds, and silently rejecting that
+    # would discard a perfectly valid edit.
+    parts = str(value).strip().split(':')
+    if len(parts) not in (2, 3):
+        logger.warning('Ignoring malformed display-power time %r', value)
+        return None
     try:
-        hours, _, minutes = str(value).strip().partition(':')
-        parsed = time(int(hours), int(minutes))
+        parsed = time(int(parts[0]), int(parts[1]))
     except (TypeError, ValueError):
         logger.warning('Ignoring malformed display-power time %r', value)
         return None
@@ -130,18 +136,32 @@ def apply_power(on: bool) -> str:
     off changes nothing, and on the way back up the display is both
     powered on and unblanked.
     """
-    try:
-        acknowledged, attempted = cec.set_power(on)
-    except (OSError, cec.CecError, TimeoutError) as exc:
-        logger.warning('Scheduled CEC power command failed: %s', exc)
-        acknowledged, attempted = 0, 0
-
     # Imported here rather than at module scope: settings pulls in the
     # Redis connection machinery, and this module is imported by the
     # unit tests for its pure schedule helpers.
     from anthias_server.settings import ViewerPublisher
 
+    # Blank first, and unconditionally. It is the layer that works
+    # everywhere, and doing it before CEC means a contended bus (below)
+    # still leaves the screen in the right visual state.
     ViewerPublisher.get_instance().send_to_viewer('unblank' if on else 'blank')
+
+    busy: cec.CecBusyError | None = None
+    try:
+        acknowledged, attempted = cec.set_power(on)
+    except cec.CecBusyError as exc:
+        # Nothing was transmitted. Raised on so the caller does not
+        # record the command as delivered and skip the retry — a
+        # scheduler that latches here would leave the TV powered on for
+        # the rest of the off-period.
+        acknowledged, attempted = 0, 0
+        busy = exc
+    except (OSError, cec.CecError, TimeoutError) as exc:
+        logger.warning('Scheduled CEC power command failed: %s', exc)
+        acknowledged, attempted = 0, 0
+
+    if busy is not None:
+        raise busy
 
     if acknowledged:
         return (

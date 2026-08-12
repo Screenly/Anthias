@@ -39,6 +39,25 @@ def test_ioctl_request_numbers_match_hardware(
 
 
 @pytest.mark.parametrize(
+    ('name', 'expected'),
+    [
+        # Three different enumerations in linux/cec.h that do not share
+        # numbering. Pinned because using the audio-system value for
+        # log_addr_type made the adapter claim LA 5 (Audio System)
+        # instead of LA 4 (Playback Device 1), which can make a TV
+        # enable ARC and mute its own speakers.
+        ('CEC_LOG_ADDR_TYPE_PLAYBACK', 3),
+        ('CEC_OP_PRIM_DEVTYPE_PLAYBACK', 4),
+        ('CEC_OP_ALL_DEVTYPE_PLAYBACK', 0x10),
+    ],
+)
+def test_playback_device_constants_match_the_kernel(
+    name: str, expected: int
+) -> None:
+    assert getattr(cec, name) == expected
+
+
+@pytest.mark.parametrize(
     ('fmt', 'size'),
     [
         ('_FMT_CAPS', 76),
@@ -380,3 +399,80 @@ def test_run_bounded_gives_up_on_a_wedged_driver() -> None:
             cec._run_bounded(lambda: release.wait(30), 0.1)
     finally:
         release.set()
+
+
+# ---------------------------------------------------------------------------
+# Bus lock — CEC access is serialised across processes
+# ---------------------------------------------------------------------------
+
+
+def test_set_power_raises_rather_than_reporting_zero_when_bus_is_busy() -> (
+    None
+):
+    """ "Never transmitted" must not look like "nothing acknowledged".
+    The scheduler latches its state on the latter, so conflating them
+    would leave a TV powered on for the rest of the off-period."""
+    with (
+        mock.patch.object(cec.CecAdapter, 'live', return_value=[_adapter()]),
+        mock.patch.object(cec, '_bus_lock') as bus_lock,
+    ):
+        bus_lock.return_value.__enter__.return_value = False
+        with pytest.raises(cec.CecBusyError):
+            cec.set_power(True)
+
+
+def test_power_status_reports_error_when_bus_is_busy() -> None:
+    """A contended bus is "we could not ask", never a claim about the
+    display's state."""
+    adapters = [_adapter(physical_address=0x1000)]
+    with (
+        mock.patch.object(cec.CecAdapter, 'enumerate', return_value=adapters),
+        mock.patch.object(cec, '_bus_lock') as bus_lock,
+    ):
+        bus_lock.return_value.__enter__.return_value = False
+        assert cec.power_status() == cec.PowerStatus.ERROR
+
+
+def test_bus_lock_releases_with_compare_and_delete() -> None:
+    """Releasing must not delete a lock someone else acquired after our
+    TTL expired mid-operation."""
+    client = mock.MagicMock()
+    client.set.return_value = True
+    with (
+        mock.patch(
+            'anthias_common.utils.connect_to_redis', return_value=client
+        ),
+        cec._bus_lock() as locked,
+    ):
+        assert locked is True
+    assert client.set.call_args.kwargs['nx'] is True
+    assert client.set.call_args.kwargs['ex'] == cec._LOCK_TTL_S
+    # Compare-and-delete, with our token as the comparison value.
+    args = client.eval.call_args.args
+    assert args[0] == cec._LOCK_RELEASE_LUA
+    assert args[2] == cec._LOCK_KEY
+    assert args[3] == client.set.call_args.args[1]
+
+
+def test_bus_lock_proceeds_unlocked_when_redis_is_unreachable() -> None:
+    """A single-writer device must keep working without redis rather
+    than losing CEC entirely."""
+    with (
+        mock.patch(
+            'anthias_common.utils.connect_to_redis',
+            side_effect=OSError('no redis'),
+        ),
+        cec._bus_lock() as locked,
+    ):
+        assert locked is True
+
+
+def test_set_power_skips_the_lock_when_there_is_nothing_to_drive() -> None:
+    """Most of the fleet has no CEC link; paying a redis round trip on
+    every scheduled transition there is pure waste (0.3-1.4s measured)."""
+    with (
+        mock.patch.object(cec.CecAdapter, 'live', return_value=[]),
+        mock.patch.object(cec, '_bus_lock') as bus_lock,
+    ):
+        assert cec.set_power(True) == (0, 0)
+    bus_lock.assert_not_called()
