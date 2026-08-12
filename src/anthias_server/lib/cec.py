@@ -208,6 +208,16 @@ class CecBusyError(CecError):
     """
 
 
+#: Everything a CEC operation can fail with, for callers to catch.
+#:
+#: ``TimeoutError`` is deliberately **absent**: PEP 3151 made it a
+#: subclass of ``OSError``, so naming both is redundant. That is subtle
+#: enough to be worth stating once here rather than re-deriving it at
+#: each call site — and ``_run_bounded`` does raise a plain
+#: ``TimeoutError``, which this tuple therefore already covers.
+CEC_ERRORS = (OSError, CecError)
+
+
 def _run_bounded[T](fn: Callable[[], T], timeout: float) -> T:
     """Run ``fn`` on a daemon thread, giving up after ``timeout``.
 
@@ -225,7 +235,14 @@ def _run_bounded[T](fn: Callable[[], T], timeout: float) -> T:
     def _target() -> None:
         try:
             box['value'] = fn()
-        except BaseException as exc:
+        except BaseException as exc:  # NOSONAR(python:S5754)
+            # Deliberately broad and deliberately not re-raised *here*:
+            # an exception raised on a worker thread would otherwise be
+            # printed by the threading module and lost, leaving the
+            # caller to see only `None`. It is stashed and re-raised on
+            # the calling thread a few lines below, which preserves the
+            # normal propagation Sonar is asking for — it just cannot
+            # see across the thread boundary.
             box['error'] = exc
 
     thread = threading.Thread(target=_target, daemon=True)
@@ -520,7 +537,7 @@ def power_status() -> PowerStatus:
         for adapter in live:
             try:
                 results.append(adapter.power_status())
-            except (OSError, CecError, TimeoutError) as exc:
+            except CEC_ERRORS as exc:
                 # Logged rather than silently folded in: a failure here
                 # used to be indistinguishable from a plain monitor not
                 # answering, hiding real faults behind a benign status.
@@ -577,7 +594,7 @@ def set_power(on: bool) -> tuple[int, int]:
             try:
                 if adapter.set_power(on):
                     acknowledged += 1
-            except (OSError, CecError, TimeoutError) as exc:
+            except CEC_ERRORS as exc:
                 logger.warning(
                     'CEC power command failed on %s: %s', adapter.node, exc
                 )

@@ -37,6 +37,9 @@ _NO_DISPLAY = 'No CEC display detected'
 #: adapter instead of picking one.
 _MIXED = 'Mixed'
 
+#: The only value here that actually means "something is wrong".
+_CEC_ERROR = 'CEC error'
+
 _STATUS_TO_LEGACY: dict[cec.PowerStatus, str | bool] = {
     cec.PowerStatus.ON: True,
     cec.PowerStatus.STANDBY: False,
@@ -52,7 +55,7 @@ _STATUS_TO_LEGACY: dict[cec.PowerStatus, str | bool] = {
     # "We could not ask" — the node would not open, an ioctl failed, or
     # we could not claim a place on the bus. Kept distinct from
     # _NO_DISPLAY on purpose: only this one is a fault.
-    cec.PowerStatus.ERROR: 'CEC error',
+    cec.PowerStatus.ERROR: _CEC_ERROR,
 }
 
 
@@ -71,9 +74,9 @@ def get_display_power() -> str | bool:
     """
     try:
         status = cec.power_status()
-    except (OSError, cec.CecError, TimeoutError):
-        return 'CEC error'
-    return _STATUS_TO_LEGACY.get(status, 'CEC error')
+    except cec.CEC_ERRORS:
+        return _CEC_ERROR
+    return _STATUS_TO_LEGACY.get(status, _CEC_ERROR)
 
 
 def set_display_power(on: bool) -> tuple[bool, str]:
@@ -91,7 +94,7 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     verb = 'on' if on else 'off'
     try:
         acknowledged, attempted = cec.set_power(on)
-    except (OSError, cec.CecError, TimeoutError) as exc:
+    except cec.CEC_ERRORS as exc:
         return False, f'Display turn-{verb} failed: {exc}'
 
     if not attempted:

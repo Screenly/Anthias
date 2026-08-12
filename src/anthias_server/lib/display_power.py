@@ -156,7 +156,7 @@ def apply_power(on: bool) -> str:
         # the rest of the off-period.
         acknowledged, attempted = 0, 0
         busy = exc
-    except (OSError, cec.CecError, TimeoutError) as exc:
+    except cec.CEC_ERRORS as exc:
         logger.warning('Scheduled CEC power command failed: %s', exc)
         acknowledged, attempted = 0, 0
 
