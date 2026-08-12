@@ -86,6 +86,10 @@ const inputsOf = (row: HTMLElement): HTMLInputElement[] => [
   ...row.querySelectorAll<HTMLInputElement>('input'),
 ]
 
+const capped = (maxItems: number): Record<string, SettingSchema> => ({
+  item: { ...(MENU_PROPS.item as SettingSchema), maxItems },
+})
+
 const addButton = (f: HTMLElement): HTMLButtonElement => {
   const btn = f.querySelector<HTMLButtonElement>('.app-cfg-add')
   if (!btn) throw new Error('no Add button')
@@ -247,15 +251,31 @@ describe('array widget — editing', () => {
   })
 
   test('maxItems caps the rows and disables Add', () => {
-    const capped: Record<string, SettingSchema> = {
-      item: { ...(MENU_PROPS.item as SettingSchema), maxItems: 1 },
-    }
-    mount(capped)
+    mount(capped(1))
     const f = field('Menu items')
     addButton(f).click()
     expect(addButton(f).disabled).toBe(true)
     addButton(f).click()
     expect(rowsOf(f)).toHaveLength(1)
+  })
+
+  test('maxItems never truncates a saved config', () => {
+    // The cap gates the Add button, not the data. A manifest that
+    // introduces or lowers maxItems must not silently drop rows an
+    // existing install already saved — that would lose items on open,
+    // before the operator touches anything.
+    const saved = ['Coffee|Espresso', 'Coffee|Cortado', 'Lunch|Soup']
+    mount(capped(1), { item: saved })
+    const f = field('Menu items')
+    expect(rowsOf(f)).toHaveLength(3)
+    expect(latest.item).toEqual(saved)
+    // Over the cap, so no more can be added...
+    expect(addButton(f).disabled).toBe(true)
+    addButton(f).click()
+    expect(rowsOf(f)).toHaveLength(3)
+    // ...and removing rows still works, down to the cap and below.
+    ;(rowsOf(f)[0] as HTMLElement).querySelector('button')?.click()
+    expect(latest.item).toEqual(['Coffee|Cortado', 'Lunch|Soup'])
   })
 })
 

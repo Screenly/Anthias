@@ -178,8 +178,12 @@ function renderArrayField(
     set(key, tokens.length ? tokens : undefined)
   }
 
-  const addRow = (seed: Record<string, string> = {}): HTMLElement | null => {
-    if (rows.length >= maxItems) return null
+  // Unconditional by design: `maxItems` gates the Add button (below),
+  // not this. Enforcing it here would silently drop rows seeded from a
+  // saved config that already exceeds a cap the manifest introduced or
+  // lowered later — sync() would then propagate the truncated list and
+  // the operator would lose items just by opening the modal.
+  const addRow = (seed: Record<string, string> = {}): HTMLElement => {
     const row: Record<string, string> = {}
     keys.forEach((k) => {
       row[k] = seed[k] ?? ''
@@ -237,8 +241,9 @@ function renderArrayField(
   }
 
   addBtn.addEventListener('click', () => {
+    if (rows.length >= maxItems) return
     const rowEl = addRow()
-    rowEl?.querySelector('input')?.focus()
+    rowEl.querySelector('input')?.focus()
     sync()
   })
 
