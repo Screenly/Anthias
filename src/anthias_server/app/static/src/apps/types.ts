@@ -35,6 +35,7 @@ export interface SettingSchema {
   format?: string
   minimum?: number
   maximum?: number
+  maxItems?: number
   properties?: Record<string, SettingSchema>
   items?: SettingSchema
   required?: string[]
