@@ -235,7 +235,7 @@ def _run_bounded[T](fn: Callable[[], T], timeout: float) -> T:
     def _target() -> None:
         try:
             box['value'] = fn()
-        except BaseException as exc:  # NOSONAR(python:S5754)
+        except BaseException as exc:  # NOSONAR - re-raised on the caller
             # Deliberately broad and deliberately not re-raised *here*:
             # an exception raised on a worker thread would otherwise be
             # printed by the threading module and lost, leaving the
