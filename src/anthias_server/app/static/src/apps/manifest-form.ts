@@ -11,10 +11,14 @@
 // Supported `x-widget`s (falling back to the JSON Schema type, or a
 // string `format`): text, url, number, datetime/date/time (from a
 // `date-time`/`date`/`time` format), select (enum), toggle (boolean),
-// timezone, and location-map (a {lat,lng} object). Unknown widgets
-// degrade to a text input; unsupported structural types (arrays,
-// non-location objects) are skipped rather than mis-rendered.
+// timezone, and location-map (a {lat,lng} object). An `array` property
+// renders as a repeated group of rows (Menu Board's items, World
+// Clock's cities), each composed into one token by the item schema's
+// `x-format`. Unknown widgets degrade to a text input; unsupported
+// structural types (non-location objects) are skipped rather than
+// mis-rendered.
 
+import { applyItemFormat, fieldNames, parseItemToken } from './item-format'
 import { initLocationMap } from './location-map'
 import { selectOptionLabel } from './select-label'
 import type { SettingSchema, SettingValue } from './types'
@@ -113,6 +117,144 @@ function timezoneList(host: HTMLElement): HTMLDataListElement | null {
   return list
 }
 
+// Repeated-group widget: an array of rows the app assembles itself
+// (Menu Board's menu items, World Clock's cities). Each row edits the
+// item schema's sub-fields; on any change every row is composed into one
+// token via the item's `x-format` and the array of tokens is stored,
+// which `launch.template`'s `{?key*}` explodes into repeated params.
+//
+// Without this the whole property was skipped as unsupported, so an app
+// whose entire content lives in an array (Menu Board) installed with
+// nothing to show.
+function renderArrayField(
+  key: string,
+  schema: SettingSchema,
+  set: SetFn,
+  host: HTMLElement,
+  seedValue: SettingValue,
+): HTMLElement {
+  const item = schema.items || {}
+  const itemProps = item.properties || {}
+  const keys = fieldNames(item)
+  const fmt = item['x-format']
+  const itemWidget = item['x-widget']
+  const required = item.required || []
+  const maxItems =
+    typeof schema.maxItems === 'number' ? schema.maxItems : Infinity
+
+  // One { field: value } object per row, in display order.
+  const rows: Array<Record<string, string>> = []
+
+  const container = document.createElement('div')
+  container.className = 'app-cfg-rows'
+
+  const empty = document.createElement('p')
+  empty.className = 'app-cfg-empty'
+  empty.textContent = 'None yet — use Add to create one.'
+
+  const addBtn = document.createElement('button')
+  addBtn.type = 'button'
+  addBtn.className = 'app-btn app-btn-light app-cfg-add'
+  const addIcon = document.createElement('i')
+  addIcon.className = 'ti ti-plus'
+  addIcon.setAttribute('aria-hidden', 'true')
+  addBtn.append(addIcon, document.createTextNode('Add'))
+
+  const tokenFor = (row: Record<string, string>): string =>
+    fmt
+      ? applyItemFormat(fmt, row)
+      : String(row[keys[0] as string] ?? '').trim()
+
+  const sync = (): void => {
+    if (rows.length) empty.remove()
+    else container.after(empty)
+    addBtn.disabled = rows.length >= maxItems
+    set(key, rows.map(tokenFor).filter(Boolean))
+  }
+
+  const addRow = (seed: Record<string, string> = {}): HTMLElement | null => {
+    if (rows.length >= maxItems) return null
+    const row: Record<string, string> = {}
+    keys.forEach((k) => {
+      row[k] = seed[k] ?? ''
+    })
+    rows.push(row)
+
+    const rowEl = document.createElement('div')
+    rowEl.className = 'app-cfg-row'
+
+    keys.forEach((pk, i) => {
+      const sub = itemProps[pk] || {}
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.className = 'app-cfg-input app-cfg-row__field'
+      input.value = row[pk] as string
+      // The primary field of a timezone item gets the shared IANA
+      // datalist, exactly as the standalone timezone widget does.
+      if (i === 0 && itemWidget === 'timezone') {
+        const list = timezoneList(host)
+        if (list) {
+          input.setAttribute('list', list.id)
+          input.autocomplete = 'off'
+        }
+        input.placeholder = 'e.g. Europe/London'
+        input.setAttribute('aria-label', sub.title || 'Time zone')
+      } else {
+        input.placeholder = sub.title || (i === 0 ? pk : 'Optional')
+        input.setAttribute('aria-label', sub.title || pk)
+      }
+      input.addEventListener('input', () => {
+        row[pk] = input.value
+        sync()
+      })
+      rowEl.appendChild(input)
+    })
+
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'app-btn app-btn-icon app-cfg-row__remove'
+    remove.setAttribute('aria-label', 'Remove')
+    const glyph = document.createElement('i')
+    glyph.className = 'ti ti-x'
+    glyph.setAttribute('aria-hidden', 'true')
+    remove.appendChild(glyph)
+    remove.addEventListener('click', () => {
+      const idx = rows.indexOf(row)
+      if (idx >= 0) rows.splice(idx, 1)
+      rowEl.remove()
+      sync()
+    })
+    rowEl.appendChild(remove)
+
+    container.appendChild(rowEl)
+    return rowEl
+  }
+
+  addBtn.addEventListener('click', () => {
+    const rowEl = addRow()
+    rowEl?.querySelector('input')?.focus()
+    sync()
+  })
+
+  const control = document.createElement('div')
+  control.append(container, addBtn)
+
+  // Edit mode: repopulate from the tokens saved in metadata.app.values.
+  const saved = Array.isArray(seedValue) ? seedValue : []
+  for (const token of saved) {
+    if (typeof token !== 'string' || !token.trim()) continue
+    addRow(
+      fmt
+        ? parseItemToken(fmt, token, required)
+        : { [keys[0] as string]: token },
+    )
+  }
+
+  // Seed the empty hint and the initial value.
+  sync()
+  return fieldRow(schema, key, control)
+}
+
 // Build the control for one property; wire it to `set(key, value)`.
 function renderField(
   key: string,
@@ -125,9 +267,12 @@ function renderField(
 ): HTMLElement | null {
   const id = `app-cfg-${key}`
 
-  // Settings with no generic control — arrays and non-location
-  // objects. Skip them rather than emit a scalar text input with the
-  // wrong value type.
+  if (widget === 'array') {
+    return renderArrayField(key, schema, set, host, seedValue)
+  }
+
+  // Settings with no generic control — non-location objects. Skip them
+  // rather than emit a scalar text input with the wrong value type.
   if (widget === 'unsupported') return null
 
   if (widget === 'select') {

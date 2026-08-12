@@ -2859,6 +2859,49 @@ body.auth-body {
   span { font-size: 0.95rem; color: var(--color-text); }
 }
 
+// Repeated-group widget: one row per array item, each row a line of
+// equal-width sub-field inputs plus a remove button. Rows wrap on a
+// narrow modal so a four-field item (Menu Board) stays usable rather
+// than squeezing every input to nothing.
+.app-cfg-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-cfg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-cfg-row__field {
+  flex: 1 1 7rem;
+  min-width: 7rem;
+}
+
+// .app-btn-icon takes its colours from a .surface context, and the
+// modal body isn't one — the button would fall back to full-strength
+// text with no hover feedback at all. State both here.
+.app-cfg-row__remove {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+
+  &:hover:not(:disabled) {
+    background: var(--scrim-6);
+    color: var(--color-danger);
+  }
+}
+
+.app-cfg-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.app-cfg-add { margin-top: var(--space-3); }
+
 .app-cfg-nosettings { margin-top: var(--space-3); }
 
 // Location-map widget (Leaflet + OSM). A fixed centre pin over a

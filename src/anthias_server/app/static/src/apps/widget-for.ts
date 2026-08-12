@@ -20,14 +20,16 @@ export function widgetFor(schema: SettingSchema): string {
   if (Array.isArray(schema.enum)) return 'select'
   if (schema.type === 'boolean') return 'toggle'
   if (schema.type === 'number' || schema.type === 'integer') return 'number'
-  // Only a {lat,lng} object is a location map; other objects/arrays
-  // have no generic control, so mark them unsupported (skipped) rather
-  // than mis-render.
+  // Only a {lat,lng} object is a location map; other objects have no
+  // generic control, so mark them unsupported (skipped) rather than
+  // mis-render.
   if (schema.type === 'object') {
     const props = schema.properties || {}
     return props.lat && props.lng ? 'location-map' : 'unsupported'
   }
-  if (schema.type === 'array') return 'unsupported'
+  // A repeated group of rows, each composed into one token by the item
+  // schema's `x-format` (Menu Board's items, World Clock's cities).
+  if (schema.type === 'array') return 'array'
   // A string with a date/time `format` gets the matching native picker.
   if (schema.type === 'string' && schema.format) {
     const w = FORMAT_WIDGET[schema.format]

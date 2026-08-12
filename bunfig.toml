@@ -1,0 +1,4 @@
+[test]
+# A DOM for the tests that render form controls. Pure-logic tests are
+# unaffected by it.
+preload = ["./src/anthias_server/app/static/src/test-setup.ts"]
