@@ -430,6 +430,18 @@ def apply_display_power_schedule() -> None:
     try:
         settings.load()
         if not settings['display_power_schedule_enabled']:
+            # Turning the schedule off must not strand a screen the
+            # schedule had already switched off. Nothing else would ever
+            # bring it back: the manual controls are CEC-only and hidden
+            # entirely on a device with no CEC adapter, so a plain
+            # monitor would stay black with no way out of the UI.
+            if _decoded(r.get(DISPLAY_POWER_STATE_KEY)) == 'off':
+                display_power.apply_power(True)
+                logger.info(
+                    'Display power schedule disabled while off; '
+                    'restoring the display'
+                )
+            r.delete(DISPLAY_POWER_STATE_KEY)
             return
 
         desired = display_power.should_be_on(
@@ -458,6 +470,18 @@ def apply_display_power_schedule() -> None:
         logger.warning(
             'apply_display_power_schedule exceeded %ss; skipping this tick',
             PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+        )
+    except Exception:
+        # Deliberately warning, not exception: this runs every 60s, and
+        # because a failure does not latch the state the next tick
+        # retries immediately. Letting it raise would file an ERROR (and
+        # so a Sentry event) every single minute for as long as the
+        # underlying fault lasts — the same runaway-noise pattern
+        # #3017/#3063 removed from the sibling periodic tasks. The
+        # warning still reaches journald for diagnosis.
+        logger.warning(
+            'apply_display_power_schedule failed; will retry next tick',
+            exc_info=True,
         )
 
 

@@ -3663,3 +3663,25 @@ def test_settings_save_display_schedule_empty_days_means_every_day(
         )
     settings.load()
     assert settings['display_power_days'] == '0,1,2,3,4,5,6'
+
+
+@pytest.mark.django_db
+def test_settings_renders_selected_schedule_days(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """The day checkboxes must reflect the stored selection. Guards the
+    template's `{% if value in display_power_days %}` int-membership
+    check, which silently renders everything unchecked if the context
+    ever hands over strings instead of ints."""
+    settings.load()
+    settings['display_power_days'] = '0,4'
+    settings.save()
+
+    body = client.get(reverse('anthias_app:settings')).content.decode()
+    import re
+
+    checked = {
+        int(m)
+        for m in re.findall(r'id="display_power_day_(\d)"[^>]*\schecked', body)
+    }
+    assert checked == {0, 4}

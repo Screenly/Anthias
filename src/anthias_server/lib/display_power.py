@@ -114,10 +114,21 @@ def should_be_on(
 def apply_power(on: bool) -> str:
     """Drive every display to ``on``, returning a human-readable summary.
 
-    Tries CEC first and falls back to the viewer's local blanking when
-    nothing acknowledges. The fallback is not an error path — a plain
-    monitor never acknowledges CEC, and blanking is the only thing that
-    can work there.
+    Sends the CEC command *and* the viewer's local blank/unblank, rather
+    than treating blanking as a fallback used only when CEC finds
+    nothing.
+
+    Doing both is what makes the multi-display case correct. A device
+    can have a CEC-capable TV on one output and a plain monitor on
+    another; CEC would power down the TV and report success, leaving the
+    monitor lit all night. Worse, a monitor whose EDID advertises no CEC
+    has no physical address at all, so it is not even counted among the
+    adapters we attempted — there is no number we could compare against
+    to detect that it was missed.
+
+    The overlap is harmless: blanking a display that CEC already powered
+    off changes nothing, and on the way back up the display is both
+    powered on and unblanked.
     """
     try:
         acknowledged, attempted = cec.set_power(on)
@@ -125,14 +136,17 @@ def apply_power(on: bool) -> str:
         logger.warning('Scheduled CEC power command failed: %s', exc)
         acknowledged, attempted = 0, 0
 
-    if acknowledged:
-        return f'CEC ({acknowledged}/{attempted} display(s) acknowledged)'
-
     # Imported here rather than at module scope: settings pulls in the
     # Redis connection machinery, and this module is imported by the
     # unit tests for its pure schedule helpers.
     from anthias_server.settings import ViewerPublisher
 
     ViewerPublisher.get_instance().send_to_viewer('unblank' if on else 'blank')
+
+    if acknowledged:
+        return (
+            f'CEC ({acknowledged}/{attempted} display(s) acknowledged) '
+            f'+ local blanking'
+        )
     detail = 'no CEC display acknowledged' if attempted else 'no CEC link'
     return f'local blanking ({detail})'

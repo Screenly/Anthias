@@ -205,14 +205,21 @@ def test_unusable_schedule_expresses_no_opinion(
 # ---------------------------------------------------------------------------
 
 
-def test_apply_power_prefers_cec_when_a_display_answers() -> None:
+def test_apply_power_uses_cec_and_blanks_locally() -> None:
+    """Both, not either. A device can have a CEC TV on one output and a
+    plain monitor on another; CEC alone would report success and leave
+    the monitor lit all night. A monitor with no CEC in its EDID is not
+    even counted in `attempted`, so there is no count to detect it by."""
     with (
         mock.patch.object(cec, 'set_power', return_value=(2, 2)),
         mock.patch('anthias_server.settings.ViewerPublisher') as publisher,
     ):
         summary = display_power.apply_power(False)
     assert 'CEC' in summary
-    publisher.get_instance.assert_not_called()
+    assert 'local blanking' in summary
+    publisher.get_instance.return_value.send_to_viewer.assert_called_once_with(
+        'blank'
+    )
 
 
 def test_apply_power_falls_back_to_blanking_without_a_cec_peer() -> None:

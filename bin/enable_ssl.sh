@@ -216,9 +216,18 @@ echo "Wrote compose override: $OVERRIDE_FILE"
 echo "Wrote Caddyfile:        $CADDYFILE"
 echo "Restarting compose with Caddy + TLS enabled..."
 
-sudo -E docker compose \
-    -f "$COMPOSE_DIR/docker-compose.yml" \
-    -f "$OVERRIDE_FILE" \
+# The CEC override carries the /dev/cec* passthrough for
+# anthias-server (written by bin/upgrade_containers.sh). It has to be
+# listed here too: this recreates anthias-server, and leaving it out
+# would quietly bring the container back with no CEC devices.
+CEC_OVERRIDE="$COMPOSE_DIR/docker-compose.cec.override.yml"
+SSL_COMPOSE_FILES=(-f "$COMPOSE_DIR/docker-compose.yml")
+if [[ -f "$CEC_OVERRIDE" ]]; then
+    SSL_COMPOSE_FILES+=(-f "$CEC_OVERRIDE")
+fi
+SSL_COMPOSE_FILES+=(-f "$OVERRIDE_FILE")
+
+sudo -E docker compose "${SSL_COMPOSE_FILES[@]}" \
     up -d --force-recreate anthias-server anthias-caddy
 
 echo

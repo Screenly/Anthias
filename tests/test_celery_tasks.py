@@ -2284,6 +2284,25 @@ def test_schedule_does_nothing_when_disabled() -> None:
     fake_redis.set.assert_not_called()
 
 
+def test_disabling_the_schedule_restores_a_switched_off_display() -> None:
+    """Otherwise the screen stays black forever: the manual controls are
+    CEC-only and are hidden entirely on a device with no CEC adapter, so
+    a plain monitor would have no way back on from the UI."""
+    fake_redis, apply_power = _run_schedule(
+        stored=b'off', desired=True, enabled=False
+    )
+    apply_power.assert_called_once_with(True)
+    fake_redis.delete.assert_called_once_with(DISPLAY_POWER_STATE_KEY)
+
+
+def test_disabling_the_schedule_leaves_an_on_display_alone() -> None:
+    fake_redis, apply_power = _run_schedule(
+        stored=b'on', desired=True, enabled=False
+    )
+    apply_power.assert_not_called()
+    fake_redis.delete.assert_called_once_with(DISPLAY_POWER_STATE_KEY)
+
+
 def test_schedule_applies_the_desired_state_on_first_tick() -> None:
     """Nothing stored yet (fresh worker) — assert the state the schedule
     says it should be in rather than waiting for the next boundary."""
@@ -2323,7 +2342,13 @@ def test_schedule_skips_an_unusable_schedule() -> None:
 
 def test_schedule_does_not_latch_state_when_applying_fails() -> None:
     """If the command never went out, the next tick must retry rather
-    than believing it already succeeded."""
+    than believing it already succeeded.
+
+    The failure is swallowed (logged at warning) rather than raised: the
+    task runs every 60s and would otherwise file a Sentry event every
+    minute for as long as the fault lasted. Not latching the state is
+    what makes that safe — the retry is immediate.
+    """
     fake_redis = mock.MagicMock()
     fake_redis.get.return_value = None
     with (
@@ -2338,7 +2363,6 @@ def test_schedule_does_not_latch_state_when_applying_fails() -> None:
             'anthias_server.lib.display_power.apply_power',
             side_effect=RuntimeError('redis down'),
         ),
-        pytest.raises(RuntimeError),
     ):
         apply_display_power_schedule.apply(throw=True)
     fake_redis.set.assert_not_called()
