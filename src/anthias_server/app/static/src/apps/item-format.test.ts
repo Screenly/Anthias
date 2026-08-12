@@ -244,6 +244,86 @@ describe('token round trip', () => {
   }
 })
 
+describe('blank fields round trip', () => {
+  // Driven from rows rather than tokens, so the blanks are the ones an
+  // operator actually leaves empty and the dropped separators are the
+  // composer's own. Each case asserts the token survives a reopen.
+  const cases: Array<[string, Record<string, string>, string]> = [
+    [
+      'a blank field in the middle',
+      { section: 'Lunch', name: 'Soup', price: '', description: 'Ask inside' },
+      'Lunch|Soup|Ask inside',
+    ],
+    [
+      'two consecutive blanks',
+      { section: '', name: 'Soup', price: '', description: 'Ask inside' },
+      'Soup|Ask inside',
+    ],
+    [
+      'every optional field blank',
+      { section: '', name: 'Espresso', price: '', description: '' },
+      'Espresso',
+    ],
+    [
+      'a blank required field',
+      { section: 'Coffee', name: '', price: '3.10', description: '' },
+      'Coffee|3.10',
+    ],
+    [
+      'every field blank',
+      { section: '', name: '', price: '', description: '' },
+      '',
+    ],
+  ]
+
+  for (const [label, row, expected] of cases) {
+    test(label, () => {
+      const token = applyItemFormat(MENU_FMT, row)
+      expect(token).toBe(expected)
+      const reopened = parseItemToken(MENU_FMT, token, MENU_REQUIRED)
+      expect(applyItemFormat(MENU_FMT, reopened)).toBe(token)
+    })
+  }
+})
+
+describe('tokens the composer cannot emit', () => {
+  // A bare separator, a doubled one, or a dangling one can never come
+  // out of applyItemFormat — it drops a blank field together with its
+  // separator. They only arise from a hand-edited metadata.app.values,
+  // and are normalised to the clean equivalent rather than preserved.
+  test('separator-only tokens collapse to nothing', () => {
+    for (const token of ['|', '||', '|||', ' | ']) {
+      const row = parseItemToken(MENU_FMT, token, MENU_REQUIRED)
+      expect(applyItemFormat(MENU_FMT, row)).toBe('')
+    }
+  })
+
+  test('a dangling separator is trimmed off', () => {
+    expect(
+      applyItemFormat(MENU_FMT, parseItemToken(MENU_FMT, 'a|', MENU_REQUIRED)),
+    ).toBe('a')
+    expect(
+      applyItemFormat(MENU_FMT, parseItemToken(MENU_FMT, '|a', MENU_REQUIRED)),
+    ).toBe('a')
+  })
+
+  test('the composer never emits one from any row', () => {
+    // The guarantee the two tests above lean on.
+    const fields = ['section', 'name', 'price', 'description']
+    // Every combination of present/absent fields.
+    for (let mask = 0; mask < 1 << fields.length; mask++) {
+      const row: Record<string, string> = {}
+      fields.forEach((f, i) => {
+        row[f] = mask & (1 << i) ? f : ''
+      })
+      const token = applyItemFormat(MENU_FMT, row)
+      expect(token.startsWith('|')).toBe(false)
+      expect(token.endsWith('|')).toBe(false)
+      expect(token.includes('||')).toBe(false)
+    }
+  })
+})
+
 describe('rows -> launch URL', () => {
   const compose = (fmt: string, rows: Array<Record<string, string>>) =>
     rows.map((r) => applyItemFormat(fmt, r)).filter(Boolean)

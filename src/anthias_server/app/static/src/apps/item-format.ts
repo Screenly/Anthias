@@ -35,18 +35,37 @@ export interface ParsedFormat {
 
 // Split an `x-format` template into its interpolated fields and the
 // literals around them.
+//
+// Scanned rather than matched with /\{([^}]+)\}/g: that pattern
+// backtracks quadratically on an unterminated brace (`{` followed by a
+// long run of non-`}`), which two indexOf calls per field avoid
+// outright. `{}` carries no field name, so it stays part of the
+// surrounding literal.
 export function parseFormat(fmt: string): ParsedFormat {
-  const re = /\{([^}]+)\}/g
   const fields: FormatField[] = []
+  // `last` ends the previous field; `search` is where the next `{` is
+  // looked for, and they only differ across a skipped `{}`.
   let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(fmt)) !== null) {
-    fields.push({ sep: fmt.slice(last, m.index), name: m[1] as string })
-    last = re.lastIndex
+  let search = 0
+  for (;;) {
+    const open = fmt.indexOf('{', search)
+    if (open === -1) break
+    const close = fmt.indexOf('}', open + 1)
+    if (close === -1) break
+    if (close === open + 1) {
+      search = close + 1
+      continue
+    }
+    fields.push({
+      sep: fmt.slice(last, open),
+      name: fmt.slice(open + 1, close),
+    })
+    last = close + 1
+    search = last
   }
   return {
     fields,
-    prefix: fields.length ? (fields[0] as FormatField).sep : '',
+    prefix: fields.at(0)?.sep ?? '',
     tail: fmt.slice(last),
   }
 }
@@ -88,7 +107,7 @@ export function applyItemFormat(
 }
 
 const escapeRe = (s: string): string =>
-  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  s.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 
 // Which fields the parts of a short token belong to.
 //
@@ -157,7 +176,7 @@ export function parseItemToken(
     : [rest]
 
   const slots = chooseSlots(names, parts.length, required)
-  const lastSep = (fields[fields.length - 1] as FormatField | undefined)?.sep
+  const lastSep = fields.at(-1)?.sep
   slots.forEach((name, i) => {
     // A value containing the separator itself over-splits; fold the
     // surplus back into the final field so the token still round-trips.

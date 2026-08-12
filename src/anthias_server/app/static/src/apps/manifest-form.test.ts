@@ -131,7 +131,21 @@ describe('array widget — rendering', () => {
     expect(rowsOf(f)).toHaveLength(0)
     expect(f.querySelector('.app-cfg-empty')).not.toBeNull()
     expect(addButton(f).disabled).toBe(false)
-    expect(latest.item).toEqual([])
+    // Unset, not an empty list — see the note in sync().
+    expect(latest.item).toBeUndefined()
+  })
+
+  test('no rows saves nothing, so the values match the URL', () => {
+    // `[]` survives pruneEmpty (apps.ts) and would be persisted into
+    // metadata.app.values while the launch URL carries no item= param.
+    mount(MENU_PROPS)
+    const f = field('Menu items')
+    addButton(f).click()
+    expect(latest.item).toBeUndefined()
+    // A row the operator never filled in counts as no rows.
+    addButton(f).click()
+    expect(rowsOf(f)).toHaveLength(2)
+    expect(latest.item).toBeUndefined()
   })
 
   test('the field description still renders', () => {
@@ -215,7 +229,7 @@ describe('array widget — editing', () => {
     expect(latest.item).toEqual(['Coffee|Cortado'])
 
     ;(rowsOf(f)[0] as HTMLElement).querySelector('button')?.click()
-    expect(latest.item).toEqual([])
+    expect(latest.item).toBeUndefined()
     expect(f.querySelector('.app-cfg-empty')).not.toBeNull()
   })
 
@@ -299,6 +313,32 @@ describe('array widget — reopening a saved config', () => {
     })
     expect(rowsOf(field('Menu items'))).toHaveLength(1)
     expect(latest.item).toEqual(['Coffee|Espresso'])
+  })
+})
+
+describe('array widget — an array of plain scalars', () => {
+  // No app in the store index ships this shape today (both arrays are
+  // objects with an x-format), but it is the obvious other way to write
+  // one, so it degrades to a single input per row rather than breaking.
+  const props: Record<string, SettingSchema> = {
+    tags: { type: 'array', title: 'Tags', items: { type: 'string' } },
+  }
+
+  test('one input per row, the raw value as the token', () => {
+    mount(props)
+    const f = field('Tags')
+    addButton(f).click()
+    const inputs = inputsOf(rowsOf(f)[0] as HTMLElement)
+    expect(inputs).toHaveLength(1)
+    type(inputs[0] as HTMLInputElement, 'lunch')
+    expect(latest.tags).toEqual(['lunch'])
+  })
+
+  test('saved values reopen as rows', () => {
+    mount(props, { tags: ['lunch', 'dinner'] })
+    const f = field('Tags')
+    expect(rowsOf(f)).toHaveLength(2)
+    expect(latest.tags).toEqual(['lunch', 'dinner'])
   })
 })
 

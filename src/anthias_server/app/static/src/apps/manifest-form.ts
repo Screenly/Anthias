@@ -169,7 +169,13 @@ function renderArrayField(
     if (rows.length) empty.remove()
     else container.after(empty)
     addBtn.disabled = rows.length >= maxItems
-    set(key, rows.map(tokenFor).filter(Boolean))
+    const tokens = rows.map(tokenFor).filter(Boolean)
+    // No rows (or only blank ones) means the setting is unset, not set
+    // to an empty list: `[]` clears none of pruneEmpty's guards in
+    // apps.ts, so it would be saved into metadata.app.values as
+    // `{ item: [] }` while the launch URL carries no `item=` at all.
+    // Undefined keeps the saved values 1:1 with the URL.
+    set(key, tokens.length ? tokens : undefined)
   }
 
   const addRow = (seed: Record<string, string> = {}): HTMLElement | null => {
