@@ -70,6 +70,11 @@ the whole on-period falls on the selected day.
 If the on and off times are identical, the schedule describes neither an
 on-period nor an off-period, and the device is left alone.
 
+Deselecting every day means *every* day, not *no* day: an enabled
+schedule with no days selected would be silently inert, so the empty
+selection is treated as the full week. To stop the schedule entirely,
+switch it off.
+
 ## Turning the schedule off
 
 Disabling the schedule while the display is switched off restores it on

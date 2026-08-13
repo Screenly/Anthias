@@ -307,10 +307,10 @@ def device_settings() -> dict[str, Any]:
         'date_format_options': _DATE_FORMAT_OPTIONS,
         'timezone_options': _timezone_options(),
         # Render-time gate for the experimental CEC display-power
-        # buttons. cec_available() enumerates /dev/cec* and reads each
-        # adapter's capabilities — measured at 0.0-0.1ms per adapter on
-        # every board in the testbed fleet, so it stays cheap enough to
-        # call on every settings render.
+        # buttons. cec_available() reads a single Redis key the viewer
+        # publishes at startup — not a device probe and not a round trip
+        # to the viewer — so it stays cheap enough to call on every
+        # settings render.
         'cec_available': diagnostics.cec_available(),
         # The schedule is NOT gated on cec_available(): when no CEC
         # display answers it falls back to the viewer's local blanking,
