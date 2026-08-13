@@ -51,11 +51,20 @@ def parse_hhmm(value: str | None) -> time | None:
         logger.warning('Ignoring malformed display-power time %r', value)
         return None
     try:
-        parsed = time(int(parts[0]), int(parts[1]))
+        # Every component is parsed and range-checked, including the
+        # seconds we are about to discard. Dropping it unread would let
+        # '07:30:xx' through as 07:30, and the v2 serializer promises a
+        # 400 for a malformed time rather than a silent reinterpretation
+        # (Copilot).
+        hour, minute = int(parts[0]), int(parts[1])
+        second = int(parts[2]) if len(parts) == 3 else 0
+        parsed = time(hour, minute, second)
     except (TypeError, ValueError):
         logger.warning('Ignoring malformed display-power time %r', value)
         return None
-    return parsed
+    # The schedule has minute resolution; seconds are validated above and
+    # then dropped so the stored value round-trips as 'HH:MM'.
+    return parsed.replace(second=0)
 
 
 def parse_days(value: str | None) -> set[int]:

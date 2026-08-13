@@ -39,6 +39,10 @@ def _at(day: str, hhmm: str) -> datetime:
         ('23:59', time(23, 59)),
         ('00:00', time(0, 0)),
         (' 09:30 ', time(9, 30)),
+        # An <input type="time"> with a sub-minute step posts seconds.
+        # They are dropped, not carried into the stored value.
+        ('07:30:00', time(7, 30)),
+        ('07:30:45', time(7, 30)),
     ],
 )
 def test_parse_hhmm_accepts_valid_times(raw: str, expected: time) -> None:
@@ -46,7 +50,22 @@ def test_parse_hhmm_accepts_valid_times(raw: str, expected: time) -> None:
 
 
 @pytest.mark.parametrize(
-    'raw', ['', None, 'nonsense', '25:00', '08:99', '08', 'aa:bb']
+    'raw',
+    [
+        '',
+        None,
+        'nonsense',
+        '25:00',
+        '08:99',
+        '08',
+        'aa:bb',
+        # The seconds token is dropped, but only after it is validated.
+        # Reading it as 07:30 would let junk past the v2 serializer,
+        # which promises a 400 rather than a reinterpretation (Copilot).
+        '07:30:xx',
+        '07:30:',
+        '07:30:60',
+    ],
 )
 def test_parse_hhmm_rejects_junk_without_raising(raw: Any) -> None:
     """A malformed config value must degrade to 'no schedule', never

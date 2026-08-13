@@ -838,6 +838,11 @@ def test_device_settings_patch_accepts_seconds_in_a_time(
     [
         {'display_power_on_time': 'not-a-time'},
         {'display_power_off_time': '25:00'},
+        # Seconds are dropped from the stored value, but a malformed or
+        # out-of-range seconds token must still be a 400 rather than
+        # being read as a valid 07:30 (Copilot).
+        {'display_power_on_time': '07:30:xx'},
+        {'display_power_off_time': '19:45:60'},
         {'display_power_days': '0,9'},
         {'display_power_days': 'mon,tue'},
     ],
