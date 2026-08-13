@@ -194,7 +194,7 @@ jobs:
 
       - name: Attest anthias-server provenance (GHCR)
         if: success() && github.event_name == 'push'
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: ghcr.io/screenly/anthias-server
           subject-digest: ${{ steps.digests.outputs.server }}
@@ -202,7 +202,7 @@ jobs:
 
       - name: Attest anthias-viewer provenance (GHCR)
         if: success() && github.event_name == 'push'
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: ghcr.io/screenly/anthias-viewer
           subject-digest: ${{ steps.digests.outputs.viewer }}
@@ -210,7 +210,7 @@ jobs:
 
       - name: Attest anthias-redis provenance (GHCR)
         if: success() && github.event_name == 'push'
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: ghcr.io/screenly/anthias-redis
           subject-digest: ${{ steps.digests.outputs.redis }}
@@ -219,7 +219,7 @@ jobs:
       - name: Attest anthias-server provenance (Docker Hub)
         if: success() && github.event_name == 'push'
         continue-on-error: true
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: docker.io/screenly/anthias-server
           subject-digest: ${{ steps.digests.outputs.server }}
@@ -228,7 +228,7 @@ jobs:
       - name: Attest anthias-viewer provenance (Docker Hub)
         if: success() && github.event_name == 'push'
         continue-on-error: true
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: docker.io/screenly/anthias-viewer
           subject-digest: ${{ steps.digests.outputs.viewer }}
@@ -237,7 +237,7 @@ jobs:
       - name: Attest anthias-redis provenance (Docker Hub)
         if: success() && github.event_name == 'push'
         continue-on-error: true
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-name: docker.io/screenly/anthias-redis
           subject-digest: ${{ steps.digests.outputs.redis }}
