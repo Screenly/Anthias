@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=83.0.0", "wheel"]
+requires = ["setuptools>=84.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,25 +22,25 @@ namespaces = false
 dev-host = [
     "ansible-lint==26.6.0",
     "celery-types==0.26.0",
-    "django-stubs==6.0.7",
-    "djangorestframework-stubs==3.17.1",
+    "django-stubs==6.0.9",
+    "djangorestframework==3.18.0",
     "mypy==2.3.0",
-    "ruff==0.16.1",
+    "ruff==0.16.2",
     "tenacity==9.1.4",
-    "types-gunicorn==26.0.0.20260728",
+    "types-gunicorn==26.0.0.20260807",
     "types-netifaces==0.11.0.20260408",
     # Direct dev dep: types-psutil used to arrive transitively via
     # djangorestframework-stubs, which dropped it in 3.17.1 — pin it
     # directly so the psutil import in the server keeps its stubs.
     "types-psutil==7.2.2.20260518",
-    "types-python-dateutil==2.9.0.20260716",
+    "types-python-dateutil==2.9.0.20260807",
     "types-pytz==2026.3.1.20260727",
     "types-PyYAML==6.0.12.20260518",
 ]
 docker-image-builder = [
     "click==8.4.2",
     "jinja2==3.1.6",
-    "pygit2==1.19.3",
+    "pygit2==1.20.0",
     "requests==2.34.2",
     "python-on-whales==0.81.0",
 ]
@@ -51,13 +51,13 @@ server = [
     "channels==4.3.2",
     "channels-redis==4.3.0",
     "Django==5.2.14",
-    "djangorestframework==3.17.1",
+    "djangorestframework==3.18.0",
     "django-dbbackup==5.3.0",
-    "django-stubs-ext==6.0.7",
+    "django-stubs-ext==6.0.9",
     "drf-spectacular==0.30.0",
     "Jinja2==3.1.6",
     "netifaces==0.11.0",
-    "packaging==26.2",
+    "packaging==26.3",
     # Pillow + pillow-heif power the upload-time image normalisation
     # pipeline (HEIC / HEIF / TIFF → lossless WebP). pillow-heif
     # registers a libheif-backed Pillow plugin at import time; the
@@ -110,12 +110,12 @@ viewer = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "pytest-django==4.12.0",
+    "pytest-django==4.13.0",
     "pytest-mock==3.15.1",
     "pytest-xdist==3.8.0",
     "playwright==1.62.0",
     "pytest-playwright==0.8.0",
-    "time-machine==3.3.0",
+    "time-machine==3.3.1",
 ]
 host = [
     "ansible-core==2.21.2",
@@ -150,8 +150,8 @@ mypy = [
     "channels-redis==4.3.0",
     "Django==5.2.14",
     "django-dbbackup==5.3.0",
-    "django-stubs-ext==6.0.7",
-    "djangorestframework==3.17.1",
+    "django-stubs-ext==6.0.9",
+    "djangorestframework==3.18.0",
     "drf-spectacular==0.30.0",
     # Pillow ships PEP 561 stubs (py.typed). The processing module
     # imports PIL at top level, so mypy needs the package resolvable
