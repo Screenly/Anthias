@@ -443,10 +443,23 @@ class CecAdapter:
 #: unconfigure an operation in flight on another.
 _bus_mutex = threading.Lock()
 
-#: Long enough to queue behind one in-flight fan-out — the slowest
-#: measured query is 3.2s on the Pi 2's Cortex-A7 — without letting a
-#: caller block indefinitely.
-_LOCK_WAIT_S = 8.0
+#: Deliberately short. The viewer dispatches commands sequentially from
+#: a single subscriber loop, so in practice this lock is never
+#: contended; it exists only so that if that invariant ever changes the
+#: second caller bails out quickly instead of blocking. Keeping it small
+#: is what lets the worst-case operation time stay inside the reply
+#: budget in ``cec_client`` — see MAX_OPERATION_S below.
+_LOCK_WAIT_S = 2.0
+
+#: The most adapters any supported board exposes (one per HDMI output;
+#: Pi 4 and Pi 5 have two).
+_MAX_ADAPTERS = 2
+
+#: Worst-case wall clock for one fan-out, exported so ``cec_client`` can
+#: size its reply timeouts from it rather than from a guessed constant.
+#: A client that gives up while the viewer is still working would report
+#: a fault that is not one.
+MAX_OPERATION_S = _LOCK_WAIT_S + _MAX_ADAPTERS * _OPERATION_TIMEOUT_S
 
 
 @contextmanager

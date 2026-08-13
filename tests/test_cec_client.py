@@ -161,3 +161,28 @@ def test_set_power_defaults_missing_counts_to_zero() -> None:
     p1, p2 = _patched(publisher, collector)
     with p1, p2:
         assert cec_client.set_power(True) == (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# Timeout budget
+# ---------------------------------------------------------------------------
+
+
+def test_client_outlasts_the_viewers_worst_case() -> None:
+    """The client must never give up while the viewer is still working.
+
+    Doing so would report a fault that is not one — the same conflation
+    of "we could not ask" with "the display did not answer" that this
+    feature exists to remove. Derived rather than hardcoded so tuning
+    either guard keeps the two in step.
+    """
+    assert cec_client.REPLY_TIMEOUT_MS / 1000 > cec.MAX_OPERATION_S
+
+
+def test_client_budget_fits_inside_the_celery_soft_limit() -> None:
+    """...and must not be so generous that the periodic tasks trip their
+    soft limit waiting for it, which is what filed the Sentry events
+    this feature keeps causing."""
+    from anthias_server.celery_tasks import PERIODIC_POKE_SOFT_TIME_LIMIT_S
+
+    assert cec_client.REPLY_TIMEOUT_MS / 1000 < PERIODIC_POKE_SOFT_TIME_LIMIT_S

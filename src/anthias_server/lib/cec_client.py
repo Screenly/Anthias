@@ -43,6 +43,7 @@ from typing import Any
 
 from anthias_common.errors import ReplyTimeoutError
 from anthias_common.utils import connect_to_redis
+from anthias_server.lib import cec
 from anthias_server.lib.cec import PowerStatus
 from anthias_server.settings import ReplyCollector, ViewerPublisher
 
@@ -53,16 +54,24 @@ logger = logging.getLogger(__name__)
 #: ``available()`` gates a settings-page render and must stay cheap.
 CEC_AVAILABLE_KEY = 'cec:available'
 
-#: Reply budget for a power *query*. The slowest measured fan-out is
-#: 3.2 s (Pi 2, Cortex-A7, one live adapter), and the viewer's own
-#: per-adapter guard is 5 s, so allow room for two adapters plus the bus
-#: hop without waiting anywhere near the celery soft limit.
-QUERY_TIMEOUT_MS = 12000
+#: Slack over the viewer's worst case, to cover the two Redis hops.
+_BUS_SLACK_S = 3
 
-#: Reply budget for a power *command*. Transmits are quicker than
-#: queries (no reply to wait for on the CEC bus itself): 431-465 ms
-#: measured across the fleet.
-COMMAND_TIMEOUT_MS = 8000
+#: Reply budget, derived from the viewer's own worst case rather than
+#: guessed. Giving up while the viewer is still working would surface a
+#: fault that is not one — the exact conflation this feature exists to
+#: remove — so this must always exceed ``cec.MAX_OPERATION_S``.
+#:
+#: Typical is nowhere near it: 79 ms on a board with no live link,
+#: 430 ms for a real transmit, 3.2 s for the slowest measured query
+#: (Pi 2, Cortex-A7). The budget only bites when an adapter wedges.
+REPLY_TIMEOUT_MS = int((cec.MAX_OPERATION_S + _BUS_SLACK_S) * 1000)
+
+# Queries and commands share a budget: both fan out across every live
+# adapter under the same per-adapter guard, so their worst cases are
+# identical even though a command's typical case is much faster.
+QUERY_TIMEOUT_MS = REPLY_TIMEOUT_MS
+COMMAND_TIMEOUT_MS = REPLY_TIMEOUT_MS
 
 
 class ViewerUnavailableError(Exception):
