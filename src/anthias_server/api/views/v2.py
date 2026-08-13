@@ -597,6 +597,12 @@ class DeviceSettingsViewV2(APIView):
                     if settings['auth_backend'] == 'auth_basic'
                     else ''
                 ),
+                'display_power_schedule_enabled': settings[
+                    'display_power_schedule_enabled'
+                ],
+                'display_power_on_time': settings['display_power_on_time'],
+                'display_power_off_time': settings['display_power_off_time'],
+                'display_power_days': settings['display_power_days'],
             }
         )
 
@@ -674,6 +680,17 @@ class DeviceSettingsViewV2(APIView):
                 settings['verify_ssl'] = data['verify_ssl']
             if 'screen_rotation' in data:
                 settings['screen_rotation'] = int(data['screen_rotation'])
+            # Scheduled display power. Already normalised by the
+            # serializer's validators ('HH:MM', sorted weekday list), so
+            # the beat can never read a value it cannot parse.
+            for field in (
+                'display_power_schedule_enabled',
+                'display_power_on_time',
+                'display_power_off_time',
+                'display_power_days',
+            ):
+                if field in data:
+                    settings[field] = data[field]
 
             settings.save()
             publisher = ViewerPublisher.get_instance()
