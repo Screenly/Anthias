@@ -379,16 +379,18 @@ def get_display_power() -> None:
     # fit. (Copilot review of #3264 caught this comment claiming the
     # function had been changed to return str always — it was not.)
     #
-    # Boards with no CEC adapter at all (x86, and any board not handed a
-    # /dev/cec* node) record a clear 'Not available' rather than probing.
-    # This is now a cheap correctness nicety rather than a necessity: the
-    # probe itself no longer forks a subprocess or loads libcec, and
-    # enumerating zero adapters costs a single failed glob.
+    # Boards with no CEC adapter at all (x86 without a dongle) record a
+    # clear 'Not available' rather than asking. cec_available() is a
+    # single redis GET of the fact the viewer publishes at startup — it
+    # no longer counts /dev/vchiq and no longer probes device nodes from
+    # this container, so the boards that used to burn a full 10s libcec
+    # timeout on every tick (#3267) take this branch for free instead.
     #
-    # cec_available() no longer counts /dev/vchiq, so the boards that
-    # previously burned a full 10s libcec timeout on every tick (#3267)
-    # now take this branch instead. They will start reporting real CEC
-    # state once the device passthrough hands them their /dev/cec* nodes.
+    # The short-circuit is now a correctness nicety rather than a
+    # necessity: the query below is a redis round trip to the viewer,
+    # not a subprocess, so skipping it saves one hop rather than ten
+    # seconds. It stays because 'Not available' is a more honest reading
+    # than whatever a device with no hardware would report.
     try:
         if not diagnostics.cec_available():
             # This SET used to sit outside the handler below, which made
