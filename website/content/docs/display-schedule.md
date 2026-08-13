@@ -133,10 +133,16 @@ feature survive a viewer restart: without it, a viewer that restarted at
   one that can reach `/dev/cec*` on every board and every deployment. If
   the viewer is not running, display power reports an error.
 - The **System Info** page has a "Display Power (CEC)" card showing what
-  the device last read back over CEC. `No CEC display detected` is the
-  normal reading for a plain monitor and is not a fault; `No CEC
-  adapter` means the board exposes none. Only `CEC error` means
-  something is actually wrong.
+  the device last read back over CEC:
+
+  | Reading | Meaning |
+  | ------- | ------- |
+  | `True` / `False` | Every display that answered is on / in standby |
+  | `Mixed` | Two displays are attached and disagree, or one is mid-transition |
+  | `No CEC display detected` | Nothing answered. The normal reading for a plain monitor, and not a fault |
+  | `No CEC adapter` | The board exposes no CEC hardware at all |
+  | `Not available` | Same, short-circuited before the query was sent |
+  | `CEC error` | The query could not be completed. The only reading that means something is wrong |
 
 ## Related documentation
 

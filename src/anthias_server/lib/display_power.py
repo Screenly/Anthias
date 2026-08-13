@@ -152,7 +152,8 @@ def apply_power(on: bool) -> str:
     # unit tests for its pure schedule helpers.
     from anthias_server.settings import ViewerPublisher
 
-    # Blank first, and unconditionally. It is the layer that works
+    # The local blank/unblank goes first, and unconditionally — blank on
+    # the way down, unblank on the way up. It is the layer that works
     # everywhere, and doing it before CEC means a contended bus (below)
     # still leaves the screen in the right visual state.
     ViewerPublisher.get_instance().send_to_viewer('unblank' if on else 'blank')
