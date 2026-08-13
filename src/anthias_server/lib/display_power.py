@@ -3,8 +3,10 @@
 Two layers, because CEC alone only works for the subset of installs that
 have a CEC-capable TV attached:
 
-  * **CEC** (``lib/cec.py``) genuinely powers the display down, and is
-    what an operator wants on a real TV.
+  * **CEC** — genuinely powers the display down, and is what an
+    operator wants on a real TV. Executed by the viewer container (see
+    ``lib/cec_client``), which is the only one that can reach
+    ``/dev/cec*`` on every board and every deployment.
   * **Local blanking** — the viewer's ``blank`` / ``unblank`` commands
     added in #3065 — is the fallback. On wayland boards that is a real
     DPMS off via ``wlr-randr``; on eglfs/linuxfb the viewer paints the
@@ -23,7 +25,7 @@ worker, a clock, or hardware.
 import logging
 from datetime import datetime, time
 
-from anthias_server.lib import cec
+from anthias_server.lib import cec_client
 
 logger = logging.getLogger(__name__)
 
@@ -146,22 +148,11 @@ def apply_power(on: bool) -> str:
     # still leaves the screen in the right visual state.
     ViewerPublisher.get_instance().send_to_viewer('unblank' if on else 'blank')
 
-    busy: cec.CecBusyError | None = None
-    try:
-        acknowledged, attempted = cec.set_power(on)
-    except cec.CecBusyError as exc:
-        # Nothing was transmitted. Raised on so the caller does not
-        # record the command as delivered and skip the retry — a
-        # scheduler that latches here would leave the TV powered on for
-        # the rest of the off-period.
-        acknowledged, attempted = 0, 0
-        busy = exc
-    except cec.CEC_ERRORS as exc:
-        logger.warning('Scheduled CEC power command failed: %s', exc)
-        acknowledged, attempted = 0, 0
-
-    if busy is not None:
-        raise busy
+    # Nothing transmitted means the caller must not record the command
+    # as delivered — a scheduler that latched here would leave the TV
+    # powered on for the rest of the off-period. So this propagates
+    # rather than being swallowed.
+    acknowledged, attempted = cec_client.set_power(on)
 
     if acknowledged:
         return (

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import logging
 import os
 from datetime import UTC, datetime
 
@@ -12,7 +13,9 @@ from anthias_common import device_helper, utils
 from anthias_common.version import (
     get_anthias_release as get_anthias_release,  # noqa: PLC0414
 )
-from anthias_server.lib import cec
+from anthias_server.lib import cec, cec_client
+
+logger = logging.getLogger(__name__)
 
 # Display power runs on the kernel CEC uABI (see ``lib/cec.py``), not
 # libcec. The functions below are a thin translation layer: they exist
@@ -73,8 +76,12 @@ def get_display_power() -> str | bool:
     well under a second.
     """
     try:
-        status = cec.power_status()
-    except cec.CEC_ERRORS:
+        status = cec_client.power_status()
+    except cec_client.ViewerUnavailableError as exc:
+        # The viewer owns the hardware; if it did not answer we know
+        # nothing about the display. Reported as an error rather than
+        # "no display", because this one really is a fault.
+        logger.warning('Display power query failed: %s', exc)
         return _CEC_ERROR
     return _STATUS_TO_LEGACY.get(status, _CEC_ERROR)
 
@@ -93,8 +100,8 @@ def set_display_power(on: bool) -> tuple[bool, str]:
     """
     verb = 'on' if on else 'off'
     try:
-        acknowledged, attempted = cec.set_power(on)
-    except cec.CEC_ERRORS as exc:
+        acknowledged, attempted = cec_client.set_power(on)
+    except cec_client.ViewerUnavailableError as exc:
         return False, f'Display turn-{verb} failed: {exc}'
 
     if not attempted:
@@ -125,14 +132,17 @@ def cec_available() -> bool:
     for", **not** "will CEC work here" — no device-node probe can answer
     the latter, because it depends on the peer display (GH #3267).
 
-    Note this no longer counts ``/dev/vchiq``. That node was only ever
+    The answer comes from a Redis fact the viewer publishes at startup,
+    because the viewer is the only container that can see ``/dev/cec*``
+    (see ``lib/cec_client``). Reading a key keeps this cheap enough for
+    every settings render.
+
+    ``/dev/vchiq`` is deliberately not consulted. That node was only ever
     meaningful to libcec, which is gone; on a mainline-KMS kernel libcec
     could not use it anyway (``No default adapter found``, measured at
-    0.07s). Boards that are currently handed vchiq and nothing else
-    therefore report "not available" and skip the doomed probe entirely,
-    instead of burning a timeout on every beat tick.
+    0.07s).
     """
-    return cec.available()
+    return cec_client.available()
 
 
 def get_uptime() -> float:

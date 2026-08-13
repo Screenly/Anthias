@@ -16,15 +16,17 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - redis
-    # No `devices:` here. /dev/vchiq existed solely for libcec's
-    # display-power probe, which is gone. CEC passthrough is NOT wired
-    # up on balena: unlike the docker-compose install path there is no
-    # on-device step that can enumerate the host's /dev/cec* nodes, and
-    # a statically-listed node that turns out to be absent stops the
-    # container from starting at all. Balena fleets therefore report
-    # display power as "not available" — which is what they already did
-    # in practice, since the deploy scripts stripped the vchiq mount on
-    # pi5/x86/arm64 and libcec could not use it on the other boards.
+    # No `devices:` here, and none needed. HDMI-CEC is driven by the
+    # anthias-viewer container, which is privileged and therefore
+    # already sees every /dev/cec* node; this service asks it over the
+    # Redis command bus (src/anthias_server/lib/cec_client.py).
+    #
+    # That indirection is what makes CEC work on balena at all. The
+    # compose file here is baked into the release from a workstation,
+    # nothing on-device can enumerate the host's adapters, and a
+    # statically listed node that turns out to be absent would stop the
+    # container from starting. /dev/vchiq used to be listed for libcec,
+    # which is gone.
     restart: always
     volumes:
       - resin-data:/data
@@ -76,15 +78,17 @@ services:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    # No `devices:` here. /dev/vchiq existed solely for libcec's
-    # display-power probe, which is gone. CEC passthrough is NOT wired
-    # up on balena: unlike the docker-compose install path there is no
-    # on-device step that can enumerate the host's /dev/cec* nodes, and
-    # a statically-listed node that turns out to be absent stops the
-    # container from starting at all. Balena fleets therefore report
-    # display power as "not available" — which is what they already did
-    # in practice, since the deploy scripts stripped the vchiq mount on
-    # pi5/x86/arm64 and libcec could not use it on the other boards.
+    # No `devices:` here, and none needed. HDMI-CEC is driven by the
+    # anthias-viewer container, which is privileged and therefore
+    # already sees every /dev/cec* node; this service asks it over the
+    # Redis command bus (src/anthias_server/lib/cec_client.py).
+    #
+    # That indirection is what makes CEC work on balena at all. The
+    # compose file here is baked into the release from a workstation,
+    # nothing on-device can enumerate the host's adapters, and a
+    # statically listed node that turns out to be absent would stop the
+    # container from starting. /dev/vchiq used to be listed for libcec,
+    # which is gone.
     restart: always
     volumes:
       - resin-data:/data

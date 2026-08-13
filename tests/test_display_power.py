@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from anthias_server.lib import cec, display_power
+from anthias_server.lib import cec_client, display_power
 
 
 def _at(day: str, hhmm: str) -> datetime:
@@ -211,7 +211,7 @@ def test_apply_power_uses_cec_and_blanks_locally() -> None:
     the monitor lit all night. A monitor with no CEC in its EDID is not
     even counted in `attempted`, so there is no count to detect it by."""
     with (
-        mock.patch.object(cec, 'set_power', return_value=(2, 2)),
+        mock.patch.object(cec_client, 'set_power', return_value=(2, 2)),
         mock.patch('anthias_server.settings.ViewerPublisher') as publisher,
     ):
         summary = display_power.apply_power(False)
@@ -226,7 +226,7 @@ def test_apply_power_falls_back_to_blanking_without_a_cec_peer() -> None:
     """The plain-monitor case — the majority of the fleet by the testbed
     measurements. Without this the schedule would do nothing at all."""
     with (
-        mock.patch.object(cec, 'set_power', return_value=(0, 1)),
+        mock.patch.object(cec_client, 'set_power', return_value=(0, 1)),
         mock.patch('anthias_server.settings.ViewerPublisher') as publisher,
     ):
         summary = display_power.apply_power(False)
@@ -238,7 +238,7 @@ def test_apply_power_falls_back_to_blanking_without_a_cec_peer() -> None:
 
 def test_apply_power_unblanks_when_turning_on() -> None:
     with (
-        mock.patch.object(cec, 'set_power', return_value=(0, 0)),
+        mock.patch.object(cec_client, 'set_power', return_value=(0, 0)),
         mock.patch('anthias_server.settings.ViewerPublisher') as publisher,
     ):
         display_power.apply_power(True)
@@ -247,16 +247,23 @@ def test_apply_power_unblanks_when_turning_on() -> None:
     )
 
 
-def test_apply_power_falls_back_when_cec_raises() -> None:
-    """A broken adapter must not stop the screen being blanked."""
+def test_apply_power_blanks_before_cec_so_a_cec_failure_still_darkens() -> (
+    None
+):
+    """The blank goes out first, so even a CEC failure that propagates
+    leaves the screen in the right visual state. The error is *not*
+    swallowed: the scheduler must retry rather than latch a command that
+    never reached the display."""
     with (
         mock.patch.object(
-            cec, 'set_power', side_effect=cec.CecError('adapter gone')
+            cec_client,
+            'set_power',
+            side_effect=cec_client.ViewerUnavailableError('no answer'),
         ),
         mock.patch('anthias_server.settings.ViewerPublisher') as publisher,
+        pytest.raises(cec_client.ViewerUnavailableError),
     ):
-        summary = display_power.apply_power(False)
-    assert 'local blanking' in summary
+        display_power.apply_power(False)
     publisher.get_instance.return_value.send_to_viewer.assert_called_once_with(
         'blank'
     )

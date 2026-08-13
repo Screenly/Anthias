@@ -428,65 +428,36 @@ class CecAdapter:
 # ---------------------------------------------------------------------
 
 
-#: Redis key serialising CEC access across processes.
-_LOCK_KEY = 'anthias:cec:lock'
-#: Comfortably longer than a full fan-out (two adapters at ~0.6s each,
-#: each already bounded by _OPERATION_TIMEOUT_S) but short enough that a
-#: process killed mid-operation frees the adapter quickly.
-_LOCK_TTL_S = 30
-_LOCK_WAIT_S = 6.0
-_LOCK_POLL_S = 0.1
+#: Serialises CEC access within this process.
+#:
+#: A plain in-process lock is sufficient because exactly one process on
+#: the device drives CEC: the viewer. It is the only container that can
+#: reach ``/dev/cec*`` on every board and every deployment (it is
+#: ``privileged: true`` in all three compose templates, including both
+#: balena ones), so anthias-server and anthias-celery ask it over the
+#: Redis command bus instead of opening the devices themselves.
+#:
+#: The lock still matters within the viewer: ``_claim_logical_address``
+#: has to clear the adapter before configuring it (the kernel returns
+#: EBUSY otherwise), and a clear issued on one file descriptor would
+#: unconfigure an operation in flight on another.
+_bus_mutex = threading.Lock()
 
-# Compare-and-delete so a lock whose TTL expired mid-operation — and was
-# then taken by someone else — is not deleted by the original holder.
-_LOCK_RELEASE_LUA = (
-    "if redis.call('get', KEYS[1]) == ARGV[1] then "
-    "return redis.call('del', KEYS[1]) "
-    'else return 0 end'
-)
+#: Long enough to queue behind one in-flight fan-out — the slowest
+#: measured query is 3.2s on the Pi 2's Cortex-A7 — without letting a
+#: caller block indefinitely.
+_LOCK_WAIT_S = 8.0
 
 
 @contextmanager
 def _bus_lock() -> Iterator[bool]:
-    """Serialise CEC access across every process on the device.
+    """Serialise CEC access.
 
-    ``_claim_logical_address`` has to clear the adapter before
-    configuring it (the kernel returns EBUSY otherwise), and a clear
-    issued on one file descriptor unconfigures the adapter out from
-    under an operation in flight on another. That is not theoretical
-    here: celery runs ``get_display_power`` every 300s and
-    ``apply_display_power_schedule`` every 60s — they coincide every 5
-    minutes — and anthias-server drives the same nodes from the
-    display-power endpoint on a request thread.
-
-    Redis is the only thing shared by the server and celery containers,
-    so it is what the lock lives in. Yields ``False`` when the lock
-    could not be taken; callers must treat that as "did not run"
-    rather than "failed", so a contended tick retries instead of
-    reporting a fault.
+    Yields ``False`` when the lock could not be taken in time; callers
+    must treat that as "did not run" rather than "failed", so the caller
+    retries instead of reporting a fault or latching state.
     """
-    from anthias_common.utils import connect_to_redis
-
-    token = f'{os.getpid()}-{time.monotonic_ns()}'
-    try:
-        client = connect_to_redis()
-    except Exception:  # pragma: no cover - redis unreachable
-        # Without redis we cannot serialise. Proceed unlocked rather
-        # than disabling CEC entirely: a single-writer device is the
-        # common case and still works.
-        logger.warning('CEC lock unavailable (redis); proceeding unlocked')
-        yield True
-        return
-
-    deadline = _LOCK_WAIT_S
-    acquired = False
-    while deadline > 0:
-        if client.set(_LOCK_KEY, token, nx=True, ex=_LOCK_TTL_S):
-            acquired = True
-            break
-        time.sleep(_LOCK_POLL_S)
-        deadline -= _LOCK_POLL_S
-
+    acquired = _bus_mutex.acquire(timeout=_LOCK_WAIT_S)
     if not acquired:
         logger.warning('CEC bus busy; skipping this operation')
         yield False
@@ -494,12 +465,7 @@ def _bus_lock() -> Iterator[bool]:
     try:
         yield True
     finally:
-        try:
-            client.eval(_LOCK_RELEASE_LUA, 1, _LOCK_KEY, token)
-        except Exception as exc:  # pragma: no cover - best effort
-            # The TTL releases it anyway; log so a redis fault is
-            # visible rather than presenting as mysterious contention.
-            logger.warning('Could not release the CEC lock: %s', exc)
+        _bus_mutex.release()
 
 
 def available() -> bool:

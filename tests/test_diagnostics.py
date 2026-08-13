@@ -1,11 +1,10 @@
-import glob
 import os
 from typing import Any
 from unittest import mock
 
 import pytest
 
-from anthias_server.lib import cec, diagnostics
+from anthias_server.lib import cec, cec_client, diagnostics
 
 
 @pytest.mark.parametrize(
@@ -173,7 +172,7 @@ def test_try_connectivity_mixed() -> None:
 def test_get_display_power_maps_status_to_legacy_value(
     status: 'cec.PowerStatus', expected: Any
 ) -> None:
-    with mock.patch.object(cec, 'power_status', return_value=status):
+    with mock.patch.object(cec_client, 'power_status', return_value=status):
         assert diagnostics.get_display_power() == expected
 
 
@@ -182,25 +181,27 @@ def test_get_display_power_no_peer_is_not_reported_as_an_error() -> None:
     fault. Reporting it as 'CEC error' is what made GH #3267
     unactionable for operators."""
     with mock.patch.object(
-        cec, 'power_status', return_value=cec.PowerStatus.NO_PEER
+        cec_client, 'power_status', return_value=cec.PowerStatus.NO_PEER
     ):
         assert diagnostics.get_display_power() == 'No CEC display detected'
 
 
-@pytest.mark.parametrize(
-    'error', [OSError('boom'), cec.CecError('boom'), TimeoutError('boom')]
-)
-def test_get_display_power_survives_adapter_failure(
-    error: Exception,
-) -> None:
-    with mock.patch.object(cec, 'power_status', side_effect=error):
+def test_get_display_power_survives_an_unreachable_viewer() -> None:
+    """The viewer owns the CEC hardware. If it does not answer we know
+    nothing about the display, and that really is a fault — distinct from
+    a display that answered "no peer"."""
+    with mock.patch.object(
+        cec_client,
+        'power_status',
+        side_effect=cec_client.ViewerUnavailableError('no answer'),
+    ):
         assert diagnostics.get_display_power() == 'CEC error'
 
 
 def test_set_display_power_reports_every_display_it_reached() -> None:
     """Fan-out is the point: a device can have two monitors attached and
     the operator needs to know both got the message."""
-    with mock.patch.object(cec, 'set_power', return_value=(2, 2)):
+    with mock.patch.object(cec_client, 'set_power', return_value=(2, 2)):
         ok, msg = diagnostics.set_display_power(on=False)
     assert ok is True
     assert 'off' in msg
@@ -208,7 +209,7 @@ def test_set_display_power_reports_every_display_it_reached() -> None:
 
 
 def test_set_display_power_singular_message_for_one_display() -> None:
-    with mock.patch.object(cec, 'set_power', return_value=(1, 1)):
+    with mock.patch.object(cec_client, 'set_power', return_value=(1, 1)):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is True
     assert '1 display.' in msg
@@ -217,21 +218,21 @@ def test_set_display_power_singular_message_for_one_display() -> None:
 def test_set_display_power_partial_success_is_reported() -> None:
     """Two displays attached, only one answered — that is a success with
     a caveat, not a silent win."""
-    with mock.patch.object(cec, 'set_power', return_value=(1, 2)):
+    with mock.patch.object(cec_client, 'set_power', return_value=(1, 2)):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is True
     assert '1 of 2' in msg
 
 
 def test_set_display_power_unacknowledged_is_a_failure() -> None:
-    with mock.patch.object(cec, 'set_power', return_value=(0, 1)):
+    with mock.patch.object(cec_client, 'set_power', return_value=(0, 1)):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'not acknowledged' in msg
 
 
 def test_set_display_power_without_a_live_link_says_so() -> None:
-    with mock.patch.object(cec, 'set_power', return_value=(0, 0)):
+    with mock.patch.object(cec_client, 'set_power', return_value=(0, 0)):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
     assert 'no CEC link' in msg
@@ -239,29 +240,29 @@ def test_set_display_power_without_a_live_link_says_so() -> None:
 
 def test_set_display_power_surfaces_adapter_errors() -> None:
     with mock.patch.object(
-        cec, 'set_power', side_effect=cec.CecError('cannot open /dev/cec0')
+        cec_client,
+        'set_power',
+        side_effect=cec_client.ViewerUnavailableError('viewer did not answer'),
     ):
         ok, msg = diagnostics.set_display_power(on=True)
     assert ok is False
-    assert 'cannot open /dev/cec0' in msg
+    assert 'viewer did not answer' in msg
 
 
-def test_cec_available_delegates_to_adapter_enumeration() -> None:
-    with mock.patch.object(cec, 'available', return_value=True):
+def test_cec_available_reads_the_fact_the_viewer_published() -> None:
+    with mock.patch.object(cec_client, 'available', return_value=True):
         assert diagnostics.cec_available() is True
-    with mock.patch.object(cec, 'available', return_value=False):
+    with mock.patch.object(cec_client, 'available', return_value=False):
         assert diagnostics.cec_available() is False
 
 
-def test_cec_available_no_longer_counts_vchiq() -> None:
-    """/dev/vchiq was only ever meaningful to libcec, which is gone. On a
-    mainline-KMS kernel libcec could not use it anyway. A board handed
-    vchiq and nothing else must now report 'no adapter' and skip the
-    probe rather than burning a timeout every beat tick (GH #3267)."""
-    with (
-        mock.patch.object(
-            os.path, 'exists', side_effect=lambda p: p == '/dev/vchiq'
-        ),
-        mock.patch.object(glob, 'glob', return_value=[]),
+def test_cec_available_is_false_before_the_viewer_reports() -> None:
+    """A missing key means the viewer has not published yet, which must
+    read as "no adapter" so the controls stay hidden rather than
+    appearing and then failing."""
+    client = mock.MagicMock()
+    client.get.return_value = None
+    with mock.patch(
+        'anthias_server.lib.cec_client.connect_to_redis', return_value=client
     ):
         assert diagnostics.cec_available() is False

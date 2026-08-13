@@ -433,38 +433,25 @@ def test_power_status_reports_error_when_bus_is_busy() -> None:
         assert cec.power_status() == cec.PowerStatus.ERROR
 
 
-def test_bus_lock_releases_with_compare_and_delete() -> None:
-    """Releasing must not delete a lock someone else acquired after our
-    TTL expired mid-operation."""
-    client = mock.MagicMock()
-    client.set.return_value = True
-    with (
-        mock.patch(
-            'anthias_common.utils.connect_to_redis', return_value=client
-        ),
-        cec._bus_lock() as locked,
-    ):
-        assert locked is True
-    assert client.set.call_args.kwargs['nx'] is True
-    assert client.set.call_args.kwargs['ex'] == cec._LOCK_TTL_S
-    # Compare-and-delete, with our token as the comparison value.
-    args = client.eval.call_args.args
-    assert args[0] == cec._LOCK_RELEASE_LUA
-    assert args[2] == cec._LOCK_KEY
-    assert args[3] == client.set.call_args.args[1]
+def test_bus_lock_is_reentrant_across_sequential_callers() -> None:
+    """Acquire/release must leave the mutex free for the next caller."""
+    for _ in range(3):
+        with cec._bus_lock() as locked:
+            assert locked is True
 
 
-def test_bus_lock_proceeds_unlocked_when_redis_is_unreachable() -> None:
-    """A single-writer device must keep working without redis rather
-    than losing CEC entirely."""
-    with (
-        mock.patch(
-            'anthias_common.utils.connect_to_redis',
-            side_effect=OSError('no redis'),
-        ),
-        cec._bus_lock() as locked,
-    ):
-        assert locked is True
+def test_bus_lock_reports_busy_rather_than_blocking_forever() -> None:
+    """A caller that cannot get the bus must learn it did nothing, so it
+    retries instead of latching state or reporting a display fault."""
+    cec._bus_mutex.acquire()
+    try:
+        with (
+            mock.patch.object(cec, '_LOCK_WAIT_S', 0.01),
+            cec._bus_lock() as locked,
+        ):
+            assert locked is False
+    finally:
+        cec._bus_mutex.release()
 
 
 def test_set_power_skips_the_lock_when_there_is_nothing_to_drive() -> None:

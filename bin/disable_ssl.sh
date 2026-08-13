@@ -18,16 +18,8 @@ if [[ -f "$OVERRIDE_FILE" ]]; then
     echo "Removed $OVERRIDE_FILE and the anthias-caddy container."
 fi
 
-# Include the CEC override (the /dev/cec* passthrough written by
-# bin/upgrade_containers.sh) — this recreates anthias-server, and
-# omitting it would bring the container back with no CEC devices.
-CEC_OVERRIDE="$COMPOSE_DIR/docker-compose.cec.override.yml"
-COMPOSE_FILES=(-f "$COMPOSE_DIR/docker-compose.yml")
-if [[ -f "$CEC_OVERRIDE" ]]; then
-    COMPOSE_FILES+=(-f "$CEC_OVERRIDE")
-fi
-
-sudo -E docker compose "${COMPOSE_FILES[@]}" \
+sudo -E docker compose \
+    -f "$COMPOSE_DIR/docker-compose.yml" \
     up -d --force-recreate anthias-server
 
 echo
