@@ -17,6 +17,7 @@ something that drifts between releases.
 
 from __future__ import annotations
 
+import errno
 import os
 import socket
 import struct
@@ -39,6 +40,8 @@ _NLMSG_HDR = struct.Struct('=IHHII')
 _IFADDRMSG = struct.Struct('=BBBBI')
 # struct rtattr {u16 len; u16 type;}
 _RTATTR = struct.Struct('=HH')
+# struct nlmsgerr leads with `int error` (a negative errno).
+_NLMSGERR_CODE = struct.Struct('=i')
 
 # Netlink messages never exceed 64 KiB and the kernel never splits one
 # across datagrams, so a single recv() always yields whole messages.
@@ -142,10 +145,16 @@ def parse_dump(data: bytes) -> tuple[list[tuple[str, str]], bool]:
         if msg_type == _NLMSG_DONE:
             return addresses, True
         if msg_type == _NLMSG_ERROR:
-            # struct nlmsgerr leads with a negative errno.
-            (error,) = struct.unpack_from('=i', data, offset + _NLMSG_HDR.size)
-            errno = -error
-            raise OSError(errno, os.strerror(errno))
+            # struct nlmsgerr leads with a negative errno. Read it out
+            # of this message's own body so a truncated tail can't be
+            # mistaken for an error code borrowed from the next message,
+            # and still fail as an OSError when there is no code at all.
+            body = data[offset + _NLMSG_HDR.size : offset + msg_len]
+            if len(body) < _NLMSGERR_CODE.size:
+                raise OSError(errno.EPROTO, 'truncated netlink error message')
+            (error,) = _NLMSGERR_CODE.unpack_from(body)
+            code = -error
+            raise OSError(code, os.strerror(code))
 
         parsed = _parse_address(
             data[offset + _NLMSG_HDR.size : offset + msg_len]

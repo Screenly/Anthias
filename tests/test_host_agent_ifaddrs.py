@@ -10,6 +10,7 @@ parser (against synthetic datagrams, no socket needed) and
 
 from __future__ import annotations
 
+import errno
 import socket
 import struct
 from unittest import mock
@@ -24,7 +25,21 @@ from anthias_host_agent.ifaddrs import (
     parse_dump,
 )
 
-_LO_INDEX = socket.if_nametoindex('lo')
+# The parser resolves the interface index through if_indextoname, so the
+# synthetic datagrams have to name an interface that really exists.
+# Index 1 is the loopback everywhere; only its name is platform-specific
+# (`lo` on Linux, `lo0` on the BSDs), so derive the name from the index
+# rather than hardcoding it — that keeps the pure-parser tests running on
+# a non-Linux dev host, where rtnetlink itself is unavailable.
+_LO_INDEX = 1
+_LO = socket.if_indextoname(_LO_INDEX)
+
+# rtnetlink is Linux-only: socket.AF_NETLINK doesn't exist elsewhere and
+# interface_addresses() refuses to run without it.
+requires_rtnetlink = pytest.mark.skipif(
+    not hasattr(socket, 'AF_NETLINK'),
+    reason='rtnetlink address enumeration requires Linux',
+)
 
 _RTM_NEWADDR = 20
 _IFA_ADDRESS = 1
@@ -81,7 +96,7 @@ class TestParseDump:
 
         addresses, done = parse_dump(data)
 
-        assert addresses == [('lo', '10.0.0.5'), ('lo', 'fd00::5')]
+        assert addresses == [(_LO, '10.0.0.5'), (_LO, 'fd00::5')]
         assert done is False
 
     def test_ifa_local_wins_over_the_peer_address(self) -> None:
@@ -103,7 +118,7 @@ class TestParseDump:
 
         addresses, _done = parse_dump(data)
 
-        assert addresses == [('lo', '192.0.2.1')]
+        assert addresses == [(_LO, '192.0.2.1')]
 
     def test_ipv6_falls_back_to_ifa_address(self) -> None:
         """IPv6 only ever sends IFA_ADDRESS, never IFA_LOCAL."""
@@ -118,7 +133,7 @@ class TestParseDump:
 
         addresses, _done = parse_dump(data)
 
-        assert addresses == [('lo', '2001:db8::1')]
+        assert addresses == [(_LO, '2001:db8::1')]
 
     def test_skips_link_layer_addresses(self) -> None:
         data = _address_message(
@@ -135,7 +150,7 @@ class TestParseDump:
 
         addresses, _done = parse_dump(data)
 
-        assert addresses == [('lo', '10.0.0.5')]
+        assert addresses == [(_LO, '10.0.0.5')]
 
     def test_skips_addresses_with_no_usable_attribute(self) -> None:
         """An ifaddrmsg carrying neither IFA_LOCAL nor IFA_ADDRESS."""
@@ -191,7 +206,7 @@ class TestParseDump:
 
         addresses, done = parse_dump(data)
 
-        assert addresses == [('lo', '10.0.0.5')]
+        assert addresses == [(_LO, '10.0.0.5')]
         assert done is True
 
     def test_nlmsg_error_raises_oserror(self) -> None:
@@ -202,6 +217,35 @@ class TestParseDump:
             parse_dump(data)
 
         assert excinfo.value.errno == 13
+
+    def test_nlmsg_error_without_a_code_still_raises_oserror(self) -> None:
+        """An NLMSG_ERROR whose body is missing or truncated.
+
+        The contract is OSError, so a short nlmsgerr must not surface as
+        a struct.error out of unpack_from.
+        """
+        for body in (b'', struct.pack('=h', -13)):
+            data = _message(_NLMSG_ERROR, body)
+
+            with pytest.raises(OSError) as excinfo:
+                parse_dump(data)
+
+            assert excinfo.value.errno == errno.EPROTO
+
+    def test_nlmsg_error_code_is_not_read_from_the_next_message(self) -> None:
+        """A truncated nlmsgerr must not borrow the following bytes."""
+        data = _message(_NLMSG_ERROR, b'') + _address_message(
+            socket.AF_INET,
+            _LO_INDEX,
+            _attribute(
+                _IFA_LOCAL, socket.inet_pton(socket.AF_INET, '10.0.0.5')
+            ),
+        )
+
+        with pytest.raises(OSError) as excinfo:
+            parse_dump(data)
+
+        assert excinfo.value.errno == errno.EPROTO
 
     def test_truncated_message_stops_parsing(self) -> None:
         """A short final message ends the run instead of raising."""
@@ -228,9 +272,10 @@ class TestParseDump:
 
         addresses, _done = parse_dump(data)
 
-        assert addresses == [('lo', '10.0.0.5')]
+        assert addresses == [(_LO, '10.0.0.5')]
 
 
+@requires_rtnetlink
 class TestInterfaceAddresses:
     def test_live_dump_reports_loopback(self) -> None:
         """Smoke test against the real kernel.
@@ -241,7 +286,7 @@ class TestInterfaceAddresses:
         """
         result = interface_addresses()
 
-        assert '127.0.0.1' in result['lo']
+        assert '127.0.0.1' in result[_LO]
 
     def test_groups_multiple_addresses_under_one_interface(self) -> None:
         """Secondary addresses stack rather than overwrite."""
@@ -270,7 +315,7 @@ class TestInterfaceAddresses:
             sock.recv.return_value = datagram
             result = interface_addresses()
 
-        assert result == {'lo': ['10.0.0.5', '10.0.0.6']}
+        assert result == {_LO: ['10.0.0.5', '10.0.0.6']}
 
 
 class TestGetIpAddresses:
