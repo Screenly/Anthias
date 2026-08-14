@@ -1,6 +1,6 @@
 ---
 name: testbed-qa
-description: How to validate Anthias changes on the physical hardware testbeds — the /tmp/used-by lockfile protocol, deploying images (plain docker-compose, not balena), the pure-Python overlay method, force-display on headless eglfs, and per-board memory/hardware quirks. Use when testing a viewer/server/webview change on real Pi / x86 / Rock Pi 4 hardware.
+description: How to validate Anthias changes on the physical hardware testbeds — the /tmp/used-by lockfile protocol, deploying images (plain docker-compose, not balena), the pure-Python overlay method, force-display on headless eglfs, running a pre-release burn-in/soak, and per-board memory/hardware quirks. Use when testing a viewer/server/webview change on real Pi / x86 / Rock Pi 4 hardware, and whenever a release burn-in or soak is requested (pair it with cut-release).
 ---
 
 # Testbed QA runbook
@@ -240,7 +240,68 @@ stack needs.
   one fd across reset and read, or sample `memory.current` on an interval and take
   the maximum yourself.
 
-## 6. Per-board memory / hardware quirks
+## 6. Burn-in / pre-release soak
+
+A burn-in is not "leave it running and see if it dies". Every rule below exists
+because a soak looked clean while measuring nothing.
+
+- **Verify the playlist is really ROTATING, not just really enabled.** The
+  existing §7 rule says confirm assets are disabled before quoting an idle
+  number; the converse bites just as hard. A 2026.08.1 burn-in ran a Pi 3 A+ with
+  a *single* enabled asset whose `duration` was **300s** (every other board: 20s),
+  left over from an earlier session parking the board. One static PNG for five
+  minutes exercises no asset-loop transition, no decode/teardown, no memory churn
+  — it would have soaked for hours, reported clean, and proved nothing. Audit
+  **enabled count AND dwell time** per board and state the resulting full-cycle
+  duration (healthy fleet values were 40-90s).
+- **Soak every supported asset type on every board** — image, video, webpage,
+  streaming. Quietly reducing the set per board (e.g. "skip webpages on the small
+  ones") is a coverage loss disguised as caution. If a board genuinely cannot run
+  a type, that is a FINDING to report, not a config to silently adopt.
+- **Never deviate from the shipping configuration without flagging it loudly.**
+  Stopping celery to keep a 1 GB board off swap-zero makes the board survive and
+  makes the result meaningless — and it buries the actual finding, which is that
+  the shipped stack does not fit. It also silently skips whatever runs in celery
+  (e.g. the CEC display-power beat). If you must deviate to keep a board alive,
+  the deviation goes in the report as a headline, not a footnote, and the
+  un-deviated failure gets measured first.
+- **The `/tmp/used-by` lock is advisory and does NOT hold.** During one release
+  burn-in, two assets were enabled on a board by something other than the lock
+  holder while the lockfile still read the holder's id, untouched. All API writes
+  arrive from the docker bridge gateway (`172.18.0.1`), so the server access log
+  cannot attribute them to a session. Consequence: a finding was published and had
+  to be withdrawn. **Capture the full playlist state at the START and END of the
+  window and diff it**, and treat `docker logs -t` on `anthias-server` (grep
+  `PATCH /api/v2/assets`) as the audit trail when a result looks wrong.
+- **Verify core dumps by FILE TYPE, never by filename.** `core_pattern` is `core`
+  on every board (dumps land in the crashing process's CWD, i.e. `/usr/src/app`;
+  there is no systemd-coredump, so an empty `coredumpctl` proves nothing). Two
+  traps:
+  * Every file named `core` on the fleet is a **jsonschema vocabulary JSON**
+    inside site-packages. A `find -name 'core*'` sweep reports ~100 phantom
+    "dumps" per board, and a `-delete` on that pattern would strip package files
+    out of the image layers. Check ELF magic `7f454c46` **and** `e_type == 4`
+    (ET_CORE) before believing or deleting anything.
+  * **Rock Pi 4 sets `core_uses_pid=0`**, so its dumps are a bare `core`, not
+    `core.<pid>`. A sweep matching only `core\.[0-9]+` silently skips that board.
+  Background on why dumps appear here at all: see the CEC/libcec teardown bullet
+  in **anthias-release** → Ops hygiene.
+- **`ssh` inside a `while read` loop eats the loop's stdin and the loop runs
+  ONCE.** A fleet-wide loop reading a board list silently processed only the first
+  board and reported success — the remaining six were never touched. Use `ssh -n`
+  (or `< /dev/null`) for every ssh **inside** a loop; conversely you must NOT pass
+  `-n` when you are piping a script in via `ssh 'bash -s'`, because `-n` redirects
+  stdin from `/dev/null` and the remote shell receives an empty script (it exits 0
+  with no output, which looks like a silent pass). Note `mapfile` does not exist
+  in zsh, which is the dev host's shell.
+- **A guarded destructive test beats a wedge.** When soaking a board you expect to
+  OOM, poll on a short interval and back the load off automatically at a
+  threshold (e.g. disable the heavy asset when avail<40 MB or swap_free<15 MB).
+  That converts "board wedged, needs a physical power cycle nobody can do
+  remotely" into a recorded measurement, and it is the only safe way to test the
+  ≤1 GB boards under a full playlist.
+
+## 7. Per-board memory / hardware quirks
 
 - **On the 1 GB Rock Pi 4 it is celery, not the viewer, that exhausts swap.**
   This bullet previously claimed the board "could not settle the latest viewer
@@ -254,7 +315,9 @@ stack needs.
   * bringing celery up on top drives swap to zero on **both** the release build
     and the previous baseline — i.e. it is the steady state of this board, not a
     regression in any given build.
-  * with celery stopped (§6's sanctioned mitigation) it is stable at 390-405 MB
+  * with celery stopped (this section's mitigation — but see §6: if you stop
+    celery during a soak, that deviation from the shipping config is a headline
+    finding, not a quiet workaround) it is stable at 390-405 MB
     available and 368-396 MB swap free.
   So: read a wedge here as *total* memory pressure and suspect celery + leftover
   enabled assets first. **Verify the playlist is really disabled before quoting
