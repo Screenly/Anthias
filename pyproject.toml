@@ -45,7 +45,6 @@ docker-image-builder = [
     "python-on-whales==0.81.0",
 ]
 server = [
-    "cec==0.2.8",
     "celery==5.6.3",
     "certifi==2026.7.22",
     "channels==4.3.2",
@@ -92,7 +91,6 @@ server = [
     "yt-dlp>=2026.7.4",
 ]
 viewer = [
-    "cec==0.2.8",
     "certifi==2026.7.22",
     "Django==5.2.14",
     "Jinja2==3.1.6",
@@ -141,7 +139,7 @@ test = [
 # Used by the python-mypy CI job. The django-stubs plugin imports
 # anthias_server.django_project.settings to introspect the app registry, so we need the
 # runtime deps that settings touches — but not the heavy native-extension
-# deps from the server group (cec, netifaces, etc.). We also include
+# deps from the server group (netifaces, etc.). We also include
 # docker-image-builder so its tools (pygit2, python_on_whales) resolve.
 mypy = [
     { include-group = "dev-host" },
@@ -158,7 +156,7 @@ mypy = [
     # to type-check the upload-time normalisation pipeline.
     # pillow-heif is intentionally not pinned here — it's listed in
     # tool.mypy.overrides above so its missing-import error is
-    # ignored, mirroring the cec / pydbus / sh pattern.
+    # ignored, mirroring the pydbus / sh pattern.
     "Pillow==12.3.0",
     "pytz==2026.3.post1",
     "sentry-sdk==2.66.1",
@@ -252,7 +250,6 @@ exclude = [
 # `channels` itself is covered by partial PEP 561 stubs in stubs/channels-stubs/;
 # only the helpers we actually call are typed there.
 module = [
-    "cec",
     "channels_redis.*",
     "gi",
     "gi.*",

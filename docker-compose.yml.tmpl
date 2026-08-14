@@ -37,8 +37,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # No `devices:` here, deliberately. This service needs no hardware
+    # access at all: HDMI-CEC is driven by the anthias-viewer container
+    # (privileged, so it already sees every /dev/cec*) and reached over
+    # the Redis command bus — see src/anthias_server/lib/cec_client.py.
+    # /dev/vchiq used to be listed for libcec's display-power probe,
+    # which is gone.
     restart: always
     volumes:
       - resin-data:/data
@@ -170,8 +174,10 @@ services:
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
       - no_proxy=${no_proxy}
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # See the note on anthias-server: no hardware access needed. Celery
+    # runs the periodic display-power query and the schedule, but it
+    # asks anthias-viewer to do the CEC work rather than opening the
+    # devices itself.
     restart: always
     volumes:
       - resin-data:/data

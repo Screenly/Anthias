@@ -12,6 +12,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from anthias_server.settings import settings
+
 # Centralised fixture password for the basic-auth flow tests so Sonar's
 # S2068 fires once per file, not once per test. Avoids dictionary
 # words / breached-password tokens to keep S6437 quiet too. Never
@@ -50,6 +52,10 @@ def test_get_device_settings(
         'prefer_dark_mode': True,
         'verify_ssl': True,
         'screen_rotation': 90,
+        'display_power_schedule_enabled': False,
+        'display_power_on_time': '08:00',
+        'display_power_off_time': '18:00',
+        'display_power_days': '0,1,2,3,4,5,6',
     }[key]
 
     response = api_client.get(device_settings_url)
@@ -367,6 +373,10 @@ def test_disable_basic_auth(
         'prefer_dark_mode': False,
         'verify_ssl': True,
         'screen_rotation': 0,
+        'display_power_schedule_enabled': False,
+        'display_power_on_time': '08:00',
+        'display_power_off_time': '18:00',
+        'display_power_days': '0,1,2,3,4,5,6',
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
 
@@ -688,9 +698,9 @@ def test_display_power_returns_503_when_no_cec_adapter(
     _cec_available_mock: Any,
     api_client: APIClient,
 ) -> None:
-    """The endpoint must fail fast (no 10 s subprocess) when neither
-    /dev/cec0 nor /dev/vchiq exists. 503 telegraphs 'this server lacks
-    the hardware to satisfy the request' more accurately than 502."""
+    """The endpoint must fail fast when the device has no CEC adapter
+    at all. 503 telegraphs 'this server lacks the hardware to satisfy
+    the request' more accurately than 502."""
     response = api_client.post(
         reverse('api:display_power_v2', kwargs={'state': 'on'})
     )
@@ -751,3 +761,119 @@ def test_patch_device_settings_password_mismatch_is_not_logged_as_error(
     # Sentry event.
     assert all(r.levelno == logging.WARNING for r in save_records)
     assert all(r.exc_info is None for r in save_records)
+
+
+# ---------------------------------------------------------------------------
+# Scheduled display power over the v2 settings API
+#
+# The HTML form path and this endpoint are documented mirrors of each
+# other, so the schedule has to be settable from both.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_device_settings_get_exposes_the_display_schedule(
+    api_client: APIClient,
+) -> None:
+    response = api_client.get(reverse('api:device_settings_v2'))
+    assert response.status_code == status.HTTP_200_OK
+    for field in (
+        'display_power_schedule_enabled',
+        'display_power_on_time',
+        'display_power_off_time',
+        'display_power_days',
+    ):
+        assert field in response.data
+
+
+@pytest.mark.django_db
+def test_device_settings_patch_sets_the_display_schedule(
+    api_client: APIClient, _isolated_settings_conf: Any
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = api_client.patch(
+            reverse('api:device_settings_v2'),
+            {
+                'display_power_schedule_enabled': True,
+                'display_power_on_time': '07:30',
+                'display_power_off_time': '19:45',
+                'display_power_days': '4,0,2,0',
+            },
+            format='json',
+        )
+    assert response.status_code == status.HTTP_200_OK
+    settings.load()
+    assert settings['display_power_schedule_enabled'] is True
+    assert settings['display_power_on_time'] == '07:30'
+    assert settings['display_power_off_time'] == '19:45'
+    # Sorted and deduped by the serializer.
+    assert settings['display_power_days'] == '0,2,4'
+
+
+@pytest.mark.django_db
+def test_device_settings_patch_accepts_seconds_in_a_time(
+    api_client: APIClient, _isolated_settings_conf: Any
+) -> None:
+    """An <input type="time"> with a sub-minute step posts HH:MM:SS."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = api_client.patch(
+            reverse('api:device_settings_v2'),
+            {'display_power_on_time': '07:30:00'},
+            format='json',
+        )
+    assert response.status_code == status.HTTP_200_OK
+    settings.load()
+    assert settings['display_power_on_time'] == '07:30'
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'payload',
+    [
+        {'display_power_on_time': 'not-a-time'},
+        {'display_power_off_time': '25:00'},
+        # Seconds are dropped from the stored value, but a malformed or
+        # out-of-range seconds token must still be a 400 rather than
+        # being read as a valid 07:30 (Copilot).
+        {'display_power_on_time': '07:30:xx'},
+        {'display_power_off_time': '19:45:60'},
+        {'display_power_days': '0,9'},
+        {'display_power_days': 'mon,tue'},
+    ],
+)
+def test_device_settings_patch_rejects_a_bad_schedule(
+    api_client: APIClient,
+    payload: dict[str, Any],
+    _isolated_settings_conf: Any,
+) -> None:
+    """400 rather than silent coercion. The HTML form keeps the previous
+    value and toasts, but an API client that explicitly sent a field
+    deserves to be told it was wrong."""
+    response = api_client.patch(
+        reverse('api:device_settings_v2'), payload, format='json'
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_device_settings_patch_blank_days_means_every_day(
+    api_client: APIClient, _isolated_settings_conf: Any
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = api_client.patch(
+            reverse('api:device_settings_v2'),
+            {'display_power_days': ''},
+            format='json',
+        )
+    assert response.status_code == status.HTTP_200_OK
+    settings.load()
+    assert settings['display_power_days'] == '0,1,2,3,4,5,6'

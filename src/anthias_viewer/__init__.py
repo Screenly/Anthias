@@ -21,6 +21,7 @@ import sh as sh
 
 from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
+from anthias_server.lib import cec, cec_client
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
@@ -721,6 +722,51 @@ def send_current_asset_id_to_server(correlation_id: str | None) -> None:
     )
 
 
+def _reply_cec_status(correlation_id: str | None) -> None:
+    """Answer a ``display_power_status`` request.
+
+    The viewer owns CEC because it is the only container that can reach
+    ``/dev/cec*`` on every board and every deployment — see
+    ``anthias_server.lib.cec_client`` for why the server cannot.
+    """
+    if not correlation_id:
+        logger.warning(
+            'display_power_status received without a correlation ID; '
+            'dropping reply.'
+        )
+        return
+    try:
+        status = cec.power_status()
+    except cec.CEC_ERRORS as exc:
+        logger.warning('CEC power query failed: %s', exc)
+        status = cec.PowerStatus.ERROR
+    reply_sender.send(correlation_id, {'status': str(status)})
+
+
+def _reply_cec_set_power(correlation_id: str | None, on: bool) -> None:
+    """Answer a ``display_on`` / ``display_off`` request.
+
+    ``busy`` tells the caller nothing was transmitted, so a scheduler
+    retries rather than latching a command that never went out.
+    """
+    if not correlation_id:
+        logger.warning(
+            'display power command received without a correlation ID; '
+            'dropping reply.'
+        )
+        return
+    payload: dict[str, Any]
+    try:
+        acknowledged, attempted = cec.set_power(on)
+        payload = {'acknowledged': acknowledged, 'attempted': attempted}
+    except cec.CecBusyError:
+        payload = {'busy': True, 'acknowledged': 0, 'attempted': 0}
+    except cec.CEC_ERRORS as exc:
+        logger.warning('CEC power command failed: %s', exc)
+        payload = {'acknowledged': 0, 'attempted': 0, 'error': str(exc)}
+    reply_sender.send(correlation_id, payload)
+
+
 def blank_display() -> None:
     """Handle the ``blank`` command: darken the screen and pause playback.
 
@@ -784,6 +830,13 @@ commands = {
     'unblank': lambda _: unblank_display(),
     'unknown': lambda _: command_not_found(),
     'current_asset_id': lambda corr: send_current_asset_id_to_server(corr),
+    # HDMI-CEC. Handled here rather than in anthias-server because the
+    # viewer is the only container with access to /dev/cec* on every
+    # board and every deployment (privileged: true in all three compose
+    # templates, balena included).
+    'display_power_status': lambda corr: _reply_cec_status(corr),
+    'display_on': lambda corr: _reply_cec_set_power(corr, True),
+    'display_off': lambda corr: _reply_cec_set_power(corr, False),
 }
 
 
@@ -2577,6 +2630,30 @@ def _publish_display_resolution_loop() -> None:
     t.start()
 
 
+def _publish_cec_availability() -> None:
+    """Tell anthias-server whether this device has a CEC adapter.
+
+    The server gates its settings UI and its display-power endpoint on
+    this, and cannot answer it itself — it has no CEC device nodes. It is
+    published as a Redis fact rather than answered over the request-reply
+    bus because it gates a page render and must stay cheap; enumerating
+    costs 0.0-0.1 ms per adapter, so doing it once at startup is ample.
+    """
+    try:
+        adapters = cec.CecAdapter.enumerate()
+        cec_client.publish_availability(bool(adapters))
+        logger.info(
+            'CEC: %d adapter(s) present: %s',
+            len(adapters),
+            ', '.join(f'{a.node} ({a.physical_address_str})' for a in adapters)
+            or 'none',
+        )
+    except Exception:
+        # Never let a CEC probe stop the viewer starting — it is a
+        # peripheral feature and the display pipeline matters more.
+        logger.warning('Could not publish CEC availability', exc_info=True)
+
+
 def main() -> None:
     global scheduler
 
@@ -2585,6 +2662,8 @@ def main() -> None:
     subscriber = ViewerSubscriber(r, commands)
     subscriber.daemon = True
     subscriber.start()
+
+    _publish_cec_availability()
 
     _publish_display_resolution_loop()
 

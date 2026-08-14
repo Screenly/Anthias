@@ -24,7 +24,7 @@ from anthias_common.utils import (
     get_node_mac_address,
     is_balena_app,
 )
-from anthias_server.lib import diagnostics
+from anthias_server.lib import diagnostics, display_power
 from anthias_server.lib.github import is_up_to_date
 from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import settings
@@ -218,6 +218,18 @@ _DATE_FORMAT_OPTIONS = (
     ('yyyy.mm.dd', 'year.month.day'),
 )
 
+# Python weekday numbering (Monday=0 ... Sunday=6), matching what
+# lib/display_power.py parses and what datetime.weekday() returns.
+_WEEKDAY_OPTIONS = (
+    (0, 'Mon'),
+    (1, 'Tue'),
+    (2, 'Wed'),
+    (3, 'Thu'),
+    (4, 'Fri'),
+    (5, 'Sat'),
+    (6, 'Sun'),
+)
+
 
 @functools.lru_cache(maxsize=1)
 def _timezone_options() -> tuple[tuple[str, str], ...]:
@@ -295,9 +307,28 @@ def device_settings() -> dict[str, Any]:
         'date_format_options': _DATE_FORMAT_OPTIONS,
         'timezone_options': _timezone_options(),
         # Render-time gate for the experimental CEC display-power
-        # buttons; cec_available() only stats device nodes, so it's
-        # cheap enough to call on every settings render.
+        # buttons. cec_available() reads a single Redis key the viewer
+        # publishes at startup — not a device probe and not a round trip
+        # to the viewer — so it stays cheap enough to call on every
+        # settings render.
         'cec_available': diagnostics.cec_available(),
+        # The schedule is NOT gated on cec_available(): when no CEC
+        # display answers it falls back to the viewer's local blanking,
+        # so it is useful on boards with a plain monitor too.
+        'display_power_schedule_enabled': settings[
+            'display_power_schedule_enabled'
+        ],
+        'display_power_on_time': settings['display_power_on_time'],
+        'display_power_off_time': settings['display_power_off_time'],
+        # Parsed with the same helper the beat uses. An inline
+        # comprehension here had the opposite empty-input behaviour —
+        # it rendered *zero* days checked where parse_days reads the
+        # same value as *every* day, so the settings page would show a
+        # schedule running on no days while it actually ran daily.
+        'display_power_days': sorted(
+            display_power.parse_days(settings['display_power_days'])
+        ),
+        'weekday_options': _WEEKDAY_OPTIONS,
     }
 
 

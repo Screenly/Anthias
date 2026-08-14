@@ -13,6 +13,9 @@ import anthias_server.celery_tasks as celery_tasks_module
 from anthias_server.app.models import Asset
 from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
+    DISPLAY_POWER_STATE_KEY,
+    DISPLAY_POWER_STATE_TTL_S,
+    apply_display_power_schedule,
     asset_recheck_lock_key,
     cleanup,
     download_youtube_asset,
@@ -213,10 +216,10 @@ def test_get_display_power_reports_not_available_without_cec() -> None:
     """On a board with no CEC adapter the task records 'Not available'
     and never spawns the libcec probe.
 
-    x86 (and any host that doesn't pass /dev/cec0 or /dev/vchiq into
-    the container) can only fail the probe; it used to store
-    'CEC error', which the System Info card and the v2 /info API then
-    showed as though something were broken.
+    x86 (and any host with no /dev/cec* passed into the container)
+    has nothing to probe; it used to store 'CEC error', which the
+    System Info card and the v2 /info API then showed as though
+    something were broken.
     """
     fake_redis = mock.MagicMock()
     with (
@@ -2228,3 +2231,157 @@ class TestWaitForMigrations:
         ):
             celery_tasks_module.wait_for_migrations()
         assert sleep.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Scheduled display power
+# ---------------------------------------------------------------------------
+
+
+def _schedule_settings(
+    enabled: bool = True, **overrides: Any
+) -> dict[str, Any]:
+    values = {
+        'display_power_schedule_enabled': enabled,
+        'display_power_on_time': '08:00',
+        'display_power_off_time': '18:00',
+        'display_power_days': '0,1,2,3,4,5,6',
+    }
+    values.update(overrides)
+    return values
+
+
+def _run_schedule(
+    stored: Any, desired: Any, **setting_overrides: Any
+) -> tuple[Any, Any]:
+    """Drive one tick, returning (fake_redis, apply_power mock)."""
+    fake_redis = mock.MagicMock()
+    fake_redis.get.return_value = stored
+    values = _schedule_settings(**setting_overrides)
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch.dict(settings, values, clear=False),
+        mock.patch.object(settings, 'load'),
+        mock.patch(
+            'anthias_server.lib.display_power.should_be_on',
+            return_value=desired,
+        ),
+        mock.patch(
+            'anthias_server.lib.display_power.apply_power',
+            return_value='CEC (1/1 display(s) acknowledged)',
+        ) as apply_power,
+    ):
+        apply_display_power_schedule.apply()
+    return fake_redis, apply_power
+
+
+def test_schedule_does_nothing_when_disabled() -> None:
+    """A device that has always stayed on must not start switching
+    itself off just because it was upgraded."""
+    fake_redis, apply_power = _run_schedule(
+        stored=None, desired=True, enabled=False
+    )
+    apply_power.assert_not_called()
+    fake_redis.set.assert_not_called()
+
+
+def test_disabling_the_schedule_restores_a_switched_off_display() -> None:
+    """Otherwise the screen stays black forever: the manual controls are
+    CEC-only and are hidden entirely on a device with no CEC adapter, so
+    a plain monitor would have no way back on from the UI."""
+    fake_redis, apply_power = _run_schedule(
+        stored=b'off', desired=True, enabled=False
+    )
+    apply_power.assert_called_once_with(True)
+    fake_redis.delete.assert_called_once_with(DISPLAY_POWER_STATE_KEY)
+
+
+def test_disabling_the_schedule_leaves_an_on_display_alone() -> None:
+    fake_redis, apply_power = _run_schedule(
+        stored=b'on', desired=True, enabled=False
+    )
+    apply_power.assert_not_called()
+    fake_redis.delete.assert_called_once_with(DISPLAY_POWER_STATE_KEY)
+
+
+def test_schedule_applies_the_desired_state_on_first_tick() -> None:
+    """Nothing stored yet (fresh worker) — assert the state the schedule
+    says it should be in rather than waiting for the next boundary."""
+    fake_redis, apply_power = _run_schedule(stored=None, desired=False)
+    apply_power.assert_called_once_with(False)
+    fake_redis.set.assert_called_once_with(
+        DISPLAY_POWER_STATE_KEY, 'off', ex=DISPLAY_POWER_STATE_TTL_S
+    )
+
+
+def test_schedule_is_edge_triggered() -> None:
+    """Re-asserting every minute would spam the CEC bus and fight an
+    operator who deliberately switched the screen on out of hours."""
+    fake_redis, apply_power = _run_schedule(stored=b'on', desired=True)
+    apply_power.assert_not_called()
+    fake_redis.set.assert_not_called()
+
+
+def test_schedule_acts_on_a_transition() -> None:
+    fake_redis, apply_power = _run_schedule(stored=b'on', desired=False)
+    apply_power.assert_called_once_with(False)
+    fake_redis.set.assert_called_once_with(
+        DISPLAY_POWER_STATE_KEY, 'off', ex=DISPLAY_POWER_STATE_TTL_S
+    )
+
+
+def test_schedule_handles_a_decoded_redis_client() -> None:
+    """decode_responses is not guaranteed on the shared connection, so
+    the stored value can arrive as str or bytes."""
+    _, apply_power = _run_schedule(stored='on', desired=True)
+    apply_power.assert_not_called()
+
+
+def test_schedule_skips_an_unusable_schedule() -> None:
+    """should_be_on returns None for identical/missing times. Leave the
+    display alone rather than guessing."""
+    fake_redis, apply_power = _run_schedule(stored=None, desired=None)
+    apply_power.assert_not_called()
+    fake_redis.set.assert_not_called()
+
+
+def test_schedule_does_not_latch_state_when_applying_fails() -> None:
+    """If the command never went out, the next tick must retry rather
+    than believing it already succeeded.
+
+    The failure is swallowed (logged at warning) rather than raised: the
+    task runs every 60s and would otherwise file a Sentry event every
+    minute for as long as the fault lasted. Not latching the state is
+    what makes that safe — the retry is immediate.
+    """
+    fake_redis = mock.MagicMock()
+    fake_redis.get.return_value = None
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch.dict(settings, _schedule_settings(), clear=False),
+        mock.patch.object(settings, 'load'),
+        mock.patch(
+            'anthias_server.lib.display_power.should_be_on',
+            return_value=False,
+        ),
+        mock.patch(
+            'anthias_server.lib.display_power.apply_power',
+            side_effect=RuntimeError('redis down'),
+        ),
+    ):
+        apply_display_power_schedule.apply(throw=True)
+    fake_redis.set.assert_not_called()
+
+
+def test_schedule_survives_a_soft_time_limit() -> None:
+    fake_redis = mock.MagicMock()
+    fake_redis.get.return_value = None
+    with (
+        mock.patch.object(celery_tasks_module, 'r', fake_redis),
+        mock.patch.dict(settings, _schedule_settings(), clear=False),
+        mock.patch.object(
+            settings, 'load', side_effect=SoftTimeLimitExceeded()
+        ),
+    ):
+        apply_display_power_schedule.apply()
+    fake_redis.set.assert_not_called()

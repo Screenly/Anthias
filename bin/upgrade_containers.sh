@@ -158,32 +158,24 @@ cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml
 
-# CEC device routing. Pi 1-4 reaches libcec via /dev/vchiq
-# (closed-firmware VideoCore IV), which is what the template's
-# `devices:` block bind-mounts. Pi 5 and mainline-KMS x86/arm64 boards
-# expose v4l2 CEC adapters at /dev/cec0 instead (Pi 5 also exposes
-# /dev/cec1 for the second HDMI output, so we map both). docker
-# compose's `devices:` fails container start if a listed host node is
-# missing, so we surgically rewrite the rendered mount per device
-# type — and on x86/arm64 we only swap in /dev/cec0 if the host
-# actually has it (a box without an HDMI-CEC adapter keeps the
-# pre-fix behaviour of dropping the bind mount entirely). Fixes
-# the "CEC error" toast on Pi 5 reported in issue #2863.
-case "$DEVICE_TYPE" in
-    pi5)
-        sed -i 's|^\([[:space:]]*\)- "/dev/vchiq:/dev/vchiq"$|\1- "/dev/cec0:/dev/cec0"\n\1- "/dev/cec1:/dev/cec1"|' \
-            /home/${USER}/anthias/docker-compose.yml
-        ;;
-    x86|arm64)
-        if [ -e /dev/cec0 ]; then
-            sed -i 's|/dev/vchiq:/dev/vchiq|/dev/cec0:/dev/cec0|g' \
-                /home/${USER}/anthias/docker-compose.yml
-        else
-            sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-                /home/${USER}/anthias/docker-compose.yml
-        fi
-        ;;
-esac
+# No CEC device passthrough is needed, on any board.
+#
+# HDMI-CEC is driven by the viewer container, which is `privileged: true`
+# in every compose template and therefore already sees every /dev/cec*
+# node. anthias-server and anthias-celery ask it over the Redis command
+# bus (see src/anthias_server/lib/cec_client.py).
+#
+# An earlier iteration of this script enumerated the host's adapters here
+# and generated a compose override for server/celery. That works on this
+# install path but is impossible on balena — its compose file is baked
+# into the release from a workstation, nothing on-device can enumerate
+# the host, and a statically listed node that turns out to be absent
+# stops the container from starting. Routing through the viewer supports
+# both deployments with no device wiring and no OTA upgrade risk.
+#
+# A stale override from that iteration is removed so it cannot keep
+# pinning nodes that the containers no longer need.
+rm -f /home/${USER}/anthias/docker-compose.cec.override.yml
 
 COMPOSE_FILES=(-f /home/${USER}/anthias/docker-compose.yml)
 SSL_OVERRIDE=/home/${USER}/anthias/docker-compose.ssl.override.yml

@@ -31,6 +31,22 @@ from anthias_server.app.models import (
     validate_asset_headers,
 )
 from anthias_server.django_project.settings import is_valid_time_zone
+from anthias_server.lib import display_power
+
+
+def _validate_hhmm(value: str) -> str:
+    """Normalise an ``HH:MM`` (or ``HH:MM:SS``) time to ``HH:MM``.
+
+    Rejects rather than ignores a malformed value. The HTML form keeps
+    the previous setting and shows a toast, but an API client gets a 400:
+    silently discarding a field it explicitly sent would be worse.
+    """
+    parsed = display_power.parse_hhmm(value)
+    if parsed is None:
+        raise serializers.ValidationError(
+            f'Invalid time {value!r}: expected HH:MM.'
+        )
+    return parsed.strftime('%H:%M')
 
 
 def _normalise_play_days(value: list[int]) -> list[int]:
@@ -421,6 +437,14 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     # on the value being one of {0, 90, 180, 270} when reading too.
     screen_rotation = ChoiceField(choices=SCREEN_ROTATION_CHOICES)
     username = CharField()
+    # Scheduled display power. Times are 'HH:MM' in the device's
+    # configured timezone; days is a comma-separated list of Python
+    # weekday numbers (Monday=0) naming the days an on-period *begins*
+    # — which is what governs a schedule that wraps past midnight.
+    display_power_schedule_enabled = BooleanField()
+    display_power_on_time = CharField()
+    display_power_off_time = CharField()
+    display_power_days = CharField(allow_blank=True)
 
 
 class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
@@ -464,6 +488,40 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
         ],
     )
     current_password = CharField(required=False, allow_blank=True)
+    # Scheduled display power — mirrors the HTML form path in
+    # anthias_app.views._apply_display_power_schedule_settings.
+    display_power_schedule_enabled = BooleanField(required=False)
+    display_power_on_time = CharField(required=False)
+    display_power_off_time = CharField(required=False)
+    display_power_days = CharField(required=False, allow_blank=True)
+
+    def validate_display_power_on_time(self, value: str) -> str:
+        return _validate_hhmm(value)
+
+    def validate_display_power_off_time(self, value: str) -> str:
+        return _validate_hhmm(value)
+
+    def validate_display_power_days(self, value: str) -> str:
+        """Normalise the weekday list.
+
+        Rejected rather than silently coerced: unlike the HTML form —
+        where an empty checkbox set legitimately means "every day" — an
+        API client that sends garbage has made a mistake and should be
+        told, not have it reinterpreted.
+        """
+        raw = (value or '').strip()
+        if not raw:
+            return display_power.ALL_DAYS
+        days = []
+        for token in raw.split(','):
+            token = token.strip()
+            if not token.isdigit() or not 0 <= int(token) <= 6:
+                raise serializers.ValidationError(
+                    f'Invalid weekday {token!r}: expected 0-6 '
+                    '(Monday=0), comma-separated.'
+                )
+            days.append(int(token))
+        return ','.join(str(d) for d in sorted(set(days)))
 
     def validate_timezone(self, value: str) -> str:
         value = (value or '').strip()

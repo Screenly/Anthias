@@ -107,12 +107,10 @@ function prepare_balena_file() {
     cat docker-compose.balena.yml.tmpl | \
     envsubst > balena-deploy/docker-compose.yml
 
-    # Pi 5, x86 and non-Pi arm64 SBCs (the rockpi4 fleet's images)
-    # don't expose /dev/vchiq; strip the bind mount.
-    if [[ $BOARD =~ ^(pi5|x86|arm64)$ ]]; then
-        sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-            balena-deploy/docker-compose.yml
-    fi
+    # The /dev/vchiq strip that used to live here is gone: the template
+    # no longer bind-mounts it. It existed only for libcec, which has
+    # been replaced by the kernel CEC uABI, so there is no longer a
+    # board-specific device list to patch up here.
 }
 
 if ! balena whoami; then
@@ -135,11 +133,6 @@ else
 
     cat docker-compose.balena.dev.yml.tmpl | \
         envsubst > docker-compose.yml
-
-    if [[ $BOARD =~ ^(pi5|x86)$ ]]; then
-        sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-            docker-compose.yml
-    fi
 
     balena push $FLEET
 fi

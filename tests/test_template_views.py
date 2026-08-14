@@ -22,6 +22,7 @@ from django.utils import timezone
 from anthias_server.app import page_context
 from anthias_server.app.models import DURATION_S_MAX, Asset
 from anthias_server.app.templatetags.asset_filters import to_json
+from anthias_server.settings import settings
 
 
 @pytest.fixture
@@ -113,6 +114,9 @@ def test_settings_renders(client: Client) -> None:
         'Timezone',
         'Authentication',
         'Show splash screen',
+        'Display schedule',
+        'Turn on at',
+        'Turn off at',
         'Backup',
         'System controls',
     ):
@@ -210,6 +214,11 @@ def test_page_context_device_settings_keys() -> None:
         'screen_rotation',
         'date_format_options',
         'is_pi5',
+        'display_power_schedule_enabled',
+        'display_power_on_time',
+        'display_power_off_time',
+        'display_power_days',
+        'weekday_options',
     ):
         assert key in ctx
 
@@ -823,40 +832,6 @@ def test_assets_download_redirects_for_url_mimetype(
     # webpage → redirect to URI
     assert response.status_code == 302
     assert response['Location'] == asset.uri
-
-
-@pytest.fixture
-def _isolated_settings_conf(tmp_path: Any) -> Any:
-    """Redirect the settings singleton's config file to a per-test temp
-    path so ``settings.save()`` writes — whether direct or through the
-    ``settings_save`` view — never touch the real
-    ``~/.anthias/anthias.conf``.
-
-    Without this, a settings-mutating test leaks its posted values onto
-    the shared on-device config and silently breaks later tests that
-    read defaults back from it. Concretely, the integration suite's
-    ``test_add_asset_via_url`` asserts a new asset inherits
-    ``default_duration``; it fails with ``assert 10 == 0`` when a
-    sibling here has already persisted a different value to disk (only
-    when both suites run against the same ``/data`` volume — CI dodges
-    it by isolating the two jobs). Generalises the same conf_file
-    redirect already used by ``_reset_review_cta``.
-    """
-    from anthias_server.settings import settings
-
-    original_conf_file = settings.conf_file
-    try:
-        # Inside the try so a failure in the reassignment or the initial
-        # save() can't leave conf_file pointed at the temp path for the
-        # rest of the session — the finally always restores it.
-        settings.conf_file = str(tmp_path / 'anthias.conf')
-        settings.save()
-        yield
-    finally:
-        # Point back at the real config and reload so the singleton's
-        # in-memory state is restored for any later test.
-        settings.conf_file = original_conf_file
-        settings.load()
 
 
 @pytest.mark.django_db
@@ -3574,3 +3549,107 @@ def test_review_cta_suppressed_while_snoozed(
         )
     assert response.status_code == 200
     assert 'review-cta' not in response.headers.get('HX-Trigger', '')
+
+
+# ---------------------------------------------------------------------------
+# Scheduled display power — settings form round trip
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_settings_save_display_schedule(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'auth_backend': '',
+                'display_power_schedule_enabled': 'true',
+                'display_power_on_time': '07:30',
+                'display_power_off_time': '19:45',
+                'display_power_days': ['0', '2', '4'],
+            },
+        )
+    assert response.status_code in (200, 302)
+    settings.load()
+    assert settings['display_power_schedule_enabled'] is True
+    assert settings['display_power_on_time'] == '07:30'
+    assert settings['display_power_off_time'] == '19:45'
+    assert settings['display_power_days'] == '0,2,4'
+
+
+@pytest.mark.django_db
+def test_settings_save_display_schedule_rejects_bad_time(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """A malformed time must leave the stored value untouched — the beat
+    reads it every minute and must never see something unparsable."""
+    settings.load()
+    settings['display_power_on_time'] = '06:15'
+    settings.save()
+
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'auth_backend': '',
+                'display_power_on_time': 'not-a-time',
+                'display_power_off_time': '19:45',
+            },
+        )
+    settings.load()
+    assert settings['display_power_on_time'] == '06:15'
+
+
+@pytest.mark.django_db
+def test_settings_save_display_schedule_empty_days_means_every_day(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """Posting no day checkboxes must not leave an enabled schedule
+    silently inert."""
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'auth_backend': '',
+                'display_power_schedule_enabled': 'true',
+                'display_power_on_time': '08:00',
+                'display_power_off_time': '18:00',
+            },
+        )
+    settings.load()
+    assert settings['display_power_days'] == '0,1,2,3,4,5,6'
+
+
+@pytest.mark.django_db
+def test_settings_renders_selected_schedule_days(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """The day checkboxes must reflect the stored selection. Guards the
+    template's `{% if value in display_power_days %}` int-membership
+    check, which silently renders everything unchecked if the context
+    ever hands over strings instead of ints."""
+    settings.load()
+    settings['display_power_days'] = '0,4'
+    settings.save()
+
+    body = client.get(reverse('anthias_app:settings')).content.decode()
+    import re
+
+    checked = {
+        int(m)
+        for m in re.findall(
+            r'name="display_power_days"\s+value="(\d)"\s+checked', body
+        )
+    }
+    assert checked == {0, 4}

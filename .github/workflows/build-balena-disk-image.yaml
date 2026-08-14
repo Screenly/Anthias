@@ -258,8 +258,8 @@ jobs:
 
       # `balena deploy` (vs `balena push`) points the fleet at the
       # existing <short-hash>-<board> GHCR images — no remote build.
-      # bin/balena_ota_deploy.sh owns the fleet mapping, compose render
-      # (incl. the pi5/x86 vchiq strip), version stamping, and retry;
+      # bin/balena_ota_deploy.sh owns the fleet mapping, compose render,
+      # version stamping, and retry;
       # the manual deploy hook (deploy-balena-manual.yaml) calls the same
       # script. `${TAG#v}` strips the leading `v` so the release tag
       # (v2026.05.1) becomes the raw CalVer the script normalizes and

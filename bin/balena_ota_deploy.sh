@@ -53,13 +53,9 @@ export BOARD
 bin/render_balena_yml.sh balena-deploy "$RELEASE_VERSION"
 envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
 
-# Pi 5, x86 and non-Pi arm64 SBCs (the rockpi4 fleet's images) don't
-# expose /dev/vchiq; strip the bind mount. ($BOARD is already
-# rewritten to arm64 for the rockpi4 fleet above.)
-if [[ "$BOARD" =~ ^(pi5|x86|arm64)$ ]]; then
-    sed -i '/devices:/ {N; /\n.*\/dev\/vchiq:\/dev\/vchiq/d}' \
-        balena-deploy/docker-compose.yml
-fi
+# The /dev/vchiq strip that used to live here is gone: the template no
+# longer bind-mounts it. It existed only for libcec, which has been
+# replaced by the kernel CEC uABI.
 
 # Wrapped in a 3-attempt retry because balena cloud routinely
 # 5xx/ESOCKETTIMEDOUTs the upload step.

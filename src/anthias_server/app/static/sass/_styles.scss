@@ -1332,6 +1332,7 @@ label { text-align: left; }
   .weekday {
     --bg: var(--color-surface-tint);
     --fg: var(--color-text);
+    position: relative;
     border: 1px solid var(--color-border);
     background: var(--bg);
     color: var(--fg);
@@ -1341,12 +1342,31 @@ label { text-align: left; }
     cursor: pointer;
     user-select: none;
     transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
-    input { display: none; }
+
+    // Visually hidden but still focusable and still announced. This was
+    // `display: none`, which drops the control out of the tab order and
+    // the accessibility tree entirely — the chips could only be operated
+    // with a pointer. Clipping instead keeps them keyboard- and
+    // screen-reader-reachable while looking identical.
+    input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
   }
   .weekday:has(input:checked) {
     --bg: #{$anthias-yellow-3};
     --fg: var(--color-accent-text);
     border-color: $anthias-yellow-2;
+  }
+  // The input itself is invisible, so the ring has to be drawn on the
+  // chip. Mirrors .app-check-input's focus treatment.
+  .weekday:has(input:focus-visible) {
+    outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
   }
 }
 

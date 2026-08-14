@@ -49,7 +49,7 @@ from anthias_common.utils import (
 )
 from anthias_common.youtube import youtube_destination_path
 from anthias_server.app.models import Asset
-from anthias_server.lib import diagnostics
+from anthias_server.lib import diagnostics, display_power
 from anthias_server.lib.telemetry import send_telemetry
 from anthias_server.settings import settings
 
@@ -165,6 +165,33 @@ ASSET_REVALIDATION_SOFT_TIME_LIMIT_S = ASSET_REVALIDATION_TIME_LIMIT_S - 60
 # in C code where the soft signal can't be delivered.
 PERIODIC_POKE_SOFT_TIME_LIMIT_S = 30
 PERIODIC_POKE_TIME_LIMIT_S = 60
+
+# How often the scheduled display-power tick runs. One minute is the
+# resolution of the schedule itself (times are HH:MM), so a coarser
+# interval would make the display switch late by up to that interval.
+DISPLAY_POWER_SCHEDULE_INTERVAL_S = 60
+
+# Redis key holding the last power state the scheduler actually applied
+# ('on'/'off'). The tick acts only when the desired state differs from
+# this, so a command goes out at the schedule boundary rather than every
+# single minute.
+DISPLAY_POWER_STATE_KEY = 'display_power_schedule_state'
+
+# ...but the key expires, so the state is re-asserted periodically.
+#
+# The viewer's blanked flag is an in-process global that is lost on
+# every viewer restart (OOM, upgrade, host reboot), and redis is
+# persisted across those restarts. Without an expiry, a viewer that
+# restarted at 22:00 would come back lit and playing while this key
+# still said 'off', and the tick would return early every minute until
+# morning — the screen stays on all night.
+#
+# Re-asserting is cheap and idempotent: a standby to an already-off TV
+# and a blank to an already-blank viewer are both no-ops. The cost is
+# that an operator who manually turns the screen on mid-off-period sees
+# it go back off within this window, which is the correct behaviour for
+# a schedule anyway.
+DISPLAY_POWER_STATE_TTL_S = 60 * 10
 
 # Time budget for the stuck-row reconciler sweep. It was the last
 # periodic task still carrying a bare ``time_limit=300`` with no soft
@@ -326,6 +353,14 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
         reconcile_stuck_processing.s(),
         name='reconcile_stuck_processing',
     )
+    # Every minute, so a schedule boundary lands within 60s of the
+    # configured time. The task itself is nearly free when the schedule
+    # is disabled or the desired state has not changed.
+    sender.add_periodic_task(
+        DISPLAY_POWER_SCHEDULE_INTERVAL_S,
+        apply_display_power_schedule.s(),
+        name='display_power_schedule',
+    )
 
 
 @celery.task(
@@ -344,25 +379,18 @@ def get_display_power() -> None:
     # fit. (Copilot review of #3264 caught this comment claiming the
     # function had been changed to return str always — it was not.)
     #
-    # Boards with no CEC device node passed in at all (x86) can only ever
-    # fail the libcec probe, which used to surface on the System Info card
-    # and the v2 /info API as 'CEC error' — reading like a fault when CEC
-    # simply isn't a thing on the hardware. Short-circuit on the same
-    # cec_available() gate the settings UI and the display-power SET
-    # endpoint already use: record a clear 'Not available' rather than
-    # spawning a doomed subprocess every tick.
+    # Boards with no CEC adapter at all (x86 without a dongle) record a
+    # clear 'Not available' rather than asking. cec_available() is a
+    # single redis GET of the fact the viewer publishes at startup — it
+    # no longer counts /dev/vchiq and no longer probes device nodes from
+    # this container, so the boards that used to burn a full 10s libcec
+    # timeout on every tick (#3267) take this branch for free instead.
     #
-    # Pi 5 was previously listed here as an example and that was wrong:
-    # `bin/upgrade_containers.sh` rewrites vchiq -> /dev/cec0 for it, so a
-    # Pi 5 *does* get a working adapter and real CEC (measured on the
-    # testbed: the adapter opens, and a monitor without CEC yields
-    # 'No CEC display detected').
-    #
-    # Note this short-circuit only engages where NO CEC node is passed in
-    # at all. A board handed the vchiq node instead makes
-    # cec_available() True even where libcec cannot use it, so it still
-    # spawns a doomed subprocess every tick — see #3267 for which boards
-    # those are and the passthrough fix for them.
+    # The short-circuit is now a correctness nicety rather than a
+    # necessity: the query below is a redis round trip to the viewer,
+    # not a subprocess, so skipping it saves one hop rather than ten
+    # seconds. It stays because 'Not available' is a more honest reading
+    # than whatever a device with no hardware would report.
     try:
         if not diagnostics.cec_available():
             # This SET used to sit outside the handler below, which made
@@ -385,15 +413,104 @@ def get_display_power() -> None:
         # (a stale display_power that never expires).
         r.set('display_power', str(diagnostics.get_display_power()), ex=3600)
     except SoftTimeLimitExceeded:
-        # The CEC query is meant to be bounded by its own
-        # subprocess timeout, but a child wedged in libcec can keep
-        # the pipe open past it. Skip this tick rather than let the
-        # hard limit SIGKILL the worker (ANTHIAS-A / 9 / B); the next
-        # beat tick re-queries.
+        # The CEC query bounds itself (each operation runs under
+        # lib.cec's own wall-clock guard, and the kernel bounds every
+        # transmit), so reaching this handler now points at redis rather
+        # than at CEC. Skip the tick either way rather than let the hard
+        # limit SIGKILL the worker (ANTHIAS-A / 9 / B); the next beat
+        # tick re-queries.
         logger.warning(
             'get_display_power: CEC query exceeded %ss; skipping this tick',
             PERIODIC_POKE_SOFT_TIME_LIMIT_S,
         )
+
+
+@celery.task(
+    soft_time_limit=PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+    time_limit=PERIODIC_POKE_TIME_LIMIT_S,
+)
+def apply_display_power_schedule() -> None:
+    """Turn the display on/off per the operator's daily schedule.
+
+    Edge-triggered: the desired state is compared against the last state
+    the scheduler applied (in Redis) and a command only goes out when
+    they differ. Re-asserting every minute would spam the CEC bus and,
+    worse, fight an operator who deliberately switched the screen on
+    outside its hours.
+    """
+    # Imported inside the task, matching the other Django-touching
+    # tasks in this module — see the app-registry note at the top.
+    from django.utils import timezone
+
+    try:
+        settings.load()
+        if not settings['display_power_schedule_enabled']:
+            # Turning the schedule off must not strand a screen the
+            # schedule had already switched off. Nothing else would ever
+            # bring it back: the manual controls are CEC-only and hidden
+            # entirely on a device with no CEC adapter, so a plain
+            # monitor would stay black with no way out of the UI.
+            if _decoded(r.get(DISPLAY_POWER_STATE_KEY)) == 'off':
+                display_power.apply_power(True)
+                logger.info(
+                    'Display power schedule disabled while off; '
+                    'restoring the display'
+                )
+            r.delete(DISPLAY_POWER_STATE_KEY)
+            return
+
+        desired = display_power.should_be_on(
+            timezone.localtime(),
+            display_power.parse_hhmm(settings['display_power_on_time']),
+            display_power.parse_hhmm(settings['display_power_off_time']),
+            display_power.parse_days(settings['display_power_days']),
+        )
+        if desired is None:
+            # Unusable schedule (missing or identical times). Leave the
+            # display alone rather than guessing at the operator's
+            # intent.
+            return
+
+        wanted = 'on' if desired else 'off'
+        if _decoded(r.get(DISPLAY_POWER_STATE_KEY)) == wanted:
+            return
+
+        how = display_power.apply_power(desired)
+        # Recorded only after the command was actually issued, so a
+        # failure mid-way (including a contended CEC bus, which raises)
+        # retries on the next tick instead of being latched as done.
+        r.set(DISPLAY_POWER_STATE_KEY, wanted, ex=DISPLAY_POWER_STATE_TTL_S)
+        logger.info('Display power schedule: turned %s via %s', wanted, how)
+    except SoftTimeLimitExceeded:
+        logger.warning(
+            'apply_display_power_schedule exceeded %ss; skipping this tick',
+            PERIODIC_POKE_SOFT_TIME_LIMIT_S,
+        )
+    except Exception:
+        # Deliberately warning, not exception: this runs every 60s, and
+        # because a failure does not latch the state the next tick
+        # retries immediately. Letting it raise would file an ERROR (and
+        # so a Sentry event) every single minute for as long as the
+        # underlying fault lasts — the same runaway-noise pattern
+        # #3017/#3063 removed from the sibling periodic tasks. The
+        # warning still reaches journald for diagnosis.
+        logger.warning(
+            'apply_display_power_schedule failed; will retry next tick',
+            exc_info=True,
+        )
+
+
+def _decoded(value: Any) -> str | None:
+    """Normalise a redis-py reply to ``str``.
+
+    ``decode_responses`` is not guaranteed to be set on the shared
+    connection, so the reply may arrive as ``bytes``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.decode('utf-8', errors='replace')
+    return str(value)
 
 
 @celery.task(
