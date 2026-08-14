@@ -9,6 +9,24 @@ on:
       - '.github/workflows/scripts/install-bun.sh'
       - 'website/**'
 
+  # Re-deploy when the API schema changes. An API-only commit touches
+  # no `website/**` path, so the filter above never fires and the API
+  # reference page silently drifts from the running API — it had been
+  # frozen since the Hugo migration, missing nine endpoints and eight
+  # component schemas by the time anyone noticed. Chaining off the
+  # schema workflow is what actually keeps the page honest; the fetch
+  # step below only makes it *possible*.
+  #
+  # Note this makes the site redeploy on most master merges, since
+  # generate-openapi-schema.yml itself runs on nearly every non-website
+  # push. That is the cost of the page never being stale.
+  workflow_run:
+    workflows: ['Generate OpenAPI Schema']
+    types:
+      - completed
+    branches:
+      - master
+
   # Re-deploy when a release is cut: build-balena-disk-image.yaml
   # invokes this workflow via `gh workflow run` after it finishes
   # uploading rpi-imager.json to the release, so this job is
@@ -32,12 +50,19 @@ env:
 
 jobs:
   build:
+    # A failed or cancelled schema run must not trigger a deploy: the
+    # fetch step would find no successful run to pull from and ship the
+    # committed fallback, quietly republishing a stale API page. Only
+    # gates the workflow_run path; push and dispatch are unaffected.
+    if: >-
+      ${{ github.event_name != 'workflow_run'
+          || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
-      # actions:read is required so the Fetch marketing screenshots
-      # step can call `gh run list` / `gh run download` against the
-      # Actions API — explicit permission blocks default every
-      # unspecified scope to `none`.
+      # actions:read is required so the Fetch marketing screenshots and
+      # Fetch OpenAPI schema steps can call `gh run list` /
+      # `gh run download` against the Actions API — explicit permission
+      # blocks default every unspecified scope to `none`.
       actions: read
       contents: read
       pages: write
@@ -115,6 +140,54 @@ jobs:
           count=$(find "$dest" -maxdepth 1 -type f -name '*.png' | wc -l)
           echo "Installed $count screenshot files"
           find "$dest" -maxdepth 1 -type f -name '*.png' -printf '%f\n' | sort
+
+      # Refresh website/data/openapi.json from the schema that
+      # generate-openapi-schema.yaml built off master. `api.html` reads
+      # it as `site.Data.openapi`, so without this the API reference is
+      # whatever was committed — which is exactly how it went a year
+      # without an update.
+      #
+      # The committed copy is a real fallback, not a placeholder: it
+      # keeps `hugo server` working offline and means a missing artifact
+      # degrades to a slightly stale page rather than a broken build.
+      # That is why a missing run is a soft fail, matching the
+      # screenshots step above. A *corrupt* artifact is not: it would
+      # replace a good file with a bad one, so the JSON is validated
+      # into a temp file and only moved into place once it parses and
+      # carries the keys the layout dereferences.
+      - name: Fetch OpenAPI schema
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dest=website/data/openapi.json
+          run_id=$(gh run list \
+            --workflow=generate-openapi-schema.yml \
+            --branch=master \
+            --status=success \
+            --limit=1 \
+            --json databaseId \
+            --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then
+            echo "::warning::No successful generate-openapi-schema run found on master; building with the committed schema."
+            exit 0
+          fi
+          echo "Fetching anthias-api-schema artifact from run $run_id"
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          gh run download "$run_id" \
+            --name anthias-api-schema \
+            --dir "$tmp"
+          src="$tmp/anthias-api-schema.json"
+          # `paths` and `components.schemas` are both dereferenced by
+          # layouts/partials/api-schema.html when it resolves a $ref; an
+          # empty or partial document would render a blank page rather
+          # than fail the build, so assert them here.
+          jq -e '.openapi and (.info.title | type == "string")' "$src" > /dev/null
+          jq -e '.paths | length > 0' "$src" > /dev/null
+          jq -e '.components.schemas | length > 0' "$src" > /dev/null
+          mv "$src" "$dest"
+          echo "Installed OpenAPI schema: $(jq -r '.paths | length' "$dest") paths, $(jq -r '.components.schemas | length' "$dest") schemas"
 
       - name: Build website CSS
         run: bun run css:build

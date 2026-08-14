@@ -1,0 +1,1954 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Anthias API",
+        "version": "2.0.0"
+    },
+    "paths": {
+        "/api/v2/assets": {
+            "get": {
+                "operationId": "assets_list",
+                "summary": "List assets",
+                "tags": [
+                    "assets"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AssetSerializerV2"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "assets_create",
+                "summary": "Create asset",
+                "tags": [
+                    "assets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateAssetSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateAssetSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateAssetSerializerV2"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssetSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/assets/{asset_id}": {
+            "get": {
+                "operationId": "assets_retrieve",
+                "summary": "Get asset",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssetSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "assets_update",
+                "summary": "Update asset",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAssetSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAssetSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAssetSerializerV2"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssetSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "assets_partial_update",
+                "summary": "Update asset",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateAssetSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateAssetSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateAssetSerializerV2"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AssetSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "assets_destroy",
+                "summary": "Delete asset",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v2/assets/{asset_id}/content": {
+            "get": {
+                "operationId": "assets_content_retrieve",
+                "description": "The content of the asset.\n`type` can either be `file` or `url`.\n\nIn case of a file, the fields `mimetype`, `filename`, and `content`\nwill be present. In case of a URL, the field `url` will be present.",
+                "summary": "Get asset content",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {
+                                            "type": "string"
+                                        },
+                                        "url": {
+                                            "type": "string"
+                                        },
+                                        "filename": {
+                                            "type": "string"
+                                        },
+                                        "mimetype": {
+                                            "type": "string"
+                                        },
+                                        "content": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/assets/{asset_id}/recheck": {
+            "post": {
+                "operationId": "assets_recheck_create",
+                "description": "On-demand reachability recheck, called from the viewer.\n\nThe viewer cannot attach operator BasicAuth credentials, so this\nendpoint uses a lightweight internal token derived from the shared\n``anthias.conf`` secret instead. The request still remains\nside-effect-only and rate-limited: it returns no asset data, queue\nchurn is debounced here, and the Celery task enforces the longer\nper-asset probe cooldown.",
+                "summary": "Recheck asset reachability",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "asset_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "202": {
+                        "description": "No response body"
+                    },
+                    "403": {
+                        "description": "No response body"
+                    },
+                    "404": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v2/assets/control/{command}": {
+            "get": {
+                "operationId": "assets_control_retrieve",
+                "description": "Use any of the following commands to control asset playback:\n* `next` - Show the next asset\n* `previous` - Show the previous asset\n* `asset&{asset_id}` - Show the asset with the specified `asset_id`",
+                "summary": "Control asset playback",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "command",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "asset&{asset_id}",
+                                "next",
+                                "previous"
+                            ]
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "assets"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Asset switched"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/assets/order": {
+            "post": {
+                "operationId": "assets_order_create",
+                "summary": "Update playlist order",
+                "tags": [
+                    "assets"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlaylistOrderSerializerMixin"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlaylistOrderSerializerMixin"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlaylistOrderSerializerMixin"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v2/backup": {
+            "post": {
+                "operationId": "backup_create",
+                "description": "Create a backup of the current Anthias instance, which\nincludes the following:\n* current settings\n* image and video assets\n* asset metadata (e.g. name, duration, play order, status),\n  which is stored in a SQLite database",
+                "summary": "Create backup",
+                "tags": [
+                    "backup"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "anthias-backup-2021-09-16T15-00-00.tar.gz",
+                                    "description": "Backup file name"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/device_settings": {
+            "get": {
+                "operationId": "device_settings_retrieve",
+                "summary": "Get device settings",
+                "tags": [
+                    "device_settings"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeviceSettingsSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "device_settings_partial_update",
+                "summary": "Update device settings",
+                "tags": [
+                    "device_settings"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateDeviceSettingsSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateDeviceSettingsSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateDeviceSettingsSerializerV2"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/display/{state}": {
+            "post": {
+                "operationId": "display_create",
+                "summary": "Set display power state (experimental, HDMI-CEC)",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "state",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "off",
+                                "on"
+                            ]
+                        },
+                        "description": "Desired display power state. Only valid on CEC-capable hardware.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "display"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DisplayPowerViewSerializerMixin"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/file_asset": {
+            "post": {
+                "operationId": "file_asset_create",
+                "summary": "Upload file asset",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-Upload-Id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Opaque upload session id returned as ``upload_id`` on the first chunk of a resumable (Content-Range) upload. Echo it on every subsequent chunk so they reassemble into the same file. Omit it to start a new upload."
+                    }
+                ],
+                "tags": [
+                    "file_asset"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "file_upload": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "uri": {
+                                            "type": "string"
+                                        },
+                                        "ext": {
+                                            "type": "string"
+                                        },
+                                        "upload_id": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/info": {
+            "get": {
+                "operationId": "info_retrieve",
+                "summary": "Get system information",
+                "tags": [
+                    "info"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "viewlog": {
+                                            "type": "string"
+                                        },
+                                        "loadavg": {
+                                            "type": "number"
+                                        },
+                                        "free_space": {
+                                            "type": "string"
+                                        },
+                                        "display_power": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
+                                        "up_to_date": {
+                                            "type": "boolean"
+                                        },
+                                        "anthias_version": {
+                                            "type": "string"
+                                        },
+                                        "device_model": {
+                                            "type": "string"
+                                        },
+                                        "uptime": {
+                                            "type": "object",
+                                            "properties": {
+                                                "days": {
+                                                    "type": "integer"
+                                                },
+                                                "hours": {
+                                                    "type": "number"
+                                                }
+                                            }
+                                        },
+                                        "memory": {
+                                            "type": "object",
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "used": {
+                                                    "type": "integer"
+                                                },
+                                                "free": {
+                                                    "type": "integer"
+                                                },
+                                                "shared": {
+                                                    "type": "integer"
+                                                },
+                                                "buff": {
+                                                    "type": "integer"
+                                                },
+                                                "available": {
+                                                    "type": "integer"
+                                                },
+                                                "low_ram": {
+                                                    "type": "boolean"
+                                                }
+                                            }
+                                        },
+                                        "ip_addresses": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "mac_address": {
+                                            "type": "string"
+                                        },
+                                        "host_user": {
+                                            "type": "string"
+                                        },
+                                        "time": {
+                                            "type": "object",
+                                            "properties": {
+                                                "iso": {
+                                                    "type": "string"
+                                                },
+                                                "timezone": {
+                                                    "type": "string"
+                                                },
+                                                "offset": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/integrations": {
+            "get": {
+                "operationId": "integrations_retrieve",
+                "summary": "Get integrations information",
+                "tags": [
+                    "integrations"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/IntegrationsSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/integrations/import/{provider}/item": {
+            "post": {
+                "operationId": "integrations_import_item_create",
+                "description": "Import a single remote media item as an Anthias asset.\n\nPer-item (not batch) for the same reason as\n``ScreenlyMigrateAssetViewV2``: the wizard shows live progress and\nkeeps going past individual failures. Known per-item failures return\n200 with ``success: False`` so the queue keeps advancing; only a\ntransport failure is a 502.",
+                "summary": "Import one media item from a provider",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "provider",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportItemSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportItemSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportItemSerializerV2"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "asset_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "skipped": {
+                                            "type": "boolean"
+                                        },
+                                        "reason": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/integrations/import/{provider}/validate": {
+            "post": {
+                "operationId": "integrations_import_validate_create",
+                "description": "Validate an import provider's token and enumerate its media.\n\nInbound counterpart to ``ScreenlyValidateTokenViewV2``: validation\nand listing happen in one round-trip so the wizard's Continue button\ngoes straight from the token field to the item picker. The token is\nnot stored; each request forwards it inline. ``provider`` is the\nregistry key from the URL (``yodeck``, later ``screencloud`` …).",
+                "summary": "Validate an import provider token and list its media",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "provider",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportValidateSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportValidateSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ImportValidateSerializerV2"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "valid": {
+                                            "type": "boolean"
+                                        },
+                                        "items": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/integrations/screenly/migrate": {
+            "post": {
+                "operationId": "integrations_screenly_migrate_create",
+                "description": "Forward a single Anthias asset to the configured Screenly account.\n\nPer-asset rather than batch on purpose: the UI shows live progress\nand continues past individual failures, which matches the way\noperators run this (large libraries, some assets reachable, some\nnot). Batching would either swallow partial failures or hand-roll\nthe same loop server-side with worse feedback.",
+                "summary": "Migrate one asset to Screenly v4.1",
+                "tags": [
+                    "integrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ScreenlyMigrateAssetSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ScreenlyMigrateAssetSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ScreenlyMigrateAssetSerializerV2"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "screenly_asset_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/integrations/screenly/validate": {
+            "post": {
+                "operationId": "integrations_screenly_validate_create",
+                "description": "Probe a Screenly v4.1 API token and reserve the migration group.\n\nTwo steps in one round-trip because the wizard's UX is \"click\nContinue → either an error or the asset picker\". Validating the\ntoken alone would leave a follow-up call between Continue and the\nnext screen, and the asset-group creation is cheap (idempotent\nget-or-create against ``/asset-groups``). The token is not stored;\neach request forwards it inline.",
+                "summary": "Validate a Screenly v4.1 API token and prepare the migration asset-group",
+                "tags": [
+                    "integrations"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ScreenlyTokenSerializerV2"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ScreenlyTokenSerializerV2"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ScreenlyTokenSerializerV2"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "valid": {
+                                            "type": "boolean"
+                                        },
+                                        "asset_group_id": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "asset_group_title": {
+                                            "type": "string",
+                                            "nullable": true
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "nullable": true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/network/ip-addresses": {
+            "get": {
+                "operationId": "network_ip_addresses_retrieve",
+                "description": "Lightweight IP-list endpoint for the splash page to poll.\n\nUnauth'd because the splash page itself is unauth'd and the viewer\nisn't a credentialed client. The data here is already disclosed by\n/splash-page rendering — there's no new exposure.\n\nNarrow on purpose: only IPs, no diagnostics. /api/v2/info covers\nthe \"everything about the device\" case but is auth'd and does\nheavier work (psutil, statvfs, version checks) that would compound\non a 2-second poll. Don't bolt onto this; add a sibling endpoint\nif a different unauth'd value is ever needed.\n\n**KNOWN LIMITATION (deferred to broader auth work).** This GET has\na side effect — ``_resolve_node_ip`` calls ``_publish_refresh()``\non cache miss / hit / empty-list, which publishes ``hostcmd:\nset_ip_addresses`` to host_agent. ``host_agent.set_ip_addresses``\nin turn does an internet probe (``requests.get`` to 1.1.1.1 with\na 10×1s tenacity retry). An unauthenticated LAN client can drive\nthat side effect at the debounce-bounded rate (one publish per\n``_IP_REFRESH_DEBOUNCE_S``).\n\nThe mitigations already in place keep blast radius bounded:\n\n  * SETNX-debounced publishes (only one refresh per 12s window\n    regardless of poll volume),\n  * the response body carries no data not already disclosed by\n    the splash page itself,\n  * host_agent's own retry/throttle behavior caps the\n    downstream cost.\n\nThe proper fix is a shared internal-auth gate (matching the one\non AssetRecheckViewV2) — but the splash polling endpoint is\nconsumed by the viewer's webview from the device's local\nnetwork with no way to attach BasicAuth, so internal-auth here\nneeds to be designed alongside the broader auth rework. Tracked\nin the same followup as AssetRecheckViewV2's gating.",
+                "summary": "Get device IP addresses (for splash poll)",
+                "tags": [
+                    "network"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "ip_addresses": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/reboot": {
+            "post": {
+                "operationId": "reboot_create",
+                "summary": "Reboot system",
+                "tags": [
+                    "reboot"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v2/recover": {
+            "post": {
+                "operationId": "recover_create",
+                "description": "Recover data from a backup file. The backup file must be\na `.tar.gz` file.",
+                "summary": "Recover from backup",
+                "tags": [
+                    "recover"
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "backup_upload": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Recovery successful."
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v2/shutdown": {
+            "post": {
+                "operationId": "shutdown_create",
+                "summary": "Shut down system",
+                "tags": [
+                    "shutdown"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v2/viewer/playlist": {
+            "get": {
+                "operationId": "viewer_playlist_retrieve",
+                "description": "Active assets + next deadline, evaluated against server time.\n\nIntended for the C++ viewer (GH #2906 Phase 3) so the viewer no\nlonger needs Django ORM access or its own ``Asset.is_active()``\nre-implementation. The Python viewer keeps using\n``anthias_viewer.scheduling.generate_asset_list()`` directly until\nPhase 3 swaps it.\n\nInternal-auth gated for the same reason as\n``AssetRecheckViewV2``: the viewer can't attach operator\nBasicAuth, so it presents the shared token derived from\n``anthias.conf``.",
+                "summary": "Get the active playlist and next re-evaluation deadline",
+                "tags": [
+                    "viewer"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ViewerPlaylistSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v2/viewer/settings": {
+            "get": {
+                "operationId": "viewer_settings_retrieve",
+                "description": "Viewer-relevant settings subset for the C++ viewer.\n\nNarrower than ``DeviceSettingsViewV2`` on purpose: only the keys\nthe viewer reads at runtime are exposed, so the internal-auth\npath doesn't surface operator credential fields. Internal-auth\ngated like ``ViewerPlaylistViewV2`` above.",
+                "summary": "Get viewer-relevant device settings",
+                "tags": [
+                    "viewer"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ViewerSettingsSerializerV2"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AssetSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "uri": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "duration": {
+                        "type": "integer",
+                        "maximum": 9223372036854775807,
+                        "minimum": -9223372036854775808,
+                        "format": "int64",
+                        "nullable": true
+                    },
+                    "mimetype": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "is_enabled": {
+                        "type": "boolean"
+                    },
+                    "nocache": {
+                        "type": "boolean"
+                    },
+                    "play_order": {
+                        "type": "integer",
+                        "maximum": 9223372036854775807,
+                        "minimum": -9223372036854775808,
+                        "format": "int64"
+                    },
+                    "skip_asset_check": {
+                        "type": "boolean"
+                    },
+                    "skip_ssl_verify": {
+                        "type": "boolean"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "is_processing": {
+                        "type": "boolean"
+                    },
+                    "play_days": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "readOnly": true
+                    },
+                    "play_time_from": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "play_time_to": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "is_reachable": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "last_reachability_check": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "readOnly": true
+                    },
+                    "refresh_interval_s": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "custom_headers": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "asset_id",
+                    "custom_headers",
+                    "is_active",
+                    "is_reachable",
+                    "last_reachability_check",
+                    "metadata",
+                    "play_days",
+                    "refresh_interval_s"
+                ]
+            },
+            "AuthBackendEnum": {
+                "enum": [
+                    "auth_basic"
+                ],
+                "type": "string",
+                "description": "* `` - No authentication\n* `auth_basic` - Basic authentication"
+            },
+            "BlankEnum": {
+                "enum": [
+                    ""
+                ]
+            },
+            "CreateAssetSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "ext": {
+                        "type": "string",
+                        "writeOnly": true
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "uri": {
+                        "type": "string"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "duration": {
+                        "type": "integer",
+                        "maximum": 31536000,
+                        "minimum": 0
+                    },
+                    "mimetype": {
+                        "type": "string"
+                    },
+                    "is_enabled": {
+                        "type": "boolean"
+                    },
+                    "is_processing": {
+                        "type": "boolean"
+                    },
+                    "nocache": {
+                        "type": "boolean"
+                    },
+                    "play_order": {
+                        "type": "integer"
+                    },
+                    "skip_asset_check": {
+                        "type": "boolean"
+                    },
+                    "skip_ssl_verify": {
+                        "type": "boolean"
+                    },
+                    "play_days": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "maximum": 7,
+                            "minimum": 1
+                        }
+                    },
+                    "play_time_from": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "play_time_to": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "refresh_interval_s": {
+                        "type": "integer",
+                        "maximum": 86400,
+                        "minimum": 0,
+                        "writeOnly": true
+                    },
+                    "custom_headers": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "writeOnly": true
+                    }
+                },
+                "required": [
+                    "asset_id",
+                    "duration",
+                    "end_date",
+                    "is_enabled",
+                    "mimetype",
+                    "name",
+                    "start_date",
+                    "uri"
+                ]
+            },
+            "DeviceSettingsSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "player_name": {
+                        "type": "string"
+                    },
+                    "audio_output": {
+                        "type": "string"
+                    },
+                    "default_duration": {
+                        "type": "integer"
+                    },
+                    "default_streaming_duration": {
+                        "type": "integer"
+                    },
+                    "date_format": {
+                        "type": "string"
+                    },
+                    "timezone": {
+                        "type": "string"
+                    },
+                    "auth_backend": {
+                        "type": "string"
+                    },
+                    "show_splash": {
+                        "type": "boolean"
+                    },
+                    "default_assets": {
+                        "type": "boolean"
+                    },
+                    "shuffle_playlist": {
+                        "type": "boolean"
+                    },
+                    "use_24_hour_clock": {
+                        "type": "boolean"
+                    },
+                    "debug_logging": {
+                        "type": "boolean"
+                    },
+                    "prefer_dark_mode": {
+                        "type": "boolean"
+                    },
+                    "verify_ssl": {
+                        "type": "boolean"
+                    },
+                    "screen_rotation": {
+                        "$ref": "#/components/schemas/ScreenRotationEnum"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "display_power_schedule_enabled": {
+                        "type": "boolean"
+                    },
+                    "display_power_on_time": {
+                        "type": "string"
+                    },
+                    "display_power_off_time": {
+                        "type": "string"
+                    },
+                    "display_power_days": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "audio_output",
+                    "auth_backend",
+                    "date_format",
+                    "debug_logging",
+                    "default_assets",
+                    "default_duration",
+                    "default_streaming_duration",
+                    "display_power_days",
+                    "display_power_off_time",
+                    "display_power_on_time",
+                    "display_power_schedule_enabled",
+                    "player_name",
+                    "prefer_dark_mode",
+                    "screen_rotation",
+                    "show_splash",
+                    "shuffle_playlist",
+                    "timezone",
+                    "use_24_hour_clock",
+                    "username",
+                    "verify_ssl"
+                ]
+            },
+            "DisplayPowerViewSerializerMixin": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "message"
+                ]
+            },
+            "ImportItemSerializerV2": {
+                "type": "object",
+                "description": "Request body for importing a single remote media item.\n\n``enable`` defaults to True so the wizard's per-item calls don't have\nto send it on every request; the operator toggles it once and it\nrides on each item POST.",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "writeOnly": true
+                    },
+                    "remote_id": {
+                        "type": "string"
+                    },
+                    "enable": {
+                        "type": "boolean",
+                        "default": true
+                    }
+                },
+                "required": [
+                    "remote_id",
+                    "token"
+                ]
+            },
+            "ImportValidateSerializerV2": {
+                "type": "object",
+                "description": "Request body for validating an import provider's token.",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "writeOnly": true
+                    }
+                },
+                "required": [
+                    "token"
+                ]
+            },
+            "IntegrationsSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "is_balena": {
+                        "type": "boolean"
+                    },
+                    "balena_device_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "balena_app_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "balena_app_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "balena_supervisor_version": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "balena_host_os_version": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "balena_device_name_at_init": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "is_balena"
+                ]
+            },
+            "PatchedUpdateAssetSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "duration": {
+                        "type": "integer",
+                        "maximum": 31536000,
+                        "minimum": 0
+                    },
+                    "is_enabled": {
+                        "type": "boolean"
+                    },
+                    "is_processing": {
+                        "type": "boolean"
+                    },
+                    "nocache": {
+                        "type": "boolean"
+                    },
+                    "play_order": {
+                        "type": "integer"
+                    },
+                    "skip_asset_check": {
+                        "type": "boolean"
+                    },
+                    "skip_ssl_verify": {
+                        "type": "boolean"
+                    },
+                    "play_days": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "maximum": 7,
+                            "minimum": 1
+                        }
+                    },
+                    "play_time_from": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "play_time_to": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "refresh_interval_s": {
+                        "type": "integer",
+                        "maximum": 86400,
+                        "minimum": 0
+                    },
+                    "custom_headers": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
+            "PatchedUpdateDeviceSettingsSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "player_name": {
+                        "type": "string"
+                    },
+                    "audio_output": {
+                        "type": "string"
+                    },
+                    "default_duration": {
+                        "type": "integer",
+                        "maximum": 31536000,
+                        "minimum": 0
+                    },
+                    "default_streaming_duration": {
+                        "type": "integer",
+                        "maximum": 31536000,
+                        "minimum": 0
+                    },
+                    "date_format": {
+                        "type": "string"
+                    },
+                    "timezone": {
+                        "type": "string"
+                    },
+                    "show_splash": {
+                        "type": "boolean"
+                    },
+                    "default_assets": {
+                        "type": "boolean"
+                    },
+                    "shuffle_playlist": {
+                        "type": "boolean"
+                    },
+                    "use_24_hour_clock": {
+                        "type": "boolean"
+                    },
+                    "debug_logging": {
+                        "type": "boolean"
+                    },
+                    "prefer_dark_mode": {
+                        "type": "boolean"
+                    },
+                    "verify_ssl": {
+                        "type": "boolean"
+                    },
+                    "screen_rotation": {
+                        "$ref": "#/components/schemas/ScreenRotationEnum"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    },
+                    "password_2": {
+                        "type": "string"
+                    },
+                    "auth_backend": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/AuthBackendEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "current_password": {
+                        "type": "string"
+                    },
+                    "display_power_schedule_enabled": {
+                        "type": "boolean"
+                    },
+                    "display_power_on_time": {
+                        "type": "string"
+                    },
+                    "display_power_off_time": {
+                        "type": "string"
+                    },
+                    "display_power_days": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PlaylistOrderSerializerMixin": {
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "description": "Comma-separated list of asset IDs in the order\nthey should be played. For example:\n\n`793406aa1fd34b85aa82614004c0e63a,1c5cfa719d1f4a9abae16c983a18903b,9c41068f3b7e452baf4dc3f9b7906595`"
+                    }
+                },
+                "required": [
+                    "ids"
+                ]
+            },
+            "ScreenRotationEnum": {
+                "enum": [
+                    0,
+                    90,
+                    180,
+                    270
+                ],
+                "type": "integer",
+                "description": "* `0` - 0\n* `90` - 90\n* `180` - 180\n* `270` - 270"
+            },
+            "ScreenlyMigrateAssetSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "writeOnly": true
+                    },
+                    "asset_id": {
+                        "type": "string"
+                    },
+                    "asset_group_id": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "asset_id",
+                    "token"
+                ]
+            },
+            "ScreenlyTokenSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "writeOnly": true
+                    }
+                },
+                "required": [
+                    "token"
+                ]
+            },
+            "UpdateAssetSerializerV2": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "duration": {
+                        "type": "integer",
+                        "maximum": 31536000,
+                        "minimum": 0
+                    },
+                    "is_enabled": {
+                        "type": "boolean"
+                    },
+                    "is_processing": {
+                        "type": "boolean"
+                    },
+                    "nocache": {
+                        "type": "boolean"
+                    },
+                    "play_order": {
+                        "type": "integer"
+                    },
+                    "skip_asset_check": {
+                        "type": "boolean"
+                    },
+                    "skip_ssl_verify": {
+                        "type": "boolean"
+                    },
+                    "play_days": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "maximum": 7,
+                            "minimum": 1
+                        }
+                    },
+                    "play_time_from": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "play_time_to": {
+                        "type": "string",
+                        "format": "time",
+                        "nullable": true
+                    },
+                    "refresh_interval_s": {
+                        "type": "integer",
+                        "maximum": 86400,
+                        "minimum": 0
+                    },
+                    "custom_headers": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                },
+                "required": [
+                    "duration",
+                    "end_date",
+                    "is_enabled",
+                    "name",
+                    "start_date"
+                ]
+            },
+            "ViewerPlaylistSerializerV2": {
+                "type": "object",
+                "description": "Server-evaluated playlist for the C++ viewer.\n\nThe deadline is the soonest UTC moment at which the viewer should\nre-fetch this endpoint — derived from asset start/end boundaries\nplus a 60s cap when any returned asset has a day-of-week or\ntime-of-day window. ``now`` is the server's notion of the\nevaluation timestamp; clients use it to compute deadline-relative\nsleeps without trusting their own clock.",
+                "properties": {
+                    "assets": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AssetSerializerV2"
+                        }
+                    },
+                    "deadline": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "now": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "assets",
+                    "deadline",
+                    "now"
+                ]
+            },
+            "ViewerSettingsSerializerV2": {
+                "type": "object",
+                "description": "Viewer-relevant subset of device settings.\n\nIntentionally narrower than ``DeviceSettingsSerializerV2``: only\nthe keys the viewer actually consults at runtime are exposed, so\nthe C++ viewer's internal-auth path doesn't pull operator fields\n(``username``, ``auth_backend``, ``player_name``, …) it never\nneeds to read.",
+                "properties": {
+                    "shuffle_playlist": {
+                        "type": "boolean"
+                    },
+                    "show_splash": {
+                        "type": "boolean"
+                    },
+                    "screen_rotation": {
+                        "$ref": "#/components/schemas/ScreenRotationEnum"
+                    },
+                    "audio_output": {
+                        "type": "string"
+                    },
+                    "debug_logging": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "audio_output",
+                    "debug_logging",
+                    "screen_rotation",
+                    "show_splash",
+                    "shuffle_playlist"
+                ]
+            }
+        }
+    }
+}
