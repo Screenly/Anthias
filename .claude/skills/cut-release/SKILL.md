@@ -109,6 +109,19 @@ gh release edit v2026.06.0 --notes-file /tmp/notes.md
 
 Keep the curated summary short; link notable PRs/releases as markdown links.
 
+## 5b. Burn-in on the testbeds — while the release is still a draft
+
+The draft is the QA gate: nothing is outward-facing yet, so a blocker found here
+costs a deleted draft rather than a published tag and a fleet OTA. Run the soak
+per **testbed-qa §6** (all supported asset types on every board, shipping
+configuration, playlist verified *rotating*), then report measured numbers.
+
+Soak the newest `<short-hash>` that actually contains device code — a
+website-only commit produces no images (`docker-build.yaml` excludes
+`website/**`), and the version-bump commit itself only touches
+`package.json` / `pyproject.toml` / `uv.lock`, so the preceding code commit is
+code-identical to the release and is the correct target.
+
 ## 6. Publish → the deploy pipeline runs
 
 ```bash
