@@ -109,7 +109,7 @@ gh release edit v2026.06.0 --notes-file /tmp/notes.md
 
 Keep the curated summary short; link notable PRs/releases as markdown links.
 
-## 5b. Burn in on the testbeds — while the release is still a draft
+## 5b. Burn-in on the testbeds — while the release is still a draft
 
 The draft is the QA gate: nothing is outward-facing yet, so a blocker found here
 costs a deleted draft rather than a published tag and a fleet OTA. Run the soak
