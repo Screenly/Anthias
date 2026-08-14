@@ -205,7 +205,7 @@ def get_node_ip() -> str:
 
     * **Balena:** one API call to the local supervisor.
     * **Bare metal:** the ``anthias-host-agent`` systemd unit runs on the
-      host, enumerates real interfaces with netifaces, and writes the
+      host, enumerates real interfaces over rtnetlink, and writes the
       results to Redis. This function publishes ``hostcmd:
       set_ip_addresses`` to trigger a refresh, waits up to ~80s
       (60s ``host_agent_ready`` + 20s ``ip_addresses_ready``) for

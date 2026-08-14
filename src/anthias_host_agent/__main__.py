@@ -11,7 +11,6 @@ import subprocess
 from collections.abc import Callable
 from typing import Any
 
-import netifaces
 import redis
 import requests
 from tenacity import (
@@ -31,6 +30,7 @@ from tenacity import (
 # ansible/roles/anthias/templates/anthias-host-agent.service), which
 # is what makes the import resolvable from the host venv.
 from anthias_common.device_helper import detect_board_subtype
+from anthias_host_agent.ifaddrs import interface_addresses
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +63,11 @@ INTERNET_PROBE_URL = 'https://1.1.1.1'  # NOSONAR
 
 def get_ip_addresses() -> list[str]:
     return [
-        ip['addr']
-        for interface in netifaces.interfaces()
+        address
+        for interface, addresses in interface_addresses().items()
         if interface.startswith(SUPPORTED_INTERFACES)
-        for ip in (
-            netifaces.ifaddresses(interface).get(netifaces.AF_INET, [])
-            + netifaces.ifaddresses(interface).get(netifaces.AF_INET6, [])
-        )
-        if not ipaddress.ip_address(ip['addr']).is_link_local
+        for address in addresses
+        if not ipaddress.ip_address(address).is_link_local
     ]
 
 

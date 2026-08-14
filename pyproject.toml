@@ -28,7 +28,6 @@ dev-host = [
     "ruff==0.16.2",
     "tenacity==9.1.4",
     "types-gunicorn==26.0.0.20260807",
-    "types-netifaces==0.11.0.20260408",
     # Direct dev dep: types-psutil used to arrive transitively via
     # djangorestframework-stubs, which dropped it in 3.17.1 — pin it
     # directly so the psutil import in the server keeps its stubs.
@@ -55,7 +54,6 @@ server = [
     "django-stubs-ext==6.0.9",
     "drf-spectacular==0.30.0",
     "Jinja2==3.1.6",
-    "netifaces==0.11.0",
     "packaging==26.3",
     # Pillow + pillow-heif power the upload-time image normalisation
     # pipeline (HEIC / HEIF / TIFF → lossless WebP). pillow-heif
@@ -94,7 +92,6 @@ viewer = [
     "certifi==2026.7.22",
     "Django==5.2.14",
     "Jinja2==3.1.6",
-    "netifaces==0.11.0",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
     "pytz==2026.3.post1",
@@ -117,7 +114,6 @@ dev = [
 ]
 host = [
     "ansible-core==2.21.2",
-    "netifaces2==0.0.22",
     "redis==8.1.0",
     "requests==2.34.2",
     "tenacity==9.1.4",
@@ -139,7 +135,7 @@ test = [
 # Used by the python-mypy CI job. The django-stubs plugin imports
 # anthias_server.django_project.settings to introspect the app registry, so we need the
 # runtime deps that settings touches — but not the heavy native-extension
-# deps from the server group (netifaces, etc.). We also include
+# deps from the server group (cec, pydbus, etc.). We also include
 # docker-image-builder so its tools (pygit2, python_on_whales) resolve.
 mypy = [
     { include-group = "dev-host" },
