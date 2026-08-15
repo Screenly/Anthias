@@ -62,9 +62,29 @@ INTERNET_PROBE_URL = 'https://1.1.1.1'  # NOSONAR
 
 
 def get_ip_addresses() -> list[str]:
+    try:
+        addresses_by_interface = interface_addresses()
+    except OSError:
+        # Opening and reading a netlink socket can fail where the old
+        # netifaces call couldn't — fd exhaustion, ENOBUFS under memory
+        # pressure, or a wedged dump hitting the timeout. This runs
+        # inside the pubsub handler, and nothing up the stack catches:
+        # an exception here ends subscriber_loop and takes reboot /
+        # shutdown handling down with it until systemd restarts the
+        # unit. Worse, set_ip_addresses has already flipped
+        # `ip_addresses_ready` to true by this point, so dying here
+        # leaves consumers reading "ready" against a key that was never
+        # written. Report no addresses and let the next
+        # set_ip_addresses request try again.
+        logger.warning(
+            'Unable to read host interface addresses over rtnetlink',
+            exc_info=True,
+        )
+        return []
+
     return [
         address
-        for interface, addresses in interface_addresses().items()
+        for interface, addresses in addresses_by_interface.items()
         if interface.startswith(SUPPORTED_INTERFACES)
         for address in addresses
         if not ipaddress.ip_address(address).is_link_local

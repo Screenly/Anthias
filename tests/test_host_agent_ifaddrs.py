@@ -393,3 +393,38 @@ class TestGetIpAddresses:
             return_value=addresses,
         ):
             assert get_ip_addresses() == expected
+
+    @pytest.mark.parametrize(
+        'error',
+        [
+            OSError(errno.EMFILE, 'Too many open files'),
+            OSError(errno.ENOBUFS, 'No buffer space available'),
+            TimeoutError('timed out'),
+        ],
+    )
+    def test_netlink_failure_reports_no_addresses(
+        self, error: OSError
+    ) -> None:
+        """A netlink failure must not escape into the pubsub handler.
+
+        Nothing between here and ``subscriber_loop``'s ``pubsub.listen()``
+        catches, so raising would end the loop and take reboot/shutdown
+        handling down with it.
+
+        The warning is asserted against the module logger rather than
+        caplog: the suite configures Django logging with
+        ``disable_existing_loggers``, which silences this logger when
+        the whole suite runs but not when this file runs alone.
+        """
+        from anthias_host_agent import __main__ as host_agent
+
+        with (
+            mock.patch.object(
+                host_agent, 'interface_addresses', side_effect=error
+            ),
+            mock.patch.object(host_agent.logger, 'warning') as warning,
+        ):
+            assert host_agent.get_ip_addresses() == []
+
+        assert warning.call_count == 1
+        assert 'rtnetlink' in warning.call_args.args[0]
