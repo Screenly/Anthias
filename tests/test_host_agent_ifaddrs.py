@@ -218,6 +218,21 @@ class TestParseDump:
 
         assert excinfo.value.errno == 13
 
+    def test_nlmsg_error_with_a_zero_code_is_an_ack(self) -> None:
+        """A zero code is an ACK, so it ends the dump instead of raising."""
+        data = _address_message(
+            socket.AF_INET,
+            _LO_INDEX,
+            _attribute(
+                _IFA_LOCAL, socket.inet_pton(socket.AF_INET, '10.0.0.5')
+            ),
+        ) + _message(_NLMSG_ERROR, struct.pack('=i', 0))
+
+        addresses, done = parse_dump(data)
+
+        assert addresses == [(_LO, '10.0.0.5')]
+        assert done is True
+
     def test_nlmsg_error_without_a_code_still_raises_oserror(self) -> None:
         """An NLMSG_ERROR whose body is missing or truncated.
 

@@ -153,6 +153,13 @@ def parse_dump(data: bytes) -> tuple[list[tuple[str, str]], bool]:
             if len(body) < _NLMSGERR_CODE.size:
                 raise OSError(errno.EPROTO, 'truncated netlink error message')
             (error,) = _NLMSGERR_CODE.unpack_from(body)
+            if error == 0:
+                # A zero code is an ACK, not a failure — it terminates
+                # the response the way NLMSG_DONE does. We don't set
+                # NLM_F_ACK so the kernel shouldn't send one, but
+                # raising OSError(0, 'Success') here would be nonsense
+                # if it ever did.
+                return addresses, True
             code = -error
             raise OSError(code, os.strerror(code))
 
