@@ -3789,3 +3789,42 @@ def test_system_info_power_card_exposes_the_sensor_detail(
     assert 'Not enough power' in body
     # System Info is the one place the mechanism is named.
     assert 'rpi_volt' in body
+
+
+@pytest.mark.django_db
+def test_naive_latch_timestamp_is_read_as_utc() -> None:
+    # We only ever write offset-aware strings, but fromisoformat also
+    # accepts a naive one. naturaltime then compares it against a naive
+    # LOCAL now, so on a non-UTC device a dip a minute ago renders as
+    # "3 hours from now". Not a crash, just a nonsense relative time in
+    # the banner, which is worse than useless to an operator.
+    parsed = page_context._parse_iso('2026-08-15T10:00:00')
+
+    assert parsed is not None
+    assert parsed.utcoffset() is not None, 'naive value must be stamped UTC'
+    assert parsed.utcoffset().total_seconds() == 0
+
+    # An explicit offset is preserved rather than overwritten.
+    other = page_context._parse_iso('2026-08-15T10:00:00+05:00')
+    assert other.utcoffset().total_seconds() == 5 * 3600
+
+
+@pytest.mark.django_db
+def test_power_banner_renders_with_a_naive_latch_timestamp(
+    client: Client, undervoltage_state: Any
+) -> None:
+    # End-to-end guard: a stale or hand-edited latch must not produce a
+    # future-dated "most recently ..." line on the banner.
+    with undervoltage_state(
+        active=False,
+        seen_since_boot=True,
+        count=2,
+        last_seen='2026-08-15T10:00:00',
+        first_seen='2026-08-15T09:00:00',
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'This player briefly lost power' in body
+    assert 'from now' not in body

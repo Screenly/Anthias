@@ -64,6 +64,27 @@ class FakePoll:
         return self._results.pop(0)
 
 
+class FlippingPoll(FakePoll):
+    """Rewrites the attribute between wake-ups.
+
+    Lets a test drive a sequence of distinct sensor states through the
+    real loop. Subclassing rather than assigning over ``poll`` keeps
+    mypy happy without a ``type: ignore``, which the repo guidelines
+    rule out where an idiom will do.
+    """
+
+    def __init__(self, path: Path, sequence: list[str]) -> None:
+        super().__init__([])
+        self._path = path
+        self._sequence = list(sequence)
+
+    def poll(self, timeout_ms: float | None = None) -> list[tuple[int, int]]:
+        if not self._sequence:
+            raise _StopLoop
+        self._path.write_text(self._sequence.pop(0))
+        return []
+
+
 @pytest.fixture(autouse=True)
 def _clear_alarm_path_cache() -> Iterator[None]:
     undervoltage.reset_alarm_path_cache()
@@ -173,18 +194,7 @@ class TestWatchLoop:
         self, alarm_file: Path, fake_redis: MagicMock
     ) -> None:
         # Flip the file between wakeups: 1 -> 0 -> 1 is two events.
-        calls = {'n': 0}
-        sequence = ['1\n', '0\n', '1\n']
-
-        def flip(*_a: Any, **_k: Any) -> list[tuple[int, int]]:
-            if calls['n'] >= len(sequence):
-                raise _StopLoop
-            alarm_file.write_text(sequence[calls['n']])
-            calls['n'] += 1
-            return []
-
-        poller = FakePoll([])
-        poller.poll = flip  # type: ignore[method-assign]
+        poller = FlippingPoll(alarm_file, ['1\n', '0\n', '1\n'])
         with (
             mock.patch(
                 'anthias_server.lib.undervoltage_watcher.select.poll',

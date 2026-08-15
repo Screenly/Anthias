@@ -7,6 +7,7 @@ surfaces stay in lockstep without going through the HTTP API.
 """
 
 import functools
+import logging
 import os
 import zoneinfo
 from datetime import timedelta
@@ -30,6 +31,11 @@ from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import settings
 
 _redis = connect_to_redis()
+logger = logging.getLogger(__name__)
+
+# One log line per process for a broken diagnostic, so a persistent
+# failure is visible without repeating on every page render.
+_logged_power_failure = False
 
 
 def _parse_iso(value: Any) -> Any:
@@ -39,15 +45,27 @@ def _parse_iso(value: Any) -> Any:
     templates want datetimes so they can use ``|naturaltime`` and
     render "8 minutes ago" instead of a UTC timestamp an operator
     would have to convert in their head.
+
+    A naive value is forced to UTC rather than returned as-is. We only
+    ever write offset-aware strings, but ``fromisoformat`` happily
+    parses a naive one, and ``naturaltime`` then compares it against a
+    naive *local* now instead of an aware UTC one. On a device in any
+    non-UTC zone that renders the offset as elapsed time: a brown-out
+    one minute ago on a US-Eastern player shows as "3 hours from now".
+    Stamping UTC is correct rather than merely defensive, because UTC
+    is what the writer emits.
     """
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 def _power_warning() -> dict[str, Any] | None:
@@ -68,7 +86,18 @@ def _power_warning() -> dict[str, Any] | None:
     try:
         state = undervoltage.get_state(_redis)
     except Exception:
-        # Never let a diagnostic break page rendering.
+        # Never let a diagnostic break page rendering, but do not fail
+        # silently either: this returns None, which renders no banner,
+        # so a broken probe is indistinguishable from a healthy supply
+        # and would hide a real under-voltage from the operator.
+        global _logged_power_failure
+        if not _logged_power_failure:
+            _logged_power_failure = True
+            logger.warning(
+                'Could not read under-voltage state for the banner; '
+                'power warnings are not being shown.',
+                exc_info=True,
+            )
         return None
 
     if not undervoltage.should_warn(state):

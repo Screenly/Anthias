@@ -574,3 +574,45 @@ class TestWarnThrottle:
 
         hits = [r for r in caplog.records if 'boot id' in r.getMessage()]
         assert len(hits) == 1
+
+
+class TestConcurrentWriters:
+    def test_same_edge_seen_by_two_callers_counts_once(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # The watcher thread and a page render can both observe the
+        # same inactive->active edge. The read/modify/write is not
+        # atomic, so they can interleave.
+        #
+        # It converges anyway: each caller computes count+1 from the
+        # SAME prior value it read, so both write n+1 rather than
+        # stacking to n+2. Simulated deterministically by replaying the
+        # prior latch under the second caller, which is exactly what it
+        # would have loaded before the first caller's write landed.
+        undervoltage.record_observation(fake_redis, False, boot_id='boot-a')
+        prior = fake_redis.get(undervoltage.REDIS_KEY)
+
+        undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+        first = json.loads(fake_redis.get(undervoltage.REDIS_KEY))
+        assert first['count'] == 1
+
+        # Second caller had loaded `prior` before that write landed.
+        fake_redis.set(undervoltage.REDIS_KEY, prior)
+        undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+
+        assert json.loads(fake_redis.get(undervoltage.REDIS_KEY))['count'] == 1
+
+    def test_history_is_never_downgraded_by_a_racing_writer(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # seen_since_boot only ever moves up within a boot, so a writer
+        # working from a stale read cannot clear a warning another
+        # writer just raised.
+        undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+        undervoltage.record_observation(fake_redis, False, boot_id='boot-a')
+
+        state = undervoltage.record_observation(
+            fake_redis, False, boot_id='boot-a'
+        )
+
+        assert state['seen_since_boot'] is True
