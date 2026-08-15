@@ -97,7 +97,9 @@ class TestStart:
 
 
 class TestWatchLoop:
-    def test_writes_on_the_first_pass_then_only_samples(self) -> None:
+    def test_writes_on_the_first_pass_then_only_samples(
+        self, monkeypatch: Any
+    ) -> None:
         # The sysfs counters are free and the write check is not, so
         # the loop pays for a write once per WRITE_CHECK_INTERVAL_S and
         # samples in between. The first pass must include a write so
@@ -109,17 +111,14 @@ class TestWatchLoop:
             if len(sleeps) >= 2:
                 raise _Stop
 
-        with (
-            mock.patch.object(
-                storage_health, 'record_check', return_value=_state()
-            ) as record,
-            mock.patch(
-                'anthias_server.lib.storage_watcher.time.sleep', _sleep
-            ),
-        ):
-            pytest.raises(
-                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
-            )
+        record = mock.MagicMock(return_value=_state())
+        monkeypatch.setattr(storage_health, 'record_check', record)
+        monkeypatch.setattr(
+            'anthias_server.lib.storage_watcher.time.sleep', _sleep
+        )
+
+        with pytest.raises(_Stop):
+            storage_watcher._watch_loop(mock.MagicMock(), '/data')
 
         assert [c.kwargs['write_check'] for c in record.call_args_list] == [
             True,
@@ -131,7 +130,7 @@ class TestWatchLoop:
         ]
 
     def test_an_unresolvable_filesystem_does_not_defer_the_write_check(
-        self, caplog: Any
+        self, monkeypatch: Any
     ) -> None:
         # record_check only writes when the filesystem resolved, so
         # stamping the interval for a pass that did nothing would push
@@ -149,17 +148,14 @@ class TestWatchLoop:
             if not results:
                 raise _Stop
 
-        with (
-            mock.patch.object(
-                storage_health, 'record_check', side_effect=_record
-            ) as record,
-            mock.patch(
-                'anthias_server.lib.storage_watcher.time.sleep', _sleep
-            ),
-        ):
-            pytest.raises(
-                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
-            )
+        record = mock.MagicMock(side_effect=_record)
+        monkeypatch.setattr(storage_health, 'record_check', record)
+        monkeypatch.setattr(
+            'anthias_server.lib.storage_watcher.time.sleep', _sleep
+        )
+
+        with pytest.raises(_Stop):
+            storage_watcher._watch_loop(mock.MagicMock(), '/data')
 
         # Both passes must ask for the write check: the first could not
         # run it, so the second must still try rather than wait out the
@@ -169,7 +165,9 @@ class TestWatchLoop:
             True,
         ]
 
-    def test_logs_once_per_status_change(self, caplog: Any) -> None:
+    def test_logs_once_per_status_change(
+        self, caplog: Any, monkeypatch: Any
+    ) -> None:
         # One line per transition, not one per sample: at a 60s cadence
         # the latter would put 1,440 identical warnings a day into the
         # device log an engineer has to read during a support call.
@@ -186,43 +184,41 @@ class TestWatchLoop:
             if not results:
                 raise _Stop
 
-        with (
-            caplog.at_level('WARNING'),
-            mock.patch.object(
-                storage_health, 'record_check', side_effect=_record
-            ),
-            mock.patch(
-                'anthias_server.lib.storage_watcher.time.sleep', _sleep
-            ),
-        ):
-            pytest.raises(
-                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
-            )
+        monkeypatch.setattr(
+            storage_health, 'record_check', mock.MagicMock(side_effect=_record)
+        )
+        monkeypatch.setattr(
+            'anthias_server.lib.storage_watcher.time.sleep', _sleep
+        )
+
+        caplog.set_level('WARNING')
+        with pytest.raises(_Stop):
+            storage_watcher._watch_loop(mock.MagicMock(), '/data')
 
         failing = [
             r for r in caplog.records if 'no longer reliable' in r.message
         ]
         assert len(failing) == 1
 
-    def test_a_failed_pass_backs_off_rather_than_spinning(self) -> None:
+    def test_a_failed_pass_backs_off_rather_than_spinning(
+        self, monkeypatch: Any
+    ) -> None:
         sleeps: list[float] = []
 
         def _sleep(seconds: float) -> None:
             sleeps.append(seconds)
             raise _Stop
 
-        with (
-            mock.patch.object(
-                storage_health,
-                'record_check',
-                side_effect=OSError('sysfs gone'),
-            ),
-            mock.patch(
-                'anthias_server.lib.storage_watcher.time.sleep', _sleep
-            ),
-        ):
-            pytest.raises(
-                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
-            )
+        monkeypatch.setattr(
+            storage_health,
+            'record_check',
+            mock.MagicMock(side_effect=OSError('sysfs gone')),
+        )
+        monkeypatch.setattr(
+            'anthias_server.lib.storage_watcher.time.sleep', _sleep
+        )
+
+        with pytest.raises(_Stop):
+            storage_watcher._watch_loop(mock.MagicMock(), '/data')
 
         assert sleeps == [storage_watcher.ERROR_BACKOFF_S]

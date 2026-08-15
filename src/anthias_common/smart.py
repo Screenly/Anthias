@@ -267,6 +267,33 @@ def _parse_ata(state: dict[str, Any], doc: dict[str, Any]) -> None:
     state['pending_sectors'] = _raw(attrs, ATA_CURRENT_PENDING_SECTOR)
 
 
+def _derive_pre_eol(state: dict[str, Any]) -> None:
+    """Settle the end-of-life verdict from the signals already read.
+
+    Runs after both protocol branches because the inputs come from
+    either, and because the drive's own self-assessment outranks
+    whatever the individual counters say.
+    """
+    if state['passed'] is False:
+        # The drive predicts its own failure. Nothing else outranks
+        # that.
+        state['pre_eol'] = 'urgent'
+        return
+
+    if state['pre_eol'] is not None:
+        # Already settled by a protocol-specific signal (NVMe spare
+        # threshold or critical warning); do not weaken it.
+        return
+
+    bad = (
+        (state['reallocated_sectors'] or 0)
+        + (state['pending_sectors'] or 0)
+        + (state['media_errors'] or 0)
+    )
+    if bad:
+        state['pre_eol'] = 'warning'
+
+
 def parse(doc: dict[str, Any], device: str) -> dict[str, Any]:
     """Normalize a smartctl document into the shape the UI consumes.
 
@@ -299,16 +326,7 @@ def parse(doc: dict[str, Any], device: str) -> dict[str, Any]:
     else:
         _parse_ata(state, doc)
 
-    if state['passed'] is False:
-        # The drive's own self-assessment says it expects to fail.
-        state['pre_eol'] = 'urgent'
-    elif state['pre_eol'] is None:
-        remapped = (state['reallocated_sectors'] or 0) + (
-            state['pending_sectors'] or 0
-        )
-        if remapped or (state['media_errors'] or 0):
-            state['pre_eol'] = 'warning'
-
+    _derive_pre_eol(state)
     return state
 
 

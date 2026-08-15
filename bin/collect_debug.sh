@@ -344,12 +344,11 @@ ext4_error_counters() {
     done
 
     if [[ "$found" -eq 0 ]]; then
-        # NOSONAR shelldre:S7677 -- this is report content that
-        # section() captures into storage.txt, not an error
-        # message. Redirecting it to stderr would drop it from
-        # the bundle, leaving an empty section that reads as
+        # Report content that section() captures into storage.txt,
+        # not an error message: sending it to stderr would drop it
+        # from the bundle and leave an empty section reading as
         # "could not check" rather than "nothing to report".
-        echo "No ext4 filesystems reporting error counters."
+        echo "No ext4 filesystems reporting error counters." # NOSONAR
     fi
 
     return 0
@@ -415,6 +414,8 @@ storage_kernel_log() {
         echo "(The buffer is finite, so this does not rule out errors"
         echo " earlier in this device's uptime.)"
     fi
+
+    return 0
 }
 
 # SMART, for the boards that boot from a SATA/NVMe device. Anthias
