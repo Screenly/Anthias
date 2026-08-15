@@ -227,6 +227,33 @@ class TestIsReadOnly:
             is True
         )
 
+    def test_emergency_ro_is_caught(self) -> None:
+        # Measured, not guessed. Injecting an error through
+        # /sys/fs/ext4/<dev>/trigger_fs_error on a loopback ext4
+        # (kernel 7.0) put the filesystem into a state where every
+        # write returned EROFS while the mount options still read
+        # `rw,relatime` and statvfs's ST_RDONLY stayed clear. This
+        # string was the only passive evidence that anything was
+        # wrong, so matching only 'ro' silently missed the exact
+        # failure this module exists to catch.
+        assert (
+            storage_health.is_read_only(
+                {
+                    'mount_options': 'rw,relatime',
+                    'super_options': 'rw,errors=remount-ro,emergency_ro',
+                }
+            )
+            is True
+        )
+
+    def test_shutdown_is_caught(self) -> None:
+        assert (
+            storage_health.is_read_only(
+                {'mount_options': 'rw', 'super_options': 'rw,shutdown'}
+            )
+            is True
+        )
+
     def test_per_mount_read_only_is_caught(self) -> None:
         assert (
             storage_health.is_read_only(

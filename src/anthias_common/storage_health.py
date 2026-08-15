@@ -103,6 +103,10 @@ STATUS_WEAR = 'wear'
 STATUS_OK = 'ok'
 STATUS_UNKNOWN = 'unknown'
 
+# Mount options that mean "this filesystem is refusing writes". See
+# is_read_only for why there is more than one spelling.
+READ_ONLY_OPTIONS = frozenset({'ro', 'emergency_ro', 'shutdown'})
+
 # Why a write check failed, in the order the UI cares about.
 REASON_READ_ONLY = 'read_only'
 REASON_NO_SPACE = 'no_space'
@@ -141,9 +145,16 @@ MANUFACTURER_IDS = {
 
 
 def _read_text(path: str) -> str | None:
+    """Stripped contents of a sysfs attribute, or ``None``.
+
+    An empty attribute reads back as ``None`` rather than ``''``:
+    ext4 leaves ``last_error_func`` empty on a filesystem that has
+    never errored, and an empty string would reach the API as
+    ``""`` where every other absent field is ``null``.
+    """
     try:
         with open(path) as f:
-            return f.read().strip()
+            return f.read().strip() or None
     except OSError:
         return None
 
@@ -293,10 +304,27 @@ def is_read_only(mount: dict[str, Any]) -> bool:
     ``errors=remount-ro`` it marks the *superblock* read-only; the
     per-mount options can still read ``rw``, so looking only at field
     5 would miss precisely the failure this exists to catch.
+
+    ``emergency_ro`` is the modern spelling and the reason this is a
+    set rather than a single string. Newer kernels stop the filesystem
+    by raising an internal emergency flag instead of setting
+    ``SB_RDONLY``, so a filesystem that fails every write with
+    ``EROFS`` reports mount options of ``rw,relatime`` and super
+    options of ``rw,errors=remount-ro,emergency_ro``. Measured
+    directly by injecting an error through ``trigger_fs_error`` on a
+    loopback ext4: writes returned ``EROFS`` while both ``ro`` and
+    ``statvfs``'s ``ST_RDONLY`` stayed clear, so this string was the
+    only passive evidence available. Older kernels still use plain
+    ``ro``; both spellings are live across the fleet.
+
+    Even so, treat this as the fast path and not the proof. The write
+    check in :func:`run_write_check` is what actually establishes
+    whether the filesystem takes writes, precisely because the passive
+    signals have already been caught missing this once.
     """
     for field in ('mount_options', 'super_options'):
-        options = str(mount.get(field) or '').split(',')
-        if 'ro' in options:
+        options = set(str(mount.get(field) or '').split(','))
+        if options & READ_ONLY_OPTIONS:
             return True
     return False
 
