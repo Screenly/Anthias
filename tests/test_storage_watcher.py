@@ -78,13 +78,13 @@ class TestStart:
         # from that is correct rather than a leak.
         release = threading.Event()
 
+        def _blocking_loop(*_args: Any) -> None:
+            """Stands in for the real loop, which never returns."""
+            release.wait(timeout=5)
+
         with (
             mock.patch.object(storage_health, 'probe', return_value=_PROBE_OK),
-            mock.patch.object(
-                storage_watcher,
-                '_watch_loop',
-                lambda *_a: release.wait(timeout=5),
-            ),
+            mock.patch.object(storage_watcher, '_watch_loop', _blocking_loop),
         ):
             try:
                 storage_watcher.start(mock.MagicMock(), '/data')
@@ -116,9 +116,10 @@ class TestWatchLoop:
             mock.patch(
                 'anthias_server.lib.storage_watcher.time.sleep', _sleep
             ),
-            pytest.raises(_Stop),
         ):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            pytest.raises(
+                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
+            )
 
         assert [c.kwargs['write_check'] for c in record.call_args_list] == [
             True,
@@ -155,9 +156,10 @@ class TestWatchLoop:
             mock.patch(
                 'anthias_server.lib.storage_watcher.time.sleep', _sleep
             ),
-            pytest.raises(_Stop),
         ):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            pytest.raises(
+                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
+            )
 
         # Both passes must ask for the write check: the first could not
         # run it, so the second must still try rather than wait out the
@@ -192,9 +194,10 @@ class TestWatchLoop:
             mock.patch(
                 'anthias_server.lib.storage_watcher.time.sleep', _sleep
             ),
-            pytest.raises(_Stop),
         ):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            pytest.raises(
+                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
+            )
 
         failing = [
             r for r in caplog.records if 'no longer reliable' in r.message
@@ -217,8 +220,9 @@ class TestWatchLoop:
             mock.patch(
                 'anthias_server.lib.storage_watcher.time.sleep', _sleep
             ),
-            pytest.raises(_Stop),
         ):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            pytest.raises(
+                _Stop, storage_watcher._watch_loop, mock.MagicMock(), '/data'
+            )
 
         assert sleeps == [storage_watcher.ERROR_BACKOFF_S]

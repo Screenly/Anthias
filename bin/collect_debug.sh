@@ -324,8 +324,8 @@ ext4_error_counters() {
 
     for dir in /sys/fs/ext4/*; do
         name="$(basename "$dir")"
-        [ "$name" = "features" ] && continue
-        [ -r "${dir}/errors_count" ] || continue
+        [[ "$name" = "features" ]] && continue
+        [[ -r "${dir}/errors_count" ]] || continue
         found=1
         echo "filesystem      : ${name}"
         echo "errors_count    : $(cat "${dir}/errors_count" 2>/dev/null)"
@@ -343,9 +343,16 @@ ext4_error_counters() {
         echo
     done
 
-    if [ "$found" -eq 0 ]; then
+    if [[ "$found" -eq 0 ]]; then
+        # NOSONAR shelldre:S7677 -- this is report content that
+        # section() captures into storage.txt, not an error
+        # message. Redirecting it to stderr would drop it from
+        # the bundle, leaving an empty section that reads as
+        # "could not check" rather than "nothing to report".
         echo "No ext4 filesystems reporting error counters."
     fi
+
+    return 0
 }
 
 # MMC/SD identification and, on eMMC only, the wear registers. SD
@@ -355,7 +362,7 @@ mmc_devices() {
     local found=0 dev dir
 
     for dir in /sys/block/mmcblk*; do
-        [ -d "$dir" ] || continue
+        [[ -d "$dir" ]] || continue
         dev="$(basename "$dir")"
         found=1
         echo "device       : ${dev}"
@@ -376,10 +383,12 @@ mmc_devices() {
         echo
     done
 
-    if [ "$found" -eq 0 ]; then
+    if [[ "$found" -eq 0 ]]; then
         echo "No MMC/SD block devices; this player boots from something"
         echo "else (SSD, NVMe, USB)."
     fi
+
+    return 0
 }
 
 # The richest evidence of a failing card by far, and host-only: the
@@ -399,7 +408,7 @@ storage_kernel_log() {
         | grep -i -E 'blk_update_request|I/O error|mmc[0-9]+:|mmcblk|EXT4-fs error|EXT4-fs .*(remount|read-only)|Buffer I/O error|critical (target|medium) error' \
         | tail -100)"
 
-    if [ -n "$out" ]; then
+    if [[ -n "$out" ]]; then
         echo "$out"
     else
         echo "No storage errors in the kernel ring buffer."
@@ -424,16 +433,18 @@ smart_devices() {
     fi
 
     for dev in /dev/sd? /dev/nvme?n?; do
-        [ -b "$dev" ] || continue
+        [[ -b "$dev" ]] || continue
         found=1
         echo "=== ${dev}"
         sudo -n smartctl -H -A -i "$dev" 2>&1 | sed 's/^/    /'
         echo
     done
 
-    if [ "$found" -eq 0 ]; then
+    if [[ "$found" -eq 0 ]]; then
         echo "No SATA/NVMe block devices on this player."
     fi
+
+    return 0
 }
 
 note "storage health"

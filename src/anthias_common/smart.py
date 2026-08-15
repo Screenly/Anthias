@@ -219,6 +219,54 @@ def _ata_wear(attrs: dict[int, dict[str, Any]]) -> int | None:
     return None
 
 
+def _parse_nvme(state: dict[str, Any], nvme: dict[str, Any]) -> None:
+    """Fold the NVMe health log into ``state``.
+
+    NVMe defines every field it reports, so these are read straight
+    through with no interpretation.
+    """
+    used = nvme.get('percentage_used')
+    if isinstance(used, int):
+        state['wear_pct'] = min(used, 100)
+        state['wear_is_exact'] = True
+
+    for field in ('power_on_hours', 'media_errors'):
+        value = nvme.get(field)
+        if isinstance(value, int):
+            state[field] = value
+
+    spare = nvme.get('available_spare')
+    threshold = nvme.get('available_spare_threshold')
+    if (
+        isinstance(spare, int)
+        and isinstance(threshold, int)
+        and spare < threshold
+    ):
+        # The drive has burned through the spare blocks it keeps to
+        # remap failures. This is the NVMe spelling of eMMC's PRE_EOL
+        # urgent.
+        state['pre_eol'] = 'urgent'
+
+    critical = nvme.get('critical_warning')
+    if isinstance(critical, int) and critical & NVME_CRIT_END_OF_LIFE:
+        state['pre_eol'] = 'urgent'
+
+
+def _parse_ata(state: dict[str, Any], doc: dict[str, Any]) -> None:
+    """Fold the ATA attribute table into ``state``.
+
+    Unlike NVMe, none of this is specified: the wear figure comes from
+    a vendor attribute and is flagged advisory so it cannot raise a
+    warning on its own. See the module docstring.
+    """
+    attrs = _ata_attrs(doc)
+    state['wear_pct'] = _ata_wear(attrs)
+    state['wear_is_advisory'] = state['wear_pct'] is not None
+    state['power_on_hours'] = _raw(attrs, ATA_POWER_ON_HOURS)
+    state['reallocated_sectors'] = _raw(attrs, ATA_REALLOCATED_SECTOR_CT)
+    state['pending_sectors'] = _raw(attrs, ATA_CURRENT_PENDING_SECTOR)
+
+
 def parse(doc: dict[str, Any], device: str) -> dict[str, Any]:
     """Normalize a smartctl document into the shape the UI consumes.
 
@@ -247,40 +295,9 @@ def parse(doc: dict[str, Any], device: str) -> dict[str, Any]:
 
     nvme = doc.get('nvme_smart_health_information_log') or {}
     if nvme:
-        # NVMe defines these, so they are read straight through.
-        used = nvme.get('percentage_used')
-        if isinstance(used, int):
-            state['wear_pct'] = min(used, 100)
-            state['wear_is_exact'] = True
-        for key, field in (
-            ('power_on_hours', 'power_on_hours'),
-            ('media_errors', 'media_errors'),
-        ):
-            value = nvme.get(field)
-            if isinstance(value, int):
-                state[key] = value
-
-        spare = nvme.get('available_spare')
-        threshold = nvme.get('available_spare_threshold')
-        critical = nvme.get('critical_warning')
-        if (
-            isinstance(spare, int)
-            and isinstance(threshold, int)
-            and spare < threshold
-        ):
-            # The drive has burned through the spare blocks it keeps
-            # to remap failures. This is the NVMe spelling of eMMC's
-            # PRE_EOL urgent.
-            state['pre_eol'] = 'urgent'
-        if isinstance(critical, int) and critical & NVME_CRIT_END_OF_LIFE:
-            state['pre_eol'] = 'urgent'
+        _parse_nvme(state, nvme)
     else:
-        attrs = _ata_attrs(doc)
-        state['wear_pct'] = _ata_wear(attrs)
-        state['wear_is_advisory'] = state['wear_pct'] is not None
-        state['power_on_hours'] = _raw(attrs, ATA_POWER_ON_HOURS)
-        state['reallocated_sectors'] = _raw(attrs, ATA_REALLOCATED_SECTOR_CT)
-        state['pending_sectors'] = _raw(attrs, ATA_CURRENT_PENDING_SECTOR)
+        _parse_ata(state, doc)
 
     if state['passed'] is False:
         # The drive's own self-assessment says it expects to fail.

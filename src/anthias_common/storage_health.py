@@ -1065,6 +1065,40 @@ def _assemble(
     return state
 
 
+def _fold_write_check(latch: dict[str, Any], result: dict[str, Any]) -> None:
+    """Merge one write-check result into the latch."""
+    missing = result['reason'] == REASON_MISSING
+
+    # None, not False, when the directory simply is not there:
+    # ``_classify_status`` branches on ``write_ok is False``, so this
+    # keeps a not-yet-created data directory out of the failure path
+    # entirely rather than relying on every consumer to special-case
+    # the reason.
+    latch['write_ok'] = None if missing else result['ok']
+    latch['write_reason'] = result['reason']
+    latch['last_check'] = result['checked_at']
+    if result['fsync_ms'] is not None:
+        latch['fsync_ms'] = result['fsync_ms']
+
+    # ENOSPC is excluded from the latch on purpose. The latch's
+    # rationale -- a write that failed and later succeeded is not a
+    # card that is fine -- holds for EIO and EROFS but not for a full
+    # filesystem, which is not a hardware fault at all and is
+    # separated everywhere else in this module. Latching it turned the
+    # banner from "run out of space" into "replace the memory card"
+    # the moment the operator did what it asked and deleted some
+    # assets, and left it there until the next reboot.
+    transient = missing or result['reason'] == REASON_NO_SPACE
+    if result['ok'] or transient:
+        return
+
+    if not latch['write_failed_since_boot']:
+        latch['write_failed_since_boot'] = True
+        latch['first_write_fail'] = result['checked_at']
+    latch['last_write_fail'] = result['checked_at']
+    latch['write_fail_count'] = (latch['write_fail_count'] or 0) + 1
+
+
 def record_check(
     redis_client: Any,
     data_dir: str | None = None,
@@ -1089,33 +1123,7 @@ def record_check(
         latch['errors_baseline'] = facts['errors']['count']
 
     if write_check and facts['supported']:
-        result = run_write_check(data_dir)
-        missing = result['reason'] == REASON_MISSING
-        # None, not False, when the directory simply is not there:
-        # ``_classify_status`` branches on ``write_ok is False``, so
-        # this keeps a not-yet-created data directory out of the
-        # failure path entirely rather than relying on every consumer
-        # to special-case the reason.
-        latch['write_ok'] = None if missing else result['ok']
-        latch['write_reason'] = result['reason']
-        latch['last_check'] = result['checked_at']
-        if result['fsync_ms'] is not None:
-            latch['fsync_ms'] = result['fsync_ms']
-        # ENOSPC is excluded from the latch on purpose. The latch's
-        # rationale -- a write that failed and later succeeded is not
-        # a card that is fine -- holds for EIO and EROFS but not for a
-        # full filesystem, which is not a hardware fault at all and is
-        # separated everywhere else in this module. Latching it turned
-        # the banner from "run out of space" into "replace the memory
-        # card" the moment the operator did what it asked and deleted
-        # some assets, and left it there until the next reboot.
-        transient = missing or result['reason'] == REASON_NO_SPACE
-        if not result['ok'] and not transient:
-            if not latch['write_failed_since_boot']:
-                latch['write_failed_since_boot'] = True
-                latch['first_write_fail'] = result['checked_at']
-            latch['last_write_fail'] = result['checked_at']
-            latch['write_fail_count'] = (latch['write_fail_count'] or 0) + 1
+        _fold_write_check(latch, run_write_check(data_dir))
 
     _save_latch(redis_client, latch, boot_id)
     return _assemble(facts, latch, get_boot_time())
