@@ -403,6 +403,144 @@ class TestReadMediaInfo:
         assert storage_health.read_media_info('mmcblk0')['wear_pct'] is None
 
 
+class TestSmartMerge:
+    """SMART folds into the same wear vocabulary eMMC populates.
+
+    The point of merging rather than adding a parallel field is that
+    an SSD and a compute module's soldered eMMC then render through
+    one path, so these tests are mostly about the merge refusing to
+    report the wrong drive's numbers.
+    """
+
+    def _smart(self, **overrides: Any) -> dict[str, Any]:
+        fact = {
+            'supported': True,
+            'device': '/dev/sda',
+            'model': 'Crucial CT250MX500SSD1',
+            'passed': True,
+            'wear_pct': 88,
+            'wear_is_exact': False,
+            'pre_eol': 'warning',
+        }
+        fact.update(overrides)
+        return fact
+
+    def test_smart_supplies_wear_for_a_disk(self, sysfs: Any) -> None:
+        sysfs(disk='sda', partition='sda1')
+
+        media = storage_health.read_media_info('sda', self._smart())
+
+        assert media['kind'] == 'disk'
+        assert media['wear_pct'] == 88
+        assert media['pre_eol'] == 'warning'
+        assert media['name'] == 'Crucial CT250MX500SSD1'
+
+    def test_a_disk_without_a_smart_fact_reports_no_wear(
+        self, sysfs: Any
+    ) -> None:
+        # The viewer may be down, or smartmontools absent. Reporting 0%
+        # wear would be a confident wrong answer; None is the truth.
+        sysfs(disk='sda', partition='sda1')
+
+        media = storage_health.read_media_info('sda', None)
+
+        assert media['kind'] == 'disk'
+        assert media['wear_pct'] is None
+        assert media['pre_eol'] is None
+        assert media['smart'] is None
+
+    def test_a_fact_for_a_different_drive_is_ignored(self, sysfs: Any) -> None:
+        # A box with a boot SSD and a separate data drive would
+        # otherwise have one drive's wear reported against the other.
+        sysfs(disk='sda', partition='sda1')
+
+        media = storage_health.read_media_info(
+            'sda', self._smart(device='/dev/nvme0n1', wear_pct=2)
+        )
+
+        assert media['wear_pct'] is None
+        assert media['smart'] is None
+
+    def test_an_unsupported_fact_is_ignored(self, sysfs: Any) -> None:
+        sysfs(disk='sda', partition='sda1')
+
+        media = storage_health.read_media_info(
+            'sda', self._smart(supported=False)
+        )
+
+        assert media['wear_pct'] is None
+        assert media['smart'] is None
+
+    def test_sd_cards_never_consult_smart(self, sysfs: Any) -> None:
+        # An SD card has its own registers and no SMART at all, so a
+        # stray fact must not leak into its reading.
+        sysfs(mmc={'type': 'SD', 'name': 'SC32G'})
+
+        media = storage_health.read_media_info(
+            'mmcblk0', self._smart(device='/dev/mmcblk0')
+        )
+
+        assert media['kind'] == 'sd'
+        assert media['wear_pct'] is None
+        assert media['smart'] is None
+
+    def test_smart_wear_drives_the_status_ladder(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # The whole reason for merging into wear_pct: no new status
+        # and no new UI branch, the existing wear path just works.
+        data_dir = sysfs(
+            disk='sda', partition='sda1', ext4={'errors_count': '0'}
+        )
+        with mock.patch(
+            'anthias_common.storage_health.smart.read',
+            return_value=self._smart(),
+        ):
+            state = storage_health.record_check(
+                fake_redis, data_dir, boot_id='boot-a'
+            )
+
+        assert state['status'] == storage_health.STATUS_WEAR
+        assert state['media']['wear_pct'] == 88
+        assert storage_health.should_warn(state) is True
+
+    def test_a_failed_self_assessment_warns(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        data_dir = sysfs(
+            disk='sda', partition='sda1', ext4={'errors_count': '0'}
+        )
+        with mock.patch(
+            'anthias_common.storage_health.smart.read',
+            return_value=self._smart(
+                passed=False, pre_eol='urgent', wear_pct=None
+            ),
+        ):
+            state = storage_health.record_check(
+                fake_redis, data_dir, boot_id='boot-a'
+            )
+
+        # Nothing is broken yet -- writes still work -- so this is
+        # wear, not failing. But it must not read as ok.
+        assert state['status'] == storage_health.STATUS_WEAR
+        assert state['media']['pre_eol'] == 'urgent'
+
+    def test_get_state_never_blocks_on_smart(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # A page render reads the published fact from Redis; it must
+        # never shell out to smartctl itself.
+        data_dir = sysfs(
+            disk='sda', partition='sda1', ext4={'errors_count': '0'}
+        )
+        with mock.patch(
+            'anthias_common.storage_health.smart.collect'
+        ) as collect:
+            storage_health.get_state(fake_redis, data_dir)
+
+        collect.assert_not_called()
+
+
 class TestWriteCheck:
     def test_round_trip_succeeds_on_a_healthy_filesystem(
         self, tmp_path: Any

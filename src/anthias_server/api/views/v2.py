@@ -1159,6 +1159,63 @@ class InfoViewV2(InfoViewMixin):
                                     },
                                     'wear_pct': {'type': ['integer', 'null']},
                                     'pre_eol': {'type': ['string', 'null']},
+                                    'smart': {
+                                        'type': ['object', 'null'],
+                                        'description': (
+                                            'SMART detail, present only '
+                                            'on a SATA/NVMe device that '
+                                            'reported it. `wear_pct` and '
+                                            '`pre_eol` above are already '
+                                            'derived from it, so most '
+                                            'clients need only those. '
+                                            '`wear_is_exact` is false '
+                                            'when the figure came from '
+                                            'an ATA vendor attribute '
+                                            'rather than a defined NVMe '
+                                            'field.'
+                                        ),
+                                        'properties': {
+                                            'supported': {'type': 'boolean'},
+                                            'device': {'type': 'string'},
+                                            'model': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'firmware': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'passed': {
+                                                'type': ['boolean', 'null']
+                                            },
+                                            'wear_pct': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'wear_is_exact': {
+                                                'type': 'boolean'
+                                            },
+                                            'power_on_hours': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'reallocated_sectors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'pending_sectors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'media_errors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'temperature_c': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'pre_eol': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'checked_at': {
+                                                'type': 'string',
+                                                'format': 'date-time',
+                                            },
+                                        },
+                                    },
                                 },
                             },
                         },

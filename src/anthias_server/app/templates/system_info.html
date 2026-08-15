@@ -252,6 +252,36 @@
             Last write test flushed in {{ storage.fsync_ms }} ms.
             {% endif %}
           </p>
+          {% if storage.media.smart %}
+          {% comment %}
+          SMART, on the SATA/NVMe boards only. Sampled by the viewer
+          (the one privileged container) and read here from Redis, so
+          it is absent on every board that boots from a card.
+          {% endcomment %}
+          <p>
+            SMART self-assessment
+            {% if storage.media.smart.passed %}passed{% elif storage.media.smart.passed is False %}<strong>FAILED</strong>{% else %}unavailable{% endif %}{% if storage.media.smart.power_on_hours %},
+            {{ storage.media.smart.power_on_hours|intcomma }} power-on
+            hours{% endif %}{% if storage.media.smart.temperature_c %},
+            {{ storage.media.smart.temperature_c }}&deg;C{% endif %}.
+            {% if storage.media.smart.reallocated_sectors %}
+            {{ storage.media.smart.reallocated_sectors|intcomma }}
+            reallocated sector{{ storage.media.smart.reallocated_sectors|pluralize }}.
+            {% endif %}
+            {% if storage.media.smart.pending_sectors %}
+            {{ storage.media.smart.pending_sectors|intcomma }} pending
+            sector{{ storage.media.smart.pending_sectors|pluralize }}.
+            {% endif %}
+            {% if storage.media.smart.media_errors %}
+            {{ storage.media.smart.media_errors|intcomma }} media
+            error{{ storage.media.smart.media_errors|pluralize }}.
+            {% endif %}
+            {% if storage.media.wear_pct is not None and not storage.media.smart.wear_is_exact %}
+            The wear figure comes from a vendor attribute rather than a
+            defined field, so treat it as approximate.
+            {% endif %}
+          </p>
+          {% endif %}
         </details>
         {% endif %}
       </div>

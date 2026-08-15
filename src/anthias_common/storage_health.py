@@ -39,6 +39,14 @@ and on Balena fleets, where there is no host agent to ask:
   short one, and because knowing whether the media is SD, eMMC or an
   SSD is what lets the UI give advice that fits the hardware.
 
+There is a fifth source that is *not* readable here: SMART, which is
+where an x86 box keeps the wear figure that eMMC puts in a register.
+Reading it needs an ioctl and therefore privilege this container does
+not have, so ``anthias_common.smart`` has the privileged viewer sample
+it and publish a Redis fact, and :func:`read_media_info` folds that
+fact into the same ``wear_pct``/``pre_eol`` fields eMMC populates. The
+UI and the API consequently need no separate SSD branch.
+
 The device is resolved at runtime from ``/proc/self/mountinfo``
 rather than assumed to be ``mmcblk0p2``: inside the container the
 data directory is a bind mount, on Balena it is a named volume on a
@@ -65,6 +73,8 @@ import os
 import time
 from datetime import UTC, datetime
 from typing import Any
+
+from anthias_common import smart
 
 logger = logging.getLogger(__name__)
 
@@ -431,8 +441,50 @@ def _parse_life_time(raw: str | None) -> int | None:
     return 100 if worst >= 0x0B else min(worst * 10, 100)
 
 
-def read_media_info(disk: str | None) -> dict[str, Any]:
-    """Media kind, identity and eMMC wear for a whole device."""
+def _merge_smart(
+    info: dict[str, Any], disk: str, smart_fact: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Fold the viewer's SMART fact into a SATA/NVMe device's info.
+
+    The fact is ignored unless it names the same disk we resolved. A
+    box with a boot SSD and a separate data drive would otherwise have
+    one drive's wear reported against the other's, which is worse than
+    reporting nothing: it is a confident wrong answer.
+    """
+    # Model name, which sysfs does give, so the card is identified
+    # even when SMART is unavailable or the viewer is down.
+    info['name'] = _read_text(
+        os.path.join(SYS_BLOCK, disk, 'device', 'model')
+    ) or _read_text(os.path.join(SYS_BLOCK, disk, 'device', 'name'))
+
+    if not smart_fact or not smart_fact.get('supported'):
+        return info
+
+    reported = str(smart_fact.get('device') or '')
+    if os.path.basename(reported) != disk:
+        return info
+
+    info['smart'] = smart_fact
+    info['name'] = smart_fact.get('model') or info['name']
+    info['wear_pct'] = smart_fact.get('wear_pct')
+    info['pre_eol'] = smart_fact.get('pre_eol')
+    return info
+
+
+def read_media_info(
+    disk: str | None, smart_fact: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Media kind, identity and wear for a whole device.
+
+    ``smart_fact`` is the payload the viewer publishes (see
+    ``anthias_common.smart``). It is only consulted for a SATA/NVMe
+    device, where sysfs offers no wear signal at all; SD and eMMC have
+    their own registers and never need it. Folding it in here rather
+    than adding a parallel field is deliberate: an SSD and a compute
+    module's soldered eMMC then render through the same
+    ``wear_pct``/``pre_eol`` path, so the UI and the API need no third
+    branch.
+    """
     info: dict[str, Any] = {
         'kind': 'unknown',
         'name': None,
@@ -440,6 +492,9 @@ def read_media_info(disk: str | None) -> dict[str, Any]:
         'manufactured': None,
         'wear_pct': None,
         'pre_eol': None,
+        # SMART-only detail, for the System Info disclosure. None on
+        # every SBC booting from a card, which is most of the fleet.
+        'smart': None,
     }
     if not disk:
         return info
@@ -456,6 +511,12 @@ def read_media_info(disk: str | None) -> dict[str, Any]:
         info['kind'] = 'emmc'
     elif disk.startswith(('nvme', 'sd')):
         info['kind'] = 'disk'
+
+    if info['kind'] == 'disk':
+        # sysfs gives a SATA/NVMe device no wear or health signal at
+        # all, so everything below has to come from SMART, which only
+        # the privileged viewer can read.
+        return _merge_smart(info, disk, smart_fact)
 
     if info['kind'] == 'unknown':
         return info
@@ -649,8 +710,17 @@ def _save_latch(
         )
 
 
-def probe(data_dir: str | None = None) -> dict[str, Any]:
-    """Everything readable without writing anything or touching Redis."""
+def probe(
+    data_dir: str | None = None,
+    smart_fact: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Everything readable without writing anything or touching Redis.
+
+    ``smart_fact`` is passed in rather than fetched so this stays
+    free of Redis: the callers that have a client
+    (:func:`get_state`, :func:`record_check`) read it and hand it
+    down, and the watcher's startup probe can skip it entirely.
+    """
     if data_dir is None:
         data_dir = default_data_dir()
 
@@ -676,7 +746,7 @@ def probe(data_dir: str | None = None) -> dict[str, Any]:
         'disk': resolved['disk'],
         'read_only': is_read_only(mount),
         'errors': read_ext4_errors(resolved['device']),
-        'media': read_media_info(resolved['disk']),
+        'media': read_media_info(resolved['disk'], smart_fact),
     }
 
 
@@ -787,7 +857,7 @@ def record_check(
     if boot_id is None:
         boot_id = get_boot_id()
 
-    facts = probe(data_dir)
+    facts = probe(data_dir, smart.read(redis_client))
     latch = _load_latch(redis_client, boot_id)
 
     if facts['errors']['supported'] and latch['errors_baseline'] is None:
@@ -829,7 +899,7 @@ def get_state(
     other field is at its "nothing wrong" value in that case and is
     indistinguishable from a healthy device.
     """
-    facts = probe(data_dir)
+    facts = probe(data_dir, smart.read(redis_client))
     latch = _load_latch(redis_client, get_boot_id())
     return _assemble(facts, latch, get_boot_time())
 

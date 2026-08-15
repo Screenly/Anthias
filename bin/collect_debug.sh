@@ -395,6 +395,34 @@ storage_kernel_log() {
     fi
 }
 
+# SMART, for the boards that boot from a SATA/NVMe device. Anthias
+# reads this through the privileged viewer container and republishes
+# it on /api/v2/info; this section is the host-side raw read for when
+# the stack can't answer. smartmontools is not installed on the
+# SD-card-only boards, and an SD card has no SMART to report anyway.
+smart_devices() {
+    local found=0 dev
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        echo "smartctl is not installed on this host."
+        echo "(apt-get install smartmontools to read SMART here; the"
+        echo " viewer container ships it on x86/arm64/pi5.)"
+        return
+    fi
+
+    for dev in /dev/sd? /dev/nvme?n?; do
+        [ -b "$dev" ] || continue
+        found=1
+        echo "=== ${dev}"
+        sudo -n smartctl -H -A -i "$dev" 2>&1 | sed 's/^/    /'
+        echo
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "No SATA/NVMe block devices on this player."
+    fi
+}
+
 note "storage health"
 STORAGE="${REPORT_DIR}/storage.txt"
 section "Block devices" "$STORAGE" lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT,RO
@@ -406,6 +434,7 @@ section "Mount flags (ro = filesystem has gone read-only)" "$STORAGE" \
 section "ext4 error counters (durable; see api-info.json)" "$STORAGE" \
     ext4_error_counters
 section "MMC / SD devices" "$STORAGE" mmc_devices
+section "SMART (SATA / NVMe; see api-info.json)" "$STORAGE" smart_devices
 section "Storage kernel messages" "$STORAGE" storage_kernel_log
 
 # Raspberry Pi specifics: model, firmware, power, temperature.
