@@ -627,6 +627,19 @@ class TestWriteCheck:
 
         assert result['reason'] == storage_health.REASON_NO_SPACE
 
+    def test_a_missing_data_directory_is_not_a_failure(
+        self, tmp_path: Any
+    ) -> None:
+        # Matters most on Balena, where the resin-data volume starts
+        # empty on a first boot: ENOENT classified as a fault would
+        # put "this player can't save anything" on a brand-new healthy
+        # device.
+        result = storage_health.run_write_check(
+            str(tmp_path / 'not-created-yet')
+        )
+
+        assert result['reason'] == storage_health.REASON_MISSING
+
     def test_io_error_is_classified(self, tmp_path: Any) -> None:
         with mock.patch(
             'os.open', side_effect=OSError(errno.EIO, 'I/O error')
@@ -760,6 +773,25 @@ class TestRecordCheck:
 
         assert state['errors_this_boot'] is False
         assert state['status'] == storage_health.STATUS_ERRORS
+
+    def test_a_first_boot_before_the_data_dir_exists_reports_ok(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # End-to-end guard for the Balena first-boot window. The whole
+        # verdict must stay out of the failure path, not merely carry
+        # a different reason string.
+        data_dir = sysfs(ext4={'errors_count': '0'})
+        missing = os.path.join(data_dir, 'not-created-yet')
+
+        state = storage_health.record_check(
+            fake_redis, missing, boot_id='boot-a'
+        )
+
+        assert state['write_ok'] is None
+        assert state['write_reason'] == storage_health.REASON_MISSING
+        assert state['write_failed_since_boot'] is False
+        assert state['status'] == storage_health.STATUS_OK
+        assert storage_health.should_warn(state) is False
 
     def test_a_full_filesystem_is_not_a_failing_card(
         self, sysfs: Any, tmp_path: Any, fake_redis: Any

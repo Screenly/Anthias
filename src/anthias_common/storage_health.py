@@ -132,6 +132,9 @@ REASON_NO_SPACE = 'no_space'
 REASON_IO_ERROR = 'io_error'
 REASON_CORRUPT = 'corrupt'
 REASON_ERROR = 'error'
+# Not a storage fault: the data directory does not exist yet. Handled
+# as "could not check" rather than a failure -- see _classify.
+REASON_MISSING = 'missing'
 
 # eMMC PRE_EOL_INFO (EXT_CSD byte 267). 0x01 is normal; 0x02 means
 # 80% of the reserved blocks are consumed and 0x03 means 90%.
@@ -658,6 +661,13 @@ def _classify(exc: OSError) -> str:
         return REASON_NO_SPACE
     if exc.errno == errno.EIO:
         return REASON_IO_ERROR
+    # The data directory isn't there. That is a startup or
+    # configuration state, not a storage fault, and it matters most on
+    # Balena where the resin-data volume starts empty on a first boot.
+    # Calling it a failure would put "this player can't save anything"
+    # on a brand-new healthy device.
+    if exc.errno in (errno.ENOENT, errno.ENOTDIR):
+        return REASON_MISSING
     return REASON_ERROR
 
 
@@ -1028,12 +1038,18 @@ def record_check(
 
     if write_check and facts['supported']:
         result = run_write_check(data_dir)
-        latch['write_ok'] = result['ok']
+        missing = result['reason'] == REASON_MISSING
+        # None, not False, when the directory simply is not there:
+        # ``_classify_status`` branches on ``write_ok is False``, so
+        # this keeps a not-yet-created data directory out of the
+        # failure path entirely rather than relying on every consumer
+        # to special-case the reason.
+        latch['write_ok'] = None if missing else result['ok']
         latch['write_reason'] = result['reason']
         latch['last_check'] = result['checked_at']
         if result['fsync_ms'] is not None:
             latch['fsync_ms'] = result['fsync_ms']
-        if not result['ok']:
+        if not result['ok'] and not missing:
             # Latched the same way under-voltage latches a dip: a
             # write that failed and then succeeded is not a card that
             # is fine, it is a card that is starting to go.
