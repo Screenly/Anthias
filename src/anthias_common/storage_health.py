@@ -143,38 +143,68 @@ PRE_EOL_LABELS = {0x01: 'normal', 0x02: 'warning', 0x03: 'urgent'}
 # discover it during a support call.
 WEAR_WARN_PCT = 80
 
-# SD card manufacturer IDs, best effort. The list is not authoritative
-# -- the SD Association does not publish one -- so an ID that is not
-# here renders as its raw hex rather than being guessed at.
+# Card manufacturer IDs, transcribed from mmc-utils' lsmmc.c, which is
+# the closest thing to a canonical table that exists. There is no
+# public authoritative registry: JEDEC assigns eMMC MIDs and does not
+# publish them freely, and the SD Association publishes nothing at
+# all. Two entries here are literally "Unknown" because that is what
+# upstream says -- kept verbatim rather than tidied away, so this
+# stays a transcription rather than an interpretation.
+#
+# SD and eMMC are DIFFERENT namespaces and upstream keeps two separate
+# tables for exactly that reason: 0x03 is SanDisk on SD but Toshiba on
+# eMMC, and 0x02 is Toshiba/Kingston/Viking on SD but Kingston/SanDisk
+# on eMMC. Sharing one table would produce a confident wrong answer,
+# which is the failure mode this module avoids everywhere else.
+#
+# Source: https://git.kernel.org/pub/scm/utils/mmc/mmc-utils.git
+# (lsmmc.c, sd_database / mmc_database). The kernel's own
+# CID_MANFID_* defines in drivers/mmc/core/card.h agree where they
+# overlap; its bus-untagged entries are deliberately not merged in
+# here, because guessing which of the two namespaces they belong to
+# is the mistake this split exists to prevent.
 SD_MANUFACTURER_IDS = {
     0x01: 'Panasonic',
-    0x02: 'Toshiba/Kioxia',
+    0x02: 'Toshiba/Kingston/Viking',
     0x03: 'SanDisk',
-    0x1B: 'Samsung',
-    0x1D: 'ADATA',
-    0x27: 'Phison',
+    0x08: 'Silicon Power',
+    0x18: 'Infineon',
+    0x1B: 'Transcend/Samsung',
+    0x1C: 'Transcend',
+    0x1D: 'Corsair/AData',
+    0x1E: 'Transcend',
+    0x1F: 'Kingston',
+    0x27: 'Delkin/Phison',
     0x28: 'Lexar',
+    0x30: 'SanDisk',
     0x31: 'Silicon Power',
+    0x33: 'STMicroelectronics',
     0x41: 'Kingston',
+    0x6F: 'STMicroelectronics',
     0x74: 'Transcend',
     0x76: 'Patriot',
-    0x82: 'Sony',
-    0x9C: 'Angelbird/Hoodman',
+    0x82: 'Gobe/Sony',
+    # Upstream carries 0x89 with no vendor; kept so the gap is visible.
+    0x89: None,
+    # From the kernel's CID_MANFID_KINGSTON_SD, which unlike its
+    # neighbours is explicitly tagged as the SD-bus value.
+    0x9F: 'Kingston',
 }
 
-# eMMC IDs are JEDEC-assigned and are a DIFFERENT namespace from the SD
-# list above -- the same number means different vendors on the two
-# buses. Sharing one table would have rendered a JEDEC 0x03 part as
-# "SanDisk", which is the confident-wrong-answer this whole module
-# tries to avoid. Kept deliberately short: only IDs worth asserting,
-# everything else falls through to hex. (The Rock Pi 4 testbed's 0x88
-# is one of those -- it renders as hex rather than a guess.)
-EMMC_MANUFACTURER_IDS = {
-    0x11: 'Toshiba/Kioxia',
+EMMC_MANUFACTURER_IDS: dict[int, str | None] = {
+    0x00: 'SanDisk',
+    0x02: 'Kingston/SanDisk',
+    0x03: 'Toshiba',
+    0x05: None,
+    0x06: None,
+    0x11: 'Toshiba',
     0x13: 'Micron',
-    0x15: 'Samsung',
-    0x45: 'SanDisk',
-    0x90: 'SK Hynix',
+    0x15: 'Samsung/SanDisk/LG',
+    0x2C: 'Kingston',
+    0x37: 'KingMax',
+    0x44: 'ATP',
+    0x45: 'SanDisk Corporation',
+    0x70: 'Kingston',
     0xFE: 'Micron',
 }
 
@@ -514,6 +544,9 @@ def read_media_info(
         'kind': 'unknown',
         'name': None,
         'manufacturer': None,
+        # Raw CID manufacturer id, kept alongside the resolved name so
+        # an id with no published vendor is still reportable.
+        'manufacturer_id': None,
         'manufactured': None,
         'wear_pct': None,
         'pre_eol': None,
@@ -555,7 +588,18 @@ def read_media_info(
             if info['kind'] == 'emmc'
             else SD_MANUFACTURER_IDS
         )
-        info['manufacturer'] = table.get(manfid, f'Unknown (0x{manfid:02x})')
+        # Kept whether or not it resolves: a support engineer can look
+        # up a raw id, and it is the only way an unlisted vendor is
+        # reported at all.
+        info['manufacturer_id'] = manfid
+        # None, not "Unknown (0x88)". An id absent from the table is
+        # one nobody has published a vendor for -- the Rock Pi 4
+        # testbed's 0x88 is in neither mmc-utils nor the kernel nor
+        # anything else citable -- and that string put a placeholder
+        # where the UI expects a company name. The card still
+        # identifies itself by product name, and the raw id stays in
+        # the technical detail.
+        info['manufacturer'] = table.get(manfid)
 
     # The MMC date register is MM/YYYY and has no day, so it stays a
     # string rather than being forced into a date the card never gave.

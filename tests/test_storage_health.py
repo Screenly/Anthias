@@ -371,7 +371,11 @@ class TestReadMediaInfo:
 
         media = storage_health.read_media_info('mmcblk0')
 
-        assert media['manufacturer'] == 'Unknown (0xee)'
+        # None, not a placeholder string: no published list carries
+        # this id, and "Unknown (0xee)" put filler where the UI
+        # expects a company name. The raw id is still reported.
+        assert media['manufacturer'] is None
+        assert media['manufacturer_id'] == 0xEE
 
     def test_emmc_ids_are_not_read_off_the_sd_table(self, sysfs: Any) -> None:
         # SD and eMMC manufacturer IDs are different namespaces. 0x03
@@ -384,14 +388,19 @@ class TestReadMediaInfo:
         media = storage_health.read_media_info('mmcblk0')
 
         assert media['kind'] == 'emmc'
-        assert media['manufacturer'] == 'Unknown (0x03)'
+        # 0x03 is SanDisk on the SD bus and Toshiba on eMMC.
+        assert media['manufacturer'] == 'Toshiba'
 
     def test_known_emmc_id_resolves(self, sysfs: Any) -> None:
+        # Transcribed verbatim from mmc-utils rather than tidied into
+        # a single vendor: upstream lists the ambiguity because the id
+        # really is shared, and inventing a cleaner answer here would
+        # be the same mistake as the SD/eMMC table merge.
         sysfs(mmc={'type': 'MMC', 'manfid': '0x000015'})
 
         assert (
             storage_health.read_media_info('mmcblk0')['manufacturer']
-            == 'Samsung'
+            == 'Samsung/SanDisk/LG'
         )
 
     def test_reads_emmc_wear_registers(self, sysfs: Any) -> None:

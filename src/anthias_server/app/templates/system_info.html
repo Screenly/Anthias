@@ -243,8 +243,16 @@
         <details class="stat-card__details">
           <summary>Technical detail</summary>
           <p>
+            {% comment %}
+            The manufacturer id is shown raw when it resolves to no
+            published vendor. mmc-utils and the kernel between them
+            list well under a hundred ids and neither is complete, so
+            an unlisted card is ordinary rather than suspicious --
+            the number is still what a support engineer would search
+            for.
+            {% endcomment %}
             {% if storage.media.name %}
-            {% if storage.media.manufacturer %}{{ storage.media.manufacturer }} {% endif %}{{ storage.media.name }}{% if storage.media.manufactured %}, made {{ storage.media.manufactured }}{% endif %}.
+            {% if storage.media.manufacturer %}{{ storage.media.manufacturer }} {% endif %}{{ storage.media.name }}{% if storage.media.manufactured %}, made {{ storage.media.manufactured }}{% endif %}{% if storage.media.manufacturer_id is not None and not storage.media.manufacturer %} (manufacturer id {{ storage.media.manufacturer_id|stringformat:"#04x" }}, not in any published list){% endif %}.
             {% endif %}
             {{ storage.fstype }} on <code>{{ storage.device }}</code>,
             mounted at <code>{{ storage.mount_point }}</code>.

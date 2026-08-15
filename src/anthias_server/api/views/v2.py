@@ -1152,7 +1152,25 @@ class InfoViewV2(InfoViewMixin):
                                     'kind': {'type': 'string'},
                                     'name': {'type': ['string', 'null']},
                                     'manufacturer': {
-                                        'type': ['string', 'null']
+                                        'type': ['string', 'null'],
+                                        'description': (
+                                            'Resolved vendor name, or '
+                                            "null when the card's "
+                                            'manufacturer id appears '
+                                            'in no published list. '
+                                            'Use `manufacturer_id` to '
+                                            'identify those.'
+                                        ),
+                                    },
+                                    'manufacturer_id': {
+                                        'type': ['integer', 'null'],
+                                        'description': (
+                                            'Raw CID manufacturer id. '
+                                            'SD and eMMC number the '
+                                            'same field from separate '
+                                            'namespaces, so interpret '
+                                            'it against `kind`.'
+                                        ),
                                     },
                                     'manufactured': {
                                         'type': ['string', 'null']
