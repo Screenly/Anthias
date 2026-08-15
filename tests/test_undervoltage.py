@@ -1,6 +1,7 @@
 """Tests for kernel-hwmon under-voltage detection and its latch."""
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -27,6 +28,18 @@ def _make_hwmon(
         if alarm is not None:
             (node / undervoltage.ALARM_ATTR).write_text(f'{alarm}\n')
     return str(root)
+
+
+@pytest.fixture(autouse=True)
+def _clear_alarm_path_cache() -> Iterator[None]:
+    """find_alarm_path() memoises, so reset it around every test.
+
+    Without this the first test's monkeypatched HWMON_ROOT would be
+    cached and every later test would assert against it.
+    """
+    undervoltage.reset_alarm_path_cache()
+    yield
+    undervoltage.reset_alarm_path_cache()
 
 
 @pytest.fixture
@@ -140,14 +153,62 @@ class TestRecordObservation:
         assert state['seen_since_boot'] is True
         assert state['count'] == 1
 
-    def test_repeat_alarms_accumulate(self, fake_redis: MagicMock) -> None:
+    def test_distinct_brown_outs_accumulate(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # Each dip has to recover before the next one counts as a
+        # separate event.
         for _ in range(3):
+            undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
             state = undervoltage.record_observation(
-                fake_redis, True, boot_id='boot-a'
+                fake_redis, False, boot_id='boot-a'
             )
 
         assert state['count'] == 3
         assert state['first_seen'] <= state['last_seen']
+
+    def test_sustained_brown_out_counts_once(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # The watcher re-samples on a 30s timeout as well as on kernel
+        # events, and re-seeds on every worker start. Counting each
+        # truthy reading would render "power dropped too low 21 times"
+        # for one condition that never went away.
+        for _ in range(20):
+            state = undervoltage.record_observation(
+                fake_redis, True, boot_id='boot-a'
+            )
+
+        assert state['count'] == 1
+        assert state['active'] is True
+
+    def test_worker_restart_does_not_inflate_the_count(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # start() seeds the latch from the live attribute on every
+        # celery worker start; an ongoing brown-out must not be
+        # recounted each time.
+        undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+        state = undervoltage.record_observation(
+            fake_redis, True, boot_id='boot-a'
+        )
+
+        assert state['count'] == 1
+
+    def test_corrupt_count_does_not_raise(self, fake_redis: MagicMock) -> None:
+        # Valid JSON, unusable count. An unguarded int() here would
+        # raise before the write that would overwrite the bad value,
+        # leaving the feature permanently dead.
+        fake_redis.set(
+            undervoltage.REDIS_KEY,
+            json.dumps({'boot_id': 'boot-a', 'count': 'abc'}),
+        )
+
+        state = undervoltage.record_observation(
+            fake_redis, True, boot_id='boot-a'
+        )
+
+        assert state['count'] == 1
 
     def test_reboot_resets_the_latch(self, fake_redis: MagicMock) -> None:
         undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
@@ -263,3 +324,125 @@ class TestGetState:
         assert state['active'] is False
         assert state['seen_since_boot'] is True
         assert undervoltage.should_warn(state) is True
+
+    def test_live_alarm_is_written_back_to_the_latch(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_redis: MagicMock,
+    ) -> None:
+        # With the watcher down, a page render is the only thing that
+        # observes the alarm. If that observation is not persisted the
+        # banner disappears the moment power recovers, contradicting
+        # the rule that seen_since_boot only goes up within a boot.
+        root = _make_hwmon(tmp_path, {'hwmon0': ('rpi_volt', 1)})
+        monkeypatch.setattr(undervoltage, 'HWMON_ROOT', root)
+        monkeypatch.setattr(undervoltage, 'get_boot_id', lambda: 'boot-a')
+
+        undervoltage.get_state(fake_redis)
+
+        stored = json.loads(fake_redis.get(undervoltage.REDIS_KEY))
+        assert stored['seen_since_boot'] is True
+        assert stored['count'] == 1
+
+    def test_warning_survives_recovery_after_a_render_only_sighting(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_redis: MagicMock,
+    ) -> None:
+        monkeypatch.setattr(undervoltage, 'get_boot_id', lambda: 'boot-a')
+
+        # Render sees a live alarm...
+        root = _make_hwmon(tmp_path, {'hwmon0': ('rpi_volt', 1)})
+        monkeypatch.setattr(undervoltage, 'HWMON_ROOT', root)
+        assert undervoltage.should_warn(undervoltage.get_state(fake_redis))
+
+        # ...power recovers, and a later render must still warn.
+        (tmp_path / 'hwmon' / 'hwmon0' / undervoltage.ALARM_ATTR).write_text(
+            '0\n'
+        )
+        undervoltage.reset_alarm_path_cache()
+        state = undervoltage.get_state(fake_redis)
+
+        assert state['active'] is False
+        assert state['seen_since_boot'] is True
+        assert undervoltage.should_warn(state) is True
+
+    def test_healthy_render_does_not_write(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_redis: MagicMock,
+    ) -> None:
+        # The banner is on every page, so the steady-state path stays
+        # a pure read rather than a Redis write per render.
+        root = _make_hwmon(tmp_path, {'hwmon0': ('rpi_volt', 0)})
+        monkeypatch.setattr(undervoltage, 'HWMON_ROOT', root)
+
+        undervoltage.get_state(fake_redis)
+
+        assert fake_redis.set.call_count == 0
+
+
+class TestAlarmPathCache:
+    def test_scan_runs_once_across_repeated_lookups(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root = _make_hwmon(tmp_path, {'hwmon0': ('rpi_volt', 0)})
+        monkeypatch.setattr(undervoltage, 'HWMON_ROOT', root)
+        calls = []
+        real_scan = undervoltage._scan_for_alarm_path
+
+        def counting_scan() -> str | None:
+            calls.append(1)
+            return real_scan()
+
+        monkeypatch.setattr(
+            undervoltage, '_scan_for_alarm_path', counting_scan
+        )
+
+        for _ in range(5):
+            undervoltage.find_alarm_path()
+
+        assert len(calls) == 1
+
+    def test_unsupported_result_is_cached_too(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A cached None must be distinguishable from "not looked up
+        # yet", or an x86 box would rescan /sys on every page render.
+        monkeypatch.setattr(undervoltage, 'HWMON_ROOT', str(tmp_path / 'no'))
+        calls: list[int] = []
+
+        def counting_miss() -> str | None:
+            calls.append(1)
+            return None
+
+        monkeypatch.setattr(
+            undervoltage, '_scan_for_alarm_path', counting_miss
+        )
+
+        assert undervoltage.find_alarm_path() is None
+        assert undervoltage.find_alarm_path() is None
+        assert len(calls) == 1
+
+    def test_use_cache_false_forces_a_rescan(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root = _make_hwmon(tmp_path, {'hwmon0': ('rpi_volt', 0)})
+        monkeypatch.setattr(undervoltage, 'HWMON_ROOT', root)
+        undervoltage.find_alarm_path()
+
+        calls: list[int] = []
+
+        def counting_miss() -> str | None:
+            calls.append(1)
+            return None
+
+        monkeypatch.setattr(
+            undervoltage, '_scan_for_alarm_path', counting_miss
+        )
+        undervoltage.find_alarm_path(use_cache=False)
+
+        assert len(calls) == 1

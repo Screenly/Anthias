@@ -82,10 +82,36 @@ def _watch_loop(alarm_path: str, redis_client: Any) -> None:
                 alarm_file.read()
 
                 while True:
-                    poller.poll(RESAMPLE_INTERVAL_S * 1000)
+                    events = poller.poll(RESAMPLE_INTERVAL_S * 1000)
+
+                    # An empty list is the timeout, which is a normal
+                    # re-sample. POLLERR means the device went away
+                    # under us (driver unbound, hwmon removed) and
+                    # would otherwise spin: poll() returns instantly
+                    # every iteration for as long as the fd stays in
+                    # that state. Break out to the reopen path.
+                    if any(
+                        event
+                        & (select.POLLERR | select.POLLHUP | select.POLLNVAL)
+                        for _fd, event in events
+                    ):
+                        raise OSError(
+                            f'poll() reported an error on {alarm_path}'
+                        )
 
                     alarm_file.seek(0)
-                    active = alarm_file.read().strip() == '1'
+                    raw = alarm_file.read().strip()
+
+                    # Treat an empty read as an error, not as "0".
+                    # A removed sysfs attribute can read empty rather
+                    # than raising, and mapping that to False would
+                    # clear a live warning: the same trap
+                    # ``read_alarm`` avoids by returning None rather
+                    # than False for an unreadable attribute.
+                    if not raw:
+                        raise OSError(f'empty read from {alarm_path}')
+
+                    active = raw == '1'
 
                     state = undervoltage.record_observation(
                         redis_client, active
@@ -102,7 +128,10 @@ def _watch_loop(alarm_path: str, redis_client: Any) -> None:
             time.sleep(ERROR_BACKOFF_S)
 
             if not os.path.exists(alarm_path):
-                resolved = undervoltage.find_alarm_path()
+                # Bypass the cache: a driver unbind/rebind is the one
+                # case where the path really can move, and the cached
+                # value is precisely what is now stale.
+                resolved = undervoltage.find_alarm_path(use_cache=False)
                 if resolved is None:
                     logger.warning(
                         'Under-voltage sensor is no longer present; '

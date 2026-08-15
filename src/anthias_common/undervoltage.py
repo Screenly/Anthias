@@ -78,8 +78,21 @@ REDIS_KEY = 'host:undervoltage'
 
 logger = logging.getLogger(__name__)
 
+# Cached sensor path. The separate "have we looked?" flag is what
+# distinguishes "not looked up yet" from a cached ``None`` (a board
+# with no sensor), so an unsupported device doesn't re-scan /sys on
+# every page render.
+_cached_alarm_path: str | None = None
+_alarm_path_cached = False
 
-def find_alarm_path() -> str | None:
+
+def reset_alarm_path_cache() -> None:
+    """Forget the cached sensor path. For tests and driver rebind."""
+    global _alarm_path_cached
+    _alarm_path_cached = False
+
+
+def find_alarm_path(use_cache: bool = True) -> str | None:
     """Absolute path of the ``rpi_volt`` under-voltage attribute.
 
     Returns ``None`` on any board without the driver: x86, most
@@ -87,7 +100,28 @@ def find_alarm_path() -> str | None:
     ``CONFIG_SENSORS_RASPBERRYPI_HWMON``. Callers treat that as
     "this device can't report under-voltage" and stay silent, rather
     than showing an operator a warning we have no way to substantiate.
+
+    The result is cached because ``get_state`` runs on every page
+    render (the banner is in the shared navbar context), and the scan
+    is a directory listing plus an ``open`` per hwmon device. hwmon
+    numbering is fixed for the life of a boot in every case that
+    matters, so re-scanning per request buys nothing. Pass
+    ``use_cache=False`` to force a fresh scan; the watcher does that
+    when its attribute disappears, which is the one situation where
+    the path can genuinely move (driver unbind/rebind).
     """
+    global _cached_alarm_path, _alarm_path_cached
+
+    if use_cache and _alarm_path_cached:
+        return _cached_alarm_path
+
+    resolved = _scan_for_alarm_path()
+    _cached_alarm_path = resolved
+    _alarm_path_cached = True
+    return resolved
+
+
+def _scan_for_alarm_path() -> str | None:
     try:
         entries = sorted(os.listdir(HWMON_ROOT))
     except OSError:
@@ -154,6 +188,22 @@ def _empty_state() -> dict[str, Any]:
     }
 
 
+def _coerce_count(value: Any) -> int:
+    """Stored ``count`` to an int, falling back to 0.
+
+    Guarded like every other field in the latch. An unguarded
+    ``int()`` here would raise straight out of ``_load_latch`` on a
+    latch whose ``count`` is valid JSON but not a number, and because
+    the exception fires before the write that would overwrite it, the
+    bad value would never be replaced: the watcher would sleep and
+    retry forever and the feature would be permanently dead.
+    """
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
     """Read the stored latch, discarding it if it predates this boot.
 
@@ -191,7 +241,7 @@ def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
             'seen_since_boot': bool(stored.get('seen_since_boot')),
             'first_seen': stored.get('first_seen'),
             'last_seen': stored.get('last_seen'),
-            'count': int(stored.get('count') or 0),
+            'count': _coerce_count(stored.get('count')),
         }
     )
     return state
@@ -209,11 +259,22 @@ def record_observation(
     power recovers. ``seen_since_boot`` only ever goes up (until the
     boot id changes): an intermittent brown-out that has stopped is
     still a failing power supply and still worth showing.
+
+    ``count`` is edge-triggered: it counts brown-out *events*, not
+    observations of one. Callers sample at whatever cadence suits
+    them (the watcher re-reads on a 30s timeout as well as on each
+    kernel event, and re-seeds on every worker start), so counting
+    every truthy reading would render "power dropped too low 21
+    times" for a single condition that never went away. The previous
+    reading comes from the latch itself rather than caller state, so
+    the count stays right across a worker restart and no matter which
+    caller writes.
     """
     if boot_id is None:
         boot_id = get_boot_id()
 
     state = _load_latch(redis_client, boot_id)
+    was_active = state['active']
     state['active'] = active
 
     if active:
@@ -222,7 +283,8 @@ def record_observation(
             state['seen_since_boot'] = True
             state['first_seen'] = now
         state['last_seen'] = now
-        state['count'] = state['count'] + 1
+        if not was_active:
+            state['count'] = state['count'] + 1
 
     payload = dict(state)
     payload['boot_id'] = boot_id
@@ -259,16 +321,25 @@ def get_state(redis_client: Any) -> dict[str, Any]:
         state['supported'] = False
         return state
 
-    state = _load_latch(redis_client, get_boot_id())
+    boot_id = get_boot_id()
+    state = _load_latch(redis_client, boot_id)
 
     live = read_alarm(alarm_path)
-    if live is not None:
-        state['active'] = live
-        # A live alarm the latch hasn't caught up with (watcher
-        # thread down, or this render beat it to the event) should
-        # still count as seen.
-        if live:
-            state['seen_since_boot'] = True
+    if live is None:
+        return state
+
+    # When the live reading disagrees with the latch, this render is
+    # the thing that observed the change (watcher thread down, or we
+    # simply beat it to the event), so persist it rather than
+    # reporting it once and dropping it. Without the write-back, a
+    # brown-out seen only by a page render would vanish from the UI
+    # the moment power recovered, contradicting the rule that
+    # ``seen_since_boot`` only goes up within a boot.
+    #
+    # Gated on a disagreement so the steady-state path (healthy
+    # device, latch already correct) stays a pure read.
+    if live != state['active'] or (live and not state['seen_since_boot']):
+        return record_observation(redis_client, live, boot_id)
 
     return state
 
