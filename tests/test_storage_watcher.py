@@ -117,8 +117,12 @@ class TestWatchLoop:
             'anthias_server.lib.storage_watcher.time.sleep', _sleep
         )
 
+        # The redis client is built outside the raises block so the
+        # block holds exactly one call: S5778's point is that you
+        # cannot tell which invocation threw otherwise.
+        redis = mock.MagicMock()
         with pytest.raises(_Stop):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            storage_watcher._watch_loop(redis, '/data')
 
         assert [c.kwargs['write_check'] for c in record.call_args_list] == [
             True,
@@ -154,8 +158,12 @@ class TestWatchLoop:
             'anthias_server.lib.storage_watcher.time.sleep', _sleep
         )
 
+        # The redis client is built outside the raises block so the
+        # block holds exactly one call: S5778's point is that you
+        # cannot tell which invocation threw otherwise.
+        redis = mock.MagicMock()
         with pytest.raises(_Stop):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            storage_watcher._watch_loop(redis, '/data')
 
         # Both passes must ask for the write check: the first could not
         # run it, so the second must still try rather than wait out the
@@ -192,8 +200,12 @@ class TestWatchLoop:
         )
 
         caplog.set_level('WARNING')
+        # The redis client is built outside the raises block so the
+        # block holds exactly one call: S5778's point is that you
+        # cannot tell which invocation threw otherwise.
+        redis = mock.MagicMock()
         with pytest.raises(_Stop):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            storage_watcher._watch_loop(redis, '/data')
 
         failing = [
             r for r in caplog.records if 'no longer reliable' in r.message
@@ -218,7 +230,11 @@ class TestWatchLoop:
             'anthias_server.lib.storage_watcher.time.sleep', _sleep
         )
 
+        # The redis client is built outside the raises block so the
+        # block holds exactly one call: S5778's point is that you
+        # cannot tell which invocation threw otherwise.
+        redis = mock.MagicMock()
         with pytest.raises(_Stop):
-            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+            storage_watcher._watch_loop(redis, '/data')
 
         assert sleeps == [storage_watcher.ERROR_BACKOFF_S]
