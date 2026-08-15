@@ -135,7 +135,7 @@ test = [
 # Used by the python-mypy CI job. The django-stubs plugin imports
 # anthias_server.django_project.settings to introspect the app registry, so we need the
 # runtime deps that settings touches — but not the heavy native-extension
-# deps from the server group (cec, pydbus, etc.). We also include
+# deps from the server group (pydbus, psutil, etc.). We also include
 # docker-image-builder so its tools (pygit2, python_on_whales) resolve.
 mypy = [
     { include-group = "dev-host" },
