@@ -255,6 +255,7 @@ def _storage_warning() -> dict[str, Any] | None:
         'last_error': _parse_iso(state.get('last_error')),
         'write_reason': state.get('write_reason'),
         'wear_pct': media.get('wear_pct'),
+        'wear_is_exact': bool(media.get('wear_is_exact')),
         'pre_eol': media.get('pre_eol'),
         # Counted here rather than in the template so the copy can
         # state a number instead of hedging.

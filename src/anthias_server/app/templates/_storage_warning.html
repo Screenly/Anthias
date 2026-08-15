@@ -119,7 +119,7 @@ _power_warning.html.
     </h2>
     <p class="device-alert__lede">
       The {{ storage_warning.media_noun }} reports that it has used
-      {% if storage_warning.wear_pct is not None %}about {{ storage_warning.wear_pct }}% of{% else %}most of{% endif %}
+      {% if storage_warning.wear_pct is None %}most of{% elif storage_warning.wear_is_exact %}{{ storage_warning.wear_pct }}% of{% else %}up to {{ storage_warning.wear_pct }}% of{% endif %}
       the writes it was built for. Everything is working normally
       today. This is the warning that arrives early enough to plan a
       replacement instead of discovering it on a Monday morning.

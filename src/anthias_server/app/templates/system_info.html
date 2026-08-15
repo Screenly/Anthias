@@ -210,7 +210,7 @@
           <i class="ti ti-hourglass-low mr-1"></i>Wearing out
         </div>
         <p class="stat-card__meta stat-card__meta--warn">
-          {% if storage.media.wear_pct is not None %}About {{ storage.media.wear_pct }}% of the rated write life used.{% else %}The drive reports it is near the end of its rated write life.{% endif %}
+          {% if storage.media.wear_pct is None %}The drive reports it is near the end of its rated write life.{% elif storage.media.wear_is_exact %}{{ storage.media.wear_pct }}% of the rated write life used.{% else %}Up to {{ storage.media.wear_pct }}% of the rated write life used.{% endif %}
           Working normally today; plan a replacement.
         </p>
 

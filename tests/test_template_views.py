@@ -4093,7 +4093,7 @@ def test_soldered_storage_is_not_told_to_swap_a_card(
 
     banner = _banner(response.content.decode(), STORAGE_BANNER_ID)
     assert "This player's storage is wearing out" in banner
-    assert 'about 90%' in banner
+    assert 'up to 90%' in banner
     assert 'Plan to replace this player' in banner
     assert 'Replace the memory card' not in banner
 
@@ -4163,7 +4163,7 @@ def test_zero_wear_is_not_read_as_missing(
         response = client.get(reverse('anthias_app:home'))
 
     banner = _collapse(_banner(response.content.decode(), STORAGE_BANNER_ID))
-    assert 'about 0% of' in banner
+    assert 'up to 0% of' in banner
     assert 'most of' not in banner
 
 

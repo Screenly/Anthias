@@ -522,6 +522,7 @@ def _merge_smart(
     info['smart'] = smart_fact
     info['name'] = smart_fact.get('model') or info['name']
     info['wear_pct'] = smart_fact.get('wear_pct')
+    info['wear_is_exact'] = bool(smart_fact.get('wear_is_exact'))
     info['pre_eol'] = smart_fact.get('pre_eol')
     return info
 
@@ -549,6 +550,9 @@ def read_media_info(
         'manufacturer_id': None,
         'manufactured': None,
         'wear_pct': None,
+        # False when wear_pct is a band's upper bound (eMMC) or a
+        # vendor ATA attribute; True only for NVMe's defined field.
+        'wear_is_exact': False,
         'pre_eol': None,
         # SMART-only detail, for the System Info disclosure. None on
         # every SBC booting from a card, which is most of the fleet.
@@ -605,9 +609,16 @@ def read_media_info(
     # string rather than being forced into a date the card never gave.
     info['manufactured'] = _read_text(os.path.join(device_dir, 'date'))
 
+    # Always the upper bound of a 10% band, never a point reading:
+    # DEVICE_LIFE_TIME_EST 0x01 means "0-10% used", so the Rock Pi 4
+    # testbed's 0x01 becomes 10 here. Conservative in the right
+    # direction for the warning threshold, but it is why the UI has to
+    # say "up to 10%" rather than "about 10%" -- the true figure could
+    # be zero.
     info['wear_pct'] = _parse_life_time(
         _read_text(os.path.join(device_dir, 'life_time'))
     )
+    info['wear_is_exact'] = False
     pre_eol = _read_int(os.path.join(device_dir, 'pre_eol_info'))
     if pre_eol is not None:
         info['pre_eol'] = PRE_EOL_LABELS.get(pre_eol)
