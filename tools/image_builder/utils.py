@@ -272,7 +272,6 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # in production (pre-existing bug, not a regression here).
         # 200 KB, easier to just install everywhere than gate on board.
         'libharfbuzz-subset0',
-        'python3-netifaces',
         'fonts-wqy-zenhei',
     ]
 

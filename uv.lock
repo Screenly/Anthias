@@ -113,7 +113,6 @@ dev-host = [
     { name = "ruff" },
     { name = "tenacity" },
     { name = "types-gunicorn" },
-    { name = "types-netifaces" },
     { name = "types-psutil" },
     { name = "types-python-dateutil" },
     { name = "types-pytz" },
@@ -128,7 +127,6 @@ docker-image-builder = [
 ]
 host = [
     { name = "ansible-core" },
-    { name = "netifaces2" },
     { name = "redis" },
     { name = "requests" },
     { name = "tenacity" },
@@ -162,7 +160,6 @@ mypy = [
     { name = "sentry-sdk" },
     { name = "tenacity" },
     { name = "types-gunicorn" },
-    { name = "types-netifaces" },
     { name = "types-psutil" },
     { name = "types-python-dateutil" },
     { name = "types-pytz" },
@@ -180,7 +177,6 @@ server = [
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
     { name = "jinja2" },
-    { name = "netifaces" },
     { name = "packaging" },
     { name = "pillow" },
     { name = "pillow-heif" },
@@ -210,7 +206,6 @@ test = [
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
     { name = "jinja2" },
-    { name = "netifaces" },
     { name = "packaging" },
     { name = "pillow" },
     { name = "pillow-heif" },
@@ -241,7 +236,6 @@ viewer = [
     { name = "certifi" },
     { name = "django" },
     { name = "jinja2" },
-    { name = "netifaces" },
     { name = "pydbus" },
     { name = "python-dateutil" },
     { name = "pytz" },
@@ -279,7 +273,6 @@ dev-host = [
     { name = "ruff", specifier = "==0.16.2" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "types-gunicorn", specifier = "==26.0.0.20260807" },
-    { name = "types-netifaces", specifier = "==0.11.0.20260408" },
     { name = "types-psutil", specifier = "==7.2.2.20260518" },
     { name = "types-python-dateutil", specifier = "==2.9.0.20260807" },
     { name = "types-pytz", specifier = "==2026.3.1.20260727" },
@@ -294,7 +287,6 @@ docker-image-builder = [
 ]
 host = [
     { name = "ansible-core", specifier = "==2.21.2" },
-    { name = "netifaces2", specifier = "==0.0.22" },
     { name = "redis", specifier = "==8.1.0" },
     { name = "requests", specifier = "==2.34.2" },
     { name = "tenacity", specifier = "==9.1.4" },
@@ -328,7 +320,6 @@ mypy = [
     { name = "sentry-sdk", specifier = "==2.66.1" },
     { name = "tenacity", specifier = "==9.1.4" },
     { name = "types-gunicorn", specifier = "==26.0.0.20260807" },
-    { name = "types-netifaces", specifier = "==0.11.0.20260408" },
     { name = "types-psutil", specifier = "==7.2.2.20260518" },
     { name = "types-python-dateutil", specifier = "==2.9.0.20260807" },
     { name = "types-pytz", specifier = "==2026.3.1.20260727" },
@@ -346,7 +337,6 @@ server = [
     { name = "djangorestframework", specifier = "==3.18.0" },
     { name = "drf-spectacular", specifier = "==0.30.0" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "netifaces", specifier = "==0.11.0" },
     { name = "packaging", specifier = "==26.3" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "pillow-heif", specifier = "==1.4.0" },
@@ -376,7 +366,6 @@ test = [
     { name = "djangorestframework", specifier = "==3.18.0" },
     { name = "drf-spectacular", specifier = "==0.30.0" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "netifaces", specifier = "==0.11.0" },
     { name = "packaging", specifier = "==26.3" },
     { name = "pillow", specifier = "==12.3.0" },
     { name = "pillow-heif", specifier = "==1.4.0" },
@@ -407,7 +396,6 @@ viewer = [
     { name = "certifi", specifier = "==2026.7.22" },
     { name = "django", specifier = "==5.2.14" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "netifaces", specifier = "==0.11.0" },
     { name = "pydbus", specifier = "==0.6.0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },
     { name = "pytz", specifier = "==2026.3.post1" },
@@ -1341,33 +1329,6 @@ wheels = [
 ]
 
 [[package]]
-name = "netifaces"
-version = "0.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a6/91/86a6eac449ddfae239e93ffc1918cf33fd9bab35c04d1e963b311e347a73/netifaces-0.11.0.tar.gz", hash = "sha256:043a79146eb2907edf439899f262b3dfe41717d34124298ed281139a8b93ca32", size = 30106, upload-time = "2021-05-31T08:33:02.506Z" }
-
-[[package]]
-name = "netifaces2"
-version = "0.0.22"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/19/40/8818b20a921c39fc6d6a508f180b9ae97e35b90a8d8b91d64db54f625225/netifaces2-0.0.22.tar.gz", hash = "sha256:c872a54e1a0e2bf078593b4460013996de804e40cab1b0ebc377b0e74b52a244", size = 21203, upload-time = "2024-02-28T21:14:00.969Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/8a/dce8b32aad8d2d338c75590656c270214a89d7a41df9b8b936d0c5d31438/netifaces2-0.0.22-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:4b7073aabee570466373e312b7f92a81e669f2462051eaefafb8a3d9ba078a35", size = 250954, upload-time = "2024-02-28T21:13:41.437Z" },
-    { url = "https://files.pythonhosted.org/packages/ba/cb/78613bbabe140763fa5ffb9e9098c35c74440b091a21025ad4acc8e6c2a4/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2f6fa1ca50ede5d148a9c378ab08e093418666b58353a2fe31b02d772f568231", size = 1012931, upload-time = "2024-02-28T21:13:43.088Z" },
-    { url = "https://files.pythonhosted.org/packages/36/1d/4dfb25228d9047ae9bc2f72f14260ffdc6a72b436dc1af6c954e50d45cce/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:e1393ddecc35fcbb5ca89c90783ef44c1cae3f93b60bbdcb2e2ebd20783b9e06", size = 1033527, upload-time = "2024-02-28T21:13:44.455Z" },
-    { url = "https://files.pythonhosted.org/packages/b2/f1/acf33b20232e4bceb838712ab42294d1a4a658f4ed1d4176596ea8d2d5db/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:150804d34f1a97d07ec7032573561267e1753c30670df5e32021a2cf4e3f76b5", size = 1048825, upload-time = "2024-02-28T21:13:46.285Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/e3/c6b0840e163d2b97e49029d90674eeb1cd41308bc47acae7f27906e28ec5/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:47d15b7235804e4b506298d757856c97e9d969be9cf91642581bf314f98cdefa", size = 1140127, upload-time = "2024-02-28T21:13:47.763Z" },
-    { url = "https://files.pythonhosted.org/packages/83/a2/a534c8362e8ac9c23497496eef39f193de37c1e10b3781bc5b3d54f9893e/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:c0f59974328a3481eb0b3264a1cb479f2058cc8f09a3a0097a24d306fd59ec5e", size = 1124535, upload-time = "2024-02-28T21:13:49.826Z" },
-    { url = "https://files.pythonhosted.org/packages/0e/56/f9ef7fcfa04ed4dcf0a5b631f82d131ddc9fe3df7c457a52f20fb21e0682/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:69689cf211d17968e020582ddf3b023b0b956c003571e088a86ad21e27b678d9", size = 1148253, upload-time = "2024-02-28T21:13:51.195Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/e9/fcbf4c0e84037e072364696927e6e12d78ce69c93eaaf9b382b8655bbdc8/netifaces2-0.0.22-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:043ddcd4b09f9b8e86c2bd54214a90904c2fec8869d0cfd295c671c2f4cb27b3", size = 1022475, upload-time = "2024-02-28T21:13:52.597Z" },
-    { url = "https://files.pythonhosted.org/packages/77/88/3e250f667ae24f8e30a651a938a27d8281e6e3c818b70e1151ba6a25654d/netifaces2-0.0.22-cp37-abi3-musllinux_1_1_aarch64.whl", hash = "sha256:e24c4089c743ad61c59e988d2c2de9ba2c91f1dccaecd57cf1d03c4414946a8f", size = 1186644, upload-time = "2024-02-28T21:13:53.799Z" },
-    { url = "https://files.pythonhosted.org/packages/52/7a/63c6607f5b12c2367d8bc37025bde067ec8eecad9b97c8d8c39eadd1411b/netifaces2-0.0.22-cp37-abi3-musllinux_1_1_armv7l.whl", hash = "sha256:03151c24171e6da9079e5abcd303f3e0d8ac275a8fe4e178f82fdf1590f989e4", size = 1290641, upload-time = "2024-02-28T21:13:55.021Z" },
-    { url = "https://files.pythonhosted.org/packages/15/51/54ecfb98ccacad6ff9353c3267bdea60e2cd27179440f00dc25e76b51486/netifaces2-0.0.22-cp37-abi3-musllinux_1_1_i686.whl", hash = "sha256:db607a05fa9e7b4791649b83bdc260dcc2f1082e502e6c9e22eb3853a5ff1485", size = 1210018, upload-time = "2024-02-28T21:13:56.321Z" },
-    { url = "https://files.pythonhosted.org/packages/6e/55/290a663e7334cce09d87e70d7c162e9141fe9ea7eb0861594ec3774babe4/netifaces2-0.0.22-cp37-abi3-musllinux_1_1_x86_64.whl", hash = "sha256:a203a34be5976a747777add600d3d9942bd87b8252bbb7d250273ec4f23744f4", size = 1191490, upload-time = "2024-02-28T21:13:57.902Z" },
-    { url = "https://files.pythonhosted.org/packages/df/c0/5b5c33aae4d07a4292bc6c4159222d04a1dbc4907d20863a8800e6f20ffd/netifaces2-0.0.22-cp37-abi3-win_amd64.whl", hash = "sha256:c31ef56334aa73d0cb81d49e7a9bc3cdd8822e566594038b76c27eaf0334ea6d", size = 138125, upload-time = "2024-02-28T21:13:59.808Z" },
-]
-
-[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2200,15 +2161,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/1c/4d/f079e48c4d6111c76b5261e29c39d1cfcad21420ced5043feea04d1a527c/types_gunicorn-26.0.0.20260807.tar.gz", hash = "sha256:e99f81aa2f29683d250ea274b25751fd5fa24976a4d69e7697f46c4a9cd69e90", size = 34825, upload-time = "2026-08-07T04:17:05.612Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c5/16/7e4ee4569a881bf7dcbe421c570f82b744085170b469f2dc8d6b622da488/types_gunicorn-26.0.0.20260807-py3-none-any.whl", hash = "sha256:f620b355b97bf36ee814f1d31a6de48f2afd7a672fabe546a67981d17b3469e6", size = 52659, upload-time = "2026-08-07T04:17:04.498Z" },
-]
-
-[[package]]
-name = "types-netifaces"
-version = "0.11.0.20260408"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fb/12/dc9ecb086c06c533206ccd21de7525873c4daa5a563854a90f0d0b2530fd/types_netifaces-0.11.0.20260408.tar.gz", hash = "sha256:5237ed095d79067d9c02f7618511c745332b8bce5bb2a217ff22c49614a80a6b", size = 7352, upload-time = "2026-04-08T04:32:57.855Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/d6/29bc5d805a02938a5804a2ed3351b569c59aefd8dce404487470bed35358/types_netifaces-0.11.0.20260408-py3-none-any.whl", hash = "sha256:e34d79960e820fb279c053d16727b1bad400763ec3f4f399c4651ccab536aa8d", size = 7719, upload-time = "2026-04-08T04:32:57.028Z" },
 ]
 
 [[package]]
