@@ -19,7 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_common import device_helper
+from anthias_common import device_helper, undervoltage
 from anthias_common.internal_auth import is_internal_request
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -937,6 +937,39 @@ class InfoViewV2(InfoViewMixin):
             'offset': format_utc_offset(now_local),
         }
 
+    def get_under_voltage(self) -> dict[str, Any]:
+        """Power-supply health, mirroring the System Info card.
+
+        Read from the kernel's ``rpi_volt`` hwmon sensor rather than
+        ``vcgencmd get_throttled``: the hwmon driver clears the
+        firmware's sticky bits every 2 seconds, so the mailbox's
+        "since boot" field is not a durable record on any current
+        kernel. See ``anthias_common.undervoltage`` for the detail.
+
+        ``supported`` is false on hardware with no such sensor (x86,
+        most non-Pi arm64 SBCs). Clients must check it before treating
+        the other fields as meaningful: a board that cannot report
+        under-voltage is indistinguishable from a healthy one on the
+        remaining fields alone.
+
+        Timestamps stay ISO-8601 strings, which is how the latch
+        stores them; ``count`` and the timestamps reset on reboot.
+        """
+        try:
+            state = undervoltage.get_state(r)
+        except Exception:
+            # A diagnostic must never take the info endpoint down.
+            logger.exception('Could not read the under-voltage state.')
+            return {
+                'supported': False,
+                'active': False,
+                'seen_since_boot': False,
+                'first_seen': None,
+                'last_seen': None,
+                'count': 0,
+            }
+        return state
+
     def get_ip_addresses(self) -> list[str]:
         # /api/v2/info is auth'd and not polled, so blocking on
         # get_node_ip()'s host-readiness loop is acceptable here —
@@ -978,6 +1011,31 @@ class InfoViewV2(InfoViewMixin):
                             'low_ram': {'type': 'boolean'},
                         },
                     },
+                    'under_voltage': {
+                        'type': 'object',
+                        'description': (
+                            'Power-supply health from the kernel '
+                            'rpi_volt sensor. Check `supported` first: '
+                            'when it is false this device has no such '
+                            'sensor and the other fields carry no '
+                            'information. Counters and timestamps '
+                            'reset when the device reboots.'
+                        ),
+                        'properties': {
+                            'supported': {'type': 'boolean'},
+                            'active': {'type': 'boolean'},
+                            'seen_since_boot': {'type': 'boolean'},
+                            'first_seen': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_seen': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'count': {'type': 'integer'},
+                        },
+                    },
                     'ip_addresses': {
                         'type': 'array',
                         'items': {'type': 'string'},
@@ -1016,6 +1074,7 @@ class InfoViewV2(InfoViewMixin):
                 'device_model': self.get_device_model(),
                 'uptime': self.get_uptime(),
                 'memory': self.get_memory(),
+                'under_voltage': self.get_under_voltage(),
                 'ip_addresses': self.get_ip_addresses(),
                 'mac_address': get_node_mac_address(),
                 'host_user': getenv('HOST_USER'),

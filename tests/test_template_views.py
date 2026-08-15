@@ -3653,3 +3653,178 @@ def test_settings_renders_selected_schedule_days(
         )
     }
     assert checked == {0, 4}
+
+
+# ---------------------------------------------------------------------------
+# Under-voltage banner (_power_warning.html)
+#
+# Rendered from the shared navbar context, so it must appear on every
+# page rather than only on System Info: an operator whose screen is
+# glitching goes to the Schedule page, not a diagnostics tab.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def undervoltage_state() -> Any:
+    """Patch the under-voltage reader used by both page-context helpers."""
+
+    def _apply(**overrides: Any) -> Any:
+        state = {
+            'supported': True,
+            'active': False,
+            'seen_since_boot': False,
+            'first_seen': None,
+            'last_seen': None,
+            'count': 0,
+        }
+        state.update(overrides)
+        return mock.patch(
+            'anthias_server.app.page_context.undervoltage.get_state',
+            return_value=state,
+        )
+
+    return _apply
+
+
+@pytest.mark.django_db
+def test_power_banner_hidden_when_healthy(
+    client: Client, undervoltage_state: Any
+) -> None:
+    with undervoltage_state():
+        response = client.get(reverse('anthias_app:home'))
+
+    assert response.status_code == 200
+    assert 'power-alert' not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_power_banner_hidden_on_unsupported_hardware(
+    client: Client, undervoltage_state: Any
+) -> None:
+    # x86 and most non-Pi arm64 boards have no sensor. Silence is
+    # correct: we can't verify the supply either way.
+    with undervoltage_state(supported=False):
+        response = client.get(reverse('anthias_app:home'))
+
+    assert 'power-alert' not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_power_banner_shows_on_a_non_diagnostic_page(
+    client: Client, undervoltage_state: Any
+) -> None:
+    with undervoltage_state(active=True, seen_since_boot=True, count=1):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    assert 'power-alert--past' not in body
+    assert "This player isn't getting enough power" in body
+    # The recommendation that actually resolves this must be present
+    # and must name Raspberry Pi rather than hedging.
+    assert 'official Raspberry Pi power supply' in body
+
+
+@pytest.mark.django_db
+def test_power_banner_de_escalates_after_recovery(
+    client: Client, undervoltage_state: Any
+) -> None:
+    with undervoltage_state(active=False, seen_since_boot=True, count=3):
+        response = client.get(reverse('anthias_app:settings'))
+
+    body = response.content.decode()
+    assert 'power-alert--past' in body
+    assert 'This player briefly lost power' in body
+    assert '3 times' in body
+
+
+@pytest.mark.django_db
+def test_power_banner_carries_no_jargon(
+    client: Client, undervoltage_state: Any
+) -> None:
+    # The banner is read by whoever installed the screen. Sensor and
+    # kernel detail belongs on System Info behind a disclosure.
+    with undervoltage_state(active=True, seen_since_boot=True, count=1):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    banner = body.split('power-alert', 1)[1].split('</section>', 1)[0]
+    for jargon in ('rpi_volt', 'in0_lcrit_alarm', 'hwmon', 'vcgencmd'):
+        assert jargon not in banner
+
+
+@pytest.mark.django_db
+def test_system_info_power_card_reports_health(
+    client: Client, undervoltage_state: Any
+) -> None:
+    with undervoltage_state():
+        response = client.get(reverse('anthias_app:system_info'))
+
+    body = response.content.decode()
+    assert 'Power supply' in body
+    assert 'No power problems since this player last restarted' in body
+
+
+@pytest.mark.django_db
+def test_system_info_power_card_states_when_unmonitored(
+    client: Client, undervoltage_state: Any
+) -> None:
+    # "We checked and it's fine" and "we can't check" must not look the
+    # same to someone chasing a glitch.
+    with undervoltage_state(supported=False):
+        response = client.get(reverse('anthias_app:system_info'))
+
+    body = response.content.decode()
+    assert 'Not monitored' in body
+    assert 'rpi_volt' not in body
+
+
+@pytest.mark.django_db
+def test_system_info_power_card_exposes_the_sensor_detail(
+    client: Client, undervoltage_state: Any
+) -> None:
+    with undervoltage_state(active=True, seen_since_boot=True, count=1):
+        response = client.get(reverse('anthias_app:system_info'))
+
+    body = response.content.decode()
+    assert 'Not enough power' in body
+    # System Info is the one place the mechanism is named.
+    assert 'rpi_volt' in body
+
+
+@pytest.mark.django_db
+def test_naive_latch_timestamp_is_read_as_utc() -> None:
+    # We only ever write offset-aware strings, but fromisoformat also
+    # accepts a naive one. naturaltime then compares it against a naive
+    # LOCAL now, so on a non-UTC device a dip a minute ago renders as
+    # "3 hours from now". Not a crash, just a nonsense relative time in
+    # the banner, which is worse than useless to an operator.
+    parsed = page_context._parse_iso('2026-08-15T10:00:00')
+
+    assert parsed is not None
+    assert parsed.utcoffset() is not None, 'naive value must be stamped UTC'
+    assert parsed.utcoffset().total_seconds() == 0
+
+    # An explicit offset is preserved rather than overwritten.
+    other = page_context._parse_iso('2026-08-15T10:00:00+05:00')
+    assert other.utcoffset().total_seconds() == 5 * 3600
+
+
+@pytest.mark.django_db
+def test_power_banner_renders_with_a_naive_latch_timestamp(
+    client: Client, undervoltage_state: Any
+) -> None:
+    # End-to-end guard: a stale or hand-edited latch must not produce a
+    # future-dated "most recently ..." line on the banner.
+    with undervoltage_state(
+        active=False,
+        seen_since_boot=True,
+        count=2,
+        last_seen='2026-08-15T10:00:00',
+        first_seen='2026-08-15T09:00:00',
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'This player briefly lost power' in body
+    assert 'from now' not in body

@@ -7,6 +7,7 @@ surfaces stay in lockstep without going through the HTTP API.
 """
 
 import functools
+import logging
 import os
 import zoneinfo
 from datetime import timedelta
@@ -16,7 +17,7 @@ from typing import Any
 import psutil
 from django.template.defaultfilters import filesizeformat
 
-from anthias_common import device_helper
+from anthias_common import device_helper, undervoltage
 from anthias_common.board import LOW_RAM_THRESHOLD_KB
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -30,6 +31,109 @@ from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import settings
 
 _redis = connect_to_redis()
+logger = logging.getLogger(__name__)
+
+# One log line per process for a broken diagnostic, so a persistent
+# failure is visible without repeating on every page render.
+_logged_power_failure = False
+
+
+def _parse_iso(value: Any) -> Any:
+    """ISO string from the Redis latch → aware datetime, or ``None``.
+
+    The latch stores ISO strings because it round-trips through JSON;
+    templates want datetimes so they can use ``|naturaltime`` and
+    render "8 minutes ago" instead of a UTC timestamp an operator
+    would have to convert in their head.
+
+    A naive value is forced to UTC rather than returned as-is. We only
+    ever write offset-aware strings, but ``fromisoformat`` happily
+    parses a naive one, and ``naturaltime`` then compares it against a
+    naive *local* now instead of an aware UTC one. On a device in any
+    non-UTC zone that renders the offset as elapsed time: a brown-out
+    one minute ago on a US-Eastern player shows as "3 hours from now".
+    Stamping UTC is correct rather than merely defensive, because UTC
+    is what the writer emits.
+    """
+    from datetime import UTC, datetime
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _power_warning() -> dict[str, Any] | None:
+    """Under-voltage banner state, or ``None`` when there's nothing
+    to say.
+
+    Returned from :func:`navbar` so the banner renders on every page
+    rather than only on System Info. An operator whose screen is
+    glitching goes to the Schedule page to look at their content, not
+    to a diagnostics tab, so that is where the explanation has to
+    meet them.
+
+    A power supply that can't keep up corrupts the SD card over time,
+    which is a much worse outcome than the visible glitching that
+    usually prompts the support ticket, hence a persistent banner
+    rather than a dismissible toast.
+    """
+    try:
+        state = undervoltage.get_state(_redis)
+    except Exception:
+        # Never let a diagnostic break page rendering, but do not fail
+        # silently either: this returns None, which renders no banner,
+        # so a broken probe is indistinguishable from a healthy supply
+        # and would hide a real under-voltage from the operator.
+        global _logged_power_failure
+        if not _logged_power_failure:
+            _logged_power_failure = True
+            logger.warning(
+                'Could not read under-voltage state for the banner; '
+                'power warnings are not being shown.',
+                exc_info=True,
+            )
+        return None
+
+    if not undervoltage.should_warn(state):
+        return None
+
+    return {
+        'active': state['active'],
+        'seen_since_boot': state['seen_since_boot'],
+        'count': state['count'],
+        'first_seen': _parse_iso(state['first_seen']),
+        'last_seen': _parse_iso(state['last_seen']),
+    }
+
+
+def _power_state() -> dict[str, Any]:
+    """Full under-voltage state for the System Info card.
+
+    Unlike :func:`_power_warning` this always returns a dict: the
+    card reports "no problems detected" and "not supported on this
+    device" as well as the alert.
+    """
+    try:
+        state = undervoltage.get_state(_redis)
+    except Exception:
+        state = {
+            'supported': False,
+            'active': False,
+            'seen_since_boot': False,
+            'first_seen': None,
+            'last_seen': None,
+            'count': 0,
+        }
+    state['warn'] = undervoltage.should_warn(state)
+    state['first_seen'] = _parse_iso(state['first_seen'])
+    state['last_seen'] = _parse_iso(state['last_seen'])
+    return state
 
 
 def navbar() -> dict[str, Any]:
@@ -38,6 +142,7 @@ def navbar() -> dict[str, Any]:
         'is_balena': is_balena_app(),
         'up_to_date': is_up_to_date(),
         'player_name': settings['player_name'],
+        'power_warning': _power_warning(),
     }
 
 
@@ -168,6 +273,14 @@ def system_info() -> dict[str, Any]:
             'active': virtual_memory.total < LOW_RAM_THRESHOLD_KB * 1024,
             'threshold_mib': LOW_RAM_THRESHOLD_KB >> 10,
         },
+        # Full under-voltage detail for the System Info card. The
+        # banner (see _power_warning) only carries enough to render
+        # the alert; this adds the "power supply is fine" and
+        # "this device can't report it" cases, which are worth
+        # stating explicitly on a diagnostics page. An operator
+        # chasing a glitch needs to know whether we checked and
+        # found nothing, or never checked at all.
+        'power': _power_state(),
         # Uptime as "2 days, 3 hours" via Django's timesince — pass the
         # boot-time so timesince computes against now(). Pass depth=2 so
         # 'X year, Y month' style formats stay readable on long-lived

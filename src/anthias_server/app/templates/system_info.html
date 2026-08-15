@@ -157,6 +157,69 @@
         <div class="stat-card__value">{{ device_model }}</div>
         {% if device_model_detail %}<div class="stat-card__meta">{{ device_model_detail }}</div>{% endif %}
       </div>
+
+      {% comment %}
+      Power health. Unlike the banner, this card also renders the
+      healthy and the unsupported case. On a diagnostics page the
+      difference between "we checked and it's fine" and "this board
+      can't tell us" is exactly what an operator chasing a glitch
+      needs to know.
+      {% endcomment %}
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Power supply</p>
+        {% if not power.supported %}
+        <div class="stat-card__value">Not monitored</div>
+        <div class="stat-card__meta">
+          This device has no power sensor Anthias can read, so power
+          problems can't be detected here.
+        </div>
+        {% elif power.active %}
+        <div class="stat-card__value power-status power-status--critical">
+          <i class="ti ti-plug-off mr-1"></i>Not enough power
+        </div>
+        <p class="stat-card__meta stat-card__meta--warn">
+          Happening right now.
+          {% if power.first_seen %}First seen {{ power.first_seen|naturaltime }}.{% endif %}
+          Fit the official Raspberry Pi power supply for this model. See
+          the warning at the top of the page.
+        </p>
+        {% elif power.seen_since_boot %}
+        <div class="stat-card__value power-status power-status--warn">
+          <i class="ti ti-alert-triangle mr-1"></i>Dropped earlier
+        </div>
+        <p class="stat-card__meta stat-card__meta--warn">
+          Power dropped too low
+          {% if power.count > 1 %}{{ power.count|intcomma }} times{% else %}once{% endif %}
+          since the last restart{% if power.last_seen %}, most recently
+          {{ power.last_seen|naturaltime }}{% endif %}. It's steady now.
+        </p>
+        {% else %}
+        <div class="stat-card__value power-status power-status--ok">
+          <i class="ti ti-plug mr-1"></i>OK
+        </div>
+        <div class="stat-card__meta">
+          No power problems since this player last restarted.
+        </div>
+        {% endif %}
+
+        {% if power.supported %}
+        {% comment %}
+        The one place the underlying mechanism is named, tucked behind
+        a disclosure so the plain-language card above stays readable
+        for a non-technical operator while a support engineer can still
+        confirm where the reading comes from.
+        {% endcomment %}
+        <details class="stat-card__details">
+          <summary>Technical detail</summary>
+          <p>
+            Read from the kernel's <code>rpi_volt</code> sensor
+            (<code>in0_lcrit_alarm</code>), which the firmware updates
+            every 2 seconds. Anthias records each occurrence; the count
+            resets when the device restarts.
+          </p>
+        </details>
+        {% endif %}
+      </div>
       <div class="stat-card">
         <p class="stat-card__label">Resolution</p>
         <div class="stat-card__value">{{ resolution.value }}</div>
