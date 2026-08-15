@@ -45,6 +45,10 @@ RESAMPLE_INTERVAL_S = 30
 # quick.
 ERROR_BACKOFF_S = 60
 
+# Conditions that mean the descriptor itself is unusable. Only
+# meaningful when POLLPRI is absent, see the note in _watch_loop.
+_POLL_ERROR_MASK = select.POLLERR | select.POLLHUP | select.POLLNVAL
+
 _thread: threading.Thread | None = None
 _lock = threading.Lock()
 
@@ -84,20 +88,31 @@ def _watch_loop(alarm_path: str, redis_client: Any) -> None:
 
                 while True:
                     events = poller.poll(RESAMPLE_INTERVAL_S * 1000)
+                    mask = 0
+                    for _fd, event in events:
+                        mask |= event
 
-                    # An empty list is the timeout, which is a normal
-                    # re-sample. POLLERR means the device went away
-                    # under us (driver unbound, hwmon removed) and
-                    # would otherwise spin: poll() returns instantly
-                    # every iteration for as long as the fd stays in
-                    # that state. Break out to the reopen path.
-                    if any(
-                        event
-                        & (select.POLLERR | select.POLLHUP | select.POLLNVAL)
-                        for _fd, event in events
-                    ):
+                    # An empty list is the timeout, a normal re-sample.
+                    #
+                    # POLLERR alone means the device went away under us
+                    # (driver unbound, hwmon removed) and would
+                    # otherwise spin, since poll() then returns
+                    # instantly for as long as the fd stays in that
+                    # state. But POLLERR is NOT on its own an error
+                    # here: kernfs_generic_poll() returns
+                    # ``DEFAULT_POLLMASK | EPOLLERR | EPOLLPRI`` on
+                    # every genuine change notification, so a real
+                    # under-voltage event arrives as POLLPRI|POLLERR
+                    # (measured as mask 0xa on a Pi 4, kernel 6.18).
+                    # Treating that as fatal would raise on every
+                    # brown-out, drop the transition, and back off for
+                    # 60s: strictly worse than not using poll() at all.
+                    # Hence the standard sysfs idiom, wake on POLLPRI
+                    # and only believe POLLERR in its absence.
+                    if mask & _POLL_ERROR_MASK and not mask & select.POLLPRI:
                         raise OSError(
-                            f'poll() reported an error on {alarm_path}'
+                            f'poll() reported an error on {alarm_path} '
+                            f'(mask 0x{mask:x})'
                         )
 
                     alarm_file.seek(0)

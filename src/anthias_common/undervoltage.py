@@ -188,6 +188,25 @@ def _empty_state() -> dict[str, Any]:
     }
 
 
+_warned: set[str] = set()
+
+
+def _warn_once(key: str, message: str) -> None:
+    """Log ``message`` at WARNING the first time, DEBUG thereafter.
+
+    The watcher calls into this module every 30s, so a condition that
+    persists (an unreadable boot id, say) would otherwise emit ~2,880
+    identical warnings a day and bury everything else in the device
+    log. Same shape as the throttled logging elsewhere in the
+    codebase.
+    """
+    if key in _warned:
+        logger.debug(message)
+        return
+    _warned.add(key)
+    logger.warning(message)
+
+
 def _coerce_count(value: Any) -> int:
     """Stored ``count`` to an int, falling back to 0.
 
@@ -204,8 +223,19 @@ def _coerce_count(value: Any) -> int:
         return 0
 
 
-def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
+def _load_latch(
+    redis_client: Any, boot_id: str | None
+) -> tuple[dict[str, Any], bool]:
     """Read the stored latch, discarding it if it predates this boot.
+
+    Returns ``(state, readable)``. ``readable`` is ``False`` only when
+    Redis could not be read at all, which callers must treat as
+    "unknown" rather than "no history": returning an empty state and
+    then persisting it would erase a real brown-out record because of
+    a momentary connection blip, telling the operator the supply is
+    fine. Same rule ``read_alarm`` follows for an unreadable sensor.
+    A latch that is simply absent, corrupt, or from an older boot is
+    genuinely empty and reports ``True``.
 
     Redis persists to a volume, so without the boot-id check a
     device that browned out last week would still be showing the
@@ -220,29 +250,34 @@ def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
     invent it.
     """
     if boot_id is None:
-        return _empty_state()
+        return _empty_state(), True
 
     try:
         raw = redis_client.get(REDIS_KEY)
     except Exception:
-        return _empty_state()
+        logger.warning(
+            'Could not read the under-voltage latch from Redis; '
+            'treating history as unknown rather than empty.',
+            exc_info=True,
+        )
+        return _empty_state(), False
 
     if not raw:
-        return _empty_state()
+        return _empty_state(), True
     if isinstance(raw, bytes):
         try:
             raw = raw.decode('utf-8')
         except UnicodeDecodeError:
-            return _empty_state()
+            return _empty_state(), True
 
     try:
         stored = json.loads(raw)
     except (ValueError, TypeError):
-        return _empty_state()
+        return _empty_state(), True
     if not isinstance(stored, dict):
-        return _empty_state()
+        return _empty_state(), True
     if stored.get('boot_id') != boot_id:
-        return _empty_state()
+        return _empty_state(), True
 
     state = _empty_state()
     state.update(
@@ -254,7 +289,7 @@ def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
             'count': _coerce_count(stored.get('count')),
         }
     )
-    return state
+    return state, True
 
 
 def record_observation(
@@ -283,7 +318,8 @@ def record_observation(
     if boot_id is None:
         boot_id = get_boot_id()
 
-    state = _load_latch(redis_client, boot_id)
+    state, readable = _load_latch(redis_client, boot_id)
+    prior = dict(state)
     was_active = state['active']
     state['active'] = active
 
@@ -302,10 +338,27 @@ def record_observation(
     # state; the live reading is still accurate, and the paired
     # discard in ``_load_latch`` keeps the two halves consistent.
     if boot_id is None:
-        logger.warning(
+        _warn_once(
+            'no_boot_id',
             'No kernel boot id available; reporting under-voltage from '
-            'the live sensor only and not persisting history.'
+            'the live sensor only and not persisting history.',
         )
+        return state
+
+    # A read failure means the stored history is unknown, not absent.
+    # Writing the empty state we fell back to would erase a genuine
+    # brown-out record over a momentary connection blip and tell the
+    # operator the supply is fine.
+    if not readable:
+        return state
+
+    # Skip a write that would change nothing. The watcher re-samples
+    # every 30s, so an unconditional SET is ~2,880 appendonly-fsynced
+    # writes a day onto the SD card of a device that is behaving
+    # perfectly, which is poor manners in a feature whose whole point
+    # is avoiding card corruption. Mirrors the same gate get_state()
+    # already applies to its write-back.
+    if state == prior:
         return state
 
     payload = dict(state)
@@ -344,10 +397,20 @@ def get_state(redis_client: Any) -> dict[str, Any]:
         return state
 
     boot_id = get_boot_id()
-    state = _load_latch(redis_client, boot_id)
+    state, readable = _load_latch(redis_client, boot_id)
 
     live = read_alarm(alarm_path)
     if live is None:
+        return state
+
+    # Redis unreadable: report the live sensor, but don't let the
+    # empty fallback state drive a write-back that would erase real
+    # history (record_observation refuses it too, this just avoids
+    # the pointless round trip).
+    if not readable:
+        state['active'] = live
+        if live:
+            state['seen_since_boot'] = True
         return state
 
     # When the live reading disagrees with the latch, this render is

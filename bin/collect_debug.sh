@@ -560,11 +560,21 @@ section "DNS resolution" "$NET" sh -c \
 # logs), which is the situation that prompts most debug bundles anyway.
 #
 # Port 80 is production; 8000 is the dev compose file.
+#
+# The timeout is deliberately generous. /api/v2/info calls
+# get_node_ip(), which publishes a hostcmd and then waits up to ~80s
+# (60s host_agent_ready + 20s ip_addresses_ready) for the host agent to
+# populate Redis. A host agent that is not running is itself a common
+# fault this bundle is meant to diagnose, so a 10s timeout would drop
+# the API snapshot on precisely the broken devices that need it. The
+# endpoint is not polled, so waiting is cheap and happens once.
+API_FETCH_TIMEOUT_S=90
+
 fetch_api_info() {
     local url code
     for url in "http://localhost/api/v2/info" \
                "http://localhost:8000/api/v2/info"; do
-        code="$(curl -sS --max-time 10 -o "$API_INFO" \
+        code="$(curl -sS --max-time "$API_FETCH_TIMEOUT_S" -o "$API_INFO" \
             -w '%{http_code}' "$url" 2>/dev/null)" || continue
         # A 302 to /login/ still writes a body, so check the status and
         # that we actually got JSON rather than an HTML login page.

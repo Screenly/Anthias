@@ -486,3 +486,68 @@ class TestUnknownBootId:
 
         assert state['seen_since_boot'] is False
         assert state['count'] == 0
+
+
+class TestRedisWriteDiscipline:
+    def test_unchanged_state_does_not_write(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # The watcher re-samples every 30s. An unconditional SET is
+        # ~2,880 appendonly-fsynced writes a day onto the SD card of a
+        # perfectly healthy device, in a feature whose whole point is
+        # avoiding card corruption.
+        undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+        writes_before = fake_redis.set.call_count
+
+        for _ in range(10):
+            undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+
+        assert fake_redis.set.call_count == writes_before
+
+    def test_healthy_device_never_creates_the_key(
+        self, fake_redis: MagicMock
+    ) -> None:
+        for _ in range(5):
+            undervoltage.record_observation(
+                fake_redis, False, boot_id='boot-a'
+            )
+
+        assert fake_redis.get(undervoltage.REDIS_KEY) is None
+
+    def test_a_real_change_still_writes(self, fake_redis: MagicMock) -> None:
+        undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+        writes = fake_redis.set.call_count
+
+        undervoltage.record_observation(fake_redis, False, boot_id='boot-a')
+
+        assert fake_redis.set.call_count == writes + 1
+
+    def test_unreadable_redis_does_not_erase_history(
+        self, fake_redis: MagicMock
+    ) -> None:
+        # Three brown-outs recorded, then a transient GET failure. The
+        # empty fallback state must not be written back over real
+        # history, or the banner vanishes and the operator is told the
+        # supply is fine.
+        for _ in range(3):
+            undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
+            undervoltage.record_observation(
+                fake_redis, False, boot_id='boot-a'
+            )
+        assert json.loads(fake_redis.get(undervoltage.REDIS_KEY))['count'] == 3
+
+        # Swap the dict-backed lookup for a failing one, then put the
+        # original back (setting side_effect to None would leave the
+        # mock returning a MagicMock rather than the stored value).
+        real_get = fake_redis.get.side_effect
+        fake_redis.get.side_effect = RuntimeError('connection reset')
+        try:
+            state = undervoltage.record_observation(
+                fake_redis, False, boot_id='boot-a'
+            )
+        finally:
+            fake_redis.get.side_effect = real_get
+
+        # Live reading still reported, history left untouched on disk.
+        assert state['active'] is False
+        assert json.loads(fake_redis.get(undervoltage.REDIS_KEY))['count'] == 3

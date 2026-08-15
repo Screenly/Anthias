@@ -31,13 +31,24 @@ class _StopLoop(BaseException):
     """
 
 
+# What the kernel actually returns on a sysfs change notification.
+# kernfs_generic_poll() returns ``DEFAULT_POLLMASK | EPOLLERR |
+# EPOLLPRI`` whenever the event counter advances, so POLLERR rides
+# along with every genuine event. Measured as mask 0xa on a Pi 4
+# (kernel 6.18) via a cgroup.events notification, which goes through
+# the same kernfs path. Scripting a bare POLLPRI here previously hid a
+# bug where the watcher treated every real brown-out as a device
+# failure.
+REAL_NOTIFY_MASK = select.POLLPRI | select.POLLERR
+
+
 class FakePoll:
     """Stands in for ``select.poll()``.
 
     Yields one scripted result per ``poll()`` call, then raises
     ``_StopLoop`` so the watcher's ``while True`` terminates. Each
     scripted entry is the event list ``poll()`` returns: ``[]`` for a
-    timeout, ``[(fd, select.POLLPRI)]`` for a change notification.
+    timeout, ``[(fd, REAL_NOTIFY_MASK)]`` for a change notification.
     """
 
     def __init__(self, results: list[list[tuple[int, int]]]) -> None:
@@ -139,7 +150,7 @@ class TestWatchLoop:
     ) -> None:
         alarm_file.write_text('1\n')
 
-        _run_loop(alarm_file, fake_redis, [[(3, 2)]])
+        _run_loop(alarm_file, fake_redis, [[(3, REAL_NOTIFY_MASK)]])
 
         state = _latch(fake_redis)
         assert state['active'] is True
@@ -312,3 +323,33 @@ class TestStart:
             _run_loop(alarm_file, fake_redis, [[]])
 
         assert 'under-voltage detected' in caplog.text.lower()
+
+    def test_real_notify_mask_is_not_mistaken_for_an_error(
+        self, alarm_file: Path, fake_redis: MagicMock
+    ) -> None:
+        # The regression that matters most. kernfs sets POLLERR on
+        # every genuine sysfs change notification, so a brown-out
+        # arrives as POLLPRI|POLLERR. Treating that as a device error
+        # raised on every real event, dropped the transition and slept
+        # 60s, which is worse than not using poll() at all.
+        alarm_file.write_text('1\n')
+
+        _run_loop(alarm_file, fake_redis, [[(3, REAL_NOTIFY_MASK)]])
+
+        state = _latch(fake_redis)
+        assert state['active'] is True
+        assert state['count'] == 1
+
+    def test_pollerr_without_pollpri_is_still_an_error(
+        self, alarm_file: Path, fake_redis: MagicMock
+    ) -> None:
+        # The converse must keep working: a bare POLLERR means the
+        # descriptor is dead and would spin, so it has to reach the
+        # backoff/reopen path.
+        with _sensor_removed(FakePoll([[(3, select.POLLERR)]])) as (
+            sleep_mock,
+            _find_mock,
+        ):
+            undervoltage_watcher._watch_loop(str(alarm_file), fake_redis)
+
+        assert sleep_mock.call_count == 1
