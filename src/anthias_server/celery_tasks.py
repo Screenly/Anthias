@@ -11,7 +11,7 @@ import requests
 import sh
 from celery import Celery, Task
 from celery.exceptions import SoftTimeLimitExceeded
-from celery.signals import worker_init
+from celery.signals import worker_init, worker_ready
 from django.apps import apps as _django_apps
 from PIL import UnidentifiedImageError
 from tenacity import (
@@ -49,7 +49,7 @@ from anthias_common.utils import (
 )
 from anthias_common.youtube import youtube_destination_path
 from anthias_server.app.models import Asset
-from anthias_server.lib import diagnostics, display_power
+from anthias_server.lib import diagnostics, display_power, undervoltage_watcher
 from anthias_server.lib.telemetry import send_telemetry
 from anthias_server.settings import settings
 
@@ -361,6 +361,26 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
         apply_display_power_schedule.s(),
         name='display_power_schedule',
     )
+
+
+@worker_ready.connect
+def start_undervoltage_watcher(**kwargs: Any) -> None:
+    """Begin watching the hwmon under-voltage alarm.
+
+    ``worker_ready`` rather than ``worker_init``: the latter is
+    already occupied by ``wait_for_migrations``, which blocks
+    indefinitely, and handler ordering there is not guaranteed. The
+    watcher touches only sysfs and Redis, never the database, so
+    starting it after the migration wait costs nothing.
+
+    A no-op on hardware without the sensor, and it never raises: a
+    diagnostic that can take down the celery worker is worse than
+    the problem it reports.
+    """
+    try:
+        undervoltage_watcher.start(r)
+    except Exception:
+        logger.exception('Could not start the under-voltage watcher.')
 
 
 @celery.task(

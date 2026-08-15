@@ -211,3 +211,90 @@ def test_info_v2_endpoint(
         'host_user': 'testuser',
     }
     _assert_response_data(data, expected_data)
+
+
+# ---------------------------------------------------------------------------
+# under_voltage on /api/v2/info
+#
+# Power-supply health, read from the kernel rpi_volt hwmon sensor. See
+# anthias_common.undervoltage for why the firmware mailbox is not used.
+# ---------------------------------------------------------------------------
+
+
+def _patch_under_voltage(**overrides: Any) -> Any:
+    state = {
+        'supported': True,
+        'active': False,
+        'seen_since_boot': False,
+        'first_seen': None,
+        'last_seen': None,
+        'count': 0,
+    }
+    state.update(overrides)
+    return mock.patch(
+        'anthias_server.api.views.v2.undervoltage.get_state',
+        return_value=state,
+    )
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_a_healthy_supply(api_client: APIClient) -> None:
+    with _patch_under_voltage():
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['under_voltage'] == {
+        'supported': True,
+        'active': False,
+        'seen_since_boot': False,
+        'first_seen': None,
+        'last_seen': None,
+        'count': 0,
+    }
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_a_live_brown_out(api_client: APIClient) -> None:
+    with _patch_under_voltage(
+        active=True,
+        seen_since_boot=True,
+        count=4,
+        first_seen='2026-08-15T10:00:00+00:00',
+        last_seen='2026-08-15T10:07:00+00:00',
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    under_voltage = response.data['under_voltage']
+    assert under_voltage['active'] is True
+    assert under_voltage['count'] == 4
+    # ISO-8601 strings, matching how the latch stores them.
+    assert under_voltage['last_seen'] == '2026-08-15T10:07:00+00:00'
+
+
+@pytest.mark.django_db
+def test_info_v2_distinguishes_unsupported_from_healthy(
+    api_client: APIClient,
+) -> None:
+    # A board with no sensor reports the same falsey values as a
+    # healthy one, so `supported` is the only thing separating "we
+    # checked and it's fine" from "we can't check". Clients must be
+    # able to tell them apart.
+    with _patch_under_voltage(supported=False):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.data['under_voltage']['supported'] is False
+
+
+@pytest.mark.django_db
+def test_info_v2_survives_an_unreadable_sensor(
+    api_client: APIClient,
+) -> None:
+    # A diagnostic must never take the info endpoint down with it.
+    with mock.patch(
+        'anthias_server.api.views.v2.undervoltage.get_state',
+        side_effect=OSError('sysfs went away'),
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['under_voltage']['supported'] is False

@@ -9,7 +9,14 @@
 # Pulls host/system info, Docker + compose state, per-container logs
 # (journald-tagged in production), the Anthias config and database
 # overview, an ffprobe of every video asset, network reachability,
-# Redis health, and Raspberry Pi specifics (throttling, temperature).
+# Redis health, and Raspberry Pi specifics (power supply health,
+# throttling, temperature).
+#
+# Device state that Anthias already computes for its own UI is captured
+# by querying /api/v2/info rather than re-deriving it here, so the
+# bundle tracks the API as diagnostics move into the web UI. The raw
+# host-level readings remain as fallbacks for the case this script
+# mostly exists for: a stack too broken to answer.
 #
 # A final PII-scrub pass redacts IP/MAC addresses, email addresses,
 # URL-embedded credentials, the device hostname, and the secrets in
@@ -219,11 +226,88 @@ section "Inode usage" "$SYS" df -ih
 section "Top memory consumers" "$SYS" sh -c 'ps -eo pid,ppid,user,%cpu,%mem,rss,comm --sort=-%mem | head -20'
 section "Mounts" "$SYS" mount
 
-# Raspberry Pi specifics — model, firmware, throttling, temperature.
+# Under-voltage, read from the kernel rather than the firmware mailbox.
+#
+# `vcgencmd get_throttled` used to be the way to check this, and it is
+# still captured below, but its "has occurred since boot" bits (16-19)
+# cannot be trusted: the raspberrypi-hwmon driver polls the same
+# firmware property every 2 seconds and clears those sticky bits as it
+# goes (it sends value = 0xffff). On every current Raspberry Pi OS and
+# balenaOS Pi kernel they are wiped moments after they are set, so a
+# bundle reporting 0x0 there says nothing about whether the device has
+# browned out. The kernel's own rpi_volt hwmon sensor is the reliable
+# reading.
+#
+# This is the *fallback* reading. The interpreted state, including the
+# since-boot history the kernel no longer keeps, comes from
+# /api/v2/info (see the "anthias api snapshot" section below), which is
+# the same source the web UI renders from. This raw read exists for the
+# case that makes someone run this script in the first place: a stack
+# too broken to answer an HTTP request. Deliberately the whole of what
+# is duplicated here, one attribute and one directory scan, rather than
+# re-deriving the latch in shell.
+undervoltage_sensor() {
+    local found=0 name dir
+
+    for dir in /sys/class/hwmon/hwmon*; do
+        [ -r "${dir}/name" ] || continue
+        name="$(cat "${dir}/name" 2>/dev/null)"
+        [ "$name" = "rpi_volt" ] || continue
+        found=1
+        echo "sensor          : ${dir}"
+        echo -n "in0_lcrit_alarm : "
+        cat "${dir}/in0_lcrit_alarm" 2>/dev/null || echo "unreadable"
+        echo "                  (1 = under-voltage seen within the"
+        echo "                   driver's last 2-second poll)"
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "No rpi_volt hwmon sensor on this device, so under-voltage"
+        echo "cannot be detected here. Expected on non-Pi hardware, or on"
+        echo "a kernel built without CONFIG_SENSORS_RASPBERRYPI_HWMON."
+    fi
+}
+
+# The kernel logs every brown-out, so the ring buffer carries history
+# the firmware bits no longer do, and it survives an Anthias restart
+# that would lose the Redis latch behind /api/v2/info. This one is
+# genuinely host-only: the ring buffer is not readable from inside the
+# server container, so it cannot move to the API. Matched on the
+# message the driver emits ("Under-voltage detected!") plus its
+# recovery counterpart.
+#
+# The result is captured into a variable rather than piped straight
+# out: `grep | tail` exits 0 even when grep matched nothing, so a
+# trailing `|| echo` would never fire and an empty section would be
+# ambiguous between "no brown-outs" and "could not read dmesg".
+undervoltage_kernel_log() {
+    local out
+    out="$({ dmesg -T 2>/dev/null || sudo -n dmesg -T 2>/dev/null \
+        || dmesg 2>/dev/null; } \
+        | grep -i -E 'under-?voltage|voltage normali[sz]ed' \
+        | tail -50)"
+
+    if [ -n "$out" ]; then
+        echo "$out"
+    else
+        echo "No under-voltage messages in the kernel ring buffer."
+        echo "(The buffer is finite, so this does not rule out a"
+        echo " brown-out earlier in this device's uptime.)"
+    fi
+}
+
+# Raspberry Pi specifics: model, firmware, power, temperature.
 note "raspberry pi specifics (if present)"
 PI="${REPORT_DIR}/raspberry-pi.txt"
 section "Device model" "$PI" cat /proc/device-tree/model
-section "Throttling status" "$PI" vcgencmd get_throttled
+section "Under-voltage sensor (raw; see api-info.json)" "$PI" \
+    undervoltage_sensor
+section "Under-voltage kernel messages" "$PI" undervoltage_kernel_log
+# Kept for the live bits (0-3: under-voltage now, ARM capped, throttled,
+# soft temp limit) and for thermal throttling, which hwmon does not
+# expose. Bits 16-19 are the ones the hwmon driver keeps clearing.
+section "Throttle flags (firmware; bits 16-19 unreliable)" "$PI" \
+    vcgencmd get_throttled
 section "Core temperature" "$PI" vcgencmd measure_temp
 section "Firmware version" "$PI" vcgencmd version
 section "Memory split" "$PI" vcgencmd get_mem arm
@@ -458,6 +542,62 @@ section "Internet (ghcr.io)" "$NET" sh -c \
     'curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" --max-time 10 https://ghcr.io/ || echo "unreachable"'
 section "DNS resolution" "$NET" sh -c \
     'getent hosts ghcr.io || nslookup ghcr.io 2>/dev/null || echo "resolution failed"'
+
+# Anthias's own view of the device, straight from /api/v2/info.
+#
+# This is the authoritative, already-interpreted device state: version,
+# uptime, memory and the low-RAM gate, display power, IP addresses and
+# power-supply health, produced by the same code the web UI renders
+# from. Capturing it keeps the bundle in step with the API instead of
+# re-deriving the same facts in shell, and it is where new diagnostics
+# should land as more of them move into the UI: adding a field to the
+# API puts it in the bundle for free.
+#
+# Best-effort by design. It needs the server up, and on a device with
+# an auth backend configured it answers with a redirect to /login/
+# rather than data. Both cases fall back to the host-only readings
+# elsewhere in this bundle (kernel ring buffer, raw sysfs, container
+# logs), which is the situation that prompts most debug bundles anyway.
+#
+# Port 80 is production; 8000 is the dev compose file.
+fetch_api_info() {
+    local url code
+    for url in "http://localhost/api/v2/info" \
+               "http://localhost:8000/api/v2/info"; do
+        code="$(curl -sS --max-time 10 -o "$API_INFO" \
+            -w '%{http_code}' "$url" 2>/dev/null)" || continue
+        # A 302 to /login/ still writes a body, so check the status and
+        # that we actually got JSON rather than an HTML login page.
+        if [[ "$code" == "200" ]] && head -c 1 "$API_INFO" | grep -q '{'; then
+            note "fetched /api/v2/info from ${url%%/api*}"
+            # Pretty-print when python3 is around; the raw single-line
+            # body is still valid JSON if it isn't.
+            if command -v python3 >/dev/null 2>&1; then
+                python3 -m json.tool "$API_INFO" >"${API_INFO}.tmp" \
+                    2>/dev/null && mv "${API_INFO}.tmp" "$API_INFO"
+                rm -f "${API_INFO}.tmp"
+            fi
+            return 0
+        fi
+    done
+    return 1
+}
+
+note "anthias api snapshot"
+API_INFO="${REPORT_DIR}/api-info.json"
+if ! fetch_api_info; then
+    rm -f "$API_INFO"
+    cat >"${REPORT_DIR}/api-info.txt" <<'EOF'
+Could not read /api/v2/info.
+
+The server did not answer on port 80 or 8000, or it redirected to the
+login page because this device has an auth backend configured.
+
+Device state that would normally come from here (power-supply health,
+memory, uptime, version) has to be read from the raw sections instead:
+raspberry-pi.txt, system.txt, logs/ and redis.txt.
+EOF
+fi
 
 # Redis health — broker / channel layer / viewer bus all live here.
 note "redis health"
