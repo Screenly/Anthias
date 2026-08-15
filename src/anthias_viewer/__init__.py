@@ -2659,7 +2659,15 @@ def _publish_smart_loop() -> None:
     def tick() -> None:
         while True:
             try:
-                facts = storage_health.probe()
+                # settings.get_configdir() rather than letting probe()
+                # fall back to $HOME. HOME is /data in every compose
+                # template and survives start_viewer.sh's `sudo -E -u
+                # viewer` (verified on the x86 testbed), so the two
+                # agree today -- but resolving the disk the server
+                # reports on must not hinge on an env var surviving a
+                # shell script. anthias-celery passes the same thing
+                # to the storage watcher for the same reason.
+                facts = storage_health.probe(settings.get_configdir())
                 disk = facts.get('disk')
                 # Only ever a real answer on SATA/NVMe. SD and eMMC
                 # have their own registers and smartctl has nothing to

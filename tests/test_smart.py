@@ -8,6 +8,7 @@ virtio disk, captured rather than invented.
 from __future__ import annotations
 
 import json
+import pathlib
 import subprocess
 from typing import Any
 from unittest import mock
@@ -168,6 +169,62 @@ class TestParse:
         ]
 
         assert smart.parse(doc, '/dev/sda')['pre_eol'] is None
+
+
+class TestArgv:
+    def test_elevates_when_not_root(self) -> None:
+        # privileged: true on the container is not enough: the viewer
+        # process drops to an unprivileged user, and /dev/sda is
+        # root:disk besides.
+        with mock.patch('os.geteuid', return_value=1000):
+            argv = smart._argv('/dev/sda')
+
+        assert argv[:2] == ['sudo', '-n']
+        assert argv[2] == smart.SMARTCTL
+
+    def test_calls_directly_when_root(self) -> None:
+        with mock.patch('os.geteuid', return_value=0):
+            argv = smart._argv('/dev/sda')
+
+        assert argv[0] == smart.SMARTCTL
+
+    def test_matches_the_sudoers_rule_in_the_viewer_image(self) -> None:
+        """The sudoers grant is pinned to this exact argument list.
+
+        sudo matches arguments literally, and a mismatch denies
+        silently -- which looks exactly like a device with no SMART,
+        so nothing would fail loudly. Reading the rule out of the
+        Dockerfile template keeps the two from drifting apart.
+        """
+        template = pathlib.Path('docker/Dockerfile.viewer.j2').read_text()
+        rules = [
+            line
+            for line in template.splitlines()
+            if 'NOPASSWD:' in line and 'smartctl' in line
+        ]
+        assert len(rules) == 1, rules
+
+        # The rule lives inside a quoted printf argument with a shell
+        # line continuation, so peel both off before comparing.
+        granted = rules[0].split('NOPASSWD:', 1)[1].strip()
+        granted = granted.rstrip('\\').strip().rstrip('\'"').strip()
+        with mock.patch('os.geteuid', return_value=1000):
+            argv = smart._argv('/dev/sda')
+
+        # Drop the sudo prefix; what sudo authorises is the rest.
+        command = argv[2:]
+        assert granted.split()[0] == command[0], (
+            f'sudoers grants {granted.split()[0]!r} but _argv runs '
+            f'{command[0]!r}'
+        )
+        # Flags must match exactly and in order; only the device is a
+        # wildcard, because it is resolved at runtime.
+        assert granted.split()[1:-1] == command[1:-1], (
+            f'sudoers flags {granted.split()[1:-1]} != _argv flags '
+            f'{command[1:-1]}'
+        )
+        assert granted.split()[-1] == '/dev/*'
+        assert command[-1].startswith('/dev/')
 
 
 class TestRunSmartctl:

@@ -90,6 +90,15 @@ def _log_status(status: str, state: dict[str, Any]) -> None:
             state.get('media', {}).get('wear_pct'),
             state.get('media', {}).get('pre_eol'),
         )
+    elif status == storage_health.STATUS_UNKNOWN:
+        # Not healthy: we could not resolve the filesystem at all
+        # (mountinfo or sysfs unreadable). Logging "healthy again"
+        # here would state the opposite of what happened.
+        logger.warning(
+            'Storage health for %s is unknown; the filesystem could '
+            'not be resolved.',
+            state.get('device'),
+        )
     else:
         logger.info('Storage on %s is healthy again.', state.get('device'))
 

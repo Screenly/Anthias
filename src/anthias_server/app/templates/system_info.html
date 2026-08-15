@@ -274,7 +274,7 @@
             {{ storage.lifetime_written }} written to this filesystem
             over its lifetime.
             {% endif %}
-            {% if storage.fsync_ms %}
+            {% if storage.fsync_ms is not None %}
             Last write test flushed in {{ storage.fsync_ms }} ms.
             {% endif %}
           </p>
@@ -286,10 +286,16 @@
           {% endcomment %}
           <p>
             SMART self-assessment
-            {% if storage.media.smart.passed %}passed{% elif storage.media.smart.passed is False %}<strong>FAILED</strong>{% else %}unavailable{% endif %}{% if storage.media.smart.power_on_hours %},
+            {% if storage.media.smart.passed %}passed{% elif storage.media.smart.passed is False %}<strong>FAILED</strong>{% else %}unavailable{% endif %}{% if storage.media.smart.power_on_hours is not None %},
             {{ storage.media.smart.power_on_hours|intcomma }} power-on
-            hours{% endif %}{% if storage.media.smart.temperature_c %},
+            hours{% endif %}{% if storage.media.smart.temperature_c is not None %},
             {{ storage.media.smart.temperature_c }}&deg;C{% endif %}.
+            {% comment %}
+            The three counters below stay falsy-tested on purpose: a
+            zero there means "none", which is worth omitting rather
+            than printing. The fields above are measurements where 0
+            is a real value.
+            {% endcomment %}
             {% if storage.media.smart.reallocated_sectors %}
             {{ storage.media.smart.reallocated_sectors|intcomma }}
             reallocated sector{{ storage.media.smart.reallocated_sectors|pluralize }}.

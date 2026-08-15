@@ -205,14 +205,24 @@ ENV ANTHIAS_SERVICE="viewer"
 # root succeeds. Two separate barriers: /dev/sda is brw-rw---- root:disk
 # (DAC), and the ATA passthrough behind SMART needs CAP_SYS_RAWIO.
 #
-# One narrow NOPASSWD rule clears both. Scoped to the single binary rather
-# than granting the viewer user general sudo, and smartctl is only ever
-# invoked here with read-only flags (-H -A -i). The alternative -- adding
-# viewer to the `disk` group plus setcap on the binary -- needs
-# cap_dac_override too and ends up closer to root than this does.
+# One narrow NOPASSWD rule clears both. The alternative -- adding viewer to
+# the `disk` group plus setcap on the binary -- needs cap_dac_override too
+# and ends up closer to root than this does.
+#
+# Pinned to the exact argument list rather than the bare binary, so the
+# grant is "read these three SMART pages off a block device" instead of
+# "run smartctl as root however you like" (smartctl can also write: -t
+# starts self-tests, -s toggles SMART, --set changes device features).
+# The device itself stays a wildcard because it is resolved at runtime.
+#
+# This MUST stay in sync with anthias_common.smart._argv(); sudo matches
+# arguments literally and a mismatch denies silently, which would look
+# exactly like a device that has no SMART. tests/test_smart.py asserts
+# the two agree.
 #
 # Only on the boards that ship smartmontools; see tools/image_builder.
-RUN printf 'viewer ALL=(root) NOPASSWD: /usr/sbin/smartctl\n' \
+RUN printf '%s\n' \
+        'viewer ALL=(root) NOPASSWD: /usr/sbin/smartctl --json -H -A -i /dev/*' \
         > /etc/sudoers.d/anthias-smartctl && \
     chmod 0440 /etc/sudoers.d/anthias-smartctl && \
     visudo -c -f /etc/sudoers.d/anthias-smartctl
