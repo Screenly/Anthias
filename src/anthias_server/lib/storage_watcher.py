@@ -118,11 +118,18 @@ def _watch_loop(redis_client: Any, data_dir: str) -> None:
             state = storage_health.record_check(
                 redis_client, data_dir, write_check=write_check
             )
-            if write_check:
-                # Stamped after the call, not before: on a card that
-                # is struggling the check itself can take a while,
-                # and the interval should be a gap between checks
-                # rather than a deadline they overrun.
+            # Gated on ``supported`` because that is the same
+            # condition record_check applies before actually writing:
+            # asking for a check the filesystem could not be resolved
+            # for is a no-op, and stamping the interval for it would
+            # push the next real check up to WRITE_CHECK_INTERVAL_S
+            # past recovery.
+            #
+            # Stamped after the call, not before: on a card that is
+            # struggling the check itself can take a while, and the
+            # interval should be a gap between checks rather than a
+            # deadline they overrun.
+            if write_check and state['supported']:
                 last_write_check = time.monotonic()
 
             status = state['status']

@@ -38,6 +38,7 @@ def _reset_watcher() -> Any:
 def _state(**overrides: Any) -> dict[str, Any]:
     state = {
         'status': storage_health.STATUS_OK,
+        'supported': True,
         'device': 'mmcblk0p2',
         'read_only': False,
         'write_reason': None,
@@ -126,6 +127,44 @@ class TestWatchLoop:
         assert sleeps == [
             storage_watcher.SAMPLE_INTERVAL_S,
             storage_watcher.SAMPLE_INTERVAL_S,
+        ]
+
+    def test_an_unresolvable_filesystem_does_not_defer_the_write_check(
+        self, caplog: Any
+    ) -> None:
+        # record_check only writes when the filesystem resolved, so
+        # stamping the interval for a pass that did nothing would push
+        # the next real write check up to WRITE_CHECK_INTERVAL_S past
+        # recovery.
+        results = [
+            _state(status=storage_health.STATUS_UNKNOWN, supported=False),
+            _state(),
+        ]
+
+        def _record(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            return results.pop(0)
+
+        def _sleep(_seconds: float) -> None:
+            if not results:
+                raise _Stop
+
+        with (
+            mock.patch.object(
+                storage_health, 'record_check', side_effect=_record
+            ) as record,
+            mock.patch(
+                'anthias_server.lib.storage_watcher.time.sleep', _sleep
+            ),
+            pytest.raises(_Stop),
+        ):
+            storage_watcher._watch_loop(mock.MagicMock(), '/data')
+
+        # Both passes must ask for the write check: the first could not
+        # run it, so the second must still try rather than wait out the
+        # interval.
+        assert [c.kwargs['write_check'] for c in record.call_args_list] == [
+            True,
+            True,
         ]
 
     def test_logs_once_per_status_change(self, caplog: Any) -> None:

@@ -3737,7 +3737,7 @@ def _healthy_storage() -> Any:
     }
     with mock.patch(
         'anthias_server.app.page_context.storage_health.get_state',
-        return_value=healthy,
+        side_effect=lambda *a, **k: dict(healthy),
     ):
         yield
 
@@ -3784,9 +3784,13 @@ def storage_state() -> Any:
         state.update(overrides)
         if media:
             state['media'] = {**state['media'], **media}
+        # side_effect, not return_value: the real get_state builds
+        # a fresh dict per call, and a double that hands out one
+        # shared instance makes any caller mutation leak across
+        # requests and tests.
         return mock.patch(
             'anthias_server.app.page_context.storage_health.get_state',
-            return_value=state,
+            side_effect=lambda *a, **k: dict(state),
         )
 
     return _apply

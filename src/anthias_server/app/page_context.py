@@ -290,7 +290,13 @@ def _storage_card() -> dict[str, Any]:
     card reports "no problems detected" and "we couldn't check" as
     well as the alert.
     """
-    state = _storage_state()
+    # Copied before mutating: get_state builds a fresh dict per call
+    # in production, but this function has no way to know that, and
+    # _parse_iso is destructive on a second application -- it returns
+    # None for an already-parsed datetime, so re-decorating the same
+    # dict would silently blank every timestamp. Not mutating a value
+    # we did not create removes the whole question.
+    state = dict(_storage_state())
     state['warn'] = storage_health.should_warn(state)
     state['kind'] = _storage_kind(state)
     state['first_error'] = _parse_iso(state.get('first_error'))
