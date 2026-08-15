@@ -117,7 +117,17 @@ def _watch_loop(alarm_path: str, redis_client: Any) -> None:
                         redis_client, active
                     )
                     if active != previous:
-                        _log_transition(active, state)
+                        # ``previous is None`` is the first reading of
+                        # this pass, not a transition. Logging it
+                        # unconditionally made a perfectly healthy Pi
+                        # report "Under-voltage alarm cleared." ~30s
+                        # after every boot, which reads as though an
+                        # alarm had happened and cleared. A device
+                        # that starts up already in alarm is still
+                        # worth a line, so only the healthy-start case
+                        # is suppressed.
+                        if active or previous is not None:
+                            _log_transition(active, state)
                         previous = active
         except Exception:
             logger.exception(

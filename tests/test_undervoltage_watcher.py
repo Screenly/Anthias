@@ -280,3 +280,35 @@ class TestStart:
         assert thread_cls.call_count == 1
         assert _latch(fake_redis)['count'] == 1
         undervoltage_watcher._thread = None
+
+    def test_healthy_start_logs_no_spurious_clear(
+        self,
+        alarm_file: Path,
+        fake_redis: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # Found on a real Pi 4: a healthy device logged "Under-voltage
+        # alarm cleared." ~30s after every boot, because the first
+        # reading differs from the initial None. It reads as though an
+        # alarm had happened, in the one log a support engineer greps.
+        alarm_file.write_text('0\n')
+
+        with caplog.at_level('INFO'):
+            _run_loop(alarm_file, fake_redis, [[], []])
+
+        assert 'cleared' not in caplog.text.lower()
+
+    def test_starting_already_in_alarm_is_logged(
+        self,
+        alarm_file: Path,
+        fake_redis: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # The converse: a device that comes up already browning out is
+        # worth a line, so the suppression must not swallow it.
+        alarm_file.write_text('1\n')
+
+        with caplog.at_level('WARNING'):
+            _run_loop(alarm_file, fake_redis, [[]])
+
+        assert 'under-voltage detected' in caplog.text.lower()
