@@ -194,12 +194,23 @@
           you no longer need from the Schedule page.
         </p>
 
+        {% elif storage.kind == 'bad_sectors' %}
+        <div class="stat-card__value status-verdict status-verdict--warn">
+          <i class="ti ti-alert-triangle mr-1"></i>Bad blocks
+        </div>
+        <p class="stat-card__meta stat-card__meta--warn">
+          {{ storage.bad_sectors|intcomma }}
+          block{{ storage.bad_sectors|pluralize }} gone bad. Saving
+          still works, but they don't heal and they usually keep
+          appearing. Plan a replacement.
+        </p>
+
         {% elif storage.kind == 'wear' %}
         <div class="stat-card__value status-verdict status-verdict--warn">
           <i class="ti ti-hourglass-low mr-1"></i>Wearing out
         </div>
         <p class="stat-card__meta stat-card__meta--warn">
-          {% if storage.media.wear_pct %}About {{ storage.media.wear_pct }}% of the rated write life used.{% else %}The drive reports it is near the end of its rated write life.{% endif %}
+          {% if storage.media.wear_pct is not None %}About {{ storage.media.wear_pct }}% of the rated write life used.{% else %}The drive reports it is near the end of its rated write life.{% endif %}
           Working normally today; plan a replacement.
         </p>
 

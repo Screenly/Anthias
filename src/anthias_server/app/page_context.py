@@ -198,6 +198,20 @@ def _storage_kind(state: dict[str, Any]) -> str | None:
     if status == storage_health.STATUS_ERRORS:
         return 'errors_past'
     if status == storage_health.STATUS_WEAR:
+        # Wear and bad blocks are the same severity and reach the same
+        # verdict, but they are not the same story and they do not
+        # have the same fix. Measured on the x86 testbed: an SSD with
+        # zero wear (Wear_Leveling_Count at 100) and a PASSED overall
+        # self-assessment, but 4 reallocated and 4 pending sectors.
+        # Telling that operator their drive is "worn out" sends them
+        # looking at write volume when the drive is actually failing
+        # to read blocks it already wrote.
+        smart = (state.get('media') or {}).get('smart') or {}
+        bad = (smart.get('reallocated_sectors') or 0) + (
+            smart.get('pending_sectors') or 0
+        )
+        if bad:
+            return 'bad_sectors'
         return 'wear'
     return None
 
@@ -242,6 +256,12 @@ def _storage_warning() -> dict[str, Any] | None:
         'write_reason': state.get('write_reason'),
         'wear_pct': media.get('wear_pct'),
         'pre_eol': media.get('pre_eol'),
+        # Counted here rather than in the template so the copy can
+        # state a number instead of hedging.
+        'bad_sectors': (
+            ((media.get('smart') or {}).get('reallocated_sectors') or 0)
+            + ((media.get('smart') or {}).get('pending_sectors') or 0)
+        ),
     }
 
 
@@ -264,6 +284,11 @@ def _storage_card() -> dict[str, Any]:
     written_kb = state.get('lifetime_written_kb')
     state['lifetime_written'] = (
         filesizeformat(written_kb * 1024) if written_kb else None
+    )
+
+    smart = (state.get('media') or {}).get('smart') or {}
+    state['bad_sectors'] = (smart.get('reallocated_sectors') or 0) + (
+        smart.get('pending_sectors') or 0
     )
     return state
 

@@ -36,6 +36,8 @@ _power_warning.html.
     <i class="ti ti-database-off"></i>
     {% elif storage_warning.kind == 'wear' %}
     <i class="ti ti-hourglass-low"></i>
+    {% elif storage_warning.kind == 'bad_sectors' %}
+    <i class="ti ti-alert-triangle"></i>
     {% elif storage_warning.kind == 'errors_past' %}
     <i class="ti ti-device-sd-card"></i>
     {% else %}
@@ -97,13 +99,27 @@ _power_warning.html.
       nothing wrong with the hardware. Freeing up space fixes this.
     </p>
 
+    {% elif storage_warning.kind == 'bad_sectors' %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      The {{ storage_warning.media_noun }} is developing bad spots
+    </h2>
+    <p class="device-alert__lede">
+      {{ storage_warning.bad_sectors|intcomma }} block{{ storage_warning.bad_sectors|pluralize }}
+      on this {{ storage_warning.media_noun }}
+      {{ storage_warning.bad_sectors|pluralize:"has,have" }} gone bad.
+      The drive is working around them for now and everything still
+      saves, so this is early warning rather than a fault you would
+      notice. Bad spots don't heal, though, and they usually keep
+      appearing once they start.
+    </p>
+
     {% elif storage_warning.kind == 'wear' %}
     <h2 class="device-alert__title" id="storage-alert-title">
       This player's storage is wearing out
     </h2>
     <p class="device-alert__lede">
       The {{ storage_warning.media_noun }} reports that it has used
-      {% if storage_warning.wear_pct %}about {{ storage_warning.wear_pct }}% of{% else %}most of{% endif %}
+      {% if storage_warning.wear_pct is not None %}about {{ storage_warning.wear_pct }}% of{% else %}most of{% endif %}
       the writes it was built for. Everything is working normally
       today. This is the warning that arrives early enough to plan a
       replacement instead of discovering it on a Monday morning.

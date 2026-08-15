@@ -4099,6 +4099,75 @@ def test_soldered_storage_is_not_told_to_swap_a_card(
 
 
 @pytest.mark.django_db
+def test_bad_blocks_are_not_described_as_wear(
+    client: Client, storage_state: Any
+) -> None:
+    # Built from the x86 testbed's real drive: Wear_Leveling_Count at
+    # 100 (zero wear), overall self-assessment PASSED, but 4
+    # reallocated and 4 pending sectors. The wear copy would have told
+    # that operator the drive had used "most of" the writes it was
+    # built for -- wrong, and it sends them looking at write volume
+    # when the drive is failing to read blocks it already wrote.
+    with storage_state(
+        status=storage_health.STATUS_WEAR,
+        media={
+            'kind': 'disk',
+            'name': 'SSD 128GB',
+            'wear_pct': 0,
+            'pre_eol': 'warning',
+            'smart': {
+                'supported': True,
+                'device': '/dev/sda',
+                'passed': True,
+                'wear_pct': 0,
+                'wear_is_exact': False,
+                'reallocated_sectors': 4,
+                'pending_sectors': 4,
+                'power_on_hours': 2226,
+            },
+        },
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    banner = _collapse(_banner(response.content.decode(), STORAGE_BANNER_ID))
+    assert 'developing bad spots' in banner
+    assert '8 blocks' in banner
+    assert 'wearing out' not in banner
+    assert 'most of' not in banner
+
+
+@pytest.mark.django_db
+def test_zero_wear_is_not_read_as_missing(
+    client: Client, storage_state: Any
+) -> None:
+    # 0 is falsy in a Django template, so `{% if wear_pct %}` fell
+    # through to the "most of the writes it was built for" branch on a
+    # drive with no wear at all. Genuine wear with no bad blocks must
+    # still say a number.
+    with storage_state(
+        status=storage_health.STATUS_WEAR,
+        media={
+            'kind': 'disk',
+            'wear_pct': 0,
+            'pre_eol': 'urgent',
+            'smart': {
+                'supported': True,
+                'device': '/dev/sda',
+                'passed': False,
+                'wear_pct': 0,
+                'reallocated_sectors': 0,
+                'pending_sectors': 0,
+            },
+        },
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    banner = _collapse(_banner(response.content.decode(), STORAGE_BANNER_ID))
+    assert 'about 0% of' in banner
+    assert 'most of' not in banner
+
+
+@pytest.mark.django_db
 def test_storage_banner_points_at_the_power_supply(
     client: Client, storage_state: Any
 ) -> None:
