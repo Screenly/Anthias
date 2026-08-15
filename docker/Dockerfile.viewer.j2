@@ -196,6 +196,28 @@ ENV ANTHIAS_SERVICE="viewer"
 # identical across containers. It is added to the `video` group there for
 # the DRM/ALSA device nodes this image's compositor opens.
 
+{% if board in ('x86', 'arm64', 'pi5') %}
+# SMART needs root, and `privileged: true` on the container is NOT enough:
+# start_viewer.sh drops to the unprivileged `viewer` user via `sudo -u
+# viewer`, so the sampler thread runs with neither root nor CAP_SYS_RAWIO.
+# Measured on the x86 testbed, where smartctl as `viewer` returns
+# "open device: /dev/sda failed: Permission denied" while the same call as
+# root succeeds. Two separate barriers: /dev/sda is brw-rw---- root:disk
+# (DAC), and the ATA passthrough behind SMART needs CAP_SYS_RAWIO.
+#
+# One narrow NOPASSWD rule clears both. Scoped to the single binary rather
+# than granting the viewer user general sudo, and smartctl is only ever
+# invoked here with read-only flags (-H -A -i). The alternative -- adding
+# viewer to the `disk` group plus setcap on the binary -- needs
+# cap_dac_override too and ends up closer to root than this does.
+#
+# Only on the boards that ship smartmontools; see tools/image_builder.
+RUN printf 'viewer ALL=(root) NOPASSWD: /usr/sbin/smartctl\n' \
+        > /etc/sudoers.d/anthias-smartctl && \
+    chmod 0440 /etc/sudoers.d/anthias-smartctl && \
+    visudo -c -f /etc/sudoers.d/anthias-smartctl
+{% endif %}
+
 RUN rm -f /etc/localtime
 
 WORKDIR /usr/src/app

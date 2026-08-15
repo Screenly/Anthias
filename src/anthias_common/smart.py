@@ -45,13 +45,16 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-SMARTCTL = 'smartctl'
+# Absolute path, because it is also what the sudoers rule authorises and
+# the two must agree exactly for the rule to match.
+SMARTCTL = '/usr/sbin/smartctl'
 
 # Redis key holding the fact the viewer publishes. ``host:`` prefix
 # matches the convention for host-shape facts.
@@ -111,6 +114,29 @@ def _blank(device: str | None = None) -> dict[str, Any]:
     }
 
 
+def _argv(device: str) -> list[str]:
+    """The smartctl command line, elevated when we are not root.
+
+    ``privileged: true`` on the viewer container is not enough on its
+    own: ``bin/start_viewer.sh`` drops to the unprivileged ``viewer``
+    user, so by the time this runs the process has neither root nor
+    ``CAP_SYS_RAWIO``, and ``/dev/sda`` is ``root:disk`` besides.
+    Measured on the x86 testbed -- as ``viewer``, smartctl reports
+    "open device: /dev/sda failed: Permission denied"; as root the
+    same call succeeds.
+
+    ``sudo -n`` never prompts, so on an image without the rule this
+    fails fast and is reported as unsupported rather than hanging a
+    sampler thread on a password prompt. The root branch keeps a
+    direct call working for tests, a debug shell, and anywhere the
+    caller already has privilege.
+    """
+    args = [SMARTCTL, '--json', '-H', '-A', '-i', device]
+    if os.geteuid() == 0:
+        return args
+    return ['sudo', '-n', *args]
+
+
 def run_smartctl(device: str) -> dict[str, Any] | None:
     """Raw ``smartctl --json`` output for ``device``, or ``None``.
 
@@ -121,7 +147,7 @@ def run_smartctl(device: str) -> dict[str, Any] | None:
     """
     try:
         proc = subprocess.run(
-            [SMARTCTL, '--json', '-H', '-A', '-i', device],
+            _argv(device),
             capture_output=True,
             text=True,
             timeout=TIMEOUT_S,
