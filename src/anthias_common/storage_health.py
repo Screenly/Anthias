@@ -209,6 +209,31 @@ EMMC_MANUFACTURER_IDS: dict[int, str | None] = {
 }
 
 
+_warned: set[str] = set()
+
+
+def _warn_once(key: str, message: str) -> None:
+    """Log ``message`` at WARNING the first time, DEBUG thereafter.
+
+    Deliberately a small local copy of the helper in
+    :mod:`anthias_common.undervoltage` rather than a shared import:
+    the two modules are siblings with no dependency between them, and
+    the alternative was reaching into another module's private
+    helper.
+
+    The conditions this guards (an unreadable boot id) are properties
+    of the device, not of an individual reading, so they are worth
+    stating once. The watcher and every page render call in here, so
+    without the throttle one persistent fault would bury the device
+    log.
+    """
+    if key in _warned:
+        logger.debug(message)
+        return
+    _warned.add(key)
+    logger.warning(message)
+
+
 def _read_text(path: str) -> str | None:
     """Stripped contents of a sysfs attribute, or ``None``.
 
@@ -744,7 +769,18 @@ def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
     count lives in the superblock and deliberately survives, because
     a card that corrupted data before the last reboot is still the
     same card.
+
+    An unknown boot id discards the latch outright, matching the fix
+    the under-voltage latch took for the same flaw: comparing ``None``
+    to a stored ``None`` matches, so a device that could not read its
+    boot id would treat last week's latch as current and never reset.
+    Degrading to "live readings only" can under-report history but
+    never invent it, and a stuck ``write_failed_since_boot`` would
+    warn about a card that had already been replaced.
     """
+    if boot_id is None:
+        return _blank_latch()
+
     try:
         raw = redis_client.get(REDIS_KEY)
     except Exception:
@@ -777,10 +813,54 @@ def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
 def _save_latch(
     redis_client: Any, latch: dict[str, Any], boot_id: str | None
 ) -> None:
+    """Persist the latch, unless doing so would be pointless or unsafe.
+
+    Two gates, both borrowed from the under-voltage latch after it hit
+    the same problems.
+
+    Without a boot id there is nothing to key the reset on, so a latch
+    written now could outlive the boot it describes and warn forever.
+    Skipping the write keeps this consistent with :func:`_load_latch`,
+    which discards such a latch anyway.
+
+    And a write that would change nothing is skipped, because Redis
+    persists to the card: the watcher samples every
+    ``SAMPLE_INTERVAL_S``, so an unconditional SET is ~1,400
+    appendonly-fsynced writes a day onto the storage of a device that
+    is behaving perfectly. Writing to a card that often in order to
+    check whether the card is wearing out would be self-defeating.
+    """
+    if boot_id is None:
+        _warn_once(
+            'no_boot_id',
+            'No kernel boot id available; reporting storage health from '
+            'live readings only and not persisting history.',
+        )
+        return
+
     payload = dict(latch)
     payload['boot_id'] = boot_id
+    serialized = json.dumps(payload, sort_keys=True)
+
     try:
-        redis_client.set(REDIS_KEY, json.dumps(payload))
+        existing = redis_client.get(REDIS_KEY)
+        if isinstance(existing, bytes):
+            existing = existing.decode('utf-8')
+        if existing == serialized:
+            return
+    except Exception:
+        # Fall through and attempt the write anyway; a read that
+        # failed says nothing about whether the write will. Not logged
+        # here because the write below reports its own failure, and a
+        # broken Redis would otherwise produce two lines per sample.
+        logger.debug(
+            'Could not read the storage-health latch back; writing '
+            'unconditionally.',
+            exc_info=True,
+        )
+
+    try:
+        redis_client.set(REDIS_KEY, serialized)
     except Exception:
         # Losing the latch costs us the history, not the live
         # reading; the caller still gets an accurate verdict. Logged

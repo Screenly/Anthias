@@ -856,6 +856,94 @@ class TestRecordCheck:
         assert state['errors_count'] == 6
         assert state['status'] == storage_health.STATUS_ERRORS
 
+    def test_a_latch_with_no_boot_id_is_never_trusted(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # Comparing None to a stored None matches, so a device that
+        # cannot read its boot id would treat last week's latch as
+        # current and never reset -- warning about a card that had
+        # already been replaced.
+        data_dir = sysfs(ext4={'errors_count': '0'})
+        fake_redis.set(
+            storage_health.REDIS_KEY,
+            json.dumps(
+                {
+                    'boot_id': None,
+                    'write_failed_since_boot': True,
+                    'write_fail_count': 9,
+                }
+            ),
+        )
+
+        with mock.patch.object(
+            storage_health, 'get_boot_id', return_value=None
+        ):
+            state = storage_health.record_check(
+                fake_redis, data_dir, write_check=False
+            )
+
+        assert state['write_failed_since_boot'] is False
+        assert state['status'] == storage_health.STATUS_OK
+
+    def test_no_boot_id_does_not_persist_a_latch(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # A latch written with no boot id could outlive the boot it
+        # describes, and _load_latch would discard it anyway.
+        data_dir = sysfs(ext4={'errors_count': '0'})
+
+        with mock.patch.object(
+            storage_health, 'get_boot_id', return_value=None
+        ):
+            storage_health.record_check(
+                fake_redis, data_dir, write_check=False
+            )
+
+        assert fake_redis.get(storage_health.REDIS_KEY) is None
+
+    def test_an_unchanged_latch_is_not_rewritten(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # Redis persists to the card. Sampling every 60s with an
+        # unconditional SET is ~1,400 fsynced writes a day onto the
+        # storage of a healthy device -- self-defeating in a feature
+        # whose whole point is avoiding card wear.
+        data_dir = sysfs(ext4={'errors_count': '0'})
+        storage_health.record_check(
+            fake_redis, data_dir, write_check=False, boot_id='boot-a'
+        )
+        writes_before = fake_redis.set.call_count
+
+        for _ in range(5):
+            storage_health.record_check(
+                fake_redis, data_dir, write_check=False, boot_id='boot-a'
+            )
+
+        assert fake_redis.set.call_count == writes_before
+
+    def test_a_changed_latch_is_still_written(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        data_dir = sysfs(ext4={'errors_count': '0'})
+        storage_health.record_check(
+            fake_redis, data_dir, write_check=False, boot_id='boot-a'
+        )
+        writes_before = fake_redis.set.call_count
+
+        failing = {
+            'ok': False,
+            'reason': storage_health.REASON_IO_ERROR,
+            'errno': 'EIO',
+            'fsync_ms': None,
+            'checked_at': '2026-08-15T00:00:00+00:00',
+        }
+        with mock.patch.object(
+            storage_health, 'run_write_check', return_value=failing
+        ):
+            storage_health.record_check(fake_redis, data_dir, boot_id='boot-a')
+
+        assert fake_redis.set.call_count > writes_before
+
     def test_corrupt_latch_is_discarded(
         self, sysfs: Any, tmp_path: Any, fake_redis: Any
     ) -> None:
