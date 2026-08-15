@@ -160,9 +160,9 @@ class TestWatchLoop:
         self, alarm_file: Path, fake_redis: MagicMock
     ) -> None:
         # This is the regression the counter was getting wrong: the
-        # loop wakes on its 30s timeout as well as on kernel events,
-        # and an unchanged alarm across ten wakeups is one brown-out,
-        # not ten. The banner renders this number to the operator.
+        # loop wakes on its backstop timeout as well as on kernel
+        # events, and an unchanged alarm across ten wakeups is one
+        # brown-out, not ten. The banner renders this to the operator.
         alarm_file.write_text('1\n')
 
         _run_loop(alarm_file, fake_redis, [[] for _ in range(10)])
@@ -213,7 +213,7 @@ class TestWatchLoop:
     ) -> None:
         # The whole design rests on sysfs change notification; a
         # registration without POLLPRI would silently degrade the
-        # watcher to a 30-second sampler.
+        # watcher to a slow periodic sampler.
         poller = _run_loop(alarm_file, fake_redis, [[]])
 
         assert poller.registered
@@ -299,7 +299,7 @@ class TestStart:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         # Found on a real Pi 4: a healthy device logged "Under-voltage
-        # alarm cleared." ~30s after every boot, because the first
+        # alarm cleared." after every boot, because the first
         # reading differs from the initial None. It reads as though an
         # alarm had happened, in the one log a support engineer greps.
         alarm_file.write_text('0\n')

@@ -170,8 +170,9 @@ class TestRecordObservation:
     def test_sustained_brown_out_counts_once(
         self, fake_redis: MagicMock
     ) -> None:
-        # The watcher re-samples on a 30s timeout as well as on kernel
-        # events, and re-seeds on every worker start. Counting each
+        # The watcher re-samples on its backstop timeout as well as
+        # on kernel events, and re-seeds on every worker start.
+        # Counting each
         # truthy reading would render "power dropped too low 21 times"
         # for one condition that never went away.
         for _ in range(20):
@@ -492,10 +493,10 @@ class TestRedisWriteDiscipline:
     def test_unchanged_state_does_not_write(
         self, fake_redis: MagicMock
     ) -> None:
-        # The watcher re-samples every 30s. An unconditional SET is
-        # ~2,880 appendonly-fsynced writes a day onto the SD card of a
-        # perfectly healthy device, in a feature whose whole point is
-        # avoiding card corruption.
+        # Redis runs appendonly, so every SET is fsynced to the SD
+        # card. A device that is behaving should not be writing at
+        # all, in a feature whose whole point is avoiding card
+        # corruption.
         undervoltage.record_observation(fake_redis, True, boot_id='boot-a')
         writes_before = fake_redis.set.call_count
 
@@ -551,3 +552,25 @@ class TestRedisWriteDiscipline:
         # Live reading still reported, history left untouched on disk.
         assert state['active'] is False
         assert json.loads(fake_redis.get(undervoltage.REDIS_KEY))['count'] == 3
+
+
+class TestWarnThrottle:
+    def test_persistent_fault_warns_once_not_every_call(
+        self,
+        fake_redis: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # A device-level fault is worth stating once per boot. Without
+        # the throttle a single persistent problem would repeat on
+        # every watcher wake-up and every page render, burying
+        # everything else in the device log.
+        monkeypatch.setattr(undervoltage, '_warned', set())
+        monkeypatch.setattr(undervoltage, 'get_boot_id', lambda: None)
+
+        with caplog.at_level('WARNING'):
+            for _ in range(10):
+                undervoltage.record_observation(fake_redis, True)
+
+        hits = [r for r in caplog.records if 'boot id' in r.getMessage()]
+        assert len(hits) == 1

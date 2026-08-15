@@ -4,8 +4,8 @@ The ``raspberrypi-hwmon`` driver re-reads the firmware every 2
 seconds and clears the sticky bits each time, so
 ``in0_lcrit_alarm`` only reflects the last couple of seconds. A
 periodic sampler on any sane interval would therefore walk straight
-past a brown-out: a dip at ``t=3s`` is gone by the time a 30-second
-beat task looks at ``t=30s``. That matters because the failure mode
+past a brown-out: a dip at ``t=3s`` is long gone by the time any
+sanely-spaced beat task looks. That matters because the failure mode
 we are trying to surface (a marginal power supply under load) is
 often a burst of short dips rather than a sustained condition.
 
@@ -13,9 +13,9 @@ The driver calls ``hwmon_notify_event()`` whenever the alarm state
 changes, which raises ``POLLPRI`` on the sysfs attribute. So instead
 of sampling we block in :func:`select.poll` and get woken on every
 transition, catching dips a sampler would miss while costing no CPU
-in between. The poll also has a timeout, which doubles as a
-re-sample so the latch stays fresh (and ``active`` de-escalates
-correctly) even if an event is ever missed.
+in between. The poll also has a long timeout, a backstop re-sample
+that re-syncs the latch if an event were ever missed. Events fire on
+both edges, so nothing routine depends on it.
 
 Runs in the celery worker: it is a single long-lived process on both
 docker-compose installs and Balena fleets, and it already owns the
@@ -36,9 +36,18 @@ from anthias_common import undervoltage
 
 logger = logging.getLogger(__name__)
 
-# Wake up at least this often even with no state change, to refresh
-# the latch and correct ``active`` if an event was missed.
-RESAMPLE_INTERVAL_S = 30
+# Backstop only. Every state change arrives as a kernel POLLPRI
+# notification, on both edges, so this timeout exists purely to
+# re-sync if one were ever missed. It does not need to be anywhere
+# near the resolution of the events themselves: a short interval
+# would just wake the worker and re-read sysfs to learn nothing,
+# hundreds of times a day, on a device that is behaving.
+#
+# The UI never depends on this cadence either. ``get_state`` reads the
+# live attribute on every page render and writes back on disagreement,
+# so what an operator sees is current to the request, not to the last
+# poll.
+RESAMPLE_INTERVAL_S = 3600
 
 # Backoff after an unexpected failure (sysfs read error, driver
 # unbound). Long enough not to spin, short enough that recovery is
@@ -136,12 +145,12 @@ def _watch_loop(alarm_path: str, redis_client: Any) -> None:
                         # ``previous is None`` is the first reading of
                         # this pass, not a transition. Logging it
                         # unconditionally made a perfectly healthy Pi
-                        # report "Under-voltage alarm cleared." ~30s
-                        # after every boot, which reads as though an
-                        # alarm had happened and cleared. A device
-                        # that starts up already in alarm is still
-                        # worth a line, so only the healthy-start case
-                        # is suppressed.
+                        # report "Under-voltage alarm cleared." on the
+                        # first re-sample after every boot, which reads
+                        # as though an alarm had happened and cleared.
+                        # A device that starts up already in alarm is
+                        # still worth a line, so only the healthy-start
+                        # case is suppressed.
                         if active or previous is not None:
                             _log_transition(active, state)
                         previous = active

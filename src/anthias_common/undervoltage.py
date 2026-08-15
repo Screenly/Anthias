@@ -194,11 +194,17 @@ _warned: set[str] = set()
 def _warn_once(key: str, message: str) -> None:
     """Log ``message`` at WARNING the first time, DEBUG thereafter.
 
-    The watcher calls into this module every 30s, so a condition that
-    persists (an unreadable boot id, say) would otherwise emit ~2,880
-    identical warnings a day and bury everything else in the device
-    log. Same shape as the throttled logging elsewhere in the
-    codebase.
+    These conditions (an unreadable boot id, a Redis that will not
+    answer) are properties of the device, not of the individual
+    reading, so they are worth stating once and not repeating. The
+    watcher and every page render call into this module, so without
+    the throttle a single persistent fault would bury everything else
+    in the device log.
+
+    Scoped to the process, which for the celery worker means once per
+    boot in practice. It deliberately is not keyed on the kernel boot
+    id: the main caller is the branch that fires precisely *because*
+    the boot id could not be read.
     """
     if key in _warned:
         logger.debug(message)
@@ -255,10 +261,10 @@ def _load_latch(
     try:
         raw = redis_client.get(REDIS_KEY)
     except Exception:
-        logger.warning(
+        _warn_once(
+            'latch_unreadable',
             'Could not read the under-voltage latch from Redis; '
             'treating history as unknown rather than empty.',
-            exc_info=True,
         )
         return _empty_state(), False
 
@@ -307,8 +313,8 @@ def record_observation(
 
     ``count`` is edge-triggered: it counts brown-out *events*, not
     observations of one. Callers sample at whatever cadence suits
-    them (the watcher re-reads on a 30s timeout as well as on each
-    kernel event, and re-seeds on every worker start), so counting
+    them (the watcher re-reads on its backstop timeout as well as on
+    each kernel event, and re-seeds on every worker start), so counting
     every truthy reading would render "power dropped too low 21
     times" for a single condition that never went away. The previous
     reading comes from the latch itself rather than caller state, so
@@ -352,12 +358,12 @@ def record_observation(
     if not readable:
         return state
 
-    # Skip a write that would change nothing. The watcher re-samples
-    # every 30s, so an unconditional SET is ~2,880 appendonly-fsynced
-    # writes a day onto the SD card of a device that is behaving
-    # perfectly, which is poor manners in a feature whose whole point
-    # is avoiding card corruption. Mirrors the same gate get_state()
-    # already applies to its write-back.
+    # Skip a write that would change nothing. Redis runs with
+    # appendonly yes, so every SET is fsynced to the SD card; a device
+    # that is behaving should not be writing at all, which is only
+    # good manners in a feature whose whole point is avoiding card
+    # corruption. Mirrors the same gate get_state() already applies to
+    # its write-back.
     if state == prior:
         return state
 
