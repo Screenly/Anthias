@@ -1,0 +1,199 @@
+{% load humanize %}
+{% comment %}
+Storage banner. Same contract as _power_warning.html: rendered on
+every page from the shared navbar context, never dismissible, plain
+language only. The mechanism (ext4 counters, the write check, eMMC
+wear registers) is on System Info behind a disclosure.
+
+Six states rather than the power banner's two, because unlike a
+brown-out the failures here are not one thing at different
+intensities. "It's full", "it went read-only" and "it's wearing out"
+have different causes and different fixes, and an operator told the
+wrong one goes and buys the wrong thing. The state is chosen
+server-side (page_context._storage_kind); this template renders it.
+
+media_noun rather than a hardcoded "memory card": most of the fleet
+boots from an SD card, the compute modules from soldered eMMC, and
+x86 from an SSD. Naming the wrong object is the fastest way to make
+an operator stop believing the warning.
+
+Semantics: a labelled <section>, not role="alert" — see the note in
+_power_warning.html.
+{% endcomment %}
+{% if storage_warning %}
+<section
+  class="device-alert {% if storage_warning.severity == 'warning' %}device-alert--warning{% endif %}"
+  aria-labelledby="storage-alert-title"
+>
+  <div class="device-alert__icon" aria-hidden="true">
+    {% comment %}
+    Each icon says what is wrong rather than restating how bad it is;
+    the rail and the wash already carry severity. The hourglass on the
+    wear state is the one that earns its place: it is the only state
+    where the thing being reported is time left, not a fault.
+    {% endcomment %}
+    {% if storage_warning.kind == 'full' %}
+    <i class="ti ti-database-off"></i>
+    {% elif storage_warning.kind == 'wear' %}
+    <i class="ti ti-hourglass-low"></i>
+    {% elif storage_warning.kind == 'errors_past' %}
+    <i class="ti ti-device-sd-card"></i>
+    {% else %}
+    <i class="ti ti-alert-octagon"></i>
+    {% endif %}
+  </div>
+
+  <div class="device-alert__body">
+    {% if storage_warning.kind == 'read_only' %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      This player has stopped saving changes
+    </h2>
+    <p class="device-alert__lede">
+      The {{ storage_warning.media_noun }} has switched to read-only,
+      which happens automatically once it can no longer be written to
+      safely. The screen keeps playing what it already has, so nothing
+      looks wrong from the front, but anything you change now is lost
+      the moment this player restarts.
+    </p>
+
+    {% elif storage_warning.kind == 'write_failing' %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      This player can't save anything
+    </h2>
+    <p class="device-alert__lede">
+      {% if storage_warning.write_reason == 'corrupt' %}
+      Anthias saved a small test file to the
+      {{ storage_warning.media_noun }} and read back something
+      different. It is handing back data that isn't what was written
+      to it, which is how storage behaves shortly before it stops
+      working altogether.
+      {% else %}
+      Anthias tried to save a small test file to the
+      {{ storage_warning.media_noun }} and couldn't. Uploads, schedule
+      changes and settings are failing the same way, whether or not
+      the screen still looks right.
+      {% endif %}
+    </p>
+
+    {% elif storage_warning.kind == 'errors_now' %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      The {{ storage_warning.media_noun }} is returning errors
+    </h2>
+    <p class="device-alert__lede">
+      This player has hit
+      {% if storage_warning.errors_count > 1 %}{{ storage_warning.errors_count|intcomma }} storage errors{% else %}a storage error{% endif %}
+      since it last restarted. Saving still works for now, but storage
+      that has started corrupting data doesn't recover, and what
+      usually comes next is that it stops accepting changes at all.
+    </p>
+
+    {% elif storage_warning.kind == 'full' %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      This player has run out of space
+    </h2>
+    <p class="device-alert__lede">
+      The {{ storage_warning.media_noun }} is full, so uploads,
+      schedule changes and settings are failing to save. There's
+      nothing wrong with the hardware. Freeing up space fixes this.
+    </p>
+
+    {% elif storage_warning.kind == 'wear' %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      This player's storage is wearing out
+    </h2>
+    <p class="device-alert__lede">
+      The {{ storage_warning.media_noun }} reports that it has used
+      {% if storage_warning.wear_pct %}about {{ storage_warning.wear_pct }}% of{% else %}most of{% endif %}
+      the writes it was built for. Everything is working normally
+      today. This is the warning that arrives early enough to plan a
+      replacement instead of discovering it on a Monday morning.
+    </p>
+
+    {% else %}
+    <h2 class="device-alert__title" id="storage-alert-title">
+      The {{ storage_warning.media_noun }} has recorded errors
+    </h2>
+    <p class="device-alert__lede">
+      {% if storage_warning.errors_count > 1 %}{{ storage_warning.errors_count|intcomma }} storage errors are{% else %}A storage error is{% endif %}
+      recorded on this player{% if storage_warning.last_error %}, most
+      recently {{ storage_warning.last_error|naturaltime }}{% endif %}.
+      Saving is working right now, and these can date from well before
+      today. They don't happen on healthy storage, though, so treat it
+      as a warning that this one won't last.
+    </p>
+    {% endif %}
+
+    <p class="device-alert__advice-label">What to do</p>
+    <ul class="device-alert__advice">
+      {% if storage_warning.kind == 'full' %}
+      {% comment %}
+      A full drive is the one state here that isn't a hardware
+      problem, so its advice shares nothing with the rest. Leading on
+      deleting content keeps an operator from buying hardware they
+      don't need.
+      {% endcomment %}
+      <li>
+        <strong>Remove content you no longer need</strong> from the
+        Schedule page. Deleting an asset frees its file straight away.
+      </li>
+      <li>
+        Videos are almost always what filled it. One long,
+        high-quality video can take more space than a whole playlist
+        of images.
+      </li>
+      <li>
+        System Info shows how much space is left, so you can check
+        before adding anything back.
+      </li>
+
+      {% else %}
+      {% if storage_warning.replaceable %}
+      <li>
+        <strong>Replace the {{ storage_warning.media_noun }}.</strong>
+        Storage wears out from ordinary use, and once it has started
+        failing it doesn't come back. This is the fix, and doing it
+        now is much less work than doing it after the player stops
+        starting up.
+      </li>
+      {% else %}
+      <li>
+        <strong>Plan to replace this player.</strong> Its storage is
+        soldered to the board, so there's nothing to swap out. Getting
+        a replacement ready now avoids an unplanned outage later.
+      </li>
+      {% endif %}
+      <li>
+        Take a backup first, from Settings, while it can still be
+        read. If the backup itself fails, this is further gone than it
+        looks and the replacement is urgent.
+      </li>
+      {% if storage_warning.media_kind == 'sd' %}
+      <li>
+        Buy a card rated A1 or A2 from a brand you recognise. Cheap
+        cards and counterfeits are the usual cause of this, and a
+        signage player writes far more than a card sold for a camera
+        expects.
+      </li>
+      {% endif %}
+      {% if not power_warning %}
+      {% comment %}
+      Omitted when the power banner is already on screen directly
+      above saying the same thing at greater length. Repeating it
+      would read as filler and cost this list the attention its
+      first item needs.
+      {% endcomment %}
+      <li>
+        Check the power supply as well. A supply that can't hold its
+        voltage is one of the main things that damages storage, and a
+        replacement will go the same way if that's the cause.
+      </li>
+      {% endif %}
+      {% endif %}
+    </ul>
+  </div>
+
+  <a class="device-alert__link" href="{% url 'anthias_app:system_info' %}">
+    See details<i class="ti ti-arrow-right ml-1" aria-hidden="true"></i>
+  </a>
+</section>
+{% endif %}

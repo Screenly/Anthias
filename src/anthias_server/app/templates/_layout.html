@@ -3,10 +3,10 @@
 
 {% block content %}
 {% include "_navbar.html" %}
-{% comment %} Above <main> so it can't be scrolled past or mistaken for
-   page content. Renders nothing unless there is an under-voltage
-   condition to report. {% endcomment %}
-{% include "_power_warning.html" %}
+{% comment %} Above <main> so they can't be scrolled past or mistaken
+   for page content. Renders nothing unless the device has an
+   under-voltage or memory-card condition to report. {% endcomment %}
+{% include "_device_alerts.html" %}
 <main>
   {% block main %}{% endblock %}
 </main>

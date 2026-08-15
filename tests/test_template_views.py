@@ -19,6 +19,7 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
+from anthias_common import storage_health
 from anthias_server.app import page_context
 from anthias_server.app.models import DURATION_S_MAX, Asset
 from anthias_server.app.templatetags.asset_filters import to_json
@@ -3656,12 +3657,139 @@ def test_settings_renders_selected_schedule_days(
 
 
 # ---------------------------------------------------------------------------
-# Under-voltage banner (_power_warning.html)
+# Device alert banners (_device_alerts.html)
 #
-# Rendered from the shared navbar context, so it must appear on every
+# Rendered from the shared navbar context, so they must appear on every
 # page rather than only on System Info: an operator whose screen is
 # glitching goes to the Schedule page, not a diagnostics tab.
+#
+# Both banners share the .device-alert block, so a test cannot assert
+# on that class to mean "the power banner is showing" -- it would also
+# match the storage banner, and the wrapper .device-alerts renders
+# unconditionally. Assert on the per-banner title id instead.
 # ---------------------------------------------------------------------------
+
+POWER_BANNER_ID = 'power-alert-title'
+STORAGE_BANNER_ID = 'storage-alert-title'
+
+
+def _collapse(html: str) -> str:
+    """Whitespace-collapsed markup.
+
+    Copy in these templates is hard-wrapped, so a sentence assertion
+    would otherwise break the moment a line rewraps -- which says
+    nothing about whether the sentence still reads correctly.
+    """
+    return ' '.join(html.split())
+
+
+def _banner(body: str, banner_id: str) -> str:
+    """The one <section> carrying ``banner_id``, or ''."""
+    for chunk in body.split('<section'):
+        if banner_id in chunk:
+            return chunk.split('</section>', 1)[0]
+    return ''
+
+
+@pytest.fixture(autouse=True)
+def _healthy_storage() -> Any:
+    """Pin storage health to healthy for every page render in this
+    module.
+
+    Without this, ``_storage_warning`` reads the real ext4 counters of
+    whatever machine is running the suite, so a developer laptop with
+    a nonzero ``errors_count`` would render an extra banner on every
+    page and fail assertions that have nothing to do with storage.
+    Tests that care patch over this from the inside.
+    """
+    healthy = {
+        'supported': True,
+        'status': storage_health.STATUS_OK,
+        'mount_point': '/data/.anthias',
+        'fstype': 'ext4',
+        'device': 'mmcblk0p2',
+        'disk': 'mmcblk0',
+        'read_only': False,
+        'error_stats_supported': True,
+        'errors_count': 0,
+        'errors_new': 0,
+        'errors_this_boot': False,
+        'first_error': None,
+        'last_error': None,
+        'last_error_function': None,
+        'lifetime_written_kb': 4096,
+        'write_ok': True,
+        'write_reason': None,
+        'write_failed_since_boot': False,
+        'write_fail_count': 0,
+        'first_write_fail': None,
+        'last_write_fail': None,
+        'last_check': None,
+        'fsync_ms': 2.5,
+        'media': {
+            'kind': 'sd',
+            'name': 'SC32G',
+            'manufacturer': 'SanDisk',
+            'manufactured': '03/2019',
+            'wear_pct': None,
+            'pre_eol': None,
+        },
+    }
+    with mock.patch(
+        'anthias_server.app.page_context.storage_health.get_state',
+        return_value=healthy,
+    ):
+        yield
+
+
+@pytest.fixture
+def storage_state() -> Any:
+    """Patch the storage reader used by both page-context helpers."""
+
+    def _apply(**overrides: Any) -> Any:
+        state: dict[str, Any] = {
+            'supported': True,
+            'status': storage_health.STATUS_OK,
+            'mount_point': '/data/.anthias',
+            'fstype': 'ext4',
+            'device': 'mmcblk0p2',
+            'disk': 'mmcblk0',
+            'read_only': False,
+            'error_stats_supported': True,
+            'errors_count': 0,
+            'errors_new': 0,
+            'errors_this_boot': False,
+            'first_error': None,
+            'last_error': None,
+            'last_error_function': None,
+            'lifetime_written_kb': None,
+            'write_ok': True,
+            'write_reason': None,
+            'write_failed_since_boot': False,
+            'write_fail_count': 0,
+            'first_write_fail': None,
+            'last_write_fail': None,
+            'last_check': None,
+            'fsync_ms': None,
+            'media': {
+                'kind': 'sd',
+                'name': 'SC32G',
+                'manufacturer': 'SanDisk',
+                'manufactured': '03/2019',
+                'wear_pct': None,
+                'pre_eol': None,
+            },
+        }
+        media = overrides.pop('media', None)
+        state.update(overrides)
+        if media:
+            state['media'] = {**state['media'], **media}
+        return mock.patch(
+            'anthias_server.app.page_context.storage_health.get_state',
+            return_value=state,
+        )
+
+    return _apply
 
 
 @pytest.fixture
@@ -3694,7 +3822,7 @@ def test_power_banner_hidden_when_healthy(
         response = client.get(reverse('anthias_app:home'))
 
     assert response.status_code == 200
-    assert 'power-alert' not in response.content.decode()
+    assert POWER_BANNER_ID not in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -3706,7 +3834,7 @@ def test_power_banner_hidden_on_unsupported_hardware(
     with undervoltage_state(supported=False):
         response = client.get(reverse('anthias_app:home'))
 
-    assert 'power-alert' not in response.content.decode()
+    assert POWER_BANNER_ID not in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -3717,7 +3845,7 @@ def test_power_banner_shows_on_a_non_diagnostic_page(
         response = client.get(reverse('anthias_app:home'))
 
     body = response.content.decode()
-    assert 'power-alert--past' not in body
+    assert 'device-alert--warning' not in _banner(body, POWER_BANNER_ID)
     assert "This player isn't getting enough power" in body
     # The recommendation that actually resolves this must be present
     # and must name Raspberry Pi rather than hedging.
@@ -3732,7 +3860,7 @@ def test_power_banner_de_escalates_after_recovery(
         response = client.get(reverse('anthias_app:settings'))
 
     body = response.content.decode()
-    assert 'power-alert--past' in body
+    assert 'device-alert--warning' in _banner(body, POWER_BANNER_ID)
     assert 'This player briefly lost power' in body
     assert '3 times' in body
 
@@ -3747,7 +3875,7 @@ def test_power_banner_carries_no_jargon(
         response = client.get(reverse('anthias_app:home'))
 
     body = response.content.decode()
-    banner = body.split('power-alert', 1)[1].split('</section>', 1)[0]
+    banner = _banner(body, POWER_BANNER_ID)
     for jargon in ('rpi_volt', 'in0_lcrit_alarm', 'hwmon', 'vcgencmd'):
         assert jargon not in banner
 
@@ -3828,3 +3956,278 @@ def test_power_banner_renders_with_a_naive_latch_timestamp(
     assert response.status_code == 200
     assert 'This player briefly lost power' in body
     assert 'from now' not in body
+
+
+# ---------------------------------------------------------------------------
+# Memory-card banner (_storage_warning.html)
+#
+# Six states rather than the power banner's two, because the failures
+# have different fixes. The tests below are mostly about keeping the
+# wrong fix off the screen: telling someone with a full card to go and
+# buy a new one wastes their money, and telling someone with a soldered
+# eMMC to swap the card wastes their afternoon.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_storage_banner_hidden_when_healthy(
+    client: Client, storage_state: Any
+) -> None:
+    with storage_state():
+        response = client.get(reverse('anthias_app:home'))
+
+    assert response.status_code == 200
+    assert STORAGE_BANNER_ID not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_storage_banner_hidden_when_unresolvable(
+    client: Client, storage_state: Any
+) -> None:
+    # We could not work out which filesystem we're on. Staying silent
+    # is correct: we can't claim health we never measured.
+    with storage_state(supported=False, status=storage_health.STATUS_UNKNOWN):
+        response = client.get(reverse('anthias_app:home'))
+
+    assert STORAGE_BANNER_ID not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_storage_banner_leads_with_the_symptom_when_read_only(
+    client: Client, storage_state: Any
+) -> None:
+    # The operator has already noticed that their changes don't stick.
+    # The banner has to name that, not the filesystem state producing
+    # it, or they won't connect the two.
+    with storage_state(status=storage_health.STATUS_FAILING, read_only=True):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    assert 'This player has stopped saving changes' in body
+    assert 'Replace the memory card' in body
+    assert 'device-alert--warning' not in _banner(body, STORAGE_BANNER_ID)
+
+
+@pytest.mark.django_db
+def test_storage_banner_names_corruption_when_the_readback_differs(
+    client: Client, storage_state: Any
+) -> None:
+    with storage_state(
+        status=storage_health.STATUS_FAILING,
+        write_ok=False,
+        write_reason='corrupt',
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = _collapse(response.content.decode())
+    assert "This player can't save anything" in body
+    assert 'read back something different' in body
+
+
+@pytest.mark.django_db
+def test_storage_banner_reports_errors_while_writes_still_work(
+    client: Client, storage_state: Any
+) -> None:
+    with storage_state(
+        status=storage_health.STATUS_FAILING,
+        errors_count=4,
+        errors_new=4,
+        errors_this_boot=True,
+    ):
+        response = client.get(reverse('anthias_app:settings'))
+
+    body = response.content.decode()
+    assert 'The memory card is returning errors' in body
+    assert '4 storage errors' in body
+
+
+@pytest.mark.django_db
+def test_storage_banner_de_escalates_for_historical_errors(
+    client: Client, storage_state: Any
+) -> None:
+    # Amber, not red: the errors are real but nothing is failing this
+    # second, and using the same red for both would flatten a
+    # distinction the operator can act on differently.
+    with storage_state(status=storage_health.STATUS_ERRORS, errors_count=6):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    assert 'device-alert--warning' in _banner(body, STORAGE_BANNER_ID)
+    assert 'The memory card has recorded errors' in body
+    assert '6 storage errors' in body
+
+
+@pytest.mark.django_db
+def test_full_card_does_not_tell_the_operator_to_buy_hardware(
+    client: Client, storage_state: Any
+) -> None:
+    # A full card is the one state here that isn't a hardware fault.
+    # Reusing the failing-card advice would send someone out for a
+    # card they don't need and leave the actual problem in place.
+    with storage_state(
+        status=storage_health.STATUS_FULL,
+        write_ok=False,
+        write_reason='no_space',
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    banner = _banner(body, STORAGE_BANNER_ID)
+    assert 'This player has run out of space' in banner
+    assert 'Remove content you no longer need' in banner
+    assert 'Replace the memory card' not in banner
+    assert 'A1 or A2' not in banner
+
+
+@pytest.mark.django_db
+def test_soldered_storage_is_not_told_to_swap_a_card(
+    client: Client, storage_state: Any
+) -> None:
+    # eMMC is soldered to the board. "Replace the memory card" is
+    # advice the operator physically cannot follow.
+    with storage_state(
+        status=storage_health.STATUS_WEAR,
+        media={'kind': 'emmc', 'wear_pct': 90, 'pre_eol': 'warning'},
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    banner = _banner(response.content.decode(), STORAGE_BANNER_ID)
+    assert "This player's storage is wearing out" in banner
+    assert 'about 90%' in banner
+    assert 'Plan to replace this player' in banner
+    assert 'Replace the memory card' not in banner
+
+
+@pytest.mark.django_db
+def test_storage_banner_points_at_the_power_supply(
+    client: Client, storage_state: Any
+) -> None:
+    # Under-voltage is one of the main causes of a corrupted card, so
+    # a replacement fitted without fixing the supply goes the same
+    # way. The two diagnostics have to cross-reference or the operator
+    # solves the same problem twice.
+    with storage_state(status=storage_health.STATUS_FAILING, read_only=True):
+        response = client.get(reverse('anthias_app:home'))
+
+    assert 'Check the power supply' in _banner(
+        response.content.decode(), STORAGE_BANNER_ID
+    )
+
+
+@pytest.mark.django_db
+def test_x86_players_are_not_told_they_have_a_memory_card(
+    client: Client, storage_state: Any
+) -> None:
+    # Anthias runs from an SSD on x86. Naming the wrong object is the
+    # fastest way to make an operator stop believing the warning.
+    with storage_state(
+        status=storage_health.STATUS_FAILING,
+        read_only=True,
+        media={'kind': 'disk', 'name': 'Samsung SSD 870', 'wear_pct': None},
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    banner = _collapse(_banner(response.content.decode(), STORAGE_BANNER_ID))
+    assert 'memory card' not in banner
+    assert 'Replace the drive' in banner
+    # The A1/A2 rating only exists for SD cards.
+    assert 'A1 or A2' not in banner
+
+
+@pytest.mark.django_db
+def test_power_advice_is_dropped_when_the_power_banner_says_it(
+    client: Client, storage_state: Any, undervoltage_state: Any
+) -> None:
+    # The power banner sits directly above saying the same thing at
+    # greater length. Repeating it reads as filler and costs this list
+    # the attention its first item needs.
+    with (
+        undervoltage_state(active=True, seen_since_boot=True, count=1),
+        storage_state(status=storage_health.STATUS_FAILING, read_only=True),
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    banner = _banner(response.content.decode(), STORAGE_BANNER_ID)
+    assert 'Check the power supply' not in banner
+
+
+@pytest.mark.django_db
+def test_storage_banner_carries_no_jargon(
+    client: Client, storage_state: Any
+) -> None:
+    with storage_state(status=storage_health.STATUS_FAILING, read_only=True):
+        response = client.get(reverse('anthias_app:home'))
+
+    banner = _banner(response.content.decode(), STORAGE_BANNER_ID)
+    for jargon in (
+        'ext4',
+        'errors_count',
+        'mmcblk',
+        'fsync',
+        'superblock',
+        'EROFS',
+    ):
+        assert jargon not in banner
+
+
+@pytest.mark.django_db
+def test_both_banners_stack_with_power_first(
+    client: Client, storage_state: Any, undervoltage_state: Any
+) -> None:
+    # A bad supply is what corrupts the card, so when both fire the
+    # top banner has to be the one to act on first. Sorting by
+    # severity would put the card above the thing destroying it.
+    with (
+        undervoltage_state(active=True, seen_since_boot=True, count=1),
+        storage_state(status=storage_health.STATUS_FAILING, read_only=True),
+    ):
+        response = client.get(reverse('anthias_app:home'))
+
+    body = response.content.decode()
+    assert body.index(POWER_BANNER_ID) < body.index(STORAGE_BANNER_ID)
+
+
+@pytest.mark.django_db
+def test_system_info_storage_card_reports_health(
+    client: Client, storage_state: Any
+) -> None:
+    with storage_state():
+        response = client.get(reverse('anthias_app:system_info'))
+
+    body = response.content.decode()
+    assert 'Memory card' in body
+    assert 'No storage errors recorded' in body
+
+
+@pytest.mark.django_db
+def test_system_info_storage_card_states_when_unchecked(
+    client: Client, storage_state: Any
+) -> None:
+    with storage_state(supported=False, status=storage_health.STATUS_UNKNOWN):
+        response = client.get(reverse('anthias_app:system_info'))
+
+    body = response.content.decode()
+    assert 'Not checked' in body
+    assert 'errors_count' not in body
+
+
+@pytest.mark.django_db
+def test_system_info_storage_card_exposes_the_evidence(
+    client: Client, storage_state: Any
+) -> None:
+    # System Info is the one place the mechanism is named, so a
+    # support engineer reading a screenshot can see the counter and
+    # the card it came from.
+    with storage_state(
+        status=storage_health.STATUS_ERRORS,
+        errors_count=6,
+        last_error_function='ext4_find_entry',
+    ):
+        response = client.get(reverse('anthias_app:system_info'))
+
+    body = response.content.decode()
+    assert 'Errors recorded' in body
+    assert 'errors_count' in body
+    assert 'mmcblk0p2' in body
+    assert 'ext4_find_entry' in body
+    assert 'SanDisk SC32G' in body

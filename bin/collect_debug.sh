@@ -9,8 +9,9 @@
 # Pulls host/system info, Docker + compose state, per-container logs
 # (journald-tagged in production), the Anthias config and database
 # overview, an ffprobe of every video asset, network reachability,
-# Redis health, and Raspberry Pi specifics (power supply health,
-# throttling, temperature).
+# Redis health, storage health (filesystem error counters, card
+# identity, kernel I/O errors), and Raspberry Pi specifics (power
+# supply health, throttling, temperature).
 #
 # Device state that Anthias already computes for its own UI is captured
 # by querying /api/v2/info rather than re-deriving it here, so the
@@ -296,6 +297,117 @@ undervoltage_kernel_log() {
     fi
 }
 
+# Storage health. Same split as under-voltage: the interpreted verdict
+# lives in /api/v2/info, and what follows is the raw evidence for when
+# the stack is too broken to answer.
+#
+# ext4 keeps its error counters in the superblock rather than in
+# memory, so unlike the firmware throttle bits these are durable: they
+# survive reboots and are cleared only by fsck or a reformat. A
+# nonzero errors_count on a device that has never been fscked is the
+# single strongest piece of evidence that a card is going.
+ext4_error_counters() {
+    local found=0 dir name
+
+    for dir in /sys/fs/ext4/*; do
+        name="$(basename "$dir")"
+        [ "$name" = "features" ] && continue
+        [ -r "${dir}/errors_count" ] || continue
+        found=1
+        echo "filesystem      : ${name}"
+        echo "errors_count    : $(cat "${dir}/errors_count" 2>/dev/null)"
+        echo "first_error_time: $(cat "${dir}/first_error_time" 2>/dev/null)"
+        echo "first_error_func: $(cat "${dir}/first_error_func" 2>/dev/null)"
+        echo "last_error_time : $(cat "${dir}/last_error_time" 2>/dev/null)"
+        echo "last_error_func : $(cat "${dir}/last_error_func" 2>/dev/null)"
+        echo "last_error_block: $(cat "${dir}/last_error_block" 2>/dev/null)"
+        echo "lifetime_write  : $(cat "${dir}/lifetime_write_kbytes" \
+            2>/dev/null) KiB"
+        echo "warning_count   : $(cat "${dir}/warning_count" 2>/dev/null)"
+        echo "                  (*_error_time are epoch seconds; on a Pi"
+        echo "                   with no RTC they can predate the first"
+        echo "                   NTP sync and read as nonsense)"
+        echo
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "No ext4 filesystems reporting error counters."
+    fi
+}
+
+# MMC/SD identification and, on eMMC only, the wear registers. SD
+# cards have no health register at all, which is why the counters
+# above and the write check in the API are what this feature rests on.
+mmc_devices() {
+    local found=0 dev dir
+
+    for dir in /sys/block/mmcblk*; do
+        [ -d "$dir" ] || continue
+        dev="$(basename "$dir")"
+        found=1
+        echo "device       : ${dev}"
+        echo "type         : $(cat "${dir}/device/type" 2>/dev/null)"
+        echo "name         : $(cat "${dir}/device/name" 2>/dev/null)"
+        echo "manfid       : $(cat "${dir}/device/manfid" 2>/dev/null)"
+        echo "oemid        : $(cat "${dir}/device/oemid" 2>/dev/null)"
+        echo "date         : $(cat "${dir}/device/date" 2>/dev/null)"
+        echo "fwrev        : $(cat "${dir}/device/fwrev" 2>/dev/null)"
+        echo "size         : $(cat "${dir}/size" 2>/dev/null) sectors"
+        # eMMC only. life_time is two 10%-band estimates (0x0b means
+        # the estimate has been exceeded); pre_eol_info is 0x01
+        # normal / 0x02 80% of reserve used / 0x03 90%.
+        echo "life_time    : $(cat "${dir}/device/life_time" \
+            2>/dev/null || echo "n/a (SD cards do not report wear)")"
+        echo "pre_eol_info : $(cat "${dir}/device/pre_eol_info" \
+            2>/dev/null || echo "n/a")"
+        echo
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "No MMC/SD block devices; this player boots from something"
+        echo "else (SSD, NVMe, USB)."
+    fi
+}
+
+# The richest evidence of a failing card by far, and host-only: the
+# ring buffer is not readable from inside the server container, so
+# this cannot move to the API. Matches the block layer's I/O error
+# message, the mmc driver's timeouts and resets, and ext4's own
+# remount-read-only announcement.
+#
+# Captured into a variable for the same reason as the under-voltage
+# equivalent above: `grep | tail` exits 0 even when grep matched
+# nothing, so an empty section would otherwise be ambiguous between
+# "no errors" and "could not read dmesg".
+storage_kernel_log() {
+    local out
+    out="$({ dmesg -T 2>/dev/null || sudo -n dmesg -T 2>/dev/null \
+        || dmesg 2>/dev/null; } \
+        | grep -i -E 'blk_update_request|I/O error|mmc[0-9]+:|mmcblk|EXT4-fs error|EXT4-fs .*(remount|read-only)|Buffer I/O error|critical (target|medium) error' \
+        | tail -100)"
+
+    if [ -n "$out" ]; then
+        echo "$out"
+    else
+        echo "No storage errors in the kernel ring buffer."
+        echo "(The buffer is finite, so this does not rule out errors"
+        echo " earlier in this device's uptime.)"
+    fi
+}
+
+note "storage health"
+STORAGE="${REPORT_DIR}/storage.txt"
+section "Block devices" "$STORAGE" lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT,RO
+# `ro` on the root filesystem here is the endgame of a dying card: the
+# player keeps displaying content while every change silently fails to
+# save.
+section "Mount flags (ro = filesystem has gone read-only)" "$STORAGE" \
+    sh -c 'grep -E " (ext4|f2fs|btrfs|vfat) " /proc/self/mounts'
+section "ext4 error counters (durable; see api-info.json)" "$STORAGE" \
+    ext4_error_counters
+section "MMC / SD devices" "$STORAGE" mmc_devices
+section "Storage kernel messages" "$STORAGE" storage_kernel_log
+
 # Raspberry Pi specifics: model, firmware, power, temperature.
 note "raspberry pi specifics (if present)"
 PI="${REPORT_DIR}/raspberry-pi.txt"
@@ -546,8 +658,10 @@ section "DNS resolution" "$NET" sh -c \
 # Anthias's own view of the device, straight from /api/v2/info.
 #
 # This is the authoritative, already-interpreted device state: version,
-# uptime, memory and the low-RAM gate, display power, IP addresses and
-# power-supply health, produced by the same code the web UI renders
+# uptime, memory and the low-RAM gate, display power, IP addresses,
+# power-supply health and storage health (including the write check,
+# which nothing outside Anthias performs), produced by the same code
+# the web UI renders
 # from. Capturing it keeps the bundle in step with the API instead of
 # re-deriving the same facts in shell, and it is where new diagnostics
 # should land as more of them move into the UI: adding a field to the
@@ -604,8 +718,9 @@ The server did not answer on port 80 or 8000, or it redirected to the
 login page because this device has an auth backend configured.
 
 Device state that would normally come from here (power-supply health,
-memory, uptime, version) has to be read from the raw sections instead:
-raspberry-pi.txt, system.txt, logs/ and redis.txt.
+storage health, memory, uptime, version) has to be read from the raw
+sections instead: raspberry-pi.txt, storage.txt, system.txt, logs/ and
+redis.txt.
 EOF
 fi
 
