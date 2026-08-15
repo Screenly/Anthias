@@ -373,6 +373,27 @@ class TestReadMediaInfo:
 
         assert media['manufacturer'] == 'Unknown (0xee)'
 
+    def test_emmc_ids_are_not_read_off_the_sd_table(self, sysfs: Any) -> None:
+        # SD and eMMC manufacturer IDs are different namespaces. 0x03
+        # is SanDisk on the SD bus and something else entirely under
+        # JEDEC, so sharing one table produced a confident wrong
+        # answer -- the exact failure mode this module avoids
+        # elsewhere by falling back to hex.
+        sysfs(mmc={'type': 'MMC', 'manfid': '0x000003'})
+
+        media = storage_health.read_media_info('mmcblk0')
+
+        assert media['kind'] == 'emmc'
+        assert media['manufacturer'] == 'Unknown (0x03)'
+
+    def test_known_emmc_id_resolves(self, sysfs: Any) -> None:
+        sysfs(mmc={'type': 'MMC', 'manfid': '0x000015'})
+
+        assert (
+            storage_health.read_media_info('mmcblk0')['manufacturer']
+            == 'Samsung'
+        )
+
     def test_reads_emmc_wear_registers(self, sysfs: Any) -> None:
         sysfs(
             mmc={

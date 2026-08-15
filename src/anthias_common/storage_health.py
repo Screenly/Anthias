@@ -20,14 +20,23 @@ and on Balena fleets, where there is no host agent to ask:
   record: they survive reboots and are cleared only by ``fsck`` or
   ``tune2fs``. A card that has begun handing back corrupt blocks
   shows up here as a rising count long before it stops mounting.
-* **Whether the filesystem still takes writes.** Raspberry Pi OS
-  mounts the root filesystem ``errors=remount-ro``, so the endgame of
-  a dying card is a read-only root. The player keeps showing content
-  and the web UI keeps loading, while every upload, schedule edit and
-  setting change silently fails to stick. Error counters cannot see
-  that state, because once the filesystem is read-only nothing is
-  going wrong any more -- nothing is being written. It has to be
-  tested directly, so we write a small file and read it back.
+* **Whether the filesystem still takes writes.** A filesystem mounted
+  ``errors=remount-ro`` stops dead on the first error, and the player
+  then keeps showing content and serving the web UI while every
+  upload, schedule edit and setting change silently fails to stick.
+  Error counters cannot see that state, because once the filesystem
+  has stopped nothing is going wrong any more -- nothing is being
+  written. It has to be tested directly, so we write a small file and
+  read it back.
+
+  Measured across the testbed fleet, this is *not* the Raspberry Pi
+  case: every Pi's root filesystem reports ``Errors behavior:
+  Continue`` in its superblock and carries no ``errors=`` mount
+  option, so a dying card there does not go read-only. It keeps
+  limping, and the error counters below are what rises. The Rock Pi 4
+  is the opposite -- its fstab passes ``errors=remount-ro``, so it
+  does stop. Both endings happen on the fleet, which is why both
+  signals are read rather than picking whichever seemed dominant.
 * **eMMC wear registers**, ``life_time`` and ``pre_eol_info``. Only
   the compute modules and a few industrial boards have them; a plain
   SD card does not. Where they exist they are the one true
@@ -134,10 +143,10 @@ PRE_EOL_LABELS = {0x01: 'normal', 0x02: 'warning', 0x03: 'urgent'}
 # discover it during a support call.
 WEAR_WARN_PCT = 80
 
-# MMC/SD manufacturer IDs, best effort. The list is not authoritative
+# SD card manufacturer IDs, best effort. The list is not authoritative
 # -- the SD Association does not publish one -- so an ID that is not
 # here renders as its raw hex rather than being guessed at.
-MANUFACTURER_IDS = {
+SD_MANUFACTURER_IDS = {
     0x01: 'Panasonic',
     0x02: 'Toshiba/Kioxia',
     0x03: 'SanDisk',
@@ -151,6 +160,22 @@ MANUFACTURER_IDS = {
     0x76: 'Patriot',
     0x82: 'Sony',
     0x9C: 'Angelbird/Hoodman',
+}
+
+# eMMC IDs are JEDEC-assigned and are a DIFFERENT namespace from the SD
+# list above -- the same number means different vendors on the two
+# buses. Sharing one table would have rendered a JEDEC 0x03 part as
+# "SanDisk", which is the confident-wrong-answer this whole module
+# tries to avoid. Kept deliberately short: only IDs worth asserting,
+# everything else falls through to hex. (The Rock Pi 4 testbed's 0x88
+# is one of those -- it renders as hex rather than a guess.)
+EMMC_MANUFACTURER_IDS = {
+    0x11: 'Toshiba/Kioxia',
+    0x13: 'Micron',
+    0x15: 'Samsung',
+    0x45: 'SanDisk',
+    0x90: 'SK Hynix',
+    0xFE: 'Micron',
 }
 
 
@@ -525,9 +550,12 @@ def read_media_info(
 
     manfid = _read_int(os.path.join(device_dir, 'manfid'))
     if manfid is not None:
-        info['manufacturer'] = MANUFACTURER_IDS.get(
-            manfid, f'Unknown (0x{manfid:02x})'
+        table = (
+            EMMC_MANUFACTURER_IDS
+            if info['kind'] == 'emmc'
+            else SD_MANUFACTURER_IDS
         )
+        info['manufacturer'] = table.get(manfid, f'Unknown (0x{manfid:02x})')
 
     # The MMC date register is MM/YYYY and has no day, so it stays a
     # string rather than being forced into a date the card never gave.
