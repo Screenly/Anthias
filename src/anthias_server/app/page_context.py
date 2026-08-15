@@ -178,6 +178,24 @@ _STORAGE_NOUNS = {
 }
 
 
+def _bad_blocks(media: dict[str, Any] | None) -> int:
+    """Blocks the drive has found bad, across both SMART dialects.
+
+    ``reallocated``/``pending`` are ATA-only fields and NVMe reports
+    the same class of fault as ``media_errors``. Counting only the ATA
+    pair meant an NVMe drive with media errors fell through to the
+    wear copy and was told it had "used N% of the writes it was built
+    for" -- the mismatched story :func:`_storage_kind` exists to
+    prevent, just on the other bus.
+    """
+    smart = (media or {}).get('smart') or {}
+    return (
+        (smart.get('reallocated_sectors') or 0)
+        + (smart.get('pending_sectors') or 0)
+        + (smart.get('media_errors') or 0)
+    )
+
+
 def _storage_kind(state: dict[str, Any]) -> str | None:
     status = state.get('status')
 
@@ -206,11 +224,7 @@ def _storage_kind(state: dict[str, Any]) -> str | None:
         # Telling that operator their drive is "worn out" sends them
         # looking at write volume when the drive is actually failing
         # to read blocks it already wrote.
-        smart = (state.get('media') or {}).get('smart') or {}
-        bad = (smart.get('reallocated_sectors') or 0) + (
-            smart.get('pending_sectors') or 0
-        )
-        if bad:
+        if _bad_blocks(state.get('media')):
             return 'bad_sectors'
         return 'wear'
     return None
@@ -252,6 +266,12 @@ def _storage_warning() -> dict[str, Any] | None:
         'media_kind': media_kind,
         'media_noun': _STORAGE_NOUNS.get(media_kind, 'storage'),
         'errors_count': state.get('errors_count'),
+        # Errors seen during THIS boot. errors_count is ext4's
+        # superblock counter and is cumulative over the filesystem's
+        # life, so copy that says "since it last restarted" has to
+        # use this one or it reports a five-year-old total as today's
+        # news.
+        'errors_new': state.get('errors_new') or 0,
         'last_error': _parse_iso(state.get('last_error')),
         'write_reason': state.get('write_reason'),
         'wear_pct': media.get('wear_pct'),
@@ -259,10 +279,7 @@ def _storage_warning() -> dict[str, Any] | None:
         'pre_eol': media.get('pre_eol'),
         # Counted here rather than in the template so the copy can
         # state a number instead of hedging.
-        'bad_sectors': (
-            ((media.get('smart') or {}).get('reallocated_sectors') or 0)
-            + ((media.get('smart') or {}).get('pending_sectors') or 0)
-        ),
+        'bad_sectors': _bad_blocks(media),
     }
 
 
@@ -287,10 +304,7 @@ def _storage_card() -> dict[str, Any]:
         filesizeformat(written_kb * 1024) if written_kb else None
     )
 
-    smart = (state.get('media') or {}).get('smart') or {}
-    state['bad_sectors'] = (smart.get('reallocated_sectors') or 0) + (
-        smart.get('pending_sectors') or 0
-    )
+    state['bad_sectors'] = _bad_blocks(state.get('media'))
     return state
 
 

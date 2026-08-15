@@ -83,7 +83,7 @@ _power_warning.html.
     </h2>
     <p class="device-alert__lede">
       This player has hit
-      {% if storage_warning.errors_count > 1 %}{{ storage_warning.errors_count|intcomma }} storage errors{% else %}a storage error{% endif %}
+      {% if storage_warning.errors_new > 1 %}{{ storage_warning.errors_new|intcomma }} storage errors{% else %}a storage error{% endif %}
       since it last restarted. Saving still works for now, but storage
       that has started corrupting data doesn't recover, and what
       usually comes next is that it stops accepting changes at all.

@@ -83,6 +83,23 @@ ATA_OFFLINE_UNCORRECTABLE = 198
 # Vendor wear attributes, best first. Each normalizes to "percent of
 # life REMAINING" counting down from 100, so wear is 100 - value. See
 # the module docstring on why this is advisory.
+# NVMe CRITICAL_WARNING bits. Bit 1 is a temperature excursion,
+# which is a cooling problem and not an end-of-life signal: treating
+# the whole byte as critical put "your storage is wearing out, plan a
+# replacement" on any drive that had once run hot. The rest genuinely
+# do mean the drive is going.
+NVME_CRIT_SPARE_LOW = 1 << 0
+NVME_CRIT_TEMPERATURE = 1 << 1
+NVME_CRIT_DEGRADED = 1 << 2
+NVME_CRIT_READ_ONLY = 1 << 3
+NVME_CRIT_VOLATILE_BACKUP_FAILED = 1 << 4
+NVME_CRIT_END_OF_LIFE = (
+    NVME_CRIT_SPARE_LOW
+    | NVME_CRIT_DEGRADED
+    | NVME_CRIT_READ_ONLY
+    | NVME_CRIT_VOLATILE_BACKUP_FAILED
+)
+
 ATA_WEAR_ATTRS = (
     231,  # SSD_Life_Left
     202,  # Percent_Lifetime_Remain
@@ -104,6 +121,12 @@ def _blank(device: str | None = None) -> dict[str, Any]:
         'passed': None,
         'wear_pct': None,
         'wear_is_exact': False,
+        # True when wear came from an ATA vendor attribute. Those
+        # count down from 100 by convention rather than by spec, and a
+        # drive that inverts the convention reads as nearly worn out
+        # when new -- so the figure is shown but is not allowed to
+        # raise a warning on its own. See the module docstring.
+        'wear_is_advisory': False,
         'power_on_hours': None,
         'reallocated_sectors': None,
         'pending_sectors': None,
@@ -249,11 +272,12 @@ def parse(doc: dict[str, Any], device: str) -> dict[str, Any]:
             # to remap failures. This is the NVMe spelling of eMMC's
             # PRE_EOL urgent.
             state['pre_eol'] = 'urgent'
-        if isinstance(critical, int) and critical:
+        if isinstance(critical, int) and critical & NVME_CRIT_END_OF_LIFE:
             state['pre_eol'] = 'urgent'
     else:
         attrs = _ata_attrs(doc)
         state['wear_pct'] = _ata_wear(attrs)
+        state['wear_is_advisory'] = state['wear_pct'] is not None
         state['power_on_hours'] = _raw(attrs, ATA_POWER_ON_HOURS)
         state['reallocated_sectors'] = _raw(attrs, ATA_REALLOCATED_SECTOR_CT)
         state['pending_sectors'] = _raw(attrs, ATA_CURRENT_PENDING_SECTOR)

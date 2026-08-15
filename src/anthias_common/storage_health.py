@@ -146,6 +146,13 @@ PRE_EOL_LABELS = {0x01: 'normal', 0x02: 'warning', 0x03: 'urgent'}
 # discover it during a support call.
 WEAR_WARN_PCT = 80
 
+# How far into a boot the watcher could plausibly have missed an
+# error it never saw the count rise for: boot, container start,
+# celery's migration wait, then the first sample. Generous, and it
+# is the bound that keeps a skewed clock from dragging old errors
+# into the current boot. See _assemble.
+STARTUP_GRACE_S = 3600
+
 # Card manufacturer IDs, transcribed from mmc-utils' lsmmc.c, which is
 # the closest thing to a canonical table that exists. There is no
 # public authoritative registry: JEDEC assigns eMMC MIDs and does not
@@ -551,6 +558,7 @@ def _merge_smart(
     info['name'] = smart_fact.get('model') or info['name']
     info['wear_pct'] = smart_fact.get('wear_pct')
     info['wear_is_exact'] = bool(smart_fact.get('wear_is_exact'))
+    info['wear_is_advisory'] = bool(smart_fact.get('wear_is_advisory'))
     info['pre_eol'] = smart_fact.get('pre_eol')
     return info
 
@@ -580,7 +588,12 @@ def read_media_info(
         'wear_pct': None,
         # False when wear_pct is a band's upper bound (eMMC) or a
         # vendor ATA attribute; True only for NVMe's defined field.
+        # Precision, which drives the "up to N%" copy.
         'wear_is_exact': False,
+        # Trustworthiness, which is a different question and drives
+        # the verdict: an eMMC band is imprecise but authoritative,
+        # an ATA vendor attribute is neither.
+        'wear_is_advisory': False,
         'pre_eol': None,
         # SMART-only detail, for the System Info disclosure. None on
         # every SBC booting from a card, which is most of the fleet.
@@ -717,7 +730,19 @@ def run_write_check(data_dir: str) -> dict[str, Any]:
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            os.write(fd, payload)
+            # Looped rather than a single os.write: a short write does
+            # not raise, and near ENOSPC ext4 will happily accept part
+            # of the buffer. The read-back would then differ from the
+            # payload and be reported as REASON_CORRUPT -- "it is
+            # handing back data that isn't what was written to it",
+            # i.e. replace the card -- when the filesystem is merely
+            # full.
+            written = 0
+            while written < len(payload):
+                chunk = os.write(fd, payload[written:])
+                if not chunk:
+                    raise OSError(errno.ENOSPC, 'short write')
+                written += chunk
             started = time.monotonic()
             os.fsync(fd)
             result['fsync_ms'] = round((time.monotonic() - started) * 1000, 1)
@@ -954,10 +979,22 @@ def _classify_status(state: dict[str, Any]) -> str:
     if state['errors_count'] > 0:
         return STATUS_ERRORS
 
-    wear = state['media']['wear_pct']
-    if state['media']['pre_eol'] in ('warning', 'urgent'):
+    media = state['media']
+    if media['pre_eol'] in ('warning', 'urgent'):
         return STATUS_WEAR
-    if wear is not None and wear >= WEAR_WARN_PCT:
+    # An advisory wear figure is displayed but never raises the
+    # warning by itself. ATA has no defined wear field, only vendor
+    # attributes that count down from 100 by convention, and a drive
+    # inverting that convention would read as nearly worn out when
+    # new. smart.py's docstring already said the well-defined signals
+    # carry the verdict; this is where that becomes true. eMMC bands
+    # and NVMe percentage_used are both authoritative and still count.
+    wear = media['wear_pct']
+    if (
+        wear is not None
+        and not media.get('wear_is_advisory')
+        and wear >= WEAR_WARN_PCT
+    ):
         return STATUS_WEAR
 
     return STATUS_OK
@@ -972,14 +1009,31 @@ def _assemble(
     baseline = latch['errors_baseline']
 
     last_epoch = errors['last_time_epoch']
-    errors_this_boot = bool(
-        errors['supported']
+    errors_new = (
+        max(0, errors['count'] - baseline) if baseline is not None else 0
+    )
+
+    # This signal exists for one narrow case: an error that landed
+    # during this boot but *before* the watcher took its baseline --
+    # a mount-time error on a bad card. Outside that gap, a rising
+    # count is what reports an error, and errors_new already has it.
+    #
+    # So the window is bounded by the gap it is meant to cover. Left
+    # unbounded it was a clock-skew trap: boot_time is derived as
+    # ``time.time() - uptime``, and a Pi has no RTC, so a clock
+    # restored behind real time by fake-hwclock pushes boot_time into
+    # the past and drags errors from *previous* boots inside it. On a
+    # device up for a month that turned an amber "recorded errors"
+    # into a red "returning errors since it last restarted" with no
+    # new error at all. An error dated an hour into a month-long
+    # uptime cannot be one the watcher missed at startup.
+    startup_gap = (
+        boot_time is not None
         and last_epoch
-        and boot_time is not None
-        # A minute of slack: the superblock timestamp and our
-        # uptime arithmetic come from different clocks, and a Pi's
-        # clock jumps when NTP first syncs.
-        and last_epoch >= boot_time - 60
+        and boot_time - 60 <= last_epoch <= boot_time + STARTUP_GRACE_S
+    )
+    errors_this_boot = bool(
+        errors['supported'] and (errors_new > 0 or startup_gap)
     )
 
     state: dict[str, Any] = {
@@ -992,9 +1046,7 @@ def _assemble(
         'media': facts['media'],
         'error_stats_supported': errors['supported'],
         'errors_count': errors['count'],
-        'errors_new': max(0, errors['count'] - baseline)
-        if baseline is not None
-        else 0,
+        'errors_new': errors_new,
         'errors_this_boot': errors_this_boot,
         'first_error': errors['first_time'],
         'last_error': errors['last_time'],
@@ -1049,10 +1101,16 @@ def record_check(
         latch['last_check'] = result['checked_at']
         if result['fsync_ms'] is not None:
             latch['fsync_ms'] = result['fsync_ms']
-        if not result['ok'] and not missing:
-            # Latched the same way under-voltage latches a dip: a
-            # write that failed and then succeeded is not a card that
-            # is fine, it is a card that is starting to go.
+        # ENOSPC is excluded from the latch on purpose. The latch's
+        # rationale -- a write that failed and later succeeded is not
+        # a card that is fine -- holds for EIO and EROFS but not for a
+        # full filesystem, which is not a hardware fault at all and is
+        # separated everywhere else in this module. Latching it turned
+        # the banner from "run out of space" into "replace the memory
+        # card" the moment the operator did what it asked and deleted
+        # some assets, and left it there until the next reboot.
+        transient = missing or result['reason'] == REASON_NO_SPACE
+        if not result['ok'] and not transient:
             if not latch['write_failed_since_boot']:
                 latch['write_failed_since_boot'] = True
                 latch['first_write_fail'] = result['checked_at']

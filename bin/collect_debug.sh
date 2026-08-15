@@ -189,6 +189,19 @@ scrub_pii() {
             -e 's#\b([0-9]{1,3}\.){3}[0-9]{1,3}\b#<redacted-ip>#g' \
             "$f"
 
+        # Storage device serials. smartctl -i prints "Serial Number:"
+        # and "LU WWN Device Id:", and the MMC/SD sysfs dump carries a
+        # "serial:" line — all of them uniquely identify a physical
+        # unit, which is exactly what this bundle promises not to
+        # carry. Model, firmware and manufacture date are deliberately
+        # kept: those are what make a support conversation useful and
+        # they identify a product, not a device.
+        sed -i -E \
+            -e 's/^([[:space:]]*Serial Number:[[:space:]]*).*/\1<redacted-serial>/I' \
+            -e 's/^([[:space:]]*LU WWN Device Id:[[:space:]]*).*/\1<redacted-wwn>/I' \
+            -e 's/^([[:space:]]*serial[[:space:]]*:[[:space:]]*).*/\1<redacted-serial>/I' \
+            "$f"
+
         sed -i \
             -e 's/__KEEP_LOOPBACK__/127.0.0.1/g' \
             -e 's/__KEEP_ANY__/0.0.0.0/g' \

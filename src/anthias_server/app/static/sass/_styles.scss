@@ -1509,10 +1509,13 @@ label { text-align: left; }
 // here is what to do about it. Giving them a shared block is what
 // keeps a stack of two from looking like two different products.
 .device-alerts {
-  // Only the gap lives here. The banners keep their own margin so a
-  // single one renders identically to how the under-voltage banner
-  // did before it had company.
-  > * + * { margin-top: var(--space-3); }
+  // No gap rule here on purpose. `> * + *` and `.device-alert` have
+  // identical specificity (0,1,0) and .device-alert is declared
+  // later, so its own margin-top wins and any value set here would be
+  // dead code describing spacing that never happened. The banners
+  // keep their own margin, which also means a single one renders
+  // identically to how the under-voltage banner did before it had
+  // company.
 }
 
 // Built on --color-surface like every .stat-card, so it reads as part

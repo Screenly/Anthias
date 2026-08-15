@@ -178,9 +178,9 @@
           {% elif storage.kind == 'write_failing' %}
           A test write failed{% if storage.last_check %} {{ storage.last_check|naturaltime }}{% endif %}.
           {% else %}
-          {{ storage.errors_count|intcomma }} storage
-          error{{ storage.errors_count|pluralize }} since this player
-          last restarted.
+          {% if storage.errors_new %}{{ storage.errors_new|intcomma }} storage
+          error{{ storage.errors_new|pluralize }}{% else %}A storage error{% endif %}
+          since this player last restarted.
           {% endif %}
           Replace it and see the warning at the top of the page.
         </p>
@@ -230,7 +230,14 @@
           <i class="ti ti-device-sd-card mr-1"></i>OK
         </div>
         <div class="stat-card__meta">
-          No storage errors recorded, and the last write test passed.
+          {% comment %}
+          Each clause is asserted only if it was actually established.
+          write_ok is None when no check has run -- notably whenever
+          Redis is unreachable, since the latch then reads blank every
+          time -- and errors_count is 0 on a non-ext4 root because
+          there is no counter, not because there are no errors.
+          {% endcomment %}
+          {% if storage.error_stats_supported %}No storage errors recorded{% else %}This filesystem keeps no error counter{% endif %}{% if storage.write_ok %}, and the last write test passed{% endif %}.
         </div>
         {% endif %}
 

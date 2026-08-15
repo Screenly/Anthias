@@ -815,6 +815,172 @@ class TestRecordCheck:
 
         assert state['status'] == storage_health.STATUS_FULL
 
+    def test_freeing_space_clears_the_full_verdict(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # ENOSPC must not latch. Otherwise the operator sees "run out
+        # of space", deletes assets exactly as instructed, and the
+        # banner turns into "replace the memory card" and stays there
+        # until reboot -- punishing them for following the advice.
+        data_dir = sysfs(ext4={'errors_count': '0'})
+        full = {
+            'ok': False,
+            'reason': storage_health.REASON_NO_SPACE,
+            'errno': 'ENOSPC',
+            'fsync_ms': None,
+            'checked_at': '2026-08-15T00:00:00+00:00',
+        }
+        with mock.patch.object(
+            storage_health, 'run_write_check', return_value=full
+        ):
+            state = storage_health.record_check(
+                fake_redis, data_dir, boot_id='boot-a'
+            )
+        assert state['status'] == storage_health.STATUS_FULL
+
+        state = storage_health.record_check(
+            fake_redis, data_dir, boot_id='boot-a'
+        )
+
+        assert state['write_failed_since_boot'] is False
+        assert state['status'] == storage_health.STATUS_OK
+
+    def test_a_real_write_failure_still_latches(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # The counterpart: EIO is exactly what the latch is for.
+        data_dir = sysfs(ext4={'errors_count': '0'})
+        failing = {
+            'ok': False,
+            'reason': storage_health.REASON_IO_ERROR,
+            'errno': 'EIO',
+            'fsync_ms': None,
+            'checked_at': '2026-08-15T00:00:00+00:00',
+        }
+        with mock.patch.object(
+            storage_health, 'run_write_check', return_value=failing
+        ):
+            storage_health.record_check(fake_redis, data_dir, boot_id='boot-a')
+
+        state = storage_health.record_check(
+            fake_redis, data_dir, boot_id='boot-a'
+        )
+
+        assert state['write_failed_since_boot'] is True
+        assert state['status'] == storage_health.STATUS_FAILING
+
+    def test_an_old_error_is_not_dragged_into_this_boot(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # boot_time is time.time() - uptime, and a Pi has no RTC, so a
+        # clock restored behind real time pushes boot_time into the
+        # past and can pull errors from previous boots inside it. An
+        # error dated an hour into a month-long uptime cannot be one
+        # the watcher missed at startup, so it must stay amber
+        # "recorded errors" rather than escalating to red.
+        import time as _time
+
+        month = 30 * 86400
+        # Five days into a month-long uptime: unambiguously outside
+        # the startup window, unlike a value right on the boundary.
+        old_error = int(_time.time()) - month + (5 * 86400)
+        data_dir = sysfs(
+            ext4={
+                'errors_count': '3',
+                'last_error_time': str(old_error),
+            },
+            uptime=f'{month}.00 {month}.00',
+        )
+
+        state = storage_health.record_check(
+            fake_redis, data_dir, write_check=False, boot_id='boot-a'
+        )
+
+        assert state['errors_new'] == 0
+        assert state['errors_this_boot'] is False
+        assert state['status'] == storage_health.STATUS_ERRORS
+
+    def test_an_error_inside_the_startup_window_still_escalates(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # The case the signal exists for: a mount-time error the
+        # watcher never saw the count rise for, because it landed
+        # before the baseline was taken.
+        import time as _time
+
+        uptime = 600.0
+        data_dir = sysfs(
+            ext4={
+                'errors_count': '1',
+                'last_error_time': str(int(_time.time()) - 300),
+            },
+            uptime=f'{uptime} {uptime}',
+        )
+
+        state = storage_health.record_check(
+            fake_redis, data_dir, write_check=False, boot_id='boot-a'
+        )
+
+        assert state['errors_new'] == 0
+        assert state['errors_this_boot'] is True
+        assert state['status'] == storage_health.STATUS_FAILING
+
+    def test_advisory_ata_wear_does_not_warn_on_its_own(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # ATA has no defined wear field, only vendor attributes that
+        # count down from 100 by convention. A drive inverting that
+        # convention reads as nearly worn out when new, so the figure
+        # is displayed but never raises the banner by itself --
+        # which is what smart.py's docstring already claimed.
+        data_dir = sysfs(
+            disk='sda', partition='sda1', ext4={'errors_count': '0'}
+        )
+        with mock.patch(
+            'anthias_common.storage_health.smart.read',
+            return_value={
+                'supported': True,
+                'device': '/dev/sda',
+                'passed': True,
+                'wear_pct': 99,
+                'wear_is_exact': False,
+                'wear_is_advisory': True,
+                'pre_eol': None,
+            },
+        ):
+            state = storage_health.record_check(
+                fake_redis, data_dir, boot_id='boot-a'
+            )
+
+        assert state['media']['wear_pct'] == 99
+        assert state['status'] == storage_health.STATUS_OK
+
+    def test_authoritative_wear_still_warns(
+        self, sysfs: Any, tmp_path: Any, fake_redis: Any
+    ) -> None:
+        # NVMe percentage_used and eMMC life_time bands are both
+        # defined fields, so they must keep working.
+        data_dir = sysfs(
+            disk='nvme0n1', partition='nvme0n1p1', ext4={'errors_count': '0'}
+        )
+        with mock.patch(
+            'anthias_common.storage_health.smart.read',
+            return_value={
+                'supported': True,
+                'device': '/dev/nvme0n1',
+                'passed': True,
+                'wear_pct': 92,
+                'wear_is_exact': True,
+                'wear_is_advisory': False,
+                'pre_eol': None,
+            },
+        ):
+            state = storage_health.record_check(
+                fake_redis, data_dir, boot_id='boot-a'
+            )
+
+        assert state['status'] == storage_health.STATUS_WEAR
+
     def test_emmc_wear_warns_before_anything_fails(
         self, sysfs: Any, tmp_path: Any, fake_redis: Any
     ) -> None:
