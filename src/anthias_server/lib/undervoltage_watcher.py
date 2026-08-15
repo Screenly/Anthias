@@ -66,11 +66,12 @@ def _watch_loop(alarm_path: str, redis_client: Any) -> None:
 
     while True:
         try:
-            # Reopened each pass rather than held forever: if the
-            # driver is unbound and rebound (or the path changes
-            # across a probe reorder) a stale fd would silently
-            # stop reporting, and a watcher that has quietly gone
-            # blind is worse than no watcher.
+            # In steady state this fd is held open indefinitely: the
+            # inner loop never exits normally. The reopen exists for
+            # the recovery path only, so that a driver unbind/rebind
+            # (which leaves the old fd reporting nothing) gets a fresh
+            # descriptor after the backoff below, rather than leaving
+            # a watcher that has quietly gone blind.
             with open(alarm_path) as alarm_file:
                 poller = select.poll()
                 poller.register(alarm_file, select.POLLPRI | select.POLLERR)

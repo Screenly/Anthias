@@ -211,7 +211,17 @@ def _load_latch(redis_client: Any, boot_id: str | None) -> dict[str, Any]:
     device that browned out last week would still be showing the
     warning after a reboot and a new power supply, which would
     teach operators to ignore it.
+
+    An unknown boot id discards the latch outright. Comparing
+    ``None`` to a stored ``None`` would match, so a device that could
+    not read its boot id would treat last week's latch as current and
+    the warning would never reset again. Degrading to "live readings
+    only" is the safe direction: it can under-report history, never
+    invent it.
     """
+    if boot_id is None:
+        return _empty_state()
+
     try:
         raw = redis_client.get(REDIS_KEY)
     except Exception:
@@ -285,6 +295,18 @@ def record_observation(
         state['last_seen'] = now
         if not was_active:
             state['count'] = state['count'] + 1
+
+    # Without a boot id there is nothing to key the reset on, so a
+    # latch written now could outlive the boot it describes and warn
+    # forever. Skip the write and hand back a best-effort in-memory
+    # state; the live reading is still accurate, and the paired
+    # discard in ``_load_latch`` keeps the two halves consistent.
+    if boot_id is None:
+        logger.warning(
+            'No kernel boot id available; reporting under-voltage from '
+            'the live sensor only and not persisting history.'
+        )
+        return state
 
     payload = dict(state)
     payload['boot_id'] = boot_id

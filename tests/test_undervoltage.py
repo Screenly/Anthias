@@ -446,3 +446,43 @@ class TestAlarmPathCache:
         undervoltage.find_alarm_path(use_cache=False)
 
         assert len(calls) == 1
+
+
+class TestUnknownBootId:
+    def test_latch_is_not_persisted_without_a_boot_id(
+        self, fake_redis: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Nothing to key the reset on, so a latch written now could
+        # outlive the boot it describes and warn forever.
+        # NB: the ``boot_id=None`` argument means "resolve it", so the
+        # unknown case has to come from get_boot_id() itself.
+        monkeypatch.setattr(undervoltage, 'get_boot_id', lambda: None)
+
+        state = undervoltage.record_observation(fake_redis, True)
+
+        assert state['active'] is True
+        assert fake_redis.get(undervoltage.REDIS_KEY) is None
+
+    def test_stored_latch_is_discarded_without_a_boot_id(
+        self, fake_redis: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The trap: a stored `boot_id: null` compares equal to a
+        # current `None`, so the latch would be treated as current
+        # forever and the warning would never reset.
+        fake_redis.set(
+            undervoltage.REDIS_KEY,
+            json.dumps(
+                {
+                    'boot_id': None,
+                    'active': True,
+                    'seen_since_boot': True,
+                    'count': 7,
+                }
+            ),
+        )
+        monkeypatch.setattr(undervoltage, 'get_boot_id', lambda: None)
+
+        state = undervoltage.record_observation(fake_redis, False)
+
+        assert state['seen_since_boot'] is False
+        assert state['count'] == 0
