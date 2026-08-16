@@ -63,20 +63,39 @@
   --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
 
   /* ---- Colour roles (light theme) -----------------------------------
-   * The UI has four planes, and each theme decides them independently:
+   * The UI has four planes:
    *
    *   canvas   the page behind everything
-   *   chrome   navbar + footer. Brand furniture; deep plum in BOTH
-   *            themes, so it is the one plane that does not invert.
+   *   chrome   navbar + footer
    *   surface  cards, modals, popovers
    *   feature  the accent card (.surface--active), splash and login
-   *            cards. DARKER than canvas in light, LIGHTER in dark, so
-   *            "emphasised" reads correctly either way.
+   *            cards. Lighter than the canvas in both themes, which is
+   *            what makes it read as elevated.
+   *
+   * Canvas and chrome are BRAND FURNITURE and stay deep plum in both
+   * themes. Only the surfaces flip. Three consequences worth stating,
+   * because this is the decision the whole theme rests on:
+   *
+   * 1. The light theme is exactly what Anthias looks like today. A
+   *    textbook light mode would put a near-white canvas behind
+   *    everything, which would replace the product's face rather than
+   *    theme it. Shipping the toggle changes nothing for anyone who
+   *    never touches it.
+   * 2. Dark mode is purely additive: the cards go dark, the frame does
+   *    not move.
+   * 3. Because the canvas never lightens, text sitting directly on it
+   *    is always light. That is --color-on-canvas, a separate role from
+   *    --color-fg, which is text on a SURFACE and does flip. Using the
+   *    wrong one is the most likely mistake here, so they are named
+   *    apart rather than being two shades of the same idea.
    *
    * Dark overrides live in css/theme-dark.css and redeclare only these
    * roles: primitives and every non-colour scale are theme-independent. */
-  --color-canvas: var(--color-plum-50);
-  --color-canvas-deep: var(--color-plum-100);
+  --color-canvas: var(--color-plum-800);
+  --color-canvas-deep: #0f0019;
+  --color-on-canvas: #ffffff;
+  --color-on-canvas-muted: var(--color-paper-65);
+  --color-on-canvas-faint: var(--color-paper-55);
 
   --color-chrome: var(--color-plum-900);
   --color-chrome-scrim: rgb(20 0 28 / 0.97);

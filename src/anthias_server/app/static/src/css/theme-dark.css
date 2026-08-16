@@ -19,12 +19,13 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
+  /* Canvas and chrome are brand furniture and do not invert; they only
+   * deepen, so the frame reads as the same product in both themes and
+   * the --color-on-canvas-* / --color-on-chrome-* families need no dark
+   * values at all. What actually changes between themes is the
+   * surfaces, below. */
   --color-canvas: var(--color-plum-950);
-  --color-canvas-deep: #0d0013;
-
-  /* Chrome does not invert. A light theme with a dark top bar is an
-   * ordinary pattern, and holding the brand bar steady means the
-   * --color-on-chrome-* family needs no dark values at all. */
+  --color-canvas-deep: #0a0011;
   --color-chrome: var(--color-plum-950);
   --color-chrome-scrim: rgb(13 0 19 / 0.97);
 
@@ -35,14 +36,15 @@
 
   --color-fg: #f2ecf6;
   --color-fg-muted: #b8acc4;
-  --color-fg-faint: #8d8299;
+  --color-fg-faint: #9a8fa6;
   --color-border: var(--color-paper-12);
   --color-divider: var(--color-paper-8);
 
-  /* The feature card inverts DIRECTION: lighter than the canvas, so it
-   * still reads as elevated rather than as a hole. --color-on-feature
-   * stays near-white, so .surface--active and all its children are
-   * unchanged between themes. */
+  /* The feature card lifts further off the canvas here, because the
+   * canvas has deepened. It is lighter than the canvas in both themes,
+   * which is what makes it read as elevated. --color-on-feature stays
+   * near-white throughout, so .surface--active and every child of it
+   * are unchanged between themes. */
   --color-feature-from: var(--color-plum-600);
   --color-feature-to: var(--color-plum-700);
 

@@ -121,11 +121,25 @@ def _luminance(colour: tuple[float, float, float, float]) -> float:
     return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 
 
-def contrast(fg_name: str, bg_name: str, tokens: dict[str, str]) -> float:
-    """WCAG contrast ratio between two token names, compositing alpha."""
-    # Ultimate backdrop for compositing a translucent background.
-    page = _parse_colour(_resolve('--color-canvas', tokens))
-    bg = _composite(_parse_colour(_resolve(bg_name, tokens)), page)
+def contrast(
+    fg_name: str,
+    bg_name: str,
+    tokens: dict[str, str],
+    backdrop: str = '--color-surface',
+) -> float:
+    """WCAG contrast ratio between two token names, compositing alpha.
+
+    ``backdrop`` is what a translucent background resolves against. It
+    defaults to the surface plane because every translucent role we have
+    (the status washes, the accent wash, the scrims) is painted inside a
+    card. Getting this wrong is not a rounding error: composited against
+    the plum canvas instead, the light theme's success wash reads as
+    dark green and its on-wash text scores 1.28:1.
+
+    Opaque backgrounds ignore it.
+    """
+    base = _parse_colour(_resolve(backdrop, tokens))
+    bg = _composite(_parse_colour(_resolve(bg_name, tokens)), base)
     fg = _composite(_parse_colour(_resolve(fg_name, tokens)), bg)
     light, dark = sorted((_luminance(fg), _luminance(bg)), reverse=True)
     return (light + 0.05) / (dark + 0.05)
@@ -135,16 +149,23 @@ def contrast(fg_name: str, bg_name: str, tokens: dict[str, str]) -> float:
 # a colour role means adding its pairs here, otherwise the role is
 # unaudited.
 PAIRS: list[tuple[str, str]] = [
-    # Text on the surface plane.
+    # Text on the surface plane. --color-fg is deliberately NOT paired
+    # with the canvas: the canvas is brand plum in both themes, so text
+    # sitting directly on it uses --color-on-canvas instead.
     ('--color-fg', '--color-surface'),
-    ('--color-fg', '--color-canvas'),
     ('--color-fg', '--color-surface-soft'),
     ('--color-fg', '--color-surface-tint'),
     ('--color-fg-muted', '--color-surface'),
-    ('--color-fg-muted', '--color-canvas'),
+    ('--color-fg-muted', '--color-surface-soft'),
     ('--color-fg-muted', '--color-surface-tint'),
     ('--color-fg-faint', '--color-surface'),
-    ('--color-fg-faint', '--color-canvas'),
+    ('--color-fg-faint', '--color-surface-tint'),
+    # Text on the canvas plane (page headers, section labels).
+    ('--color-on-canvas', '--color-canvas'),
+    ('--color-on-canvas-muted', '--color-canvas'),
+    ('--color-on-canvas-faint', '--color-canvas'),
+    ('--color-on-canvas', '--color-canvas-deep'),
+    ('--color-on-canvas-muted', '--color-canvas-deep'),
     # Text on the chrome plane (navbar, footer).
     ('--color-on-chrome', '--color-chrome'),
     ('--color-on-chrome-muted', '--color-chrome'),
@@ -157,10 +178,8 @@ PAIRS: list[tuple[str, str]] = [
     # Anchors.
     ('--color-link', '--color-surface'),
     ('--color-link-hover', '--color-surface'),
-    ('--color-link', '--color-canvas'),
     # Status text on a plain surface.
     ('--color-danger', '--color-surface'),
-    ('--color-danger', '--color-canvas'),
     # Status text on its own wash (chips, inline alerts).
     ('--color-danger-on-wash', '--color-danger-wash'),
     ('--color-warning-on-wash', '--color-warning-wash'),
