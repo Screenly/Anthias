@@ -4,9 +4,13 @@
   base.html pulls vendor.js, which unconditionally opens a /ws
   connection with automatic reconnect. On public 404s, that turns
   crawler/bot traffic into long-lived WebSocket sessions, which is
-  the wrong shape of load for an error page. Tailwind is also not
-  used here (every selector is .auth-*/.error-* from anthias.css),
-  so keep the asset list tight.
+  the wrong shape of load for an error page. That stays true: no JS
+  here.
+
+  The stylesheet list, however, now matches every other root. This page
+  used to skip tailwind.css on the grounds that it used no utilities,
+  which also meant it had no design tokens and no CSS reset. Both are
+  needed once components are shared across roots.
 {% endcomment %}
 <!DOCTYPE html>
 <html lang="en">
@@ -15,6 +19,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="robots" content="noindex"/>
   <title>{% block title %}Error — Anthias{% endblock %}</title>
+  <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
   <link href="{% static 'dist/css/tabler-icons.css' %}" rel="stylesheet"/>
   <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
   <link rel="icon" href="/static/favicons/favicon.ico"/>

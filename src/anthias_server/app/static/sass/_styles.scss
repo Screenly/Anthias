@@ -2415,12 +2415,15 @@ $footer-height: 13rem;
 body.auth-body {
   padding-top: 0;
   background-color: var(--color-bg-deep);
-
-  main {
-    min-height: auto;
-    padding: 0;
-  }
 }
+// The `main { min-height: auto; padding: 0 }` reset that used to live
+// inside the block above was neutralising the global `main` rule, but
+// `body.auth-body main` (0,1,2) also outranked `.auth-shell` (0,1,0) —
+// so the shell's `min-height: 100vh` never applied and the login and
+// error cards have been top-aligned rather than vertically centred.
+//
+// The reset is unnecessary: `.auth-shell` already outranks the bare
+// `main` selector (0,0,1) on its own, so it can just own its box.
 
 .auth-page {
   min-height: 100vh;
