@@ -1443,8 +1443,13 @@ label { text-align: left; }
   }
   .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
   .stat-card__meta a:hover { text-decoration: underline; }
-  // Variant for advisory/warning text inside a stat card (the low-RAM
-  // badge on Memory, the Power supply and Storage verdicts).
+  // Variant for advisory/warning text inside a stat card. Used by the
+  // low-RAM badge on Memory, and only there: the Power supply and
+  // Storage cards carry their severity on a coloured verdict and an
+  // icon instead, so tinting their body copy as well said the same
+  // thing a third time and cost legibility. The badge has no verdict
+  // above it, so its icon, its bold lead-in and this tint are the
+  // whole signal.
   //
   // The -text-on-wash ink, NOT --color-warning. The fill colour is
   // #f59e0b, which on a white .stat-card measures 2.15:1 — under half
@@ -1510,8 +1515,9 @@ label { text-align: left; }
 // label in the same place and every value on the same left edge, so
 // the block is scanned rather than read.
 //
-// This is the one place in the card allowed to look technical. It is
-// behind a disclosure, and its whole audience is someone reading a
+// This is the one place in the card allowed to look technical, and
+// it is shown outright rather than behind a toggle: System Info
+// exists to display it, and its audience is whoever is reading a
 // screenshot during a support call.
 .readout {
   display: grid;
@@ -1554,7 +1560,13 @@ label { text-align: left; }
 
 // Trailing caveat under a readout — the one sentence that qualifies a
 // number rather than being one.
-.readout__note {
+// Scoped under .stat-card__details deliberately. The generic
+// `.stat-card__details p` rule is (0,1,1) and a bare `.readout__note`
+// is (0,1,0), so the margin here silently lost and the note sat at
+// --space-2. Same specificity trap that made an earlier
+// `.device-alerts > * + *` rule dead code; matching the descendant
+// shape is what makes it actually apply.
+.stat-card__details .readout__note {
   margin: var(--space-3) 0 0;
   line-height: 1.5;
   // The one genuinely secondary line in the block: it explains a
