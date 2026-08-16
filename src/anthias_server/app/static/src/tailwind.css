@@ -134,13 +134,12 @@
    * because a fill that lightens for dark mode leaves white label text
    * at 2.75:1. A destructive button should look the same either way.
    *
-   * Both are a step darker than the Bootstrap red this inherited:
-   * #dc3545 as text on white is 4.53:1, passing by 0.03 and failing on
-   * any tinted surface. */
-  --color-danger: #c82333;
-  --color-danger-fill: #c82333;
-  --color-danger-fill-hover: var(--color-red-600);
-  --color-danger-fill-active: #a71d2a;
+   * Both sit on the red ramp in palette.css, which replaced the
+   * inherited Bootstrap one. */
+  --color-danger: var(--color-red-600);
+  --color-danger-fill: var(--color-red-600);
+  --color-danger-fill-hover: var(--color-red-700);
+  --color-danger-fill-active: var(--color-red-800);
   --color-on-danger: #ffffff;
   --color-danger-wash: var(--color-red-50);
   --color-danger-edge: var(--color-red-100);

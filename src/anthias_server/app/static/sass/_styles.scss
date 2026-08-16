@@ -67,16 +67,21 @@
   --color-accent-wash: rgba(255, 225, 26, 0.16);     // chip bg
   --color-accent-edge: rgba(255, 225, 26, 0.32);     // chip border
   --color-accent-hover: rgba(255, 225, 26, 0.10);    // hover tint
-  --color-danger: #dc3545;
-  --color-danger-hover: #c82333;
-  --color-danger-active: #bd2130;
+  // Shifted one step darker off the inherited Bootstrap ramp
+  // (#dc3545 / #c82333 / #bd2130), which was the last Bootstrap palette
+  // value left in the codebase. The note below was right that #dc3545
+  // measures ~4:1 on white; the fix is the base token, not a
+  // workaround around it. #c82333 measures 5.61:1 as text on white AND
+  // carries white label text at 5.61:1 as a button fill, so one value
+  // serves both roles here.
+  // tests/test_design_tokens.py holds every pairing to 4.5:1.
+  --color-danger: #b91c1c;
+  --color-danger-hover: #a01818;
+  --color-danger-active: #8a1414;
   // Wash / edge / on-wash-text trio matching the --color-success set
-  // below. Added for the under-voltage banner, which needed a light
-  // alert surface and readable body copy on it; the base
-  // --color-danger is a fill colour and drops to ~4:1 on white, which
-  // is too low for the small print in an alert.
-  --color-danger-wash: rgba(220, 53, 69, 0.12);
-  --color-danger-edge: rgba(220, 53, 69, 0.38);
+  // below, for the under-voltage banner's light alert surface.
+  --color-danger-wash: rgba(185, 28, 28, 0.12);
+  --color-danger-edge: rgba(185, 28, 28, 0.38);
   --color-danger-text-on-wash: #8a1220;              // WCAG-AA on wash
 
   // Functional status colours (success / warning) used by chips,
@@ -2761,16 +2766,23 @@ body.auth-body {
 // from the design-token CSS variables.
 // =============================================================================
 
-// --- Layout app-container — responsive max-widths ---
+// --- Layout app-container ---
+//
+// One fluid container, not a stepped ladder. The five tiers this
+// replaced (576/768/992/1200/1400 -> 540/720/960/1140/1320) were
+// Bootstrap 5's grid breakpoints, carried over verbatim, and were the
+// only reason those five widths existed anywhere in the codebase. A
+// stepped container also jumps visibly as you resize, which a fluid one
+// does not.
+//
+// Widest tier retained as the cap so large screens are unaffected;
+// intermediate viewports get wider. Padding scales with the viewport so
+// the extra width does not run the content to the edges.
 .app-container {
   width: 100%;
   margin-inline: auto;
-  padding-inline: var(--space-4);
-  @media (min-width: 576px)  { max-width: 540px; }
-  @media (min-width: 768px)  { max-width: 720px; }
-  @media (min-width: 992px)  { max-width: 960px; }
-  @media (min-width: 1200px) { max-width: 1140px; }
-  @media (min-width: 1400px) { max-width: 1320px; }
+  max-width: var(--container-page);
+  padding-inline: clamp(var(--space-4), 4vw, var(--space-6));
 }
 
 // --- Tabs (asset modal) ---

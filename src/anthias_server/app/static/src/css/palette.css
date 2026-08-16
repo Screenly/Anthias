@@ -42,8 +42,16 @@
   --color-sun-300: #fff963;
   --color-sun-200: #fff3a3;
 
-  --color-red-600: #bd2130;
-  --color-red-500: #dc3545;
+  /* Error red. Deliberately NOT the inherited Bootstrap ramp
+   * (#dc3545 / #c82333 / #bd2130): #dc3545 measures 4.53:1 as text on
+   * white, passing WCAG AA by 0.03 and failing on any tinted surface.
+   * This ramp clears 4.5:1 at every step that carries text, and stays a
+   * plain unambiguous red rather than a styled one, because an error
+   * colour's job is to be read as an error. */
+  --color-red-800: #8a1414;
+  --color-red-700: #a01818;
+  --color-red-600: #b91c1c;
+  --color-red-300: #ff6b7a;
   --color-red-100: #fecaca;
   --color-red-50: #fef2f2;
   --color-red-900: #991b1b;

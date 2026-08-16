@@ -20,13 +20,12 @@ from pathlib import Path
 
 import pytest
 
-STATIC = (
-    Path(__file__).resolve().parent.parent
-    / 'src/anthias_server/app/static/src'
-)
+REPO = Path(__file__).resolve().parent.parent
+STATIC = REPO / 'src/anthias_server/app/static/src'
 ENTRY = STATIC / 'tailwind.css'
 PALETTE = STATIC / 'css/palette.css'
 DARK = STATIC / 'css/theme-dark.css'
+SASS = REPO / 'src/anthias_server/app/static/sass'
 
 # WCAG AA for normal text. Lighthouse reports a failure below this.
 #
@@ -81,7 +80,7 @@ def _parse_colour(value: str) -> tuple[float, float, float, float]:
         hex_digits = value[1:]
         if len(hex_digits) == 3:
             hex_digits = ''.join(c * 2 for c in hex_digits)
-        r, g, b = (int(hex_digits[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (int(hex_digits[i : i + 2], 16) for i in (0, 2, 4))
         return r, g, b, 1.0
     match = re.fullmatch(
         r'rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)'
@@ -192,4 +191,85 @@ def test_contrast_ratios_meet_wcag_aa(theme: str) -> None:
             failures.append(f'  {fg} on {bg}: {ratio:.2f}:1 (needs {AA}:1)')
     assert not failures, (
         f'{theme} theme fails WCAG AA contrast:\n' + '\n'.join(failures)
+    )
+
+
+# Bootstrap's default palette and its grid-tier breakpoints. The class
+# names were renamed away long ago (test_template_views.py guards those),
+# but the *values* survived in the stylesheets, which nothing covered:
+# the danger ramp was still Bootstrap's #dc3545/#c82333/#bd2130 and
+# .app-container still stepped through Bootstrap 5's grid tiers.
+BOOTSTRAP_HEX = {
+    '#dc3545': 'danger',
+    '#0d6efd': 'primary',
+    '#007bff': 'primary (bs4)',
+    '#6c757d': 'secondary',
+    '#28a745': 'success (bs4)',
+    '#198754': 'success',
+    '#ffc107': 'warning',
+    '#17a2b8': 'info (bs4)',
+    '#0dcaf0': 'info',
+    '#f8f9fa': 'light',
+    '#212529': 'dark',
+    '#343a40': 'dark (bs4)',
+}
+
+# Bootstrap 5 grid tiers. 768 and 1024 are deliberately omitted: they are
+# ordinary device widths our own scale also lands on.
+BOOTSTRAP_BREAKPOINTS = ('576px', '992px', '1200px', '1400px')
+
+
+def _stylesheets() -> list[Path]:
+    sheets = sorted(STATIC.rglob('*.css'))
+    if SASS.is_dir():
+        sheets += sorted(SASS.rglob('*.scss'))
+    return sheets
+
+
+def test_no_bootstrap_palette_values_in_stylesheets() -> None:
+    """No Bootstrap default colour survives as a literal.
+
+    Complements the class-name guard in test_template_views.py. Renaming
+    .btn-danger to .app-btn-danger removes the Bootstrap *class* but
+    leaves the Bootstrap *colour*, which is how #dc3545 outlived the
+    migration. It was a contrast problem too: 4.53:1 as text on white.
+    """
+    offenders = []
+    for sheet in _stylesheets():
+        for lineno, line in enumerate(sheet.read_text().splitlines(), 1):
+            if line.lstrip().startswith(('//', '*', '/*')):
+                continue
+            for hex_value, role in BOOTSTRAP_HEX.items():
+                if hex_value in line.lower():
+                    offenders.append(
+                        f'  {sheet.relative_to(REPO)}:{lineno} '
+                        f'{hex_value} (Bootstrap {role})'
+                    )
+    assert not offenders, (
+        'Bootstrap palette values reintroduced. Use a role token from '
+        'the @theme block in tailwind.css:\n' + '\n'.join(offenders)
+    )
+
+
+def test_no_bootstrap_grid_breakpoints_in_stylesheets() -> None:
+    """No Bootstrap grid tier survives as a media-query width.
+
+    Breakpoints are declared once as --breakpoint-* in @theme and reached
+    through `lg:` in markup or `@variant lg` in CSS. A raw min-width of
+    576/992/1200/1400 means someone reached past the scale for a
+    Bootstrap tier.
+    """
+    offenders = []
+    for sheet in _stylesheets():
+        for lineno, line in enumerate(sheet.read_text().splitlines(), 1):
+            if '@media' not in line:
+                continue
+            for width in BOOTSTRAP_BREAKPOINTS:
+                if width in line:
+                    offenders.append(
+                        f'  {sheet.relative_to(REPO)}:{lineno} {width}'
+                    )
+    assert not offenders, (
+        'Bootstrap grid-tier breakpoints reintroduced. Breakpoints live '
+        'in @theme; use a variant:\n' + '\n'.join(offenders)
     )

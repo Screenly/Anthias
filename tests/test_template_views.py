@@ -3355,6 +3355,25 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'container-fluid',
         'col-12',
         'col-md-6',
+        # Bootstrap text utilities whose Tailwind spellings differ, so
+        # they style to nothing and read as working code. `text-capitalize`
+        # sat in _asset_modal.html for exactly that reason; Tailwind
+        # spells it `capitalize`.
+        'text-capitalize',
+        'text-lowercase',
+        'text-uppercase',
+        'text-nowrap',
+        'text-truncate',
+        'text-start',
+        'font-weight-bold',
+        'font-weight-normal',
+        'align-items-center',
+        'justify-content-between',
+        'justify-content-center',
+        'justify-content-end',
+        'flex-column',
+        'flex-row',
+        'sr-only-focusable',
     }
     # Prefix-match tokens — anything starting with these is forbidden.
     # Catches `bi-archive`, `bi-collection-play` etc. without enumerating

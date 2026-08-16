@@ -59,9 +59,9 @@
    * Only the INK lightens. --color-danger-fill deliberately does not:
    * it is a button background carrying white label text, and lightening
    * it would drop that label to 2.75:1. */
-  --color-danger: #ff6b7a;
-  --color-danger-wash: rgb(220 53 69 / 0.16);
-  --color-danger-edge: rgb(220 53 69 / 0.4);
+  --color-danger: var(--color-red-300);
+  --color-danger-wash: rgb(185 28 28 / 0.22);
+  --color-danger-edge: rgb(185 28 28 / 0.45);
   --color-danger-on-wash: #ffd7db;
 
   --color-warning-wash: rgb(245 158 11 / 0.16);
