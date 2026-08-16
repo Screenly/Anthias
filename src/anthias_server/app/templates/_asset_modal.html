@@ -22,7 +22,7 @@
 
     {# ---- Add mode ---- #}
     <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
-      <div class="modal-card__body" style="padding-bottom: var(--space-3)">
+      <div class="modal-card__body" style="padding-bottom: calc(var(--spacing) * 3)">
         <ul class="app-tabs mb-4" id="add-asset-nav-tabs">
           <li class="app-tab-item">
             <button type="button" id="tab-uri"
@@ -235,7 +235,7 @@
           <input type="hidden" name="app_values" :value="valuesJson">
           <input type="hidden" name="refresh_interval_s" :value="refreshIntervalS">
 
-          <div class="modal-card__body" style="padding-top: var(--space-2)">
+          <div class="modal-card__body" style="padding-top: calc(var(--spacing) * 2)">
             <button type="button" class="app-cfg-back" @click="back()">
               <i class="ti ti-arrow-left"></i><span>All apps</span>
             </button>

@@ -15,6 +15,7 @@ the default theme would silently skip.
 
 from __future__ import annotations
 
+import glob as globlib
 import re
 from pathlib import Path
 
@@ -177,10 +178,14 @@ PAIRS: list[tuple[str, str]] = [
     ('--color-on-canvas-faint', '--color-canvas'),
     ('--color-on-canvas', '--color-canvas-deep'),
     ('--color-on-canvas-muted', '--color-canvas-deep'),
-    # Text on the chrome plane (navbar, footer).
+    # Text on the chrome plane (navbar, footer, mobile nav drawer).
     ('--color-on-chrome', '--color-chrome'),
     ('--color-on-chrome-muted', '--color-chrome'),
     ('--color-on-chrome-faint', '--color-chrome'),
+    ('--color-on-chrome', '--color-chrome-soft'),
+    ('--color-on-chrome-muted', '--color-chrome-soft'),
+    ('--color-on-chrome', '--color-chrome-scrim'),
+    ('--color-on-chrome-muted', '--color-chrome-scrim'),
     # Text on the feature plane (active card, splash, login).
     ('--color-on-feature', '--color-feature-to'),
     ('--color-on-feature', '--color-feature-from'),
@@ -203,6 +208,18 @@ PAIRS: list[tuple[str, str]] = [
     ('--color-on-danger', '--color-danger-fill-active'),
 ]
 
+# What a translucent background composites against, where the surface
+# plane is the wrong answer. contrast() defaults to --color-surface
+# because that is where every wash and scrim is painted, but the chrome
+# veil is not: the navbar, footer and nav drawer are translucent over
+# the canvas, and measuring them against white would score a colour that
+# is never on screen.
+BACKDROP: dict[str, str] = {
+    '--color-chrome': '--color-canvas',
+    '--color-chrome-soft': '--color-canvas',
+    '--color-chrome-scrim': '--color-canvas',
+}
+
 
 @pytest.mark.parametrize('theme', ['light', 'dark'])
 def test_contrast_ratios_meet_wcag_aa(theme: str) -> None:
@@ -216,7 +233,7 @@ def test_contrast_ratios_meet_wcag_aa(theme: str) -> None:
     tokens = _light_tokens() if theme == 'light' else _dark_tokens()
     failures = []
     for fg, bg in PAIRS:
-        ratio = contrast(fg, bg, tokens)
+        ratio = contrast(fg, bg, tokens, BACKDROP.get(bg, '--color-surface'))
         if ratio < AA:
             failures.append(f'  {fg} on {bg}: {ratio:.2f}:1 (needs {AA}:1)')
     assert not failures, (
@@ -372,6 +389,34 @@ def test_scss_declares_no_design_tokens() -> None:
         'token in tailwind.css (@theme), palette.css (primitive) or '
         'base.css (no @theme namespace), and read it here with var():\n'
         + '\n'.join(offenders)
+    )
+
+
+_SOURCE = re.compile(r'@source\s+"([^"]+)"')
+
+
+def test_source_globs_match_files() -> None:
+    """Every @source glob in the entry file still points at something.
+
+    The entry imports Tailwind with `source(none)`, which switches off
+    the automatic scan of the working directory, so these globs are the
+    only input the class detector gets. A glob that stops resolving does
+    not fail the build. It just stops contributing classes, and the
+    bundle comes out quietly missing the utilities the templates ask
+    for, which shows up as one unstyled corner of a page rather than as
+    an error.
+    """
+    globs = _SOURCE.findall(ENTRY.read_text())
+    assert globs, 'No @source globs: nothing is scanned for classes.'
+    empty = [
+        pattern
+        for pattern in globs
+        if not globlib.glob(str(ENTRY.parent / pattern), recursive=True)
+    ]
+    assert not empty, (
+        'These @source globs in tailwind.css match no files, so every '
+        'class they were meant to contribute is missing from the '
+        'bundle:\n' + '\n'.join(f'  {pattern}' for pattern in empty)
     )
 
 

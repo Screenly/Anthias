@@ -34,8 +34,10 @@
  * to players). website/ has its own bundle and must stay separate.
  *
  * The flip side: a wrong glob here now yields an almost-empty file
- * instead of being masked by the accidental cwd scan. CI asserts the
- * bundle's size for exactly that reason. */
+ * instead of being masked by the accidental cwd scan, and a stylesheet
+ * that is merely missing utilities looks fine in a diff. That is what
+ * test_source_globs_match_files in tests/test_design_tokens.py is for:
+ * it asserts every @source glob below still matches a file. */
 /* Every @import is here, in one block, before any other rule.
  *
  * CSS requires that (only @charset and @layer may precede them), and
@@ -63,6 +65,14 @@
 @import "./css/palette.css";
 @import "./css/theme-dark.css";
 @import "./css/base.css";
+
+/* Native checkbox, radio and select widgets ignore almost every
+ * property until this plugin swaps them for styleable elements. It was
+ * carried by the old entry file and has to stay: without it the import
+ * wizard's "enable imported assets" checkbox and the per-asset boxes in
+ * the migration table fall back to raw OS controls. Not an @import, so
+ * it sits below the import block rather than inside it. */
+@plugin "@tailwindcss/forms";
 
 @source "../../templates/**/*.html";
 @source "./**/*.ts";
@@ -132,8 +142,14 @@
   --color-on-canvas-muted: var(--color-paper-65);
   --color-on-canvas-faint: var(--color-paper-55);
 
-  --color-chrome: var(--color-plum-900);
-  --color-chrome-scrim: rgb(20 0 28 / 0.97);
+  /* Chrome is a veil over the canvas, not an opaque fill: the navbar
+   * carries a backdrop blur and the footer lets the page colour through,
+   * so all three rungs are one ink at three alphas rather than three
+   * separate colours. The drawer is near-opaque because page content
+   * scrolls under it and must not read through. */
+  --color-chrome: rgb(15 0 25 / 0.7);
+  --color-chrome-soft: rgb(15 0 25 / 0.5);
+  --color-chrome-scrim: rgb(15 0 25 / 0.97);
   --color-on-chrome: #ffffff;
   --color-on-chrome-muted: var(--color-paper-65);
   --color-on-chrome-faint: var(--color-paper-55);
@@ -204,7 +220,7 @@
    * hex. These are the real tokens. */
   --color-warning: var(--color-amber-500);
   --color-warning-wash: var(--color-amber-100);
-  --color-warning-edge: var(--color-amber-900);
+  --color-warning-edge: rgb(245 158 11 / 0.42);
   --color-warning-on-wash: var(--color-amber-900);
   --color-warning-ring: rgb(245 158 11 / 0.18);
 

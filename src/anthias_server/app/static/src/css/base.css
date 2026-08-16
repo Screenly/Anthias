@@ -27,13 +27,16 @@
   --z-bulk-bar: 300;
   --z-modal: 400;
   --z-modal-nested: 410;
-  --z-datepicker: 500;
-  --z-toast: 600;
+  --z-toast: 500;
   /* The review nudge sits above toasts, which is the order the old
      numbers had (1090 over 1080). It is persistent where a toast is
-     transient, so this is worth revisiting — but not in the commit that
+     transient, so this is worth revisiting, but not in the commit that
      was only meant to renumber. */
-  --z-nudge: 610;
+  --z-nudge: 510;
+  /* Highest, as the old 1100 was. An open calendar is a control the
+     operator is actively using, so a toast arriving mid-edit must not
+     land on top of it. */
+  --z-datepicker: 600;
 
   /* ---- Layout constants -----------------------------------------------
    * The navbar height was previously the magic number 4.5rem repeated in

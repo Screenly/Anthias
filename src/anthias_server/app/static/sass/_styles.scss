@@ -2012,7 +2012,7 @@ label { text-align: left; }
 .app-nav {
   height: var(--nav-height);
   padding: 0;
-  background: rgba(15, 0, 25, 0.7) !important;
+  background: var(--color-chrome) !important;
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   border-bottom: 1px solid var(--color-paper-6);
@@ -2034,7 +2034,7 @@ label { text-align: left; }
       left: 0;
       right: 0;
       padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4) calc(var(--spacing) * 3);
-      background: rgba(15, 0, 25, 0.97);
+      background: var(--color-chrome-scrim);
       backdrop-filter: blur(10px) saturate(140%);
       -webkit-backdrop-filter: blur(10px) saturate(140%);
       border-bottom: 1px solid var(--color-paper-6);
@@ -2100,7 +2100,7 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 #footer {
   margin-top: calc(var(--spacing) * 16);
-  background: rgba(15, 0, 25, 0.5);
+  background: var(--color-chrome-soft);
   border-top: 1px solid var(--color-paper-6);
   color: var(--color-on-chrome-muted);
 

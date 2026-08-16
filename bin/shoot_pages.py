@@ -219,9 +219,15 @@ def main() -> int:
         return 2
 
     out: Path = args.out
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    # Clear only this script's own artefacts, never the directory. --out
+    # is a path a human types, and rmtree on it would take a real tree
+    # with one typo; unlinking the PNGs keeps reruns just as repeatable.
+    if out.exists() and not out.is_dir():
+        print(f'--out exists and is not a directory: {out}')
+        return 2
+    out.mkdir(parents=True, exist_ok=True)
+    for stale in out.glob('*.png'):
+        stale.unlink()
 
     _setup_django(seed=True)
 

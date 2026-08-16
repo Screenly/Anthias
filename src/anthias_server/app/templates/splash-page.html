@@ -15,12 +15,16 @@
     <title>Welcome to Anthias</title>
     {% comment %}
       This page used to skip the Tailwind bundle to save a stylesheet
-      fetch on a constrained Pi 1 webview. Measured, that trade was the
-      wrong way round: the page was already pulling the entire 83 KB
-      anthias.css to use a few percent of it, against Tailwind's 37 KB.
-      Once the design system is utility-generated and tree-shaken the
-      two collapse into one smaller bundle, so the splash both loses
-      weight and gains the design tokens it needs to follow the theme.
+      fetch on a constrained Pi 1 webview. That saved very little and
+      cost a lot: the page was already pulling the whole 86 KB
+      anthias.css to use a few percent of it, and skipping the token
+      layer left the splash unable to follow the theme, so it carried
+      its own hardcoded colours instead.
+
+      Linking both is the honest trade and not a free one: it is 133 KB
+      and two fetches where it was 86 KB and one. Collapsing them into a
+      single tree-shaken bundle would win that back, but that is a build
+      change and not this one.
 
       Tabler icons stays out: the splash renders no glyphs, and that
       bundle carries font files.

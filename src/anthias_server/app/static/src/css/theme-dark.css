@@ -26,8 +26,9 @@
    * surfaces, below. */
   --color-canvas: var(--color-plum-950);
   --color-canvas-deep: #0a0011;
-  --color-chrome: var(--color-plum-950);
-  --color-chrome-scrim: rgb(13 0 19 / 0.97);
+  --color-chrome: rgb(10 0 17 / 0.7);
+  --color-chrome-soft: rgb(10 0 17 / 0.5);
+  --color-chrome-scrim: rgb(10 0 17 / 0.97);
 
   --color-surface: #221030;
   --color-surface-soft: #2a1639;

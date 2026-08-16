@@ -52,11 +52,15 @@ COLOUR_GROUPS: list[tuple[str, str, list[str]]] = [
         'Chrome',
         (
             'Navbar and footer. Brand furniture; deepens in dark mode but '
-            'never inverts. The scrim is the mobile nav drawer, which has '
-            'to be near-opaque so page content cannot read through it.'
+            'never inverts. One ink at three alphas, because chrome is a '
+            'veil over the canvas rather than an opaque fill: chrome is '
+            'the navbar, soft is the lighter footer, and the scrim is the '
+            'mobile nav drawer, which has to be near-opaque so page '
+            'content cannot read through it.'
         ),
         [
             'chrome',
+            'chrome-soft',
             'chrome-scrim',
             'on-chrome',
             'on-chrome-muted',
@@ -252,9 +256,9 @@ Z_INDEX: list[tuple[str, str, str]] = [
     ('bulk-bar', '300', 'Floating selection bar'),
     ('modal', '400', 'Modal overlay'),
     ('modal-nested', '410', 'Preview / bulk-edit over the asset modal'),
-    ('datepicker', '500', 'Flatpickr, must clear nested modals'),
-    ('toast', '600', 'Toast stack'),
-    ('nudge', '610', 'Review nudge, above the toasts'),
+    ('toast', '500', 'Toast stack'),
+    ('nudge', '510', 'Review nudge, above the toasts'),
+    ('datepicker', '600', 'Flatpickr, clears nested modals and toasts'),
 ]
 
 BREAKPOINTS: list[tuple[str, str, str]] = [
