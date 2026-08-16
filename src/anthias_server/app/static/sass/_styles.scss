@@ -1,7 +1,17 @@
 // =============================================================================
-// _styles.scss — Anthias UI design system
+// _styles.scss — Anthias UI components
 //
-// Layered as: tokens → base → components → page-specific bits.
+// Layered as: base → components → page-specific bits. There is no token
+// layer here: this file READS tokens and never declares one.
+//
+// That is not a style preference, it is the cascade. anthias.css loads
+// after tailwind.css and both are unlayered, so any :root declaration
+// here beats the same name in @theme no matter what @theme says. A
+// duplicate does not merge, it wins silently. Declare tokens in
+// static/src/tailwind.css (roles), css/palette.css (primitives) or
+// css/base.css (no @theme namespace); read them here with var().
+// tests/test_design_tokens.py enforces this.
+//
 // Everything is project-namespaced (.app-btn, .app-input, .app-tabs,
 // .surface, .modal-card, .schedule-chip, .stat-card, .app-toast,
 // .resource-pie, .loadavg-row, …) — there is no Bootstrap (or any
@@ -9,135 +19,9 @@
 // one-off spacing/flex.
 // =============================================================================
 
-// Brand colour tokens — referenced via #{$anthias-...} in this file
-// to seed the CSS-custom-property design tokens declared further down.
-@import "variables";
-
 // -----------------------------------------------------------------------------
-// 1. Design tokens
+// 1. Base
 // -----------------------------------------------------------------------------
-:root {
-  // Spacing — 4 px base, doubled tier above 16 px so layouts stay tidy.
-  --space-1: 0.25rem;   //  4
-  --space-2: 0.5rem;    //  8
-  --space-3: 0.75rem;   // 12
-  --space-4: 1rem;      // 16
-  --space-5: 1.5rem;    // 24
-  --space-6: 2rem;      // 32
-  --space-7: 3rem;      // 48
-  --space-8: 4rem;      // 64
-
-  // Radii
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-pill: 999px;
-
-  // Shadows — soft, layered, modern. Use --shadow-md as the default card lift.
-  --shadow-sm: 0 1px 2px var(--scrim-4), 0 1px 3px var(--scrim-6);
-  --shadow-md: 0 2px 6px var(--scrim-4), 0 8px 24px var(--scrim-8);
-  --shadow-lg: 0 4px 12px var(--scrim-6), 0 16px 48px var(--scrim-14);
-
-  // Transitions
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --t-fast: 120ms var(--ease-out);
-  --t-med: 200ms var(--ease-out);
-
-  // Colour roles. Backgrounds, surfaces, text — referenced by name through
-  // the rest of the file so tweaks happen in one place.
-  --color-bg: #{$anthias-purple-1};
-  --color-bg-deep: #0f0019;          // splash / extreme dark
-  --color-bg-elevated: #{$anthias-purple-3};
-  --color-surface: #ffffff;
-  --color-surface-soft: #fafafa;
-  --color-surface-tint: #f4f1f6;
-  --color-active: #{$anthias-purple-2};
-  --color-active-tint: #503061;      // gradient stop above $anthias-purple-2
-  --color-text: #1f002a;
-  --color-text-muted: #5e5868;
-  --color-text-on-dark: #ffffff;
-  --color-text-on-dark-muted: rgba(255, 255, 255, 0.65);
-  --color-text-on-dark-faint: rgba(255, 255, 255, 0.45);
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-on-dark: rgba(255, 255, 255, 0.12);
-  --color-accent: #{$anthias-yellow-3};
-  --color-accent-soft: #{$anthias-yellow-4};
-  --color-accent-text: #1f002a;
-  --color-accent-wash: rgba(255, 225, 26, 0.16);     // chip bg
-  --color-accent-edge: rgba(255, 225, 26, 0.32);     // chip border
-  --color-accent-hover: rgba(255, 225, 26, 0.10);    // hover tint
-  // Shifted one step darker off the inherited Bootstrap ramp
-  // (#dc3545 / #c82333 / #bd2130), which was the last Bootstrap palette
-  // value left in the codebase. The note below was right that #dc3545
-  // measures ~4:1 on white; the fix is the base token, not a
-  // workaround around it. #c82333 measures 5.61:1 as text on white AND
-  // carries white label text at 5.61:1 as a button fill, so one value
-  // serves both roles here.
-  // tests/test_design_tokens.py holds every pairing to 4.5:1.
-  --color-danger: #b91c1c;
-  --color-danger-hover: #a01818;
-  --color-danger-active: #8a1414;
-  // Wash / edge / on-wash-text trio matching the --color-success set
-  // below, for the under-voltage banner's light alert surface.
-  --color-danger-wash: rgba(185, 28, 28, 0.12);
-  --color-danger-edge: rgba(185, 28, 28, 0.38);
-  --color-danger-text-on-wash: #8a1220;              // WCAG-AA on wash
-
-  // Functional status colours (success / warning) used by chips,
-  // load-average bars, resource-pie slices, and toasts. Hex baseline
-  // + alpha variants for chip/wash/ring use.
-  --color-success: #34d399;
-  --color-success-wash: rgba(52, 211, 153, 0.22);
-  --color-success-wash-strong: rgba(52, 211, 153, 0.4);
-  --color-success-edge: rgba(52, 211, 153, 0.45);
-  --color-success-edge-strong: rgba(52, 211, 153, 0.6);
-  --color-success-ring: rgba(52, 211, 153, 0.18);
-  --color-success-ring-pulse: rgba(52, 211, 153, 0.32);
-  --color-success-text-on-wash: #0e4a30;             // WCAG-AA on wash
-  --color-success-text-on-wash-strong: #ecfff5;      // WCAG-AA on dark
-  --color-success-bright: #4ade80;                   // active dot
-  --color-warning: #f59e0b;
-  --color-warning-ring: rgba(245, 158, 11, 0.18);
-  --color-warning-wash: rgba(245, 158, 11, 0.14);
-  --color-warning-edge: rgba(245, 158, 11, 0.42);
-  --color-warning-text-on-wash: #6b3d05;             // WCAG-AA on wash
-
-  // Anchors on light surfaces — kept readable against white cards
-  // (the brand yellow we use for accents has too little contrast).
-  --color-link: #6633a0;
-  --color-link-hover: #4a1f80;
-  --color-link-wash: rgba(102, 51, 160, 0.08);       // chip bg
-  --color-link-edge: rgba(102, 51, 160, 0.22);       // chip border
-  --color-link-ring: rgba(102, 51, 160, 0.18);
-
-  // Focus ring — used at every input/button focus state.
-  --color-focus-ring: rgba(136, 25, 199, 0.35);
-  --ring-width: 3px;
-
-  // Scrim ladder — neutral overlays for hovers, borders, dividers,
-  // tints. Two contexts: light surface and dark surface. Pick the
-  // closest tier instead of inventing a new alpha at the use site.
-  --scrim-2:  rgba(0, 0, 0, 0.02);   // row hover
-  --scrim-4:  rgba(0, 0, 0, 0.04);
-  --scrim-5:  rgba(0, 0, 0, 0.05);
-  --scrim-6:  rgba(0, 0, 0, 0.06);
-  --scrim-8:  rgba(0, 0, 0, 0.08);   // = --color-border
-  --scrim-10: rgba(0, 0, 0, 0.10);
-  --scrim-14: rgba(0, 0, 0, 0.14);   // shadow-lg outer
-  --scrim-18: rgba(0, 0, 0, 0.18);   // outline border
-  --scrim-25: rgba(0, 0, 0, 0.25);   // dashed dropzone
-  --scrim-40: rgba(0, 0, 0, 0.40);   // outline hover-border
-  --scrim-on-dark-4:  rgba(255, 255, 255, 0.04);
-  --scrim-on-dark-5:  rgba(255, 255, 255, 0.05);
-  --scrim-on-dark-6:  rgba(255, 255, 255, 0.06);
-  --scrim-on-dark-8:  rgba(255, 255, 255, 0.08);
-  --scrim-on-dark-10: rgba(255, 255, 255, 0.10);
-  --scrim-on-dark-12: rgba(255, 255, 255, 0.12);   // = --color-border-on-dark
-  --scrim-on-dark-15: rgba(255, 255, 255, 0.15);
-  --scrim-on-dark-18: rgba(255, 255, 255, 0.18);
-  --scrim-on-dark-30: rgba(255, 255, 255, 0.30);
-}
 
 // Default anchor styling; overridden in dark contexts (.surface--active,
 // app-nav, footer) where the link colour switches to white-ish.
@@ -147,11 +31,12 @@ a {
   &:hover { color: var(--color-link-hover); text-decoration: underline; }
 }
 
-// -----------------------------------------------------------------------------
-// 2. Base
-// -----------------------------------------------------------------------------
-::-moz-selection { color: #000; background: var(--color-accent); }
-::selection      { color: #000; background: var(--color-accent); }
+// ::selection lives in css/base.css. The -moz- prefixed twin has no
+// standard alias to pair with, so it stays here and mirrors it.
+::-moz-selection {
+  color: var(--color-accent-text);
+  background: var(--color-accent);
+}
 
 html {
   position: relative;
@@ -159,34 +44,34 @@ html {
 }
 
 body {
-  background-color: var(--color-bg);
+  background-color: var(--color-canvas);
   margin: 0;
   padding-top: 4.5rem;          // app-nav height
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.5;
-  color: var(--color-text-on-dark);
+  color: var(--color-on-canvas);
   -webkit-font-smoothing: antialiased;
 }
 
 main {
   display: block;
   min-height: calc(100vh - 4.5rem - 13rem);   // app-nav + footer
-  padding: var(--space-6) 0 var(--space-7);
+  padding: calc(var(--spacing) * 8) 0 calc(var(--spacing) * 12);
 }
 
 label { text-align: left; }
 
 
 // -----------------------------------------------------------------------------
-// 3. Typography helpers
+// 2. Typography helpers
 // -----------------------------------------------------------------------------
 .page-header {
   font-size: 1.875rem;          // 30px
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
-  color: var(--color-text-on-dark);
+  color: var(--color-on-canvas);
   // 30px swallows two lines of vertical space on a narrow phone for
   // a single-word title. Drop to 24px below the sm breakpoint so the
   // header bar (title + lede + actions) fits the same vertical
@@ -198,20 +83,20 @@ label { text-align: left; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
+  gap: calc(var(--spacing) * 4);
+  margin-bottom: calc(var(--spacing) * 8);
 
   .page-header-bar__title { flex: 1 1 auto; min-width: 0; }
   .page-header-bar__lede {
-    margin: var(--space-1) 0 0;
-    color: var(--color-text-on-dark-muted);
+    margin: calc(var(--spacing) * 1) 0 0;
+    color: var(--color-on-canvas-muted);
     font-size: 0.95rem;
   }
   .page-header-bar__actions {
     flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2);
+    gap: calc(var(--spacing) * 2);
   }
 }
 
@@ -224,11 +109,11 @@ label { text-align: left; }
 
 .muted-label {
   font-size: 0.8125rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 
 // -----------------------------------------------------------------------------
-// 4. Surface (card) component
+// 3. Surface (card) component
 //
 // `.surface` declares a *context*, not just a background — it exposes
 // --surface-* CSS custom properties (text colour, muted text, scrim
@@ -239,48 +124,48 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 .surface {
   --surface-bg: var(--color-surface);
-  --surface-text: var(--color-text);
-  --surface-text-muted: var(--color-text-muted);
-  --surface-text-faint: var(--color-text-muted);
+  --surface-text: var(--color-fg);
+  --surface-text-muted: var(--color-fg-muted);
+  --surface-text-faint: var(--color-fg-muted);
   --surface-divider: var(--color-border);
-  --surface-scrim-2: var(--scrim-2);
-  --surface-scrim-5: var(--scrim-5);
-  --surface-scrim-8: var(--scrim-6);
-  --surface-scrim-10: var(--scrim-10);
+  --surface-scrim-2: var(--color-scrim-2);
+  --surface-scrim-5: var(--color-scrim-5);
+  --surface-scrim-8: var(--color-scrim-6);
+  --surface-scrim-10: var(--color-scrim-10);
   --surface-anchor: var(--color-link);
   --surface-anchor-hover: var(--color-link-hover);
 
   background: var(--surface-bg);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  padding: var(--space-6);
+  padding: calc(var(--spacing) * 8);
   color: var(--surface-text);
 }
 
 .surface--active {
-  --surface-bg: linear-gradient(180deg, var(--color-active-tint) 0%, var(--color-active) 100%);
-  --surface-text: var(--color-text-on-dark);
-  --surface-text-muted: var(--color-text-on-dark-muted);
-  --surface-text-faint: var(--color-text-on-dark-faint);
-  --surface-divider: var(--color-border-on-dark);
-  --surface-scrim-2: var(--scrim-on-dark-4);
-  --surface-scrim-5: var(--scrim-on-dark-8);
-  --surface-scrim-8: var(--scrim-on-dark-10);
-  --surface-scrim-10: var(--scrim-on-dark-15);
+  --surface-bg: linear-gradient(180deg, var(--color-feature-from) 0%, var(--color-feature-to) 100%);
+  --surface-text: var(--color-on-feature);
+  --surface-text-muted: var(--color-on-feature-muted);
+  --surface-text-faint: var(--color-on-feature-faint);
+  --surface-divider: var(--color-feature-divider);
+  --surface-scrim-2: var(--color-paper-4);
+  --surface-scrim-5: var(--color-paper-8);
+  --surface-scrim-8: var(--color-paper-10);
+  --surface-scrim-10: var(--color-paper-15);
   --surface-anchor: var(--color-accent);
   --surface-anchor-hover: var(--color-accent);
 }
 
 .surface--inset {
-  padding: var(--space-5);
+  padding: calc(var(--spacing) * 6);
 }
 
 .surface__header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  gap: calc(var(--spacing) * 3);
+  margin-bottom: calc(var(--spacing) * 4);
 
   h2 {
     font-size: 1.0625rem;
@@ -296,21 +181,21 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 5. Buttons
+// 4. Buttons
 // -----------------------------------------------------------------------------
 .app-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4em;
-  padding: 0.5625rem var(--space-4);
+  padding: 0.5625rem calc(var(--spacing) * 4);
   font: inherit;
   font-weight: 600;
   line-height: 1.4;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-fg);
   cursor: pointer;
   text-decoration: none;
   transition: transform var(--t-fast), box-shadow var(--t-fast),
@@ -329,43 +214,43 @@ label { text-align: left; }
 }
 
 .app-btn-primary {
-  background-image: $anthias-yellow-gradient;
-  background-color: $anthias-yellow-3;
+  background-image: var(--gradient-accent);
+  background-color: var(--color-accent);
   border-color: transparent;
   color: var(--color-accent-text);
   font-weight: 700;
 
   &:hover, &:focus {
-    background-image: $anthias-yellow-gradient;
+    background-image: var(--gradient-accent);
     color: var(--color-accent-text);
     box-shadow: var(--shadow-md);
   }
-  &:active { background-color: $anthias-yellow-2; }
+  &:active { background-color: var(--color-accent-strong); }
 }
 
 .app-btn-light {
   background: var(--color-surface);
-  border-color: var(--scrim-6);
-  color: var(--color-text);
-  &:hover { background: var(--color-surface-soft); color: var(--color-text); }
+  border-color: var(--color-scrim-6);
+  color: var(--color-fg);
+  &:hover { background: var(--color-surface-soft); color: var(--color-fg); }
 }
 
 .app-btn-danger {
   background: var(--color-danger);
   border-color: var(--color-danger);
-  color: var(--color-text-on-dark);
+  color: var(--color-on-danger);
   &:hover {
-    background: var(--color-danger-hover);
-    border-color: var(--color-danger-active);
-    color: var(--color-text-on-dark);
+    background: var(--color-danger-fill-hover);
+    border-color: var(--color-danger-fill-active);
+    color: var(--color-on-danger);
   }
 }
 
 .app-btn-link {
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   text-decoration: none;
   font-weight: 600;
-  &:hover { color: var(--color-text); text-decoration: underline; }
+  &:hover { color: var(--color-fg); text-decoration: underline; }
 }
 
 // Icon-only square button — reads surface context, so the same markup
@@ -389,13 +274,13 @@ label { text-align: left; }
 
 // On-light outline (settings page — Backup / Reboot etc.)
 .app-btn-outline-dark {
-  color: var(--color-text);
-  border-color: var(--scrim-18);
+  color: var(--color-fg);
+  border-color: var(--color-scrim-18);
   background: transparent;
   &:hover {
-    background: var(--scrim-4);
-    border-color: var(--scrim-40);
-    color: var(--color-text);
+    background: var(--color-scrim-4);
+    border-color: var(--color-scrim-40);
+    color: var(--color-fg);
   }
 }
 
@@ -406,7 +291,7 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 6. Asset table
+// 5. Asset table
 // -----------------------------------------------------------------------------
 .asset-table {
   width: 100%;
@@ -419,7 +304,7 @@ label { text-align: left; }
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: var(--space-3) var(--space-3);
+    padding: calc(var(--spacing) * 3) calc(var(--spacing) * 3);
     border-bottom: 1px solid var(--surface-divider);
     background: transparent;
     color: var(--surface-text-muted);
@@ -427,7 +312,7 @@ label { text-align: left; }
   }
 
   tbody td {
-    padding: var(--space-4) var(--space-3);
+    padding: calc(var(--spacing) * 4) calc(var(--spacing) * 3);
     border-bottom: 1px solid var(--surface-divider);
     vertical-align: middle;
     color: var(--surface-text);
@@ -463,7 +348,7 @@ label { text-align: left; }
 
     tbody tr {
       display: block;
-      padding: var(--space-3) 0;
+      padding: calc(var(--spacing) * 3) 0;
       border-bottom: 1px solid var(--surface-divider);
     }
     tbody tr:last-child { border-bottom: none; }
@@ -471,7 +356,7 @@ label { text-align: left; }
     tbody td,
     tbody th {
       display: block;
-      padding: var(--space-1) 0;
+      padding: calc(var(--spacing) * 1) 0;
       border: 0;
       text-align: left;
 
@@ -501,14 +386,14 @@ label { text-align: left; }
     tbody tr[data-asset-id] {
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: var(--space-2) var(--space-3);
+      gap: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
       position: relative;
       padding-left: 1.9rem;
 
       td.asset-select-col {
         position: absolute;
         left: 0;
-        top: var(--space-3);
+        top: calc(var(--spacing) * 3);
         padding: 0;
         &::before { display: none; }
       }
@@ -555,7 +440,7 @@ label { text-align: left; }
 .surface__header-left {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   min-width: 0;
 }
 
@@ -569,7 +454,7 @@ label { text-align: left; }
 .asset-cell-name {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   min-width: 0;
 
   .drag-handle {
@@ -606,12 +491,12 @@ label { text-align: left; }
   }
 }
 // -----------------------------------------------------------------------------
-// 7. Schedule chip
+// 6. Schedule chip
 // -----------------------------------------------------------------------------
 .schedule-chips {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: calc(var(--spacing) * 1);
   vertical-align: middle;
 }
 // Chip palette is exposed through context tokens so each surface picks
@@ -620,14 +505,14 @@ label { text-align: left; }
 // .surface--active block down in section 4 flips them to the dark-
 // surface chip palette (yellow accent, deeper-green --all variant).
 .surface {
-  --chip-neutral-bg:     var(--scrim-5);
-  --chip-neutral-text:   var(--color-text-muted);
-  --chip-neutral-edge:   var(--scrim-6);
+  --chip-neutral-bg:     var(--color-scrim-5);
+  --chip-neutral-text:   var(--color-fg-muted);
+  --chip-neutral-edge:   var(--color-scrim-6);
   --chip-day-bg:         var(--color-link-wash);
   --chip-day-text:       var(--color-link);
   --chip-day-edge:       var(--color-link-edge);
   --chip-all-bg:         var(--color-success-wash);
-  --chip-all-text:       var(--color-success-text-on-wash);
+  --chip-all-text:       var(--color-success-on-wash);
   --chip-all-edge:       var(--color-success-edge);
 }
 .surface--active {
@@ -638,7 +523,7 @@ label { text-align: left; }
   --chip-neutral-text:   var(--color-accent);
   --chip-neutral-edge:   var(--color-accent-edge);
   --chip-all-bg:         var(--color-success-wash-strong);
-  --chip-all-text:       var(--color-success-text-on-wash-strong);
+  --chip-all-text:       var(--color-success-on-wash-strong);
   --chip-all-edge:       var(--color-success-edge-strong);
   // --chip-day-* inherits the light-surface defaults; that palette
   // already reads cleanly on the gradient.
@@ -677,7 +562,7 @@ label { text-align: left; }
 .schedule-window {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   min-width: 0;
 }
 // Schedule-window state-color set is also exposed through chip-style
@@ -686,12 +571,12 @@ label { text-align: left; }
 // regular --color-success). Sets default to light-surface palette;
 // .surface--active flips just the live-state pair.
 .surface {
-  --window-dot-default-ring: var(--scrim-4);
+  --window-dot-default-ring: var(--color-scrim-4);
   --window-live-fill: var(--color-success);
   --window-live-ring: var(--color-success-ring);
 }
 .surface--active {
-  --window-dot-default-ring: var(--scrim-on-dark-5);
+  --window-dot-default-ring: var(--color-paper-5);
   --window-live-fill: var(--color-success-bright);
   --window-live-ring: var(--color-success-wash);
 }
@@ -750,7 +635,7 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 8. Activity toggle (form switch) sizing
+// 7. Activity toggle (form switch) sizing
 // -----------------------------------------------------------------------------
 .app-switch.activity-toggle .app-check-input {
   width: 2.4em;
@@ -763,12 +648,12 @@ label { text-align: left; }
 // explicit fill because a transparent off-state vanishes against the
 // purple gradient.
 .surface--active .app-check-input:not(:checked) {
-  background-color: var(--scrim-on-dark-18);
-  border-color: var(--scrim-on-dark-30);
+  background-color: var(--color-paper-18);
+  border-color: var(--color-paper-30);
 }
 
 // -----------------------------------------------------------------------------
-// 9. Action group (icon buttons) and processing label
+// 8. Action group (icon buttons) and processing label
 // -----------------------------------------------------------------------------
 .action-group {
   display: inline-flex;
@@ -804,14 +689,14 @@ label { text-align: left; }
   border-radius: var(--radius-pill);
   font-size: 0.72rem;
   font-weight: 600;
-  background: var(--color-warning-soft, #fef3c7);
-  color: var(--color-warning-strong, #92400e);
+  background: var(--color-warning-wash);
+  color: var(--color-warning-on-wash);
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease;
 
   &:hover,
   &:focus-visible {
-    background: color-mix(in oklab, var(--color-warning-soft, #fef3c7) 80%, #000);
+    background: color-mix(in oklab, var(--color-warning-wash) 80%, #000);
     outline: none;
   }
   &:active {
@@ -824,11 +709,11 @@ label { text-align: left; }
 // pattern with something the operator can read, copy from, and
 // dismiss by editing the row.
 .modal-alert {
-  border: 1px solid var(--color-warning-strong, #92400e);
+  border: 1px solid var(--color-warning-on-wash);
   border-radius: var(--radius-md, 0.5rem);
   padding: 0.85rem 1rem;
-  background: var(--color-warning-soft, #fef3c7);
-  color: var(--color-warning-strong, #92400e);
+  background: var(--color-warning-wash);
+  color: var(--color-warning-on-wash);
 
   .modal-alert__head {
     display: flex;
@@ -904,25 +789,25 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 10. Empty state
+// 9. Empty state
 // -----------------------------------------------------------------------------
 .empty-state {
   text-align: center;
-  padding: var(--space-7) var(--space-4);
+  padding: calc(var(--spacing) * 12) calc(var(--spacing) * 4);
   color: var(--surface-text-muted);
 
   .empty-state__icon {
     font-size: 2rem;
     opacity: 0.45;
-    margin-bottom: var(--space-2);
+    margin-bottom: calc(var(--spacing) * 2);
   }
   .empty-state__title {
     font-weight: 600;
-    margin-bottom: var(--space-1);
+    margin-bottom: calc(var(--spacing) * 1);
   }
   .empty-state__description {
     font-size: 0.9rem;
-    margin: 0 0 var(--space-3);
+    margin: 0 0 calc(var(--spacing) * 3);
   }
   // The call-to-action is an action (opens the Add modal), not
   // navigation, so it's a <button> styled as a link.
@@ -945,7 +830,7 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 11. Modal
+// 10. Modal
 // -----------------------------------------------------------------------------
 .modal-overlay {
   display: flex;
@@ -953,7 +838,7 @@ label { text-align: left; }
   justify-content: center;
   position: fixed;
   inset: 0;
-  padding: var(--space-5);
+  padding: calc(var(--spacing) * 6);
   overflow-y: auto;
   background: rgba(15, 0, 25, 0.55);
   backdrop-filter: blur(6px) saturate(120%);
@@ -975,10 +860,10 @@ label { text-align: left; }
   // the fold. The header/footer pin via position: sticky so the title
   // and the Save/Apply buttons stay reachable while the body scrolls.
   // (overflow-y: auto still clips children to the rounded corners.)
-  max-height: calc(100vh - var(--space-5) * 2);
+  max-height: calc(100vh - calc(var(--spacing) * 6) * 2);
   overflow-y: auto;
-  color: var(--color-text);
-  animation: modal-in 220ms var(--ease-out) both;
+  color: var(--color-fg);
+  animation: modal-in 220ms var(--ease-standard) both;
 }
 
 @keyframes modal-in {
@@ -989,7 +874,7 @@ label { text-align: left; }
 .modal-card--sm { max-width: 480px; }
 
 .modal-card__header {
-  padding: var(--space-5) var(--space-6);
+  padding: calc(var(--spacing) * 6) calc(var(--spacing) * 8);
   border-bottom: 1px solid var(--color-border);
   // Pin to the top of the scrolling card so the title + close button
   // stay put while a tall body scrolls underneath. Opaque background
@@ -1007,7 +892,7 @@ label { text-align: left; }
   // button down.
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
 
   h2 {
     margin: 0;
@@ -1026,14 +911,14 @@ label { text-align: left; }
   height: 2rem;
   border-radius: var(--radius-md);
   border: none;
-  background: var(--scrim-5);
-  color: var(--color-text-muted);
+  background: var(--color-scrim-5);
+  color: var(--color-fg-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast);
-  &:hover { background: var(--scrim-10); color: var(--color-text); }
+  &:hover { background: var(--color-scrim-10); color: var(--color-fg); }
   &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
@@ -1047,7 +932,7 @@ label { text-align: left; }
   border-bottom: 1px solid var(--color-border);
 
   .app-tab-link {
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
@@ -1058,20 +943,20 @@ label { text-align: left; }
     transition: color var(--t-fast), border-color var(--t-fast);
 
     &:hover {
-      color: var(--color-text);
+      color: var(--color-fg);
       border-bottom-color: var(--color-border);
     }
     &.active {
-      color: var(--color-text);
+      color: var(--color-fg);
       background: transparent;
-      border-bottom-color: var(--color-text);
+      border-bottom-color: var(--color-fg);
     }
   }
 }
 
-.modal-card__body  { padding: var(--space-6); }
+.modal-card__body  { padding: calc(var(--spacing) * 8); }
 .modal-card__footer {
-  padding: var(--space-4) var(--space-6);
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 8);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-soft);
   // Pin to the bottom of the scrolling card so Save / Apply / Cancel
@@ -1082,7 +967,7 @@ label { text-align: left; }
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   // Wrap is set on every modal footer but only kicks in when the row
   // can't fit. The preview modal is the one that actually exercises
   // it (link + blurb + Done at 390px); other modals' two-button
@@ -1096,7 +981,7 @@ label { text-align: left; }
 // button with a rotating chevron; auto-open is wired in the template
 // when the asset has any non-default value in the Advanced block.
 .modal-section {
-  margin-bottom: var(--space-5);
+  margin-bottom: calc(var(--spacing) * 6);
 
   &:last-child { margin-bottom: 0; }
 }
@@ -1107,32 +992,32 @@ label { text-align: left; }
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--color-text);
+  color: var(--color-fg);
 }
 
 .modal-section__hint {
-  margin: var(--space-1) 0 var(--space-3);
-  color: var(--color-text-muted);
+  margin: calc(var(--spacing) * 1) 0 calc(var(--spacing) * 3);
+  color: var(--color-fg-muted);
   font-size: 0.8125rem;
   line-height: 1.45;
 }
 
 .modal-section--collapsible {
   border-top: 1px solid var(--color-border);
-  padding-top: var(--space-3);
+  padding-top: calc(var(--spacing) * 3);
 }
 
 .modal-section__toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   width: 100%;
   background: none;
   border: 0;
-  padding: var(--space-1) 0;
+  padding: calc(var(--spacing) * 1) 0;
   cursor: pointer;
-  color: var(--color-text);
+  color: var(--color-fg);
   text-align: left;
 
   &:focus-visible {
@@ -1144,7 +1029,7 @@ label { text-align: left; }
 
 .modal-section__chevron {
   font-size: 1.1rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   transition: transform var(--t-fast);
 
   .modal-section--collapsible.is-open & {
@@ -1153,13 +1038,13 @@ label { text-align: left; }
 }
 
 .modal-section__body {
-  padding-top: var(--space-3);
+  padding-top: calc(var(--spacing) * 3);
 }
 
 .modal-section__divider {
   height: 1px;
   background: var(--color-border);
-  margin: var(--space-4) 0;
+  margin: calc(var(--spacing) * 4) 0;
 }
 
 // Flatpickr in modal — keep the popup above the modal overlay's
@@ -1174,7 +1059,7 @@ label { text-align: left; }
 .modal-card--preview { max-width: 960px; }
 .modal-card__body--preview {
   padding: 0;
-  background: var(--color-bg-deep);
+  background: var(--color-canvas-deep);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1200,7 +1085,7 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 12. Forms — token-driven form components.
+// 11. Forms — token-driven form components.
 // -----------------------------------------------------------------------------
 .app-input,
 .app-select {
@@ -1210,7 +1095,7 @@ label { text-align: left; }
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.4;
-  color: var(--color-text);
+  color: var(--color-fg);
   background-color: var(--color-surface);
   background-clip: padding-box;
   border: 1px solid var(--color-border);
@@ -1225,10 +1110,10 @@ label { text-align: left; }
   &:disabled,
   &[readonly] {
     background-color: var(--color-surface-tint);
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
   }
   &::placeholder {
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     opacity: 0.7;
   }
 }
@@ -1254,7 +1139,7 @@ label { text-align: left; }
     inset: 0 auto auto 0;
     padding: 0.85rem;
     pointer-events: none;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     font-size: 0.95rem;
     transition: opacity var(--t-fast), transform var(--t-fast),
       font-size var(--t-fast);
@@ -1266,7 +1151,7 @@ label { text-align: left; }
   > .app-select ~ label {
     transform: translateY(-0.55rem);
     font-size: 0.72rem;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     letter-spacing: 0.04em;
     font-weight: 600;
   }
@@ -1275,7 +1160,7 @@ label { text-align: left; }
 .app-check {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   min-height: 1.5rem;
 }
 .app-check-input {
@@ -1336,18 +1221,18 @@ label { text-align: left; }
 .app-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
+  gap: calc(var(--spacing) * 4);
   @media (max-width: 720px) { grid-template-columns: 1fr; }
 }
 
 .weekday-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
 
   .weekday {
     --bg: var(--color-surface-tint);
-    --fg: var(--color-text);
+    --fg: var(--color-fg);
     position: relative;
     border: 1px solid var(--color-border);
     background: var(--bg);
@@ -1374,9 +1259,9 @@ label { text-align: left; }
     }
   }
   .weekday:has(input:checked) {
-    --bg: #{$anthias-yellow-3};
+    --bg: var(--color-accent);
     --fg: var(--color-accent-text);
-    border-color: $anthias-yellow-2;
+    border-color: var(--color-accent-strong);
   }
   // The input itself is invisible, so the ring has to be drawn on the
   // chip. Mirrors .app-check-input's focus treatment.
@@ -1387,12 +1272,12 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// 13. Stat card (system info)
+// 12. Stat card (system info)
 // -----------------------------------------------------------------------------
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-4);
+  gap: calc(var(--spacing) * 4);
 
   @media (max-width: 1100px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @media (max-width: 540px)  { grid-template-columns: 1fr; }
@@ -1401,12 +1286,12 @@ label { text-align: left; }
 .stat-card {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: calc(var(--spacing) * 6);
   box-shadow: var(--shadow-sm);
-  color: var(--color-text);
+  color: var(--color-fg);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   // Equal-height cards within a row of the stat-grid so a 1-line
   // value next to a 3-line memory donut doesn't jump heights.
   height: 100%;
@@ -1416,7 +1301,7 @@ label { text-align: left; }
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     margin: 0;
   }
   // Two-line layout: label on top, value-block flex-grows so cards
@@ -1443,10 +1328,10 @@ label { text-align: left; }
   }
   .stat-card__meta {
     font-size: 0.78rem;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     margin-top: 0;
   }
-  .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
+  .stat-card__meta a { color: var(--color-link); text-decoration: none; }
   .stat-card__meta a:hover { text-decoration: underline; }
   // Variant for advisory/warning text inside a stat card. Used by the
   // low-RAM badge on Memory, and only there: the Power supply and
@@ -1456,7 +1341,7 @@ label { text-align: left; }
   // above it, so its icon, its bold lead-in and this tint are the
   // whole signal.
   //
-  // The -text-on-wash ink, NOT --color-warning. The fill colour is
+  // The -on-wash ink, NOT --color-warning. The fill colour is
   // #f59e0b, which on a white .stat-card measures 2.15:1 — under half
   // the 4.5:1 AA needs for body text, and visibly unreadable at this
   // size. The token next to it exists precisely for text and measures
@@ -1465,7 +1350,7 @@ label { text-align: left; }
   // Measured on a live device, not eyeballed: the amber paragraph on
   // the Storage card was the worst thing on the page.
   .stat-card__meta--warn {
-    color: var(--color-warning-text-on-wash);
+    color: var(--color-warning-on-wash);
     margin-top: 0.5rem;
     line-height: 1.5;
   }
@@ -1484,9 +1369,9 @@ label { text-align: left; }
   display: inline-flex;
   align-items: center;
 
-  &--critical { color: var(--color-danger-text-on-wash); }
-  &--warn     { color: var(--color-warning-text-on-wash); }
-  &--ok       { color: var(--color-success-text-on-wash); }
+  &--critical { color: var(--color-danger-on-wash); }
+  &--warn     { color: var(--color-warning-on-wash); }
+  &--ok       { color: var(--color-success-on-wash); }
 }
 
 // The evidence block on a diagnostic card. Not a disclosure and not
@@ -1496,11 +1381,11 @@ label { text-align: left; }
 // someone came for got buried. It is simply present, in ordinary
 // text.
 .stat-card__details {
-  margin-top: var(--space-3);
+  margin-top: calc(var(--spacing) * 3);
   font-size: 0.78rem;
-  color: var(--color-text);
+  color: var(--color-fg);
 
-  p { margin: var(--space-2) 0 0; line-height: 1.5; }
+  p { margin: calc(var(--spacing) * 2) 0 0; line-height: 1.5; }
 
   code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1529,18 +1414,18 @@ label { text-align: left; }
   // Labels size to the longest one and then stop, so the values all
   // share a left edge instead of stepping raggedly per row.
   grid-template-columns: minmax(6.5rem, max-content) 1fr;
-  gap: var(--space-1) var(--space-3);
-  margin: var(--space-2) 0 0;
+  gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
+  margin: calc(var(--spacing) * 2) 0 0;
 
   &__key {
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     // The label column is deliberately NOT bolded or capitalised: it
     // is scaffolding, and the value is the thing being looked up.
     font-weight: 400;
   }
 
   &__value {
-    color: var(--color-text);
+    color: var(--color-fg);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     // Long values (a mount path, a SMART summary) wrap inside their
     // own column rather than pushing the grid wider.
@@ -1559,7 +1444,7 @@ label { text-align: left; }
     grid-template-columns: 1fr;
     gap: 0 0;
 
-    .readout__key { margin-top: var(--space-2); }
+    .readout__key { margin-top: calc(var(--spacing) * 2); }
   }
 }
 
@@ -1572,12 +1457,12 @@ label { text-align: left; }
 // `.device-alerts > * + *` rule dead code; matching the descendant
 // shape is what makes it actually apply.
 .stat-card__details .readout__note {
-  margin: var(--space-3) 0 0;
+  margin: calc(var(--spacing) * 3) 0 0;
   line-height: 1.5;
   // The one genuinely secondary line in the block: it explains a
   // number rather than being one, so it is the only thing the muted
   // ink is used for here.
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 
 // -----------------------------------------------------------------------------
@@ -1619,15 +1504,15 @@ label { text-align: left; }
   --alert-accent: var(--color-danger);
   --alert-wash: var(--color-danger-wash);
   --alert-edge: var(--color-danger-edge);
-  --alert-ink: var(--color-danger-text-on-wash);
+  --alert-ink: var(--color-danger-on-wash);
 
   display: flex;
   align-items: flex-start;
-  gap: var(--space-4);
-  margin-top: var(--space-5);
-  padding: var(--space-4) var(--space-5);
+  gap: calc(var(--spacing) * 4);
+  margin-top: calc(var(--spacing) * 6);
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 6);
   background: var(--color-surface);
-  color: var(--color-text);
+  color: var(--color-fg);
   border: 1px solid var(--alert-edge);
   border-left: 0.375rem solid var(--alert-accent);
   border-radius: var(--radius-lg);
@@ -1641,7 +1526,7 @@ label { text-align: left; }
     --alert-accent: var(--color-warning);
     --alert-wash: var(--color-warning-wash);
     --alert-edge: var(--color-warning-edge);
-    --alert-ink: var(--color-warning-text-on-wash);
+    --alert-ink: var(--color-warning-on-wash);
   }
 
   &__icon {
@@ -1667,22 +1552,22 @@ label { text-align: left; }
     color: var(--alert-ink);
   }
 
-  // Body copy stays --color-text, not the severity ink: tinting a
+  // Body copy stays --color-fg, not the severity ink: tinting a
   // whole paragraph red costs legibility and buys no extra signal
   // once the rail, chip and title have carried it.
   &__lede {
-    margin: var(--space-2) 0 0;
+    margin: calc(var(--spacing) * 2) 0 0;
     font-size: 0.9375rem;
     line-height: 1.5;
   }
 
   &__advice-label {
-    margin: var(--space-4) 0 var(--space-2);
+    margin: calc(var(--spacing) * 4) 0 calc(var(--spacing) * 2);
     font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;      // matches .stat-card__label
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
   }
 
   &__advice {
@@ -1691,12 +1576,12 @@ label { text-align: left; }
     list-style: disc;
     font-size: 0.9375rem;
     line-height: 1.5;
-    color: var(--color-text);
+    color: var(--color-fg);
 
     // Slightly more air between items than the usual list rhythm:
     // the first item carries a bolded recommendation and needs to
     // separate cleanly from the secondary checks below it.
-    li + li { margin-top: var(--space-2); }
+    li + li { margin-top: calc(var(--spacing) * 2); }
     &::marker { color: var(--alert-accent); }
 
     // The one recommendation that actually resolves this, lifted out
@@ -1726,7 +1611,7 @@ label { text-align: left; }
     font-weight: 600;
     color: var(--alert-ink);
     text-decoration: none;
-    padding: var(--space-2) var(--space-3);
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
     border-radius: var(--radius-md);
     border: 1px solid var(--alert-edge);
     transition: background var(--t-fast);
@@ -1745,11 +1630,11 @@ label { text-align: left; }
   // rather than squeezing the copy into a narrow gutter.
   @media (max-width: 720px) {
     flex-wrap: wrap;
-    padding: var(--space-4);
+    padding: calc(var(--spacing) * 4);
 
     .device-alert__link {
       align-self: flex-start;
-      margin-left: calc(2.5rem + var(--space-4));
+      margin-left: calc(2.5rem + calc(var(--spacing) * 4));
     }
   }
 }
@@ -1764,12 +1649,12 @@ label { text-align: left; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-1);
+  gap: calc(var(--spacing) * 1);
 }
 .version-line__head { font-size: 1.05rem; line-height: 1.2; }
 .version-line__meta {
   font-size: 0.78rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -1780,7 +1665,7 @@ label { text-align: left; }
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   background: var(--color-accent);
-  color: var(--color-text);
+  color: var(--color-fg);
   font-family: var(--font-sans);
   font-size: 0.75rem;
   font-weight: 700;
@@ -1795,29 +1680,29 @@ label { text-align: left; }
 // Display / Anthias) so the eye lands on a heading instead of a wall
 // of stat-cards. Header eyebrow + lede mirrors the settings sections.
 .info-section {
-  margin-bottom: var(--space-7);
+  margin-bottom: calc(var(--spacing) * 12);
   &:last-child { margin-bottom: 0; }
 }
 .info-section__header {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: var(--space-4);
+  margin-bottom: calc(var(--spacing) * 4);
 
   h2 {
     margin: 0;
-    color: var(--color-text-on-dark);
+    color: var(--color-on-canvas);
     font-size: 1.05rem;
     font-weight: 700;
     letter-spacing: -0.01em;
     display: inline-flex;
     align-items: center;
-    i { color: var(--color-text-on-dark-muted); font-size: 0.95em; }
+    i { color: var(--color-on-canvas-muted); font-size: 0.95em; }
   }
 }
 .info-section__lede {
   margin: 0;
-  color: var(--color-text-on-dark-muted);
+  color: var(--color-on-canvas-muted);
   font-size: 0.875rem;
 }
 
@@ -1829,35 +1714,35 @@ label { text-align: left; }
 .loadavg-card {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: var(--space-5);
+  gap: calc(var(--spacing) * 6);
   align-items: center;
-  margin-top: var(--space-2);
+  margin-top: calc(var(--spacing) * 2);
   @media (max-width: 540px) {
     grid-template-columns: 1fr;
-    gap: var(--space-3);
+    gap: calc(var(--spacing) * 3);
   }
 }
 .loadavg-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   min-width: 0;
 }
 .loadavg-row {
   display: grid;
   grid-template-columns: 3rem 1fr 3.5rem;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   align-items: center;
   font-size: 0.875rem;
 }
 .loadavg-row__label {
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 .loadavg-row__bar {
   position: relative;
   height: 0.55rem;
-  background: var(--scrim-6);
+  background: var(--color-scrim-6);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
@@ -1866,7 +1751,7 @@ label { text-align: left; }
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--color-success);
-  transition: width 200ms var(--ease-out);
+  transition: width 200ms var(--ease-standard);
 }
 .loadavg-row--warn .loadavg-row__fill { background: var(--color-warning); }
 .loadavg-row--high .loadavg-row__fill { background: var(--color-danger); }
@@ -1874,19 +1759,19 @@ label { text-align: left; }
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: right;
-  color: var(--color-text);
+  color: var(--color-fg);
 }
 
 .loadavg-trend {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--scrim-4);
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  background: var(--color-scrim-4);
   border-radius: var(--radius-md);
   min-width: 12rem;
 
-  i { font-size: 1.6rem; flex: none; color: var(--color-text-muted); }
+  i { font-size: 1.6rem; flex: none; color: var(--color-fg-muted); }
 }
 .loadavg-trend--up i { color: var(--color-danger); }
 .loadavg-trend--down i { color: var(--color-success); }
@@ -1898,7 +1783,7 @@ label { text-align: left; }
 .loadavg-trend__secondary {
   margin: 0;
   font-size: 0.78rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 
 // Resource donut + legend (memory and disk on System Info). Slice
@@ -1909,16 +1794,16 @@ label { text-align: left; }
 .resource-card {
   display: grid;
   grid-template-columns: 11rem 1fr;
-  gap: var(--space-5);
+  gap: calc(var(--spacing) * 6);
   align-items: center;
-  margin-top: var(--space-2);
+  margin-top: calc(var(--spacing) * 2);
   // Drop to a stacked layout on narrow viewports / when the host
   // card is span-1 in a 4-col grid — donut + legend can't share a
   // row at < 30rem of inner width without crowding.
   @media (max-width: 880px) {
     grid-template-columns: 1fr;
     justify-items: center;
-    gap: var(--space-4);
+    gap: calc(var(--spacing) * 4);
   }
 }
 .resource-pie {
@@ -1935,7 +1820,7 @@ label { text-align: left; }
   );
   position: relative;
   flex: none;
-  box-shadow: inset 0 0 0 1px var(--scrim-6), var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px var(--color-scrim-6), var(--shadow-sm);
 }
 // Disk uses different slice colours (red-ish for used, green for free)
 // so a near-full drive reads as a warning at a glance.
@@ -1953,20 +1838,20 @@ label { text-align: left; }
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 var(--space-2);
+  padding: 0 calc(var(--spacing) * 2);
 }
 .resource-pie__total {
   font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-text);
+  color: var(--color-fg);
   line-height: 1;
 }
 .resource-pie__unit {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   margin-top: 0.35rem;
 }
 
@@ -1976,26 +1861,26 @@ label { text-align: left; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   font-size: 0.875rem;
   min-width: 0;
 }
 .resource-legend__row {
   display: grid;
   grid-template-columns: 0.85rem 1fr auto;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   align-items: center;
 }
 .resource-legend__swatch {
   width: 0.85rem;
   height: 0.85rem;
   border-radius: 0.25rem;
-  background: var(--color-text-muted);
+  background: var(--color-fg-muted);
   flex: none;
 }
-.resource-legend__name { color: var(--color-text); font-weight: 600; }
+.resource-legend__name { color: var(--color-fg); font-weight: 600; }
 .resource-legend__value {
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   font-variant-numeric: tabular-nums;
 }
 .resource-legend__row--slice-1 .resource-legend__swatch { background: var(--color-link); }
@@ -2004,36 +1889,36 @@ label { text-align: left; }
 .resource-pie--disk ~ .resource-legend .resource-legend__row--slice-1 .resource-legend__swatch { background: var(--color-danger); }
 .resource-legend__row--ghost .resource-legend__swatch {
   background: transparent;
-  border: 1.5px dashed var(--scrim-25);
+  border: 1.5px dashed var(--color-scrim-25);
 }
 .resource-legend__row--ghost .resource-legend__name {
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   font-weight: 500;
 }
 
 // -----------------------------------------------------------------------------
-// 14. Settings sections
+// 13. Settings sections
 // -----------------------------------------------------------------------------
 .settings-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: calc(var(--spacing) * 6);
 }
 
 .settings-section {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  padding: var(--space-6);
-  color: var(--color-text);
+  padding: calc(var(--spacing) * 8);
+  color: var(--color-fg);
 
   > header {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--space-3);
-    margin-bottom: var(--space-5);
+    gap: calc(var(--spacing) * 3);
+    margin-bottom: calc(var(--spacing) * 6);
   }
 
   h2 {
@@ -2043,22 +1928,22 @@ label { text-align: left; }
     margin: 0;
   }
   .settings-section__lede {
-    margin: var(--space-1) 0 0;
-    color: var(--color-text-muted);
+    margin: calc(var(--spacing) * 1) 0 0;
+    color: var(--color-fg-muted);
     font-size: 0.875rem;
     max-width: 60ch;
   }
   .settings-section__actions {
     display: flex;
-    gap: var(--space-2);
+    gap: calc(var(--spacing) * 2);
   }
   .settings-section__badge {
     display: inline-block;
-    margin-left: var(--space-2);
+    margin-left: calc(var(--spacing) * 2);
     padding: 0.125rem 0.5rem;
     border-radius: var(--radius-md);
-    background: var(--color-warning-soft, #fef3c7);
-    color: var(--color-warning-strong, #92400e);
+    background: var(--color-warning-wash);
+    color: var(--color-warning-on-wash);
     font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.03em;
@@ -2071,8 +1956,8 @@ label { text-align: left; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 3) 0;
   border-bottom: 1px solid var(--color-border);
   &:last-child { border-bottom: none; }
 
@@ -2082,13 +1967,13 @@ label { text-align: left; }
   }
   .toggle-row__hint {
     font-size: 0.8125rem;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     margin: 2px 0 0;
   }
 }
 
 // -----------------------------------------------------------------------------
-// 15. Navbar (component partial reuses these classes)
+// 14. Navbar (component partial reuses these classes)
 // -----------------------------------------------------------------------------
 .app-nav {
   height: 4.5rem;
@@ -2096,7 +1981,7 @@ label { text-align: left; }
   background: rgba(15, 0, 25, 0.7) !important;
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
-  border-bottom: 1px solid var(--scrim-on-dark-6);
+  border-bottom: 1px solid var(--color-paper-6);
 
   // Below the lg breakpoint (1024px, matching Tailwind's `lg:`) the
   // menu is gated by the hamburger toggle. Without intervention the
@@ -2114,11 +1999,11 @@ label { text-align: left; }
       top: 100%;
       left: 0;
       right: 0;
-      padding: var(--space-2) var(--space-4) var(--space-3);
+      padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4) calc(var(--spacing) * 3);
       background: rgba(15, 0, 25, 0.97);
       backdrop-filter: blur(10px) saturate(140%);
       -webkit-backdrop-filter: blur(10px) saturate(140%);
-      border-bottom: 1px solid var(--scrim-on-dark-6);
+      border-bottom: 1px solid var(--color-paper-6);
       box-shadow: var(--shadow-md);
     }
     .app-nav-items {
@@ -2134,12 +2019,12 @@ label { text-align: left; }
     padding: 0;
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: calc(var(--spacing) * 3);
     img { height: 28px; }
   }
 
   .app-tab-link {
-    color: var(--color-text-on-dark-muted) !important;
+    color: var(--color-on-chrome-muted) !important;
     padding: 0.45rem 0.85rem !important;
     border-radius: var(--radius-md);
     font-weight: 500;
@@ -2152,65 +2037,65 @@ label { text-align: left; }
     i { font-size: 0.95em; opacity: 0.85; }
 
     &:hover {
-      color: var(--color-text-on-dark) !important;
-      background: var(--scrim-on-dark-6);
+      color: var(--color-on-chrome) !important;
+      background: var(--color-paper-6);
     }
     &.active {
-      color: var(--color-text-on-dark) !important;
-      background: var(--scrim-on-dark-10);
+      color: var(--color-on-chrome) !important;
+      background: var(--color-paper-10);
     }
   }
 
   .divider-vertical {
     width: 1px;
     height: 1.5rem;
-    background: var(--color-border-on-dark);
-    margin: 0 var(--space-2);
+    background: var(--color-paper-12);
+    margin: 0 calc(var(--spacing) * 2);
   }
 
   .app-nav-toggler {
-    border: 1px solid var(--scrim-on-dark-15);
-    color: var(--color-text-on-dark);
+    border: 1px solid var(--color-paper-15);
+    color: var(--color-on-chrome);
     padding: 0.4rem 0.55rem;
     &:focus { box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring); }
   }
 }
 
 // -----------------------------------------------------------------------------
-// 16. Footer
+// 15. Footer
 // -----------------------------------------------------------------------------
 $footer-height: 13rem;
 
 #footer {
-  margin-top: var(--space-8);
+  margin-top: calc(var(--spacing) * 16);
   background: rgba(15, 0, 25, 0.5);
-  border-top: 1px solid var(--scrim-on-dark-6);
-  color: var(--color-text-on-dark-muted);
+  border-top: 1px solid var(--color-paper-6);
+  color: var(--color-on-chrome-muted);
 
   .links a {
-    color: var(--color-text-on-dark-muted);
+    color: var(--color-on-chrome-muted);
     text-transform: uppercase;
     font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-decoration: none;
     transition: color var(--t-fast);
-    &:hover { color: var(--color-text-on-dark); }
+    &:hover { color: var(--color-on-chrome); }
   }
 
   a.brand { color: var(--color-accent); text-decoration: none; }
-  a.brand:hover { color: var(--color-text-on-dark); }
+  a.brand:hover { color: var(--color-on-chrome); }
 
   .copy {
-    margin-top: var(--space-5);
-    border-top: 1px solid var(--scrim-on-dark-5);
-    color: var(--color-text-on-dark-faint);
+    margin-top: calc(var(--spacing) * 6);
+    border-top: 1px solid var(--color-paper-5);
+    color: var(--color-on-chrome-faint);
     font-size: 0.7rem;
   }
 }
 
 // -----------------------------------------------------------------------------
-// 17. Splash page — full-bleed gradient + elevated card with a QR slot.
+// 16. Splash page — full-bleed gradient + elevated card with a QR slot.
 //     Kept conservative for the device webview: no backdrop-filter (Qt5
 //     on Pi 1-4 is on an older Chromium and silently no-ops it), no
 //     CSS variables that don't already exist in :root.
@@ -2228,12 +2113,12 @@ $footer-height: 13rem;
   padding: 0;
   min-height: 100vh;
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, sans-serif);
-  color: var(--color-text-on-dark);
-  background-color: var(--color-bg-deep);
+  color: var(--color-on-canvas);
+  background-color: var(--color-canvas-deep);
   background-image:
     radial-gradient(at 20% 10%, rgba(124, 48, 205, 0.45), transparent 55%),
     radial-gradient(at 85% 90%, rgba(91, 32, 144, 0.4), transparent 55%),
-    linear-gradient(160deg, #{$anthias-purple-1} 0%, var(--color-bg-deep) 100%);
+    linear-gradient(160deg, var(--color-canvas) 0%, var(--color-canvas-deep) 100%);
 }
 
 .splash-shell {
@@ -2270,7 +2155,7 @@ $footer-height: 13rem;
     justify-self: center;
     background: #ffffff;
     border-radius: var(--radius-lg);
-    padding: var(--space-4);
+    padding: calc(var(--spacing) * 4);
     text-align: center;
     box-shadow: var(--shadow-md);
   }
@@ -2292,13 +2177,13 @@ $footer-height: 13rem;
 .splash-status {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-4) 0;
-  padding: var(--space-1) var(--space-3);
+  gap: calc(var(--spacing) * 2);
+  margin: 0 0 calc(var(--spacing) * 4) 0;
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
   font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--color-text-on-dark-muted);
+  color: var(--color-on-canvas-muted);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-pill);
@@ -2307,7 +2192,7 @@ $footer-height: 13rem;
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 50%;
-    background: var(--color-text-on-dark-muted);
+    background: var(--color-on-canvas-muted);
     flex-shrink: 0;
   }
   &__dot--pulse {
@@ -2328,35 +2213,35 @@ $footer-height: 13rem;
 }
 
 .splash-headline {
-  margin: 0 0 var(--space-2) 0;
+  margin: 0 0 calc(var(--spacing) * 2) 0;
   font-size: clamp(1.5rem, 2.4vw + 1rem, 2.5rem);
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: var(--color-text-on-dark);
+  color: var(--color-on-canvas);
 }
 
 .splash-subhead {
-  margin: 0 0 var(--space-5) 0;
+  margin: 0 0 calc(var(--spacing) * 6) 0;
   font-size: clamp(0.95rem, 0.5vw + 0.85rem, 1.125rem);
-  color: var(--color-text-on-dark-muted);
+  color: var(--color-on-canvas-muted);
   max-width: 36rem;
 }
 
 .splash-ip-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
 }
 
 .splash-ip-pill {
   display: inline-flex;
   align-items: center;
-  padding: var(--space-2) var(--space-4);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-text-on-dark);
+  color: var(--color-on-canvas);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: var(--radius-pill);
@@ -2367,7 +2252,7 @@ $footer-height: 13rem;
   &:hover {
     background: rgba(255, 255, 255, 0.14);
     border-color: rgba(255, 255, 255, 0.28);
-    color: var(--color-text-on-dark);
+    color: var(--color-on-canvas);
     text-decoration: none;
   }
   &:active { transform: translateY(1px); }
@@ -2394,12 +2279,12 @@ $footer-height: 13rem;
 }
 
 .splash-qr__caption {
-  margin: var(--space-3) 0 0 0;
+  margin: calc(var(--spacing) * 3) 0 0 0;
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--color-text);
+  color: var(--color-fg);
 }
 
 // -----------------------------------------------------------------------------
@@ -2414,7 +2299,7 @@ $footer-height: 13rem;
 // the gradient).
 body.auth-body {
   padding-top: 0;
-  background-color: var(--color-bg-deep);
+  background-color: var(--color-canvas-deep);
 }
 // The `main { min-height: auto; padding: 0 }` reset that used to live
 // inside the block above was neutralising the global `main` rule, but
@@ -2428,12 +2313,12 @@ body.auth-body {
 .auth-page {
   min-height: 100vh;
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, sans-serif);
-  color: var(--color-text);
-  background-color: var(--color-bg-deep);
+  color: var(--color-fg);
+  background-color: var(--color-canvas-deep);
   background-image:
     radial-gradient(at 20% 10%, rgba(124, 48, 205, 0.45), transparent 55%),
     radial-gradient(at 85% 90%, rgba(91, 32, 144, 0.4), transparent 55%),
-    linear-gradient(160deg, #{$anthias-purple-1} 0%, var(--color-bg-deep) 100%);
+    linear-gradient(160deg, var(--color-canvas) 0%, var(--color-canvas-deep) 100%);
 }
 
 .auth-shell {
@@ -2452,12 +2337,12 @@ body.auth-body {
   padding: clamp(1.5rem, 4vw, 2.5rem);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: calc(var(--spacing) * 4);
 
   &__brand {
     display: flex;
     justify-content: center;
-    margin-bottom: var(--space-2);
+    margin-bottom: calc(var(--spacing) * 2);
   }
 }
 
@@ -2472,19 +2357,19 @@ body.auth-body {
   font-weight: 700;
   letter-spacing: -0.01em;
   text-align: center;
-  color: var(--color-text);
+  color: var(--color-fg);
 }
 
 .auth-subhead {
-  margin: calc(var(--space-2) * -1) 0 0 0;
+  margin: calc(calc(var(--spacing) * 2) * -1) 0 0 0;
   font-size: 0.95rem;
   text-align: center;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 
 .auth-alert {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
   list-style: disc inside;
   border: 1px solid #fecaca;
   background: #fef2f2;
@@ -2493,17 +2378,17 @@ body.auth-body {
   font-size: 0.875rem;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: calc(var(--spacing) * 1);
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
 }
 
 .auth-submit {
-  margin-top: var(--space-2);
+  margin-top: calc(var(--spacing) * 2);
   width: 100%;
   justify-content: center;
 }
@@ -2534,7 +2419,7 @@ body.auth-body {
     font-weight: 700;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
   }
 }
 
@@ -2546,7 +2431,7 @@ body.auth-body {
   text-align: center;
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-6);
+  padding: calc(var(--spacing) * 8);
   cursor: pointer;
   background: var(--color-surface-tint);
   transition: border-color var(--t-fast), background var(--t-fast);
@@ -2565,8 +2450,8 @@ body.auth-body {
 .upload-progress {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-5);
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-soft);
@@ -2574,7 +2459,7 @@ body.auth-body {
   .upload-progress__head {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: calc(var(--spacing) * 3);
     i { font-size: 1.5rem; color: var(--color-link); flex: none; }
   }
   .upload-progress__text { min-width: 0; flex: 1 1 auto; }
@@ -2589,7 +2474,7 @@ body.auth-body {
     height: 100%;
     background: var(--color-link);
     border-radius: var(--radius-pill);
-    transition: width 200ms var(--ease-out);
+    transition: width 200ms var(--ease-standard);
   }
   .upload-progress__fill--indeterminate {
     background: linear-gradient(
@@ -2619,32 +2504,32 @@ body.auth-body {
 // -----------------------------------------------------------------------------
 .app-toast-stack {
   position: fixed;
-  top: calc(4.5rem + var(--space-4));   // below the fixed app-nav
-  right: var(--space-5);
+  top: calc(4.5rem + calc(var(--spacing) * 4));   // below the fixed app-nav
+  right: calc(var(--spacing) * 6);
   z-index: 1080;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   pointer-events: none;
-  max-width: min(420px, calc(100vw - var(--space-5) * 2));
+  max-width: min(420px, calc(100vw - calc(var(--spacing) * 6) * 2));
 }
 // Named `.app-toast` rather than `.toast` so we don't collide with any
 // other framework's toast component if one ever lands underneath.
 //
-// The body background is anthias-purple-1 (#1f0029); the prior
-// `background: var(--color-text)` resolved to #1f002a — one hex
-// digit off, indistinguishable from the page. Use the surface white
-// instead so toasts stand out as a card notification on the dark
-// theme. Accent stays on the left-border + leading icon.
+// A toast must not share the page's colour. The prior
+// `background: var(--color-fg)` resolved to #1f002a, one hex digit off
+// the canvas, so a toast was indistinguishable from the page behind it.
+// Use the surface instead, so a toast reads as a card floating over the
+// canvas. Accent stays on the left border and the leading icon.
 .app-toast {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  color: var(--color-text);
+  color: var(--color-fg);
   box-shadow: var(--shadow-lg);
   font-size: 0.95rem;
   border-left: 4px solid var(--color-link);
@@ -2655,13 +2540,13 @@ body.auth-body {
     flex: none;
     background: transparent;
     border: none;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     cursor: pointer;
-    padding: 0 var(--space-1);
+    padding: 0 calc(var(--spacing) * 1);
     line-height: 1;
     border-radius: var(--radius-sm);
     transition: color var(--t-fast), background var(--t-fast);
-    &:hover { color: var(--color-text); background: var(--scrim-8); }
+    &:hover { color: var(--color-fg); background: var(--color-scrim-8); }
   }
 }
 .app-toast--success { border-left-color: var(--color-success); > i { color: var(--color-success); } }
@@ -2674,36 +2559,36 @@ body.auth-body {
 // `review-cta` HX-Trigger event (see _review_cta.html).
 .review-cta {
   position: fixed;
-  bottom: var(--space-5);
-  right: var(--space-5);
+  bottom: calc(var(--spacing) * 6);
+  right: calc(var(--spacing) * 6);
   z-index: 1090;
-  width: min(360px, calc(100vw - var(--space-5) * 2));
-  padding: var(--space-4);
+  width: min(360px, calc(100vw - calc(var(--spacing) * 6) * 2));
+  padding: calc(var(--spacing) * 4);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  color: var(--color-text);
+  color: var(--color-fg);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--color-border);
 
   .review-cta__close {
     position: absolute;
-    top: var(--space-2);
-    right: var(--space-2);
+    top: calc(var(--spacing) * 2);
+    right: calc(var(--spacing) * 2);
     background: transparent;
     border: none;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     cursor: pointer;
-    padding: var(--space-1);
+    padding: calc(var(--spacing) * 1);
     line-height: 1;
     border-radius: var(--radius-sm);
     transition: color var(--t-fast), background var(--t-fast);
-    &:hover { color: var(--color-text); background: var(--scrim-8); }
+    &:hover { color: var(--color-fg); background: var(--color-scrim-8); }
   }
 
   .review-cta__body {
     display: flex;
-    gap: var(--space-3);
-    padding-right: var(--space-4); // clear of the close button
+    gap: calc(var(--spacing) * 3);
+    padding-right: calc(var(--spacing) * 4); // clear of the close button
   }
   .review-cta__icon {
     flex: none;
@@ -2713,41 +2598,41 @@ body.auth-body {
   }
   .review-cta__title {
     font-weight: 700;
-    margin: 0 0 var(--space-1);
+    margin: 0 0 calc(var(--spacing) * 1);
   }
   .review-cta__text {
     margin: 0;
     font-size: 0.9rem;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
   }
 
   .review-cta__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2);
-    margin-top: var(--space-4);
+    gap: calc(var(--spacing) * 2);
+    margin-top: calc(var(--spacing) * 4);
     .app-btn { flex: 1 1 auto; }
   }
 
   .review-cta__later {
     display: block;
     width: 100%;
-    margin-top: var(--space-2);
-    padding: var(--space-1);
+    margin-top: calc(var(--spacing) * 2);
+    padding: calc(var(--spacing) * 1);
     background: transparent;
     border: none;
-    color: var(--color-text-muted);
+    color: var(--color-fg-muted);
     font: inherit;
     font-size: 0.85rem;
     cursor: pointer;
     border-radius: var(--radius-sm);
     transition: color var(--t-fast);
-    &:hover { color: var(--color-text); }
+    &:hover { color: var(--color-fg); }
   }
 }
 
 // -----------------------------------------------------------------------------
-// 18. Misc
+// 17. Misc
 // -----------------------------------------------------------------------------
 [hidden] { display: none !important; }
 
@@ -2756,12 +2641,12 @@ body.auth-body {
   width: 1px;
   height: 1rem;
   background: var(--color-border);
-  margin: 0 var(--space-2);
+  margin: 0 calc(var(--spacing) * 2);
   vertical-align: middle;
 }
 
 // =============================================================================
-// 19. App component classes
+// 18. App component classes
 //
 // The earlier sections style page-bespoke components (.app-btn, .surface,
 // .modal-card, .stat-card, .schedule-chip, …). The block below covers
@@ -2785,7 +2670,7 @@ body.auth-body {
   width: 100%;
   margin-inline: auto;
   max-width: var(--container-page);
-  padding-inline: clamp(var(--space-4), 4vw, var(--space-6));
+  padding-inline: clamp(calc(var(--spacing) * 4), 4vw, calc(var(--spacing) * 8));
 }
 
 // --- Tabs (asset modal) ---
@@ -2804,7 +2689,7 @@ body.auth-body {
   padding: 0.45rem 0.85rem;
   background: transparent;
   border: none;
-  color: var(--color-text);
+  color: var(--color-fg);
   text-decoration: none;
   font: inherit;
   font-weight: 500;
@@ -2812,14 +2697,14 @@ body.auth-body {
   border-radius: var(--radius-md);
   transition: color var(--t-fast), background var(--t-fast);
 
-  &:hover { background: var(--scrim-4); }
+  &:hover { background: var(--color-scrim-4); }
 }
 
 .app-nav-toggler {
   cursor: pointer;
   background: transparent;
-  border: 1px solid var(--scrim-on-dark-15);
-  color: var(--color-text-on-dark);
+  border: 1px solid var(--color-paper-15);
+  color: var(--color-on-chrome);
   padding: 0.4rem 0.55rem;
   border-radius: var(--radius-md);
   font-size: 1.1rem;
@@ -2855,33 +2740,33 @@ body.auth-body {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--space-5);
+  bottom: calc(var(--spacing) * 6);
   z-index: 1040;
   display: flex;
   justify-content: center;
-  padding-inline: var(--space-4);
+  padding-inline: calc(var(--spacing) * 4);
   pointer-events: none;
 }
 .bulk-bar__inner {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: calc(var(--spacing) * 4);
   flex-wrap: wrap;
   justify-content: space-between;
   width: 100%;
   max-width: 720px;
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-bg-elevated);
-  color: var(--color-text-on-dark);
-  border: 1px solid var(--color-border-on-dark);
+  padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+  background: var(--color-feature-from);
+  color: var(--color-on-feature);
+  border: 1px solid var(--color-feature-divider);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-lg);
 }
 .bulk-bar__count {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   font-size: 0.9rem;
   white-space: nowrap;
   i { font-size: 1.1rem; opacity: 0.85; }
@@ -2890,16 +2775,16 @@ body.auth-body {
 .bulk-bar__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   flex-wrap: wrap;
 }
 .bulk-bar__clear {
-  color: var(--color-text-on-dark);
+  color: var(--color-on-feature);
   background: transparent;
-  border-color: var(--color-border-on-dark);
+  border-color: var(--color-feature-divider);
   // Set the utility "clear" apart from the destructive Delete it sits
   // beside in the action row.
-  margin-left: var(--space-2);
+  margin-left: calc(var(--spacing) * 2);
 }
 
 @media (max-width: 640px) {
@@ -2914,8 +2799,8 @@ body.auth-body {
   .bulk-bar__actions { justify-content: center; }
   .bulk-bar__clear {
     position: absolute;
-    top: var(--space-3);
-    right: var(--space-3);
+    top: calc(var(--spacing) * 3);
+    right: calc(var(--spacing) * 3);
     margin-left: 0;
   }
 }
@@ -2924,10 +2809,10 @@ body.auth-body {
 // only revealed once its "Change …" toggle is on. The is-on class
 // lifts the card so the active groups read as the ones being written.
 .bulk-field {
-  padding: var(--space-4);
+  padding: calc(var(--spacing) * 4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  margin-bottom: var(--space-3);
+  margin-bottom: calc(var(--spacing) * 3);
   transition: border-color var(--t-fast), background var(--t-fast);
 
   &.is-on {
@@ -2944,11 +2829,11 @@ body.auth-body {
 // duplicates. Shares the weekday pill vocabulary for a consistent look.
 .bulk-flag-choice {
   display: inline-flex;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
 
   &__pill {
     --bg: var(--color-surface-tint);
-    --fg: var(--color-text);
+    --fg: var(--color-fg);
     border: 1px solid var(--color-border);
     background: var(--bg);
     color: var(--fg);
@@ -2961,9 +2846,9 @@ body.auth-body {
     input { position: absolute; opacity: 0; pointer-events: none; }
   }
   &__pill:has(input:checked) {
-    --bg: #{$anthias-yellow-3};
+    --bg: var(--color-accent);
     --fg: var(--color-accent-text);
-    border-color: $anthias-yellow-2;
+    border-color: var(--color-accent-strong);
   }
   // Keyboard focus lands on the hidden radio — surface it on the pill so
   // the control is navigable without a mouse.
@@ -3017,14 +2902,14 @@ body.auth-body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
   text-align: center;
   min-height: 12rem;
 }
 
 .app-cfg-spin {
   font-size: 2rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   animation: app-cfg-spin 0.9s linear infinite;
 }
 
@@ -3035,15 +2920,15 @@ body.auth-body {
 // Responsive catalog grid — auto-fills as the modal widens.
 .app-grid {
   display: grid;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
 }
 
 .app-card {
   display: flex;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   align-items: flex-start;
-  padding: var(--space-3);
+  padding: calc(var(--spacing) * 3);
   text-align: left;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -3073,7 +2958,7 @@ body.auth-body {
   height: 2.75rem;
   border-radius: var(--radius-md);
   background-color: var(--color-surface-tint);
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   overflow: hidden;
 
   img { width: 100%; height: 100%; object-fit: cover; }
@@ -3095,12 +2980,12 @@ body.auth-body {
 
 .app-card__name {
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-fg);
 }
 
 .app-card__text {
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   // Clamp the summary to two lines so cards stay even.
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -3111,8 +2996,8 @@ body.auth-body {
 .app-card__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
+  gap: calc(var(--spacing) * 1);
+  margin-top: calc(var(--spacing) * 2);
 }
 
 .app-card__tag {
@@ -3120,7 +3005,7 @@ body.auth-body {
   font-weight: 600;
   padding: 0.1rem 0.45rem;
   border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   background-color: var(--color-surface-tint);
 }
 
@@ -3128,13 +3013,13 @@ body.auth-body {
 .app-cfg-back {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: calc(var(--spacing) * 1);
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   background: none;
   border: none;
   padding: 0;
-  margin-bottom: var(--space-3);
+  margin-bottom: calc(var(--spacing) * 3);
   cursor: pointer;
 
   &:hover { color: var(--color-link); }
@@ -3142,7 +3027,7 @@ body.auth-body {
 
 .app-cfg-head {
   display: flex;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   align-items: center;
 }
 
@@ -3153,10 +3038,10 @@ body.auth-body {
 }
 
 // Manifest-driven form controls.
-.app-cfg-fields { margin-top: var(--space-4); }
+.app-cfg-fields { margin-top: calc(var(--spacing) * 4); }
 
 .app-cfg-field {
-  margin-bottom: var(--space-4);
+  margin-bottom: calc(var(--spacing) * 4);
   &:last-child { margin-bottom: 0; }
 }
 
@@ -3166,8 +3051,8 @@ body.auth-body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-  margin-bottom: var(--space-2);
+  color: var(--color-fg-muted);
+  margin-bottom: calc(var(--spacing) * 2);
 }
 
 .app-cfg-input {
@@ -3175,26 +3060,26 @@ body.auth-body {
 }
 
 .app-cfg-help {
-  margin: var(--space-2) 0 0;
+  margin: calc(var(--spacing) * 2) 0 0;
   font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 
 .app-cfg-group {
-  margin: var(--space-5) 0 var(--space-3);
+  margin: calc(var(--spacing) * 6) 0 calc(var(--spacing) * 3);
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-fg);
 }
 
 .app-cfg-toggle {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: calc(var(--spacing) * 3);
   cursor: pointer;
 
   input { flex: 0 0 auto; }
-  span { font-size: 0.95rem; color: var(--color-text); }
+  span { font-size: 0.95rem; color: var(--color-fg); }
 }
 
 // Repeated-group widget: one row per array item, each row a line of
@@ -3204,14 +3089,14 @@ body.auth-body {
 .app-cfg-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
 }
 
 .app-cfg-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(var(--spacing) * 2);
 }
 
 .app-cfg-row__field {
@@ -3224,23 +3109,23 @@ body.auth-body {
 // text with no hover feedback at all. State both here.
 .app-cfg-row__remove {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 
   &:hover:not(:disabled) {
-    background: var(--scrim-6);
+    background: var(--color-scrim-6);
     color: var(--color-danger);
   }
 }
 
 .app-cfg-empty {
-  margin: var(--space-2) 0 0;
+  margin: calc(var(--spacing) * 2) 0 0;
   font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
 }
 
-.app-cfg-add { margin-top: var(--space-3); }
+.app-cfg-add { margin-top: calc(var(--spacing) * 3); }
 
-.app-cfg-nosettings { margin-top: var(--space-3); }
+.app-cfg-nosettings { margin-top: calc(var(--spacing) * 3); }
 
 // Location-map widget (Leaflet + OSM). A fixed centre pin over a
 // draggable map; the map canvas fills the frame and the pin/readout
@@ -3290,14 +3175,14 @@ body.auth-body {
 .app-cfg-map__readout,
 .app-cfg-map__hint {
   position: absolute;
-  bottom: var(--space-2);
-  left: var(--space-2);
+  bottom: calc(var(--spacing) * 2);
+  left: calc(var(--spacing) * 2);
   z-index: 500;
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-sm);
-  color: var(--color-text-on-dark);
+  color: var(--color-on-canvas);
   background-color: rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
@@ -3316,10 +3201,10 @@ body.auth-body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-4);
+  padding: calc(var(--spacing) * 4);
   text-align: center;
   font-size: 0.85rem;
-  color: var(--color-text-muted);
+  color: var(--color-fg-muted);
   height: auto;
   min-height: 6rem;
 }

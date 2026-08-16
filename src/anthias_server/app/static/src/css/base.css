@@ -48,6 +48,22 @@
   /* Focus ring width. Paired with --color-focus-ring. */
   --ring-width: 0.1875rem;
 
+  /* ---- Motion ---------------------------------------------------------
+   * Duration and easing as one value. Every transition in the codebase
+   * uses the pair, and v4 has no namespace for a composite, so splitting
+   * them would only make each `transition:` declaration twice as long
+   * for no gain. The easing half is --ease-standard from @theme. */
+  --t-fast: 120ms var(--ease-standard);
+
+  /* The primary button's fill. A gradient cannot be a --color-* token:
+   * that namespace generates `bg-*` utilities, which set
+   * background-color, where a gradient is invalid. */
+  --gradient-accent: linear-gradient(
+    133.73deg,
+    var(--color-sun-300),
+    var(--color-sun-500)
+  );
+
   /* ---- Icon sizes -----------------------------------------------------
    * Deliberately NOT part of the type ramp. Six of the 27 "font sizes"
    * in the old SCSS were glyph dimensions on an <i>, not text, and

@@ -47,7 +47,19 @@
 /* ========================================================================
  * Tokens
  * ====================================================================== */
-@theme {
+/* `static` forces every token below into :root whether or not Tailwind
+ * can see it used.
+ *
+ * Without it v4 prunes unused theme variables, which is the wrong
+ * default for a design system: a token referenced only from a dynamic
+ * var() — an inline style computed in a template, the /_design/ page's
+ * swatch loop, a value read by JS — is invisible to the scanner and
+ * silently disappears. Pruning only pays when you carry a large unused
+ * palette, and we deleted Tailwind's.
+ *
+ * This does not generate unused utility classes; those are still
+ * emitted on demand. It only guarantees the variables exist. */
+@theme static {
   /* Delete Tailwind's built-in palette so the only colours reachable
    * from markup are the roles declared below. `text-red-600` and
    * `bg-white` become unknown classes that emit nothing, closing the

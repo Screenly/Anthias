@@ -48,7 +48,7 @@ def _light_tokens() -> dict[str, str]:
     """Palette primitives plus the light-theme roles from @theme."""
     tokens = _declarations(PALETTE.read_text())
     entry = ENTRY.read_text()
-    start = entry.index('@theme {')
+    start = entry.index('@theme static {')
     # The @theme block runs to the closing brace at column 0.
     end = entry.index('\n}', start)
     tokens.update(_declarations(entry[start:end]))
@@ -291,4 +291,74 @@ def test_no_bootstrap_grid_breakpoints_in_stylesheets() -> None:
     assert not offenders, (
         'Bootstrap grid-tier breakpoints reintroduced. Breakpoints live '
         'in @theme; use a variant:\n' + '\n'.join(offenders)
+    )
+
+
+# Namespaces that belong to the token layer. A declaration of one of
+# these inside the SCSS is a second source of truth for a name @theme
+# already owns.
+TOKEN_PREFIXES = (
+    '--color-',
+    '--radius-',
+    '--shadow-',
+    '--text-',
+    '--tracking-',
+    '--breakpoint-',
+    '--font-',
+    '--ease-',
+    '--space-',
+    '--scrim-',
+)
+
+# Component-scoped custom properties. These are the .surface pattern:
+# a component declares them on ITS OWN selector and its children read
+# them, which is how .surface--active flips every descendant without a
+# descendant selector. They are local variables, not tokens.
+COMPONENT_LOCAL = (
+    '--color-scheme',  # not a token; the CSS property spelled long
+)
+
+# Anywhere in the line, not just at its start: `:root { --radius-sm: 4px }`
+# on one line is the same reintroduction as a multi-line block. A var()
+# READ never matches, because the name is followed by `)` or `,`, never
+# by a colon.
+_SCSS_DECL = re.compile(r'(--[a-z0-9-]+)\s*:')
+
+
+def test_scss_declares_no_design_tokens() -> None:
+    """The SCSS may READ tokens; it may not DECLARE them.
+
+    This guards the failure that the "single authority" refactor did not
+    actually close on its first pass. _styles.scss kept its own :root
+    block declaring 39 names that @theme also declared, and because
+    anthias.css loads after tailwind.css and both were unlayered, the
+    SCSS won all 39 - @theme won none. Every consequence was silent:
+    --radius-sm rendered 4px while @theme said 0.25rem, and the contrast
+    test above scored @theme values the browser never painted.
+
+    Nothing about that is visible in a diff of either file alone, which
+    is why it needs a test rather than a convention.
+    """
+    offenders = []
+    for sheet in _stylesheets():
+        if sheet.suffix != '.scss':
+            continue
+        for lineno, line in enumerate(sheet.read_text().splitlines(), 1):
+            if line.lstrip().startswith(('//', '*', '/*')):
+                continue
+            for match in _SCSS_DECL.finditer(line):
+                name = match[1]
+                if name in COMPONENT_LOCAL:
+                    continue
+                if name.startswith(TOKEN_PREFIXES):
+                    offenders.append(
+                        f'  {sheet.relative_to(REPO)}:{lineno} {name}'
+                    )
+    assert not offenders, (
+        'Design tokens declared in SCSS. anthias.css loads after '
+        'tailwind.css, so these silently override @theme and nothing '
+        'renders the value the token layer says it does. Declare the '
+        'token in tailwind.css (@theme), palette.css (primitive) or '
+        'base.css (no @theme namespace), and read it here with var():\n'
+        + '\n'.join(offenders)
     )
