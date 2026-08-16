@@ -46,7 +46,7 @@ html {
 body {
   background-color: var(--color-canvas);
   margin: 0;
-  padding-top: 4.5rem;          // app-nav height
+  padding-top: var(--nav-height);
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.5;
@@ -56,7 +56,7 @@ body {
 
 main {
   display: block;
-  min-height: calc(100vh - 4.5rem - 13rem);   // app-nav + footer
+  min-height: var(--content-min-height);
   padding: calc(var(--spacing) * 8) 0 calc(var(--spacing) * 12);
 }
 
@@ -130,7 +130,7 @@ label { text-align: left; }
   --surface-divider: var(--color-border);
   --surface-scrim-2: var(--color-scrim-2);
   --surface-scrim-5: var(--color-scrim-5);
-  --surface-scrim-8: var(--color-scrim-6);
+  --surface-scrim-8: var(--color-scrim-8);
   --surface-scrim-10: var(--color-scrim-10);
   --surface-anchor: var(--color-link);
   --surface-anchor-hover: var(--color-link-hover);
@@ -235,9 +235,15 @@ label { text-align: left; }
   &:hover { background: var(--color-surface-soft); color: var(--color-fg); }
 }
 
+// --color-danger-fill, NOT --color-danger. The two are split precisely
+// for this: the ink lightens in dark mode so it stays readable on a dark
+// surface, and a fill that lightens strands the white label at 2.75:1.
+// The fill stays dark in both themes and carries white at 6.47:1.
+// Graphical uses that carry no text — the load bar, the legend swatch,
+// the map pin — correctly keep --color-danger and do lighten.
 .app-btn-danger {
-  background: var(--color-danger);
-  border-color: var(--color-danger);
+  background: var(--color-danger-fill);
+  border-color: var(--color-danger-fill);
   color: var(--color-on-danger);
   &:hover {
     background: var(--color-danger-fill-hover);
@@ -2004,7 +2010,7 @@ label { text-align: left; }
 // 14. Navbar (component partial reuses these classes)
 // -----------------------------------------------------------------------------
 .app-nav {
-  height: 4.5rem;
+  height: var(--nav-height);
   padding: 0;
   background: rgba(15, 0, 25, 0.7) !important;
   backdrop-filter: blur(10px) saturate(140%);
@@ -2092,8 +2098,6 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 // 15. Footer
 // -----------------------------------------------------------------------------
-$footer-height: 13rem;
-
 #footer {
   margin-top: calc(var(--spacing) * 16);
   background: rgba(15, 0, 25, 0.5);
@@ -2532,7 +2536,7 @@ body.auth-body {
 // -----------------------------------------------------------------------------
 .app-toast-stack {
   position: fixed;
-  top: calc(4.5rem + calc(var(--spacing) * 4));   // below the fixed app-nav
+  top: calc(var(--nav-height) + calc(var(--spacing) * 4));
   right: calc(var(--spacing) * 6);
   z-index: var(--z-toast);
   display: flex;

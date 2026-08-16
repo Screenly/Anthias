@@ -406,3 +406,113 @@ def test_no_magic_z_index_values() -> None:
         'base.css: `z-index: var(--z-modal)` in CSS, or the '
         '`z-(--z-modal)` utility in markup:\n' + '\n'.join(offenders)
     )
+
+
+# Foreground roles that name the background they are legible on. Each
+# maps to the ONLY background token that is guaranteed to carry it.
+#
+# The danger pair is the one with teeth. --color-danger is ink and
+# lightens in dark mode so it stays readable on a dark surface;
+# --color-danger-fill is a button background and deliberately does not,
+# because a fill that lightens strands the white label. Using the ink as
+# a fill measures 2.75:1 in dark, which is what .app-btn-danger did.
+INK_ON_FILL: dict[str, str] = {
+    '--color-on-danger': '--color-danger-fill',
+}
+
+_BG = re.compile(r'\bbackground(?:-color)?\s*:\s*var\((--[a-z0-9-]+)\)')
+# NOT background-color or border-color. A bare \b would match the tail of
+# both, since `-` is a non-word character, and every fill would then read
+# as its own foreground.
+_FG = re.compile(r'(?<![-\w])color\s*:\s*var\((--[a-z0-9-]+)\)')
+
+
+def _blocks(scss: str) -> list[tuple[str, str, int]]:
+    """Every rule block as (effective color, background, line).
+
+    Resolved when the block CLOSES, not as declarations stream past:
+    `background` is very often written above `color` in the same block,
+    and a single pass would judge the fill before knowing what text
+    sits on it. That ordering is exactly how .app-btn-danger looked.
+
+    `color` is inherited into nested blocks, so a `&:hover` that sets
+    only a background is still checked against its parent's colour.
+    """
+    scss = re.sub(r'/\*.*?\*/', ' ', scss, flags=re.DOTALL)
+    scss = re.sub(r'//[^\n]*', ' ', scss)
+    out: list[tuple[str, str, int]] = []
+    # Each frame: [inherited-or-own color, [(background, line), ...]]
+    stack: list[list] = [['', []]]
+    buf = ''
+    line = 1
+    for char in scss:
+        if char == '\n':
+            line += 1
+        if char == '{':
+            stack.append([stack[-1][0], []])
+            buf = ''
+        elif char == '}':
+            colour, backgrounds = stack.pop() if len(stack) > 1 else ('', [])
+            out += [(colour, bg, at) for bg, at in backgrounds]
+            if not stack:
+                stack = [['', []]]
+            buf = ''
+        elif char == ';':
+            fg = _FG.search(buf)
+            if fg:
+                stack[-1][0] = fg[1]
+            bg = _BG.search(buf)
+            if bg:
+                stack[-1][1].append((bg[1], line))
+            buf = ''
+        else:
+            buf += char
+    return out
+
+
+def test_ink_tokens_are_not_used_as_fills() -> None:
+    """A background carrying on-* text must be that text's fill token.
+
+    Only pairs are flagged, never a bare background: a graphical fill
+    with no text on it — the load-average bar, a legend swatch, the map
+    pin — correctly uses the ink role and correctly lightens in dark.
+    """
+    scss = (SASS / '_styles.scss').read_text()
+    offenders = []
+    for fg, bg, line in _blocks(scss):
+        expected = INK_ON_FILL.get(fg)
+        # The whole family is allowed: -fill, -fill-hover, -fill-active
+        # are one ramp, and the next test holds every rung to AA.
+        if expected and not bg.startswith(expected):
+            offenders.append(
+                f'  _styles.scss:{line} color {fg} on background {bg}, '
+                f'expected {expected}*'
+            )
+    assert not offenders, (
+        'A foreground role is painted on a background that is not its '
+        'guaranteed partner, so contrast is whatever the two happen to '
+        'measure in each theme:\n' + '\n'.join(offenders)
+    )
+
+
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_every_fill_in_a_ramp_carries_its_ink(theme: str) -> None:
+    """Each rung of a fill ramp, not just the resting one.
+
+    The guard above lets a component use any --color-danger-fill* token.
+    That is only safe if every rung carries the ink, so hover and active
+    are measured here rather than assumed to track the base.
+    """
+    tokens = _light_tokens() if theme == 'light' else _dark_tokens()
+    failures = []
+    for ink, prefix in INK_ON_FILL.items():
+        rungs = sorted(n for n in tokens if n.startswith(prefix))
+        assert rungs, f'no fill rungs found for {prefix}'
+        for fill in rungs:
+            ratio = contrast(ink, fill, tokens, backdrop=fill)
+            if ratio < AA:
+                failures.append(f'  {ink} on {fill}: {ratio:.2f}:1')
+    assert not failures, (
+        f'Fill rungs below {AA}:1 in the {theme} theme:\n'
+        + '\n'.join(failures)
+    )
