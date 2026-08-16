@@ -7,10 +7,12 @@ a single request exercises the whole component library, so a template
 that fails to compile fails a fast unit test instead of surfacing in a
 Playwright run or, worse, on a device.
 
-Dev-only. The route is registered in urls.py behind ``settings.DEBUG``,
-so production images (ENVIRONMENT=production, hence DEBUG=False) never
-expose it. The guard lives at route registration rather than inside the
-view so there is no way to reach it at all.
+Dev-only. The route is registered in urls.py behind ``settings.DEBUG or
+settings.IS_TEST``, so a production image (ENVIRONMENT=production, where
+both are false) never exposes it. The guard lives at route registration
+rather than inside the view, so there is no view to reach. IS_TEST is
+part of the condition because pytest-django sets ``settings.DEBUG =
+False`` for the duration of a run; see the comment in urls.py.
 
 The catalogues below are data, not markup, so the template stays a
 handful of loops and adding a token means adding one tuple.

@@ -1,22 +1,30 @@
-/* Anthias design system: the single source of truth.
+/* Anthias design system: the token layer.
  *
- * This file is the ONLY place a design value may be written. Every
- * colour, size, radius, shadow, duration, z-index and breakpoint lives
- * in the @theme block below; everything else in the codebase reaches
- * them through a Tailwind utility (bg-surface, p-4, lg:flex) or, where
- * utilities genuinely cannot express the thing, through var() from a
- * file under css/.
+ * Every design value is declared once, in one of three files, and
+ * everything else reaches it through a Tailwind utility (bg-surface,
+ * p-4, lg:flex) or through var():
  *
- * Output is ONE stylesheet, dist/css/anthias.css, linked by all four
- * document roots (base.html, login.html, _error.html, splash-page.html).
+ *   this file      colour roles and every scale with an @theme
+ *                  namespace: type, tracking, radii, shadows, easing,
+ *                  breakpoints
+ *   css/palette.css  primitives the roles resolve to, kept OUT of
+ *                  @theme so they cannot become utility classes
+ *   css/base.css   the rest — z-index, layout constants, icon sizes,
+ *                  motion. Not a lesser tier: they live there only
+ *                  because v4 has no @theme namespace to hold them.
+ *
+ * Two stylesheets are built, and both are linked by all four document
+ * roots (base.html, login.html, _error.html, splash-page.html):
+ *
+ *   dist/css/tailwind.css   this file — tokens, preflight, utilities
+ *   dist/css/anthias.css    sass/_styles.scss — the .app-* components
+ *
+ * anthias.css loads SECOND and both are unlayered, so a declaration
+ * there beats the same name here. That is why _styles.scss declares no
+ * tokens at all, enforced by tests/test_design_tokens.py.
+ *
  * Tabler Icons stays a separate <link>: it references its font files
  * with relative URLs that would not resolve from our bundle.
- *
- * Custom CSS is imported at the bottom rather than compiled separately.
- * That is load-bearing: Tailwind reads those files, so the tokens they
- * reference are marked used and kept in :root, while tokens nothing
- * references anywhere are pruned. One authority, no duplication, no
- * dead tokens.
  */
 
 /* `source(none)` disables Tailwind's automatic scan of the working

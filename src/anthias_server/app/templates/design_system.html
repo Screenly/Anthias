@@ -289,9 +289,16 @@
   <section class="ds-section" id="breakpoints">
     <h2>Breakpoints</h2>
     <p class="ds-lede">
-      Written once, in <code>@theme</code>. Markup uses <code>lg:</code>,
-      hand-written CSS uses <code>@variant lg</code>, both resolve here.
-      Never write a raw <code>@media (max-width: …)</code>.
+      Written once, in <code>@theme</code>. Markup uses <code>lg:</code>
+      and CSS that Tailwind compiles (<code>base.css</code>,
+      <code>theme-dark.css</code>) uses <code>@variant lg</code>; both
+      resolve here. The component sheet is different:
+      <code>_styles.scss</code> is compiled by sass and never passes
+      through Tailwind, so <code>@variant</code> is not available to it
+      and it writes plain media queries against these same pixel values.
+      A few component rules there use off-scale widths (420, 540, 720,
+      880, 1100) for the case where a component runs out of room rather
+      than the page.
     </p>
     <div class="ds-card">
       {% for token, rem, px in breakpoints %}
