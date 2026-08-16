@@ -21,7 +21,7 @@
 <header class="bg-brand-dark py-16 md:py-20 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto">
         <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">API Reference</h1>
-        <p class="text-white/60 text-lg mt-4 max-w-2xl">{{ $spec.info.title }} v{{ $spec.info.version }} — manage assets, device settings, backups, and integrations over HTTP.</p>
+        <p class="text-white/60 text-lg mt-4 max-w-2xl">{{ $spec.info.title }} v{{ $spec.info.version }}. Manage assets, device settings, backups, and integrations over HTTP.</p>
         <div class="mt-6 flex flex-wrap gap-2">
             {{- range $tags -}}
             <a href="#tag-{{ . | urlize }}" class="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition">{{ . }}</a>
@@ -29,6 +29,14 @@
         </div>
     </div>
 </header>
+
+{{- with .Content -}}
+<section class="bg-white pt-16 lg:pt-20 px-6 md:px-12 lg:px-20">
+    <article class="docs-prose max-w-3xl mx-auto">
+        {{ . }}
+    </article>
+</section>
+{{- end -}}
 
 <section class="bg-white py-16 lg:py-20 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto space-y-16">

@@ -151,6 +151,86 @@
       </template>
     </section>
 
+    {% comment %}
+      Scheduled display power. Deliberately NOT gated on cec_available:
+      when no CEC display answers, the schedule falls back to the
+      viewer's local blanking, so it is useful on a plain monitor too.
+    {% endcomment %}
+    <section class="settings-section">
+      <header>
+        <div>
+          <h2>Display schedule</h2>
+          <p class="settings-section__lede">
+            Switch the screen off outside opening hours. A TV that supports
+            HDMI-CEC powers down; any other display goes black.
+          </p>
+        </div>
+      </header>
+
+      <div x-data="{ enabled: {{ display_power_schedule_enabled|yesno:'true,false' }} }">
+        <div @change="enabled = $event.target.checked">
+          {% include "_settings_toggle.html" with name="display_power_schedule_enabled" label="Enable schedule" hint="Outside the hours below, the screen switches off." checked=display_power_schedule_enabled %}
+        </div>
+
+        {% comment %}
+          x-cloak matches the asset modal's collapsible sections: without
+          it the fields flash open on first paint before Alpine
+          initialises and applies x-show.
+        {% endcomment %}
+        <div x-show="enabled" x-cloak class="mt-4">
+          {% comment %}
+            type="time" rather than the .js-flatpickr-time treatment used
+            in the asset modal — flatpickr is initialised in home.ts,
+            which this page does not load.
+          {% endcomment %}
+          <div class="app-form-grid mb-4">
+            <div class="app-floating">
+              <input
+                type="time"
+                class="app-input"
+                id="display_power_on_time"
+                name="display_power_on_time"
+                value="{{ display_power_on_time }}"
+                placeholder=" ">
+              <label for="display_power_on_time">Turn on at</label>
+            </div>
+            <div class="app-floating">
+              <input
+                type="time"
+                class="app-input"
+                id="display_power_off_time"
+                name="display_power_off_time"
+                value="{{ display_power_off_time }}"
+                placeholder=" ">
+              <label for="display_power_off_time">Turn off at</label>
+            </div>
+          </div>
+
+          <p class="settings-section__lede mb-3">
+            Active days. An overnight schedule belongs to the day it starts —
+            18:00 to 06:00 on Friday runs into Saturday morning.
+          </p>
+          {% comment %}
+            Same .weekday-picker pill chips the asset modal and bulk-edit
+            modal use for choosing days, so the two places in the product
+            that pick weekdays look and behave identically.
+          {% endcomment %}
+          <div class="weekday-picker">
+            {% for value, label in weekday_options %}
+            <label class="weekday">
+              <input
+                type="checkbox"
+                name="display_power_days"
+                value="{{ value }}"
+                {% if value in display_power_days %}checked{% endif %}>
+              <span>{{ label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="flex justify-end">
       <button type="submit" class="app-btn app-btn-primary">
         <i class="ti ti-check"></i><span>Save settings</span>

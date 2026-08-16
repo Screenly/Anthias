@@ -120,21 +120,17 @@ def _install_dbus_stubs() -> None:
         # touches these when a bus is actually constructed (e.g.
         # ``pydbus.SessionBus()`` inside a function body); tests that
         # hit those paths mock them themselves.
-        setattr(gi_repository, 'Gio', MagicMock(name='gi.repository.Gio'))
-        setattr(gi_repository, 'GLib', MagicMock(name='gi.repository.GLib'))
-        setattr(
-            gi_repository, 'GObject', MagicMock(name='gi.repository.GObject')
-        )
-        setattr(gi_module, 'repository', gi_repository)
+        gi_repository.Gio = MagicMock(name='gi.repository.Gio')  # type: ignore[attr-defined]
+        gi_repository.GLib = MagicMock(name='gi.repository.GLib')  # type: ignore[attr-defined]
+        gi_repository.GObject = MagicMock(name='gi.repository.GObject')  # type: ignore[attr-defined]
+        gi_module.repository = gi_repository  # type: ignore[attr-defined]
         sys.modules['gi'] = gi_module
         sys.modules['gi.repository'] = gi_repository
 
     if pydbus_missing or gi_missing:
         pydbus_module = types.ModuleType('pydbus')
-        setattr(
-            pydbus_module, 'SessionBus', MagicMock(name='pydbus.SessionBus')
-        )
-        setattr(pydbus_module, 'SystemBus', MagicMock(name='pydbus.SystemBus'))
+        pydbus_module.SessionBus = MagicMock(name='pydbus.SessionBus')  # type: ignore[attr-defined]
+        pydbus_module.SystemBus = MagicMock(name='pydbus.SystemBus')  # type: ignore[attr-defined]
         sys.modules['pydbus'] = pydbus_module
 
 
@@ -365,3 +361,37 @@ def _mock_redis(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
 
     ViewerPublisher.INSTANCE = None
     ReplyCollector.INSTANCE = None
+
+
+@pytest.fixture
+def _isolated_settings_conf(tmp_path: Any) -> Any:
+    """Redirect the settings singleton's config file to a per-test temp
+    path so ``settings.save()`` writes — whether direct or through the
+    ``settings_save`` view — never touch the real
+    ``~/.anthias/anthias.conf``.
+
+    Without this, a settings-mutating test leaks its posted values onto
+    the shared on-device config and silently breaks later tests that
+    read defaults back from it. Concretely, the integration suite's
+    ``test_add_asset_via_url`` asserts a new asset inherits
+    ``default_duration``; it fails with ``assert 10 == 0`` when a
+    sibling here has already persisted a different value to disk (only
+    when both suites run against the same ``/data`` volume — CI dodges
+    it by isolating the two jobs). Generalises the same conf_file
+    redirect already used by ``_reset_review_cta``.
+    """
+    from anthias_server.settings import settings
+
+    original_conf_file = settings.conf_file
+    try:
+        # Inside the try so a failure in the reassignment or the initial
+        # save() can't leave conf_file pointed at the temp path for the
+        # rest of the session — the finally always restores it.
+        settings.conf_file = str(tmp_path / 'anthias.conf')
+        settings.save()
+        yield
+    finally:
+        # Point back at the real config and reload so the singleton's
+        # in-memory state is restored for any later test.
+        settings.conf_file = original_conf_file
+        settings.load()

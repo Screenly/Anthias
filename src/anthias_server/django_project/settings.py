@@ -349,7 +349,7 @@ if not DEBUG:
 else:
     # SECURITY WARNING: keep the secret key used in production secret!
     SECRET_KEY = (
-        'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'  # noqa: E501
+        'django-insecure-7rz*$)g6dk&=h-3imq2xw*iu!zuhfb&w6v482_vs!w@4_gha=j'
     )
 
 # Anthias is a local-network signage device with no fixed public
@@ -469,7 +469,26 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [(getenv('REDIS_HOST', 'redis'), 6379)],
+            # channels_redis polls each channel with a blocking BZPOPMIN
+            # whose server-side timeout is brpop_timeout (5s). redis-py
+            # 8.0.1 introduced a default 5s async socket read timeout
+            # (DEFAULT_SOCKET_TIMEOUT = 5); with no override the blocking
+            # read inherits it and an empty 5s poll races the socket
+            # timeout, raising "Timeout reading from redis:6379" on every
+            # cycle of an open WebSocket (issue #3228).
+            #
+            # Keep a read timeout so a genuinely dead redis connection is
+            # still detected, but set it well above the 5s poll so it
+            # cannot race: 15s = 3x brpop_timeout, leaving margin for a
+            # slow / memory-pressured board to return the empty poll
+            # before the socket read gives up.
+            'hosts': [
+                {
+                    'host': getenv('REDIS_HOST', 'redis'),
+                    'port': 6379,
+                    'socket_timeout': 15,
+                }
+            ],
         },
     },
 }
@@ -595,12 +614,10 @@ def is_valid_time_zone(
         zoneinfo.ZoneInfo(time_zone)
     except (ValueError, zoneinfo.ZoneInfoNotFoundError):
         return False
-    if (
+    return not (
         zoneinfo_root.exists()
         and not zoneinfo_root.joinpath(*time_zone.split('/')).exists()
-    ):
-        return False
-    return True
+    )
 
 
 def get_host_time_zone(

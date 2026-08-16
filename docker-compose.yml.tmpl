@@ -15,6 +15,18 @@ services:
       - LISTEN=0.0.0.0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # HTTP proxy support (GH #3239). upgrade_containers.sh sources
+      # /etc/anthias/proxy.env before envsubst, so these substitute to
+      # the configured proxy (or empty strings when none is set, which
+      # every client treats as "no proxy"). NO_PROXY already includes the
+      # anthias-server/redis service names so internal traffic bypasses
+      # the proxy.
+      - HTTP_PROXY=${HTTP_PROXY}
+      - HTTPS_PROXY=${HTTPS_PROXY}
+      - NO_PROXY=${NO_PROXY}
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy}
     # Gate startup on redis actually answering PING (see the
     # healthcheck on the redis service below) — plain service_started
     # only orders container creation, so uvicorn's first Channels /
@@ -25,8 +37,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+    # No `devices:` here, deliberately. This service needs no hardware
+    # access at all: HDMI-CEC is driven by the anthias-viewer container
+    # (privileged, so it already sees every /dev/cec*) and reached over
+    # the Redis command bus — see src/anthias_server/lib/cec_client.py.
+    # /dev/vchiq used to be listed for libcec's display-power probe,
+    # which is gone.
     restart: always
     volumes:
       - resin-data:/data
@@ -74,6 +90,14 @@ services:
       - LANG=${LANG}
       - LANGUAGE=${LANGUAGE}
       - LC_ALL=${LC_ALL}
+      # HTTP proxy support (GH #3239) — also picked up by QtWebEngine
+      # (Chromium reads http_proxy/https_proxy on Linux) for web assets.
+      - HTTP_PROXY=${HTTP_PROXY}
+      - HTTPS_PROXY=${HTTPS_PROXY}
+      - NO_PROXY=${NO_PROXY}
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy}
     privileged: true
     restart: always
     # cage (the wlroots kiosk compositor used on Pi 5 / x86 /
@@ -141,8 +165,19 @@ services:
       - HOME=/data
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    devices:
-      - "/dev/vchiq:/dev/vchiq"
+      # HTTP proxy support (GH #3239) — the celery worker downloads URL
+      # assets (requests, honours these) and shells out to yt-dlp (inherits
+      # the container env).
+      - HTTP_PROXY=${HTTP_PROXY}
+      - HTTPS_PROXY=${HTTPS_PROXY}
+      - NO_PROXY=${NO_PROXY}
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy}
+    # See the note on anthias-server: no hardware access needed. Celery
+    # runs the periodic display-power query and the schedule, but it
+    # asks anthias-viewer to do the CEC work rather than opening the
+    # devices itself.
     restart: always
     volumes:
       - resin-data:/data

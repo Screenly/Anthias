@@ -285,9 +285,11 @@ def test_subscriber_run_signals_ready_then_exits_on_loop_break(
         sleep_calls.append(delay)
         raise SystemExit  # break out of while True
 
-    with mock.patch('anthias_viewer.messaging.sleep', side_effect=fake_sleep):
-        with pytest.raises(SystemExit):
-            sub.run()
+    with (
+        mock.patch('anthias_viewer.messaging.sleep', side_effect=fake_sleep),
+        pytest.raises(SystemExit),
+    ):
+        sub.run()
 
     # First subscribe succeeded → readiness signalled True before
     # disconnect, then False on connection loss.

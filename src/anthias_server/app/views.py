@@ -29,6 +29,12 @@ from django.utils.http import (
 )
 from django.views.decorators.http import require_http_methods
 
+from anthias_common.utils import (
+    DISK_FULL_ERROR,
+    clamp_screen_rotation,
+    connect_to_redis,
+    is_disk_full,
+)
 from anthias_server.app import page_context
 from anthias_server.app.models import (
     clamp_duration,
@@ -36,19 +42,13 @@ from anthias_server.app.models import (
     parse_header_lines,
 )
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
+from anthias_server.django_project.settings import is_valid_time_zone
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import (
     AuthSettingsError,
     apply_auth_settings,
     authorized,
 )
-from anthias_common.utils import (
-    DISK_FULL_ERROR,
-    clamp_screen_rotation,
-    connect_to_redis,
-    is_disk_full,
-)
-from anthias_server.django_project.settings import is_valid_time_zone
 from anthias_server.settings import ViewerPublisher, settings
 
 from .helpers import (
@@ -97,7 +97,8 @@ def _parse_local_datetime(value: str) -> datetime:
     candidates = [f'{date_fmt} {time_fmt}', f'{date_fmt} %H:%M']
     for fmt in candidates:
         try:
-            return timezone.make_aware(datetime.strptime(value, fmt))
+            # Naive strptime is deliberate — make_aware attaches the tz.
+            return timezone.make_aware(datetime.strptime(value, fmt))  # noqa: DTZ007
         except ValueError:
             continue
     return timezone.make_aware(datetime.fromisoformat(value))
@@ -118,7 +119,8 @@ def _parse_local_time(value: str) -> time:
     value = value.strip()
     for fmt in ('%H:%M', '%I:%M %p'):
         try:
-            return datetime.strptime(value, fmt).time()
+            # Time-of-day only, no date or tz involved.
+            return datetime.strptime(value, fmt).time()  # noqa: DTZ007
         except ValueError:
             continue
     return time.fromisoformat(value)
@@ -233,6 +235,8 @@ def assets_create(request: HttpRequest) -> HttpResponse:
     queued to fetch the file. The "Processing" pill on the table row
     clears once the worker completes.
     """
+    from datetime import timedelta
+
     from anthias_common.remote_video import is_streaming_uri
     from anthias_common.utils import validate_url
     from anthias_common.youtube import (
@@ -241,7 +245,6 @@ def assets_create(request: HttpRequest) -> HttpResponse:
         youtube_destination_path,
     )
     from anthias_server.app.models import Asset
-    from datetime import timedelta
 
     uri = (request.POST.get('uri') or '').strip()
     if not uri or not validate_url(uri):
@@ -397,10 +400,10 @@ def assets_create_app(request: HttpRequest) -> HttpResponse:
     plays.
     """
     import json
+    from datetime import timedelta
 
     from anthias_common.utils import validate_url
     from anthias_server.app.models import Asset
-    from datetime import timedelta
 
     # The launch URL / values are posted as app_uri / app_values (not
     # uri / values) so the Apps form's hidden inputs don't collide with
@@ -490,8 +493,9 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     """File upload tab. Mirrors api.views.mixins.FileAssetViewMixin.post:
     move the upload into assetdir, create an Asset row, return the
     table partial so HTMX can swap straight in."""
-    from anthias_server.app.models import Asset
     from datetime import timedelta
+
+    from anthias_server.app.models import Asset
 
     # ``request.FILES`` triggers the (lazy) multipart parse, which
     # spools the body to a temp file — on a full disk that write is
@@ -656,8 +660,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     final_path = path.join(settings['assetdir'], f'{final_name}{src_ext}')
     try:
         with open(final_path, 'wb') as f:
-            for chunk in file_upload.chunks():
-                f.write(chunk)
+            f.writelines(file_upload.chunks())
     except OSError as exc:
         if not is_disk_full(exc):
             raise
@@ -682,13 +685,15 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     #     The set lives in one place so adding a new format only
     #     touches that constant — this comment is intentionally
     #     not the source of truth.
-    from anthias_server.processing import needs_image_normalisation
+    from anthias_server.processing import needs_image_processing
 
     is_video = mimetype == 'video'
-    needs_image_normalize = mimetype == 'image' and needs_image_normalisation(
+    # Either reason earns the Celery hop: a format that needs converting
+    # to WebP, or a JPEG/PNG too large for a low-RAM board to render.
+    needs_image_pipeline = mimetype == 'image' and needs_image_processing(
         final_path
     )
-    is_processing = is_video or needs_image_normalize
+    is_processing = is_video or needs_image_pipeline
 
     duration = settings['default_duration']
 
@@ -737,7 +742,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             ),
             offer_review_cta=True,
         )
-    if needs_image_normalize:
+    if needs_image_pipeline:
         from anthias_server.processing import dispatch_normalize_image
 
         dispatch_normalize_image(asset.asset_id)
@@ -852,8 +857,10 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
             request,
             toast=(
                 'error',
-                'Set both play from and until times, or clear both '
-                '— not saved',
+                (
+                    'Set both play from and until times, or clear both '
+                    '— not saved'
+                ),
             ),
         )
     else:
@@ -916,8 +923,10 @@ def assets_update(request: HttpRequest, asset_id: str) -> HttpResponse:
                 request,
                 toast=(
                     'error',
-                    'That app URL is not from a recognised '
-                    'app store — not saved',
+                    (
+                        'That app URL is not from a recognised '
+                        'app store — not saved'
+                    ),
                 ),
             )
         try:
@@ -1199,8 +1208,10 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
                     request,
                     toast=(
                         'error',
-                        'Could not read the play from/until times '
-                        '— nothing changed',
+                        (
+                            'Could not read the play from/until times '
+                            '— nothing changed'
+                        ),
                     ),
                 )
         elif play_from or play_to:
@@ -1208,8 +1219,10 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
                 request,
                 toast=(
                     'error',
-                    'Set both play from and until times, or clear both '
-                    '— nothing changed',
+                    (
+                        'Set both play from and until times, or clear both '
+                        '— nothing changed'
+                    ),
                 ),
             )
         else:
@@ -1287,8 +1300,10 @@ def assets_bulk_update(request: HttpRequest) -> HttpResponse:
             request,
             toast=(
                 'info',
-                'Duration applies to images and web pages only '
-                '— nothing changed',
+                (
+                    'Duration applies to images and web pages only '
+                    '— nothing changed'
+                ),
             ),
         )
     ViewerPublisher.get_instance().send_to_viewer('reload')
@@ -1620,6 +1635,42 @@ def review_cta_snooze(request: HttpRequest) -> HttpResponse:
     return HttpResponse(status=204)
 
 
+def _apply_display_power_schedule_settings(request: HttpRequest) -> None:
+    """Persist the scheduled display-power fields from the settings form.
+
+    Times are normalised through ``parse_hhmm`` so a malformed value is
+    rejected here and the stored setting keeps its previous value —
+    the Celery beat must never read a time it cannot parse.
+    """
+    from anthias_server.lib import display_power
+
+    settings['display_power_schedule_enabled'] = _checkbox(
+        request, 'display_power_schedule_enabled'
+    )
+
+    for field in ('display_power_on_time', 'display_power_off_time'):
+        raw = (request.POST.get(field) or '').strip()
+        parsed = display_power.parse_hhmm(raw)
+        if parsed is not None:
+            settings[field] = parsed.strftime('%H:%M')
+        elif raw:
+            # Keep the previous value, but say so. Silently discarding
+            # the edit while still reporting "successfully saved" would
+            # show the operator the old time with no sign it was
+            # rejected.
+            messages.error(
+                request, f'Ignored invalid display schedule time: {raw}'
+            )
+
+    # An empty selection means "every day" rather than "no days", which
+    # would leave an enabled schedule silently inert.
+    days = [d for d in request.POST.getlist('display_power_days') if d.strip()]
+    parsed_days = display_power.parse_days(','.join(days))
+    settings['display_power_days'] = ','.join(
+        str(d) for d in sorted(parsed_days)
+    )
+
+
 @authorized
 @require_http_methods(['GET'])
 def settings_view(request: HttpRequest) -> HttpResponse:
@@ -1711,6 +1762,8 @@ def settings_save(request: HttpRequest) -> HttpResponse:
             request.POST.get('screen_rotation')
         )
 
+        _apply_display_power_schedule_settings(request)
+
         settings.save()
         ViewerPublisher.get_instance().send_to_viewer('reload')
 
@@ -1783,8 +1836,7 @@ def settings_recover(request: HttpRequest) -> HttpResponse:
     try:
         publisher.send_to_viewer('stop')
         with open(location, 'wb') as f:
-            for chunk in file_upload.chunks():
-                f.write(chunk)
+            f.writelines(file_upload.chunks())
         try:
             backup_helper.recover(location)
             messages.success(request, 'Recovery successful.')

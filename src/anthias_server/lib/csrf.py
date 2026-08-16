@@ -108,7 +108,7 @@ class SameHostOriginCsrfMiddleware(CsrfViewMiddleware):
     # ``type: ignore`` at the call site. The runtime override itself
     # is well-defined — Django's CSRF middleware has called this hook
     # since 4.0.
-    def _origin_verified(self, request: 'HttpRequest') -> bool:
+    def _origin_verified(self, request: HttpRequest) -> bool:
         if super()._origin_verified(request):  # type: ignore[misc]
             return True
 

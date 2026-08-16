@@ -57,15 +57,6 @@ Things to know before you pick a board:
 
 Per-SoC hardware video decode (Rockchip `rkmpp`, Allwinner `cedrus`, Amlogic `meson-vdec`) is the planned follow-up; see [issue #2849](https://github.com/Screenly/Anthias/issues/2849).
 
-## :star: Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=Screenly/Anthias&type=Date)](https://star-history.com/#Screenly/Anthias&Date)
-
-## :lady_beetle: Issues and Bugs
-
-> [!NOTE]
-> We are still in the process of knocking out some bugs. You can track the known issues [here](https://github.com/Screenly/Anthias/issues). You can also check the discussions in the [Anthias forums](https://forums.screenly.io).
-
 ## :zap: Quick Links
 
 * [Forum](https://forums.screenly.io/)

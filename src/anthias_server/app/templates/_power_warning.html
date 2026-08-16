@@ -1,0 +1,96 @@
+{% load humanize %}
+{% comment %}
+Under-voltage banner. Rendered on every page from the shared navbar
+context, because an operator whose screen is glitching opens the
+Schedule page to look at their content, not a diagnostics tab.
+
+Deliberately not dismissible. An inadequate supply corrupts the
+memory card over time, so the warning should stay until the power is
+fixed rather than until the operator clicks it away.
+
+Copy stays in plain language and names things the operator can
+actually touch (adapter, cable, USB socket), never the sensor or the
+kernel. The mechanism is on System Info behind a disclosure instead.
+
+Semantics: a labelled <section>, not role="alert". The banner is
+present at page load rather than announced dynamically, and
+role="alert" would make a screen reader interrupt whatever the user
+was doing on every single navigation.
+
+Wrapped by _device_alerts.html, which owns the .app-container and the
+spacing between this and the memory-card banner.
+{% endcomment %}
+{% if power_warning %}
+<section
+  class="device-alert {% if not power_warning.active %}device-alert--warning{% endif %}"
+  aria-labelledby="power-alert-title"
+>
+  <div class="device-alert__icon" aria-hidden="true">
+    <i class="ti {% if power_warning.active %}ti-plug-off{% else %}ti-alert-triangle{% endif %}"></i>
+  </div>
+
+  <div class="device-alert__body">
+    {% if power_warning.active %}
+    <h2 class="device-alert__title" id="power-alert-title">
+      This player isn't getting enough power
+    </h2>
+    <p class="device-alert__lede">
+      The power supply can't keep up with what this player needs. That's
+      what makes the picture freeze or glitch and stray text appear at
+      the edge of the screen. Left alone, it can also corrupt the memory
+      card until the player stops starting up.
+    </p>
+    {% else %}
+    <h2 class="device-alert__title" id="power-alert-title">
+      This player briefly lost power
+    </h2>
+    <p class="device-alert__lede">
+      The power dropped too low
+      {% if power_warning.count > 1 %}{{ power_warning.count|intcomma }} times{% else %}once{% endif %}
+      since this player last restarted{% if power_warning.last_seen %},
+      most recently {{ power_warning.last_seen|naturaltime }}{% endif %}.
+      It's steady now, but a supply that struggles under load usually
+      gets worse.
+    </p>
+    {% endif %}
+
+    {% comment %}
+    The official supply leads, and deliberately isn't softened into
+    one option among four: it resolves this in almost every case, and
+    burying it under cable-swapping advice sends operators round a
+    diagnostic loop they don't need. The rest are secondary checks
+    for when the right supply is already fitted.
+
+    Naming Raspberry Pi outright is safe here: the banner only ever
+    renders when the rpi_volt sensor exists, which is Raspberry Pi
+    hardware by definition.
+    {% endcomment %}
+    <p class="device-alert__advice-label">What to do</p>
+    <ul class="device-alert__advice">
+      <li>
+        <strong>Use the official Raspberry Pi power supply for this
+        model.</strong> This is the fix in almost every case. Third-party
+        adapters, even well-reviewed and correctly-rated ones, often
+        can't hold the voltage steady once the player is under load.
+      </li>
+      <li>
+        Use the cable that came with it. A thin or long cable drops
+        enough voltage to cause this on its own, even with the right
+        adapter.
+      </li>
+      <li>
+        Unplug anything powered by the player itself: USB drives, hubs,
+        keyboards.
+      </li>
+      <li>
+        Don't run the player from a TV's USB socket or a phone charger.
+        Neither supplies enough power.
+      </li>
+    </ul>
+  </div>
+
+  <a class="device-alert__link" href="{% url 'anthias_app:system_info' %}">
+    See details<i class="ti ti-arrow-right ml-1" aria-hidden="true"></i>
+  </a>
+</section>
+{% endif %}

@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
+import logging
 import os
-import subprocess
-import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 from anthias_common import device_helper, utils
 
@@ -11,171 +10,139 @@ from anthias_common import device_helper, utils
 # this as an explicit re-export so it stays importable from the old
 # diagnostics path without a lint suppression). Layer-agnostic code
 # imports it from ``anthias_common.version`` directly.
-from anthias_common.version import get_anthias_release as get_anthias_release
+from anthias_common.version import (
+    get_anthias_release as get_anthias_release,  # noqa: PLC0414
+)
+from anthias_server.lib import cec, cec_client
 
+logger = logging.getLogger(__name__)
 
-# Never let this probe reach normal interpreter teardown. On hardware
-# without a usable CEC adapter (e.g. Raspberry Pi 5) libcec's adapter
-# thread aborts as it is torn down ("FATAL: exception not rethrown",
-# SIGABRT), which dumps a multi-MB core every run and eventually fills
-# the disk. The answer is already on stdout by then, so the helper
-# flushes and os._exit(0)s to skip Python/libcec teardown entirely.
-_CEC_QUERY_SCRIPT = """
-import os
-import sys
+# Display power runs on the kernel CEC uABI (see ``lib/cec.py``), not
+# libcec. The functions below are a thin translation layer: they exist
+# only to keep the *wire* shape the v2 System Info API has always had.
+#
+# ``get_display_power`` returns ``str | bool`` and the v2 ``/info``
+# endpoint exposes ``display_power`` as ``string | null``, so external
+# clients already parse ``'True'``/``'False'`` alongside diagnostic
+# strings. Anthias never breaks a published API version, so the values
+# below are deliberately unchanged from the libcec era even though the
+# mechanism underneath is completely different.
 
+#: Adapter present but nothing reachable through it — either no CEC
+#: link at all (nothing plugged in, or the sink's EDID carries no CEC
+#: block) or a link with nothing that answers. Both are the normal
+#: state for a plain desktop monitor, which is a large share of
+#: signage installs, so neither is reported as a fault (GH #3267).
+_NO_DISPLAY = 'No CEC display detected'
 
-def _done(text):
-    sys.stdout.write(text)
-    sys.stdout.flush()
-    os._exit(0)
+#: More than one display is attached and they disagree about power
+#: state. Only reachable now that operations fan out across every
+#: adapter instead of picking one.
+_MIXED = 'Mixed'
 
+#: The only value here that actually means "something is wrong".
+_CEC_ERROR = 'CEC error'
 
-try:
-    import cec
-    cec.init()
-    tv = cec.Device(cec.CECDEVICE_TV)
-except Exception:
-    _done('CEC error')
-try:
-    _done('True' if tv.is_on() else 'False')
-except IOError:
-    _done('Unknown')
-"""
-
-# Issued from the settings page / REST endpoint, *not* from a celery
-# worker, so a hung libcec call would block the request thread until
-# the subprocess timeout fires. Same subprocess+timeout shape as
-# `_CEC_QUERY_SCRIPT` for the same reason: libcec C calls don't
-# honour Python signals. Same os._exit(0) on the way out, too, to
-# avoid the teardown abort + core dump described above.
-_CEC_SET_SCRIPT = """
-import os
-import sys
-
-
-def _done(text):
-    sys.stdout.write(text)
-    sys.stdout.flush()
-    os._exit(0)
-
-
-try:
-    import cec
-    cec.init()
-    tv = cec.Device(cec.CECDEVICE_TV)
-except Exception as exc:
-    _done('ERROR: ' + (str(exc) or 'CEC stack unavailable'))
-try:
-    if {on}:
-        tv.power_on()
-    else:
-        tv.standby()
-    _done('OK')
-except Exception as exc:
-    _done('ERROR: ' + (str(exc) or 'CEC command failed'))
-"""
+_STATUS_TO_LEGACY: dict[cec.PowerStatus, str | bool] = {
+    cec.PowerStatus.ON: True,
+    cec.PowerStatus.STANDBY: False,
+    cec.PowerStatus.NO_ADAPTER: 'No CEC adapter',
+    cec.PowerStatus.NO_LINK: _NO_DISPLAY,
+    cec.PowerStatus.NO_PEER: _NO_DISPLAY,
+    cec.PowerStatus.UNKNOWN: _MIXED,
+    # A display that is warming up or shutting down is not a fault. The
+    # module-level aggregate currently folds this into UNKNOWN, but
+    # CecAdapter.power_status() returns it directly, so mapping it here
+    # stops a future caller reporting a healthy TV as broken.
+    cec.PowerStatus.TRANSITIONING: 'Transitioning',
+    # "We could not ask" — the node would not open, an ioctl failed, or
+    # we could not claim a place on the bus. Kept distinct from
+    # _NO_DISPLAY on purpose: only this one is a fault.
+    cec.PowerStatus.ERROR: _CEC_ERROR,
+}
 
 
 def get_display_power() -> str | bool:
-    """
-    Queries the TV using CEC.
+    """Power state of the attached display(s), aggregated over every port.
 
-    The CEC stack can block inside libcec (no HDMI link, TV asleep,
-    adapter unresponsive) in a C call that ignores Python signals,
-    which would tie up the celery worker until it hits its hard
-    time_limit and gets SIGKILL'd. Run the query in a subprocess so
-    we can enforce a timeout and recover cleanly.
+    ``True``/``False`` mean every display that answered is on / in
+    standby. Anything else is a diagnostic string — see
+    ``_STATUS_TO_LEGACY``.
+
+    Unlike the libcec implementation this replaced, there is no
+    subprocess, no 10s timeout and no core-dump workaround: the kernel
+    ioctls that back this answered in 0.0-0.1ms on every board in the
+    testbed fleet, and a transmit to an unresponsive monitor NACKs in
+    well under a second.
     """
     try:
-        result = subprocess.run(
-            [sys.executable, '-c', _CEC_QUERY_SCRIPT],
-            capture_output=True,
-            timeout=10,
-        )
-    except subprocess.TimeoutExpired:
-        return 'CEC error'
-
-    output = result.stdout.decode('utf-8', errors='replace').strip()
-    if output == 'True':
-        return True
-    if output == 'False':
-        return False
-    return output or 'CEC error'
+        status = cec_client.power_status()
+    except cec_client.ViewerUnavailableError as exc:
+        # The viewer owns the hardware; if it did not answer we know
+        # nothing about the display. Reported as an error rather than
+        # "no display", because this one really is a fault.
+        logger.warning('Display power query failed: %s', exc)
+        return _CEC_ERROR
+    return _STATUS_TO_LEGACY.get(status, _CEC_ERROR)
 
 
 def set_display_power(on: bool) -> tuple[bool, str]:
-    """Send a CEC power_on / standby to the connected TV.
+    """Turn the attached display(s) on or off over CEC.
 
-    Returns ``(ok, message)`` for direct surfacing to the operator as
-    a toast. Stays synchronous on purpose — the issue brief asks for
-    an immediate feedback loop so failed CEC commands aren't silent.
+    Fans out to **every** adapter with a live link rather than picking
+    one. A device can have more than one display attached (two HDMI
+    ports on a Pi 4/5, more on x86), and powering down only the first
+    would leave the other lit.
+
+    Returns ``(ok, message)`` for direct surfacing to the operator as a
+    toast, and stays synchronous on purpose so a failed command is not
+    silent.
     """
-    script = _CEC_SET_SCRIPT.format(on='True' if on else 'False')
     verb = 'on' if on else 'off'
     try:
-        result = subprocess.run(
-            [sys.executable, '-c', script],
-            capture_output=True,
-            timeout=10,
-        )
-    except subprocess.TimeoutExpired:
-        return (
-            False,
-            f'Display turn-{verb} timed out — CEC adapter unresponsive.',
-        )
+        acknowledged, attempted = cec_client.set_power(on)
+    except cec_client.ViewerUnavailableError as exc:
+        return False, f'Display turn-{verb} failed: {exc}'
 
-    output = result.stdout.decode('utf-8', errors='replace').strip()
-    if output == 'OK':
-        return True, f'Display turn-{verb} command sent.'
-    if output.startswith('ERROR: '):
+    if not attempted:
         return False, (
-            f'Display turn-{verb} failed: '
-            f'{_trim_cec_detail(output[len("ERROR: ") :])}'
+            f'Display turn-{verb} failed: no CEC link on any HDMI port.'
         )
-
-    # Subprocess didn't emit one of the two contract sentinels. The
-    # likely causes are an interpreter crash (returncode != 0) or
-    # libcec writing its diagnostic to stderr instead of stdout — both
-    # would surface as "unexpected CEC response." without further
-    # detail, which is useless to an operator. Fall back to stderr (or
-    # the raw stdout if non-empty) so the toast / API response carries
-    # something actionable.
-    stderr = result.stderr.decode('utf-8', errors='replace').strip()
-    detail = (
-        stderr or output
-    ) or f'subprocess exited with status {result.returncode}'
-    return False, f'Display turn-{verb} failed: {_trim_cec_detail(detail)}'
-
-
-def _trim_cec_detail(detail: str) -> str:
-    """Sanitize an arbitrarily-sized libcec / Python error blob into a
-    one-line, length-capped toast / JSON message.
-
-    libcec (and the in-subprocess Python) can emit multi-line tracebacks
-    or kilobyte-scale diagnostics on either stdout or stderr. The last
-    non-empty line is almost always the actual exception/error message,
-    so we keep that and drop the rest, then cap to 240 chars so the toast
-    stack doesn't overflow and JSON responses stay small.
-    """
-    lines = [line for line in detail.splitlines() if line.strip()]
-    one_line = lines[-1].strip() if lines else detail.strip()
-    if len(one_line) > 240:
-        one_line = one_line[:237] + '...'
-    return one_line
+    if not acknowledged:
+        # Transmitted fine, nothing acknowledged. Overwhelmingly this
+        # means the attached display simply has no CEC support.
+        return False, (
+            f'Display turn-{verb} was not acknowledged — no CEC-capable '
+            f'display responded.'
+        )
+    if acknowledged < attempted:
+        return True, (
+            f'Display turn-{verb} sent to {acknowledged} of {attempted} '
+            f'displays; the rest did not respond.'
+        )
+    plural = 'display' if attempted == 1 else 'displays'
+    return True, f'Display turn-{verb} command sent to {attempted} {plural}.'
 
 
 def cec_available() -> bool:
-    """Cheap render-time gate for whether to show CEC controls.
+    """Whether this device has any CEC adapter at all.
 
-    Probes only for the device nodes libcec consumes — `/dev/cec0`
-    on mainline kernels (Pi 5, x86 USB adapters when exposed) and
-    `/dev/vchiq` on Pi 1-4 (currently the only one passed into the
-    server container by `docker-compose.yml.tmpl`). A positive result
-    means the adapter *could* work, not that it will: the actual
-    success/failure is surfaced by ``set_display_power``'s toast.
+    Render-time gate for the settings controls and a fast-fail for the
+    REST endpoint. It answers "is there hardware worth showing controls
+    for", **not** "will CEC work here" — no device-node probe can answer
+    the latter, because it depends on the peer display (GH #3267).
+
+    The answer comes from a Redis fact the viewer publishes at startup,
+    because the viewer is the only container that can see ``/dev/cec*``
+    (see ``lib/cec_client``). Reading a key keeps this cheap enough for
+    every settings render.
+
+    ``/dev/vchiq`` is deliberately not consulted. That node was only ever
+    meaningful to libcec, which is gone; on a mainline-KMS kernel libcec
+    could not use it anyway (``No default adapter found``, measured at
+    0.07s).
     """
-    return os.path.exists('/dev/cec0') or os.path.exists('/dev/vchiq')
+    return cec_client.available()
 
 
 def get_uptime() -> float:
@@ -277,14 +244,14 @@ def try_connectivity() -> list[str]:
     result = []
     for url in urls:
         if utils.url_fails(url):
-            result.append('{}: Error'.format(url))
+            result.append(f'{url}: Error')
         else:
-            result.append('{}: OK'.format(url))
+            result.append(f'{url}: OK')
     return result
 
 
 def get_utc_isodate() -> str:
-    return datetime.isoformat(datetime.utcnow())
+    return datetime.now(UTC).isoformat()
 
 
 def get_debian_version() -> str:

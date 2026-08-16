@@ -32,6 +32,15 @@ updates:
     ignore:
       - dependency-name: "Django"
         update-types: ["version-update:semver-major"]
+      # pillow-heif >= 1.5.0 requires libheif >= 1.23.1 to build from
+      # source; Debian trixie ships libheif 1.19.8. arm64/x86 use a
+      # prebuilt wheel and are fine, but armhf (pi2/pi3) has no wheel and
+      # the source build fails, taking the whole master build matrix red
+      # (see the 1.4.0 pin in pyproject.toml). Hold at 1.4.x until trixie
+      # carries libheif >= 1.23.1 or 1.5.x ships armhf wheels; 1.4.x
+      # patch bumps are still allowed.
+      - dependency-name: "pillow-heif"
+        versions: [">=1.5.0"]
   - package-ecosystem: "docker"
     directory: "/"
     schedule:

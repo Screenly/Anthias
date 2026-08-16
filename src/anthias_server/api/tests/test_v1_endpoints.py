@@ -14,8 +14,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from anthias_server.app.models import Asset
 from anthias_server.api.tests.test_common import ASSET_CREATION_DATA
+from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
 
 
@@ -68,6 +68,19 @@ def test_file_asset(api_client: APIClient, cleanup_asset_dir: None) -> None:
     assert response.status_code == status.HTTP_200_OK
     assert os.path.exists(data['uri'])
     assert data['ext'] == '.png'
+
+
+@pytest.mark.django_db
+def test_file_asset_rejects_list_body(api_client: APIClient) -> None:
+    # DRF parses a JSON array body into a list, so request.data.get(...)
+    # would raise AttributeError (500). The endpoint must reject a
+    # non-dict body with a 400 instead.
+    response = api_client.post(
+        reverse('api:file_asset_v1'),
+        data=['not', 'a', 'dict'],
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db

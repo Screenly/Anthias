@@ -73,6 +73,10 @@
     owner: root
     group: root
   with_items: "{{ anthias_systemd_units }}"
+  # Restart on change so an existing install picks up a unit edit — e.g.
+  # the proxy EnvironmentFile added for GH #3239, which is only read when
+  # the service (re)starts.
+  notify: Restart Anthias systemd units
 
 - name: Enable Anthias systemd services
   ansible.builtin.systemd:

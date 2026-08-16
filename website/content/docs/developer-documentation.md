@@ -14,7 +14,7 @@ Here is a high-level overview of the different components that make Anthias:
 
 These components and their dependencies are mostly installed and handled with Ansible and Docker.
 
-* The **web app** component (`anthias-server`) is the single HTTP entrypoint, served by uvicorn (ASGI). It runs the Django front-end + REST API, serves static assets via WhiteNoise, streams uploaded media at `/anthias_assets/`, and exposes the WebSocket endpoint at `/ws` via Django Channels. Always plain HTTP — TLS is opt-in via the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs (Caddy local CA by default, or Let's Encrypt with `--domain`).
+* The **web app** component (`anthias-server`) is the single HTTP entrypoint, served by uvicorn (ASGI). It runs the Django front-end + REST API, serves static assets via WhiteNoise, streams uploaded media at `/anthias_assets/`, and exposes the WebSocket endpoint at `/ws` via Django Channels. Always plain HTTP, TLS is opt-in via the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs (Caddy local CA by default, or Let's Encrypt with `--domain`).
 * The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video). It fetches media from `anthias-server` over HTTP.
 * The **Celery** (`anthias-celery`) component is for asynchronously queueing and executing tasks outside the HTTP request-response cycle (e.g., yt-dlp downloads, asset cleanup). It pushes asset-update events to connected WebSocket clients via the Redis-backed Channels layer.
 * **Redis** (`redis`) is used as the Celery broker/result backend and as the Channels channel layer.
@@ -178,7 +178,7 @@ you can also run it locally. There are several ways to do this.
 ### Run the linter using `act`
 
 [`act`](https://nektosact.com/) lets you run GitHub Actions locally. This is useful for testing the CI/CD pipeline locally.
-Installation instructions can be found [here](https://nektosact.com/installation/index.html).
+See the [act installation instructions](https://nektosact.com/installation/index.html).
 
 After installing and setting up `act`, run the following command:
 
@@ -191,8 +191,8 @@ on a specific file, you can try the commands in the next section.
 
 ### Running the linter using `uv`
 
-You have to install `uv` first. You can find the installation instructions
-[here](https://docs.astral.sh/uv/getting-started/installation/).
+You have to install `uv` first. See the
+[uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
 After installing uv, run the following commands:
 
@@ -253,19 +253,19 @@ present in a Raspberry Pi with Anthias installed.
 ### `/home/${USER}/anthias/`
 
 * All of the files and folders from the Github repo should be cloned into this directory.
-* On installations created before the rename, this directory is `/home/${USER}/screenly/` &mdash; the installer migrates it to `anthias/` on upgrade and leaves a back-compat symlink at the old path for one release.
+* On installations created before the rename, this directory is `/home/${USER}/screenly/`: the installer migrates it to `anthias/` on upgrade and leaves a back-compat symlink at the old path for one release.
 
 ### `/home/${USER}/.anthias/`
 
-* `default_assets.yml` &mdash; configuration file which contains the default assets that get added to the assets list if enabled
-* `anthias.conf` &mdash; configuration file for web interface settings
+* `default_assets.yml`: configuration file which contains the default assets that get added to the assets list if enabled
+* `anthias.conf`: configuration file for web interface settings
 * `anthias.db` &ndash; database file containing current assets information.
 * On pre-rename installations this directory is `~/.screenly/` containing `screenly.conf` / `screenly.db`; the installer migrates them.
 
 
 ### `/etc/systemd/system/`
 
-* `anthias-host-agent.service` &mdash; starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
+* `anthias-host-agent.service`: starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
 
 ### `/etc/sudoers.d/anthias_overrides`
 
@@ -273,9 +273,9 @@ present in a Raspberry Pi with Anthias installed.
 
 ### `/usr/share/plymouth/themes/anthias`
 
-* `anthias.plymouth` &mdash; Plymouth config file (sets module name, `ImageDir` and `ScriptFile` dir)
+* `anthias.plymouth`: Plymouth config file (sets module name, `ImageDir` and `ScriptFile` dir)
 * `anthias.script` &ndash; plymouth script file that loads and scales the splash screen image during the boot process
-* `splashscreen.png` &mdash; the splash screen image that is displayed during the boot process
+* `splashscreen.png`: the splash screen image that is displayed during the boot process
 
 ## Debugging the Anthias WebView
 
@@ -288,4 +288,11 @@ export QT_QPA_EGLFS_DEBUG=1
 The Anthias WebView is a custom-built web browser based on the [Qt](https://www.qt.io/) toolkit framework.
 The browser is assembled with a Dockerfile and built by a `src/anthias_webview/build_qt#.sh` script.
 
-For further info on these files and more, visit the following link: [https://github.com/Screenly/Anthias/tree/master/src/anthias_webview](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview)
+For further info on these files and more, browse the [`anthias_webview` source directory on GitHub](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview).
+
+## Related documentation
+
+- [QA checklist](/docs/qa/): the manual testing guide referenced above.
+- [Installation options](/docs/install/): set up a device to test your changes on.
+- [API reference](/api/): the REST API you'll build against.
+- [All documentation](/docs/): the full Anthias documentation index.

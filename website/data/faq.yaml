@@ -1,5 +1,18 @@
 - group: About
   items:
+    - question: Is Anthias the same as Screenly OSE?
+      answer: |
+        Yes. Anthias is the current name for the project formerly called
+        **Screenly OSE** (Open Source Edition). It was renamed in December 2022 to
+        clear up the confusion between Screenly, the paid platform, and the
+        open-source project, see the
+        [announcement](https://www.screenly.io/blog/2022/12/06/screenly-ose-now-called-anthias/).
+
+        Nothing was discontinued in the rename. It is the same project, the same
+        maintainers, and the same [repository](https://github.com/Screenly/Anthias).
+        If you are running an older Screenly OSE install, see the
+        [installation options](/docs/install/) to move to a current release.
+
     - question: What is the difference between Anthias and Screenly?
       answer: |
         Anthias is free, open-source digital signage software built by Screenly, Inc. Screenly is a paid, cloud-managed digital signage platform designed for professional multi-screen deployments. You can learn more about the differences on [screenly.io](https://www.screenly.io/screenly-vs-anthias/).
@@ -8,7 +21,7 @@
 
     - question: What hardware do I need?
       answer: |
-        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5, 64-bit x86 PCs (Intel NUC or similar), and — on a best-effort basis — generic 64-bit ARM single-board computers via [Armbian](https://www.armbian.com/) (Rock Pi, Orange Pi, Banana Pi and similar boards). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
+        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5, 64-bit x86 PCs (Intel NUC or similar), and, on a best-effort basis, generic 64-bit ARM single-board computers via [Armbian](https://www.armbian.com/) (Rock Pi, Orange Pi, Banana Pi and similar boards). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
 
     - question: Does Anthias require an internet connection?
       answer: |
@@ -20,7 +33,7 @@
 
     - question: Can I use Anthias commercially?
       answer: |
-        Yes. Anthias is dual-licensed under [GPLv2](https://github.com/Screenly/Anthias/blob/master/LICENSE) and a commercial license. You can deploy it commercially under GPLv2 — including in customer-facing storefronts and lobbies — as long as you comply with the GPL's copyleft terms when redistributing modified versions.
+        Yes. Anthias is dual-licensed under [GPLv2](https://github.com/Screenly/Anthias/blob/master/LICENSE) and a commercial license. You can deploy it commercially under GPLv2, including in customer-facing storefronts and lobbies, as long as you comply with the GPL's copyleft terms when redistributing modified versions.
 
         If you need a non-copyleft license, professional support, or fleet-scale management, see [Screenly](https://www.screenly.io).
 
@@ -32,13 +45,13 @@
   items:
     - question: How do I install Anthias with Raspberry Pi Imager?
       answer: |
-        Open [Raspberry Pi Imager](https://www.raspberrypi.com/software/) (v1.9.4 or newer), click **Choose OS** &rarr; **Other specific-purpose OS** &rarr; **Digital signage and kiosks** &rarr; **Anthias**, then pick the entry that matches your Pi (Pi 2, Pi 3, Pi 4, or Pi 5). Select your SD card under **Choose Storage** and click **Write**. When the flash finishes, insert the card into the Pi and power it on — Anthias boots straight into the dashboard.
+        Open [Raspberry Pi Imager](https://www.raspberrypi.com/software/) (v1.9.4 or newer), click **Choose OS** &rarr; **Other specific-purpose OS** &rarr; **Digital signage and kiosks** &rarr; **Anthias**, then pick the entry that matches your Pi (Pi 2, Pi 3, Pi 4, or Pi 5). Select your SD card under **Choose Storage** and click **Write**. When the flash finishes, insert the card into the Pi and power it on. Anthias boots straight into the dashboard.
 
-        Open `http://<device-ip>` in a browser on the same network to start adding assets. If you want shell access on the device, enable SSH via Raspberry Pi Imager's **OS customization** (gear icon) before flashing — the Anthias image doesn't ship with SSH on by default.
+        Open `http://<device-ip>` in a browser on the same network to start adding assets. If you want shell access on the device, enable SSH via Raspberry Pi Imager's **OS customization** (gear icon) before flashing. The Anthias image doesn't ship with SSH on by default.
 
     - question: How do I update Anthias?
       answer: |
-        If you installed from a disk image or via balenaHub, updates are applied automatically over the air — the device tracks the latest stable release. For command-line installations, re-run the installer (`$HOME/anthias/bin/run_upgrade.sh`) or pull the latest Docker images.
+        If you installed from a disk image or via balenaHub, updates are applied automatically over the air. The device tracks the latest stable release. For command-line installations, re-run the installer (`$HOME/anthias/bin/run_upgrade.sh`) or pull the latest Docker images.
 
     - question: How do I configure Wi-Fi or change networks?
       answer: |
@@ -52,7 +65,7 @@
 
     - question: How do I enable SSH on the device?
       answer: |
-        Whether SSH is enabled depends on the OS image, not on Anthias itself — the installer doesn't touch `sshd`.
+        Whether SSH is enabled depends on the OS image, not on Anthias itself. The installer doesn't touch `sshd`.
 
         * **Anthias Raspberry Pi Imager image**: SSH is *not* on by default. Before flashing, click the gear icon in Raspberry Pi Imager ("OS customization") and check **Enable SSH**, set a username/password (or paste in a public key), and write the SD card. The same Imager dialog can preconfigure Wi-Fi, hostname, and locale.
         * **balenaHub fleets**: SSH is on out of the box via the balena supervisor.
@@ -61,7 +74,7 @@
 
         Then connect with `ssh <user>@<device-ip>`.
 
-    - question: I'm installing Anthias on Debian on x86 and `sudo` is missing — how do I add it?
+    - question: I'm installing Anthias on Debian on x86 and `sudo` is missing, how do I add it?
       answer: |
         A stock Debian install doesn't include `sudo` (and often not `curl` either) if you set a root password during installation. Bootstrap both as root before running the Anthias installer:
 
@@ -76,9 +89,9 @@
 
         If you instead reinstall Debian and leave the root password blank, the Debian installer wires your regular user up as a `sudo` user automatically and you can skip this step.
 
-    - question: Raspberry Pi Imager fails with "Error writing to storage device" on macOS — what's wrong?
+    - question: Raspberry Pi Imager fails with "Error writing to storage device" on macOS, what's wrong?
       answer: |
-        This is a bug in **Raspberry Pi Imager 2.0.2–2.0.7 on macOS**, not in the Anthias image or your SD card. Those versions abort mid-write with *"Error writing to storage device. Some writes failed to complete."* whenever the image is decompressed on the fly — it affects our `.img.xz` images as well as plain `.img` files (rpi-imager [#1605](https://github.com/raspberrypi/rpi-imager/issues/1605), [#1489](https://github.com/raspberrypi/rpi-imager/issues/1489)).
+        This is a bug in **Raspberry Pi Imager 2.0.2–2.0.7 on macOS**, not in the Anthias image or your SD card. Those versions abort mid-write with *"Error writing to storage device. Some writes failed to complete."* whenever the image is decompressed on the fly. It affects our `.img.xz` images as well as plain `.img` files (rpi-imager [#1605](https://github.com/raspberrypi/rpi-imager/issues/1605), [#1489](https://github.com/raspberrypi/rpi-imager/issues/1489)).
 
         The fix was merged upstream in [rpi-imager#1621](https://github.com/raspberrypi/rpi-imager/pull/1621) (May 2026), so the cleanest fix is to **update Raspberry Pi Imager to a release newer than 2.0.7**. If you can't update yet, decompress the image yourself and flash the resulting `.img`:
 
@@ -86,7 +99,7 @@
         xz -d <yyyy>-<mm>-<dd>-anthias-<board>.img.xz
         ```
 
-        Then point Raspberry Pi Imager (or [balenaEtcher](https://etcher.balena.io/)) at the extracted `.img` — flashing an already-decompressed file skips the code path that trips the bug.
+        Then point Raspberry Pi Imager (or [balenaEtcher](https://etcher.balena.io/)) at the extracted `.img`. Flashing an already-decompressed file skips the code path that trips the bug.
 
 - group: Display & playback
   items:
@@ -102,19 +115,19 @@
         display_rotate=3   # 270°
         ```
 
-        Then reboot. If `display_rotate` doesn't take effect on a particular Pi 5 / KMS setup, set the rotation on the kernel cmdline instead — edit `/boot/firmware/cmdline.txt` and append `video=HDMI-A-1:1920x1080@60,rotate=90` (or 180/270) on the same line. Many displays also expose a rotation setting in their own OSD as a fallback.
+        Then reboot. If `display_rotate` doesn't take effect on a particular Pi 5 / KMS setup, set the rotation on the kernel cmdline instead, edit `/boot/firmware/cmdline.txt` and append `video=HDMI-A-1:1920x1080@60,rotate=90` (or 180/270) on the same line. Many displays also expose a rotation setting in their own OSD as a fallback.
 
     - question: How do I change the screen resolution? Does Anthias support 4K?
       answer: |
-        Anthias displays at whatever resolution the OS reports — there's no resolution setting in the dashboard. Set the output mode at the OS level: on Raspberry Pi OS, use `sudo raspi-config` → **Display Options** → **Resolution**, or set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt`.
+        Anthias displays at whatever resolution the OS reports. There's no resolution setting in the dashboard. Set the output mode at the OS level: on Raspberry Pi OS, use `sudo raspi-config` → **Display Options** → **Resolution**, or set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt`.
 
-        4K is supported on Pi 5 / x86 / arm64 — those run the viewer under the `cage` Wayland compositor and the GPU handles the upscale for free. On Pi 4 the viewer renders to the Linux framebuffer directly and mpv hands video scaling to the V3D, so 1080p source on a 4K connector works smoothly; demanding 4K-source video on Pi 4 will drop frames, however, because the V3D doesn't have the bandwidth headroom Pi 5's V3D 7.1 has.
+        4K is supported on Pi 5 / x86 / arm64, those run the viewer under the `cage` Wayland compositor and the GPU handles the upscale for free. On Pi 4 the viewer renders to the Linux framebuffer directly and mpv hands video scaling to the V3D, so 1080p source on a 4K connector works smoothly; demanding 4K-source video on Pi 4 will drop frames, however, because the V3D doesn't have the bandwidth headroom Pi 5's V3D 7.1 has.
 
-    - question: My screen is black or stuck on "Manage the content" — what now?
+    - question: My screen is black or stuck on "Manage the content", what now?
       answer: |
         This usually means the viewer container can't reach the server, or there are no active assets. Try these in order:
 
-        1. SSH in and run `docker compose ps` from `~/anthias/` — all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
+        1. SSH in and run `docker compose ps` from `~/anthias/`: all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
         2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
         3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
         4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders directly to KMS (via `cage` on Pi 5 / x86 / arm64, or Qt `linuxfb` on Pi 2 / Pi 3 / Pi 4) and uses no X server, so `xset` won't help.
@@ -123,7 +136,7 @@
 
     - question: What image and video files can I upload?
       answer: |
-        Pretty much anything you'd take with a phone or download from the web. Photos from iPhones (HEIC), Android phones, scanners, and screenshots all work — Anthias quietly converts unusual formats into something it knows how to display.
+        Pretty much anything you'd take with a phone or download from the web. Photos from iPhones (HEIC), Android phones, scanners, and screenshots all work. Anthias quietly converts unusual formats into something it knows how to display.
 
         Videos work the same way. Drop in a clip from your phone or a camera, or pick something off your computer; if it's not in a format your screen plays smoothly, Anthias prepares it for you in the background. Most files don't need any conversion at all and start playing right away.
 
@@ -131,27 +144,27 @@
 
     - question: Can I display YouTube videos?
       answer: |
-        Yes — paste a YouTube URL into the **Add Asset** dialog. Anthias downloads the video and stores it on the device, so playback is smooth, doesn't buffer, and never shows ads or recommended-video overlays.
+        Yes, paste a YouTube URL into the **Add Asset** dialog. Anthias downloads the video and stores it on the device, so playback is smooth, doesn't buffer, and never shows ads or recommended-video overlays.
 
-        If a particular video fails to load, it's almost always because YouTube has changed something on their end — updating Anthias to the latest release usually fixes it.
+        If a particular video fails to load, it's almost always because YouTube has changed something on their end. Updating Anthias to the latest release usually fixes it.
 
     - question: How do I switch audio between HDMI and the 3.5mm jack?
       answer: |
-        Open the web dashboard, go to **Settings**, and pick **HDMI** or **3.5mm jack** under *Audio output*. The change applies to video assets immediately — no reboot required.
+        Open the web dashboard, go to **Settings**, and pick **HDMI** or **3.5mm jack** under *Audio output*. The change applies to video assets immediately, no reboot required.
 
-        Note: Raspberry Pi 5 only exposes the **HDMI** option in the dropdown — the 3.5mm jack was removed from the Pi 5 hardware, so the dashboard hides that choice on Pi 5 devices.
+        Note: Raspberry Pi 5 only exposes the **HDMI** option in the dropdown. The 3.5mm jack was removed from the Pi 5 hardware, so the dashboard hides that choice on Pi 5 devices.
 
     - question: Does Anthias work on Rock Pi, Orange Pi, Banana Pi, and other non-Pi single-board computers?
       answer: |
-        Yes — on a best-effort basis. If you flash a **Debian-based [Armbian](https://www.armbian.com)** image (Bookworm / Trixie) onto a 64-bit ARM board (Rock Pi, Orange Pi, Banana Pi and similar), the Anthias installer recognises it and sets things up the same way it does on a Raspberry Pi. The dashboard, scheduling, and asset library all work exactly as you'd expect.
+        Yes, on a best-effort basis. If you flash a **Debian-based [Armbian](https://www.armbian.com)** image (Bookworm / Trixie) onto a 64-bit ARM board (Rock Pi, Orange Pi, Banana Pi and similar), the Anthias installer recognises it and sets things up the same way it does on a Raspberry Pi. The dashboard, scheduling, and asset library all work exactly as you'd expect.
 
         **Pick the Debian build of the Armbian image for your board.** The installer wires Docker's apt repository under the Debian namespace; Ubuntu-based Armbian downloads (Jammy / Noble) fail at the very first `apt update` because Docker doesn't publish those codenames there. Supporting Ubuntu-based Armbian is a follow-up.
 
         A few things to know before you pick a board for a serious deployment:
 
         * **Videos play, but the work is done in software.** Raspberry Pi and modern Intel PCs have a dedicated video chip that does the heavy lifting; on these other boards we haven't wired that up yet, so the main CPU is doing the decoding. In practice, anything up to a smooth 720p clip is fine. 1080p is usable on faster boards but can stutter on slower ones. 4K isn't a good fit. **If your content is mostly video, especially HD video walls, stick with a Raspberry Pi 4 / 5 or an x86 mini-PC.**
-        * **Images and web pages are no problem.** Slideshows, dashboards, menus, and most web content run beautifully across the whole range — the limitation above is specifically about video.
-        * **No Anthias boot splash.** Most non-Pi boards don't display our splash — you'll see the kernel boot log scroll on the screen until Anthias starts and shows your first asset (usually a minute or two from power-on). Everything works fine; startup just looks less polished than on a Raspberry Pi.
+        * **Images and web pages are no problem.** Slideshows, dashboards, menus, and most web content run beautifully across the whole range. The limitation above is specifically about video.
+        * **No Anthias boot splash.** Most non-Pi boards don't display our splash. You'll see the kernel boot log scroll on the screen until Anthias starts and shows your first asset (usually a minute or two from power-on). Everything works fine; startup just looks less polished than on a Raspberry Pi.
         * **Tested boards.** Rock Pi 4, Rock 5, Orange Pi 5, and Banana Pi M5 are known to work well. Orange Pi Zero 3 (and other Allwinner H616 / H618 boards) currently have weaker mainline driver support and are best limited to images and web content.
 
         See [issue #2849](https://github.com/Screenly/Anthias/issues/2849) for the roadmap on per-board hardware video acceleration.
@@ -160,11 +173,11 @@
       answer: |
         Not currently. Anthias plays one asset, then immediately switches to the next. Adding crossfades would require composited rendering on the viewer side, which the lightweight Pi WebView pipeline doesn't do. If this matters for your deployment, [Screenly](https://www.screenly.io) supports transitions.
 
-    - question: A multi-language website displays in English instead of my language — how do I fix it?
+    - question: A multi-language website displays in English instead of my language, how do I fix it?
       answer: |
         Anthias sends an HTTP `Accept-Language` header derived from the device's system locale, and sites that ship multiple languages use that header to pick which version to serve. Out of the box the locale is whatever the OS image was built with (usually `en_GB.UTF-8` on the Anthias Raspberry Pi image), so multi-language URL assets default to English. Set the locale to the language you want and the site will follow.
 
-        * **Raspberry Pi OS / Debian:** SSH in and run `sudo raspi-config` → **Localisation Options** → **Locale**, tick the locales you need, then pick one as the default — or, non-interactively, `sudo update-locale LANG=nl_NL.UTF-8` (substitute your locale). Re-run `~/anthias/bin/upgrade_containers.sh` so the new `LANG` is baked into the viewer container.
+        * **Raspberry Pi OS / Debian:** SSH in and run `sudo raspi-config` → **Localisation Options** → **Locale**, tick the locales you need, then pick one as the default, or, non-interactively, `sudo update-locale LANG=nl_NL.UTF-8` (substitute your locale). Re-run `~/anthias/bin/upgrade_containers.sh` so the new `LANG` is baked into the viewer container.
 
         * **balena:** open your fleet/device in the [balena dashboard](https://dashboard.balena-cloud.com/), add a **Device Variable** (or Service Variable scoped to `anthias-viewer`) with name `LANG` and value e.g. `nl_NL.UTF-8`. The balena supervisor restarts the viewer container with the new env var; no SSH needed.
 
@@ -197,9 +210,13 @@
       answer: |
         From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls--ssl).
 
+    - question: Is there a software bill of materials (SBOM) for Anthias?
+      answer: |
+        Yes. Anthias publishes a software bill of materials (SBOM) that lists the components it ships, so you can audit its dependencies for security and compliance. View and download the current SBOMs from the [Anthias Trust Center](https://trust.screenly.io/product/anthias/).
+
     - question: How do I run Anthias behind my own reverse proxy?
       answer: |
-        Most reverse proxies — nginx, Apache (`mod_proxy`), IIS ARR — rewrite the upstream `Host` header by default. When that happens, Django's CSRF protection rejects every POST with `Origin checking failed` and uploads, asset changes, and settings updates all fail.
+        Most reverse proxies (nginx, Apache `mod_proxy`, IIS ARR) rewrite the upstream `Host` header by default. When that happens, Django's CSRF protection rejects every POST with `Origin checking failed` and uploads, asset changes, and settings updates all fail.
 
         You have two options:
 
@@ -210,7 +227,7 @@
         | nginx   | `proxy_set_header Host $host;`                  |
         | Apache  | `ProxyPreserveHost On`                          |
         | IIS ARR | `preserveHostHeader="true"` (or the GUI toggle) |
-        | Caddy   | preserved by default — no action needed         |
+        | Caddy   | preserved by default, no action needed         |
         | Traefik | preserved by default (`passHostHeader: true`)   |
 
         With `Host` preserved, Anthias's built-in same-host CSRF fallback handles HTTP-to-HTTPS scheme drift automatically.
@@ -223,7 +240,7 @@
 
         Multiple origins are comma-separated. Restart with `docker compose up -d`.
 
-        The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you — the above is only relevant if you're terminating TLS or proxying with something else.
+        The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you. The above is only relevant if you're terminating TLS or proxying with something else.
 
     - question: Where is the API reference?
       answer: |
@@ -233,7 +250,7 @@
       answer: |
         Devices with the **Basic** authentication mode enabled in **Settings** require credentials on every API call. Two paths resolve to the same operator account:
 
-        * **Browser session cookie** — what the dashboard uses. Treat this path as **browser-only**: a naive headless POST to `/login/` will 403 because the login form itself is CSRF-protected (the script has to GET `/login/` first, parse out the `csrfmiddlewaretoken` form field and the `csrftoken` cookie, then POST both back), and DRF's `SessionAuthentication` enforces CSRF *again* on every API write (`POST` / `PUT` / `PATCH` / `DELETE`) by requiring an `X-CSRFToken` header. Cookie-only scripts that skip either step get 403s.
-        * **HTTP Basic** *(legacy, deprecated — use this for headless automation today)* — `Authorization: Basic <base64(user:pass)>`. Retained for back-compat with pre-2826 Anthias-CLI and third-party scripts; the server logs a `DEPRECATED:` warning the first time it sees each `(user, client IP, path)` tuple and then again roughly once an hour for the same tuple (throttled so a polling client doesn't flood the log). A UI-managed personal-token system that will replace Basic for headless callers is tracked as a follow-up.
+        * **Browser session cookie**: what the dashboard uses. Treat this path as **browser-only**: a naive headless POST to `/login/` will 403 because the login form itself is CSRF-protected (the script has to GET `/login/` first, parse out the `csrfmiddlewaretoken` form field and the `csrftoken` cookie, then POST both back), and DRF's `SessionAuthentication` enforces CSRF *again* on every API write (`POST` / `PUT` / `PATCH` / `DELETE`) by requiring an `X-CSRFToken` header. Cookie-only scripts that skip either step get 403s.
+        * **HTTP Basic** *(legacy, deprecated: use this for headless automation today)*. `Authorization: Basic <base64(user:pass)>`. Retained for back-compat with pre-2826 Anthias-CLI and third-party scripts; the server logs a `DEPRECATED:` warning the first time it sees each `(user, client IP, path)` tuple and then again roughly once an hour for the same tuple (throttled so a polling client doesn't flood the log). A UI-managed personal-token system that will replace Basic for headless callers is tracked as a follow-up.
 
         Devices with authentication disabled (the default on a fresh install) accept either of these but don't require them.

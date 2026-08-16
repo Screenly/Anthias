@@ -20,8 +20,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.helpers import delete_asset_with_file
-from anthias_server.app.models import Asset
+from anthias_common.utils import (
+    DISK_FULL_ERROR,
+    connect_to_redis,
+    is_disk_full,
+)
 from anthias_server.api.helpers import save_active_assets_ordering
 from anthias_server.api.serializers.mixins import (
     BackupViewSerializerMixin,
@@ -30,15 +33,12 @@ from anthias_server.api.serializers.mixins import (
     RebootViewSerializerMixin,
     ShutdownViewSerializerMixin,
 )
+from anthias_server.app.helpers import delete_asset_with_file
+from anthias_server.app.models import Asset
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.lib import backup_helper, diagnostics
 from anthias_server.lib.auth import authorized
 from anthias_server.lib.github import is_up_to_date
-from anthias_common.utils import (
-    DISK_FULL_ERROR,
-    connect_to_redis,
-    is_disk_full,
-)
 from anthias_server.settings import ViewerPublisher, settings
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,13 @@ class RecoverViewMixin(APIView):
     @authorized
     def post(self, request: Request) -> Response:
         publisher = ViewerPublisher.get_instance()
-        file_upload = request.data.get('backup_upload')
+        # DRF types request.data as dict | list; a JSON list body would
+        # make .get() raise (500). Treat any non-dict body as "no
+        # upload" so it falls through to the 400 below.
+        data = request.data
+        file_upload = (
+            data.get('backup_upload') if isinstance(data, dict) else None
+        )
         if file_upload is None:
             raise ValidationError(
                 {'backup_upload': 'No backup file uploaded.'}
@@ -139,8 +145,7 @@ class RecoverViewMixin(APIView):
             # (settings_recover) already streams; this brings the API
             # path in line.
             with open(location, 'wb') as f:
-                for chunk in file_upload.chunks():
-                    f.write(chunk)
+                f.writelines(file_upload.chunks())
 
             try:
                 backup_helper.recover(location)
@@ -231,8 +236,8 @@ class DisplayPowerViewMixin(APIView):
                 {'message': 'Invalid display state.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # No /dev/cec0 or /dev/vchiq — fail fast with 503 rather than
-        # spawning a 10 s libcec subprocess that's guaranteed to error.
+        # No CEC adapter on this device — fail fast with 503 rather
+        # than attempting a transmit that cannot succeed.
         if not diagnostics.cec_available():
             return Response(
                 {'message': 'No HDMI-CEC adapter detected on this device.'},
@@ -287,7 +292,10 @@ class FileAssetViewMixin(APIView):
         # spools the body to a temp file — on a full disk that write
         # is where ENOSPC actually surfaces (Sentry ANTHIAS-3K).
         try:
-            file_upload = request.data.get('file_upload')
+            data = request.data
+            file_upload = (
+                data.get('file_upload') if isinstance(data, dict) else None
+            )
         except OSError as exc:
             if not is_disk_full(exc):
                 raise
@@ -495,7 +503,12 @@ class PlaylistOrderViewMixin(APIView):
     )
     @authorized
     def post(self, request: Request) -> Response:
-        asset_ids = request.data.get('ids', '').split(',')
+        data = request.data
+        if not isinstance(data, dict):
+            raise ValidationError(
+                {'ids': 'Expected an object body with an "ids" field.'}
+            )
+        asset_ids = data.get('ids', '').split(',')
         save_active_assets_ordering(asset_ids)
 
         return Response(status=status.HTTP_204_NO_CONTENT)

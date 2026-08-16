@@ -18,12 +18,12 @@ import pytest
 from django.test import Client
 
 import anthias_server.api.views.v2 as v2_module
-from anthias_server.app.models import Asset
-from anthias_server.celery_tasks import asset_recheck_queue_key
 from anthias_common.internal_auth import (
     INTERNAL_AUTH_HEADER,
     internal_auth_token,
 )
+from anthias_server.app.models import Asset
+from anthias_server.celery_tasks import asset_recheck_queue_key
 from anthias_server.settings import settings as anthias_settings
 
 

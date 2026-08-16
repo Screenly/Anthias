@@ -34,20 +34,23 @@ import io
 import json
 import os
 import shutil
+import struct
 import subprocess
+import zlib
 from collections.abc import Iterator
+from datetime import UTC
 from os import path
-from typing import Any
+from pathlib import Path
+from typing import Any, Self
 from unittest import mock
 
 import pytest
 import sh
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_server import processing
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
-
 
 # ---------------------------------------------------------------------------
 # Skip markers — keep the suite green on hosts without optional deps
@@ -297,6 +300,49 @@ def test_image_normalises_to_lossless_webp_across_formats(
 
 @pytest_heif
 @pytest.mark.django_db
+def test_heif_decoder_owns_orientation_not_exif_transpose(
+    asset_dir: str,
+) -> None:
+    """pillow-heif normalises EXIF Orientation away, so HEIC rotation is
+    the decoder's job — and a synthetic HEIC fixture cannot test it.
+
+    Real camera HEICs encode rotation in the HEIF ``irot`` box rather
+    than as EXIF Orientation, and pillow-heif applies ``irot`` at decode
+    *and* rewrites the Orientation tag to 1. Two consequences worth
+    pinning:
+
+    1. ``_bake_exif_orientation`` is a defensive no-op for HEIC. If a
+       future pillow-heif stopped normalising, this test fails and warns
+       that the HEIC leg needs rethinking — including the possibility of
+       a double rotation, since ``irot`` would already have been applied.
+    2. Injecting Orientation into a HEIC to build a test fixture is
+       futile: the tag does not survive the round-trip. This was
+       independently mistaken for a bug twice during release QA. The
+       real behaviour was confirmed against genuine iPhone 12 Pro files
+       (``irot`` 90 and 270, stored 3024x4032) which decode to the
+       correct portrait with the tag reading 1.
+    """
+    src = path.join(asset_dir, 'injected.heic')
+    image = Image.new('RGB', (400, 200), (200, 30, 30))
+    exif = image.getexif()
+    exif[0x0112] = 6
+    image.save(src, 'HEIF', exif=exif)
+
+    with Image.open(src) as reopened:
+        assert reopened.getexif().get(0x0112) in (None, 1), (
+            'pillow-heif no longer normalises injected EXIF Orientation — '
+            'the HEIC orientation path needs re-verifying against a real '
+            'camera file, and may now double-rotate'
+        )
+        stored = reopened.size
+        transposed = ImageOps.exif_transpose(reopened)
+        assert transposed.size == stored, (
+            'exif_transpose became load-bearing for HEIC; see docstring'
+        )
+
+
+@pytest_heif
+@pytest.mark.django_db
 @pytest.mark.parametrize('ext', ['.heic', '.heif', '.HEIC'])
 def test_image_heif_converts_to_lossless_webp(
     asset_dir: str, ext: str
@@ -323,6 +369,99 @@ def test_image_heif_converts_to_lossless_webp(
 
 
 @pytest.mark.django_db
+def test_image_normalisation_applies_exif_orientation(asset_dir: str) -> None:
+    """A portrait photo shot on a rotated camera is stored with
+    landscape pixels plus an EXIF Orientation tag (6 or 8). WebP output
+    carries no Orientation tag and Pillow never auto-applies it, so
+    without an explicit transpose the asset would be baked rotated 90°
+    on screen (issue 3232). Feed ``_convert_image_to_webp`` a 24x16
+    (landscape) source tagged Orientation=6 and assert the WebP comes
+    out 16x24 (upright portrait)."""
+    src = path.join(asset_dir, 'rotated.jpg')
+    landscape = Image.new('RGB', (24, 16), (10, 20, 30))
+    exif = landscape.getexif()
+    exif[0x0112] = 6  # Orientation: rotate 90° CW to display upright
+    landscape.save(src, 'JPEG', exif=exif)
+
+    # Sanity-check the fixture: pixels are landscape, tag says portrait.
+    with Image.open(src) as probe:
+        assert probe.size == (24, 16)
+        assert probe.getexif().get(0x0112) == 6
+
+    out = path.join(asset_dir, 'rotated.webp')
+    processing._convert_image_to_webp(src, out)
+
+    # Without the exif_transpose the WebP would be a landscape 24x16
+    # (pixels copied verbatim, tag dropped); with it the orientation is
+    # baked so the stored image is upright 16x24.
+    with Image.open(out) as result:
+        assert result.size == (16, 24), (
+            f'expected orientation applied (16x24), got {result.size}'
+        )
+
+
+@pytest.mark.django_db
+def test_image_downscaled_to_cap_on_low_ram(asset_dir: str) -> None:
+    """On a low-RAM board a >1080p image is downscaled to the pixel cap
+    before the RGBA convert + lossless WebP encode. At full resolution a
+    many-MP photo drives peak RSS past what a Pi 2/3 normalisation
+    container is capped at and OOM-kills / reboots the board. The
+    downscale is aspect-preserving (a 1080p board can't show more)."""
+    src = path.join(asset_dir, 'big.jpg')
+    # 4000x3000 = 12 MP, ~6x over the 1080p (2.07 MP) cap.
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, 'JPEG')
+    out = path.join(asset_dir, 'big.webp')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        processing._convert_image_to_webp(src, out)
+
+    with Image.open(out) as result:
+        w, h = result.size
+        assert w * h <= processing._LOW_RAM_MAX_PIXELS, (
+            f'{w}x{h} still exceeds the low-RAM cap'
+        )
+        # Aspect ratio (4:3) preserved.
+        assert abs((w / h) - (4000 / 3000)) < 0.02
+
+
+@pytest.mark.django_db
+def test_image_full_resolution_on_normal_ram(asset_dir: str) -> None:
+    """A normal-RAM board keeps full resolution — the downscale is a
+    low-RAM concession, not a global quality drop."""
+    src = path.join(asset_dir, 'big.jpg')
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, 'JPEG')
+    out = path.join(asset_dir, 'big.webp')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=False
+    ):
+        processing._convert_image_to_webp(src, out)
+
+    with Image.open(out) as result:
+        assert result.size == (4000, 3000)
+
+
+@pytest.mark.django_db
+def test_image_under_cap_not_downscaled_on_low_ram(asset_dir: str) -> None:
+    """Even on a low-RAM board, an image already within the 1080p cap is
+    left untouched — the downscale only kicks in above the budget."""
+    src = path.join(asset_dir, 'small.jpg')
+    # 1280x720 = 0.92 MP, comfortably under the 2.07 MP cap.
+    Image.new('RGB', (1280, 720), (10, 20, 30)).save(src, 'JPEG')
+    out = path.join(asset_dir, 'small.webp')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        processing._convert_image_to_webp(src, out)
+
+    with Image.open(out) as result:
+        assert result.size == (1280, 720)
+
+
+@pytest.mark.django_db
 def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
     """Pillow's UnidentifiedImageError must bubble out so the
     on_failure hook can write metadata.error_message — never leave a
@@ -331,9 +470,11 @@ def test_image_corrupt_input_raises_clean_error(asset_dir: str) -> None:
     _write_corrupt(src, '.tiff')
     asset = _make_processing_asset('img-bad', src)
 
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(UnidentifiedImageError):
-            processing._run_image_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(UnidentifiedImageError),
+    ):
+        processing._run_image_normalisation(asset)
 
     # No webp produced; the source file is left in place for the
     # operator to inspect / re-upload. Staging .webp.tmp must also
@@ -364,13 +505,13 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
         size = bomb_size
         format = 'TIFF'
 
-        def __enter__(self) -> '_FakeImage':
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *_: object) -> None:
             return None
 
-        def convert(self, _mode: str) -> 'mock.MagicMock':
+        def convert(self, _mode: str) -> mock.MagicMock:
             # Should never be reached — the size check raises first.
             raise AssertionError(
                 'convert() called on a bomb input — size check missed'
@@ -385,9 +526,9 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
             'anthias_server.processing.Image.open',
             return_value=_FakeImage(),
         ),
+        pytest.raises(ValueError, match='exceed cap'),
     ):
-        with pytest.raises(ValueError, match='exceed cap'):
-            processing._run_image_normalisation(asset)
+        processing._run_image_normalisation(asset)
 
     # Staging cleanup contract still holds for the bomb path.
     leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
@@ -416,9 +557,9 @@ def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
         mock.patch.object(
             processing, '_convert_image_to_webp', side_effect=half_write
         ),
+        pytest.raises(OSError, match='disk full'),
     ):
-        with pytest.raises(OSError, match='disk full'):
-            processing._run_image_normalisation(asset)
+        processing._run_image_normalisation(asset)
 
     # No leftover .webp.tmp in the asset dir — the runner removed it
     # before the raise propagated.
@@ -448,9 +589,9 @@ def test_image_rename_failure_cleans_staging(asset_dir: str) -> None:
     with (
         mock.patch.object(processing, '_notify'),
         mock.patch('anthias_server.processing.os.replace', side_effect=boom),
+        pytest.raises(OSError, match='cross-device'),
     ):
-        with pytest.raises(OSError, match='cross-device'):
-            processing._run_image_normalisation(asset)
+        processing._run_image_normalisation(asset)
 
     leftover = [n for n in os.listdir(asset_dir) if n.endswith('.webp.tmp')]
     assert not leftover, f'image staging leftover after rename: {leftover}'
@@ -466,9 +607,11 @@ def test_image_missing_file_raises_filenotfound(asset_dir: str) -> None:
     src = path.join(asset_dir, 'gone.tiff')
     asset = _make_processing_asset('img-gone', src)
 
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(FileNotFoundError):
-            processing._run_image_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(FileNotFoundError),
+    ):
+        processing._run_image_normalisation(asset)
 
 
 @pytest.mark.django_db
@@ -602,9 +745,11 @@ def test_set_processing_error_writes_metadata(asset_dir: str) -> None:
 def test_video_missing_file_raises_filenotfound(asset_dir: str) -> None:
     src = path.join(asset_dir, 'gone.mp4')
     asset = _make_processing_asset('vid-gone', src, mimetype='video')
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(FileNotFoundError):
-            processing._run_video_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(FileNotFoundError),
+    ):
+        processing._run_video_normalisation(asset)
 
 
 @pytest_ffmpeg
@@ -670,9 +815,9 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
     ):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+        processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
@@ -731,9 +876,9 @@ def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
     ):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+        processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
@@ -809,9 +954,9 @@ def test_video_unsupported_codec_still_rejected_on_pi5(
         mock.patch.object(
             processing, '_ffprobe_summary', return_value=fake_summary
         ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
     ):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+        processing._run_video_normalisation(asset)
 
     import shlex as _shlex
 
@@ -834,9 +979,11 @@ def test_video_unsupported_codec_h264_board_recipe(
     _make_video(src, codec='mpeg2video', container='mpeg', audio=None)
     asset = _make_processing_asset('vid-mpeg2', src, mimetype='video')
 
-    with mock.patch.object(processing, '_notify'):
-        with pytest.raises(processing.UnsupportedVideoCodecError) as excinfo:
-            processing._run_video_normalisation(asset)
+    with (
+        mock.patch.object(processing, '_notify'),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
 
     recipe = excinfo.value.recipe
     assert 'libx264' in recipe
@@ -1362,7 +1509,8 @@ def test_format_subprocess_stderr_decodes_and_trims() -> None:
         truncate=False,
     )
     out = processing._format_subprocess_stderr(exc)
-    assert 'broken' in out and 'byte' in out
+    assert 'broken' in out
+    assert 'byte' in out
 
     # 3) Long stderr is tail-trimmed with an ellipsis prefix so the
     # operator sees the diagnostic, not 4 KB of build-info preamble.
@@ -1800,10 +1948,8 @@ def test_normalize_on_failure_writes_error_metadata(
 
     asset.refresh_from_db()
     assert asset.is_processing is False
-    assert (
-        'cannot decode' in asset.metadata['error_message']
-        and 'UnidentifiedImageError' in asset.metadata['error_message']
-    )
+    assert 'cannot decode' in asset.metadata['error_message']
+    assert 'UnidentifiedImageError' in asset.metadata['error_message']
     # Earlier metadata keys are preserved.
     assert asset.metadata['original_ext'] == '.tiff'
     notify.assert_called_once_with(asset.asset_id)
@@ -1961,6 +2107,361 @@ def test_dispatch_normalize_video_invokes_celery_task() -> None:
     ):
         processing.dispatch_normalize_video('asset-2')
     delay.assert_called_once_with('asset-2')
+
+
+# ---------------------------------------------------------------------------
+# Low-RAM in-place downscale for the formats we don't convert (JPEG / PNG)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'ext,over_cap,low_ram,expected',
+    [
+        # The case that motivated this: a big phone JPEG on a Pi 2/3.
+        ('.jpg', True, True, True),
+        ('.jpeg', True, True, True),
+        ('.png', True, True, True),
+        # Not low-RAM → never resize an operator's photo unasked.
+        ('.jpg', True, False, False),
+        # Low-RAM but already within budget → nothing to do.
+        ('.jpg', False, True, False),
+        # Formats deliberately excluded: GIF/WebP may be animated and
+        # SVG has no pixel buffer to cap.
+        ('.gif', True, True, False),
+        ('.webp', True, True, False),
+        # A convert-format is NORMALIZE_IMAGE_EXTS' job, not this one.
+        ('.tiff', True, True, False),
+    ],
+)
+@pytest.mark.django_db
+def test_needs_low_ram_image_downscale(
+    asset_dir: str, ext: str, over_cap: bool, low_ram: bool, expected: bool
+) -> None:
+    src = path.join(asset_dir, f'probe{ext}')
+    size = (4000, 3000) if over_cap else (1280, 720)
+    fmt = {
+        '.jpg': 'JPEG',
+        '.jpeg': 'JPEG',
+        '.png': 'PNG',
+        '.gif': 'GIF',
+        '.webp': 'WEBP',
+        '.tiff': 'TIFF',
+    }[ext]
+    Image.new('RGB', size, (10, 20, 30)).save(src, fmt)
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=low_ram
+    ):
+        assert processing.needs_low_ram_image_downscale(src) is expected
+
+
+@pytest.mark.django_db
+def test_needs_low_ram_image_downscale_unreadable_file_is_false(
+    asset_dir: str,
+) -> None:
+    """A missing or undecodable file must not block the upload here. It
+    fails later with a real decode error the operator can act on;
+    guessing at this point would turn "corrupt file" into the far more
+    confusing "silently skipped resize"."""
+    missing = path.join(asset_dir, 'not-there.jpg')
+    corrupt = path.join(asset_dir, 'broken.jpg')
+    _write_corrupt(corrupt, '.jpg')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        assert processing.needs_low_ram_image_downscale(missing) is False
+        assert processing.needs_low_ram_image_downscale(corrupt) is False
+
+
+@pytest.mark.django_db
+def test_needs_low_ram_downscale_routes_bomb_instead_of_raising(
+    asset_dir: str,
+) -> None:
+    """A decompression bomb must not raise out of the predicate.
+
+    This runs inside the upload request, and the module tightens
+    ``Image.MAX_IMAGE_PIXELS``, so ``Image.open`` raises
+    ``DecompressionBombError`` on a header declaring more than twice the
+    cap. That exception derives straight from ``Exception``, so an
+    ``except (OSError, ValueError)`` misses it and the upload 500s.
+
+    It returns ``True`` — routing the bomb into the Celery task, which
+    rejects it deterministically and surfaces a "Failed" pill with the
+    dimensions, the same way an over-cap HEIC/TIFF already does."""
+    src = path.join(asset_dir, 'bomb.png')
+    # A ~24 KB PNG whose IHDR declares 400 MP — 8x the 50 MP cap, and
+    # over the 2x threshold at which Pillow raises rather than warns.
+    side = 20000
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(src, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        # The assertion that matters is "does not raise"; the True is
+        # what gets the operator a real error message.
+        assert processing.needs_low_ram_image_downscale(src) is True
+        assert processing.needs_image_processing(src) is True
+
+
+@pytest.mark.django_db
+def test_needs_image_processing_is_the_union(asset_dir: str) -> None:
+    """The upload paths branch on the union: a file earns a Celery hop
+    either because its format needs converting or because it is too big
+    for this board."""
+    big_jpeg = path.join(asset_dir, 'big.jpg')
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(big_jpeg, 'JPEG')
+    small_jpeg = path.join(asset_dir, 'small.jpg')
+    Image.new('RGB', (800, 600), (10, 20, 30)).save(small_jpeg, 'JPEG')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        # Convert-format: routed on extension alone.
+        assert processing.needs_image_processing('foo.tiff') is True
+        # Bypass-format, over cap on a low-RAM board: routed on size.
+        assert processing.needs_image_processing(big_jpeg) is True
+        # Bypass-format within budget: no hop at all.
+        assert processing.needs_image_processing(small_jpeg) is False
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('ext,fmt', [('.jpg', 'JPEG'), ('.png', 'PNG')])
+def test_downscale_in_place_keeps_format_and_fits_cap(
+    asset_dir: str, ext: str, fmt: str
+) -> None:
+    """The resize keeps the source format — re-encoding a photographic
+    JPEG as lossless WebP would inflate it several times over, which is
+    why this path exists separately from ``_convert_image_to_webp``."""
+    src = path.join(asset_dir, f'big{ext}')
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, fmt)
+    out = path.join(asset_dir, f'out{ext}')
+
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        processing._downscale_image_in_place(src, out)
+
+    with Image.open(out) as result:
+        assert result.format == fmt
+        w, h = result.size
+        assert w * h <= processing._LOW_RAM_MAX_PIXELS, (
+            f'{w}x{h} still exceeds the low-RAM cap'
+        )
+        assert abs((w / h) - (4000 / 3000)) < 0.02
+
+
+@pytest.mark.django_db
+def test_downscale_in_place_bakes_orientation_and_drops_exif(
+    asset_dir: str,
+) -> None:
+    """The double-rotation hazard, pinned.
+
+    The resize bakes EXIF Orientation into the pixels. If the output
+    then *also* carried the original Orientation tag, the viewer's
+    ``QImageReader::setAutoTransform`` would rotate a second time and
+    turn a correct portrait into a sideways one. So the output must be
+    upright in pixels AND carry no Orientation tag."""
+    src = path.join(asset_dir, 'portrait.jpg')
+    # Stored landscape (4000x3000) but tagged Orientation=6, i.e. the
+    # classic phone photo: display rotated 90° CW → portrait.
+    image = Image.new('RGB', (4000, 3000), (10, 20, 30))
+    exif = image.getexif()
+    exif[0x0112] = 6
+    image.save(src, 'JPEG', exif=exif)
+
+    with Image.open(src) as probe:
+        assert probe.size == (4000, 3000)
+        assert probe.getexif().get(0x0112) == 6
+
+    out = path.join(asset_dir, 'portrait-out.jpg')
+    with mock.patch(
+        'anthias_server.processing.is_low_ram_device', return_value=True
+    ):
+        processing._downscale_image_in_place(src, out)
+
+    with Image.open(out) as result:
+        w, h = result.size
+        # Rotation baked in: the stored buffer is now portrait.
+        assert h > w, f'expected orientation baked to portrait, got {w}x{h}'
+        # And no tag left for the viewer to apply a second time.
+        assert result.getexif().get(0x0112) in (None, 1), (
+            'Orientation tag survived; the viewer would double-rotate'
+        )
+
+
+@pytest.mark.django_db
+def test_run_normalisation_downscales_jpeg_without_changing_uri(
+    asset_dir: str,
+) -> None:
+    """End-to-end: an over-cap JPEG on a low-RAM board is resized in
+    place. The URI keeps its ``.jpg`` extension (no viewer-side cache
+    or path churn), the original is not left behind as a ghost, and the
+    metadata records the resize without claiming a format conversion."""
+    src = path.join(asset_dir, 'photo.jpg')
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, 'JPEG')
+    asset = _make_processing_asset('img-jpeg-big', src)
+
+    with (
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        mock.patch.object(processing, '_notify') as notify,
+    ):
+        processing._run_image_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.uri == src, 'in-place downscale must not move the URI'
+    assert path.isfile(src)
+    assert not path.exists(f'{src}.tmp'), 'staging file must not survive'
+    assert asset.is_processing is False
+    assert asset.metadata['downscaled'] is True
+    assert asset.metadata['original_resolution'] == '4000x3000'
+    # ``converted`` means "re-encoded to a different format" — a resize
+    # is not a conversion, so existing consumers of the flag must not
+    # start seeing JPEGs reported as converted.
+    assert asset.metadata['converted'] is False
+    notify.assert_called_once_with('img-jpeg-big')
+
+    with Image.open(src) as result:
+        assert result.format == 'JPEG'
+        w, h = result.size
+        assert w * h <= processing._LOW_RAM_MAX_PIXELS
+
+
+@pytest.mark.django_db
+def test_original_resolution_reports_display_orientation(
+    asset_dir: str,
+) -> None:
+    """``original_resolution`` must name the dimensions the operator
+    saw, not the stored buffer.
+
+    A phone photo is stored landscape with Orientation=6 ("rotate 90°
+    CW to display"), so a 6000x4000 stored buffer is a 4000x6000
+    portrait to the person who took it. The field exists to answer "why
+    is my photo softer than the file I uploaded?", so reporting the
+    pre-transpose orientation would name an orientation they never
+    saw. Caught on the Pi 3-64 testbed."""
+    src = path.join(asset_dir, 'portrait.jpg')
+    image = Image.new('RGB', (6000, 4000), (10, 20, 30))
+    exif = image.getexif()
+    exif[0x0112] = 6
+    image.save(src, 'JPEG', exif=exif)
+    asset = _make_processing_asset('img-jpeg-portrait', src)
+
+    with (
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        mock.patch.object(processing, '_notify'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.metadata['original_resolution'] == '4000x6000', (
+        'expected the display orientation the operator uploaded'
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'orientation,expected',
+    [
+        # Identity and the pure mirrors keep the stored aspect.
+        (None, (6000, 4000)),
+        (1, (6000, 4000)),
+        (2, (6000, 4000)),
+        (3, (6000, 4000)),
+        (4, (6000, 4000)),
+        # 90°/270°, with or without a mirror, swap the axes.
+        (5, (4000, 6000)),
+        (6, (4000, 6000)),
+        (7, (4000, 6000)),
+        (8, (4000, 6000)),
+    ],
+)
+def test_display_size_per_orientation(
+    asset_dir: str, orientation: int | None, expected: tuple[int, int]
+) -> None:
+    src = path.join(asset_dir, 'probe.jpg')
+    image = Image.new('RGB', (6000, 4000), (10, 20, 30))
+    if orientation is None:
+        image.save(src, 'JPEG')
+    else:
+        exif = image.getexif()
+        exif[0x0112] = orientation
+        image.save(src, 'JPEG', exif=exif)
+
+    with Image.open(src) as probe:
+        assert processing._display_size(probe) == expected
+
+
+@pytest.mark.django_db
+def test_run_normalisation_leaves_small_jpeg_untouched(
+    asset_dir: str,
+) -> None:
+    """A JPEG within budget is a no-op success even if the task somehow
+    gets dispatched for it — byte-identical file, no ``downscaled``
+    flag, and the row still clears ``is_processing``."""
+    src = path.join(asset_dir, 'small.jpg')
+    Image.new('RGB', (800, 600), (10, 20, 30)).save(src, 'JPEG')
+    before = Path(src).read_bytes()
+    asset = _make_processing_asset('img-jpeg-small', src)
+
+    with (
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        mock.patch.object(processing, '_notify'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.uri == src
+    assert Path(src).read_bytes() == before, 'file must not be re-encoded'
+    assert asset.is_processing is False
+    assert 'downscaled' not in asset.metadata
+
+
+@pytest.mark.django_db
+def test_run_normalisation_leaves_big_jpeg_untouched_on_normal_ram(
+    asset_dir: str,
+) -> None:
+    """The resize is a low-RAM concession, not a global quality drop: a
+    Pi 4 / 5 / x86 keeps the operator's full-resolution upload."""
+    src = path.join(asset_dir, 'photo.jpg')
+    Image.new('RGB', (4000, 3000), (10, 20, 30)).save(src, 'JPEG')
+    before = Path(src).read_bytes()
+    asset = _make_processing_asset('img-jpeg-normal-ram', src)
+
+    with (
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        mock.patch.object(processing, '_notify'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert Path(src).read_bytes() == before
+    with Image.open(src) as result:
+        assert result.size == (4000, 3000)
 
 
 @pytest.mark.django_db
@@ -2179,7 +2680,7 @@ def test_prepare_asset_routes_heic_through_image_pipeline(
     """End-to-end-ish: simulate a HEIC upload and verify
     prepare_asset stamps is_processing=True and stashes the pending
     flag the view dispatches on."""
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2192,8 +2693,8 @@ def test_prepare_asset_routes_heic_through_image_pipeline(
             'ext': '.heic',
             'mimetype': 'image',
             'duration': 10,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,
@@ -2219,7 +2720,7 @@ def test_prepare_asset_routes_heic_through_image_pipeline(
 def test_prepare_asset_routes_video_through_video_pipeline(
     asset_dir: str,
 ) -> None:
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2232,8 +2733,8 @@ def test_prepare_asset_routes_video_through_video_pipeline(
             'ext': '.mp4',
             'mimetype': 'video',
             'duration': 0,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,
@@ -2263,7 +2764,7 @@ def test_prepare_asset_skips_pipeline_for_remote_url(
 ) -> None:
     """A webpage / RTSP / HTTP video URL must not get flagged for
     normalisation — only locally-uploaded files do."""
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2273,8 +2774,8 @@ def test_prepare_asset_skips_pipeline_for_remote_url(
             'uri': 'https://example.com/page',
             'mimetype': 'webpage',
             'duration': 30,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,
@@ -2295,7 +2796,7 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
 ) -> None:
     """Common JPEG / PNG / WebP uploads land ready-to-play — never
     enqueue a normalisation task for them."""
-    from datetime import datetime, timezone as _tz
+    from datetime import datetime
 
     from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 
@@ -2307,8 +2808,8 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
             'ext': '.jpg',
             'mimetype': 'image',
             'duration': 10,
-            'start_date': datetime(2026, 1, 1, tzinfo=_tz.utc),
-            'end_date': datetime(2030, 1, 1, tzinfo=_tz.utc),
+            'start_date': datetime(2026, 1, 1, tzinfo=UTC),
+            'end_date': datetime(2030, 1, 1, tzinfo=UTC),
             'is_enabled': False,
         },
         unique_name=False,

@@ -6,7 +6,6 @@ from typing import Any
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import CharField, Serializer
 
-from anthias_server.api.errors import AssetCreationError
 from anthias_common.remote_video import (
     is_downloadable_remote_video,
     remote_video_destination_path,
@@ -16,7 +15,9 @@ from anthias_common.utils import (
     url_fails,
 )
 from anthias_common.youtube import is_youtube_url, youtube_destination_path
-from anthias_server.processing import needs_image_normalisation
+from anthias_server.api.errors import AssetCreationError
+from anthias_server.app.models import DURATION_S_MAX, clamp_duration
+from anthias_server.processing import needs_image_processing
 from anthias_server.settings import settings
 
 from . import (
@@ -24,7 +25,6 @@ from . import (
     get_unique_name,
     validate_uri,
 )
-from anthias_server.app.models import DURATION_S_MAX, clamp_duration
 
 
 class CreateAssetSerializerMixin:
@@ -171,7 +171,7 @@ class CreateAssetSerializerMixin:
         # never get rewritten in-place. Anything that goes through the
         # pipeline lands as ``is_processing=True`` so the viewer skips
         # it during rotation until the task clears the flag.
-        needs_image = is_local_upload and needs_image_normalisation(uri)
+        needs_image = is_local_upload and needs_image_processing(uri)
         needs_video = (
             is_local_upload
             and not is_youtube

@@ -19,22 +19,21 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_server.app.helpers import (
-    add_default_assets,
-    remove_default_assets,
+from anthias_common import device_helper, storage_health, undervoltage
+from anthias_common.internal_auth import is_internal_request
+from anthias_common.utils import (
+    clamp_screen_rotation,
+    connect_to_redis,
+    get_balena_device_info,
+    get_node_ip,
+    get_node_mac_address,
+    is_balena_app,
 )
-from anthias_server.app.models import Asset
 from anthias_server.api.helpers import (
     AssetCreationError,
     finalize_asset_update,
     persist_new_asset,
 )
-from anthias_server.lib.auth import (
-    AuthSettingsError,
-    apply_auth_settings,
-    operator_username,
-)
-from anthias_common.internal_auth import is_internal_request
 from anthias_server.api.serializers.v2 import (
     AssetSerializerV2,
     CreateAssetSerializerV2,
@@ -49,15 +48,6 @@ from anthias_server.api.serializers.v2 import (
     ViewerPlaylistSerializerV2,
     ViewerSettingsSerializerV2,
 )
-from anthias_server.lib.integrations.base import ProviderImportError
-from anthias_server.lib.integrations.registry import get_provider
-from anthias_server.lib.screenly_migration import (
-    MIGRATION_ASSET_GROUP_TITLE,
-    ScreenlyMigrationError,
-    ensure_asset_group,
-    migrate_asset,
-    validate_token,
-)
 from anthias_server.api.views.mixins import (
     AssetContentViewMixin,
     AssetsControlViewMixin,
@@ -71,19 +61,29 @@ from anthias_server.api.views.mixins import (
     RecoverViewMixin,
     ShutdownViewMixin,
 )
-from anthias_common import device_helper
-from anthias_server.lib import diagnostics
-from anthias_server.lib.auth import authorized
-from anthias_server.lib.github import is_up_to_date
-from anthias_server.lib.timezone import format_utc_offset
-from anthias_common.utils import (
-    clamp_screen_rotation,
-    connect_to_redis,
-    get_balena_device_info,
-    get_node_ip,
-    get_node_mac_address,
-    is_balena_app,
+from anthias_server.app.helpers import (
+    add_default_assets,
+    remove_default_assets,
 )
+from anthias_server.app.models import Asset
+from anthias_server.lib import diagnostics
+from anthias_server.lib.auth import (
+    AuthSettingsError,
+    apply_auth_settings,
+    authorized,
+    operator_username,
+)
+from anthias_server.lib.github import is_up_to_date
+from anthias_server.lib.integrations.base import ProviderImportError
+from anthias_server.lib.integrations.registry import get_provider
+from anthias_server.lib.screenly_migration import (
+    MIGRATION_ASSET_GROUP_TITLE,
+    ScreenlyMigrationError,
+    ensure_asset_group,
+    migrate_asset,
+    validate_token,
+)
+from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import ViewerPublisher, settings
 
 r = connect_to_redis()
@@ -562,7 +562,7 @@ class DeviceSettingsViewV2(APIView):
             # Force reload of settings
             settings.load()
         except Exception as e:
-            logging.error(f'Failed to reload settings: {str(e)}')
+            logger.error(f'Failed to reload settings: {e!s}')
             # Continue with existing settings if reload fails
 
         return Response(
@@ -597,6 +597,12 @@ class DeviceSettingsViewV2(APIView):
                     if settings['auth_backend'] == 'auth_basic'
                     else ''
                 ),
+                'display_power_schedule_enabled': settings[
+                    'display_power_schedule_enabled'
+                ],
+                'display_power_on_time': settings['display_power_on_time'],
+                'display_power_off_time': settings['display_power_off_time'],
+                'display_power_days': settings['display_power_days'],
             }
         )
 
@@ -674,6 +680,17 @@ class DeviceSettingsViewV2(APIView):
                 settings['verify_ssl'] = data['verify_ssl']
             if 'screen_rotation' in data:
                 settings['screen_rotation'] = int(data['screen_rotation'])
+            # Scheduled display power. Already normalised by the
+            # serializer's validators ('HH:MM', sorted weekday list), so
+            # the beat can never read a value it cannot parse.
+            for field in (
+                'display_power_schedule_enabled',
+                'display_power_on_time',
+                'display_power_off_time',
+                'display_power_days',
+            ):
+                if field in data:
+                    settings[field] = data[field]
 
             settings.save()
             publisher = ViewerPublisher.get_instance()
@@ -920,6 +937,72 @@ class InfoViewV2(InfoViewMixin):
             'offset': format_utc_offset(now_local),
         }
 
+    def get_under_voltage(self) -> dict[str, Any]:
+        """Power-supply health, mirroring the System Info card.
+
+        Read from the kernel's ``rpi_volt`` hwmon sensor rather than
+        ``vcgencmd get_throttled``: the hwmon driver clears the
+        firmware's sticky bits every 2 seconds, so the mailbox's
+        "since boot" field is not a durable record on any current
+        kernel. See ``anthias_common.undervoltage`` for the detail.
+
+        ``supported`` is false on hardware with no such sensor (x86,
+        most non-Pi arm64 SBCs). Clients must check it before treating
+        the other fields as meaningful: a board that cannot report
+        under-voltage is indistinguishable from a healthy one on the
+        remaining fields alone.
+
+        Timestamps stay ISO-8601 strings, which is how the latch
+        stores them; ``count`` and the timestamps reset on reboot.
+        """
+        try:
+            state = undervoltage.get_state(r)
+        except Exception:
+            # A diagnostic must never take the info endpoint down.
+            logger.exception('Could not read the under-voltage state.')
+            return {
+                'supported': False,
+                'active': False,
+                'seen_since_boot': False,
+                'first_seen': None,
+                'last_seen': None,
+                'count': 0,
+            }
+        return state
+
+    def get_storage(self) -> dict[str, Any]:
+        """Storage health, mirroring the System Info card.
+
+        SD cards have no health register, so unlike ``under_voltage``
+        this is not one sensor but a verdict assembled from ext4's
+        superblock error counters, a periodic write-and-read-back
+        check, and the eMMC wear registers where the board has them.
+        See ``anthias_common.storage_health`` for the reasoning.
+
+        ``status`` is the field to branch on. It is one of ``ok``,
+        ``wear``, ``errors``, ``full``, ``failing`` or ``unknown``,
+        ordered from healthy to worst, and it is the same verdict the
+        web UI renders. ``supported`` is false only when the
+        filesystem behind the data directory could not be resolved at
+        all; the other fields carry no information in that case.
+
+        ``errors_count`` is cumulative over the life of the
+        filesystem and deliberately survives reboots -- ext4 keeps it
+        in the superblock, and a card that corrupted data last month
+        is still the same card. ``errors_new`` and the write-check
+        fields reset on reboot, because those are things this device
+        observed rather than things the filesystem recorded.
+        """
+        try:
+            return storage_health.get_state(r, settings.get_configdir())
+        except Exception:
+            # A diagnostic must never take the info endpoint down.
+            logger.exception('Could not read the storage-health state.')
+            return {
+                'supported': False,
+                'status': storage_health.STATUS_UNKNOWN,
+            }
+
     def get_ip_addresses(self) -> list[str]:
         # /api/v2/info is auth'd and not polled, so blocking on
         # get_node_ip()'s host-readiness loop is acceptable here —
@@ -961,6 +1044,200 @@ class InfoViewV2(InfoViewMixin):
                             'low_ram': {'type': 'boolean'},
                         },
                     },
+                    'under_voltage': {
+                        'type': 'object',
+                        'description': (
+                            'Power-supply health from the kernel '
+                            'rpi_volt sensor. Check `supported` first: '
+                            'when it is false this device has no such '
+                            'sensor and the other fields carry no '
+                            'information. Counters and timestamps '
+                            'reset when the device reboots.'
+                        ),
+                        'properties': {
+                            'supported': {'type': 'boolean'},
+                            'active': {'type': 'boolean'},
+                            'seen_since_boot': {'type': 'boolean'},
+                            'first_seen': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_seen': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'count': {'type': 'integer'},
+                        },
+                    },
+                    'storage': {
+                        'type': 'object',
+                        'description': (
+                            'Health of the filesystem this device '
+                            'runs from, assembled from ext4 '
+                            'superblock error counters, a periodic '
+                            'write-and-read-back check, and eMMC wear '
+                            'registers where present. Branch on '
+                            '`status`. Check `supported` first: when '
+                            'it is false the filesystem could not be '
+                            'resolved and no other field carries '
+                            'information. `errors_count` is '
+                            'cumulative over the life of the '
+                            'filesystem and survives reboots; '
+                            '`errors_new` and the write-check fields '
+                            'reset on reboot.'
+                        ),
+                        'properties': {
+                            'supported': {'type': 'boolean'},
+                            'status': {
+                                'type': 'string',
+                                'enum': [
+                                    'ok',
+                                    'wear',
+                                    'errors',
+                                    'full',
+                                    'failing',
+                                    'unknown',
+                                ],
+                            },
+                            'mount_point': {'type': ['string', 'null']},
+                            'fstype': {'type': ['string', 'null']},
+                            'device': {'type': ['string', 'null']},
+                            'disk': {'type': ['string', 'null']},
+                            'read_only': {'type': 'boolean'},
+                            'error_stats_supported': {'type': 'boolean'},
+                            'errors_count': {'type': 'integer'},
+                            'errors_new': {'type': 'integer'},
+                            'errors_this_boot': {'type': 'boolean'},
+                            'first_error': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_error': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_error_function': {
+                                'type': ['string', 'null']
+                            },
+                            'lifetime_written_kb': {
+                                'type': ['integer', 'null']
+                            },
+                            'write_ok': {'type': ['boolean', 'null']},
+                            'write_reason': {'type': ['string', 'null']},
+                            'write_failed_since_boot': {'type': 'boolean'},
+                            'write_fail_count': {'type': 'integer'},
+                            'first_write_fail': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_write_fail': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_check': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'fsync_ms': {'type': ['number', 'null']},
+                            'media': {
+                                'type': 'object',
+                                'description': (
+                                    'What the device is. `kind` is '
+                                    '`sd`, `emmc`, `disk` or '
+                                    '`unknown`; the wear fields are '
+                                    'populated on eMMC only, since '
+                                    'SD cards do not report health.'
+                                ),
+                                'properties': {
+                                    'kind': {'type': 'string'},
+                                    'name': {'type': ['string', 'null']},
+                                    'manufacturer': {
+                                        'type': ['string', 'null'],
+                                        'description': (
+                                            'Resolved vendor name, or '
+                                            "null when the card's "
+                                            'manufacturer id appears '
+                                            'in no published list. '
+                                            'Use `manufacturer_id` to '
+                                            'identify those.'
+                                        ),
+                                    },
+                                    'manufacturer_id': {
+                                        'type': ['integer', 'null'],
+                                        'description': (
+                                            'Raw CID manufacturer id. '
+                                            'SD and eMMC number the '
+                                            'same field from separate '
+                                            'namespaces, so interpret '
+                                            'it against `kind`.'
+                                        ),
+                                    },
+                                    'manufactured': {
+                                        'type': ['string', 'null']
+                                    },
+                                    'wear_pct': {'type': ['integer', 'null']},
+                                    'pre_eol': {'type': ['string', 'null']},
+                                    'smart': {
+                                        'type': ['object', 'null'],
+                                        'description': (
+                                            'SMART detail, present only '
+                                            'on a SATA/NVMe device that '
+                                            'reported it. `wear_pct` and '
+                                            '`pre_eol` above are already '
+                                            'derived from it, so most '
+                                            'clients need only those. '
+                                            '`wear_is_exact` is false '
+                                            'when the figure came from '
+                                            'an ATA vendor attribute '
+                                            'rather than a defined NVMe '
+                                            'field.'
+                                        ),
+                                        'properties': {
+                                            'supported': {'type': 'boolean'},
+                                            'device': {'type': 'string'},
+                                            'model': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'firmware': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'passed': {
+                                                'type': ['boolean', 'null']
+                                            },
+                                            'wear_pct': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'wear_is_exact': {
+                                                'type': 'boolean'
+                                            },
+                                            'power_on_hours': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'reallocated_sectors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'pending_sectors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'media_errors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'temperature_c': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'pre_eol': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'checked_at': {
+                                                'type': 'string',
+                                                'format': 'date-time',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
                     'ip_addresses': {
                         'type': 'array',
                         'items': {'type': 'string'},
@@ -999,6 +1276,8 @@ class InfoViewV2(InfoViewMixin):
                 'device_model': self.get_device_model(),
                 'uptime': self.get_uptime(),
                 'memory': self.get_memory(),
+                'under_voltage': self.get_under_voltage(),
+                'storage': self.get_storage(),
                 'ip_addresses': self.get_ip_addresses(),
                 'mac_address': get_node_mac_address(),
                 'host_user': getenv('HOST_USER'),

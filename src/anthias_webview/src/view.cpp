@@ -870,8 +870,20 @@ bool View::tryLoadAsAnimatedGif(const QByteArray& data)
 
 void View::loadAsStaticImage(const QByteArray& data)
 {
-    QImage newImage;
-    if (newImage.loadFromData(data)) {
+    // Decode through a QImageReader with auto-transform enabled so the
+    // EXIF Orientation tag is honoured. QImage::loadFromData() ignores
+    // orientation, which left camera/phone photos taken in portrait
+    // (stored landscape + Orientation 6/8) drawn sideways on screen
+    // (issue 3232). setAutoTransform applies the rotation/flip during
+    // decode for every format that carries the tag (JPEG, HEIC, ...).
+    QBuffer buffer;
+    buffer.setData(data);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer);
+    reader.setAutoTransform(true);
+
+    QImage newImage = reader.read();
+    if (!newImage.isNull()) {
         qDebug() << "Successfully loaded static image. Size:" << newImage.size();
         nextImage = newImage;
         webView1->setVisible(false);
@@ -879,7 +891,7 @@ void View::loadAsStaticImage(const QByteArray& data)
         currentImage = nextImage;
         update();
     } else {
-        qDebug() << "Failed to load image from data";
+        qDebug() << "Failed to load image from data:" << reader.errorString();
     }
 }
 

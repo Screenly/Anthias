@@ -36,7 +36,7 @@
       {{- $required := default (slice) $schema.required -}}
       {{- /* Range directly over the map: Hugo iterates map keys in
              sorted order, and `sort` here would collapse the map to a
-             slice — making $name the numeric index instead of the
+             slice, making $name the numeric index instead of the
              property name. */ -}}
       {{- range $name, $prop := $schema.properties -}}
       {{- $propRef := index $prop "$ref" -}}
@@ -47,6 +47,12 @@
         <td class="py-2 pr-4 font-mono text-xs text-zinc-700">
           {{- if $propRef -}}
             {{ replace $propRef "#/components/schemas/" "" }}
+          {{- else if reflect.IsSlice $prop.type -}}
+            {{- /* A union type, e.g. `type: [string, null]` on
+                   /api/v2/info's display_power. Printing the slice
+                   directly gives Go's `[string null]`; join it so it
+                   reads like the `| null` suffix used just below. */ -}}
+            {{ delimit $prop.type " | " }}
           {{- else if eq $prop.type "array" -}}
             {{- $itemsRef := index $prop.items "$ref" -}}
             {{- if $itemsRef -}}

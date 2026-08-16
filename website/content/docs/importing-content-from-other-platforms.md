@@ -81,3 +81,10 @@ $ docker compose exec anthias-server \
 Use `--provider` with one of `yodeck`, `screencloud`, `pisignage`, or
 `xibo`, and pass the same credentials you would enter in the wizard. Add
 `--dry-run` to list what would be imported without copying anything.
+
+## Related documentation
+
+- [Asset scheduling](/docs/asset-scheduling/): schedule the assets you import.
+- [Migrating assets to Screenly](/docs/migrate-to-screenly/): move assets the
+  other way, up to a Screenly cloud account.
+- [All documentation](/docs/): the full Anthias documentation index.

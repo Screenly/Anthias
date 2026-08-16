@@ -20,8 +20,9 @@ is delegated to :mod:`anthias_server.lib.integrations.ingest`.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from datetime import datetime
-from typing import Any, Iterator
+from typing import Any
 from urllib.parse import urlparse
 
 from . import ingest

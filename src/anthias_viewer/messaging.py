@@ -1,11 +1,14 @@
 import logging
+from collections.abc import Callable
 from threading import Thread
 from time import sleep
-from typing import Any, Callable
+from typing import Any
 
 import redis
 
 from anthias_server.settings import VIEWER_CHANNEL
+
+logger = logging.getLogger(__name__)
 
 
 class ViewerSubscriber(Thread):
@@ -59,7 +62,7 @@ class ViewerSubscriber(Thread):
 
                 self._consume(pubsub)
             except redis.ConnectionError:
-                logging.warning(
+                logger.warning(
                     'Lost Redis connection in ViewerSubscriber; '
                     'reconnecting in %ss.',
                     delay,

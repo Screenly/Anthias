@@ -29,6 +29,7 @@ straight DOM query.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -49,7 +50,6 @@ from tests._seed_data import (
     home_seed_assets,
 )
 from tests.conftest import MarketingShotFn
-
 
 BASE_URL = 'http://localhost:8080'
 SETTINGS_URL = f'{BASE_URL}/settings/'
@@ -93,7 +93,7 @@ class _TemporaryCopy:
         shutil.copy2(self.original_path, self.path)
         return self.path
 
-    def __exit__(self, *_: Any) -> None:
+    def __exit__(self, *_: object) -> None:
         try:
             os.remove(self.path)
         except FileNotFoundError:
@@ -1865,22 +1865,21 @@ def test_skip_buttons_publish_correct_command(
             f'expected viewer publish {expected_command!r}, got {published!r}'
         )
     finally:
-        try:
+        with contextlib.suppress(Exception):
             sub.unsubscribe()
             sub.close()
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
 # 8. Display power (experimental, HDMI-CEC) — issue #2575
 # ---------------------------------------------------------------------------
 #
-# The section is gated on cec_available(), which stats /dev/cec0 and
-# /dev/vchiq. Neither exists in the test container by default, so the
-# section is hidden on every other settings test. To exercise the
-# visible state we stub /dev/vchiq with a plain file before navigating
-# and remove it on teardown.
+# The section is gated on cec_available(), which enumerates /dev/cec*
+# and probes each with CEC_ADAP_G_CAPS. No adapter exists in the test
+# container by default, so the section is hidden on every other settings
+# test. The visible-state tests require real CEC hardware and skip
+# without it — see the cec_stub_device fixture for why it can no longer
+# be faked.
 
 # Screenshot capture is OFF by default. The original PR (#2886) used
 # screenshots for a one-time UX review; running them on every CI cycle
@@ -1909,27 +1908,28 @@ def _maybe_screenshot(page: Page, filename: str, **kwargs: Any) -> None:
 
 @pytest.fixture
 def cec_stub_device() -> Any:
-    """Create a stub `/dev/vchiq` so `diagnostics.cec_available()`
-    returns True. /dev is tmpfs+writable in the test container; we
-    create a plain file (not a real device node) — the gate only
-    `os.path.exists`s the path.
+    """Require a real CEC adapter, skipping when there is none.
+
+    This used to fake availability by creating a plain file at
+    `/dev/vchiq`, because the old gate was a bare `os.path.exists`. That
+    is no longer possible, and deliberately so: `cec_available()` now
+    enumerates `/dev/cec*` and issues `CEC_ADAP_G_CAPS` against each, so
+    a regular file fails the ioctl (ENOTTY) and is correctly rejected.
+    The gate answers "is there CEC hardware", which a touch-file cannot
+    honestly satisfy.
+
+    These are Playwright tests against a separate server process, so
+    in-process mocking cannot reach it either. The rendering logic is
+    covered without hardware by the unit tests in
+    `test_template_views.py`, which mock `diagnostics.cec_available`
+    directly; this fixture keeps the browser-level checks meaningful by
+    running them only where a real adapter exists.
     """
-    path = '/dev/vchiq'
-    created = False
-    if not os.path.exists(path):
-        try:
-            open(path, 'w').close()
-            created = True
-        except OSError:
-            pytest.skip('cannot stub /dev/vchiq in this environment')
-    try:
-        yield path
-    finally:
-        if created:
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                pass
+    from anthias_server.lib import cec
+
+    if not cec.available():
+        pytest.skip('no CEC adapter on this host')
+    yield '/dev/cec0'
 
 
 @pytest.mark.integration
@@ -1937,11 +1937,13 @@ def cec_stub_device() -> Any:
 def test_display_power_section_hidden_without_cec_adapter(
     reset_assets: None, page: Page
 ) -> None:
-    """No /dev/cec0 or /dev/vchiq in the container by default — the
-    experimental section must NOT render. Guards against accidentally
-    surfacing CEC controls on x86 / non-CEC hardware."""
-    if os.path.exists('/dev/vchiq') or os.path.exists('/dev/cec0'):
-        pytest.skip('CEC device present; cannot test the hidden case')
+    """No CEC adapter in the container by default — the experimental
+    section must NOT render. Guards against accidentally surfacing CEC
+    controls on x86 / non-CEC hardware."""
+    from anthias_server.lib import cec
+
+    if cec.available():
+        pytest.skip('CEC adapter present; cannot test the hidden case')
     page.goto(SETTINGS_URL)
     expect(
         page.get_by_role('heading', name='Settings', exact=True)

@@ -28,7 +28,6 @@ from tests._seed_data import (
     WIZARD_WEBPAGE_URL,
 )
 
-
 BASE_URL = 'http://localhost:8080'
 MIGRATE_URL = f'{BASE_URL}/settings/migrate-to-screenly/'
 SETTINGS_URL = f'{BASE_URL}/settings/'

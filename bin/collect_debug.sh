@@ -9,7 +9,15 @@
 # Pulls host/system info, Docker + compose state, per-container logs
 # (journald-tagged in production), the Anthias config and database
 # overview, an ffprobe of every video asset, network reachability,
-# Redis health, and Raspberry Pi specifics (throttling, temperature).
+# Redis health, storage health (filesystem error counters, card
+# identity, kernel I/O errors), and Raspberry Pi specifics (power
+# supply health, throttling, temperature).
+#
+# Device state that Anthias already computes for its own UI is captured
+# by querying /api/v2/info rather than re-deriving it here, so the
+# bundle tracks the API as diagnostics move into the web UI. The raw
+# host-level readings remain as fallbacks for the case this script
+# mostly exists for: a stack too broken to answer.
 #
 # A final PII-scrub pass redacts IP/MAC addresses, email addresses,
 # URL-embedded credentials, the device hostname, and the secrets in
@@ -181,6 +189,19 @@ scrub_pii() {
             -e 's#\b([0-9]{1,3}\.){3}[0-9]{1,3}\b#<redacted-ip>#g' \
             "$f"
 
+        # Storage device serials. smartctl -i prints "Serial Number:"
+        # and "LU WWN Device Id:", and the MMC/SD sysfs dump carries a
+        # "serial:" line — all of them uniquely identify a physical
+        # unit, which is exactly what this bundle promises not to
+        # carry. Model, firmware and manufacture date are deliberately
+        # kept: those are what make a support conversation useful and
+        # they identify a product, not a device.
+        sed -i -E \
+            -e 's/^([[:space:]]*Serial Number:[[:space:]]*).*/\1<redacted-serial>/I' \
+            -e 's/^([[:space:]]*LU WWN Device Id:[[:space:]]*).*/\1<redacted-wwn>/I' \
+            -e 's/^([[:space:]]*serial[[:space:]]*:[[:space:]]*).*/\1<redacted-serial>/I' \
+            "$f"
+
         sed -i \
             -e 's/__KEEP_LOOPBACK__/127.0.0.1/g' \
             -e 's/__KEEP_ANY__/0.0.0.0/g' \
@@ -219,11 +240,240 @@ section "Inode usage" "$SYS" df -ih
 section "Top memory consumers" "$SYS" sh -c 'ps -eo pid,ppid,user,%cpu,%mem,rss,comm --sort=-%mem | head -20'
 section "Mounts" "$SYS" mount
 
-# Raspberry Pi specifics — model, firmware, throttling, temperature.
+# Under-voltage, read from the kernel rather than the firmware mailbox.
+#
+# `vcgencmd get_throttled` used to be the way to check this, and it is
+# still captured below, but its "has occurred since boot" bits (16-19)
+# cannot be trusted: the raspberrypi-hwmon driver polls the same
+# firmware property every 2 seconds and clears those sticky bits as it
+# goes (it sends value = 0xffff). On every current Raspberry Pi OS and
+# balenaOS Pi kernel they are wiped moments after they are set, so a
+# bundle reporting 0x0 there says nothing about whether the device has
+# browned out. The kernel's own rpi_volt hwmon sensor is the reliable
+# reading.
+#
+# This is the *fallback* reading. The interpreted state, including the
+# since-boot history the kernel no longer keeps, comes from
+# /api/v2/info (see the "anthias api snapshot" section below), which is
+# the same source the web UI renders from. This raw read exists for the
+# case that makes someone run this script in the first place: a stack
+# too broken to answer an HTTP request. Deliberately the whole of what
+# is duplicated here, one attribute and one directory scan, rather than
+# re-deriving the latch in shell.
+undervoltage_sensor() {
+    local found=0 name dir
+
+    for dir in /sys/class/hwmon/hwmon*; do
+        [ -r "${dir}/name" ] || continue
+        name="$(cat "${dir}/name" 2>/dev/null)"
+        [ "$name" = "rpi_volt" ] || continue
+        found=1
+        echo "sensor          : ${dir}"
+        echo -n "in0_lcrit_alarm : "
+        cat "${dir}/in0_lcrit_alarm" 2>/dev/null || echo "unreadable"
+        echo "                  (1 = under-voltage seen within the"
+        echo "                   driver's last 2-second poll)"
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "No rpi_volt hwmon sensor on this device, so under-voltage"
+        echo "cannot be detected here. Expected on non-Pi hardware, or on"
+        echo "a kernel built without CONFIG_SENSORS_RASPBERRYPI_HWMON."
+    fi
+}
+
+# The kernel logs every brown-out, so the ring buffer carries history
+# the firmware bits no longer do, and it survives an Anthias restart
+# that would lose the Redis latch behind /api/v2/info. This one is
+# genuinely host-only: the ring buffer is not readable from inside the
+# server container, so it cannot move to the API. Matched on the
+# message the driver emits ("Under-voltage detected!") plus its
+# recovery counterpart.
+#
+# The result is captured into a variable rather than piped straight
+# out: `grep | tail` exits 0 even when grep matched nothing, so a
+# trailing `|| echo` would never fire and an empty section would be
+# ambiguous between "no brown-outs" and "could not read dmesg".
+undervoltage_kernel_log() {
+    local out
+    out="$({ dmesg -T 2>/dev/null || sudo -n dmesg -T 2>/dev/null \
+        || dmesg 2>/dev/null; } \
+        | grep -i -E 'under-?voltage|voltage normali[sz]ed' \
+        | tail -50)"
+
+    if [ -n "$out" ]; then
+        echo "$out"
+    else
+        echo "No under-voltage messages in the kernel ring buffer."
+        echo "(The buffer is finite, so this does not rule out a"
+        echo " brown-out earlier in this device's uptime.)"
+    fi
+}
+
+# Storage health. Same split as under-voltage: the interpreted verdict
+# lives in /api/v2/info, and what follows is the raw evidence for when
+# the stack is too broken to answer.
+#
+# ext4 keeps its error counters in the superblock rather than in
+# memory, so unlike the firmware throttle bits these are durable: they
+# survive reboots and are cleared only by fsck or a reformat. A
+# nonzero errors_count on a device that has never been fscked is the
+# single strongest piece of evidence that a card is going.
+ext4_error_counters() {
+    local found=0 dir name
+
+    for dir in /sys/fs/ext4/*; do
+        name="$(basename "$dir")"
+        [[ "$name" = "features" ]] && continue
+        [[ -r "${dir}/errors_count" ]] || continue
+        found=1
+        echo "filesystem      : ${name}"
+        echo "errors_count    : $(cat "${dir}/errors_count" 2>/dev/null)"
+        echo "first_error_time: $(cat "${dir}/first_error_time" 2>/dev/null)"
+        echo "first_error_func: $(cat "${dir}/first_error_func" 2>/dev/null)"
+        echo "last_error_time : $(cat "${dir}/last_error_time" 2>/dev/null)"
+        echo "last_error_func : $(cat "${dir}/last_error_func" 2>/dev/null)"
+        echo "last_error_block: $(cat "${dir}/last_error_block" 2>/dev/null)"
+        echo "lifetime_write  : $(cat "${dir}/lifetime_write_kbytes" \
+            2>/dev/null) KiB"
+        echo "warning_count   : $(cat "${dir}/warning_count" 2>/dev/null)"
+        echo "                  (*_error_time are epoch seconds; on a Pi"
+        echo "                   with no RTC they can predate the first"
+        echo "                   NTP sync and read as nonsense)"
+        echo
+    done
+
+    if [[ "$found" -eq 0 ]]; then
+        # Report content that section() captures into storage.txt,
+        # not an error message: sending it to stderr would drop it
+        # from the bundle and leave an empty section reading as
+        # "could not check" rather than "nothing to report".
+        echo "No ext4 filesystems reporting error counters." # NOSONAR
+    fi
+
+    return 0
+}
+
+# MMC/SD identification and, on eMMC only, the wear registers. SD
+# cards have no health register at all, which is why the counters
+# above and the write check in the API are what this feature rests on.
+mmc_devices() {
+    local found=0 dev dir
+
+    for dir in /sys/block/mmcblk*; do
+        [[ -d "$dir" ]] || continue
+        dev="$(basename "$dir")"
+        found=1
+        echo "device       : ${dev}"
+        echo "type         : $(cat "${dir}/device/type" 2>/dev/null)"
+        echo "name         : $(cat "${dir}/device/name" 2>/dev/null)"
+        echo "manfid       : $(cat "${dir}/device/manfid" 2>/dev/null)"
+        echo "oemid        : $(cat "${dir}/device/oemid" 2>/dev/null)"
+        echo "date         : $(cat "${dir}/device/date" 2>/dev/null)"
+        echo "fwrev        : $(cat "${dir}/device/fwrev" 2>/dev/null)"
+        echo "size         : $(cat "${dir}/size" 2>/dev/null) sectors"
+        # eMMC only. life_time is two 10%-band estimates (0x0b means
+        # the estimate has been exceeded); pre_eol_info is 0x01
+        # normal / 0x02 80% of reserve used / 0x03 90%.
+        echo "life_time    : $(cat "${dir}/device/life_time" \
+            2>/dev/null || echo "n/a (SD cards do not report wear)")"
+        echo "pre_eol_info : $(cat "${dir}/device/pre_eol_info" \
+            2>/dev/null || echo "n/a")"
+        echo
+    done
+
+    if [[ "$found" -eq 0 ]]; then
+        echo "No MMC/SD block devices; this player boots from something"
+        echo "else (SSD, NVMe, USB)."
+    fi
+
+    return 0
+}
+
+# The richest evidence of a failing card by far, and host-only: the
+# ring buffer is not readable from inside the server container, so
+# this cannot move to the API. Matches the block layer's I/O error
+# message, the mmc driver's timeouts and resets, and ext4's own
+# remount-read-only announcement.
+#
+# Captured into a variable for the same reason as the under-voltage
+# equivalent above: `grep | tail` exits 0 even when grep matched
+# nothing, so an empty section would otherwise be ambiguous between
+# "no errors" and "could not read dmesg".
+storage_kernel_log() {
+    local out
+    out="$({ dmesg -T 2>/dev/null || sudo -n dmesg -T 2>/dev/null \
+        || dmesg 2>/dev/null; } \
+        | grep -i -E 'blk_update_request|I/O error|mmc[0-9]+:|mmcblk|EXT4-fs error|EXT4-fs .*(remount|read-only)|Buffer I/O error|critical (target|medium) error' \
+        | tail -100)"
+
+    if [[ -n "$out" ]]; then
+        echo "$out"
+    else
+        echo "No storage errors in the kernel ring buffer."
+        echo "(The buffer is finite, so this does not rule out errors"
+        echo " earlier in this device's uptime.)"
+    fi
+
+    return 0
+}
+
+# SMART, for the boards that boot from a SATA/NVMe device. Anthias
+# reads this through the privileged viewer container and republishes
+# it on /api/v2/info; this section is the host-side raw read for when
+# the stack can't answer. smartmontools is not installed on the
+# SD-card-only boards, and an SD card has no SMART to report anyway.
+smart_devices() {
+    local found=0 dev
+
+    if ! command -v smartctl >/dev/null 2>&1; then
+        echo "smartctl is not installed on this host."
+        echo "(apt-get install smartmontools to read SMART here; the"
+        echo " viewer container ships it on x86/arm64/pi5.)"
+        return
+    fi
+
+    for dev in /dev/sd? /dev/nvme?n?; do
+        [[ -b "$dev" ]] || continue
+        found=1
+        echo "=== ${dev}"
+        sudo -n smartctl -H -A -i "$dev" 2>&1 | sed 's/^/    /'
+        echo
+    done
+
+    if [[ "$found" -eq 0 ]]; then
+        echo "No SATA/NVMe block devices on this player."
+    fi
+
+    return 0
+}
+
+note "storage health"
+STORAGE="${REPORT_DIR}/storage.txt"
+section "Block devices" "$STORAGE" lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT,RO
+# `ro` on the root filesystem here is the endgame of a dying card: the
+# player keeps displaying content while every change silently fails to
+# save.
+section "Mount flags (ro = filesystem has gone read-only)" "$STORAGE" \
+    sh -c 'grep -E " (ext4|f2fs|btrfs|vfat) " /proc/self/mounts'
+section "ext4 error counters (durable; see api-info.json)" "$STORAGE" \
+    ext4_error_counters
+section "MMC / SD devices" "$STORAGE" mmc_devices
+section "SMART (SATA / NVMe; see api-info.json)" "$STORAGE" smart_devices
+section "Storage kernel messages" "$STORAGE" storage_kernel_log
+
+# Raspberry Pi specifics: model, firmware, power, temperature.
 note "raspberry pi specifics (if present)"
 PI="${REPORT_DIR}/raspberry-pi.txt"
 section "Device model" "$PI" cat /proc/device-tree/model
-section "Throttling status" "$PI" vcgencmd get_throttled
+section "Under-voltage sensor (raw; see api-info.json)" "$PI" \
+    undervoltage_sensor
+section "Under-voltage kernel messages" "$PI" undervoltage_kernel_log
+# Kept for the live bits (0-3: under-voltage now, ARM capped, throttled,
+# soft temp limit) and for thermal throttling, which hwmon does not
+# expose. Bits 16-19 are the ones the hwmon driver keeps clearing.
+section "Throttle flags (firmware; bits 16-19 unreliable)" "$PI" \
+    vcgencmd get_throttled
 section "Core temperature" "$PI" vcgencmd measure_temp
 section "Firmware version" "$PI" vcgencmd version
 section "Memory split" "$PI" vcgencmd get_mem arm
@@ -458,6 +708,75 @@ section "Internet (ghcr.io)" "$NET" sh -c \
     'curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" --max-time 10 https://ghcr.io/ || echo "unreachable"'
 section "DNS resolution" "$NET" sh -c \
     'getent hosts ghcr.io || nslookup ghcr.io 2>/dev/null || echo "resolution failed"'
+
+# Anthias's own view of the device, straight from /api/v2/info.
+#
+# This is the authoritative, already-interpreted device state: version,
+# uptime, memory and the low-RAM gate, display power, IP addresses,
+# power-supply health and storage health (including the write check,
+# which nothing outside Anthias performs), produced by the same code
+# the web UI renders
+# from. Capturing it keeps the bundle in step with the API instead of
+# re-deriving the same facts in shell, and it is where new diagnostics
+# should land as more of them move into the UI: adding a field to the
+# API puts it in the bundle for free.
+#
+# Best-effort by design. It needs the server up, and on a device with
+# an auth backend configured it answers with a redirect to /login/
+# rather than data. Both cases fall back to the host-only readings
+# elsewhere in this bundle (kernel ring buffer, raw sysfs, container
+# logs), which is the situation that prompts most debug bundles anyway.
+#
+# Port 80 is production; 8000 is the dev compose file.
+#
+# The timeout is deliberately generous. /api/v2/info calls
+# get_node_ip(), which publishes a hostcmd and then waits up to ~80s
+# (60s host_agent_ready + 20s ip_addresses_ready) for the host agent to
+# populate Redis. A host agent that is not running is itself a common
+# fault this bundle is meant to diagnose, so a 10s timeout would drop
+# the API snapshot on precisely the broken devices that need it. The
+# endpoint is not polled, so waiting is cheap and happens once.
+API_FETCH_TIMEOUT_S=90
+
+fetch_api_info() {
+    local url code
+    for url in "http://localhost/api/v2/info" \
+               "http://localhost:8000/api/v2/info"; do
+        code="$(curl -sS --max-time "$API_FETCH_TIMEOUT_S" -o "$API_INFO" \
+            -w '%{http_code}' "$url" 2>/dev/null)" || continue
+        # A 302 to /login/ still writes a body, so check the status and
+        # that we actually got JSON rather than an HTML login page.
+        if [[ "$code" == "200" ]] && head -c 1 "$API_INFO" | grep -q '{'; then
+            note "fetched /api/v2/info from ${url%%/api*}"
+            # Pretty-print when python3 is around; the raw single-line
+            # body is still valid JSON if it isn't.
+            if command -v python3 >/dev/null 2>&1; then
+                python3 -m json.tool "$API_INFO" >"${API_INFO}.tmp" \
+                    2>/dev/null && mv "${API_INFO}.tmp" "$API_INFO"
+                rm -f "${API_INFO}.tmp"
+            fi
+            return 0
+        fi
+    done
+    return 1
+}
+
+note "anthias api snapshot"
+API_INFO="${REPORT_DIR}/api-info.json"
+if ! fetch_api_info; then
+    rm -f "$API_INFO"
+    cat >"${REPORT_DIR}/api-info.txt" <<'EOF'
+Could not read /api/v2/info.
+
+The server did not answer on port 80 or 8000, or it redirected to the
+login page because this device has an auth backend configured.
+
+Device state that would normally come from here (power-supply health,
+storage health, memory, uptime, version) has to be read from the raw
+sections instead: raspberry-pi.txt, storage.txt, system.txt, logs/ and
+redis.txt.
+EOF
+fi
 
 # Redis health — broker / channel layer / viewer bus all live here.
 note "redis health"

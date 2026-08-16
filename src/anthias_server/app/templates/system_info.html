@@ -143,6 +143,196 @@
           </ul>
         </div>
       </div>
+
+      {% comment %}
+      Storage health, directly under Disk usage. "83% of 32 GB used"
+      and "this card has recorded 6 errors" are two halves of the same
+      question, and separating them would leave the second findable
+      only by someone who already suspected it.
+
+      Like the Power supply card, this one also renders the healthy
+      and the could-not-check cases. The verdict is written for an
+      operator; the evidence behind it sits in the disclosure.
+      {% endcomment %}
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">
+          {% if storage.media.kind == 'sd' %}Memory card
+          {% elif storage.media.kind == 'emmc' %}Built-in storage
+          {% else %}Storage health{% endif %}
+        </p>
+
+        {% if not storage.supported %}
+        <div class="stat-card__value">Not checked</div>
+        <div class="stat-card__meta">
+          Anthias couldn't work out which storage it's running from, so
+          storage problems can't be detected here.
+        </div>
+
+        {% elif storage.kind == 'read_only' or storage.kind == 'write_failing' or storage.kind == 'errors_now' %}
+        <div class="stat-card__value status-verdict status-verdict--critical">
+          <i class="ti ti-alert-octagon mr-1"></i>Failing
+        </div>
+        <p class="stat-card__meta">
+          {% if storage.kind == 'read_only' %}
+          Switched to read-only, so nothing you change is being saved.
+          {% elif storage.kind == 'write_failing' %}
+          A test write failed{% if storage.last_check %} {{ storage.last_check|naturaltime }}{% endif %}.
+          {% else %}
+          {% if storage.errors_new %}{{ storage.errors_new|intcomma }} storage
+          error{{ storage.errors_new|pluralize }}{% else %}A storage error{% endif %}
+          since this player last restarted.
+          {% endif %}
+          Replace it and see the warning at the top of the page.
+        </p>
+
+        {% elif storage.kind == 'full' %}
+        <div class="stat-card__value status-verdict status-verdict--critical">
+          <i class="ti ti-database-off mr-1"></i>Out of space
+        </div>
+        <p class="stat-card__meta">
+          Writes are failing because the drive is full. Remove content
+          you no longer need from the Schedule page.
+        </p>
+
+        {% elif storage.kind == 'bad_sectors' %}
+        <div class="stat-card__value status-verdict status-verdict--warn">
+          <i class="ti ti-alert-triangle mr-1"></i>Bad blocks
+        </div>
+        <p class="stat-card__meta">
+          {{ storage.bad_sectors|intcomma }}
+          block{{ storage.bad_sectors|pluralize }} gone bad. Saving
+          still works, but they don't heal and they usually keep
+          appearing. Plan a replacement.
+        </p>
+
+        {% elif storage.kind == 'wear' %}
+        <div class="stat-card__value status-verdict status-verdict--warn">
+          <i class="ti ti-hourglass-low mr-1"></i>Wearing out
+        </div>
+        <p class="stat-card__meta">
+          {% if storage.media.wear_pct is None %}The drive reports it is near the end of its rated write life.{% elif storage.media.wear_is_exact %}{{ storage.media.wear_pct }}% of the rated write life used.{% else %}Up to {{ storage.media.wear_pct }}% of the rated write life used.{% endif %}
+          Working normally today; plan a replacement.
+        </p>
+
+        {% elif storage.kind == 'errors_past' %}
+        <div class="stat-card__value status-verdict status-verdict--warn">
+          <i class="ti ti-device-sd-card mr-1"></i>Errors recorded
+        </div>
+        <p class="stat-card__meta">
+          {{ storage.errors_count|intcomma }} storage
+          error{{ storage.errors_count|pluralize }} recorded{% if storage.last_error %}, most recently {{ storage.last_error|naturaltime }}{% endif %}.
+          Saving works right now, but these don't happen on healthy
+          storage.
+        </p>
+
+        {% else %}
+        <div class="stat-card__value status-verdict status-verdict--ok">
+          <i class="ti ti-device-sd-card mr-1"></i>OK
+        </div>
+        <div class="stat-card__meta">
+          {% comment %}
+          Each clause is asserted only if it was actually established.
+          write_ok is None when no check has run -- notably whenever
+          Redis is unreachable, since the latch then reads blank every
+          time -- and errors_count is 0 on a non-ext4 root because
+          there is no counter, not because there are no errors.
+          {% endcomment %}
+          {% if storage.error_stats_supported %}No storage errors recorded{% else %}This filesystem keeps no error counter{% endif %}{% if storage.write_ok %}, and the last write test passed{% endif %}.
+        </div>
+        {% endif %}
+
+        {% if storage.supported %}
+        {% comment %}
+        The only place the mechanism is named, and the one part of the
+        card written for a support engineer rather than an operator.
+
+        A readout rather than a paragraph. This was prose with
+        monospace fragments embedded in it, which at 0.78rem made the
+        block look like mixed type and buried the one number anybody
+        opens it for. Labels in a fixed column, values on a shared
+        left edge, one monospace size throughout: scanned, not read.
+        {% endcomment %}
+        <div class="stat-card__details">
+          <dl class="readout">
+            {% if storage.media.name %}
+            <dt class="readout__key">Device</dt>
+            <dd class="readout__value">
+              {% if storage.media.manufacturer %}{{ storage.media.manufacturer }} {% endif %}{{ storage.media.name }}{% if storage.media.manufactured %} &middot; {{ storage.media.manufactured }}{% endif %}
+            </dd>
+            {% endif %}
+            {% comment %}
+            An id with no published vendor is shown raw. mmc-utils and
+            the kernel between them list well under a hundred, and
+            neither is complete, so an unlisted card is ordinary
+            rather than suspicious — and the number is what someone
+            would actually search for.
+            {% endcomment %}
+            {% if storage.media.manufacturer_id is not None and not storage.media.manufacturer %}
+            <dt class="readout__key">Vendor id</dt>
+            <dd class="readout__value">
+              {{ storage.media.manufacturer_id|stringformat:"#04x" }} (unlisted)
+            </dd>
+            {% endif %}
+            <dt class="readout__key">Filesystem</dt>
+            <dd class="readout__value">
+              {{ storage.fstype }} on {{ storage.device }} &middot; {{ storage.mount_point }}
+            </dd>
+            {% if storage.error_stats_supported %}
+            <dt class="readout__key">ext4 errors</dt>
+            <dd class="readout__value">
+              {{ storage.errors_count|intcomma }}{% if storage.last_error_function %} &middot; last in {{ storage.last_error_function }}{% endif %}
+            </dd>
+            {% endif %}
+            {% if storage.lifetime_written %}
+            <dt class="readout__key">Written</dt>
+            <dd class="readout__value">{{ storage.lifetime_written }} lifetime</dd>
+            {% endif %}
+            {% if storage.fsync_ms is not None %}
+            <dt class="readout__key">Write test</dt>
+            <dd class="readout__value">
+              {% if storage.write_ok %}passed{% elif storage.write_ok is False %}failed{% else %}not run{% endif %} &middot; {{ storage.fsync_ms }} ms
+            </dd>
+            {% endif %}
+            {% if storage.media.smart %}
+            {% comment %}
+            SMART, on the SATA/NVMe boards only. Sampled by the viewer
+            (the one privileged container) and read here from Redis,
+            so it is absent on every board that boots from a card.
+            {% endcomment %}
+            <dt class="readout__key">SMART</dt>
+            <dd class="readout__value">
+              {% if storage.media.smart.passed %}passed{% elif storage.media.smart.passed is False %}FAILED{% else %}unavailable{% endif %}{% if storage.media.smart.power_on_hours is not None %} &middot; {{ storage.media.smart.power_on_hours|intcomma }} h{% endif %}{% if storage.media.smart.temperature_c is not None %} &middot; {{ storage.media.smart.temperature_c }} &deg;C{% endif %}
+            </dd>
+            {% comment %}
+            Counters are falsy-tested on purpose: zero means "none",
+            which is worth omitting rather than printing. The
+            measurements above are tested against None, because zero
+            is a real reading there.
+            {% endcomment %}
+            {% if storage.bad_sectors %}
+            <dt class="readout__key">Bad blocks</dt>
+            <dd class="readout__value">
+              {% if storage.media.smart.reallocated_sectors %}{{ storage.media.smart.reallocated_sectors|intcomma }} reallocated{% endif %}{% if storage.media.smart.pending_sectors %}{% if storage.media.smart.reallocated_sectors %} &middot; {% endif %}{{ storage.media.smart.pending_sectors|intcomma }} pending{% endif %}{% if storage.media.smart.media_errors %}{% if storage.media.smart.reallocated_sectors or storage.media.smart.pending_sectors %} &middot; {% endif %}{{ storage.media.smart.media_errors|intcomma }} media errors{% endif %}
+            </dd>
+            {% endif %}
+            {% endif %}
+            {% if storage.media.wear_pct is not None %}
+            <dt class="readout__key">Wear</dt>
+            <dd class="readout__value">
+              {% if storage.media.wear_is_exact %}{{ storage.media.wear_pct }}% of rated life{% else %}up to {{ storage.media.wear_pct }}% of rated life (approximate){% endif %}
+            </dd>
+            {% endif %}
+          </dl>
+          {% if storage.error_stats_supported %}
+          <p class="readout__note">
+            The error count lives in the filesystem superblock and
+            survives reboots, so it is cleared only by a repair or a
+            reformat.
+          </p>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
     </div>
   </section>
 
@@ -156,6 +346,80 @@
         <p class="stat-card__label">Device model</p>
         <div class="stat-card__value">{{ device_model }}</div>
         {% if device_model_detail %}<div class="stat-card__meta">{{ device_model_detail }}</div>{% endif %}
+      </div>
+
+      {% comment %}
+      Power health. Unlike the banner, this card also renders the
+      healthy and the unsupported case. On a diagnostics page the
+      difference between "we checked and it's fine" and "this board
+      can't tell us" is exactly what an operator chasing a glitch
+      needs to know.
+      {% endcomment %}
+      <div class="stat-card stat-card--span-2">
+        <p class="stat-card__label">Power supply</p>
+        {% if not power.supported %}
+        <div class="stat-card__value">Not monitored</div>
+        <div class="stat-card__meta">
+          This device has no power sensor Anthias can read, so power
+          problems can't be detected here.
+        </div>
+        {% elif power.active %}
+        <div class="stat-card__value status-verdict status-verdict--critical">
+          <i class="ti ti-plug-off mr-1"></i>Not enough power
+        </div>
+        <p class="stat-card__meta">
+          Happening right now.
+          {% if power.first_seen %}First seen {{ power.first_seen|naturaltime }}.{% endif %}
+          Fit the official Raspberry Pi power supply for this model. See
+          the warning at the top of the page.
+        </p>
+        {% elif power.seen_since_boot %}
+        <div class="stat-card__value status-verdict status-verdict--warn">
+          <i class="ti ti-alert-triangle mr-1"></i>Dropped earlier
+        </div>
+        <p class="stat-card__meta">
+          Power dropped too low
+          {% if power.count > 1 %}{{ power.count|intcomma }} times{% else %}once{% endif %}
+          since the last restart{% if power.last_seen %}, most recently
+          {{ power.last_seen|naturaltime }}{% endif %}. It's steady now.
+        </p>
+        {% else %}
+        <div class="stat-card__value status-verdict status-verdict--ok">
+          <i class="ti ti-plug mr-1"></i>OK
+        </div>
+        <div class="stat-card__meta">
+          No power problems since this player last restarted.
+        </div>
+        {% endif %}
+
+        {% if power.supported %}
+        {% comment %}
+        The one place the underlying mechanism is named, tucked behind
+        a disclosure so the plain-language card above stays readable
+        for a non-technical operator while a support engineer can still
+        confirm where the reading comes from.
+        {% endcomment %}
+        <div class="stat-card__details">
+          <dl class="readout">
+            <dt class="readout__key">Sensor</dt>
+            <dd class="readout__value">rpi_volt / in0_lcrit_alarm</dd>
+            <dt class="readout__key">Polled</dt>
+            <dd class="readout__value">every 2 s by the firmware</dd>
+            <dt class="readout__key">Dips</dt>
+            <dd class="readout__value">
+              {{ power.count|intcomma }} since restart{% if power.first_seen %} &middot; first {{ power.first_seen|naturaltime }}{% endif %}
+            </dd>
+            {% if power.last_seen %}
+            <dt class="readout__key">Most recent</dt>
+            <dd class="readout__value">{{ power.last_seen|naturaltime }}</dd>
+            {% endif %}
+          </dl>
+          <p class="readout__note">
+            The count resets when the device restarts, because the
+            kernel keeps no record of it across a reboot.
+          </p>
+        </div>
+        {% endif %}
       </div>
       <div class="stat-card">
         <p class="stat-card__label">Resolution</p>

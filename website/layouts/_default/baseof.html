@@ -17,7 +17,7 @@
            crawler always gets *something*. */ -}}
     {{- $pageImage := "" -}}
     {{- $pageImageAlt := "Anthias logo" -}}
-    {{- /* Stable string key — the partial reads only site.Data and
+    {{- /* Stable string key, the partial reads only site.Data and
            bundled resources, so memoising once per build (instead of
            per-page via "." which differs across pages) is correct and
            avoids re-running the Resize pipeline for every page. */ -}}
@@ -52,15 +52,15 @@
     <meta name="twitter:image:alt" content="{{ $pageImageAlt }}">
 
     {{- $favicon := resources.Get "images/favicon.ico" -}}
-    {{- $style := resources.Get "styles/style.css" | fingerprint -}}
+    {{- $style := resources.Get "styles/style.css" | minify | fingerprint -}}
     <link rel="icon" href="{{ $favicon.RelPermalink }}">
 
     {{- /* Preload primary font weights so text renders without a FOUT.
-           Latin only — latin-ext loads on demand via unicode-range. */ -}}
+           Latin only, latin-ext loads on demand via unicode-range. */ -}}
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 
-    {{- /* Preload the LCP hero image on the home page — only the
+    {{- /* Preload the LCP hero image on the home page, only the
            first slide of the screenshot slider. Subsequent slides
            come in via lazy <img> as the user scrolls/advances. */ -}}
     {{- if and .IsHome $heroSlides -}}
@@ -72,14 +72,14 @@
 
     {{- /* chroma.css is only needed on pages that produce highlighted
            code blocks. Hugo wraps each block in <pre class="chroma">,
-           so that exact attribute is the precise sentinel — looser
+           so that exact attribute is the precise sentinel, looser
            matches like "chroma" alone would false-positive on prose.
            The faq layout renders answers from data/faq.yaml via
            markdownify, so its highlighted output is not in .Content
            and we have to special-case it. */ -}}
     {{- $needsChroma := or (strings.Contains .Content `class="chroma"`) (eq .Layout "faq") -}}
     {{- if $needsChroma -}}
-      {{- $chroma := resources.Get "styles/chroma.css" | fingerprint -}}
+      {{- $chroma := resources.Get "styles/chroma.css" | minify | fingerprint -}}
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
     {{- end }}
 
@@ -89,7 +89,7 @@
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "Anthias",
-      "description": {{ $defaultDescription | jsonify }},
+      "description": {{ $defaultDescription | jsonify | safeJS }},
       "url": "{{ site.BaseURL }}",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Linux",
@@ -108,7 +108,7 @@
     </script>
     {{ end }}
 
-    {{- /* FAQPage structured data — generated from data/faq.yaml */ -}}
+    {{- /* FAQPage structured data, generated from data/faq.yaml */ -}}
     {{ if eq .Layout "faq" }}
     <script type="application/ld+json">
     {
@@ -122,10 +122,10 @@
             {{- $first = false }}
         {
           "@type": "Question",
-          "name": {{ .question | jsonify }},
+          "name": {{ .question | jsonify | safeJS }},
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": {{ .answer | markdownify | plainify | jsonify }}
+            "text": {{ .answer | markdownify | plainify | jsonify | safeJS }}
           }
         }
           {{- end -}}
@@ -135,7 +135,7 @@
     </script>
     {{ end }}
 
-    {{- /* Screenshot slider script — only on the home page where the
+    {{- /* Screenshot slider script, only on the home page where the
            slider markup exists. js.Build runs esbuild internally
            (target=es2020, minify=true) so the published artifact is
            a small, tree-shaken bundle. `defer` lets the browser
@@ -153,8 +153,8 @@
     {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      "headline": {{ .Title | jsonify }},
-      "description": {{ $description | jsonify }},
+      "headline": {{ .Title | jsonify | safeJS }},
+      "description": {{ $description | jsonify | safeJS }},
       "url": "{{ .Permalink }}",
       "image": "{{ $pageImage }}",
       "publisher": {

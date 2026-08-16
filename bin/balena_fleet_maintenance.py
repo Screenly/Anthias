@@ -78,6 +78,7 @@ def run_balena(
             capture_output=True,
             text=True,
             timeout=180,
+            check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, '', str(exc)

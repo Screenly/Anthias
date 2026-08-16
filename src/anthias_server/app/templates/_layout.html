@@ -3,6 +3,10 @@
 
 {% block content %}
 {% include "_navbar.html" %}
+{% comment %} Above <main> so they can't be scrolled past or mistaken
+   for page content. Renders nothing unless the device has an
+   under-voltage or memory-card condition to report. {% endcomment %}
+{% include "_device_alerts.html" %}
 <main>
   {% block main %}{% endblock %}
 </main>

@@ -19,6 +19,12 @@ disableKinds = ['taxonomy']
     pageRef = '/features'
     weight = 10
   [[menus.main]]
+    name = 'Apps'
+    url = 'https://signage-apps.com/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=nav'
+    weight = 15
+    [menus.main.params]
+      external = true
+  [[menus.main]]
     name = 'Get Started'
     pageRef = '/get-started'
     weight = 20

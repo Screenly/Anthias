@@ -8,6 +8,9 @@
             <p class="text-white/60 text-lg mt-6 leading-relaxed">
                 Turn a Raspberry Pi or any PC into a digital sign. Schedule images, videos, and web pages from a web interface. No subscriptions, no cloud lock-in.
             </p>
+            <p class="text-white/40 text-sm mt-3">
+                Formerly <strong class="font-semibold text-white/60">Screenly OSE</strong>, same project, renamed in 2022.
+            </p>
             <div class="flex flex-wrap items-center gap-4 mt-8">
                 <a class="btn-primary" href="/get-started/">Get Started</a>
                 <a class="btn-secondary" href="/features/">See Features</a>
@@ -47,7 +50,7 @@
             aria-roledescription="carousel"
             aria-label="Anthias product screenshots">
 
-            {{- /* Top chrome — traffic-light dots + URL pill. Reads
+            {{- /* Top chrome, traffic-light dots + URL pill. Reads
                    as a real browser frame so the dashboard captures
                    inside feel like the live product, not a flat PR
                    render. The URL value flips per-slide via
@@ -129,7 +132,7 @@
             </div>
 
             {{- if gt (len $slides) 1 }}
-            {{- /* Plain buttons with aria-current — not role="tab"
+            {{- /* Plain buttons with aria-current, not role="tab"
                    inside role="tablist". The full ARIA Tabs pattern
                    (roving tabindex, aria-controls/tabpanel) doesn't
                    fit a horizontal-scroll carousel where every slide
@@ -217,13 +220,13 @@
 <section class="bg-bg-light py-20 lg:py-28 px-6 md:px-12 lg:px-20">
     <div class="max-w-7xl mx-auto">
         <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Get running in minutes</h2>
-        <p class="text-zinc-500 mt-3 text-lg max-w-xl">The recommended way is to flash an SD card with Raspberry Pi Imager &mdash; no command line needed. Advanced users can install over an existing Raspberry Pi OS / Debian system.</p>
+        <p class="text-zinc-500 mt-3 text-lg max-w-xl">The recommended way is to flash an SD card with Raspberry Pi Imager, no command line needed. Advanced users can install over an existing Raspberry Pi OS / Debian system.</p>
 
         <div class="mt-8 grid md:grid-cols-2 gap-6 max-w-4xl">
             <div class="bg-white border border-black/10 rounded-lg p-6 flex flex-col">
                 <div class="flex items-center gap-2"><h3 class="text-lg font-bold">Raspberry Pi Imager</h3><span class="text-xs font-semibold text-green-700 bg-green-100 rounded px-2 py-0.5">Recommended</span></div>
-                <p class="text-zinc-500 mt-2 text-sm leading-relaxed flex-grow">Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, pick <em>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</em>, choose your Pi model, and flash. The SD card boots straight into Anthias &mdash; no SSH, no installer prompts.</p>
-                <p class="text-zinc-400 text-xs mt-3">Raspberry Pi 2 through Pi 5.</p>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed flex-grow">Open <a class="text-brand-purple no-underline hover:underline" href="https://www.raspberrypi.com/software/" target="_blank" rel="noopener">Raspberry Pi Imager</a>, pick <em>Other specific-purpose OS &rarr; Digital signage and kiosks &rarr; Anthias</em>, choose your Pi model, and flash. The SD card boots straight into Anthias, no SSH, no installer prompts.</p>
+                <p class="text-zinc-400 text-xs mt-3">Raspberry Pi 2 through Pi 5. These are <a class="text-brand-purple no-underline hover:underline" href="https://hub.balena.io/fleets-for-good" target="_blank" rel="noopener">balenaHub Fleets for Good</a> images, so the device updates over the air automatically.</p>
             </div>
 
             <div class="bg-brand-dark rounded-lg p-6 flex flex-col">
@@ -236,10 +239,89 @@
             </div>
         </div>
 
-        <p class="text-zinc-500 mt-6 text-sm">Prefer fleet-managed, OTA-updated images? See <a class="text-brand-purple no-underline hover:underline" href="https://hub.balena.io/fleets-for-good" target="_blank" rel="noopener">balenaHub Fleets for Good</a>.</p>
-
         <div class="mt-8">
             <a class="text-brand-purple font-semibold text-sm no-underline hover:underline" href="/get-started/">All installation options &rarr;</a>
+        </div>
+    </div>
+</section>
+
+<section class="bg-white py-20 lg:py-28 px-6 md:px-12 lg:px-20">
+    <div class="max-w-7xl mx-auto">
+        <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight">Open source digital signage you control</h2>
+        <p class="text-zinc-500 mt-3 text-lg max-w-xl">Free and self-hosted, developed in the open since 2012, running on hardware you already own.</p>
+
+        <div class="mt-12 grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
+            <div class="space-y-5 text-zinc-600 text-base lg:text-lg leading-relaxed">
+                <p>Anthias is a free, self-hosted digital signage platform for Raspberry Pi and x86 PCs. Formerly known as Screenly OSE, it has been developed in the open since 2012 and is one of the most widely deployed open source signage projects in the world.</p>
+                <p>Once a screen is running, you manage it from a simple web interface: upload an image or video, point to a web page or a free <a class="text-brand-purple no-underline hover:underline" href="https://signage-apps.com/?utm_source=anthias.screenly.io&amp;utm_medium=referral&amp;utm_campaign=home-body">signage app</a> such as weather, a world clock, or a news feed, then set how long each asset shows and give it a start and end date. Anthias loops through the active playlist automatically, so a Pi tucked behind a display can run unattended for months.</p>
+                <div class="pt-2">
+                    <a class="text-brand-purple font-semibold text-sm no-underline hover:underline" href="/features/">Explore all features &rarr;</a>
+                </div>
+            </div>
+
+            <div class="bg-bg-light rounded-2xl border border-black/5 p-8">
+                <h3 class="text-lg font-bold">Why teams choose Anthias</h3>
+                <ul class="mt-6 space-y-5 list-none m-0 p-0">
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Free and open source</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">On GitHub under a permissive license, maintained by Screenly with a large community of contributors.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Self-hosted and private</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Your content stays on your own network, with no cloud account to sign up for.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">No per-screen fees</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Run one screen or a hundred at no software cost.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Runs on hardware you own</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Raspberry Pi 2 through Pi 5, and ordinary x86 PCs.</p>
+                        </div>
+                    </li>
+                    <li class="flex gap-4">
+                        <span class="shrink-0 w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center">
+                            <svg class="w-4 h-4 text-brand-purple" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-brand-near-black m-0">Automate with a REST API</p>
+                            <p class="text-zinc-500 text-sm mt-1 leading-relaxed">Manage and update dozens of screens programmatically.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-14">
+            <p class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Where teams use it</p>
+            <div class="mt-4 flex flex-wrap gap-2.5">
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Menu boards</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Wayfinding &amp; reception</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Operations dashboards</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Retail promotions</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Schools</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Churches</span>
+                <span class="inline-flex items-center rounded-full bg-brand-purple/10 px-3.5 py-1.5 text-sm font-medium text-brand-dark">Community spaces</span>
+            </div>
         </div>
     </div>
 </section>
@@ -250,6 +332,7 @@
         <p class="text-white/50 mt-4 text-lg max-w-lg mx-auto">Anthias is free and open source. Get started in minutes on any Raspberry Pi or x86 PC.</p>
         <div class="flex flex-wrap justify-center gap-4 mt-8">
             <a class="btn-primary" href="/get-started/">Get Started</a>
+            <a class="btn-secondary" href="https://signage-apps.com/?utm_source=anthias.screenly.io&amp;utm_medium=referral&amp;utm_campaign=home-cta" target="_blank" rel="noopener">Browse free apps</a>
             <a class="btn-secondary" href="https://github.com/Screenly/Anthias" target="_blank" rel="noopener">View on GitHub</a>
         </div>
     </div>

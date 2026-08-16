@@ -2,3 +2,13 @@
 - name: Update GRUB
   ansible.builtin.command: update-grub
   changed_when: true
+
+- name: Restart docker
+  # Picks up /etc/systemd/system/docker.service.d/http-proxy.conf so
+  # dockerd can pull from ghcr.io through the proxy. Runs at end of play,
+  # before install.sh hands off to bin/upgrade_containers.sh (which pulls
+  # the images), so the daemon already has the proxy by then.
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true

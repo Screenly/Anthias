@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import json
 import os
 import re
@@ -81,7 +79,7 @@ def get_latest_tag() -> str:
         return tag
 
     response = requests.get(
-        '{}/releases/latest'.format(BASE_URL),
+        f'{BASE_URL}/releases/latest',
         headers=get_github_headers(),
         timeout=HTTP_TIMEOUT,
     )
@@ -98,7 +96,7 @@ def get_board_from_url(url: str) -> str | None:
 def get_asset_list(release_tag: str) -> list[str]:
     asset_urls = []
     response = requests.get(
-        '{}/releases/tags/{}'.format(BASE_URL, release_tag),
+        f'{BASE_URL}/releases/tags/{release_tag}',
         headers=get_github_headers(),
         timeout=HTTP_TIMEOUT,
     )

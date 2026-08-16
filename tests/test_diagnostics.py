@@ -1,11 +1,10 @@
 import os
-import subprocess
 from typing import Any
 from unittest import mock
 
 import pytest
 
-from anthias_server.lib import diagnostics
+from anthias_server.lib import cec, cec_client, diagnostics
 
 
 @pytest.mark.parametrize(
@@ -113,203 +112,6 @@ def test_get_raspberry_model_unknown() -> None:
         assert diagnostics.get_raspberry_model() == 'Unknown'
 
 
-def test_get_display_power_true() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'True'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        assert diagnostics.get_display_power() is True
-
-
-def test_get_display_power_false() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'False'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        assert diagnostics.get_display_power() is False
-
-
-def test_get_display_power_cec_error() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'CEC error'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        assert diagnostics.get_display_power() == 'CEC error'
-
-
-def test_get_display_power_unknown() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'Unknown'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        assert diagnostics.get_display_power() == 'Unknown'
-
-
-def test_get_display_power_empty_output_returns_cec_error() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        assert diagnostics.get_display_power() == 'CEC error'
-
-
-def test_set_display_power_on_success() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'OK'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is True
-    assert 'on' in msg
-
-
-def test_set_display_power_off_success() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'OK'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=False)
-    assert ok is True
-    assert 'off' in msg
-
-
-def test_set_display_power_cec_error_passes_through_reason() -> None:
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'ERROR: no adapter'
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'no adapter' in msg
-
-
-def test_set_display_power_timeout_returns_failure_message() -> None:
-    with mock.patch.object(
-        subprocess,
-        'run',
-        side_effect=subprocess.TimeoutExpired(cmd='python', timeout=10),
-    ):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'timed out' in msg.lower()
-
-
-def test_set_display_power_unexpected_stdout_falls_through_to_stdout() -> None:
-    """No 'OK' / 'ERROR:' sentinel — the helper still has to return
-    something actionable. With non-empty stdout and a clean exit, that
-    becomes the raw line itself (capped)."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'something weird'
-    completed.stderr = b''
-    completed.returncode = 0
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'something weird' in msg
-
-
-def test_set_display_power_subprocess_crash_surfaces_stderr() -> None:
-    """When stdout is empty and stderr has content (interpreter crash,
-    libcec writing to stderr), the last line of stderr is what reaches
-    the toast — gives the operator a real reason instead of a generic
-    'unexpected response.'"""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    completed.stderr = (
-        b'Traceback (most recent call last):\n'
-        b'  File "<string>", line 4, in <module>\n'
-        b'RuntimeError: cec init failed: no adapter\n'
-    )
-    completed.returncode = 1
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'RuntimeError: cec init failed: no adapter' in msg
-
-
-def test_set_display_power_subprocess_crash_with_empty_streams_reports_status() -> (
-    None
-):
-    """Last-resort fallback: subprocess exits non-zero with no stderr
-    and no stdout. Still has to report something — surface the returncode."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    completed.stderr = b''
-    completed.returncode = 137
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert '137' in msg
-
-
-def test_set_display_power_caps_long_error_message() -> None:
-    """libcec can spew kilobytes of diagnostic output; the toast / API
-    body must not carry an unbounded blob."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b''
-    completed.stderr = ('X' * 4000).encode()
-    completed.returncode = 1
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    # Cap is 240; message has prefix "Display turn-on failed: " so total
-    # is under ~280 chars and ends with the ellipsis sentinel.
-    assert len(msg) < 300
-    assert msg.endswith('...')
-
-
-def test_set_display_power_caps_long_error_sentinel_reason() -> None:
-    """The ERROR: sentinel branch must apply the same length cap +
-    last-line trim as the unexpected-stdout fallback; a hostile or
-    chatty libcec build could otherwise smuggle a multi-line / huge
-    string into the toast via the contract path."""
-    long_reason = 'X' * 4000
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = f'ERROR: {long_reason}'.encode()
-    completed.stderr = b''
-    completed.returncode = 0
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert len(msg) < 300
-    assert msg.endswith('...')
-
-
-def test_set_display_power_error_sentinel_strips_multiline() -> None:
-    """Multi-line reason on the ERROR: branch — we keep only the last
-    non-empty line so the toast stays one row tall."""
-    completed = mock.MagicMock(spec=subprocess.CompletedProcess)
-    completed.stdout = b'ERROR: first line\nmiddle line\nactual failure reason'
-    completed.stderr = b''
-    completed.returncode = 0
-    with mock.patch.object(subprocess, 'run', return_value=completed):
-        ok, msg = diagnostics.set_display_power(on=True)
-    assert ok is False
-    assert 'actual failure reason' in msg
-    assert 'first line' not in msg
-    assert 'middle line' not in msg
-
-
-def test_cec_available_true_when_cec0_present() -> None:
-    with mock.patch.object(
-        os.path, 'exists', side_effect=lambda p: p == '/dev/cec0'
-    ):
-        assert diagnostics.cec_available() is True
-
-
-def test_cec_available_true_when_vchiq_present() -> None:
-    with mock.patch.object(
-        os.path, 'exists', side_effect=lambda p: p == '/dev/vchiq'
-    ):
-        assert diagnostics.cec_available() is True
-
-
-def test_cec_available_false_when_neither_present() -> None:
-    with mock.patch.object(os.path, 'exists', return_value=False):
-        assert diagnostics.cec_available() is False
-
-
-def test_get_display_power_subprocess_timeout() -> None:
-    with mock.patch.object(
-        subprocess,
-        'run',
-        side_effect=subprocess.TimeoutExpired(cmd='cec', timeout=10),
-    ):
-        assert diagnostics.get_display_power() == 'CEC error'
-
-
 def test_try_connectivity_all_succeed() -> None:
     with mock.patch(
         'anthias_server.lib.diagnostics.utils.url_fails', return_value=False
@@ -342,3 +144,125 @@ def test_try_connectivity_mixed() -> None:
     assert results[1].endswith(': OK')
     assert results[2].endswith(': Error')
     assert results[3].endswith(': OK')
+
+
+# ---------------------------------------------------------------------------
+# Display power — the translation layer over lib/cec.py.
+#
+# These assert the *legacy wire values* the v2 System Info API has always
+# exposed (``display_power`` is ``string | null``, with 'True'/'False'
+# alongside diagnostic strings). The mechanism underneath changed
+# completely when libcec was dropped for the kernel CEC uABI; the values
+# deliberately did not, because Anthias never breaks a published API.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ('status', 'expected'),
+    [
+        (cec.PowerStatus.ON, True),
+        (cec.PowerStatus.STANDBY, False),
+        (cec.PowerStatus.NO_ADAPTER, 'No CEC adapter'),
+        (cec.PowerStatus.NO_LINK, 'No CEC display detected'),
+        (cec.PowerStatus.NO_PEER, 'No CEC display detected'),
+        (cec.PowerStatus.UNKNOWN, 'Mixed'),
+        (cec.PowerStatus.ERROR, 'CEC error'),
+    ],
+)
+def test_get_display_power_maps_status_to_legacy_value(
+    status: 'cec.PowerStatus', expected: Any
+) -> None:
+    with mock.patch.object(cec_client, 'power_status', return_value=status):
+        assert diagnostics.get_display_power() == expected
+
+
+def test_get_display_power_no_peer_is_not_reported_as_an_error() -> None:
+    """A plain monitor with no CEC support is the common case, not a
+    fault. Reporting it as 'CEC error' is what made GH #3267
+    unactionable for operators."""
+    with mock.patch.object(
+        cec_client, 'power_status', return_value=cec.PowerStatus.NO_PEER
+    ):
+        assert diagnostics.get_display_power() == 'No CEC display detected'
+
+
+def test_get_display_power_survives_an_unreachable_viewer() -> None:
+    """The viewer owns the CEC hardware. If it does not answer we know
+    nothing about the display, and that really is a fault — distinct from
+    a display that answered "no peer"."""
+    with mock.patch.object(
+        cec_client,
+        'power_status',
+        side_effect=cec_client.ViewerUnavailableError('no answer'),
+    ):
+        assert diagnostics.get_display_power() == 'CEC error'
+
+
+def test_set_display_power_reports_every_display_it_reached() -> None:
+    """Fan-out is the point: a device can have two monitors attached and
+    the operator needs to know both got the message."""
+    with mock.patch.object(cec_client, 'set_power', return_value=(2, 2)):
+        ok, msg = diagnostics.set_display_power(on=False)
+    assert ok is True
+    assert 'off' in msg
+    assert '2 displays' in msg
+
+
+def test_set_display_power_singular_message_for_one_display() -> None:
+    with mock.patch.object(cec_client, 'set_power', return_value=(1, 1)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is True
+    assert '1 display.' in msg
+
+
+def test_set_display_power_partial_success_is_reported() -> None:
+    """Two displays attached, only one answered — that is a success with
+    a caveat, not a silent win."""
+    with mock.patch.object(cec_client, 'set_power', return_value=(1, 2)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is True
+    assert '1 of 2' in msg
+
+
+def test_set_display_power_unacknowledged_is_a_failure() -> None:
+    with mock.patch.object(cec_client, 'set_power', return_value=(0, 1)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'not acknowledged' in msg
+
+
+def test_set_display_power_without_a_live_link_says_so() -> None:
+    with mock.patch.object(cec_client, 'set_power', return_value=(0, 0)):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'no CEC link' in msg
+
+
+def test_set_display_power_surfaces_adapter_errors() -> None:
+    with mock.patch.object(
+        cec_client,
+        'set_power',
+        side_effect=cec_client.ViewerUnavailableError('viewer did not answer'),
+    ):
+        ok, msg = diagnostics.set_display_power(on=True)
+    assert ok is False
+    assert 'viewer did not answer' in msg
+
+
+def test_cec_available_reads_the_fact_the_viewer_published() -> None:
+    with mock.patch.object(cec_client, 'available', return_value=True):
+        assert diagnostics.cec_available() is True
+    with mock.patch.object(cec_client, 'available', return_value=False):
+        assert diagnostics.cec_available() is False
+
+
+def test_cec_available_is_false_before_the_viewer_reports() -> None:
+    """A missing key means the viewer has not published yet, which must
+    read as "no adapter" so the controls stay hidden rather than
+    appearing and then failing."""
+    client = mock.MagicMock()
+    client.get.return_value = None
+    with mock.patch(
+        'anthias_server.lib.cec_client.connect_to_redis', return_value=client
+    ):
+        assert diagnostics.cec_available() is False

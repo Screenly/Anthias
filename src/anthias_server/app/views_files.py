@@ -1,9 +1,10 @@
 import ipaddress
 import mimetypes
 import os
+from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from django.http import (
     FileResponse,

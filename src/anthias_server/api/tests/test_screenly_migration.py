@@ -27,7 +27,6 @@ from rest_framework.test import APIClient
 from anthias_server.app.models import Asset
 from anthias_server.lib import screenly_migration
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -383,14 +382,14 @@ class TestMigrateAsset:
         target.write_bytes(b'\x89PNG\r\n')
         asset = Asset(asset_id='locked', name='Locked', uri=str(target))
 
-        with patch(
-            'pathlib.Path.open',
-            side_effect=PermissionError(13, 'Permission denied'),
+        with (
+            patch(
+                'pathlib.Path.open',
+                side_effect=PermissionError(13, 'Permission denied'),
+            ),
+            pytest.raises(screenly_migration.ScreenlyMigrationError) as exc,
         ):
-            with pytest.raises(
-                screenly_migration.ScreenlyMigrationError
-            ) as exc:
-                screenly_migration.migrate_asset('tok', asset)
+            screenly_migration.migrate_asset('tok', asset)
 
         assert 'Could not read locked.png' in str(exc.value)
         assert 'Permission denied' in str(exc.value)

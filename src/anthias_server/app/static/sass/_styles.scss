@@ -70,6 +70,14 @@
   --color-danger: #dc3545;
   --color-danger-hover: #c82333;
   --color-danger-active: #bd2130;
+  // Wash / edge / on-wash-text trio matching the --color-success set
+  // below. Added for the under-voltage banner, which needed a light
+  // alert surface and readable body copy on it; the base
+  // --color-danger is a fill colour and drops to ~4:1 on white, which
+  // is too low for the small print in an alert.
+  --color-danger-wash: rgba(220, 53, 69, 0.12);
+  --color-danger-edge: rgba(220, 53, 69, 0.38);
+  --color-danger-text-on-wash: #8a1220;              // WCAG-AA on wash
 
   // Functional status colours (success / warning) used by chips,
   // load-average bars, resource-pie slices, and toasts. Hex baseline
@@ -86,6 +94,9 @@
   --color-success-bright: #4ade80;                   // active dot
   --color-warning: #f59e0b;
   --color-warning-ring: rgba(245, 158, 11, 0.18);
+  --color-warning-wash: rgba(245, 158, 11, 0.14);
+  --color-warning-edge: rgba(245, 158, 11, 0.42);
+  --color-warning-text-on-wash: #6b3d05;             // WCAG-AA on wash
 
   // Anchors on light surfaces — kept readable against white cards
   // (the brand yellow we use for accents has too little contrast).
@@ -1332,6 +1343,7 @@ label { text-align: left; }
   .weekday {
     --bg: var(--color-surface-tint);
     --fg: var(--color-text);
+    position: relative;
     border: 1px solid var(--color-border);
     background: var(--bg);
     color: var(--fg);
@@ -1341,12 +1353,31 @@ label { text-align: left; }
     cursor: pointer;
     user-select: none;
     transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
-    input { display: none; }
+
+    // Visually hidden but still focusable and still announced. This was
+    // `display: none`, which drops the control out of the tab order and
+    // the accessibility tree entirely — the chips could only be operated
+    // with a pointer. Clipping instead keeps them keyboard- and
+    // screen-reader-reachable while looking identical.
+    input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
   }
   .weekday:has(input:checked) {
     --bg: #{$anthias-yellow-3};
     --fg: var(--color-accent-text);
     border-color: $anthias-yellow-2;
+  }
+  // The input itself is invisible, so the ring has to be drawn on the
+  // chip. Mirrors .app-check-input's focus treatment.
+  .weekday:has(input:focus-visible) {
+    outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
   }
 }
 
@@ -1412,19 +1443,311 @@ label { text-align: left; }
   }
   .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
   .stat-card__meta a:hover { text-decoration: underline; }
-  // Variant for advisory/warning text inside a stat card (e.g. the
-  // low-RAM degradation badge on Memory). Borrows the warning
-  // colour token already used by .loadavg-row--warn so the palette
-  // stays consistent and a future theme swap touches one token.
+  // Variant for advisory/warning text inside a stat card. Used by the
+  // low-RAM badge on Memory, and only there: the Power supply and
+  // Storage cards carry their severity on a coloured verdict and an
+  // icon instead, so tinting their body copy as well said the same
+  // thing a third time and cost legibility. The badge has no verdict
+  // above it, so its icon, its bold lead-in and this tint are the
+  // whole signal.
+  //
+  // The -text-on-wash ink, NOT --color-warning. The fill colour is
+  // #f59e0b, which on a white .stat-card measures 2.15:1 — under half
+  // the 4.5:1 AA needs for body text, and visibly unreadable at this
+  // size. The token next to it exists precisely for text and measures
+  // 9.15:1. Same hue family, same signal, legible.
+  //
+  // Measured on a live device, not eyeballed: the amber paragraph on
+  // the Storage card was the worst thing on the page.
   .stat-card__meta--warn {
-    color: var(--color-warning);
+    color: var(--color-warning-text-on-wash);
     margin-top: 0.5rem;
-    line-height: 1.4;
+    line-height: 1.5;
   }
 }
 
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
 .stat-card--span-full { grid-column: 1 / -1; }
+
+// Status line for the diagnostic cards (Power supply, Memory card).
+// Sized off .stat-card__value so it keeps the card rhythm, but
+// recoloured by severity. These are the cards whose headline value is
+// a verdict rather than a measurement. Uses the -text-on-wash tokens
+// rather than the base fill colours: these sit on a white .stat-card,
+// where --color-danger lands at ~4:1 and --color-success at ~1.6:1.
+.status-verdict {
+  display: inline-flex;
+  align-items: center;
+
+  &--critical { color: var(--color-danger-text-on-wash); }
+  &--warn     { color: var(--color-warning-text-on-wash); }
+  &--ok       { color: var(--color-success-text-on-wash); }
+}
+
+// The evidence block on a diagnostic card. Not a disclosure and not
+// muted: this is System Info, a page whose whole job is showing
+// exactly this, so hiding it behind a click and greying it out
+// inverted the emphasis — the prose got the weight and the numbers
+// someone came for got buried. It is simply present, in ordinary
+// text.
+.stat-card__details {
+  margin-top: var(--space-3);
+  font-size: 0.78rem;
+  color: var(--color-text);
+
+  p { margin: var(--space-2) 0 0; line-height: 1.5; }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    // 1em, not 0.95em. A monospace face set fractionally smaller than
+    // the prose around it reads as a typo rather than a distinction,
+    // and inline code appeared often enough in the storage detail to
+    // make the whole paragraph look like mixed type. The family
+    // already carries the distinction.
+    font-size: 1em;
+  }
+}
+
+// Key/value readout inside a .stat-card__details. Replaces what was a
+// paragraph of prose with monospace fragments embedded in it: at this
+// size the mixed families and the wrapping made a support engineer
+// hunt for the one number they came for. A two-column list puts every
+// label in the same place and every value on the same left edge, so
+// the block is scanned rather than read.
+//
+// This is the one place in the card allowed to look technical, and
+// it is shown outright rather than behind a toggle: System Info
+// exists to display it, and its audience is whoever is reading a
+// screenshot during a support call.
+.readout {
+  display: grid;
+  // Labels size to the longest one and then stop, so the values all
+  // share a left edge instead of stepping raggedly per row.
+  grid-template-columns: minmax(6.5rem, max-content) 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+
+  &__key {
+    color: var(--color-text-muted);
+    // The label column is deliberately NOT bolded or capitalised: it
+    // is scaffolding, and the value is the thing being looked up.
+    font-weight: 400;
+  }
+
+  &__value {
+    color: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    // Long values (a mount path, a SMART summary) wrap inside their
+    // own column rather than pushing the grid wider.
+    overflow-wrap: anywhere;
+  }
+
+  // Deliberately no severity variant. Every card here already spends
+  // its colour twice, on an icon and a coloured verdict; tinting rows
+  // of the readout as well would be a third place saying the same
+  // thing, and would put a coloured typeface under body-sized text
+  // where it reads worst.
+
+  // Below the narrow breakpoint the two columns would leave the value
+  // column too tight to read, so stack them.
+  @media (max-width: 420px) {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+
+    .readout__key { margin-top: var(--space-2); }
+  }
+}
+
+// Trailing caveat under a readout — the one sentence that qualifies a
+// number rather than being one.
+// Scoped under .stat-card__details deliberately. The generic
+// `.stat-card__details p` rule is (0,1,1) and a bare `.readout__note`
+// is (0,1,0), so the margin here silently lost and the note sat at
+// --space-2. Same specificity trap that made an earlier
+// `.device-alerts > * + *` rule dead code; matching the descendant
+// shape is what makes it actually apply.
+.stat-card__details .readout__note {
+  margin: var(--space-3) 0 0;
+  line-height: 1.5;
+  // The one genuinely secondary line in the block: it explains a
+  // number rather than being one, so it is the only thing the muted
+  // ink is used for here.
+  color: var(--color-text-muted);
+}
+
+// -----------------------------------------------------------------------------
+// Device alert banners (_device_alerts.html and the per-diagnostic
+// templates it includes: _power_warning.html, _storage_warning.html)
+//
+// Sit between the fixed navbar and <main> on every page. Light
+// surface rather than the page's dark ground so they read as an
+// interruption rather than as chrome. An operator should notice one
+// before they notice their content.
+// -----------------------------------------------------------------------------
+// One component, not one per diagnostic. The under-voltage and
+// memory-card warnings are the two failures a Raspberry Pi actually
+// dies of, they can be true at the same time, and they are the same
+// kind of statement to the operator: something physical is wrong,
+// here is what to do about it. Giving them a shared block is what
+// keeps a stack of two from looking like two different products.
+.device-alerts {
+  // No gap rule here on purpose. `> * + *` and `.device-alert` have
+  // identical specificity (0,1,0) and .device-alert is declared
+  // later, so its own margin-top wins and any value set here would be
+  // dead code describing spacing that never happened. The banners
+  // keep their own margin, which also means a single one renders
+  // identically to how the under-voltage banner did before it had
+  // company.
+}
+
+// Built on --color-surface like every .stat-card, so it reads as part
+// of the product rather than as a foreign alert widget dropped onto
+// the purple ground. All the alarm is carried by one element: a solid
+// severity rail down the leading edge, picked up by the icon chip and
+// the title. Everything else stays the standard card treatment;
+// spending the boldness in one place is what keeps a permanent banner
+// legible instead of exhausting.
+.device-alert {
+  // Severity is switched once here and consumed by the parts below,
+  // matching the --chip-* local-custom-property pattern used by the
+  // schedule chips rather than restating colours per element.
+  --alert-accent: var(--color-danger);
+  --alert-wash: var(--color-danger-wash);
+  --alert-edge: var(--color-danger-edge);
+  --alert-ink: var(--color-danger-text-on-wash);
+
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--alert-edge);
+  border-left: 0.375rem solid var(--alert-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+
+  // Amber for a condition that has proven itself but isn't failing
+  // this second: power that dipped and recovered, a card carrying old
+  // errors that still writes fine. Using the same red for both would
+  // flatten a distinction the operator can act on differently.
+  &--warning {
+    --alert-accent: var(--color-warning);
+    --alert-wash: var(--color-warning-wash);
+    --alert-edge: var(--color-warning-edge);
+    --alert-ink: var(--color-warning-text-on-wash);
+  }
+
+  &__icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    font-size: 1.375rem;
+    background: var(--alert-wash);
+    color: var(--alert-ink);
+  }
+
+  &__body { flex: 1 1 auto; min-width: 0; }
+
+  &__title {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--alert-ink);
+  }
+
+  // Body copy stays --color-text, not the severity ink: tinting a
+  // whole paragraph red costs legibility and buys no extra signal
+  // once the rail, chip and title have carried it.
+  &__lede {
+    margin: var(--space-2) 0 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  &__advice-label {
+    margin: var(--space-4) 0 var(--space-2);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;      // matches .stat-card__label
+    color: var(--color-text-muted);
+  }
+
+  &__advice {
+    margin: 0;
+    padding-left: 1.1rem;
+    list-style: disc;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--color-text);
+
+    // Slightly more air between items than the usual list rhythm:
+    // the first item carries a bolded recommendation and needs to
+    // separate cleanly from the secondary checks below it.
+    li + li { margin-top: var(--space-2); }
+    &::marker { color: var(--alert-accent); }
+
+    // The one recommendation that actually resolves this, lifted out
+    // of the body colour so it survives a skim.
+    strong { color: var(--alert-ink); }
+  }
+
+  &__link {
+    flex: 0 0 auto;
+    // Top-aligned, not centred. `align-self: center` put it at the
+    // vertical midpoint of a banner whose height varies with the copy,
+    // so it floated beside an arbitrary bullet with no relationship to
+    // anything. Sitting on the title's optical line makes it read as
+    // the action belonging to that heading. The small offset accounts
+    // for the button's own padding so the two cap-heights align rather
+    // than the two boxes.
+    align-self: flex-start;
+    margin-top: -0.0625rem;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    // Matches the lede and the advice list. The banner was running
+    // four prose sizes (title 1.0625, body 0.9375, this 0.875, label
+    // 0.7); one body size for everything that is a sentence leaves the
+    // title and the eyebrow as the only deliberate steps.
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--alert-ink);
+    text-decoration: none;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--alert-edge);
+    transition: background var(--t-fast);
+
+    &:hover { background: var(--alert-wash); }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+      outline: none;
+    }
+  }
+
+  // Stack below the lg breakpoint the navbar already uses. The advice
+  // list is the payload, so it keeps full width and the Details
+  // affordance drops beneath it, indented to the body's text column
+  // rather than squeezing the copy into a narrow gutter.
+  @media (max-width: 720px) {
+    flex-wrap: wrap;
+    padding: var(--space-4);
+
+    .device-alert__link {
+      align-self: flex-start;
+      margin-left: calc(2.5rem + var(--space-4));
+    }
+  }
+}
 
 // Version line on System Info — calver `v2026.5.0` is the headline
 // number; the git-meta `(08c26f3, vanilla-django)` sits underneath
@@ -2858,6 +3181,49 @@ body.auth-body {
   input { flex: 0 0 auto; }
   span { font-size: 0.95rem; color: var(--color-text); }
 }
+
+// Repeated-group widget: one row per array item, each row a line of
+// equal-width sub-field inputs plus a remove button. Rows wrap on a
+// narrow modal so a four-field item (Menu Board) stays usable rather
+// than squeezing every input to nothing.
+.app-cfg-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-cfg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-cfg-row__field {
+  flex: 1 1 7rem;
+  min-width: 7rem;
+}
+
+// .app-btn-icon takes its colours from a .surface context, and the
+// modal body isn't one — the button would fall back to full-strength
+// text with no hover feedback at all. State both here.
+.app-cfg-row__remove {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+
+  &:hover:not(:disabled) {
+    background: var(--scrim-6);
+    color: var(--color-danger);
+  }
+}
+
+.app-cfg-empty {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.app-cfg-add { margin-top: var(--space-3); }
 
 .app-cfg-nosettings { margin-top: var(--space-3); }
 

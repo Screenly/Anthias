@@ -104,6 +104,14 @@ def test_info_v1_endpoint(
 )
 @mock.patch('anthias_server.api.views.v2.statvfs', mock.MagicMock())
 @mock.patch('anthias_server.api.views.v2.r.get', return_value='on')
+# Stubbed with an explicit `new` so it injects no extra argument.
+# Without it the storage probe reads its Redis latch, which is a
+# second `r.get` and would trip the call_count == 1 assertion below —
+# an assertion about the display-power read, not about this.
+@mock.patch(
+    'anthias_server.api.views.v2.storage_health.get_state',
+    mock.MagicMock(return_value={'supported': False, 'status': 'unknown'}),
+)
 @mock.patch(
     'anthias_server.api.views.v2.diagnostics.get_git_branch',
     return_value='main',
@@ -211,3 +219,234 @@ def test_info_v2_endpoint(
         'host_user': 'testuser',
     }
     _assert_response_data(data, expected_data)
+
+
+# ---------------------------------------------------------------------------
+# under_voltage on /api/v2/info
+#
+# Power-supply health, read from the kernel rpi_volt hwmon sensor. See
+# anthias_common.undervoltage for why the firmware mailbox is not used.
+# ---------------------------------------------------------------------------
+
+
+def _patch_under_voltage(**overrides: Any) -> Any:
+    state = {
+        'supported': True,
+        'active': False,
+        'seen_since_boot': False,
+        'first_seen': None,
+        'last_seen': None,
+        'count': 0,
+    }
+    state.update(overrides)
+    return mock.patch(
+        'anthias_server.api.views.v2.undervoltage.get_state',
+        return_value=state,
+    )
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_a_healthy_supply(api_client: APIClient) -> None:
+    with _patch_under_voltage():
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['under_voltage'] == {
+        'supported': True,
+        'active': False,
+        'seen_since_boot': False,
+        'first_seen': None,
+        'last_seen': None,
+        'count': 0,
+    }
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_a_live_brown_out(api_client: APIClient) -> None:
+    with _patch_under_voltage(
+        active=True,
+        seen_since_boot=True,
+        count=4,
+        first_seen='2026-08-15T10:00:00+00:00',
+        last_seen='2026-08-15T10:07:00+00:00',
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    under_voltage = response.data['under_voltage']
+    assert under_voltage['active'] is True
+    assert under_voltage['count'] == 4
+    # ISO-8601 strings, matching how the latch stores them.
+    assert under_voltage['last_seen'] == '2026-08-15T10:07:00+00:00'
+
+
+@pytest.mark.django_db
+def test_info_v2_distinguishes_unsupported_from_healthy(
+    api_client: APIClient,
+) -> None:
+    # A board with no sensor reports the same falsey values as a
+    # healthy one, so `supported` is the only thing separating "we
+    # checked and it's fine" from "we can't check". Clients must be
+    # able to tell them apart.
+    with _patch_under_voltage(supported=False):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.data['under_voltage']['supported'] is False
+
+
+@pytest.mark.django_db
+def test_info_v2_survives_an_unreadable_sensor(
+    api_client: APIClient,
+) -> None:
+    # A diagnostic must never take the info endpoint down with it.
+    with mock.patch(
+        'anthias_server.api.views.v2.undervoltage.get_state',
+        side_effect=OSError('sysfs went away'),
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['under_voltage']['supported'] is False
+
+
+# ---------------------------------------------------------------------------
+# storage on /api/v2/info
+#
+# SD cards have no health register, so this is a verdict assembled from
+# ext4's superblock counters, a periodic write check and the eMMC wear
+# registers. See anthias_common.storage_health.
+# ---------------------------------------------------------------------------
+
+
+def _patch_storage(**overrides: Any) -> Any:
+    state: dict[str, Any] = {
+        'supported': True,
+        'status': 'ok',
+        'mount_point': '/data/.anthias',
+        'fstype': 'ext4',
+        'device': 'mmcblk0p2',
+        'disk': 'mmcblk0',
+        'read_only': False,
+        'error_stats_supported': True,
+        'errors_count': 0,
+        'errors_new': 0,
+        'errors_this_boot': False,
+        'first_error': None,
+        'last_error': None,
+        'last_error_function': None,
+        'lifetime_written_kb': 4194304,
+        'write_ok': True,
+        'write_reason': None,
+        'write_failed_since_boot': False,
+        'write_fail_count': 0,
+        'first_write_fail': None,
+        'last_write_fail': None,
+        'last_check': '2026-08-15T10:00:00+00:00',
+        'fsync_ms': 2.4,
+        'media': {
+            'kind': 'sd',
+            'name': 'SC32G',
+            'manufacturer': 'SanDisk',
+            'manufactured': '03/2019',
+            'wear_pct': None,
+            'pre_eol': None,
+        },
+    }
+    state.update(overrides)
+    return mock.patch(
+        'anthias_server.api.views.v2.storage_health.get_state',
+        return_value=state,
+    )
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_healthy_storage(api_client: APIClient) -> None:
+    with _patch_storage():
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    storage = response.data['storage']
+    assert storage['status'] == 'ok'
+    assert storage['device'] == 'mmcblk0p2'
+    assert storage['media']['kind'] == 'sd'
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_a_failing_card(api_client: APIClient) -> None:
+    with _patch_storage(
+        status='failing',
+        read_only=True,
+        errors_count=12,
+        errors_new=3,
+        errors_this_boot=True,
+        last_error='2026-08-15T09:58:00+00:00',
+        last_error_function='ext4_find_entry',
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    storage = response.data['storage']
+    assert storage['status'] == 'failing'
+    assert storage['read_only'] is True
+    assert storage['errors_new'] == 3
+    # ISO-8601 strings, matching the under_voltage field and the latch.
+    assert storage['last_error'] == '2026-08-15T09:58:00+00:00'
+
+
+@pytest.mark.django_db
+def test_info_v2_separates_a_full_card_from_a_failing_one(
+    api_client: APIClient,
+) -> None:
+    # Both fail writes, and a client that lumped them together would
+    # tell someone to replace hardware that is working fine.
+    with _patch_storage(
+        status='full', write_ok=False, write_reason='no_space'
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.data['storage']['status'] == 'full'
+
+
+@pytest.mark.django_db
+def test_info_v2_exposes_emmc_wear(api_client: APIClient) -> None:
+    with _patch_storage(
+        status='wear',
+        media={
+            'kind': 'emmc',
+            'name': 'DG4008',
+            'manufacturer': 'Samsung',
+            'manufactured': '06/2021',
+            'wear_pct': 90,
+            'pre_eol': 'warning',
+        },
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    media = response.data['storage']['media']
+    assert media['kind'] == 'emmc'
+    assert media['wear_pct'] == 90
+    assert media['pre_eol'] == 'warning'
+
+
+@pytest.mark.django_db
+def test_info_v2_distinguishes_unchecked_storage_from_healthy(
+    api_client: APIClient,
+) -> None:
+    with _patch_storage(supported=False, status='unknown'):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.data['storage']['supported'] is False
+    assert response.data['storage']['status'] == 'unknown'
+
+
+@pytest.mark.django_db
+def test_info_v2_survives_an_unreadable_filesystem(
+    api_client: APIClient,
+) -> None:
+    # A diagnostic must never take the info endpoint down with it.
+    with mock.patch(
+        'anthias_server.api.views.v2.storage_health.get_state',
+        side_effect=OSError('sysfs went away'),
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['storage']['supported'] is False

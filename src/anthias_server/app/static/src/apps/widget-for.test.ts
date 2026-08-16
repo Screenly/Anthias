@@ -40,6 +40,29 @@ describe('widgetFor', () => {
     expect(
       widgetFor({ type: 'object', properties: { lat: {}, lng: {} } }),
     ).toBe('location-map')
-    expect(widgetFor({ type: 'array' })).toBe('unsupported')
+    expect(widgetFor({ type: 'array' })).toBe('array')
+  })
+
+  test('an array renders as a repeated group, not skipped', () => {
+    // Menu Board's items and World Clock's cities: the whole point of
+    // the app lives in an array, so returning 'unsupported' here
+    // installed the app with nothing to show.
+    const menuItems: SettingSchema = {
+      type: 'array',
+      title: 'Menu items',
+      items: {
+        type: 'object',
+        'x-format': '{section}|{name}|{price}|{description}',
+        properties: { section: { type: 'string' }, name: { type: 'string' } },
+        required: ['name'],
+      },
+    }
+    expect(widgetFor(menuItems)).toBe('array')
+  })
+
+  test('a non-location object is still skipped', () => {
+    expect(widgetFor({ type: 'object', properties: { a: {} } })).toBe(
+      'unsupported',
+    )
   })
 })

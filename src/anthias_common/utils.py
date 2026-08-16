@@ -28,6 +28,8 @@ from tenacity import (
 
 from anthias_server.settings import settings
 
+logger = logging.getLogger(__name__)
+
 arch = machine()
 
 
@@ -93,7 +95,7 @@ def is_ci() -> bool:
     """
     Returns True when run on CI.
     """
-    return string_to_bool(os.getenv('CI', False))
+    return string_to_bool(os.getenv('CI', 'false'))
 
 
 def validate_url(string: str) -> bool:
@@ -203,7 +205,7 @@ def get_node_ip() -> str:
 
     * **Balena:** one API call to the local supervisor.
     * **Bare metal:** the ``anthias-host-agent`` systemd unit runs on the
-      host, enumerates real interfaces with netifaces, and writes the
+      host, enumerates real interfaces over rtnetlink, and writes the
       results to Redis. This function publishes ``hostcmd:
       set_ip_addresses`` to trigger a refresh, waits up to ~80s
       (60s ``host_agent_ready`` + 20s ``ip_addresses_ready``) for
@@ -231,7 +233,7 @@ def get_node_ip() -> str:
                 break
 
             if retries >= max_retries:
-                logging.info(
+                logger.info(
                     'host_agent_service is not ready after %d retries',
                     max_retries,
                 )
@@ -256,11 +258,11 @@ def get_node_ip() -> str:
                     if json.loads(ip_addresses_ready):
                         break
                     else:
-                        raise Exception(
+                        raise RuntimeError(
                             'Internet connection is not available.'
                         )
         except RetryError:
-            logging.warning('Internet connection is not available. ')
+            logger.warning('Internet connection is not available. ')
 
         ip_addresses = r.get('ip_addresses')
 
@@ -341,9 +343,7 @@ def get_node_mac_address() -> str:
         headers = {'Content-Type': 'application/json'}
 
         r = requests.get(
-            '{}/v1/device?apikey={}'.format(
-                balena_supervisor_address, balena_supervisor_api_key
-            ),
+            f'{balena_supervisor_address}/v1/device?apikey={balena_supervisor_api_key}',
             headers=headers,
         )
 
@@ -449,7 +449,7 @@ def get_active_connections(
     if not fields:
         fields = ['Id', 'Uuid', 'Type', 'Devices']
 
-    connections = list()
+    connections = []
 
     try:
         nm_proxy = bus.get(
@@ -471,14 +471,14 @@ def get_active_connections(
             'org.freedesktop.DBus.Properties'
         ]
 
-        connection = dict()
+        connection = {}
         for field in fields:
             field_value = active_connection_properties.Get(
                 'org.freedesktop.NetworkManager.Connection.Active', field
             )
 
             if field == 'Devices':
-                devices = list()
+                devices = []
                 for device_path in field_value:
                     device_proxy = bus.get(
                         'org.freedesktop.NetworkManager', device_path
@@ -541,10 +541,10 @@ def get_video_duration(file: str) -> timedelta | None:
     try:
         run_player = sh.Command('ffprobe')('-i', file, _err_to_out=True)
     except sh.CommandNotFound:
-        logging.warning('ffprobe is not installed; cannot determine duration')
+        logger.warning('ffprobe is not installed; cannot determine duration')
         return None
     except sh.ErrorReturnCode_1 as err:
-        raise Exception('Bad video format') from err
+        raise RuntimeError('Bad video format') from err
 
     for line in run_player.split('\n'):
         if 'Duration' in line:
@@ -568,7 +568,7 @@ def handler(obj: Any) -> str:
         return with_tz.isoformat()
     else:
         raise TypeError(
-            f'Object of type {type(obj)} with value of {repr(obj)} '
+            f'Object of type {type(obj)} with value of {obj!r} '
             'is not JSON serializable'
         )
 
@@ -610,7 +610,7 @@ def url_fails(url: str, verify_ssl: bool | None = None) -> bool:
                 _timeout=15,
             )
         except sh.CommandNotFound:
-            logging.warning(
+            logger.warning(
                 'ffprobe is not installed; skipping streaming URL probe'
             )
             return False
@@ -639,7 +639,7 @@ def url_fails(url: str, verify_ssl: bool | None = None) -> bool:
         verify = False
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'  # noqa: E501
+        'User-Agent': 'Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/538.15 (KHTML, like Gecko) Version/8.0 Safari/538.15'
     }
     try:
         if not validate_url(url):
@@ -700,7 +700,7 @@ def is_demo_node() -> bool:
     Check if the environment variable IS_DEMO_NODE is set to 1
     :return: bool
     """
-    return string_to_bool(os.getenv('IS_DEMO_NODE', False))
+    return string_to_bool(os.getenv('IS_DEMO_NODE', 'false'))
 
 
 def generate_perfect_paper_password(
@@ -716,7 +716,7 @@ def generate_perfect_paper_password(
     :return: string
     """
     ppp_letters = (
-        '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'  # noqa: E501
+        '!#%+23456789:=?@ABCDEFGHJKLMNPRSTUVWXYZabcdefghjkmnopqrstuvwxyz'
     )
     if not has_symbols:
         ppp_letters = ''.join(set(ppp_letters) - set(string.punctuation))
@@ -738,4 +738,4 @@ def is_balena_app() -> bool:
     Checks the application is running on Balena Cloud
     :return: bool
     """
-    return bool(getenv('BALENA', False))
+    return bool(getenv('BALENA', ''))

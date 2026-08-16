@@ -6,17 +6,18 @@ The DRF API views in api/views/v2.py call the same primitives
 surfaces stay in lockstep without going through the HTTP API.
 """
 
-from datetime import timedelta
 import functools
+import logging
 import os
 import zoneinfo
+from datetime import timedelta
 from os import getenv, statvfs
 from typing import Any
 
 import psutil
 from django.template.defaultfilters import filesizeformat
 
-from anthias_common import device_helper
+from anthias_common import device_helper, storage_health, undervoltage
 from anthias_common.board import LOW_RAM_THRESHOLD_KB
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -24,12 +25,293 @@ from anthias_common.utils import (
     get_node_mac_address,
     is_balena_app,
 )
-from anthias_server.lib import diagnostics
+from anthias_server.lib import diagnostics, display_power
 from anthias_server.lib.github import is_up_to_date
 from anthias_server.lib.timezone import format_utc_offset
 from anthias_server.settings import settings
 
 _redis = connect_to_redis()
+logger = logging.getLogger(__name__)
+
+# One log line per process for a broken diagnostic, so a persistent
+# failure is visible without repeating on every page render.
+_logged_power_failure = False
+
+
+def _parse_iso(value: Any) -> Any:
+    """ISO string from the Redis latch → aware datetime, or ``None``.
+
+    The latch stores ISO strings because it round-trips through JSON;
+    templates want datetimes so they can use ``|naturaltime`` and
+    render "8 minutes ago" instead of a UTC timestamp an operator
+    would have to convert in their head.
+
+    A naive value is forced to UTC rather than returned as-is. We only
+    ever write offset-aware strings, but ``fromisoformat`` happily
+    parses a naive one, and ``naturaltime`` then compares it against a
+    naive *local* now instead of an aware UTC one. On a device in any
+    non-UTC zone that renders the offset as elapsed time: a brown-out
+    one minute ago on a US-Eastern player shows as "3 hours from now".
+    Stamping UTC is correct rather than merely defensive, because UTC
+    is what the writer emits.
+    """
+    from datetime import UTC, datetime
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def _power_warning() -> dict[str, Any] | None:
+    """Under-voltage banner state, or ``None`` when there's nothing
+    to say.
+
+    Returned from :func:`navbar` so the banner renders on every page
+    rather than only on System Info. An operator whose screen is
+    glitching goes to the Schedule page to look at their content, not
+    to a diagnostics tab, so that is where the explanation has to
+    meet them.
+
+    A power supply that can't keep up corrupts the SD card over time,
+    which is a much worse outcome than the visible glitching that
+    usually prompts the support ticket, hence a persistent banner
+    rather than a dismissible toast.
+    """
+    try:
+        state = undervoltage.get_state(_redis)
+    except Exception:
+        # Never let a diagnostic break page rendering, but do not fail
+        # silently either: this returns None, which renders no banner,
+        # so a broken probe is indistinguishable from a healthy supply
+        # and would hide a real under-voltage from the operator.
+        global _logged_power_failure
+        if not _logged_power_failure:
+            _logged_power_failure = True
+            logger.warning(
+                'Could not read under-voltage state for the banner; '
+                'power warnings are not being shown.',
+                exc_info=True,
+            )
+        return None
+
+    if not undervoltage.should_warn(state):
+        return None
+
+    return {
+        'active': state['active'],
+        'seen_since_boot': state['seen_since_boot'],
+        'count': state['count'],
+        'first_seen': _parse_iso(state['first_seen']),
+        'last_seen': _parse_iso(state['last_seen']),
+    }
+
+
+def _power_state() -> dict[str, Any]:
+    """Full under-voltage state for the System Info card.
+
+    Unlike :func:`_power_warning` this always returns a dict: the
+    card reports "no problems detected" and "not supported on this
+    device" as well as the alert.
+    """
+    try:
+        state = undervoltage.get_state(_redis)
+    except Exception:
+        state = {
+            'supported': False,
+            'active': False,
+            'seen_since_boot': False,
+            'first_seen': None,
+            'last_seen': None,
+            'count': 0,
+        }
+    state['warn'] = undervoltage.should_warn(state)
+    state['first_seen'] = _parse_iso(state['first_seen'])
+    state['last_seen'] = _parse_iso(state['last_seen'])
+    return state
+
+
+def _blank_storage_state() -> dict[str, Any]:
+    """What the storage helpers report when the probe itself failed.
+
+    ``supported`` false rather than a healthy-looking zero: the card
+    might be fine or might be on fire, and the UI says which of those
+    it knows.
+    """
+    return {
+        'supported': False,
+        'status': storage_health.STATUS_UNKNOWN,
+        'media': {'kind': 'unknown'},
+    }
+
+
+def _storage_state() -> dict[str, Any]:
+    try:
+        return storage_health.get_state(_redis, settings.get_configdir())
+    except Exception:
+        # Never let a diagnostic break page rendering.
+        return _blank_storage_state()
+
+
+# Verdict → the shape of thing that has gone wrong, which is what
+# picks the copy. Deliberately finer-grained than the API's ``status``:
+# "the card went read-only" and "the card is returning corrupt data"
+# are the same severity and the same fix, but an operator recognises
+# their own symptom in one of them and not the other, and being
+# recognised is what gets the banner read instead of dismissed.
+_STORAGE_CRITICAL_KINDS = ('full', 'read_only', 'write_failing', 'errors_now')
+
+# What to call the thing on screen. Anthias runs from an SD card on
+# most of the fleet, from soldered eMMC on the compute modules, and
+# from an SSD on x86, so a hardcoded "memory card" would be plainly
+# wrong on two of the three and would cost the warning its
+# credibility with the operator reading it.
+_STORAGE_NOUNS = {
+    'sd': 'memory card',
+    'emmc': 'built-in storage',
+    'disk': 'drive',
+}
+
+
+def _bad_blocks(media: dict[str, Any] | None) -> int:
+    """Blocks the drive has found bad, across both SMART dialects.
+
+    ``reallocated``/``pending`` are ATA-only fields and NVMe reports
+    the same class of fault as ``media_errors``. Counting only the ATA
+    pair meant an NVMe drive with media errors fell through to the
+    wear copy and was told it had "used N% of the writes it was built
+    for" -- the mismatched story :func:`_storage_kind` exists to
+    prevent, just on the other bus.
+    """
+    smart = (media or {}).get('smart') or {}
+    return (
+        (smart.get('reallocated_sectors') or 0)
+        + (smart.get('pending_sectors') or 0)
+        + (smart.get('media_errors') or 0)
+    )
+
+
+def _storage_kind(state: dict[str, Any]) -> str | None:
+    status = state.get('status')
+
+    if status == storage_health.STATUS_FULL:
+        return 'full'
+    if status == storage_health.STATUS_FAILING:
+        # Ordered by how directly the operator feels it. A read-only
+        # filesystem is the one they will already have noticed
+        # (nothing they change sticks), so it wins over the reasons
+        # that produced it.
+        if state.get('read_only'):
+            return 'read_only'
+        if state.get('write_ok') is False or state.get(
+            'write_failed_since_boot'
+        ):
+            return 'write_failing'
+        return 'errors_now'
+    if status == storage_health.STATUS_ERRORS:
+        return 'errors_past'
+    if status == storage_health.STATUS_WEAR:
+        # Wear and bad blocks are the same severity and reach the same
+        # verdict, but they are not the same story and they do not
+        # have the same fix. Measured on the x86 testbed: an SSD with
+        # zero wear (Wear_Leveling_Count at 100) and a PASSED overall
+        # self-assessment, but 4 reallocated and 4 pending sectors.
+        # Telling that operator their drive is "worn out" sends them
+        # looking at write volume when the drive is actually failing
+        # to read blocks it already wrote.
+        if _bad_blocks(state.get('media')):
+            return 'bad_sectors'
+        return 'wear'
+    return None
+
+
+def _storage_warning() -> dict[str, Any] | None:
+    """Memory-card banner state, or ``None`` when there's nothing to
+    say.
+
+    Returned from :func:`navbar` alongside the under-voltage banner,
+    for the same reason: the two failures a Raspberry Pi actually dies
+    of are a bad power supply and a worn-out card, and neither is
+    something an operator goes looking for on a diagnostics page.
+
+    The pair is also causally linked, which is why the copy for one
+    mentions the other. Under-voltage is one of the main things that
+    corrupts cards, so a device showing both banners has one problem,
+    not two.
+    """
+    state = _storage_state()
+    if not storage_health.should_warn(state):
+        return None
+
+    kind = _storage_kind(state)
+    if kind is None:
+        return None
+
+    media = state.get('media') or {}
+    media_kind = str(media.get('kind') or 'unknown')
+    return {
+        'kind': kind,
+        'severity': 'critical'
+        if kind in _STORAGE_CRITICAL_KINDS
+        else 'warning',
+        # eMMC is soldered to the board, so "replace the card" is
+        # advice the operator physically cannot follow. The template
+        # swaps it for the module swap instead.
+        'replaceable': media_kind != 'emmc',
+        'media_kind': media_kind,
+        'media_noun': _STORAGE_NOUNS.get(media_kind, 'storage'),
+        'errors_count': state.get('errors_count'),
+        # Errors seen during THIS boot. errors_count is ext4's
+        # superblock counter and is cumulative over the filesystem's
+        # life, so copy that says "since it last restarted" has to
+        # use this one or it reports a five-year-old total as today's
+        # news.
+        'errors_new': state.get('errors_new') or 0,
+        'last_error': _parse_iso(state.get('last_error')),
+        'write_reason': state.get('write_reason'),
+        'wear_pct': media.get('wear_pct'),
+        'wear_is_exact': bool(media.get('wear_is_exact')),
+        'pre_eol': media.get('pre_eol'),
+        # Counted here rather than in the template so the copy can
+        # state a number instead of hedging.
+        'bad_sectors': _bad_blocks(media),
+    }
+
+
+def _storage_card() -> dict[str, Any]:
+    """Full storage detail for the System Info card.
+
+    Unlike :func:`_storage_warning` this always returns a dict: the
+    card reports "no problems detected" and "we couldn't check" as
+    well as the alert.
+    """
+    # Copied before mutating: get_state builds a fresh dict per call
+    # in production, but this function has no way to know that, and
+    # _parse_iso is destructive on a second application -- it returns
+    # None for an already-parsed datetime, so re-decorating the same
+    # dict would silently blank every timestamp. Not mutating a value
+    # we did not create removes the whole question.
+    state = dict(_storage_state())
+    state['warn'] = storage_health.should_warn(state)
+    state['kind'] = _storage_kind(state)
+    state['first_error'] = _parse_iso(state.get('first_error'))
+    state['last_error'] = _parse_iso(state.get('last_error'))
+    state['last_check'] = _parse_iso(state.get('last_check'))
+
+    # Lifetime writes are the closest thing a plain SD card gives to a
+    # wear figure, and the raw kilobyte count means nothing to anyone.
+    written_kb = state.get('lifetime_written_kb')
+    state['lifetime_written'] = (
+        filesizeformat(written_kb * 1024) if written_kb else None
+    )
+
+    state['bad_sectors'] = _bad_blocks(state.get('media'))
+    return state
 
 
 def navbar() -> dict[str, Any]:
@@ -38,6 +320,8 @@ def navbar() -> dict[str, Any]:
         'is_balena': is_balena_app(),
         'up_to_date': is_up_to_date(),
         'player_name': settings['player_name'],
+        'power_warning': _power_warning(),
+        'storage_warning': _storage_warning(),
     }
 
 
@@ -60,8 +344,8 @@ def _resolved_resolution() -> dict[str, Any]:
 
 
 def system_info() -> dict[str, Any]:
-    from django.utils.timesince import timesince
     from django.utils import timezone
+    from django.utils.timesince import timesince
 
     slash = statvfs('/')
     virtual_memory = psutil.virtual_memory()
@@ -168,6 +452,21 @@ def system_info() -> dict[str, Any]:
             'active': virtual_memory.total < LOW_RAM_THRESHOLD_KB * 1024,
             'threshold_mib': LOW_RAM_THRESHOLD_KB >> 10,
         },
+        # Full under-voltage detail for the System Info card. The
+        # banner (see _power_warning) only carries enough to render
+        # the alert; this adds the "power supply is fine" and
+        # "this device can't report it" cases, which are worth
+        # stating explicitly on a diagnostics page. An operator
+        # chasing a glitch needs to know whether we checked and
+        # found nothing, or never checked at all.
+        'power': _power_state(),
+        # Full storage detail, next to Disk usage on purpose: "83% of
+        # 32 GB used" and "this card has recorded 6 filesystem errors"
+        # are the two halves of one question an operator asks about
+        # storage, and splitting them across the page would make the
+        # second one findable only by someone who already suspected
+        # it.
+        'storage': _storage_card(),
         # Uptime as "2 days, 3 hours" via Django's timesince — pass the
         # boot-time so timesince computes against now(). Pass depth=2 so
         # 'X year, Y month' style formats stay readable on long-lived
@@ -216,6 +515,18 @@ _DATE_FORMAT_OPTIONS = (
     ('mm.dd.yyyy', 'month.day.year'),
     ('dd.mm.yyyy', 'day.month.year'),
     ('yyyy.mm.dd', 'year.month.day'),
+)
+
+# Python weekday numbering (Monday=0 ... Sunday=6), matching what
+# lib/display_power.py parses and what datetime.weekday() returns.
+_WEEKDAY_OPTIONS = (
+    (0, 'Mon'),
+    (1, 'Tue'),
+    (2, 'Wed'),
+    (3, 'Thu'),
+    (4, 'Fri'),
+    (5, 'Sat'),
+    (6, 'Sun'),
 )
 
 
@@ -295,9 +606,28 @@ def device_settings() -> dict[str, Any]:
         'date_format_options': _DATE_FORMAT_OPTIONS,
         'timezone_options': _timezone_options(),
         # Render-time gate for the experimental CEC display-power
-        # buttons; cec_available() only stats device nodes, so it's
-        # cheap enough to call on every settings render.
+        # buttons. cec_available() reads a single Redis key the viewer
+        # publishes at startup — not a device probe and not a round trip
+        # to the viewer — so it stays cheap enough to call on every
+        # settings render.
         'cec_available': diagnostics.cec_available(),
+        # The schedule is NOT gated on cec_available(): when no CEC
+        # display answers it falls back to the viewer's local blanking,
+        # so it is useful on boards with a plain monitor too.
+        'display_power_schedule_enabled': settings[
+            'display_power_schedule_enabled'
+        ],
+        'display_power_on_time': settings['display_power_on_time'],
+        'display_power_off_time': settings['display_power_off_time'],
+        # Parsed with the same helper the beat uses. An inline
+        # comprehension here had the opposite empty-input behaviour —
+        # it rendered *zero* days checked where parse_days reads the
+        # same value as *every* day, so the settings page would show a
+        # schedule running on no days while it actually ran daily.
+        'display_power_days': sorted(
+            display_power.parse_days(settings['display_power_days'])
+        ),
+        'weekday_options': _WEEKDAY_OPTIONS,
     }
 
 

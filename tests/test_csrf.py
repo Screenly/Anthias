@@ -16,7 +16,7 @@ from django.test import Client
 from django.urls import reverse
 
 if TYPE_CHECKING:
-    from pytest_django.fixtures import SettingsWrapper
+    from pytest_django.fixtures import Settings
 
 # The whole point of this suite is exercising plain-HTTP Origin headers
 # against an HTTP-served Anthias — that's the deployment shape the bug
@@ -211,7 +211,7 @@ def test_iis_rewrite_host_proxy_without_trusted_origin_rejected() -> None:
 
 @pytest.mark.django_db
 def test_iis_rewrite_host_proxy_with_trusted_origin_passes(
-    settings: SettingsWrapper,
+    settings: Settings,
 ) -> None:
     """Issue #2900 fix: when the operator lists the public hostname
     they actually serve Anthias under in CSRF_TRUSTED_ORIGINS,
@@ -231,7 +231,7 @@ def test_iis_rewrite_host_proxy_with_trusted_origin_passes(
 
 @pytest.mark.django_db
 def test_trusted_origin_does_not_open_other_hosts(
-    settings: SettingsWrapper,
+    settings: Settings,
 ) -> None:
     """Trusting ``https://signage.example.com`` must not implicitly
     trust ``https://attacker.example``. The trusted-origin allowlist

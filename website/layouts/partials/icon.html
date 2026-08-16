@@ -1,17 +1,17 @@
 {{- /* Inline a Font Awesome SVG with explicit sizing. FA's source
        SVGs declare ``fill="currentColor"``, so the icon inherits the
-       parent's CSS ``color`` — Tailwind classes like ``text-white``
+       parent's CSS ``color``, Tailwind classes like ``text-white``
        or ``text-[#ea4aaa]`` tint it without per-icon overrides.
 
        Usage: {{ partial "icon.html" (dict "name" "linkedin" "size" "1.25rem" "class" "block") }}
 
        Inputs:
-         name  — slug matching ``assets/images/icons/<name>.svg``
+         name, slug matching ``assets/images/icons/<name>.svg``
                  (populated by ``bun run icons:install``).
-         size  — CSS length applied to both width and height. Default
+         size, CSS length applied to both width and height. Default
                  "1em" so the icon scales with the surrounding font.
-         class — extra classes merged into the <svg> element.
-         alt   — accessible label; when present the SVG gets
+         class, extra classes merged into the <svg> element.
+         alt, accessible label; when present the SVG gets
                  ``role="img"`` + ``aria-label``. Omit for decorative
                  icons (added to ``aria-hidden`` instead).
 

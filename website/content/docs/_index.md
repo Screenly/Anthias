@@ -27,7 +27,7 @@ installs. You can read the logs three ways: `docker logs`,
 > on the old `json-file` driver will still have the existing log files
 > on disk after upgrading. To reclaim that space, truncate the leftover
 > files in place (Docker keeps them open, so deleting can confuse the
-> daemon — `truncate -s 0` is safe):
+> daemon, `truncate -s 0` is safe):
 >
 > ```bash
 > $ sudo find /var/lib/docker/containers/ -name "*-json.log" \
@@ -96,12 +96,12 @@ The available tags are `anthias-server`, `anthias-viewer`,
 >
 > The Anthias installer adds your user to the `adm` group, which on
 > Debian/Raspberry Pi OS grants read access to the journal once you've
-> logged out and back in (and provided the journal is persistent —
+> logged out and back in (and provided the journal is persistent, 
 > i.e. `/var/log/journal/` exists). On systems where that's set up you
 > can drop the `sudo` from the commands above.
 
 Journal retention is controlled by `systemd-journald` (see
-`/etc/systemd/journald.conf` — `SystemMaxUse` caps total disk usage,
+`/etc/systemd/journald.conf`, `SystemMaxUse` caps total disk usage,
 defaulting to 10% of the filesystem). If you want to free space
 immediately:
 
@@ -130,7 +130,7 @@ $ $HOME/anthias/bin/run_upgrade.sh
 
 ## Accessing the REST API
 
-The full endpoint reference is on the [API page](/api/) — endpoints, parameters, and response schemas grouped by tag.
+The full endpoint reference is on the [API page](/api/): endpoints, parameters, and response schemas grouped by tag.
 
 If you'd prefer the live ReDoc-rendered docs straight from your device, open `http://<device-ip>/api/docs/` (or `http://localhost:8000/api/docs/` in development mode).
 
@@ -147,13 +147,13 @@ reverse-proxies plain HTTP to `anthias-server:8080`. There are three
 modes:
 
 ```bash
-# Default — Caddy issues a cert from its built-in local CA. Good for
+# Default: Caddy issues a cert from its built-in local CA. Good for
 # IP-based LAN access; browsers will warn that the CA is untrusted.
 $ ./bin/enable_ssl.sh
 
-# Auto Let's Encrypt — needs the domain to resolve to this host and
+# Auto Let's Encrypt: needs the domain to resolve to this host and
 # port 80 to be reachable from the internet for the HTTP-01 challenge.
-$ ./bin/enable_ssl.sh --domain example.com --email you@example.com
+$ ./bin/enable_ssl.sh --domain example.com --email <your-email>
 $ ./bin/enable_ssl.sh --domain example.com --staging   # ACME staging
 
 # Bring your own certificate.
@@ -163,7 +163,7 @@ $ ./bin/enable_ssl.sh --cert /path/to/cert.pem --key /path/to/key.pem
 $ ./bin/disable_ssl.sh
 ```
 
-When SSL is *not* enabled, no Caddy container is pulled or run — the
+When SSL is *not* enabled, no Caddy container is pulled or run. The
 default install is unchanged.
 
 ### 2. Trusting a custom CA for outbound requests
@@ -181,4 +181,4 @@ a private CA, install the CA into the `anthias-server` and
 > $ ./bin/add_certificate.sh /path/to/certificate.crt
 > ```
 
-More details about generating self-signed certificates can be found [here](https://devopscube.com/create-self-signed-certificates-openssl/).
+For more details, see this [guide to generating self-signed certificates with OpenSSL](https://devopscube.com/create-self-signed-certificates-openssl/).

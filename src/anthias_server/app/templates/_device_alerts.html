@@ -1,0 +1,16 @@
+{% comment %}
+The device-health banners, in one container above <main>.
+
+Both render nothing unless there is something to report, so on a
+healthy player this emits an empty div and costs nothing visually.
+
+Order is fixed rather than by severity, and power comes first on
+purpose: an inadequate supply is one of the main causes of a corrupted
+memory card, so when both fire, the top banner is the one to act on
+first. Sorting by severity would put the card above the thing
+destroying it.
+{% endcomment %}
+<div class="app-container device-alerts">
+  {% include "_power_warning.html" %}
+  {% include "_storage_warning.html" %}
+</div>

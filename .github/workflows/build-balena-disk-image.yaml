@@ -66,7 +66,7 @@ jobs:
           fi
 
       - name: Checkout at tag
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 1
@@ -149,7 +149,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout at tag
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
@@ -258,8 +258,8 @@ jobs:
 
       # `balena deploy` (vs `balena push`) points the fleet at the
       # existing <short-hash>-<board> GHCR images — no remote build.
-      # bin/balena_ota_deploy.sh owns the fleet mapping, compose render
-      # (incl. the pi5/x86 vchiq strip), version stamping, and retry;
+      # bin/balena_ota_deploy.sh owns the fleet mapping, compose render,
+      # version stamping, and retry;
       # the manual deploy hook (deploy-balena-manual.yaml) calls the same
       # script. `${TAG#v}` strips the leading `v` so the release tag
       # (v2026.05.1) becomes the raw CalVer the script normalizes and
@@ -289,7 +289,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout at tag
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
@@ -489,7 +489,7 @@ jobs:
             ./*-anthias-*.json
 
       - name: Attest
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: '${{ github.workspace }}/*-anthias-*.img.xz'
 
@@ -509,7 +509,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout at tag
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
@@ -567,17 +567,17 @@ jobs:
       actions: write
     steps:
       - name: Checkout at tag
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
       - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: '0.9.17'
 

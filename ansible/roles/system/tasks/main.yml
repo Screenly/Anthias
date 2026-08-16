@@ -1,4 +1,7 @@
 ---
+- name: Configure HTTP proxy propagation
+  ansible.builtin.include_tasks: proxy.yml
+
 - name: Configure boot partition (/boot/{config,cmdline}.txt)
   ansible.builtin.include_tasks:
     file: boot.yml
@@ -11,6 +14,12 @@
       tags:
         - touches-boot-partition
         - raspberry-pi
+  # Belt-and-suspenders alongside install.sh's --skip-tags raspberry-pi:
+  # boot.yml writes /boot/firmware/config.txt, which only exists on
+  # Raspberry Pi OS, so a direct `ansible-playbook` run (or a wrapper that
+  # forgets the skip-tags flag) must not reach it on non-Pi hardware
+  # (GH #3239 point 6).
+  when: device_type in ['pi2', 'pi3', 'pi3-64', 'pi4-64', 'pi5']
   tags:
     - touches-boot-partition
     - raspberry-pi
@@ -21,6 +30,10 @@
 
 - name: Install/remove apt packages
   ansible.builtin.include_tasks: packages.yml
+
+- name: Ensure a stable local DNS resolver before Docker starts (x86)
+  ansible.builtin.include_tasks: dns.yml
+  when: device_type == 'x86'
 
 - name: Install and configure Docker
   ansible.builtin.include_tasks: docker.yml

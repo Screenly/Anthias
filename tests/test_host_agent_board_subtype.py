@@ -180,12 +180,14 @@ def test_set_board_subtype_propagates_redis_failures() -> None:
     docstring to reflect the new contract."""
     fake_redis = mock.MagicMock()
     fake_redis.set.side_effect = Exception('simulated redis hiccup')
-    with mock.patch(
-        'anthias_host_agent.__main__.detect_board_subtype',
-        return_value='rockpi4',
+    with (
+        mock.patch(
+            'anthias_host_agent.__main__.detect_board_subtype',
+            return_value='rockpi4',
+        ),
+        pytest.raises(Exception, match='simulated redis hiccup'),
     ):
-        with pytest.raises(Exception, match='simulated redis hiccup'):
-            set_board_subtype(fake_redis)
+        set_board_subtype(fake_redis)
 
 
 def test_subscriber_loop_calls_set_board_subtype(
