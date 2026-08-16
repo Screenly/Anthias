@@ -28,21 +28,36 @@
  * The flip side: a wrong glob here now yields an almost-empty file
  * instead of being masked by the accidental cwd scan. CI asserts the
  * bundle's size for exactly that reason. */
+/* Every @import is here, in one block, before any other rule.
+ *
+ * CSS requires that (only @charset and @layer may precede them), and
+ * @source counts as a rule — so a vendor import placed after the
+ * @source globs below is invalid CSS even though Tailwind resolves it
+ * happily. Keep this block contiguous and keep @source under it.
+ *
+ * Order within the block does not carry meaning. Every file imported
+ * here declares custom properties on :root or a [data-theme] selector,
+ * and none of them declares a name another one does, so nothing here
+ * depends on who lands last:
+ *
+ *   flatpickr, leaflet  vendor CSS, inlined rather than fetched
+ *   palette.css         primitives, plain properties and NOT @theme, so
+ *                       they cannot become utility classes: a component
+ *                       naming `bg-plum-700` has hardcoded a colour and
+ *                       will not follow the theme
+ *   theme-dark.css      the dark overrides, which win on specificity
+ *                       (:root[data-theme] is 0,2,0) rather than order
+ *   base.css            tokens with no @theme namespace to live in
+ */
 @import "tailwindcss" source(none);
-@source "../../templates/**/*.html";
-@source "./**/*.ts";
-
-/* Vendor CSS, resolved from node_modules and inlined into our bundle.
- * Leaflet powers the Apps tab's location picker; tiles load from OSM at
- * runtime but the library CSS is local, never a CDN. */
 @import "flatpickr/dist/flatpickr.css";
 @import "leaflet/dist/leaflet.css";
-
-/* Palette primitives. Plain custom properties, NOT @theme, so they do
- * not become utility classes: a component naming `bg-plum-700` has
- * hardcoded a colour and will not follow the theme. Only the roles
- * below are reachable from markup. */
 @import "./css/palette.css";
+@import "./css/theme-dark.css";
+@import "./css/base.css";
+
+@source "../../templates/**/*.html";
+@source "./**/*.ts";
 
 /* ========================================================================
  * Tokens
@@ -282,12 +297,7 @@
  * missing. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* ========================================================================
- * Hand-written CSS
- *
- * Only for what utilities cannot express. Imported here rather than
- * compiled separately so Tailwind sees the var() references and keeps
- * those tokens alive.
- * ====================================================================== */
-@import "./css/theme-dark.css";
-@import "./css/base.css";
+/* Hand-written CSS — theme-dark.css and base.css — is imported at the
+ * top of this file with everything else. It is part of the bundle
+ * rather than a separate sheet so there is one stylesheet to load and
+ * one place to look. */

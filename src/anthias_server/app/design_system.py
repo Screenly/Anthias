@@ -22,6 +22,7 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
+from django.views.decorators.http import require_safe
 
 # Colour roles, grouped by the plane they belong to. Every entry is a
 # token name; the template renders each as a swatch labelled with the
@@ -192,9 +193,16 @@ COLOUR_GROUPS: list[tuple[str, str, list[str]]] = [
 ]
 
 # (token suffix, the size it resolves to, what it is for)
+#
+# The three scales below are independent, and a few steps coincide:
+# 0.75rem is a type step, a spacing step and a radius. Sonar reads that
+# as a literal worth extracting (python:S1192), hence the NOSONAR. Do
+# not extract it — hoisting the value into one constant would couple
+# three scales that must be free to move separately, which is the whole
+# reason they are separate scales.
 TYPE_SCALE: list[tuple[str, str, str]] = [
     ('2xs', '0.6875rem', 'Eyebrows, uppercase micro-labels'),
-    ('xs', '0.75rem', 'Hints, chips, table meta, timestamps'),
+    ('xs', '0.75rem', 'Hints, chips, table meta'),  # NOSONAR
     ('sm', '0.875rem', 'Secondary body, buttons, inputs, most labels'),
     ('base', '1rem', 'Body copy'),
     ('lg', '1.125rem', 'Card headings'),
@@ -264,8 +272,12 @@ BUTTON_VARIANTS: list[tuple[str, str]] = [
 ]
 
 
+@require_safe
 def design_system(request: HttpRequest) -> HttpResponse:
-    """Render the whole design system on one page."""
+    """Render the whole design system on one page.
+
+    Read-only, so GET and HEAD and nothing else.
+    """
     context: dict[str, Any] = {
         'colour_groups': COLOUR_GROUPS,
         'type_scale': TYPE_SCALE,

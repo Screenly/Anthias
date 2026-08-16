@@ -150,6 +150,45 @@ def _render_templates(names: dict[str, str]) -> dict[str, str]:
     return html
 
 
+def _capture(
+    names: list[str], port: int, out: Path, themes: list[str]
+) -> None:
+    """Screenshot every page, at every viewport, in every theme."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        for theme in themes:
+            for vp_name, (width, height) in VIEWPORTS.items():
+                context = browser.new_context(
+                    viewport={'width': width, 'height': height},
+                    device_scale_factor=2,
+                )
+                # Set before navigation so the boot script, once it
+                # exists, reads it on first paint.
+                context.add_init_script(
+                    'try { localStorage.setItem('
+                    f"'anthias.appearance', '{theme}'); }} "
+                    'catch (e) {}'
+                )
+                page = context.new_page()
+                for name in names:
+                    page.goto(
+                        f'http://127.0.0.1:{port}/_shots_tmp/{name}.html',
+                        wait_until='networkidle',
+                    )
+                    page.evaluate(
+                        't => document.documentElement'
+                        '.setAttribute("data-theme", t)',
+                        theme,
+                    )
+                    shot = out / f'{name}-{theme}-{vp_name}.png'
+                    page.screenshot(path=str(shot), full_page=True)
+                    print(f'  . {shot.name}')
+                context.close()
+        browser.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', required=True, type=Path)
@@ -204,41 +243,8 @@ def main() -> int:
         port = _free_port()
         httpd = _serve(STATIC_ROOT, port)
         try:
-            from playwright.sync_api import sync_playwright
-
             print('capturing:')
-            with sync_playwright() as p:
-                browser = p.chromium.launch()
-                for theme in args.themes:
-                    for vp_name, (width, height) in VIEWPORTS.items():
-                        context = browser.new_context(
-                            viewport={'width': width, 'height': height},
-                            device_scale_factor=2,
-                        )
-                        # Set before navigation so the boot script,
-                        # once it exists, reads it on first paint.
-                        context.add_init_script(
-                            'try { localStorage.setItem('
-                            f"'anthias.appearance', '{theme}'); }} "
-                            'catch (e) {}'
-                        )
-                        page = context.new_page()
-                        for name in pages:
-                            page.goto(
-                                f'http://127.0.0.1:{port}'
-                                f'/_shots_tmp/{name}.html',
-                                wait_until='networkidle',
-                            )
-                            page.evaluate(
-                                't => document.documentElement'
-                                '.setAttribute("data-theme", t)',
-                                theme,
-                            )
-                            shot = out / f'{name}-{theme}-{vp_name}.png'
-                            page.screenshot(path=str(shot), full_page=True)
-                            print(f'  . {shot.name}')
-                        context.close()
-                browser.close()
+            _capture(list(pages), port, out, args.themes)
         finally:
             httpd.shutdown()
     finally:
