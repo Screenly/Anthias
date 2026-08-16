@@ -4298,9 +4298,12 @@ def test_system_info_storage_card_exposes_the_evidence(
     ):
         response = client.get(reverse('anthias_app:system_info'))
 
-    body = response.content.decode()
+    body = _collapse(response.content.decode())
     assert 'Errors recorded' in body
-    assert 'errors_count' in body
+    # The readout labels the row in words now rather than naming the
+    # sysfs symbol, but every piece of evidence is still on the page.
+    assert 'ext4 errors' in body
     assert 'mmcblk0p2' in body
     assert 'ext4_find_entry' in body
     assert 'SanDisk SC32G' in body
+    assert 'survives reboots' in body
