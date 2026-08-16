@@ -129,7 +129,7 @@
       <div
         x-show="tokenError"
         x-cloak
-        class="text-red-600"
+        class="text-danger"
         role="alert"
         aria-live="assertive"
       >
@@ -268,7 +268,7 @@
         <span x-text="completedCount()"></span> of <span x-text="results.length"></span> done
         &middot; <span x-text="successCount()"></span> succeeded
         <template x-if="failureCount()">
-          <span>&middot; <span class="text-red-600" x-text="failureCount() + ' failed'"></span></span>
+          <span>&middot; <span class="text-danger" x-text="failureCount() + ' failed'"></span></span>
         </template>
         <template x-if="assetGroupTitle">
           <span>&middot; group: <strong x-text="assetGroupTitle"></strong></span>
@@ -305,7 +305,7 @@
                   <span style="color:#16a34a"><i class="ti ti-check"></i> Done</span>
                 </template>
                 <template x-if="row.status === 'failed'">
-                  <span class="text-red-600"><i class="ti ti-x"></i> Failed</span>
+                  <span class="text-danger"><i class="ti ti-x"></i> Failed</span>
                 </template>
               </td>
               <td x-text="row.name || row.asset_id"></td>
@@ -314,7 +314,7 @@
                   <span class="muted-label">Uploaded to Screenly</span>
                 </template>
                 <template x-if="row.status === 'failed'">
-                  <span class="text-red-600" x-text="row.error"></span>
+                  <span class="text-danger" x-text="row.error"></span>
                 </template>
               </td>
             </tr>

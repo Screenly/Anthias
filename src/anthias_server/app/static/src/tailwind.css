@@ -1,29 +1,263 @@
-/* Tailwind v4 entry — utility classes + design tokens.
+/* Anthias design system: the single source of truth.
  *
- * The Anthias design system lives in SCSS (anthias.scss). Tailwind
- * here is purely utility-class layer: spacing, flex/grid, typography
- * helpers. Component classes (.app-btn, .surface, .modal-card, .stat-card,
- * .schedule-chip, .schedule-window, .resource-pie, .loadavg-card,
- * .app-toast …) stay hand-rolled so the named design surface survives
- * the cutover from Bootstrap.
+ * This file is the ONLY place a design value may be written. Every
+ * colour, size, radius, shadow, duration, z-index and breakpoint lives
+ * in the @theme block below; everything else in the codebase reaches
+ * them through a Tailwind utility (bg-surface, p-4, lg:flex) or, where
+ * utilities genuinely cannot express the thing, through var() from a
+ * file under css/.
+ *
+ * Output is ONE stylesheet, dist/css/anthias.css, linked by all four
+ * document roots (base.html, login.html, _error.html, splash-page.html).
+ * Tabler Icons stays a separate <link>: it references its font files
+ * with relative URLs that would not resolve from our bundle.
+ *
+ * Custom CSS is imported at the bottom rather than compiled separately.
+ * That is load-bearing: Tailwind reads those files, so the tokens they
+ * reference are marked used and kept in :root, while tokens nothing
+ * references anywhere are pruned. One authority, no duplication, no
+ * dead tokens.
  */
-@import "tailwindcss";
-@plugin "@tailwindcss/forms";
 
+/* `source(none)` disables Tailwind's automatic scan of the working
+ * directory, so ONLY the globs below are considered. Without it v4 also
+ * walks the repo root and pulls the Hugo marketing site's classes into
+ * the device bundle (#ea4aaa, max-w-7xl and lg:py-28 were all shipping
+ * to players). website/ has its own bundle and must stay separate.
+ *
+ * The flip side: a wrong glob here now yields an almost-empty file
+ * instead of being masked by the accidental cwd scan. CI asserts the
+ * bundle's size for exactly that reason. */
+@import "tailwindcss" source(none);
+@source "../../templates/**/*.html";
+@source "./**/*.ts";
+
+/* Vendor CSS, resolved from node_modules and inlined into our bundle.
+ * Leaflet powers the Apps tab's location picker; tiles load from OSM at
+ * runtime but the library CSS is local, never a CDN. */
+@import "flatpickr/dist/flatpickr.css";
+@import "leaflet/dist/leaflet.css";
+
+/* Palette primitives. Plain custom properties, NOT @theme, so they do
+ * not become utility classes: a component naming `bg-plum-700` has
+ * hardcoded a colour and will not follow the theme. Only the roles
+ * below are reachable from markup. */
+@import "./css/palette.css";
+
+/* ========================================================================
+ * Tokens
+ * ====================================================================== */
 @theme {
-  --color-anthias-purple-1: #1f0029;
-  --color-anthias-purple-2: #3c1762;
-  --color-anthias-purple-3: #270035;
-  --color-anthias-purple-4: #5b2090;
-  --color-anthias-purple-5: #7c30cd;
-  --color-anthias-yellow-3: #FFE11A;
-  --color-anthias-yellow-4: #FFED75;
+  /* Delete Tailwind's built-in palette so the only colours reachable
+   * from markup are the roles declared below. `text-red-600` and
+   * `bg-white` become unknown classes that emit nothing, closing the
+   * stock-palette leak in the compiler rather than in a style guide.
+   * `transparent`, `current` and `inherit` survive as static keywords,
+   * and @tailwindcss/forms is unaffected (it carries a JS fallback).
+   *
+   * MUST come first: this clears the namespace at the point it is
+   * processed, so anything declared above it would be wiped. */
+  --color-*: initial;
 
+  /* ---- Fonts -------------------------------------------------------- */
   --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+
+  /* ---- Colour roles (light theme) -----------------------------------
+   * The UI has four planes, and each theme decides them independently:
+   *
+   *   canvas   the page behind everything
+   *   chrome   navbar + footer. Brand furniture; deep plum in BOTH
+   *            themes, so it is the one plane that does not invert.
+   *   surface  cards, modals, popovers
+   *   feature  the accent card (.surface--active), splash and login
+   *            cards. DARKER than canvas in light, LIGHTER in dark, so
+   *            "emphasised" reads correctly either way.
+   *
+   * Dark overrides live in css/theme-dark.css and redeclare only these
+   * roles: primitives and every non-colour scale are theme-independent. */
+  --color-canvas: var(--color-plum-50);
+  --color-canvas-deep: var(--color-plum-100);
+
+  --color-chrome: var(--color-plum-900);
+  --color-chrome-scrim: rgb(20 0 28 / 0.97);
+  --color-on-chrome: #ffffff;
+  --color-on-chrome-muted: var(--color-paper-65);
+  --color-on-chrome-faint: var(--color-paper-55);
+
+  --color-surface: #ffffff;
+  --color-surface-soft: #fafafa;
+  --color-surface-tint: var(--color-plum-50);
+  --color-surface-sunken: var(--color-plum-100);
+
+  --color-fg: #1f002a;
+  --color-fg-muted: #5e5868;
+  /* Darker than it looks like it should be. Every foreground role here
+   * clears 4.5:1 against every surface it can land on, including the
+   * canvas, and including the faint tier: Lighthouse measures rendered
+   * font size, so a "this is only used on large text" exemption is a bug
+   * waiting for someone to reuse the token on a caption. */
+  --color-fg-faint: #6f6779;
+  --color-border: var(--color-ink-8);
+  --color-divider: var(--color-ink-8);
+
+  --color-feature-from: #503061;
+  --color-feature-to: #492955;
+  --color-on-feature: #ffffff;
+  --color-on-feature-muted: var(--color-paper-65);
+  --color-on-feature-faint: var(--color-paper-55);
+  --color-feature-divider: var(--color-paper-12);
+
+  --color-accent: var(--color-sun-400);
+  --color-accent-soft: var(--color-sun-200);
+  --color-accent-strong: var(--color-sun-500);
+  --color-accent-text: #1f002a;
+  --color-accent-wash: rgb(255 225 26 / 0.16);
+  --color-accent-edge: rgb(255 225 26 / 0.32);
+  --color-accent-hover: rgb(255 225 26 / 0.1);
+
+  /* Anchors on light surfaces. The brand yellow has far too little
+   * contrast against white to be a link colour. */
+  --color-link: #6633a0;
+  --color-link-hover: #4a1f80;
+  --color-link-wash: rgb(102 51 160 / 0.08);
+  --color-link-edge: rgb(102 51 160 / 0.22);
+  --color-link-ring: rgb(102 51 160 / 0.18);
+
+  /* Danger splits into two roles that a single token cannot serve.
+   *
+   * --color-danger is INK: inline error text and icons. It has to
+   * contrast against the surface behind it, so the dark theme lightens
+   * it (see theme-dark.css).
+   *
+   * --color-danger-fill is a BACKGROUND, for destructive buttons, with
+   * --color-on-danger written on top. It stays dark in both themes,
+   * because a fill that lightens for dark mode leaves white label text
+   * at 2.75:1. A destructive button should look the same either way.
+   *
+   * Both are a step darker than the Bootstrap red this inherited:
+   * #dc3545 as text on white is 4.53:1, passing by 0.03 and failing on
+   * any tinted surface. */
+  --color-danger: #c82333;
+  --color-danger-fill: #c82333;
+  --color-danger-fill-hover: var(--color-red-600);
+  --color-danger-fill-active: #a71d2a;
+  --color-on-danger: #ffffff;
+  --color-danger-wash: var(--color-red-50);
+  --color-danger-edge: var(--color-red-100);
+  --color-danger-on-wash: var(--color-red-900);
+
+  /* The old --color-warning-soft / --color-warning-strong were never
+   * declared: all 8 call sites silently rendered their inline fallback
+   * hex. These are the real tokens. */
+  --color-warning: var(--color-amber-500);
+  --color-warning-wash: var(--color-amber-100);
+  --color-warning-edge: var(--color-amber-900);
+  --color-warning-on-wash: var(--color-amber-900);
+  --color-warning-ring: rgb(245 158 11 / 0.18);
+
+  --color-success: var(--color-green-500);
+  --color-success-bright: var(--color-green-400);
+  --color-success-wash: rgb(52 211 153 / 0.22);
+  --color-success-wash-strong: rgb(52 211 153 / 0.4);
+  --color-success-edge: rgb(52 211 153 / 0.45);
+  --color-success-edge-strong: rgb(52 211 153 / 0.6);
+  --color-success-ring: rgb(52 211 153 / 0.18);
+  --color-success-ring-pulse: rgb(52 211 153 / 0.32);
+  --color-success-on-wash: var(--color-green-900);
+  --color-success-on-wash-strong: var(--color-green-50);
+
+  --color-focus-ring: rgb(124 48 205 / 0.35);
+
+  /* Theme-relative overlay ladder: aliases onto ink in light and paper
+   * in dark, so component CSS never has to ask which theme it is in. */
+  --color-scrim-2: var(--color-ink-2);
+  --color-scrim-4: var(--color-ink-4);
+  --color-scrim-5: var(--color-ink-5);
+  --color-scrim-6: var(--color-ink-6);
+  --color-scrim-8: var(--color-ink-8);
+  --color-scrim-10: var(--color-ink-10);
+  --color-scrim-14: var(--color-ink-14);
+  --color-scrim-18: var(--color-ink-18);
+  --color-scrim-25: var(--color-ink-25);
+  --color-scrim-40: var(--color-ink-40);
+
+  /* ---- Type ramp -----------------------------------------------------
+   * Tailwind's own names and steps, plus a 2xs the default ramp lacks,
+   * so `text-sm` in markup and var(--text-sm) in CSS denote the same
+   * number. Nine steps replaces 27 ad-hoc sizes, ten of which were
+   * crowded into the 0.65-0.875rem band. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.45;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 1.15;
+
+  --tracking-tighter: -0.02em;
+  --tracking-tight: -0.01em;
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.1em;
+
+  /* ---- Radii. rem, not px, per CLAUDE.md. --------------------------- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-pill: 62.5rem;
+
+  /* ---- Elevation ----------------------------------------------------
+   * Dark theme replaces these with an inset hairline: a drop shadow is
+   * invisible against a near-black canvas. */
+  --shadow-sm: 0 1px 2px var(--color-ink-4), 0 1px 3px var(--color-ink-6);
+  --shadow-md: 0 2px 6px var(--color-ink-4), 0 8px 24px var(--color-ink-8);
+  --shadow-lg: 0 4px 12px var(--color-ink-6), 0 16px 48px var(--color-ink-14);
+
+  /* ---- Motion ------------------------------------------------------- */
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---- Breakpoints ---------------------------------------------------
+   * Written once. Markup uses `lg:`, custom CSS uses `@variant lg`, both
+   * resolve here. Replaces 15 ad-hoc widths that mixed min- and
+   * max-width and still carried vestigial Bootstrap-5 grid tiers. */
+  --breakpoint-xs: 30rem;
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
 }
 
-/* Tell Tailwind which files to scan for class strings. The default
- * v4 detector covers Vue/Svelte/HTML/JSX globs but not Django's .html
- * paths under our nested src/ tree, so we declare them explicitly. */
-@source "../../templates/**/*.html";
-@source "../src/**/*.ts";
+/* Theme variant. Tailwind's default `dark` is
+ * @media (prefers-color-scheme: dark), which would disagree with an
+ * explicit operator choice. Point it at the attribute the boot script
+ * writes instead; that script always resolves "system" to a concrete
+ * value before first paint, so the attribute is the single truth.
+ *
+ * Prefer a role token over this variant. Because the roles above are
+ * redefined per theme, `bg-surface` is already correct in both and needs
+ * no variant. Reach for `dark:` only when the STRUCTURE differs, such as
+ * swapping a logo asset. Using `dark:` on a colour means a role token is
+ * missing. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ========================================================================
+ * Hand-written CSS
+ *
+ * Only for what utilities cannot express. Imported here rather than
+ * compiled separately so Tailwind sees the var() references and keeps
+ * those tokens alive.
+ * ====================================================================== */
+@import "./css/theme-dark.css";
+@import "./css/base.css";

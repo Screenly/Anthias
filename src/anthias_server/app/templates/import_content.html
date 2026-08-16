@@ -85,7 +85,7 @@
       <div
         x-show="tokenError"
         x-cloak
-        class="text-red-600"
+        class="text-danger"
         role="alert"
         aria-live="assertive"
       >
@@ -224,7 +224,7 @@
           <span>&middot; <span x-text="skippedResultCount() + ' skipped'"></span></span>
         </template>
         <template x-if="failureCount()">
-          <span>&middot; <span class="text-red-600" x-text="failureCount() + ' failed'"></span></span>
+          <span>&middot; <span class="text-danger" x-text="failureCount() + ' failed'"></span></span>
         </template>
       </p>
     </header>
@@ -261,7 +261,7 @@
                   <span class="muted-label"><i class="ti ti-minus"></i> Skipped</span>
                 </template>
                 <template x-if="row.status === 'failed'">
-                  <span class="text-red-600"><i class="ti ti-x"></i> Failed</span>
+                  <span class="text-danger"><i class="ti ti-x"></i> Failed</span>
                 </template>
               </td>
               <td x-text="row.name || row.remote_id"></td>
@@ -270,7 +270,7 @@
                   <span class="muted-label" x-text="row.detail"></span>
                 </template>
                 <template x-if="row.status === 'failed'">
-                  <span class="text-red-600" x-text="row.detail"></span>
+                  <span class="text-danger" x-text="row.detail"></span>
                 </template>
               </td>
             </tr>

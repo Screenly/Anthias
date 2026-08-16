@@ -1,0 +1,72 @@
+/* Base layer: values that are design tokens in spirit but have no
+ * Tailwind @theme namespace to live in, plus the handful of global
+ * rules that utilities cannot attach to.
+ *
+ * Everything here is reached with Tailwind's CSS-variable shorthand,
+ * e.g. `z-(--z-modal)` or `h-(--nav-height)`, so the use site still
+ * names a token rather than a number.
+ */
+
+:root {
+  /* ---- Stacking order -------------------------------------------------
+   * v4 has no --z-index-* theme namespace, so these are plain custom
+   * properties. One ordered scale replaces 1040/1050/1060/1080/1090/1100
+   * scattered across the old SCSS plus three inline
+   * style="z-index: 1060" attributes.
+   *
+   * Two constraints encoded here. Leaflet's internal panes run 400-1000
+   * inside their own stacking context, so the map must stay below
+   * --z-modal. Flatpickr opens FROM inside modals, so its calendar has
+   * to clear --z-modal-nested; the old SCSS documented this as the
+   * reason its calendar was forced to 1100. */
+  --z-below: -1;
+  --z-base: 0;
+  --z-raised: 2;
+  --z-sticky: 100;
+  --z-nav: 200;
+  --z-bulk-bar: 300;
+  --z-modal: 400;
+  --z-modal-nested: 410;
+  --z-datepicker: 500;
+  --z-toast: 600;
+
+  /* ---- Layout constants -----------------------------------------------
+   * The navbar height was previously the magic number 4.5rem repeated in
+   * `body`, in a `main` calc() and in the splash page; the footer height
+   * was a SCSS variable that participated in that same calc() by
+   * coincidence rather than by reference. */
+  --nav-height: 4.5rem;
+  --footer-height: 13rem;
+  --content-min-height: calc(
+    100vh - var(--nav-height) - var(--footer-height)
+  );
+  --modal-body-max-height: calc(100vh - 12rem);
+  --pie-size: 11rem;
+  --menu-min-width: 12rem;
+  --container-page: 82.5rem;
+
+  /* Focus ring width. Paired with --color-focus-ring. */
+  --ring-width: 0.1875rem;
+
+  /* ---- Icon sizes -----------------------------------------------------
+   * Deliberately NOT part of the type ramp. Six of the 27 "font sizes"
+   * in the old SCSS were glyph dimensions on an <i>, not text, and
+   * conflating the two is why the ramp had so many near-duplicate steps.
+   * --icon-inline is em-based so a glyph tracks the text it sits in. */
+  --icon-inline: 0.9em;
+  --icon-sm: 1rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+  --icon-xl: 2rem;
+}
+
+/* Alpine sets x-cloak on elements that must not flash before it takes
+ * over. Without this rule every modal renders for one frame on load. */
+[x-cloak] {
+  display: none !important;
+}
+
+::selection {
+  color: var(--color-accent-text);
+  background: var(--color-accent);
+}

@@ -1,0 +1,96 @@
+/* Dark theme.
+ *
+ * Only colour ROLES are redeclared. Palette primitives and every
+ * non-colour scale (type, spacing, radii, breakpoints) are
+ * theme-independent, which is what keeps this file short and auditable.
+ *
+ * Driven entirely by the data-theme attribute that the boot script in
+ * templates/_theme_boot.html writes before first paint. There is no
+ * @media (prefers-color-scheme) arm on purpose: the script always
+ * resolves "system" to a concrete light/dark value, so the attribute is
+ * the single truth. A no-JS fallback would mean maintaining this
+ * declaration list twice, and the management UI already requires JS for
+ * htmx and Alpine.
+ *
+ * Specificity: Tailwind emits its theme into `:root, :host` (0,1,0), so
+ * a bare [data-theme="dark"] would merely tie. `:root[data-theme=...]`
+ * is (0,2,0) and wins outright. Do not "simplify" this selector.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-canvas: var(--color-plum-950);
+  --color-canvas-deep: #0d0013;
+
+  /* Chrome does not invert. A light theme with a dark top bar is an
+   * ordinary pattern, and holding the brand bar steady means the
+   * --color-on-chrome-* family needs no dark values at all. */
+  --color-chrome: var(--color-plum-950);
+  --color-chrome-scrim: rgb(13 0 19 / 0.97);
+
+  --color-surface: #221030;
+  --color-surface-soft: #2a1639;
+  --color-surface-tint: #2e1a3e;
+  --color-surface-sunken: #1a0a26;
+
+  --color-fg: #f2ecf6;
+  --color-fg-muted: #b8acc4;
+  --color-fg-faint: #8d8299;
+  --color-border: var(--color-paper-12);
+  --color-divider: var(--color-paper-8);
+
+  /* The feature card inverts DIRECTION: lighter than the canvas, so it
+   * still reads as elevated rather than as a hole. --color-on-feature
+   * stays near-white, so .surface--active and all its children are
+   * unchanged between themes. */
+  --color-feature-from: var(--color-plum-600);
+  --color-feature-to: var(--color-plum-700);
+
+  /* The light-surface purple is unreadable on #221030. */
+  --color-link: #c9a4f0;
+  --color-link-hover: #e2ccff;
+  --color-link-wash: rgb(201 164 240 / 0.12);
+  --color-link-edge: rgb(201 164 240 / 0.28);
+  --color-link-ring: rgb(201 164 240 / 0.22);
+
+  /* Status washes flip from tinted-white to tinted-dark, so their
+   * on-wash text partners flip with them.
+   *
+   * Only the INK lightens. --color-danger-fill deliberately does not:
+   * it is a button background carrying white label text, and lightening
+   * it would drop that label to 2.75:1. */
+  --color-danger: #ff6b7a;
+  --color-danger-wash: rgb(220 53 69 / 0.16);
+  --color-danger-edge: rgb(220 53 69 / 0.4);
+  --color-danger-on-wash: #ffd7db;
+
+  --color-warning-wash: rgb(245 158 11 / 0.16);
+  --color-warning-edge: rgb(245 158 11 / 0.4);
+  --color-warning-on-wash: #ffe4b3;
+
+  --color-success-on-wash: var(--color-green-50);
+
+  --color-focus-ring: rgb(201 164 240 / 0.45);
+
+  /* Overlays flip from ink to paper. This single swap is why no
+   * component needs a [data-theme] override of its own. */
+  --color-scrim-2: var(--color-paper-4);
+  --color-scrim-4: var(--color-paper-5);
+  --color-scrim-5: var(--color-paper-6);
+  --color-scrim-6: var(--color-paper-8);
+  --color-scrim-8: var(--color-paper-10);
+  --color-scrim-10: var(--color-paper-12);
+  --color-scrim-14: var(--color-paper-15);
+  --color-scrim-18: var(--color-paper-18);
+  --color-scrim-25: var(--color-paper-30);
+  --color-scrim-40: var(--color-paper-50);
+
+  /* Drop shadows barely register on a near-black canvas, so elevation
+   * is carried by a top inset hairline instead. */
+  --shadow-sm: 0 1px 2px var(--color-ink-40),
+    inset 0 1px 0 var(--color-paper-5);
+  --shadow-md: 0 2px 8px var(--color-ink-40), 0 8px 24px var(--color-ink-40),
+    inset 0 1px 0 var(--color-paper-6);
+  --shadow-lg: 0 4px 16px var(--color-ink-60), 0 16px 48px var(--color-ink-60),
+    inset 0 1px 0 var(--color-paper-8);
+}
