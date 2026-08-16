@@ -49,7 +49,12 @@ from anthias_common.utils import (
 )
 from anthias_common.youtube import youtube_destination_path
 from anthias_server.app.models import Asset
-from anthias_server.lib import diagnostics, display_power, undervoltage_watcher
+from anthias_server.lib import (
+    diagnostics,
+    display_power,
+    storage_watcher,
+    undervoltage_watcher,
+)
 from anthias_server.lib.telemetry import send_telemetry
 from anthias_server.settings import settings
 
@@ -381,6 +386,27 @@ def start_undervoltage_watcher(**kwargs: Any) -> None:
         undervoltage_watcher.start(r)
     except Exception:
         logger.exception('Could not start the under-voltage watcher.')
+
+
+@worker_ready.connect
+def start_storage_watcher(**kwargs: Any) -> None:
+    """Begin watching the storage the device runs from.
+
+    Same placement and same reasoning as the under-voltage watcher
+    above: ``worker_ready`` because ``worker_init`` is occupied by
+    ``wait_for_migrations``, and swallowing the exception because a
+    diagnostic that can take down the celery worker is worse than
+    the problem it reports.
+
+    Pointed at the config directory rather than left to its own
+    default so the watcher measures the filesystem Anthias actually
+    depends on -- the one holding the SQLite database -- whatever
+    ``HOME`` happens to be in this container.
+    """
+    try:
+        storage_watcher.start(r, settings.get_configdir())
+    except Exception:
+        logger.exception('Could not start the storage-health watcher.')
 
 
 @celery.task(

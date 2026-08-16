@@ -352,6 +352,20 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
                 ]
             )
 
+            # smartmontools: these three are the boards that can boot
+            # from a SATA/NVMe device (x86 outright, Rock Pi 4 and a
+            # Pi 5 with an NVMe HAT), and SMART is the only place such
+            # a device reports wear -- there is no sysfs equivalent of
+            # eMMC's life_time. The viewer samples it and publishes a
+            # Redis fact because it is the one container privileged
+            # enough to issue the ioctl; see anthias_common/smart.py.
+            #
+            # Deliberately not on the SD-card-only boards (pi2, pi3,
+            # pi4): an SD card has no SMART at all, so smartctl there
+            # would be ~2 MB of image that can never return an answer,
+            # on exactly the boards whose storage is tightest.
+            viewer_extra_apt_dependencies.append('smartmontools')
+
         if board == 'x86':
             # va-driver-all is a Debian metapackage that pulls in
             # intel-media-va-driver (modern Intel iHD), i965-va-driver

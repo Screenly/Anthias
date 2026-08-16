@@ -19,7 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_common import device_helper, undervoltage
+from anthias_common import device_helper, storage_health, undervoltage
 from anthias_common.internal_auth import is_internal_request
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -970,6 +970,39 @@ class InfoViewV2(InfoViewMixin):
             }
         return state
 
+    def get_storage(self) -> dict[str, Any]:
+        """Storage health, mirroring the System Info card.
+
+        SD cards have no health register, so unlike ``under_voltage``
+        this is not one sensor but a verdict assembled from ext4's
+        superblock error counters, a periodic write-and-read-back
+        check, and the eMMC wear registers where the board has them.
+        See ``anthias_common.storage_health`` for the reasoning.
+
+        ``status`` is the field to branch on. It is one of ``ok``,
+        ``wear``, ``errors``, ``full``, ``failing`` or ``unknown``,
+        ordered from healthy to worst, and it is the same verdict the
+        web UI renders. ``supported`` is false only when the
+        filesystem behind the data directory could not be resolved at
+        all; the other fields carry no information in that case.
+
+        ``errors_count`` is cumulative over the life of the
+        filesystem and deliberately survives reboots -- ext4 keeps it
+        in the superblock, and a card that corrupted data last month
+        is still the same card. ``errors_new`` and the write-check
+        fields reset on reboot, because those are things this device
+        observed rather than things the filesystem recorded.
+        """
+        try:
+            return storage_health.get_state(r, settings.get_configdir())
+        except Exception:
+            # A diagnostic must never take the info endpoint down.
+            logger.exception('Could not read the storage-health state.')
+            return {
+                'supported': False,
+                'status': storage_health.STATUS_UNKNOWN,
+            }
+
     def get_ip_addresses(self) -> list[str]:
         # /api/v2/info is auth'd and not polled, so blocking on
         # get_node_ip()'s host-readiness loop is acceptable here —
@@ -1036,6 +1069,175 @@ class InfoViewV2(InfoViewMixin):
                             'count': {'type': 'integer'},
                         },
                     },
+                    'storage': {
+                        'type': 'object',
+                        'description': (
+                            'Health of the filesystem this device '
+                            'runs from, assembled from ext4 '
+                            'superblock error counters, a periodic '
+                            'write-and-read-back check, and eMMC wear '
+                            'registers where present. Branch on '
+                            '`status`. Check `supported` first: when '
+                            'it is false the filesystem could not be '
+                            'resolved and no other field carries '
+                            'information. `errors_count` is '
+                            'cumulative over the life of the '
+                            'filesystem and survives reboots; '
+                            '`errors_new` and the write-check fields '
+                            'reset on reboot.'
+                        ),
+                        'properties': {
+                            'supported': {'type': 'boolean'},
+                            'status': {
+                                'type': 'string',
+                                'enum': [
+                                    'ok',
+                                    'wear',
+                                    'errors',
+                                    'full',
+                                    'failing',
+                                    'unknown',
+                                ],
+                            },
+                            'mount_point': {'type': ['string', 'null']},
+                            'fstype': {'type': ['string', 'null']},
+                            'device': {'type': ['string', 'null']},
+                            'disk': {'type': ['string', 'null']},
+                            'read_only': {'type': 'boolean'},
+                            'error_stats_supported': {'type': 'boolean'},
+                            'errors_count': {'type': 'integer'},
+                            'errors_new': {'type': 'integer'},
+                            'errors_this_boot': {'type': 'boolean'},
+                            'first_error': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_error': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_error_function': {
+                                'type': ['string', 'null']
+                            },
+                            'lifetime_written_kb': {
+                                'type': ['integer', 'null']
+                            },
+                            'write_ok': {'type': ['boolean', 'null']},
+                            'write_reason': {'type': ['string', 'null']},
+                            'write_failed_since_boot': {'type': 'boolean'},
+                            'write_fail_count': {'type': 'integer'},
+                            'first_write_fail': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_write_fail': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'last_check': {
+                                'type': ['string', 'null'],
+                                'format': 'date-time',
+                            },
+                            'fsync_ms': {'type': ['number', 'null']},
+                            'media': {
+                                'type': 'object',
+                                'description': (
+                                    'What the device is. `kind` is '
+                                    '`sd`, `emmc`, `disk` or '
+                                    '`unknown`; the wear fields are '
+                                    'populated on eMMC only, since '
+                                    'SD cards do not report health.'
+                                ),
+                                'properties': {
+                                    'kind': {'type': 'string'},
+                                    'name': {'type': ['string', 'null']},
+                                    'manufacturer': {
+                                        'type': ['string', 'null'],
+                                        'description': (
+                                            'Resolved vendor name, or '
+                                            "null when the card's "
+                                            'manufacturer id appears '
+                                            'in no published list. '
+                                            'Use `manufacturer_id` to '
+                                            'identify those.'
+                                        ),
+                                    },
+                                    'manufacturer_id': {
+                                        'type': ['integer', 'null'],
+                                        'description': (
+                                            'Raw CID manufacturer id. '
+                                            'SD and eMMC number the '
+                                            'same field from separate '
+                                            'namespaces, so interpret '
+                                            'it against `kind`.'
+                                        ),
+                                    },
+                                    'manufactured': {
+                                        'type': ['string', 'null']
+                                    },
+                                    'wear_pct': {'type': ['integer', 'null']},
+                                    'pre_eol': {'type': ['string', 'null']},
+                                    'smart': {
+                                        'type': ['object', 'null'],
+                                        'description': (
+                                            'SMART detail, present only '
+                                            'on a SATA/NVMe device that '
+                                            'reported it. `wear_pct` and '
+                                            '`pre_eol` above are already '
+                                            'derived from it, so most '
+                                            'clients need only those. '
+                                            '`wear_is_exact` is false '
+                                            'when the figure came from '
+                                            'an ATA vendor attribute '
+                                            'rather than a defined NVMe '
+                                            'field.'
+                                        ),
+                                        'properties': {
+                                            'supported': {'type': 'boolean'},
+                                            'device': {'type': 'string'},
+                                            'model': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'firmware': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'passed': {
+                                                'type': ['boolean', 'null']
+                                            },
+                                            'wear_pct': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'wear_is_exact': {
+                                                'type': 'boolean'
+                                            },
+                                            'power_on_hours': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'reallocated_sectors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'pending_sectors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'media_errors': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'temperature_c': {
+                                                'type': ['integer', 'null']
+                                            },
+                                            'pre_eol': {
+                                                'type': ['string', 'null']
+                                            },
+                                            'checked_at': {
+                                                'type': 'string',
+                                                'format': 'date-time',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
                     'ip_addresses': {
                         'type': 'array',
                         'items': {'type': 'string'},
@@ -1075,6 +1277,7 @@ class InfoViewV2(InfoViewMixin):
                 'uptime': self.get_uptime(),
                 'memory': self.get_memory(),
                 'under_voltage': self.get_under_voltage(),
+                'storage': self.get_storage(),
                 'ip_addresses': self.get_ip_addresses(),
                 'mac_address': get_node_mac_address(),
                 'host_user': getenv('HOST_USER'),

@@ -17,7 +17,7 @@ from typing import Any
 import psutil
 from django.template.defaultfilters import filesizeformat
 
-from anthias_common import device_helper, undervoltage
+from anthias_common import device_helper, storage_health, undervoltage
 from anthias_common.board import LOW_RAM_THRESHOLD_KB
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -136,6 +136,184 @@ def _power_state() -> dict[str, Any]:
     return state
 
 
+def _blank_storage_state() -> dict[str, Any]:
+    """What the storage helpers report when the probe itself failed.
+
+    ``supported`` false rather than a healthy-looking zero: the card
+    might be fine or might be on fire, and the UI says which of those
+    it knows.
+    """
+    return {
+        'supported': False,
+        'status': storage_health.STATUS_UNKNOWN,
+        'media': {'kind': 'unknown'},
+    }
+
+
+def _storage_state() -> dict[str, Any]:
+    try:
+        return storage_health.get_state(_redis, settings.get_configdir())
+    except Exception:
+        # Never let a diagnostic break page rendering.
+        return _blank_storage_state()
+
+
+# Verdict → the shape of thing that has gone wrong, which is what
+# picks the copy. Deliberately finer-grained than the API's ``status``:
+# "the card went read-only" and "the card is returning corrupt data"
+# are the same severity and the same fix, but an operator recognises
+# their own symptom in one of them and not the other, and being
+# recognised is what gets the banner read instead of dismissed.
+_STORAGE_CRITICAL_KINDS = ('full', 'read_only', 'write_failing', 'errors_now')
+
+# What to call the thing on screen. Anthias runs from an SD card on
+# most of the fleet, from soldered eMMC on the compute modules, and
+# from an SSD on x86, so a hardcoded "memory card" would be plainly
+# wrong on two of the three and would cost the warning its
+# credibility with the operator reading it.
+_STORAGE_NOUNS = {
+    'sd': 'memory card',
+    'emmc': 'built-in storage',
+    'disk': 'drive',
+}
+
+
+def _bad_blocks(media: dict[str, Any] | None) -> int:
+    """Blocks the drive has found bad, across both SMART dialects.
+
+    ``reallocated``/``pending`` are ATA-only fields and NVMe reports
+    the same class of fault as ``media_errors``. Counting only the ATA
+    pair meant an NVMe drive with media errors fell through to the
+    wear copy and was told it had "used N% of the writes it was built
+    for" -- the mismatched story :func:`_storage_kind` exists to
+    prevent, just on the other bus.
+    """
+    smart = (media or {}).get('smart') or {}
+    return (
+        (smart.get('reallocated_sectors') or 0)
+        + (smart.get('pending_sectors') or 0)
+        + (smart.get('media_errors') or 0)
+    )
+
+
+def _storage_kind(state: dict[str, Any]) -> str | None:
+    status = state.get('status')
+
+    if status == storage_health.STATUS_FULL:
+        return 'full'
+    if status == storage_health.STATUS_FAILING:
+        # Ordered by how directly the operator feels it. A read-only
+        # filesystem is the one they will already have noticed
+        # (nothing they change sticks), so it wins over the reasons
+        # that produced it.
+        if state.get('read_only'):
+            return 'read_only'
+        if state.get('write_ok') is False or state.get(
+            'write_failed_since_boot'
+        ):
+            return 'write_failing'
+        return 'errors_now'
+    if status == storage_health.STATUS_ERRORS:
+        return 'errors_past'
+    if status == storage_health.STATUS_WEAR:
+        # Wear and bad blocks are the same severity and reach the same
+        # verdict, but they are not the same story and they do not
+        # have the same fix. Measured on the x86 testbed: an SSD with
+        # zero wear (Wear_Leveling_Count at 100) and a PASSED overall
+        # self-assessment, but 4 reallocated and 4 pending sectors.
+        # Telling that operator their drive is "worn out" sends them
+        # looking at write volume when the drive is actually failing
+        # to read blocks it already wrote.
+        if _bad_blocks(state.get('media')):
+            return 'bad_sectors'
+        return 'wear'
+    return None
+
+
+def _storage_warning() -> dict[str, Any] | None:
+    """Memory-card banner state, or ``None`` when there's nothing to
+    say.
+
+    Returned from :func:`navbar` alongside the under-voltage banner,
+    for the same reason: the two failures a Raspberry Pi actually dies
+    of are a bad power supply and a worn-out card, and neither is
+    something an operator goes looking for on a diagnostics page.
+
+    The pair is also causally linked, which is why the copy for one
+    mentions the other. Under-voltage is one of the main things that
+    corrupts cards, so a device showing both banners has one problem,
+    not two.
+    """
+    state = _storage_state()
+    if not storage_health.should_warn(state):
+        return None
+
+    kind = _storage_kind(state)
+    if kind is None:
+        return None
+
+    media = state.get('media') or {}
+    media_kind = str(media.get('kind') or 'unknown')
+    return {
+        'kind': kind,
+        'severity': 'critical'
+        if kind in _STORAGE_CRITICAL_KINDS
+        else 'warning',
+        # eMMC is soldered to the board, so "replace the card" is
+        # advice the operator physically cannot follow. The template
+        # swaps it for the module swap instead.
+        'replaceable': media_kind != 'emmc',
+        'media_kind': media_kind,
+        'media_noun': _STORAGE_NOUNS.get(media_kind, 'storage'),
+        'errors_count': state.get('errors_count'),
+        # Errors seen during THIS boot. errors_count is ext4's
+        # superblock counter and is cumulative over the filesystem's
+        # life, so copy that says "since it last restarted" has to
+        # use this one or it reports a five-year-old total as today's
+        # news.
+        'errors_new': state.get('errors_new') or 0,
+        'last_error': _parse_iso(state.get('last_error')),
+        'write_reason': state.get('write_reason'),
+        'wear_pct': media.get('wear_pct'),
+        'wear_is_exact': bool(media.get('wear_is_exact')),
+        'pre_eol': media.get('pre_eol'),
+        # Counted here rather than in the template so the copy can
+        # state a number instead of hedging.
+        'bad_sectors': _bad_blocks(media),
+    }
+
+
+def _storage_card() -> dict[str, Any]:
+    """Full storage detail for the System Info card.
+
+    Unlike :func:`_storage_warning` this always returns a dict: the
+    card reports "no problems detected" and "we couldn't check" as
+    well as the alert.
+    """
+    # Copied before mutating: get_state builds a fresh dict per call
+    # in production, but this function has no way to know that, and
+    # _parse_iso is destructive on a second application -- it returns
+    # None for an already-parsed datetime, so re-decorating the same
+    # dict would silently blank every timestamp. Not mutating a value
+    # we did not create removes the whole question.
+    state = dict(_storage_state())
+    state['warn'] = storage_health.should_warn(state)
+    state['kind'] = _storage_kind(state)
+    state['first_error'] = _parse_iso(state.get('first_error'))
+    state['last_error'] = _parse_iso(state.get('last_error'))
+    state['last_check'] = _parse_iso(state.get('last_check'))
+
+    # Lifetime writes are the closest thing a plain SD card gives to a
+    # wear figure, and the raw kilobyte count means nothing to anyone.
+    written_kb = state.get('lifetime_written_kb')
+    state['lifetime_written'] = (
+        filesizeformat(written_kb * 1024) if written_kb else None
+    )
+
+    state['bad_sectors'] = _bad_blocks(state.get('media'))
+    return state
+
+
 def navbar() -> dict[str, Any]:
     """Shared by every page; merged into context by helpers.template()."""
     return {
@@ -143,6 +321,7 @@ def navbar() -> dict[str, Any]:
         'up_to_date': is_up_to_date(),
         'player_name': settings['player_name'],
         'power_warning': _power_warning(),
+        'storage_warning': _storage_warning(),
     }
 
 
@@ -281,6 +460,13 @@ def system_info() -> dict[str, Any]:
         # chasing a glitch needs to know whether we checked and
         # found nothing, or never checked at all.
         'power': _power_state(),
+        # Full storage detail, next to Disk usage on purpose: "83% of
+        # 32 GB used" and "this card has recorded 6 filesystem errors"
+        # are the two halves of one question an operator asks about
+        # storage, and splitting them across the page would make the
+        # second one findable only by someone who already suspected
+        # it.
+        'storage': _storage_card(),
         # Uptime as "2 days, 3 hours" via Django's timesince — pass the
         # boot-time so timesince computes against now(). Pass depth=2 so
         # 'X year, Y month' style formats stay readable on long-lived

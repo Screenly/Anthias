@@ -19,6 +19,7 @@ import redis.exceptions
 import requests
 import sh as sh
 
+from anthias_common import smart, storage_health
 from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.lib import cec, cec_client
@@ -2577,6 +2578,13 @@ DISPLAY_RESOLUTION_KEY = 'viewer:display_resolution'
 DISPLAY_RESOLUTION_INTERVAL_S = 60
 DISPLAY_RESOLUTION_TTL_S = 180
 
+# SMART sampling cadence. Hourly because none of it moves faster than
+# that -- wear is a months-long trend and power-on hours tick once an
+# hour by definition -- and because each sample is an ATA/NVMe command
+# to a device that may already be struggling. Comfortably inside
+# smart.TTL_S so an ordinary slow sample never expires the fact.
+SMART_INTERVAL_S = 3600
+
 
 def _publish_display_resolution_once() -> None:
     """One reporter tick — detect the resolution and write it to Redis.
@@ -2630,6 +2638,52 @@ def _publish_display_resolution_loop() -> None:
     t.start()
 
 
+def _publish_smart_loop() -> None:
+    """Background reporter -- sample SMART and publish it for the server.
+
+    anthias-server renders the storage card but cannot read SMART: the
+    ioctl needs privilege it deliberately does not have, and on Balena
+    it cannot be handed the device node at all. This container is
+    ``privileged: true`` everywhere, so it does the reading. Same
+    division of labour as CEC (see anthias_server/lib/cec_client.py),
+    but published as a plain Redis fact rather than answered over the
+    request-reply bus, because SMART moves over hours and the server
+    reads it during a page render.
+
+    The disk is whichever one backs the data directory, resolved the
+    same way the server resolves it, so the two cannot disagree about
+    which device they are describing.
+    """
+    import threading
+
+    def tick() -> None:
+        while True:
+            try:
+                # settings.get_configdir() rather than letting probe()
+                # fall back to $HOME. HOME is /data in every compose
+                # template and survives start_viewer.sh's `sudo -E -u
+                # viewer` (verified on the x86 testbed), so the two
+                # agree today -- but resolving the disk the server
+                # reports on must not hinge on an env var surviving a
+                # shell script. anthias-celery passes the same thing
+                # to the storage watcher for the same reason.
+                facts = storage_health.probe(settings.get_configdir())
+                disk = facts.get('disk')
+                # Only ever a real answer on SATA/NVMe. SD and eMMC
+                # have their own registers and smartctl has nothing to
+                # say about them, so most of the fleet skips this.
+                if disk and facts['media']['kind'] == 'disk':
+                    smart.publish(r, smart.collect(f'/dev/{disk}'))
+            except Exception:
+                # A diagnostic must never take the viewer down; the
+                # display pipeline matters more.
+                logger.warning('Could not sample SMART', exc_info=True)
+            sleep(SMART_INTERVAL_S)
+
+    t = threading.Thread(target=tick, name='smart-reporter', daemon=True)
+    t.start()
+
+
 def _publish_cec_availability() -> None:
     """Tell anthias-server whether this device has a CEC adapter.
 
@@ -2666,6 +2720,8 @@ def main() -> None:
     _publish_cec_availability()
 
     _publish_display_resolution_loop()
+
+    _publish_smart_loop()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

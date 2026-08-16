@@ -1457,13 +1457,13 @@ label { text-align: left; }
 .stat-card--span-2 { grid-column: span 2; @media (max-width: 540px) { grid-column: span 1; } }
 .stat-card--span-full { grid-column: 1 / -1; }
 
-// Status line for the Power supply card. Sized off .stat-card__value
-// so it keeps the card rhythm, but recoloured by severity. This is
-// the one card whose headline value is a verdict rather than a
-// measurement. Uses the -text-on-wash tokens rather than the base
-// fill colours: these sit on a white .stat-card, where --color-danger
-// lands at ~4:1 and --color-success at ~1.6:1.
-.power-status {
+// Status line for the diagnostic cards (Power supply, Memory card).
+// Sized off .stat-card__value so it keeps the card rhythm, but
+// recoloured by severity. These are the cards whose headline value is
+// a verdict rather than a measurement. Uses the -text-on-wash tokens
+// rather than the base fill colours: these sit on a white .stat-card,
+// where --color-danger lands at ~4:1 and --color-success at ~1.6:1.
+.status-verdict {
   display: inline-flex;
   align-items: center;
 
@@ -1472,9 +1472,9 @@ label { text-align: left; }
   &--ok       { color: var(--color-success-text-on-wash); }
 }
 
-// Disclosure for the sensor detail on the Power supply card. Kept
-// muted and closed by default so the plain-language verdict above it
-// stays the thing an operator reads first.
+// Disclosure for the sensor detail on a diagnostic card. Kept muted
+// and closed by default so the plain-language verdict above it stays
+// the thing an operator reads first.
 .stat-card__details {
   margin-top: var(--space-2);
   font-size: 0.78rem;
@@ -1494,13 +1494,30 @@ label { text-align: left; }
 }
 
 // -----------------------------------------------------------------------------
-// Under-voltage banner (_power_warning.html)
+// Device alert banners (_device_alerts.html and the per-diagnostic
+// templates it includes: _power_warning.html, _storage_warning.html)
 //
-// Sits between the fixed navbar and <main> on every page. Light
-// surface rather than the page's dark ground so it reads as an
-// interruption rather than as chrome. An operator should notice it
+// Sit between the fixed navbar and <main> on every page. Light
+// surface rather than the page's dark ground so they read as an
+// interruption rather than as chrome. An operator should notice one
 // before they notice their content.
 // -----------------------------------------------------------------------------
+// One component, not one per diagnostic. The under-voltage and
+// memory-card warnings are the two failures a Raspberry Pi actually
+// dies of, they can be true at the same time, and they are the same
+// kind of statement to the operator: something physical is wrong,
+// here is what to do about it. Giving them a shared block is what
+// keeps a stack of two from looking like two different products.
+.device-alerts {
+  // No gap rule here on purpose. `> * + *` and `.device-alert` have
+  // identical specificity (0,1,0) and .device-alert is declared
+  // later, so its own margin-top wins and any value set here would be
+  // dead code describing spacing that never happened. The banners
+  // keep their own margin, which also means a single one renders
+  // identically to how the under-voltage banner did before it had
+  // company.
+}
+
 // Built on --color-surface like every .stat-card, so it reads as part
 // of the product rather than as a foreign alert widget dropped onto
 // the purple ground. All the alarm is carried by one element: a solid
@@ -1508,14 +1525,14 @@ label { text-align: left; }
 // the title. Everything else stays the standard card treatment;
 // spending the boldness in one place is what keeps a permanent banner
 // legible instead of exhausting.
-.power-alert {
+.device-alert {
   // Severity is switched once here and consumed by the parts below,
   // matching the --chip-* local-custom-property pattern used by the
   // schedule chips rather than restating colours per element.
-  --power-accent: var(--color-danger);
-  --power-wash: var(--color-danger-wash);
-  --power-edge: var(--color-danger-edge);
-  --power-ink: var(--color-danger-text-on-wash);
+  --alert-accent: var(--color-danger);
+  --alert-wash: var(--color-danger-wash);
+  --alert-edge: var(--color-danger-edge);
+  --alert-ink: var(--color-danger-text-on-wash);
 
   display: flex;
   align-items: flex-start;
@@ -1524,20 +1541,20 @@ label { text-align: left; }
   padding: var(--space-4) var(--space-5);
   background: var(--color-surface);
   color: var(--color-text);
-  border: 1px solid var(--power-edge);
-  border-left: 0.375rem solid var(--power-accent);
+  border: 1px solid var(--alert-edge);
+  border-left: 0.375rem solid var(--alert-accent);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 
-  // Amber once power has recovered: the supply has still proven it
-  // can't hold up, but nothing is failing this second, and using the
-  // same red for both would flatten a distinction the operator can
-  // act on differently.
-  &--past {
-    --power-accent: var(--color-warning);
-    --power-wash: var(--color-warning-wash);
-    --power-edge: var(--color-warning-edge);
-    --power-ink: var(--color-warning-text-on-wash);
+  // Amber for a condition that has proven itself but isn't failing
+  // this second: power that dipped and recovered, a card carrying old
+  // errors that still writes fine. Using the same red for both would
+  // flatten a distinction the operator can act on differently.
+  &--warning {
+    --alert-accent: var(--color-warning);
+    --alert-wash: var(--color-warning-wash);
+    --alert-edge: var(--color-warning-edge);
+    --alert-ink: var(--color-warning-text-on-wash);
   }
 
   &__icon {
@@ -1549,8 +1566,8 @@ label { text-align: left; }
     height: 2.5rem;
     border-radius: 50%;
     font-size: 1.375rem;
-    background: var(--power-wash);
-    color: var(--power-ink);
+    background: var(--alert-wash);
+    color: var(--alert-ink);
   }
 
   &__body { flex: 1 1 auto; min-width: 0; }
@@ -1560,7 +1577,7 @@ label { text-align: left; }
     font-size: 1.0625rem;
     font-weight: 700;
     line-height: 1.3;
-    color: var(--power-ink);
+    color: var(--alert-ink);
   }
 
   // Body copy stays --color-text, not the severity ink: tinting a
@@ -1593,11 +1610,11 @@ label { text-align: left; }
     // the first item carries a bolded recommendation and needs to
     // separate cleanly from the secondary checks below it.
     li + li { margin-top: var(--space-2); }
-    &::marker { color: var(--power-accent); }
+    &::marker { color: var(--alert-accent); }
 
     // The one recommendation that actually resolves this, lifted out
     // of the body colour so it survives a skim.
-    strong { color: var(--power-ink); }
+    strong { color: var(--alert-ink); }
   }
 
   &__link {
@@ -1608,14 +1625,14 @@ label { text-align: left; }
     white-space: nowrap;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--power-ink);
+    color: var(--alert-ink);
     text-decoration: none;
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
-    border: 1px solid var(--power-edge);
+    border: 1px solid var(--alert-edge);
     transition: background var(--t-fast);
 
-    &:hover { background: var(--power-wash); }
+    &:hover { background: var(--alert-wash); }
 
     &:focus-visible {
       box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
@@ -1631,7 +1648,7 @@ label { text-align: left; }
     flex-wrap: wrap;
     padding: var(--space-4);
 
-    .power-alert__link {
+    .device-alert__link {
       align-self: flex-start;
       margin-left: calc(2.5rem + var(--space-4));
     }
