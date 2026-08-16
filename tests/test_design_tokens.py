@@ -441,29 +441,31 @@ def _blocks(scss: str) -> list[tuple[str, str, int]]:
     scss = re.sub(r'/\*.*?\*/', ' ', scss, flags=re.DOTALL)
     scss = re.sub(r'//[^\n]*', ' ', scss)
     out: list[tuple[str, str, int]] = []
-    # Each frame: [inherited-or-own color, [(background, line), ...]]
-    stack: list[list] = [['', []]]
+    # One frame per open block, kept as two parallel stacks: the colour
+    # in effect, and the backgrounds seen so far in that block.
+    colours: list[str] = ['']
+    backgrounds: list[list[tuple[str, int]]] = [[]]
     buf = ''
     line = 1
     for char in scss:
         if char == '\n':
             line += 1
         if char == '{':
-            stack.append([stack[-1][0], []])
+            colours.append(colours[-1])
+            backgrounds.append([])
             buf = ''
         elif char == '}':
-            colour, backgrounds = stack.pop() if len(stack) > 1 else ('', [])
-            out += [(colour, bg, at) for bg, at in backgrounds]
-            if not stack:
-                stack = [['', []]]
+            if len(colours) > 1:
+                colour = colours.pop()
+                out += [(colour, bg, at) for bg, at in backgrounds.pop()]
             buf = ''
         elif char == ';':
             fg = _FG.search(buf)
             if fg:
-                stack[-1][0] = fg[1]
+                colours[-1] = fg[1]
             bg = _BG.search(buf)
             if bg:
-                stack[-1][1].append((bg[1], line))
+                backgrounds[-1].append((bg[1], line))
             buf = ''
         else:
             buf += char
