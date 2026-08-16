@@ -54,9 +54,24 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 # this module pointed at the production /data path on local pytest
 # runs. Detect pytest itself by inspecting argv (covers `pytest ...`,
 # `python -m pytest ...`, and `uv run pytest ...`) so the test branch
-# is taken regardless of import order. Used by both the Sentry DSN
-# default here and the DATABASES test branch further down.
+# is taken regardless of import order. Used by IS_TEST below.
 _running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
+
+# The deployment environment: 'development', 'test', or 'production'
+# (the default). Everything environment-dependent in this file derives
+# from these two names rather than re-reading the env var.
+ENVIRONMENT = getenv('ENVIRONMENT', 'production')
+
+# Deliberately not folded into ENVIRONMENT, and deliberately not
+# derived from DEBUG:
+#
+#   * Keeping the argv sniff out of ENVIRONMENT keeps it out of DEBUG.
+#     A stray process whose argv mentions pytest must never be able to
+#     turn debug error pages on in production.
+#   * pytest-django sets settings.DEBUG = False for the duration of a
+#     run, so DEBUG is not readable as "is this a test". IS_TEST is
+#     computed once at import and cannot be mutated that way.
+IS_TEST = ENVIRONMENT == 'test' or _running_under_pytest
 
 # Operators can point crash reporting at their own Sentry project by
 # setting SENTRY_DSN, or disable it entirely by setting it to an
@@ -70,7 +85,7 @@ _running_under_pytest = any('pytest' in (a or '') for a in sys.argv)
 # deliberately.
 _default_sentry_dsn = (
     ''
-    if getenv('ENVIRONMENT') == 'test' or _running_under_pytest
+    if IS_TEST
     else (
         'https://da18c7bdab65c9adc4afcd311f5b6f09'
         '@o4511522371534848.ingest.us.sentry.io/4511522375794688'
@@ -260,7 +275,7 @@ sentry_sdk.init(
     # or 'production' (the default) — lets dev events be filtered out
     # in Sentry. (Test runs don't send at all — see the DSN default
     # above.)
-    environment=getenv('ENVIRONMENT', 'production'),
+    environment=ENVIRONMENT,
     # CalVer (pyproject [project].version, via the same helper the
     # System Info page and v2 info API use) plus the image's git
     # short hash — see get_sentry_release above.
@@ -335,7 +350,7 @@ if _board_model:
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = getenv('ENVIRONMENT', 'production') in ['development', 'test']
+DEBUG = ENVIRONMENT in ['development', 'test']
 
 if not DEBUG:
     if not device_settings.get('django_secret_key'):
@@ -502,7 +517,7 @@ CHANNEL_LAYERS = {
 # preserve their existing layout by exporting
 # `ANTHIAS_TEST_DB_PATH=/data/.anthias/test.db` (see
 # docker-compose.test.yml).
-if getenv('ENVIRONMENT') == 'test' or _running_under_pytest:
+if IS_TEST:
     db_path = getenv('ANTHIAS_TEST_DB_PATH') or str(
         BASE_DIR / '.anthias-test.db'
     )

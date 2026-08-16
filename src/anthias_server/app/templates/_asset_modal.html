@@ -171,7 +171,7 @@
         <div class="modal-card__body app-cfg-state" x-show="phase === 'error'" x-cloak>
           <i class="ti ti-plug-connected-x" style="font-size: 2rem; opacity: .55" aria-hidden="true"></i>
           <p class="mb-2" x-text="error"></p>
-          <button type="button" class="app-btn app-btn-secondary" @click="retry()">
+          <button type="button" class="app-btn app-btn-outline-dark" @click="retry()">
             <i class="ti ti-refresh"></i><span>Try again</span>
           </button>
         </div>
@@ -376,7 +376,7 @@
                      style="user-select: all"
                 ><code x-text="editAsset.metadata.error_recipe"></code></pre>
                 <button type="button"
-                        class="app-btn app-btn-secondary modal-alert__copy"
+                        class="app-btn app-btn-outline-dark modal-alert__copy"
                         @click="copyRecipe()"
                         :aria-label="copied ? 'Copied' : 'Copy ffmpeg command'">
                   <i class="ti" :class="copied ? 'ti-check' : 'ti-copy'"></i>

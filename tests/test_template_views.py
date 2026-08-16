@@ -3413,6 +3413,87 @@ def test_no_bootstrap_class_names_in_templates() -> None:
     )
 
 
+def test_every_app_class_in_templates_is_styled() -> None:
+    """An .app-* class in a template must exist in the stylesheet.
+
+    The same failure mode as the text-capitalize case above, one step
+    further in: the name is right for our own namespace, so it reads as
+    a working component, but nothing defines it and the element renders
+    unstyled. `app-btn-secondary` sat in _asset_modal.html at two call
+    sites doing nothing, and was only noticed when the design page tried
+    to draw it.
+
+    Scoped to the .app-* namespace on purpose. Utility classes come from
+    Tailwind and are generated on demand, so they cannot be checked
+    against a static list.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    scss = (
+        root / 'src/anthias_server/app/static/sass/_styles.scss'
+    ).read_text()
+
+    # Resolve `&` against the enclosing selector, because most component
+    # children are written nested: `.app-card { &__name { … } }` defines
+    # .app-card__name, which a literal search would never see.
+    defined: set[str] = set()
+    stack: list[list[str]] = []
+    class_re = re.compile(r'\.(app-[a-z0-9_-]+)')
+
+    def resolve(selector: str, parents: list[str]) -> list[str]:
+        out = []
+        for part in (p.strip() for p in selector.split(',')):
+            if not part or part.startswith('@'):
+                continue
+            out += (
+                [part.replace('&', p) for p in parents]
+                if '&' in part
+                else [part]
+            )
+        return out
+
+    # Brace-driven rather than line-driven: `.app-input,` on its own
+    # line, opening a selector list that closes three lines later, is
+    # the common shape here and a line-by-line scan misses all of it.
+    stripped = re.sub(r'/\*.*?\*/', ' ', scss, flags=re.DOTALL)
+    stripped = re.sub(r'//[^\n]*', ' ', stripped)
+    buf = ''
+    for char in stripped:
+        if char == '{':
+            parents = stack[-1] if stack else ['']
+            resolved = resolve(buf, parents)
+            for sel in resolved:
+                defined.update(class_re.findall(sel))
+            stack.append(resolved or parents)
+            buf = ''
+        elif char == '}':
+            if stack:
+                stack.pop()
+            buf = ''
+        elif char == ';':
+            buf = ''
+        else:
+            buf += char
+
+    django_tag_re = re.compile(r'\{%[^%]*%\}|\{\{[^}]*\}\}')
+    class_attr_re = re.compile(r'class="([^"]+)"')
+    templates = root / 'src/anthias_server/app/templates'
+
+    missing: list[str] = []
+    for path in sorted(templates.rglob('*.html')):
+        for match in class_attr_re.finditer(path.read_text()):
+            cleaned = django_tag_re.sub(' ', match.group(1))
+            for tok in cleaned.split():
+                if tok.startswith('app-') and tok not in defined:
+                    missing.append(f'{path.name}: {tok}')
+    assert not missing, (
+        'Templates use .app-* classes that _styles.scss never defines, '
+        'so these elements render unstyled:\n  ' + '\n  '.join(missing)
+    )
+
+
 # ---------------------------------------------------------------------------
 # "Star on GitHub / Review on G2" nudge (review-CTA)
 # ---------------------------------------------------------------------------

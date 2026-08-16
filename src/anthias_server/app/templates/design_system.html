@@ -1,0 +1,465 @@
+{% load static %}
+{% comment %}
+  The design system on one page. Dev-only; see app/design_system.py.
+
+  Deliberately standalone rather than extending _layout.html: it needs
+  its own theme switcher and full-bleed layout, and it must keep
+  rendering even when the navbar's context is unavailable.
+
+  Everything here is driven by the catalogues in design_system.py, so
+  adding a token means adding a tuple, not editing markup.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="robots" content="noindex"/>
+  <title>Design system · Anthias</title>
+  <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
+  <link href="{% static 'dist/css/tabler-icons.css' %}" rel="stylesheet"/>
+  <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
+  <link rel="icon" href="/static/favicons/favicon.ico"/>
+  <style>
+    /* Page-local scaffolding. Not part of the design system: this is
+       the frame the system is displayed IN, so it deliberately does not
+       add component classes that would then need documenting. */
+    .ds-body { background: var(--color-canvas); color: var(--color-on-canvas); }
+    .ds-wrap { max-width: 82.5rem; margin-inline: auto; padding: 2rem 1.5rem 6rem; }
+    .ds-section { margin-top: 3.5rem; }
+    .ds-section > h2 {
+      font-size: var(--text-2xl); font-weight: 700; margin: 0 0 0.25rem;
+      letter-spacing: -0.01em;
+    }
+    .ds-section > p.ds-lede {
+      margin: 0 0 1.5rem; color: var(--color-on-canvas-muted);
+      font-size: var(--text-sm); max-width: 60ch;
+    }
+    .ds-group { margin-bottom: 2rem; }
+    .ds-group h3 {
+      font-size: var(--text-sm); font-weight: 700; margin: 0 0 0.15rem;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--color-on-canvas);
+    }
+    .ds-group p {
+      margin: 0 0 0.75rem; color: var(--color-on-canvas-muted);
+      font-size: var(--text-xs); max-width: 70ch;
+    }
+    .ds-swatches {
+      display: grid; gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    }
+    .ds-swatch {
+      border-radius: var(--radius-md); overflow: hidden;
+      border: 1px solid var(--color-paper-12);
+      background: var(--color-surface);
+    }
+    .ds-swatch__chip {
+      height: 3.25rem;
+      /* Chequerboard so an alpha token reads as translucent rather than
+         as a solid colour that happens to look pale. */
+      background-image:
+        linear-gradient(45deg, var(--color-ink-8) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--color-ink-8) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--color-ink-8) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--color-ink-8) 75%);
+      background-size: 12px 12px;
+      background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+    }
+    .ds-swatch__chip > span { display: block; height: 100%; }
+    .ds-swatch__name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.6875rem; padding: 0.4rem 0.5rem;
+      color: var(--color-fg); background: var(--color-surface);
+      word-break: break-all;
+    }
+    .ds-row {
+      display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;
+    }
+    .ds-card {
+      background: var(--color-surface); color: var(--color-fg);
+      border-radius: var(--radius-lg); padding: 1.25rem;
+      border: 1px solid var(--color-border);
+    }
+    .ds-spec {
+      display: flex; align-items: baseline; gap: 1rem;
+      padding: 0.5rem 0; border-top: 1px solid var(--color-paper-12);
+    }
+    .ds-spec:first-child { border-top: 0; }
+    .ds-spec__meta {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.6875rem; color: var(--color-on-canvas-faint);
+      min-width: 14rem; flex: none;
+    }
+    .ds-bar { background: var(--color-accent); height: 0.75rem; border-radius: 2px; }
+    .ds-box {
+      width: 4.5rem; height: 4.5rem; background: var(--color-surface);
+      display: grid; place-items: center; font-size: 0.625rem;
+      color: var(--color-fg-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .ds-toolbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem; margin-bottom: 1rem;
+      background: var(--color-chrome); color: var(--color-on-chrome);
+      border-bottom: 1px solid var(--color-paper-12);
+    }
+    .ds-toolbar h1 { font-size: var(--text-lg); font-weight: 700; margin: 0; }
+    .ds-toolbar__note {
+      font-size: var(--text-xs); color: var(--color-on-chrome-muted);
+    }
+    .ds-toc {
+      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
+      font-size: var(--text-xs); margin: 0 0 1rem; padding: 0; list-style: none;
+    }
+    .ds-toc a { color: var(--color-on-canvas-muted); text-decoration: none; }
+    .ds-toc a:hover { color: var(--color-accent); text-decoration: underline; }
+  </style>
+</head>
+<body class="ds-body">
+
+<div class="ds-toolbar">
+  <div>
+    <h1>Anthias design system</h1>
+    <div class="ds-toolbar__note">
+      Dev-only page. Every token and component variant, in both themes.
+    </div>
+  </div>
+  <div class="ds-row">
+    <span class="ds-toolbar__note">Theme</span>
+    {% comment %}
+      Plain inline JS rather than Alpine: this page must render even if
+      the vendor bundle is broken, since diagnosing that is one of the
+      things it is for.
+    {% endcomment %}
+    <button type="button" class="app-btn app-btn-light app-btn-pill"
+            onclick="document.documentElement.setAttribute('data-theme','light')">
+      <i class="ti ti-sun"></i><span>Light</span>
+    </button>
+    <button type="button" class="app-btn app-btn-light app-btn-pill"
+            onclick="document.documentElement.setAttribute('data-theme','dark')">
+      <i class="ti ti-moon"></i><span>Dark</span>
+    </button>
+  </div>
+</div>
+
+<div class="ds-wrap">
+
+  <ul class="ds-toc">
+    <li><a href="#colour">Colour</a></li>
+    <li><a href="#type">Type</a></li>
+    <li><a href="#spacing">Spacing</a></li>
+    <li><a href="#radii">Radii</a></li>
+    <li><a href="#elevation">Elevation</a></li>
+    <li><a href="#layering">Layering</a></li>
+    <li><a href="#breakpoints">Breakpoints</a></li>
+    <li><a href="#buttons">Buttons</a></li>
+    <li><a href="#surfaces">Surfaces</a></li>
+    <li><a href="#forms">Forms</a></li>
+    <li><a href="#status">Status</a></li>
+    <li><a href="#feedback">Feedback</a></li>
+  </ul>
+
+  {# ===================== Colour ===================== #}
+  <section class="ds-section" id="colour">
+    <h2>Colour</h2>
+    <p class="ds-lede">
+      Every colour in the UI is one of these roles. Palette primitives
+      are not shown because they are not reachable from markup: a
+      component naming <code>bg-plum-700</code> has hardcoded a colour
+      and will not follow the theme. Each swatch is labelled with the
+      Tailwind utility you would type.
+    </p>
+    {% for name, blurb, tokens in colour_groups %}
+    <div class="ds-group">
+      <h3>{{ name }}</h3>
+      <p>{{ blurb }}</p>
+      <div class="ds-swatches">
+        {% for token in tokens %}
+        <div class="ds-swatch">
+          <div class="ds-swatch__chip">
+            <span style="background: var(--color-{{ token }})"></span>
+          </div>
+          <div class="ds-swatch__name">--color-{{ token }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {# ===================== Type ===================== #}
+  <section class="ds-section" id="type">
+    <h2>Type</h2>
+    <p class="ds-lede">
+      Nine steps, on Tailwind's own names and values, so
+      <code>text-sm</code> in markup and <code>var(--text-sm)</code> in
+      CSS mean the same number. This replaced 27 ad-hoc sizes, ten of
+      which sat inside a single 0.2rem band. Line heights are tightened
+      throughout for a dense operator UI.
+    </p>
+    <div class="ds-card">
+      {% for token, size, use in type_scale %}
+      <div class="ds-spec">
+        <div class="ds-spec__meta">text-{{ token }} &middot; {{ size }}</div>
+        <div style="font-size: var(--text-{{ token }}); line-height: var(--text-{{ token }}--line-height);">
+          {{ use }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Spacing ===================== #}
+  <section class="ds-section" id="spacing">
+    <h2>Spacing</h2>
+    <p class="ds-lede">
+      A single 0.25rem base. Tailwind's <code>p-4</code> / <code>gap-2</code>
+      and any <code>calc(var(--spacing) * n)</code> in CSS both derive
+      from it, so the two scales that used to be numerically coincidental
+      but unlinked are now one scale.
+    </p>
+    <div class="ds-card">
+      {% for step, size in spacing %}
+      <div class="ds-spec">
+        <div class="ds-spec__meta">{{ step }} &middot; {{ size }}</div>
+        <div style="flex: 1">
+          <div class="ds-bar" style="width: calc(var(--spacing) * {{ step }})"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Radii ===================== #}
+  <section class="ds-section" id="radii">
+    <h2>Radii</h2>
+    <p class="ds-lede">In rem, not px, so corners scale with the root font size.</p>
+    <div class="ds-row">
+      {% for token, size in radii %}
+      <div class="ds-box" style="border-radius: var(--radius-{{ token }}); border: 1px solid var(--color-border)">
+        {{ token }}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Elevation ===================== #}
+  <section class="ds-section" id="elevation">
+    <h2>Elevation</h2>
+    <p class="ds-lede">
+      Three steps. In dark mode a drop shadow is invisible against a
+      near-black canvas, so each level gains an inset top hairline
+      instead. Switch the theme above to see the substitution.
+    </p>
+    <div class="ds-row" style="gap: 2rem; padding: 1rem 0">
+      {% for token, use in elevation %}
+      <div class="ds-card" style="box-shadow: var(--shadow-{{ token }}); border: 0; min-width: 12rem">
+        <div style="font-family: ui-monospace, monospace; font-size: 0.6875rem; color: var(--color-fg-muted)">shadow-{{ token }}</div>
+        <div style="font-size: var(--text-sm); margin-top: 0.25rem">{{ use }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Layering ===================== #}
+  <section class="ds-section" id="layering">
+    <h2>Layering</h2>
+    <p class="ds-lede">
+      One ordered scale, replacing 1040/1050/1060/1080/1090/1100 scattered
+      across the stylesheet and three inline <code>style</code>
+      attributes. Two constraints are encoded here: Leaflet's internal
+      panes run 400-1000 in their own stacking context so the map must
+      stay below the modal, and Flatpickr opens from inside modals so its
+      calendar has to clear the nested tier.
+    </p>
+    <div class="ds-card">
+      {% for token, value, use in z_index %}
+      <div class="ds-spec">
+        <div class="ds-spec__meta">--z-{{ token }} &middot; {{ value }}</div>
+        <div style="font-size: var(--text-sm)">{{ use }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Breakpoints ===================== #}
+  <section class="ds-section" id="breakpoints">
+    <h2>Breakpoints</h2>
+    <p class="ds-lede">
+      Written once, in <code>@theme</code>. Markup uses <code>lg:</code>,
+      hand-written CSS uses <code>@variant lg</code>, both resolve here.
+      Never write a raw <code>@media (max-width: …)</code>.
+    </p>
+    <div class="ds-card">
+      {% for token, rem, px in breakpoints %}
+      <div class="ds-spec">
+        <div class="ds-spec__meta">{{ token }}: &middot; {{ rem }}</div>
+        <div style="font-size: var(--text-sm)">{{ px }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===================== Buttons ===================== #}
+  <section class="ds-section" id="buttons">
+    <h2>Buttons</h2>
+    <p class="ds-lede">
+      Every variant, in the three states worth seeing. Icon-only buttons
+      carry a <code>title</code> because they have no visible label.
+    </p>
+    <div class="ds-card">
+      {% for cls, use in button_variants %}
+      <div class="ds-spec">
+        <div class="ds-spec__meta">{{ cls }}</div>
+        <div class="ds-row">
+          <button type="button" class="app-btn {{ cls }}">
+            <i class="ti ti-check"></i><span>Default</span>
+          </button>
+          <button type="button" class="app-btn {{ cls }}" disabled>
+            <i class="ti ti-check"></i><span>Disabled</span>
+          </button>
+          <button type="button" class="app-btn {{ cls }} app-btn-pill">
+            <i class="ti ti-check"></i><span>Pill</span>
+          </button>
+          <span style="font-size: var(--text-xs); color: var(--color-fg-muted)">{{ use }}</span>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="ds-spec">
+        <div class="ds-spec__meta">app-btn-icon</div>
+        <div class="ds-row">
+          <button type="button" class="app-btn app-btn-icon" title="Preview"><i class="ti ti-eye"></i></button>
+          <button type="button" class="app-btn app-btn-icon" title="Edit"><i class="ti ti-pencil"></i></button>
+          <button type="button" class="app-btn app-btn-icon" title="Delete"><i class="ti ti-trash"></i></button>
+          <button type="button" class="app-btn app-btn-icon" title="Download" disabled><i class="ti ti-download"></i></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ===================== Surfaces ===================== #}
+  <section class="ds-section" id="surfaces">
+    <h2>Surfaces</h2>
+    <p class="ds-lede">
+      <code>.surface</code> declares a context, not just a background: it
+      exposes <code>--surface-*</code> custom properties that children
+      read, so <code>.surface--active</code> flips every descendant's
+      contrast without a single descendant selector. This is the pattern
+      that makes theming nearly free.
+    </p>
+    <div class="ds-row" style="align-items: stretch; gap: 1.5rem">
+      <section class="surface" style="flex: 1 1 22rem">
+        <header class="surface__header">
+          <h2><i class="ti ti-playlist"></i>Default surface</h2>
+        </header>
+        <div style="padding: 1rem 1.25rem 1.25rem">
+          <p style="margin: 0 0 0.5rem">Body copy on a default surface.</p>
+          <p class="muted-label" style="margin: 0">Muted label</p>
+          <p style="margin: 0.5rem 0 0"><a href="#surfaces">An anchor</a></p>
+        </div>
+      </section>
+      <section class="surface surface--active" style="flex: 1 1 22rem">
+        <header class="surface__header">
+          <h2><i class="ti ti-star"></i>Feature surface</h2>
+        </header>
+        <div style="padding: 1rem 1.25rem 1.25rem">
+          <p style="margin: 0 0 0.5rem">Same markup, same classes.</p>
+          <p class="muted-label" style="margin: 0">Muted label</p>
+          <p style="margin: 0.5rem 0 0"><a href="#surfaces">An anchor</a></p>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  {# ===================== Forms ===================== #}
+  <section class="ds-section" id="forms">
+    <h2>Forms</h2>
+    <p class="ds-lede">
+      The floating-label field is the most-repeated markup in the app, at
+      32 call sites. <code>placeholder=" "</code> is load-bearing: the
+      label float is driven by <code>:placeholder-shown</code>.
+    </p>
+    <div class="ds-card">
+      <div class="app-form-grid" style="margin-bottom: 1rem">
+        <div class="app-floating">
+          <input type="text" class="app-input" id="ds-text" placeholder=" " value="Lobby screen">
+          <label for="ds-text">Text input</label>
+        </div>
+        <div class="app-floating">
+          <input type="number" class="app-input" id="ds-number" placeholder=" " value="10">
+          <label for="ds-number">Number input</label>
+        </div>
+        <div class="app-floating">
+          <select class="app-select" id="ds-select">
+            <option>HDMI</option>
+            <option>3.5mm jack</option>
+          </select>
+          <label for="ds-select">Select</label>
+        </div>
+        <div class="app-floating">
+          <input type="text" class="app-input" id="ds-empty" placeholder=" ">
+          <label for="ds-empty">Empty, label unfloated</label>
+        </div>
+      </div>
+      {% include "_settings_toggle.html" with name="ds-toggle-on" label="Toggle, on" hint="Switches read as a row with a label and a hint." checked=True %}
+      {% include "_settings_toggle.html" with name="ds-toggle-off" label="Toggle, off" hint="The hint uses a theme role, not a fixed grey." checked=False %}
+    </div>
+  </section>
+
+  {# ===================== Status ===================== #}
+  <section class="ds-section" id="status">
+    <h2>Status</h2>
+    <p class="ds-lede">
+      Schedule chips and window states. Every status colour has an
+      on-wash text partner that clears 4.5:1 against its own wash, in
+      both themes.
+    </p>
+    <div class="ds-card">
+      <div class="ds-spec">
+        <div class="ds-spec__meta">schedule-chip</div>
+        <div class="ds-row">
+          <span class="schedule-chip schedule-chip--all"><i class="ti ti-calendar"></i>Everyday</span>
+          <span class="schedule-chip schedule-chip--day"><i class="ti ti-calendar-event"></i>Mon</span>
+          <span class="schedule-chip">09:00 &ndash; 17:00</span>
+        </div>
+      </div>
+      <div class="ds-spec">
+        <div class="ds-spec__meta">schedule-window</div>
+        <div class="ds-row">
+          <span class="schedule-window schedule-window--live">Live</span>
+          <span class="schedule-window schedule-window--upcoming">Upcoming</span>
+          <span class="schedule-window schedule-window--scheduled">Scheduled</span>
+          <span class="schedule-window schedule-window--expired">Expired</span>
+          <span class="schedule-window schedule-window--disabled">Disabled</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ===================== Feedback ===================== #}
+  <section class="ds-section" id="feedback">
+    <h2>Feedback</h2>
+    <p class="ds-lede">Toasts and the empty state.</p>
+    <div class="ds-card">
+      <div class="ds-spec">
+        <div class="ds-spec__meta">app-toast</div>
+        <div class="ds-row" style="flex-direction: column; align-items: stretch">
+          <div class="app-toast app-toast--success"><i class="ti ti-check"></i><span>Asset added.</span></div>
+          <div class="app-toast app-toast--error"><i class="ti ti-alert-triangle"></i><span>That file type is not supported.</span></div>
+          <div class="app-toast app-toast--info"><i class="ti ti-info-circle"></i><span>Reboot scheduled.</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top: 1.5rem">
+      <section class="surface">
+        {% include "_empty_assets.html" %}
+      </section>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

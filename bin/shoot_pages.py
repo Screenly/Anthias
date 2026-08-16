@@ -50,6 +50,7 @@ PAGES: dict[str, str] = {
     'settings': '/settings/',
     'system-info': '/system-info/',
     'integrations': '/integrations/',
+    'design': '/_design/',
 }
 
 # Error pages are rendered from their template rather than fetched by

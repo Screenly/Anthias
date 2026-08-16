@@ -44,14 +44,24 @@ def _declarations(text: str) -> dict[str, str]:
     return {m[1]: m[2].strip() for m in _DECL.finditer(text)}
 
 
-def _light_tokens() -> dict[str, str]:
-    """Palette primitives plus the light-theme roles from @theme."""
-    tokens = _declarations(PALETTE.read_text())
+def theme_block() -> dict[str, str]:
+    """The @theme declarations alone, without the palette primitives.
+
+    Public because test_design_system_page.py checks the demo page
+    against exactly this set: the roles, which a component may name,
+    and not the primitives, which it may not.
+    """
     entry = ENTRY.read_text()
     start = entry.index('@theme static {')
     # The @theme block runs to the closing brace at column 0.
     end = entry.index('\n}', start)
-    tokens.update(_declarations(entry[start:end]))
+    return _declarations(entry[start:end])
+
+
+def _light_tokens() -> dict[str, str]:
+    """Palette primitives plus the light-theme roles from @theme."""
+    tokens = _declarations(PALETTE.read_text())
+    tokens.update(theme_block())
     return tokens
 
 
