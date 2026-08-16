@@ -244,7 +244,7 @@ ELEVATION: list[tuple[str, str]] = [
 Z_INDEX: list[tuple[str, str, str]] = [
     ('below', '-1', 'Behind the flow'),
     ('base', '0', 'Default'),
-    ('raised', '2', 'Hover lift, sticky table header'),
+    ('raised', '2', 'Sticky modal header and footer'),
     ('sticky', '100', 'Sticky page furniture'),
     ('nav', '200', 'Navbar'),
     ('bulk-bar', '300', 'Floating selection bar'),
@@ -252,6 +252,7 @@ Z_INDEX: list[tuple[str, str, str]] = [
     ('modal-nested', '410', 'Preview / bulk-edit over the asset modal'),
     ('datepicker', '500', 'Flatpickr, must clear nested modals'),
     ('toast', '600', 'Toast stack'),
+    ('nudge', '610', 'Review nudge, above the toasts'),
 ]
 
 BREAKPOINTS: list[tuple[str, str, str]] = [

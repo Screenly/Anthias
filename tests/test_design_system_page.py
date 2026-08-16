@@ -203,15 +203,32 @@ def test_documented_button_variants_exist() -> None:
 
 
 def test_documented_z_index_matches_base_css() -> None:
-    """The stacking scale is declared in base.css, not invented here."""
+    """The stacking scale is declared in base.css, not invented here.
+
+    Both directions, like the colour roles: a rung added to base.css and
+    not to the page leaves the page describing a shorter ladder than the
+    one components can actually reach for.
+    """
     from tests.test_design_tokens import STATIC, _declarations
 
-    declared = _declarations((STATIC / 'css/base.css').read_text())
+    declared = {
+        name.removeprefix('--z-'): value
+        for name, value in _declarations(
+            (STATIC / 'css/base.css').read_text()
+        ).items()
+        if name.startswith('--z-')
+    }
+    documented = {name: value for name, value, _ in design_system.Z_INDEX}
+
     wrong = [
-        f'--z-{name}: page says {value}, base.css says '
-        f'{declared.get(f"--z-{name}")}'
-        for name, value, _ in design_system.Z_INDEX
-        if declared.get(f'--z-{name}') != value
+        f'--z-{name}: page says {value}, base.css says {declared.get(name)}'
+        for name, value in documented.items()
+        if declared.get(name) != value
+    ]
+    wrong += [
+        f'--z-{name}: in base.css ({value}), missing from the page'
+        for name, value in declared.items()
+        if name not in documented
     ]
     assert not wrong, '\n  '.join(['Layering table is out of date:', *wrong])
 

@@ -26,6 +26,7 @@ ENTRY = STATIC / 'tailwind.css'
 PALETTE = STATIC / 'css/palette.css'
 DARK = STATIC / 'css/theme-dark.css'
 SASS = REPO / 'src/anthias_server/app/static/sass'
+TEMPLATES = REPO / 'src/anthias_server/app/templates'
 
 # WCAG AA for normal text. Lighthouse reports a failure below this.
 #
@@ -371,4 +372,37 @@ def test_scss_declares_no_design_tokens() -> None:
         'token in tailwind.css (@theme), palette.css (primitive) or '
         'base.css (no @theme namespace), and read it here with var():\n'
         + '\n'.join(offenders)
+    )
+
+
+# Four digits means the old Bootstrap-era ladder (1040/1050/1060/1080/
+# 1090/1100). Small numbers are left alone on purpose: a local stacking
+# context legitimately uses 0/1/2, and the map's pin sits at 500 to
+# clear Leaflet's own panes, which is not a rung on our ladder.
+_BIG_Z = re.compile(r'z-index:\s*(\d{4,})')
+
+
+def test_no_magic_z_index_values() -> None:
+    """Stacking order comes from the --z-* scale, not from a number.
+
+    base.css claimed this scale had already replaced those values. It
+    had not: every original number was still in place and the scale was
+    referenced by nothing but the design page's own documentation of it.
+    A declared-but-unused scale is worse than no scale, because it reads
+    as done.
+    """
+    offenders = []
+    sheets = [*_stylesheets(), *sorted(TEMPLATES.rglob('*.html'))]
+    for sheet in sheets:
+        for lineno, line in enumerate(sheet.read_text().splitlines(), 1):
+            if line.lstrip().startswith(('//', '*', '/*')):
+                continue
+            for match in _BIG_Z.finditer(line):
+                offenders.append(
+                    f'  {sheet.relative_to(REPO)}:{lineno} z-index: {match[1]}'
+                )
+    assert not offenders, (
+        'Magic z-index values. Use a rung from the --z-* scale in '
+        'base.css: `z-index: var(--z-modal)` in CSS, or the '
+        '`z-(--z-modal)` utility in markup:\n' + '\n'.join(offenders)
     )

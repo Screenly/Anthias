@@ -843,7 +843,17 @@ label { text-align: left; }
   background: rgba(15, 0, 25, 0.55);
   backdrop-filter: blur(6px) saturate(120%);
   -webkit-backdrop-filter: blur(6px) saturate(120%);
-  z-index: 1050;
+  z-index: var(--z-modal);
+}
+
+// An overlay opened from inside another modal: preview, bulk delete,
+// delete confirm. A modifier rather than a `z-(--z-modal-nested)`
+// utility in the markup, because that utility would tie with
+// .modal-overlay on specificity (0,1,0) and lose on order — anthias.css
+// loads after tailwind.css. The old inline style="z-index: 1060" only
+// worked because inline beats every stylesheet.
+.modal-overlay--nested {
+  z-index: var(--z-modal-nested);
 }
 
 .modal-card {
@@ -881,7 +891,7 @@ label { text-align: left; }
   // so scrolled content doesn't bleed through.
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--z-raised);
   background: var(--color-surface);
   display: flex;
   // Top-aligned across every modal: only the preview modal can carry
@@ -963,7 +973,7 @@ label { text-align: left; }
   // stay reachable no matter how tall the body grows.
   position: sticky;
   bottom: 0;
-  z-index: 2;
+  z-index: var(--z-raised);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1048,11 +1058,11 @@ label { text-align: left; }
 }
 
 // Flatpickr in modal — keep the popup above the modal overlay's
-// stacking context (the overlay is z-index 1050) so the calendar /
-// time wheels render on top of the modal-card body. The default
-// flatpickr z-index is 99999 in its own stylesheet, but our import
-// order can lose to local rules — pin it explicitly here.
-.flatpickr-calendar.open { z-index: 1100; }
+// stacking context (--z-modal, and --z-modal-nested above it) so the
+// calendar / time wheels render on top of the modal-card body. The
+// default flatpickr z-index is 99999 in its own stylesheet, but our
+// import order can lose to local rules — pin it explicitly here.
+.flatpickr-calendar.open { z-index: var(--z-datepicker); }
 
 // Preview modal — wider card, dark stage so transparent images stay
 // readable and videos sit on a neutral surround.
@@ -2506,7 +2516,7 @@ body.auth-body {
   position: fixed;
   top: calc(4.5rem + calc(var(--spacing) * 4));   // below the fixed app-nav
   right: calc(var(--spacing) * 6);
-  z-index: 1080;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: calc(var(--spacing) * 2);
@@ -2561,7 +2571,7 @@ body.auth-body {
   position: fixed;
   bottom: calc(var(--spacing) * 6);
   right: calc(var(--spacing) * 6);
-  z-index: 1090;
+  z-index: var(--z-nudge);
   width: min(360px, calc(100vw - calc(var(--spacing) * 6) * 2));
   padding: calc(var(--spacing) * 4);
   border-radius: var(--radius-lg);
@@ -2741,7 +2751,7 @@ body.auth-body {
   left: 0;
   right: 0;
   bottom: calc(var(--spacing) * 6);
-  z-index: 1040;
+  z-index: var(--z-bulk-bar);
   display: flex;
   justify-content: center;
   padding-inline: calc(var(--spacing) * 4);
@@ -3151,8 +3161,12 @@ body.auth-body {
   width: 100%;
   height: 100%;
   // Leaflet needs an explicit z-index floor so its panes sit below the
-  // pin/readout but above the frame background.
-  z-index: 0;
+  // pin/readout but above the frame background. Positioned + z-index
+  // makes this a stacking context, which is why the 500s on the pin and
+  // readout below are local to the map and not rungs on the app's
+  // --z-* ladder: they are chosen to clear Leaflet's own internal panes
+  // (400-1000), and comparing them to --z-datepicker is meaningless.
+  z-index: var(--z-base);
 }
 
 .app-cfg-map__pin {
