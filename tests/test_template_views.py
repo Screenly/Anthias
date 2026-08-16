@@ -3423,6 +3423,13 @@ def test_every_app_class_in_templates_is_styled() -> None:
     sites doing nothing, and was only noticed when the design page tried
     to draw it.
 
+    Covers Alpine's `:class` / `x-bind:class` as well as the plain
+    attribute. Those are the easier ones to get wrong, because the value
+    is a JS expression rather than a class list, and this guard used to
+    read straight past them: a bare `class="…"` pattern matches inside
+    `:class="…"` too, so the bindings looked covered while every name in
+    them sat inside a string literal that no token scan would reach.
+
     Scoped to the .app-* namespace on purpose. Utility classes come from
     Tailwind and are generated on demand, so they cannot be checked
     against a static list.
@@ -3478,15 +3485,45 @@ def test_every_app_class_in_templates_is_styled() -> None:
             buf += char
 
     django_tag_re = re.compile(r'\{%[^%]*%\}|\{\{[^}]*\}\}')
-    class_attr_re = re.compile(r'class="([^"]+)"')
+    # Group 1 is what separates a bound attribute from a plain one, and
+    # it has to be captured rather than assumed: `class="…"` on its own
+    # also matches inside `:class="…"`, which is why the bindings read
+    # as covered when nothing in them was ever checked.
+    class_attr_re = re.compile(r'(:|x-bind:)?class="([^"]+)"')
+    # In a binding the value is an expression, so the class names live
+    # in its string and template literals. Double quotes cannot appear:
+    # they would close the attribute.
+    literal_re = re.compile(r"'([^']*)'|`([^`]*)`")
     templates = root / 'src/anthias_server/app/templates'
+
+    def candidates(value: str, bound: bool) -> list[str]:
+        """Every class name an attribute value can put on an element."""
+        if not bound:
+            return django_tag_re.sub(' ', value).split()
+        return [
+            token
+            for literal in literal_re.finditer(value)
+            for token in (literal[1] or literal[2] or '').split()
+        ]
 
     missing: list[str] = []
     for path in sorted(templates.rglob('*.html')):
-        for match in class_attr_re.finditer(path.read_text()):
-            cleaned = django_tag_re.sub(' ', match.group(1))
-            for tok in cleaned.split():
-                if tok.startswith('app-') and tok not in defined:
+        for attr in class_attr_re.finditer(path.read_text()):
+            for tok in candidates(attr[2], bound=bool(attr[1])):
+                if not tok.startswith('app-'):
+                    continue
+                # An interpolated name like `app-toast--${t.kind}` has
+                # no single value to look up, so its static prefix is
+                # held to the weaker bar that something defines it. That
+                # still fails if the whole .app-toast--* family is
+                # renamed or dropped, which is the failure worth having.
+                stem = tok.split('${')[0]
+                styled = (
+                    tok in defined
+                    if stem == tok
+                    else any(name.startswith(stem) for name in defined)
+                )
+                if not styled:
                     missing.append(f'{path.name}: {tok}')
     assert not missing, (
         'Templates use .app-* classes that _styles.scss never defines, '

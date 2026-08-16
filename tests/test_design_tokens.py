@@ -15,7 +15,7 @@ the default theme would silently skip.
 
 from __future__ import annotations
 
-import glob as globlib
+import glob
 import re
 from pathlib import Path
 
@@ -214,11 +214,10 @@ PAIRS: list[tuple[str, str]] = [
 # veil is not: the navbar, footer and nav drawer are translucent over
 # the canvas, and measuring them against white would score a colour that
 # is never on screen.
-BACKDROP: dict[str, str] = {
-    '--color-chrome': '--color-canvas',
-    '--color-chrome-soft': '--color-canvas',
-    '--color-chrome-scrim': '--color-canvas',
-}
+BACKDROP: dict[str, str] = dict.fromkeys(
+    ('--color-chrome', '--color-chrome-soft', '--color-chrome-scrim'),
+    '--color-canvas',
+)
 
 
 @pytest.mark.parametrize('theme', ['light', 'dark'])
@@ -406,12 +405,12 @@ def test_source_globs_match_files() -> None:
     for, which shows up as one unstyled corner of a page rather than as
     an error.
     """
-    globs = _SOURCE.findall(ENTRY.read_text())
-    assert globs, 'No @source globs: nothing is scanned for classes.'
+    patterns = _SOURCE.findall(ENTRY.read_text())
+    assert patterns, 'No @source globs: nothing is scanned for classes.'
     empty = [
         pattern
-        for pattern in globs
-        if not globlib.glob(str(ENTRY.parent / pattern), recursive=True)
+        for pattern in patterns
+        if not glob.glob(str(ENTRY.parent / pattern), recursive=True)
     ]
     assert not empty, (
         'These @source globs in tailwind.css match no files, so every '
