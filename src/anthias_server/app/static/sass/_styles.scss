@@ -1443,14 +1443,26 @@ label { text-align: left; }
   }
   .stat-card__meta a { color: $anthias-purple-5; text-decoration: none; }
   .stat-card__meta a:hover { text-decoration: underline; }
-  // Variant for advisory/warning text inside a stat card (e.g. the
-  // low-RAM degradation badge on Memory). Borrows the warning
-  // colour token already used by .loadavg-row--warn so the palette
-  // stays consistent and a future theme swap touches one token.
+  // Variant for advisory/warning text inside a stat card. Used by the
+  // low-RAM badge on Memory, and only there: the Power supply and
+  // Storage cards carry their severity on a coloured verdict and an
+  // icon instead, so tinting their body copy as well said the same
+  // thing a third time and cost legibility. The badge has no verdict
+  // above it, so its icon, its bold lead-in and this tint are the
+  // whole signal.
+  //
+  // The -text-on-wash ink, NOT --color-warning. The fill colour is
+  // #f59e0b, which on a white .stat-card measures 2.15:1 — under half
+  // the 4.5:1 AA needs for body text, and visibly unreadable at this
+  // size. The token next to it exists precisely for text and measures
+  // 9.15:1. Same hue family, same signal, legible.
+  //
+  // Measured on a live device, not eyeballed: the amber paragraph on
+  // the Storage card was the worst thing on the page.
   .stat-card__meta--warn {
-    color: var(--color-warning);
+    color: var(--color-warning-text-on-wash);
     margin-top: 0.5rem;
-    line-height: 1.4;
+    line-height: 1.5;
   }
 }
 
@@ -1472,25 +1484,95 @@ label { text-align: left; }
   &--ok       { color: var(--color-success-text-on-wash); }
 }
 
-// Disclosure for the sensor detail on a diagnostic card. Kept muted
-// and closed by default so the plain-language verdict above it stays
-// the thing an operator reads first.
+// The evidence block on a diagnostic card. Not a disclosure and not
+// muted: this is System Info, a page whose whole job is showing
+// exactly this, so hiding it behind a click and greying it out
+// inverted the emphasis — the prose got the weight and the numbers
+// someone came for got buried. It is simply present, in ordinary
+// text.
 .stat-card__details {
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
   font-size: 0.78rem;
-  color: var(--color-text-muted);
-
-  summary {
-    cursor: pointer;
-    user-select: none;
-  }
+  color: var(--color-text);
 
   p { margin: var(--space-2) 0 0; line-height: 1.5; }
 
   code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.95em;
+    // 1em, not 0.95em. A monospace face set fractionally smaller than
+    // the prose around it reads as a typo rather than a distinction,
+    // and inline code appeared often enough in the storage detail to
+    // make the whole paragraph look like mixed type. The family
+    // already carries the distinction.
+    font-size: 1em;
   }
+}
+
+// Key/value readout inside a .stat-card__details. Replaces what was a
+// paragraph of prose with monospace fragments embedded in it: at this
+// size the mixed families and the wrapping made a support engineer
+// hunt for the one number they came for. A two-column list puts every
+// label in the same place and every value on the same left edge, so
+// the block is scanned rather than read.
+//
+// This is the one place in the card allowed to look technical, and
+// it is shown outright rather than behind a toggle: System Info
+// exists to display it, and its audience is whoever is reading a
+// screenshot during a support call.
+.readout {
+  display: grid;
+  // Labels size to the longest one and then stop, so the values all
+  // share a left edge instead of stepping raggedly per row.
+  grid-template-columns: minmax(6.5rem, max-content) 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+
+  &__key {
+    color: var(--color-text-muted);
+    // The label column is deliberately NOT bolded or capitalised: it
+    // is scaffolding, and the value is the thing being looked up.
+    font-weight: 400;
+  }
+
+  &__value {
+    color: var(--color-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    // Long values (a mount path, a SMART summary) wrap inside their
+    // own column rather than pushing the grid wider.
+    overflow-wrap: anywhere;
+  }
+
+  // Deliberately no severity variant. Every card here already spends
+  // its colour twice, on an icon and a coloured verdict; tinting rows
+  // of the readout as well would be a third place saying the same
+  // thing, and would put a coloured typeface under body-sized text
+  // where it reads worst.
+
+  // Below the narrow breakpoint the two columns would leave the value
+  // column too tight to read, so stack them.
+  @media (max-width: 420px) {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+
+    .readout__key { margin-top: var(--space-2); }
+  }
+}
+
+// Trailing caveat under a readout — the one sentence that qualifies a
+// number rather than being one.
+// Scoped under .stat-card__details deliberately. The generic
+// `.stat-card__details p` rule is (0,1,1) and a bare `.readout__note`
+// is (0,1,0), so the margin here silently lost and the note sat at
+// --space-2. Same specificity trap that made an earlier
+// `.device-alerts > * + *` rule dead code; matching the descendant
+// shape is what makes it actually apply.
+.stat-card__details .readout__note {
+  margin: var(--space-3) 0 0;
+  line-height: 1.5;
+  // The one genuinely secondary line in the block: it explains a
+  // number rather than being one, so it is the only thing the muted
+  // ink is used for here.
+  color: var(--color-text-muted);
 }
 
 // -----------------------------------------------------------------------------
@@ -1619,11 +1701,23 @@ label { text-align: left; }
 
   &__link {
     flex: 0 0 auto;
-    align-self: center;
+    // Top-aligned, not centred. `align-self: center` put it at the
+    // vertical midpoint of a banner whose height varies with the copy,
+    // so it floated beside an arbitrary bullet with no relationship to
+    // anything. Sitting on the title's optical line makes it read as
+    // the action belonging to that heading. The small offset accounts
+    // for the button's own padding so the two cap-heights align rather
+    // than the two boxes.
+    align-self: flex-start;
+    margin-top: -0.0625rem;
     display: inline-flex;
     align-items: center;
     white-space: nowrap;
-    font-size: 0.875rem;
+    // Matches the lede and the advice list. The banner was running
+    // four prose sizes (title 1.0625, body 0.9375, this 0.875, label
+    // 0.7); one body size for everything that is a sentence leaves the
+    // title and the eyebrow as the only deliberate steps.
+    font-size: 0.9375rem;
     font-weight: 600;
     color: var(--alert-ink);
     text-decoration: none;
