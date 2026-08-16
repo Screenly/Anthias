@@ -1,7 +1,12 @@
-<div class="flex justify-between items-center gap-4 py-2 border-t border-black/5 first:border-t-0">
+{% comment %}
+  border-divider / text-fg-muted are theme roles, not fixed colours.
+  This row previously used border-black/5 and text-black/60, which are
+  black at any theme and would have been invisible on a dark surface.
+{% endcomment %}
+<div class="flex justify-between items-center gap-4 py-2 border-t border-divider first:border-t-0">
   <div class="min-w-0">
     <label class="block font-semibold text-sm" for="{{ name }}">{{ label }}</label>
-    {% if hint %}<p class="text-xs text-black/60 mt-1 mb-0">{{ hint }}</p>{% endif %}
+    {% if hint %}<p class="text-xs text-fg-muted mt-1 mb-0">{{ hint }}</p>{% endif %}
   </div>
   <div class="app-check app-switch m-0 flex-none">
     <input type="hidden" name="{{ name }}" value="false">

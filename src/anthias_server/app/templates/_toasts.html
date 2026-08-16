@@ -2,7 +2,13 @@
 <div class="app-toast-stack" aria-live="polite" aria-atomic="true" x-data>
   <template x-for="t in $store.toasts.items" :key="t.id">
     <div class="app-toast" :class="`app-toast--${t.kind}`" role="status">
-      <i class="ti" :class="t.kind === 'error' ? 'ti-alert-triangle-filled' : t.kind === 'success' ? 'ti-circle-check-filled' : 'ti-info-circle-filled'"></i>
+      {% comment %}
+        Outline names, not -filled: @tabler/icons-webfont ships the
+        outline set only (5193 icons, zero filled), so a -filled name
+        resolves to no glyph at all and the toast renders with an empty
+        icon slot.
+      {% endcomment %}
+      <i class="ti" :class="t.kind === 'error' ? 'ti-alert-triangle' : t.kind === 'success' ? 'ti-circle-check' : 'ti-info-circle'"></i>
       <span class="app-toast__msg" x-text="t.message"></span>
       <button type="button" class="app-toast__close" @click="$store.toasts.dismiss(t.id)" aria-label="Dismiss">
         <i class="ti ti-x"></i>

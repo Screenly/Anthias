@@ -4,41 +4,6 @@
 {% block title %}{% if player_name %}{{ player_name }} · {% endif %}Import from {{ provider.label }}{% endblock %}
 
 {% block main %}
-<style>
-  /*
-    Native <progress> styled to match the surface, mirroring the
-    Migrate-to-Screenly wizard. The element (rather than a div with
-    role="progressbar") is used so the completion state is announced
-    consistently by assistive tech. Pseudoelement names are
-    vendor-prefixed and can't be set via inline styles, hence the rule
-    block.
-  */
-  .content-import-progress {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    display: block;
-    width: 100%;
-    height: 0.5rem;
-    border: none;
-    border-radius: 0.25rem;
-    overflow: hidden;
-    background: #e5e7eb;
-  }
-  .content-import-progress::-webkit-progress-bar {
-    background: #e5e7eb;
-    border-radius: 0.25rem;
-  }
-  .content-import-progress::-webkit-progress-value {
-    background: #2563eb;
-    border-radius: 0.25rem;
-    transition: width 0.2s linear;
-  }
-  .content-import-progress::-moz-progress-bar {
-    background: #2563eb;
-    border-radius: 0.25rem;
-  }
-</style>
 <div class="app-container" x-data="importContent()" x-init="init()">
   {# Hidden form just for the CSRF token — the wizard does everything in JS. #}
   <form style="display:none">{% csrf_token %}</form>
@@ -85,7 +50,7 @@
       <div
         x-show="tokenError"
         x-cloak
-        class="text-red-600"
+        class="text-danger"
         role="alert"
         aria-live="assertive"
       >
@@ -212,10 +177,10 @@
     <header class="surface__header">
       <h2 x-show="step === 'running'"><i class="ti ti-download mr-2"></i>Importing…</h2>
       <h2 x-show="step === 'done' && failureCount() === 0">
-        <i class="ti ti-circle-check mr-2" style="color:#16a34a"></i>Import complete
+        <i class="ti ti-circle-check mr-2 text-success-on-wash"></i>Import complete
       </h2>
       <h2 x-show="step === 'done' && failureCount() > 0">
-        <i class="ti ti-alert-triangle mr-2" style="color:#d97706"></i>Import finished with errors
+        <i class="ti ti-alert-triangle mr-2 text-warning-on-wash"></i>Import finished with errors
       </h2>
       <p class="muted-label m-0">
         <span x-text="completedCount()"></span> of <span x-text="results.length"></span> done
@@ -224,14 +189,14 @@
           <span>&middot; <span x-text="skippedResultCount() + ' skipped'"></span></span>
         </template>
         <template x-if="failureCount()">
-          <span>&middot; <span class="text-red-600" x-text="failureCount() + ' failed'"></span></span>
+          <span>&middot; <span class="text-danger" x-text="failureCount() + ' failed'"></span></span>
         </template>
       </p>
     </header>
 
     <div class="settings-stack">
       <progress
-        class="content-import-progress"
+        class="app-progress"
         :value="progressPercent()"
         max="100"
       ></progress>
@@ -255,13 +220,13 @@
                   <span><i class="ti ti-loader animate-spin"></i> Importing…</span>
                 </template>
                 <template x-if="row.status === 'success'">
-                  <span style="color:#16a34a"><i class="ti ti-check"></i> Imported</span>
+                  <span class="text-success-on-wash"><i class="ti ti-check"></i> Imported</span>
                 </template>
                 <template x-if="row.status === 'skipped'">
                   <span class="muted-label"><i class="ti ti-minus"></i> Skipped</span>
                 </template>
                 <template x-if="row.status === 'failed'">
-                  <span class="text-red-600"><i class="ti ti-x"></i> Failed</span>
+                  <span class="text-danger"><i class="ti ti-x"></i> Failed</span>
                 </template>
               </td>
               <td x-text="row.name || row.remote_id"></td>
@@ -270,7 +235,7 @@
                   <span class="muted-label" x-text="row.detail"></span>
                 </template>
                 <template x-if="row.status === 'failed'">
-                  <span class="text-red-600" x-text="row.detail"></span>
+                  <span class="text-danger" x-text="row.detail"></span>
                 </template>
               </td>
             </tr>

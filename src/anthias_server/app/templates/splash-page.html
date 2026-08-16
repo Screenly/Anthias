@@ -14,11 +14,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>Welcome to Anthias</title>
     {% comment %}
-      This page uses no Tailwind utility classes — every selector
-      (.splash-*, .auth-*) lives in anthias.css. Skip the Tailwind
-      bundle so first paint on a constrained Pi 1 webview avoids one
-      extra ~30 KB stylesheet fetch.
+      This page used to skip the Tailwind bundle to save a stylesheet
+      fetch on a constrained Pi 1 webview. That saved very little and
+      cost a lot: the page was already pulling the whole 86 KB
+      anthias.css to use a few percent of it, and skipping the token
+      layer left the splash unable to follow the theme, so it carried
+      its own hardcoded colours instead.
+
+      Linking both is the honest trade and not a free one: it is 133 KB
+      and two fetches where it was 86 KB and one. Collapsing them into a
+      single tree-shaken bundle would win that back, but that is a build
+      change and not this one.
+
+      Tabler icons stays out: the splash renders no glyphs, and that
+      bundle carries font files.
     {% endcomment %}
+    <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
     <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
     <link rel="icon" href="/static/favicons/favicon.ico"/>
     <script src="{% static 'dist/js/splash.js' %}" defer></script>

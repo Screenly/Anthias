@@ -1,6 +1,7 @@
+from django.conf import settings as django_settings
 from django.urls import path
 
-from . import views
+from . import design_system, views
 
 app_name = 'anthias_app'
 
@@ -107,3 +108,24 @@ urlpatterns = [
         name='assets_preview',
     ),
 ]
+
+# Dev-only: the design-system demo page, rendering every token and every
+# component variant on one page.
+#
+# Gated at registration rather than inside the view, so on a production
+# image (ENVIRONMENT=production) the route does not exist at all and
+# there is no view to reach.
+#
+# The IS_TEST half is load-bearing, not belt-and-braces: pytest-django
+# sets settings.DEBUG = False for the duration of a run, and this module
+# is imported lazily on the first reverse() or request — i.e. from
+# inside a test, after that assignment. Gating on DEBUG alone deletes
+# the route exactly where tests/test_design_system_page.py needs it.
+if django_settings.DEBUG or django_settings.IS_TEST:
+    urlpatterns += [
+        path(
+            '_design/',
+            design_system.design_system,
+            name='design_system',
+        ),
+    ]

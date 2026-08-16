@@ -1,0 +1,100 @@
+/* Palette primitives.
+ *
+ * Deliberately NOT in @theme. Anything declared there becomes a utility
+ * class, and primitives must not be reachable from markup: a component
+ * that writes `bg-plum-700` has hardcoded a colour and will not follow
+ * the theme. Only the ROLES in tailwind.css get @theme treatment, and a
+ * role is the only thing a component may name.
+ *
+ * Keeping them out also means `text-red-600` stays an unknown class,
+ * which is the whole point of clearing Tailwind's palette.
+ *
+ * Roles reference these with var(); custom-property resolution happens
+ * at computed-value time, so declaration order between this file and
+ * the @theme block does not matter.
+ */
+
+:root {
+  /* Brand plum ramp.
+   *
+   * Resolves a fork that had been live for some time: sass/_variables.scss
+   * and the old @theme block declared different hex under the same
+   * names (purple-2 was #492955 in one and #3c1762 in the other, and
+   * purple-3 in one was purple-1 in the other). The even ramp was the
+   * coherent one but rendered nowhere; the SCSS ramp rendered everywhere
+   * but carried two off-ramp mauves that existed only as gradient stops.
+   * Canonical set is the even ramp extended at both ends; the mauves
+   * survive as the --color-feature-* roles. */
+  --color-plum-950: #14001c;
+  --color-plum-900: #1f0029;
+  --color-plum-800: #270035;
+  --color-plum-700: #3c1762;
+  --color-plum-600: #5b2090;
+  --color-plum-500: #7c30cd;
+  --color-plum-400: #9b6bd6;
+  --color-plum-300: #b99ae0;
+  --color-plum-200: #d4ccd7;
+  --color-plum-100: #ebe5ef;
+  --color-plum-50: #f6f3f8;
+
+  --color-sun-500: #ffd800;
+  --color-sun-400: #ffe11a;
+  --color-sun-300: #fff963;
+  --color-sun-200: #fff3a3;
+
+  /* Error red. Deliberately NOT the inherited Bootstrap ramp
+   * (#dc3545 / #c82333 / #bd2130): #dc3545 measures 4.53:1 as text on
+   * white, passing WCAG AA by 0.03 and failing on any tinted surface.
+   * This ramp clears 4.5:1 at every step that carries text, and stays a
+   * plain unambiguous red rather than a styled one, because an error
+   * colour's job is to be read as an error. */
+  --color-red-800: #8a1414;
+  --color-red-700: #a01818;
+  --color-red-600: #b91c1c;
+  --color-red-300: #ff6b7a;
+  --color-red-100: #fecaca;
+  --color-red-50: #fef2f2;
+  --color-red-900: #991b1b;
+
+  --color-amber-500: #f59e0b;
+  --color-amber-100: #fef3c7;
+  --color-amber-900: #92400e;
+
+  --color-green-500: #34d399;
+  --color-green-400: #4ade80;
+  --color-green-900: #0e4a30;
+  --color-green-50: #ecfff5;
+
+  /* Alpha ladders. Theme-INDEPENDENT: ink is always black, paper always
+   * white. The theme-relative --color-scrim-* roles alias onto one or
+   * the other. Between them these retire all 62 rgba() literals from the
+   * old SCSS and the entire --scrim-on-dark-* family.
+   *
+   * Pick the nearest rung. Never invent an alpha at the use site. */
+  --color-ink-2: rgb(0 0 0 / 0.02);
+  --color-ink-4: rgb(0 0 0 / 0.04);
+  --color-ink-5: rgb(0 0 0 / 0.05);
+  --color-ink-6: rgb(0 0 0 / 0.06);
+  --color-ink-8: rgb(0 0 0 / 0.08);
+  --color-ink-10: rgb(0 0 0 / 0.1);
+  --color-ink-14: rgb(0 0 0 / 0.14);
+  --color-ink-18: rgb(0 0 0 / 0.18);
+  --color-ink-25: rgb(0 0 0 / 0.25);
+  --color-ink-40: rgb(0 0 0 / 0.4);
+  --color-ink-60: rgb(0 0 0 / 0.6);
+  --color-paper-4: rgb(255 255 255 / 0.04);
+  --color-paper-5: rgb(255 255 255 / 0.05);
+  --color-paper-6: rgb(255 255 255 / 0.06);
+  --color-paper-8: rgb(255 255 255 / 0.08);
+  --color-paper-10: rgb(255 255 255 / 0.1);
+  --color-paper-12: rgb(255 255 255 / 0.12);
+  --color-paper-15: rgb(255 255 255 / 0.15);
+  --color-paper-18: rgb(255 255 255 / 0.18);
+  --color-paper-30: rgb(255 255 255 / 0.3);
+  --color-paper-45: rgb(255 255 255 / 0.45);
+  --color-paper-50: rgb(255 255 255 / 0.5);
+  /* 55 is the lowest rung that still clears 4.5:1 as text on both the
+     chrome and feature planes. Do not use 45 for text. */
+  --color-paper-55: rgb(255 255 255 / 0.55);
+  --color-paper-65: rgb(255 255 255 / 0.65);
+}

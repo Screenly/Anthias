@@ -2,8 +2,7 @@
 <div
   x-show="previewAsset"
   x-cloak
-  class="modal-overlay"
-  style="z-index: 1060"
+  class="modal-overlay modal-overlay--nested"
   @keydown.escape.window="closePreview()"
   @click.self="closePreview()"
 >

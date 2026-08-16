@@ -56,8 +56,7 @@
   <div
     x-show="pendingDeleteId"
     x-cloak
-    class="modal-overlay"
-    style="z-index: 1060"
+    class="modal-overlay modal-overlay--nested"
     @keydown.escape.window="pendingDeleteId = null"
     @click.self="pendingDeleteId = null"
   >

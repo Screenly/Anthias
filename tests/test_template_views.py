@@ -3355,6 +3355,25 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'container-fluid',
         'col-12',
         'col-md-6',
+        # Bootstrap text utilities whose Tailwind spellings differ, so
+        # they style to nothing and read as working code. `text-capitalize`
+        # sat in _asset_modal.html for exactly that reason; Tailwind
+        # spells it `capitalize`.
+        'text-capitalize',
+        'text-lowercase',
+        'text-uppercase',
+        'text-nowrap',
+        'text-truncate',
+        'text-start',
+        'font-weight-bold',
+        'font-weight-normal',
+        'align-items-center',
+        'justify-content-between',
+        'justify-content-center',
+        'justify-content-end',
+        'flex-column',
+        'flex-row',
+        'sr-only-focusable',
     }
     # Prefix-match tokens — anything starting with these is forbidden.
     # Catches `bi-archive`, `bi-collection-play` etc. without enumerating
@@ -3391,6 +3410,124 @@ def test_no_bootstrap_class_names_in_templates() -> None:
         'Bootstrap-shaped class names reintroduced — components live '
         'under .app-* now, and Bootstrap Icons were replaced by Tabler '
         '(.ti / .ti-*):\n  ' + '\n  '.join(seen)
+    )
+
+
+def test_every_app_class_in_templates_is_styled() -> None:
+    """An .app-* class in a template must exist in the stylesheet.
+
+    The same failure mode as the text-capitalize case above, one step
+    further in: the name is right for our own namespace, so it reads as
+    a working component, but nothing defines it and the element renders
+    unstyled. `app-btn-secondary` sat in _asset_modal.html at two call
+    sites doing nothing, and was only noticed when the design page tried
+    to draw it.
+
+    Covers Alpine's `:class` / `x-bind:class` as well as the plain
+    attribute. Those are the easier ones to get wrong, because the value
+    is a JS expression rather than a class list, and this guard used to
+    read straight past them: a bare `class="…"` pattern matches inside
+    `:class="…"` too, so the bindings looked covered while every name in
+    them sat inside a string literal that no token scan would reach.
+
+    Scoped to the .app-* namespace on purpose. Utility classes come from
+    Tailwind and are generated on demand, so they cannot be checked
+    against a static list.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    scss = (
+        root / 'src/anthias_server/app/static/sass/_styles.scss'
+    ).read_text()
+
+    # Resolve `&` against the enclosing selector, because most component
+    # children are written nested: `.app-card { &__name { … } }` defines
+    # .app-card__name, which a literal search would never see.
+    defined: set[str] = set()
+    stack: list[list[str]] = []
+    class_re = re.compile(r'\.(app-[a-z0-9_-]+)')
+
+    def resolve(selector: str, parents: list[str]) -> list[str]:
+        out = []
+        for part in (p.strip() for p in selector.split(',')):
+            if not part or part.startswith('@'):
+                continue
+            out += (
+                [part.replace('&', p) for p in parents]
+                if '&' in part
+                else [part]
+            )
+        return out
+
+    # Brace-driven rather than line-driven: `.app-input,` on its own
+    # line, opening a selector list that closes three lines later, is
+    # the common shape here and a line-by-line scan misses all of it.
+    stripped = re.sub(r'/\*.*?\*/', ' ', scss, flags=re.DOTALL)
+    stripped = re.sub(r'//[^\n]*', ' ', stripped)
+    buf = ''
+    for char in stripped:
+        if char == '{':
+            parents = stack[-1] if stack else ['']
+            resolved = resolve(buf, parents)
+            for sel in resolved:
+                defined.update(class_re.findall(sel))
+            stack.append(resolved or parents)
+            buf = ''
+        elif char == '}':
+            if stack:
+                stack.pop()
+            buf = ''
+        elif char == ';':
+            buf = ''
+        else:
+            buf += char
+
+    django_tag_re = re.compile(r'\{%[^%]*%\}|\{\{[^}]*\}\}')
+    # Group 1 is what separates a bound attribute from a plain one, and
+    # it has to be captured rather than assumed: `class="…"` on its own
+    # also matches inside `:class="…"`, which is why the bindings read
+    # as covered when nothing in them was ever checked.
+    class_attr_re = re.compile(r'(:|x-bind:)?class="([^"]+)"')
+    # In a binding the value is an expression, so the class names live
+    # in its string and template literals. Double quotes cannot appear:
+    # they would close the attribute.
+    literal_re = re.compile(r"'([^']*)'|`([^`]*)`")
+    templates = root / 'src/anthias_server/app/templates'
+
+    def candidates(value: str, bound: bool) -> list[str]:
+        """Every class name an attribute value can put on an element."""
+        if not bound:
+            return django_tag_re.sub(' ', value).split()
+        return [
+            token
+            for literal in literal_re.finditer(value)
+            for token in (literal[1] or literal[2] or '').split()
+        ]
+
+    missing: list[str] = []
+    for path in sorted(templates.rglob('*.html')):
+        for attr in class_attr_re.finditer(path.read_text()):
+            for tok in candidates(attr[2], bound=bool(attr[1])):
+                if not tok.startswith('app-'):
+                    continue
+                # An interpolated name like `app-toast--${t.kind}` has
+                # no single value to look up, so its static prefix is
+                # held to the weaker bar that something defines it. That
+                # still fails if the whole .app-toast--* family is
+                # renamed or dropped, which is the failure worth having.
+                stem = tok.split('${')[0]
+                styled = (
+                    tok in defined
+                    if stem == tok
+                    else any(name.startswith(stem) for name in defined)
+                )
+                if not styled:
+                    missing.append(f'{path.name}: {tok}')
+    assert not missing, (
+        'Templates use .app-* classes that _styles.scss never defines, '
+        'so these elements render unstyled:\n  ' + '\n  '.join(missing)
     )
 
 

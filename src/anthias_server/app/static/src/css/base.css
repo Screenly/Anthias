@@ -1,0 +1,96 @@
+/* Base layer: values that are design tokens in spirit but have no
+ * Tailwind @theme namespace to live in, plus the handful of global
+ * rules that utilities cannot attach to.
+ *
+ * Everything here is reached with Tailwind's CSS-variable shorthand,
+ * e.g. `z-(--z-modal)` or `h-(--nav-height)`, so the use site still
+ * names a token rather than a number.
+ */
+
+:root {
+  /* ---- Stacking order -------------------------------------------------
+   * v4 has no --z-index-* theme namespace, so these are plain custom
+   * properties. One ordered scale replaces 1040/1050/1060/1080/1090/1100
+   * scattered across the old SCSS plus three inline
+   * style="z-index: 1060" attributes.
+   *
+   * Two constraints encoded here. Leaflet's internal panes run 400-1000
+   * inside their own stacking context, so the map must stay below
+   * --z-modal. Flatpickr opens FROM inside modals, so its calendar has
+   * to clear --z-modal-nested; the old SCSS documented this as the
+   * reason its calendar was forced to 1100. */
+  --z-below: -1;
+  --z-base: 0;
+  --z-raised: 2;
+  --z-sticky: 100;
+  --z-nav: 200;
+  --z-bulk-bar: 300;
+  --z-modal: 400;
+  --z-modal-nested: 410;
+  --z-toast: 500;
+  /* The review nudge sits above toasts, which is the order the old
+     numbers had (1090 over 1080). It is persistent where a toast is
+     transient, so this is worth revisiting, but not in the commit that
+     was only meant to renumber. */
+  --z-nudge: 510;
+  /* Highest, as the old 1100 was. An open calendar is a control the
+     operator is actively using, so a toast arriving mid-edit must not
+     land on top of it. */
+  --z-datepicker: 600;
+
+  /* ---- Layout constants -----------------------------------------------
+   * The navbar height was previously the magic number 4.5rem repeated in
+   * `body`, in a `main` calc() and in the splash page; the footer height
+   * was a SCSS variable that participated in that same calc() by
+   * coincidence rather than by reference. */
+  --nav-height: 4.5rem;
+  --footer-height: 13rem;
+  --content-min-height: calc(
+    100vh - var(--nav-height) - var(--footer-height)
+  );
+  --modal-body-max-height: calc(100vh - 12rem);
+  --pie-size: 11rem;
+  --menu-min-width: 12rem;
+  --container-page: 82.5rem;
+
+  /* Focus ring width. Paired with --color-focus-ring. */
+  --ring-width: 0.1875rem;
+
+  /* ---- Motion ---------------------------------------------------------
+   * Duration and easing as one value. Every transition in the codebase
+   * uses the pair, and v4 has no namespace for a composite, so splitting
+   * them would only make each `transition:` declaration twice as long
+   * for no gain. The easing half is --ease-standard from @theme. */
+  --t-fast: 120ms var(--ease-standard);
+
+  /* The primary button's fill. A gradient cannot be a --color-* token:
+   * that namespace generates `bg-*` utilities, which set
+   * background-color, where a gradient is invalid. */
+  --gradient-accent: linear-gradient(
+    133.73deg,
+    var(--color-sun-300),
+    var(--color-sun-500)
+  );
+
+  /* ---- Icon sizes -----------------------------------------------------
+   * Deliberately NOT part of the type ramp. Six of the 27 "font sizes"
+   * in the old SCSS were glyph dimensions on an <i>, not text, and
+   * conflating the two is why the ramp had so many near-duplicate steps.
+   * --icon-inline is em-based so a glyph tracks the text it sits in. */
+  --icon-inline: 0.9em;
+  --icon-sm: 1rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+  --icon-xl: 2rem;
+}
+
+/* Alpine sets x-cloak on elements that must not flash before it takes
+ * over. Without this rule every modal renders for one frame on load. */
+[x-cloak] {
+  display: none !important;
+}
+
+::selection {
+  color: var(--color-accent-text);
+  background: var(--color-accent);
+}
