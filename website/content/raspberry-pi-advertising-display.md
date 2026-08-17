@@ -66,7 +66,7 @@ On a TV that supports HDMI-CEC the panel genuinely powers down, which saves elec
 
 ## Making ads that actually read on a wall
 
-The screen is usually seen in passing, from several metres away, by someone who did not intend to look at it. A few habits help:
+The screen is usually seen in passing, from across a room, by someone who did not intend to look at it. A few habits help:
 
 - **One idea per slide.** A price, an offer, a name. Anything needing a second read is wasted.
 - **Big type and strong contrast.** If it is not legible from across the room, it is not legible.

@@ -10,7 +10,7 @@ Anthias is **free digital signage software**. Not a trial, not a one-screen teas
 Most digital signage freeware turns out to be a limited edition of a paid product. Anthias is the whole thing:
 
 - **No subscription.** No monthly bill, ever, at any number of screens.
-- **No per-screen licence.** Run one display or fifty at no software cost.
+- **No per-screen license.** Run one display or fifty at no software cost.
 - **No account.** Nothing to sign up for, no email address, no card.
 - **No time limit or watermark.** Nothing expires and nothing is stamped on your content.
 - **Open source.** Read, modify and redistribute it under [GPLv2](https://github.com/Screenly/Anthias/blob/master/LICENSE).

@@ -11,7 +11,7 @@ Neither is universally better, so here is a straight comparison rather than a sa
 
 | | Anthias | Yodeck |
 |---|---|---|
-| Licence | open source, GPLv2 | proprietary |
+| License | open source, GPLv2 | proprietary |
 | Cost, one screen | free | free |
 | Cost, more screens | free | from $8 per screen per month |
 | Where it runs | your hardware and network | Yodeck cloud |
@@ -24,7 +24,7 @@ Neither is universally better, so here is a straight comparison rather than a sa
 | Account required | no | yes |
 | Hardware | Raspberry Pi, x86 PC, ARM SBC | Pi and vendor players |
 
-Yodeck figures are its published list prices, checked in August 2026. Its free plan covers a single screen with Basic features, and paid plans start at $8 per screen per month rising to $12 and $16 for Premium and Enterprise. See [Yodeck's pricing](https://www.yodeck.com/pricing/) for current numbers.
+Yodeck figures are its published list prices as of August 2026: a free plan covering a single screen with Basic features, then $8 per screen per month, rising to $12 and $16 for Premium and Enterprise. Prices change, so check Yodeck's own pricing page for current numbers.
 
 ## What it costs over a year
 
