@@ -195,3 +195,14 @@ fi
 # Without it `up -d` only logs a warning and leaves the orphans running,
 # which is confusing on a `docker ps` audit later.
 sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+
+# Drop the images the release we just replaced was running on. Deliberately
+# the last thing we do, and only once the new stack is up, so a pull or a
+# start that failed above still leaves the previous images to fall back on.
+# Best effort: losing the cleanup must not fail the upgrade itself. The
+# existence check covers the operator who pulled only this script down
+# instead of updating the whole checkout.
+PURGE_SCRIPT="${SCRIPT_DIR}/purge_stale_images.sh"
+if [ -f "${PURGE_SCRIPT}" ]; then
+    bash "${PURGE_SCRIPT}" || true
+fi
