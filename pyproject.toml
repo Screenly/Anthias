@@ -246,6 +246,8 @@ exclude = [
 # `channels` itself is covered by partial PEP 561 stubs in stubs/channels-stubs/;
 # only the helpers we actually call are typed there.
 module = [
+    # Dev-only: emails/render_logo.py, run through `uv run --no-project`.
+    "cairosvg",
     "channels_redis.*",
     "gi",
     "gi.*",
