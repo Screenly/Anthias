@@ -1846,12 +1846,12 @@ label { text-align: left; }
   flex: none;
   box-shadow: inset 0 0 0 1px var(--color-scrim-6), var(--shadow-sm);
 }
-// Disk uses different slice colours (red-ish for used, green for free)
-// so a near-full drive reads as a warning at a glance.
-.resource-pie--disk {
-  --slice-1-color: var(--color-danger);
-  --slice-3-color: var(--color-success);
-}
+// Disk deliberately carries no slice-colour overrides: it shares the
+// memory pie's scheme so "used" means the same colour on both charts.
+// It previously painted slice 1 with --color-danger so a near-full drive
+// read as a warning, but that made the same quantity red here and blue
+// there, and the storage-health panel directly below already raises an
+// actual alert when the drive needs attention.
 .resource-pie__inner {
   position: absolute;
   inset: 18%;
@@ -1910,7 +1910,6 @@ label { text-align: left; }
 .resource-legend__row--slice-1 .resource-legend__swatch { background: var(--color-link); }
 .resource-legend__row--slice-2 .resource-legend__swatch { background: var(--color-warning); }
 .resource-legend__row--slice-3 .resource-legend__swatch { background: var(--color-success); }
-.resource-pie--disk ~ .resource-legend .resource-legend__row--slice-1 .resource-legend__swatch { background: var(--color-danger); }
 .resource-legend__row--ghost .resource-legend__swatch {
   background: transparent;
   border: 1.5px dashed var(--color-scrim-25);
