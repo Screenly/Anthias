@@ -551,7 +551,7 @@
               <template x-if="editAsset.mimetype === 'webpage'">
                 <div>
                   <div class="modal-section__divider"></div>
-                  <div class="app-floating">
+                  <div class="app-floating app-floating--lifted">
                     <input type="number" class="app-input" id="edit-refresh-interval"
                       name="refresh_interval_s"
                       min="0" max="{{ refresh_interval_s_max }}" step="1"
@@ -572,7 +572,7 @@
                     parses + sanitises via parse_header_lines.
                   {% endcomment %}
                   <div class="modal-section__divider"></div>
-                  <div class="app-floating">
+                  <div class="app-floating app-floating--lifted">
                     <textarea class="app-input" id="edit-custom-headers"
                       name="custom_headers" rows="3"
                       placeholder="Authorization: Bearer <token>"
