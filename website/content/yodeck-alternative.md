@@ -39,23 +39,14 @@ Yodeck's first screen is free, so the two only diverge as you add displays. Cred
 
 Anthias has no software cost at any number of screens. What it does have is labor: every screen is a device you set up and maintain, so the cost moves off the invoice and into your own time.
 
-## When Yodeck is the better choice
-
-Worth saying plainly, because for a lot of people it is:
-
-- You need one dashboard controlling screens across several sites.
-- You want a template and app library rather than building content yourself.
-- You want a vendor to call when a screen goes dark.
-- You would rather pay a subscription than own the maintenance.
-
-## When Anthias is the better choice
+## Choose Anthias if
 
 - You want zero recurring cost, permanently.
 - You do not want your signage depending on someone else's cloud, or network policy keeps your content on site.
 - You want the screen to keep playing through an internet outage.
 - You want [open source](https://github.com/Screenly/Anthias) software you can read, change, and keep running with no vendor risk.
 - You show YouTube content. Paste a link and Anthias downloads the video to play locally, so the screen never buffers and never shows ads or recommended videos.
-- You are comfortable managing content device by device.
+- You would rather own the hardware than rent access to it.
 
 ## Moving your content across
 
@@ -99,8 +90,8 @@ Yes, and you do not have to do it by hand. Anthias has a built-in import wizard 
 
 Not built in. Anthias plays images, videos and web pages, so anything you can build or host as a web page will display. There is also a library of [free signage apps](https://signage-apps.com/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=yodeck-alt) covering weather, clocks, news and countdown timers, each of which you add by pasting in a URL.
 
-### Which handles many screens better?
+### How does Anthias handle several screens?
 
-Yodeck, if what you want is one dashboard covering every screen's content. Anthias manages content per device, each with its own dashboard.
+Content is managed per device, each with its own dashboard. Two features keep that from becoming repetitive work: a whole fleet can be deployed and updated over the air through [Balena](/docs/balena-fleet-deployment/), and the backup file lets you configure one device and restore that setup onto the rest.
 
-Anthias is not defenceless at scale, though. You can deploy and update a whole fleet over the air through [Balena](/docs/balena-fleet-deployment/), and the backup file lets you configure one device and restore that setup onto the rest rather than repeating the work. What you do not get is a single screen where you change tomorrow's playlist for forty displays at once.
+What Anthias does not offer is a single dashboard where you change tomorrow's playlist for every screen at once. If that specific workflow is what you need, a cloud platform priced per screen is the trade on offer.
