@@ -1,3 +1,3 @@
 ---
-title: "Anthias - The world's most popular open source digital signage project"
+title: "Anthias - Free Open Source Digital Signage Software"
 ---

@@ -1,6 +1,6 @@
 baseURL = 'https://anthias.screenly.io/'
 languageCode = 'en-us'
-title = "Anthias - The world's most popular open source digital signage project"
+title = "Anthias - Free Open Source Digital Signage Software"
 
 disableKinds = ['taxonomy']
 
