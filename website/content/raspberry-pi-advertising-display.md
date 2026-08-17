@@ -30,7 +30,11 @@ Anthias also runs on x86 mini PCs and ARM single-board computers if a Pi is not 
 
 Upload your images and videos, or point the display at a web page, and set how long each one shows. Anthias plays the active playlist on a loop and stores uploaded media locally, so the screen keeps running through a network outage. That matters in a shop, where a blank screen looks worse than a slightly stale one.
 
-Most files just work. Photos from a phone, screenshots, and ordinary video clips are accepted, and anything in an awkward format is converted in the background before it plays.
+Most files just work. Photos from a phone, screenshots, and ordinary video clips are accepted, and anything in an awkward format is converted in the background before it plays. Uploading does not interrupt whatever is currently on screen, and you can preview an item before you publish it.
+
+If your ad already lives on YouTube, paste the link. Anthias downloads the video and plays it locally, so the screen never buffers and never surfaces ads or recommended videos over your own content, which is the usual reason not to point a shop screen at YouTube.
+
+You can drag items to reorder the loop, or shuffle it so a repeat visitor does not see the same sequence in the same order.
 
 You can mix promotions with useful ambient content so the screen stays fresh. Browse the [free signage apps](https://signage-apps.com/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=pi-ads) that drop straight into Anthias, such as [weather](https://signage-apps.com/weather/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=pi-ads), news feeds, and a [countdown timer](https://signage-apps.com/timer/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=pi-ads) for a sale.
 
@@ -73,7 +77,13 @@ The screen is usually seen in passing, from several metres away, by someone who 
 
 ## Running more than one screen
 
-Anthias manages one screen per device, each with its own dashboard. Several screens showing the same loop means several Pis, set up individually. For a window bank or a handful of sites that is entirely workable, and the [import tools](/docs/import-content/) help you move a content set in rather than rebuilding it by hand. It is not the right shape for a large estate managed from one place, and it is better to know that up front.
+Anthias manages content per device, each with its own dashboard, so several screens means several Pis. That is less work than it sounds:
+
+- **Clone a configured device.** Download a backup file holding your settings and asset list, then restore it onto a new device instead of setting it up from scratch.
+- **Deploy and update a fleet over the air** through [Balena](/docs/balena-fleet-deployment/), so you are not carrying cards around to push an update.
+- **Bring a library in from another platform** with the [built-in importer](/docs/import-content/), which supports Yodeck, ScreenCloud, piSignage and Xibo.
+
+What you do not get is one dashboard where you change tomorrow's loop for every screen at once. For a window bank or a handful of sites that is rarely the blocker; for a large estate it will be.
 
 ## Getting started
 

@@ -67,9 +67,13 @@ Uploaded images and video play from the Pi's local storage, so a network outage 
 
 For an install that should last years, use a reputable microSD card and the official power supply, or move a Pi 5 onto an [SSD](/docs/pi5-ssd/) to avoid card wear. When you add a file, the dashboard shows a **Processing** badge while it is prepared and a **Failed** badge with a short explanation if something is wrong, so problems surface in the interface rather than in a log file.
 
+Anthias can also tell you whether the connected TV is actually powered on, which is the difference between spotting a dark screen from your desk and finding out when someone complains. The dashboard shows system information at a glance and flags when an update is available, and the device can be restarted or shut down remotely. If the screen sits somewhere public, the interface can be put behind a password and served over HTTPS.
+
 ## More than one screen
 
-Anthias runs one screen per device, each with its own dashboard. Two or three info screens means two or three Pis, configured individually, which is fine for a building or a floor. It is not built to drive a large estate from a single place, and it is better to say so now than after you have bought the hardware.
+Anthias manages content per device, each with its own dashboard, so two or three info screens means two or three Pis. A few things take the sting out of that: a backup file captures your settings and asset list so you can restore it onto the next device rather than rebuilding it, and a fleet can be deployed and updated over the air through [Balena](/docs/balena-fleet-deployment/).
+
+What you do not get is one dashboard that changes the content on every screen at once. For a building or a floor that is fine. For a large estate it is the wrong tool, and it is better to say so now than after you have bought the hardware.
 
 ## Getting started
 
