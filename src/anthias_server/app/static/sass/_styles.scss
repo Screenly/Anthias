@@ -1162,9 +1162,17 @@ label { text-align: left; }
     transform-origin: 0 0;
     font-weight: 500;
   }
+  // A floating label and a visible placeholder claim the same spot. The
+  // label only lifts on :not(:placeholder-shown), which is false exactly
+  // while a placeholder is on screen, so a field carrying a real
+  // placeholder renders the label on top of the placeholder text. Fields
+  // that want the placeholder as a worked example opt into --lifted and
+  // keep the label raised from the start. The 1.4rem block padding above
+  // already reserves the room, so the placeholder lands clear of it.
   > .app-input:focus ~ label,
   > .app-input:not(:placeholder-shown) ~ label,
-  > .app-select ~ label {
+  > .app-select ~ label,
+  &.app-floating--lifted > label {
     transform: translateY(-0.55rem);
     font-size: 0.72rem;
     color: var(--color-fg-muted);
