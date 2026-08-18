@@ -208,6 +208,15 @@ def test_every_table_row_is_used() -> None:
     left behind by an edit keeps being verified, keeps looking
     deliberate, and is the first thing someone copies when they need a
     colour.
+
+    Rows are matched by literal, not by role, so rows that resolve to
+    the same value cover for each other: --color-on-canvas,
+    --color-surface and --color-on-feature are all #ffffff today, and
+    one of the three going unused would not be caught. Telling them
+    apart would mean every use site naming the role it paints, which is
+    a lot of annotation to buy the detection of a stale row for a white
+    that is still white. The colours that actually move are the ones
+    with a value of their own, and those are matched exactly.
     """
     painted = _painted()
     unused = [
