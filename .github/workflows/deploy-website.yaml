@@ -88,9 +88,11 @@ jobs:
           # workflow_run triggers above, which an `on:` block cannot
           # read from `env`.
           DEPLOY_BRANCH: master
-        # `-e` is already the runner default for a `run:` block; `-u`
-        # and `pipefail` are not, and this reads the API into a variable
-        # it then compares numerically.
+        # No `shell:` key here, so this runs under the Linux default of
+        # `bash -e {0}`: errexit and nothing else. The `-eo pipefail`
+        # people remember comes from writing `shell: bash` explicitly,
+        # which this does not. Both missing flags are set below rather
+        # than left resting on which of the two forms applies.
         run: |
           set -uo pipefail
 
