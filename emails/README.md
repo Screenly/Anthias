@@ -11,7 +11,24 @@ out of the same design tokens as the management UI and the marketing
 site. Kept anywhere else it would be a hand-matched approximation of
 the product's colours, drifting a shade at a time.
 
-## Building
+## Getting the built email
+
+If you are here to send it rather than to edit it, you do not need a
+checkout. Every change to this directory runs
+[Build Newsletter Email](../.github/workflows/build-email.yaml), which
+attaches an `anthias-newsletter-<commit>.zip` to the run: the compiled
+HTML, this README, and the masthead image. Open the run from the commit
+or the pull request and download it from the Artifacts section. The
+workflow can also be started by hand against any branch from the Actions
+tab, which is the quickest way to get the current HTML without pushing
+anything.
+
+That workflow is also where the compiled size is checked. MJML expands a
+template several times over, so a paragraph that reads as three lines in
+the source can be a few KB of nested tables in the output, and the build
+fails rather than shipping something Gmail will clip.
+
+## Building it yourself
 
 ```bash
 bun run build:email     # -> emails/dist/newsletter.html
@@ -23,9 +40,10 @@ the same email is how a fix lands in one of them. `emails/dist/` needs
 no entry of its own, because the root `.gitignore` already ignores any
 directory named `dist`.
 
-Check the size before sending. Gmail clips at 102 KB and shows a "view
-entire message" link at the cut, which usually lands mid-newsletter.
-The current template compiles to about 35 KB.
+Gmail clips at 102 KB and shows a "view entire message" link at the cut,
+which usually lands mid-newsletter. The current template compiles to
+about 35 KB. CI enforces the limit, so a local build only needs checking
+if you are curious how much room is left.
 
 ## Colours, sizes, and why they are all written out
 

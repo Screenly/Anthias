@@ -1,0 +1,124 @@
+name: Build Newsletter Email
+
+# Compiles emails/newsletter.mjml and publishes the result as a
+# downloadable zip on the run.
+#
+# It exists because the person who sends the newsletter is not
+# necessarily the person who edits it, and asking them to install bun and
+# run a build to get an HTML file is how a stale hand-edited copy ends up
+# being the one that goes out. Every run of this workflow leaves a
+# send-ready bundle attached to the commit that produced it.
+#
+# It is also the only place the compiled size is checked. MJML expands a
+# template several times over, so copy that reads as a paragraph in the
+# .mjml can be a few KB of nested tables in the output, and nothing about
+# the source shows you when you have crossed Gmail's clipping threshold.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'emails/**'
+      - 'website/static/img/anthias-logo-email.png'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/build-email.yaml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'emails/**'
+      - 'website/static/img/anthias-logo-email.png'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/build-email.yaml'
+  # So a fresh bundle can be pulled off any ref without pushing a commit
+  # to trigger one, which is the normal case when someone is about to
+  # send and just wants the current HTML.
+  workflow_dispatch:
+
+# Nothing here reads or writes repository state. upload-artifact uses a
+# separate API and does not read this block.
+permissions:
+  contents: read
+
+env:
+  # Gmail clips a message above this and hides the rest behind a "view
+  # entire message" link, which in a newsletter usually lands mid-story.
+  # The limit is on the whole message, so the compiled HTML has to leave
+  # room for the headers and the encoding Mailjet adds around it.
+  GMAIL_CLIP_BYTES: 102400
+
+jobs:
+  build:
+    name: Build and package the newsletter
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.13
+
+      # No `bun install`. build:email runs mjml through bunx at a pinned
+      # version rather than out of node_modules, precisely so it stays
+      # off the dependency tree the device image builds from, so there is
+      # nothing in the lockfile for this job to install.
+      - name: Build the email
+        run: bun run build:email
+
+      - name: Check the compiled size against Gmail's clipping threshold
+        run: |
+          size=$(stat -c%s emails/dist/newsletter.html)
+          echo "Compiled newsletter: $size bytes (limit ${GMAIL_CLIP_BYTES})"
+          echo "### Newsletter size" >> "$GITHUB_STEP_SUMMARY"
+          echo "$size bytes of ${GMAIL_CLIP_BYTES} before Gmail clips." \
+            >> "$GITHUB_STEP_SUMMARY"
+          if [ "$size" -ge "$GMAIL_CLIP_BYTES" ]; then
+            # Built up in a variable because a workflow command has to be
+            # one line, and a backslash continuation would fold this
+            # block's indentation into the message the moment anyone
+            # reindented it.
+            msg="Compiled to $size bytes, at or over Gmail's"
+            msg="$msg $GMAIL_CLIP_BYTES-byte clipping threshold."
+            msg="$msg Cut copy or split the newsletter."
+            echo "::error file=emails/newsletter.mjml::$msg"
+            exit 1
+          fi
+
+      # The masthead ships alongside the HTML even though the HTML points
+      # at the copy hosted on anthias.screenly.io. Whoever sends this may
+      # need to re-host it, and a bundle that carries its own image is
+      # one they can act on without going back to the repo.
+      - name: Assemble the bundle
+        run: |
+          # Named for the commit, and the zip's top-level directory is
+          # the same name, so an extracted bundle still says which build
+          # it came from once it is sitting in someone's Downloads.
+          bundle="anthias-newsletter-${GITHUB_SHA:0:7}"
+          echo "BUNDLE=$bundle" >> "$GITHUB_ENV"
+          mkdir -p "$bundle/images"
+          cp emails/dist/newsletter.html "$bundle/"
+          cp emails/README.md "$bundle/"
+          cp website/static/img/anthias-logo-email.png "$bundle/images/"
+
+      # Zipped here rather than left to upload-artifact so the downloaded
+      # file is one named, dated object a marketer can hand on, instead of
+      # a loose tree named after the run. GitHub wraps any artifact in a
+      # zip of its own, so downloading this yields a zip containing the
+      # zip; that is the cost of the bundle having a real name.
+      - name: Create the zip
+        run: |
+          zip -r -q "$BUNDLE.zip" "$BUNDLE"
+          unzip -l "$BUNDLE.zip"
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: anthias-newsletter
+          path: anthias-newsletter-*.zip
+          if-no-files-found: error
+          retention-days: 90

@@ -10,6 +10,12 @@ on:
       - '!README.md'
       - '!CONTRIBUTING.md'
       - '!website/**'
+      # ...except the newsletter masthead, which only lives under
+      # website/ so the site can host it. test_email_tokens.py checks
+      # the plum baked into that PNG against --color-canvas, and the
+      # check is worth nothing if it skips the commit that re-renders
+      # it.
+      - 'website/static/img/anthias-logo-email.png'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/release.yml'
       - '!.github/dependabot.yml'
@@ -25,6 +31,12 @@ on:
       - '!README.md'
       - '!CONTRIBUTING.md'
       - '!website/**'
+      # ...except the newsletter masthead, which only lives under
+      # website/ so the site can host it. test_email_tokens.py checks
+      # the plum baked into that PNG against --color-canvas, and the
+      # check is worth nothing if it skips the commit that re-renders
+      # it.
+      - 'website/static/img/anthias-logo-email.png'
       - '!.github/workflows/build-balena-disk-image.yaml'
       - '!.github/release.yml'
       - '!.github/dependabot.yml'
