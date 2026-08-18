@@ -1,0 +1,32 @@
+{{- /* Link render hook for Markdown content.
+
+       Outbound links to third parties get rel="nofollow", so the site
+       does not hand its ranking signal to other people's domains. The
+       allowlist below is our own estate plus the code hosts the project
+       genuinely lives on, which stay followed on purpose.
+
+       Internal links, anchors, and mailto: destinations are emitted
+       unchanged. Only `rel` is added; link targets are deliberately not
+       rewritten, so nothing here changes how a link opens. */ -}}
+{{- $u := urls.Parse .Destination -}}
+{{- /* Suffix match, so any current or future subdomain of our own
+       properties is covered without editing this list. */ -}}
+{{- $ourSuffixes := slice
+      "screenly.io"
+      "screenlyapp.com"
+      "srly.io"
+      "signage-apps.com"
+      "github.com"
+-}}
+{{- $isOurs := false -}}
+{{- range $ourSuffixes -}}
+  {{- if or (eq $u.Host .) (strings.HasSuffix $u.Host (printf ".%s" .)) -}}
+    {{- $isOurs = true -}}
+  {{- end -}}
+{{- end -}}
+{{- $isRemote := in (slice "http" "https") $u.Scheme -}}
+{{- $nofollow := and $isRemote (not $isOurs) -}}
+<a href="{{ .Destination | safeURL }}"
+   {{- with .Title }} title="{{ . }}"{{ end }}
+   {{- if $nofollow }} rel="nofollow noopener"{{ end -}}
+>{{ .Text }}</a>
