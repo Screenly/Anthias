@@ -1,5 +1,5 @@
 ---
-title: "Free Yodeck Alternative"
+title: "Free Yodeck Alternative for Digital Signage"
 description: "Anthias is a free, open-source alternative to Yodeck digital signage software. Self-hosted on your own hardware, with no cloud account and no per-screen fees. An honest comparison of both."
 ---
 
@@ -16,7 +16,8 @@ Neither is universally better, so here is a straight comparison rather than a sa
 | Cost, more screens | free | from $8 per screen per month |
 | Where it runs | your hardware and network | Yodeck cloud |
 | Central dashboard for all content | no, one per device | yes |
-| Fleet deployment and OTA updates | via Balena | built in |
+| Over-the-air updates | atomic, with rollback | in place, no rollback |
+| Base OS updated over the air | yes, whole image | reflash to change OS |
 | Import from your current platform | built-in Yodeck importer | n/a |
 | Plays with no internet | yes | limited |
 | Template and app library | none built in, plays any web page | large, included |
@@ -71,6 +72,24 @@ Yodeck's apps and widgets. Those render inside Yodeck, so their internal URLs
 would only produce broken assets here. The wizard lists anything it skips
 along with the reason rather than importing it half-way. Full detail is in the
 [import documentation](/docs/import-content/).
+
+## Updates, and the operating system underneath
+
+Anthias updates over the air atomically. It runs on balenaOS, which keeps two
+system partitions: a new version is written to the spare one and the device
+switches over only once the whole image is in place, rolling back on its own if
+anything goes wrong. The base operating system moves forward this way too, so a
+screen stays current without a site visit and without a half-applied update
+leaving it dark.
+
+That last point is worth dwelling on, because it shows up in the operating
+system a device actually runs. A platform that cannot push a full-image update
+over the air tends to leave hardware on whatever it first shipped with. The
+Yodeck image for Raspberry Pi 2, 3 and 4, the current download at the time of
+writing, is built on Raspbian 10 "buster", which
+[reached end of life in June 2024](https://www.debian.org/News/2024/20240615).
+We will leave you to draw your own conclusion about a signage device that ships
+today on a base OS past its support window.
 
 ## Try it on spare hardware
 
