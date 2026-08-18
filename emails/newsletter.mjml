@@ -132,6 +132,7 @@
       <!-- Text roles. Applied with mj-class on the element. -->
       <mj-class name="eyebrow"
         color="#ffe11a" font-size="12px" font-weight="700"
+        line-height="1.4"
         letter-spacing="0.1em" text-transform="uppercase" />
       <mj-class name="h1"
         color="#ffffff" font-size="30px" font-weight="700"

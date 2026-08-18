@@ -68,8 +68,14 @@ SLOTS = {
     '--tracking-': 'letter-spacing',
 }
 
-# Every tag that sets both, so the pair can be checked against the ramp.
-_TAG = re.compile(r'<[a-z-]+\s[^>]*>', re.DOTALL)
+# Tags that set paragraph type, and so owe a leading as well as a size.
+#
+# mj-button is deliberately not one of them: its label is a single line
+# inside a box whose height comes from inner-padding, so a paragraph
+# leading would only change the box. Neither is the `code` rule in
+# mj-style, which is an inline chip and has to keep the leading of the
+# paragraph it sits in.
+_TYPE_TAG = re.compile(r'<(mj-text|mj-class)\s[^>]*>', re.DOTALL)
 _ATTR_SIZE = re.compile(r'font-size="([\d.]+)px"')
 _ATTR_LEADING = re.compile(r'line-height="([\d.]+)"')
 
@@ -235,13 +241,22 @@ def test_font_sizes_and_line_heights_are_the_same_ramp_step() -> None:
         if re.fullmatch(r'--text-[a-z0-9]+', name)
     }
     offenders = []
-    for tag in _TAG.findall(_template()):
-        size = _ATTR_SIZE.search(tag)
-        leading = _ATTR_LEADING.search(tag)
-        if not size or not leading:
+    for tag in _TYPE_TAG.finditer(_template()):
+        size = _ATTR_SIZE.search(tag[0])
+        if not size:
             continue
         expected = ramp.get(f'{size[1]}px')
-        if leading[1] != expected:
+        leading = _ATTR_LEADING.search(tag[0])
+        # Silence is not agreement. A size with no leading beside it
+        # inherits mj-text's default, which is one step's leading
+        # applied to every other step.
+        if leading is None:
+            offenders.append(
+                f'  <{tag[1]}> sets font-size {size[1]}px and no '
+                f'line-height, so it inherits one; the ramp pairs that '
+                f'size with {expected}'
+            )
+        elif leading[1] != expected:
             offenders.append(
                 f'  font-size {size[1]}px with line-height {leading[1]}, '
                 f'the ramp pairs it with {expected}'
