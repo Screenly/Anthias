@@ -14,12 +14,14 @@ the product's colours, drifting a shade at a time.
 ## Building
 
 ```bash
-bun run build:email     # -> emails/dist/newsletter.html (gitignored)
+bun run build:email     # -> emails/dist/newsletter.html
 ```
 
 Paste the compiled HTML into a Mailjet template. The compiled file is
 not committed: it is a build artifact of the `.mjml`, and two copies of
-the same email is how a fix lands in one of them.
+the same email is how a fix lands in one of them. `emails/dist/` needs
+no entry of its own, because the root `.gitignore` already ignores any
+directory named `dist`.
 
 Check the size before sending. Gmail clips at 102 KB and shows a "view
 entire message" link at the cut, which usually lands mid-newsletter.

@@ -60,6 +60,14 @@ _FONT_SIZE = re.compile(r'font-size\s*[:=]\s*"?\s*([\d.]+)px')
 _RADIUS = re.compile(r'border-radius\s*[:=]\s*"?\s*([\d.]+)px')
 _TRACKING = re.compile(r'letter-spacing\s*[:=]\s*"?\s*([\d.]+em)')
 
+# What each prefix of the table is scanned as, for the failure message.
+SLOTS = {
+    '--color-': 'colour',
+    '--text-': 'font-size',
+    '--radius-': 'border-radius',
+    '--tracking-': 'letter-spacing',
+}
+
 # Every tag that sets both, so the pair can be checked against the ramp.
 _TAG = re.compile(r'<[a-z-]+\s[^>]*>', re.DOTALL)
 _ATTR_SIZE = re.compile(r'font-size="([\d.]+)px"')
@@ -127,6 +135,44 @@ def test_token_table_matches_the_design_tokens() -> None:
     )
 
 
+def _painted() -> dict[str, set[str]]:
+    """Every literal the template paints with, keyed by token prefix.
+
+    Read by both directions of the table check, which have to agree on
+    what counts as a use or a row is dead to one and alive to the
+    other. Scanning per slot rather than searching the file for the
+    string is what makes them agree: `4px` occurs inside `14px` and
+    `24px`, so a substring search would report the small radius as used
+    by any font size that happens to end in it.
+    """
+    body = _ROW.sub('', _template())
+    return {
+        '--color-': set(_HEX.findall(body)),
+        '--text-': {f'{value}px' for value in _FONT_SIZE.findall(body)},
+        '--radius-': {f'{value}px' for value in _RADIUS.findall(body)},
+        '--tracking-': set(_TRACKING.findall(body)),
+    }
+
+
+def test_every_table_row_belongs_to_a_scanned_slot() -> None:
+    """Both directions of the check cover every row.
+
+    The two tests below only see the slots _painted() scans. A row
+    under some other prefix would sit in the table looking as guarded
+    as its neighbours while being checked in neither direction, so a
+    new kind of token has to arrive with the scan that reads it.
+    """
+    prefixes = tuple(_painted())
+    unscanned = [
+        f'  {name}' for name, _, _ in _rows() if not name.startswith(prefixes)
+    ]
+    assert not unscanned, (
+        'Token table rows in no slot _painted() scans, so nothing '
+        'checks whether the template uses them or reaches past them:\n'
+        + '\n'.join(unscanned)
+    )
+
+
 def test_no_literal_reaches_past_the_token_table() -> None:
     """A value at a use site must be one the table accounts for.
 
@@ -135,31 +181,17 @@ def test_no_literal_reaches_past_the_token_table() -> None:
     attribute, and the test above keeps passing because it only ever
     looks at the rows.
     """
-    body = _ROW.sub('', _template())
-    offenders = []
-    checks = (
-        ('colour', _HEX.findall(body), _literals('--color-')),
-        (
-            'font-size',
-            [f'{v}px' for v in _FONT_SIZE.findall(body)],
-            _literals('--text-'),
-        ),
-        (
-            'border-radius',
-            [f'{v}px' for v in _RADIUS.findall(body)],
-            _literals('--radius-'),
-        ),
-        ('letter-spacing', _TRACKING.findall(body), _literals('--tracking-')),
-    )
-    for kind, used, allowed in checks:
-        for value in used:
-            if value not in allowed:
-                offenders.append(f'  {kind} {value}')
+    offenders = [
+        f'  {SLOTS[prefix]} {value}'
+        for prefix, used in _painted().items()
+        for value in used
+        if value not in _literals(prefix)
+    ]
     assert not offenders, (
         'Literals used in emails/newsletter.mjml that no row of its '
         'token table resolves to. Add the token to the table and use '
         'the value the table gives, or the newsletter has a colour the '
-        'product does not:\n' + '\n'.join(sorted(set(offenders)))
+        'product does not:\n' + '\n'.join(sorted(offenders))
     )
 
 
@@ -171,11 +203,12 @@ def test_every_table_row_is_used() -> None:
     deliberate, and is the first thing someone copies when they need a
     colour.
     """
-    body = _ROW.sub('', _template())
+    painted = _painted()
     unused = [
         f'  {name} = {literal}'
         for name, _, literal in _rows()
-        if literal not in body
+        for prefix, used in painted.items()
+        if name.startswith(prefix) and literal not in used
     ]
     assert not unused, (
         'Token table rows that nothing in the template uses:\n'
