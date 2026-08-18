@@ -84,24 +84,52 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SCHEMA_WORKFLOW: generate-openapi-schema.yml
+          # Must stay in step with the branch filters on the push and
+          # workflow_run triggers above, which an `on:` block cannot
+          # read from `env`.
+          DEPLOY_BRANCH: master
+        # `-e` is already the runner default for a `run:` block; `-u`
+        # and `pipefail` are not, and this reads the API into a variable
+        # it then compares numerically.
         run: |
+          set -uo pipefail
+
           if [ "$GITHUB_EVENT_NAME" != "push" ]; then
             echo "Event is $GITHUB_EVENT_NAME; nothing to stand down for."
             echo "proceed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # The schema run is created by the same push event as this
-          # one, so it is normally registered before this step even gets
-          # a runner. Retried regardless, because "not there yet" and
-          # "not coming at all" look identical from here, and guessing
-          # wrong towards deploying only reproduces today's behaviour.
+
+          # Scoped to master, and that is load-bearing rather than
+          # tidiness. Most runs of the schema workflow are pull_request
+          # runs carrying a BRANCH head SHA, and standing down for one of
+          # those would be standing down for a run whose completion
+          # cannot trigger this workflow at all, because the workflow_run
+          # trigger above is itself filtered to master. The commit would
+          # then never deploy. `branch=master` matches exactly the runs
+          # that will come back here.
+          query="branch=$DEPLOY_BRANCH&head_sha=$GITHUB_SHA"
           api="repos/$GITHUB_REPOSITORY/actions/workflows"
+
+          # The schema run is created by the same push event as this one,
+          # so it is normally registered before this step even gets a
+          # runner. Retried regardless, because "not there yet" and "not
+          # coming at all" look identical from here.
           for _ in 1 2 3 4 5 6; do
-            found=$(gh api \
-              "$api/$SCHEMA_WORKFLOW/runs?head_sha=$GITHUB_SHA" \
-              --jq '.total_count')
+            found=$(gh api "$api/$SCHEMA_WORKFLOW/runs?$query" \
+              --jq '.total_count' 2>/dev/null || true)
+            # Anything that is not a plain count counts as "nothing
+            # found", so a blip retries and then deploys. gh prints an
+            # error body on STDOUT, so this has to reject non-digits
+            # rather than trust a non-zero exit. Both ways of being
+            # wrong cost something, and a duplicate run that gets
+            # cancelled is only today's behaviour, where a skipped
+            # deploy is a stale site.
+            case "$found" in
+              '' | *[!0-9]*) found=0 ;;
+            esac
             if [ "$found" -gt 0 ]; then
-              echo "Schema run exists for $GITHUB_SHA; it will deploy."
+              echo "Schema run on $DEPLOY_BRANCH for $GITHUB_SHA; it deploys."
               echo "proceed=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
