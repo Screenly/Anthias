@@ -11,34 +11,44 @@ out of the same design tokens as the management UI and the marketing
 site. Kept anywhere else it would be a hand-matched approximation of
 the product's colours, drifting a shade at a time.
 
-## Getting the built email
+## Getting it, if you are here to send it
 
-If you are here to send it rather than to edit it, you do not need a
-checkout. Every change to this directory runs
+You do not need a checkout. Every change to this directory runs
 [Build Newsletter Email](../.github/workflows/build-email.yaml), which
-attaches an `anthias-newsletter-<commit>.zip` to the run: the compiled
-HTML, this README, and the masthead image. Open the run from the commit
-or the pull request and download it from the Artifacts section. The
-workflow can also be started by hand against any branch from the Actions
-tab, which is the quickest way to get the current HTML without pushing
+attaches an `anthias-newsletter-<commit>.zip` to the run holding
+`newsletter.mjml` and this file. Open the run from the commit or the
+pull request and download it from the Artifacts section. The workflow
+can also be started by hand against any branch from the Actions tab,
+which is the quickest way to get the current template without pushing
 anything.
 
-That workflow is also where the compiled size is checked. MJML expands a
-template several times over, so a paragraph that reads as three lines in
-the source can be a few KB of nested tables in the output, and the build
-fails rather than shipping something Gmail will clip.
+What you get is the MJML source, not compiled HTML. Mailjet reads MJML
+directly, so it is the file to paste, and it is the only version anyone
+can still edit: nobody is going to change a headline inside 35 KB of
+nested tables, which is how the sent mail and this repo would stop being
+the same email.
 
-## Building it yourself
+Nothing else is in the bundle because nothing else is needed. The
+masthead is referenced by URL from the site, so the template is already
+the whole email.
+
+That workflow is also where the compiled size gets checked. MJML expands
+a template several times over, so a paragraph that reads as three lines
+here can be a few KB of output, and the build fails rather than shipping
+something Gmail will clip.
+
+## Compiling it
 
 ```bash
 bun run build:email     # -> emails/dist/newsletter.html
 ```
 
-Paste the compiled HTML into a Mailjet template. The compiled file is
-not committed: it is a build artifact of the `.mjml`, and two copies of
-the same email is how a fix lands in one of them. `emails/dist/` needs
-no entry of its own, because the root `.gitignore` already ignores any
-directory named `dist`.
+For looking at the result in a browser, and for the strict validation
+pass. The compiled file is not committed and is not what gets sent:
+it is an artifact of the `.mjml`, and two copies of one email is how a
+fix lands in only one of them. `emails/dist/` needs no ignore entry of
+its own, because the root `.gitignore` already ignores any directory
+named `dist`.
 
 Gmail clips at 102 KB and shows a "view entire message" link at the cut,
 which usually lands mid-newsletter. The current template compiles to
@@ -82,6 +92,16 @@ alone. Gmail, Outlook and Yahoo all refuse to render SVG, so the site's
 `logo-full.svg` cannot be used, and a transparent PNG picks up a black
 matte in older Outlook builds, so it ships flattened onto the canvas
 colour.
+
+It is referenced by URL rather than inlined into the template as a
+base64 `data:` URI. Inlining would make the `.mjml` self-contained
+offline, but the same three clients that refuse SVG also refuse `data:`
+image URIs, which would put a broken image at the top of the newsletter
+for most of the list. Apple Mail and Thunderbird would render it, which
+is exactly enough to make the problem invisible in testing. The form of
+embedding that does work everywhere is a `cid:` inline attachment, and
+that is send-side setup in Mailjet rather than something the template
+can carry.
 
 That puts a token inside a binary. To regenerate it after a change to
 `--color-canvas` or to the logo itself:
