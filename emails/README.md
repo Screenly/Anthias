@@ -52,26 +52,63 @@ named `dist`.
 
 Gmail clips at 102 KB and shows a "view entire message" link at the cut,
 which usually lands mid-newsletter. The current template compiles to
-about 35 KB. CI enforces the limit, so a local build only needs checking
+about 37 KB. CI enforces the limit, so a local build only needs checking
 if you are curious how much room is left.
 
-## Colours, sizes, and why they are all written out
+## Nothing may depend on the head
+
+Every colour, size, weight and space is written on the element that uses
+it. There is no `mj-attributes` block and no `mj-class` in the template,
+and the tests fail the build if either comes back.
+
+That rule was bought the hard way. The design used to live entirely in
+one `mj-attributes` block: text colours, section backgrounds, every
+padding. Strip that block, which is what happens the moment anything
+takes the body without the head, and MJML falls back to its own
+defaults, which is black text on the plum canvas at **1.6:1**, no cards,
+and 20px of default padding everywhere. It still compiled, still sent,
+and still looked like an email. That is what made it dangerous.
+
+Three things hold the line now:
+
+- `test_nothing_visual_depends_on_the_head` rejects an `mj-attributes`
+  block or an `mj-class` reference.
+- `test_every_styled_element_carries_its_own_styling` requires every
+  `mj-text` and `mj-button` to set its own `color`, `font-family`,
+  `font-size` and `line-height`. Deleting the block is only half of it,
+  since an element that names no colour still inherits MJML's black.
+- The build compiles the template a second time with `mj-head` deleted
+  and fails on a single occurrence of MJML's fallback `#000000`. Only
+  mjml can tell you whether the result still renders; the two tests
+  above can only look for the constructs known to break it.
+
+The head keeps the title, the preview text, the web font, and one media
+query that adds a gap between the two cards when they stack. That query
+is the one cosmetic thing allowed up there, and losing it costs the gap
+and nothing else.
+
+Link colours sit on each anchor rather than in `mj-style` for the same
+reason, and because several clients drop a `<style>` block outright.
+
+## Colours and sizes, and why they are all written out
 
 Email clients strip CSS custom properties and Outlook drops `rgba()`,
 so nothing from the token layer can be used here by name. Every value
 arrives as a literal, which makes this file a second copy of the design
 system that goes stale in silence. It already did once: the first
-version was derived from `src/anthias_server/app/static/sass/_variables.scss`, and when the
+version was derived from
+`src/anthias_server/app/static/sass/_variables.scss`, and when the
 authority moved into the `@theme` block in
-`src/anthias_server/app/static/src/tailwind.css` the email kept painting the colours of a file
-that no longer existed.
+`src/anthias_server/app/static/src/tailwind.css` the email kept painting
+the colours of a file that no longer existed.
 
-So the template carries one `RESOLVED TOKENS` table near the top, and
-that is the only place a literal may be written.
+So the template carries one `RESOLVED TOKENS` table near the top. That
+is the only place a literal is written down as a *decision*; every use
+site copies from it, which is what the repetition above is for.
 `tests/test_email_tokens.py` re-derives every row from the real tokens,
-rejects any literal further down that the table does not account for,
-and fails on a row nothing uses. Change a colour in the design system
-and the test tells you which row moved.
+rejects any literal that no row accounts for, and fails on a row nothing
+uses. Change a colour in the design system and the test says which row
+moved.
 
 Alpha tokens get a backdrop named in the table, because a translucent
 value has no literal until you know what is behind it. That is the

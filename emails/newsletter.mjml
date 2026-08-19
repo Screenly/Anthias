@@ -7,53 +7,70 @@
     <mj-preview>Your player now warns you when the hardware is in trouble.</mj-preview>
 
     <!--
-      Plus Jakarta Sans is vendored locally for the web app, but email
-      cannot load /static/ fonts, so it is pulled from Google Fonts
-      here. Only Apple Mail and a few others honour it. Everything else
-      falls back to Helvetica/Arial, which is why the stack below is
-      always spelled out in full rather than relying on the @font-face.
-    -->
-    <mj-font
-      name="Plus Jakarta Sans"
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&amp;display=swap" />
+      NOTHING BELOW THIS HEAD MAY DEPEND ON THIS HEAD
+      ===============================================
+      Every colour, size, weight and space is written on the element
+      that uses it. There is no mj-attributes block and no mj-class in
+      this file, and tests/test_email_tokens.py fails the build if
+      either comes back.
 
-    <!--
+      That is not a style preference. This template had both, and the
+      entire design lived in them: one mj-attributes block set the text
+      colours, the section backgrounds and every padding. Strip that
+      block, which is what happens the moment anything takes the body
+      without the head, and MJML falls back to its own defaults: black
+      text on the plum canvas at 1.6:1, no cards, and 20px of default
+      padding everywhere. The result still looks like an email, which
+      is what makes it dangerous. It does not look like an error.
+
+      So the head now carries only what cannot be inlined at all: the
+      title, the preview text, the web font, and one media query. Delete
+      the entire mj-head and the email still renders in the right
+      colours at the right sizes.
+
+      That media query is the one cosmetic thing allowed to live up
+      here, and it is worth being precise about what losing it costs.
+      Stacked columns have no vertical gap between them, so the second
+      card in the two-up sits directly under the first. That is the
+      whole blast radius: no colour, no size and no alignment depends on
+      it. Anything with a bigger blast radius belongs on the element.
+
+      Link colours are written on each anchor rather than in a
+      stylesheet for the same reason, and because several clients drop a
+      <style> block outright.
+
+      Repetition is the point. If you find yourself factoring a value
+      out into one place, that place is the table below, which is
+      documentation and a test fixture, not a stylesheet.
+
       RESOLVED TOKENS
-      ===============
-      Email clients strip CSS custom properties, and Outlook drops
-      rgba(), so no token from the design system can be used here by
-      name: every one has to arrive as a literal. That makes this file
-      a second copy of the token layer, and a second copy goes stale
-      silently. It already did once, when the token authority moved out
-      of src/anthias_server/app/static/sass/_variables.scss
-      and into the @theme block in
-      src/anthias_server/app/static/src/tailwind.css, and every
-      value below kept rendering the colours of a file that no longer
-      existed.
+      ---------------
+      Email clients strip CSS custom properties and Outlook drops
+      rgba(), so no token can be used here by name. Every one arrives
+      as a literal, which makes this file a second copy of the design
+      system, and a second copy goes stale in silence. It already did
+      once, when the authority moved out of
+      src/anthias_server/app/static/sass/_variables.scss into the
+      @theme block in src/anthias_server/app/static/src/tailwind.css.
 
-      So the table is the only place a literal may be written, and
-      tests/test_email_tokens.py re-derives every row from the real
-      token layer and fails if a row drifts. It also fails on any
-      literal used further down that is not a value in this table, so
-      the table cannot be routed around.
+      So this table is the only place a literal may be WRITTEN DOWN as
+      a decision, every use site copies from it, and the test
+      re-derives every row from the real tokens, rejects any literal
+      that no row accounts for, and fails on a row nothing uses.
 
-      Rows read: TOKEN [on BACKDROP] = literal.
-      A backdrop is named when the token is declared with alpha; the
-      literal is that colour composited over it, since a translucent
-      value has no meaning without one. Lengths are the rem token
-      multiplied by the 16px root.
+      Rows read: TOKEN [on BACKDROP] = literal. A backdrop is named
+      when the token is declared with alpha; the literal is that colour
+      composited over it, since a translucent value has no meaning
+      without one. Lengths are the rem token times the 16px root.
 
-      Line heights are not listed. Every one of them belongs to a step
-      of the type ramp, so instead of a row per value the test pairs
-      each font-size in this file with its line-height and checks that
-      the two are the same step: --text-lg with --text-lg--line-height,
-      never a size from one step beside a leading from another.
+      Line heights are not listed. Each belongs to a step of the type
+      ramp, so rather than a row per value the test pairs every
+      font-size in this file with its line-height and checks the two
+      are the same step.
 
-      Light theme only. The web app themes off a data-theme attribute
-      written before first paint, which email has no equivalent of, so
-      the newsletter renders the theme the app ships by default. Canvas
-      and chrome are brand furniture and do not invert anyway, so the
-      frame reads the same either way.
+      Light theme only. The app themes off an attribute written before
+      first paint, which email has no equivalent of. Canvas and chrome
+      are brand furniture and do not invert anyway.
 
         --color-canvas                              = #270035
         --color-on-canvas                           = #ffffff
@@ -69,11 +86,11 @@
         --color-feature-to                          = #492955
         --color-on-feature                          = #ffffff
 
-      The footer hairline, and the one row that names a primitive
-      rather than a role. There is no divider role for the canvas
-      plane because the app has no hairline sitting directly on the
-      canvas; sass/_styles.scss draws its footer rule on the chrome
-      veil and reaches for a --color-paper-* rung there too.
+      The footer hairline, and the one row naming a primitive rather
+      than a role. There is no divider role for the canvas plane
+      because the app has no hairline sitting directly on the canvas;
+      sass/_styles.scss draws its footer rule on the chrome veil and
+      reaches for a --color-paper-* rung there too.
 
         --color-paper-12         on --color-canvas  = #411f4d
 
@@ -85,145 +102,83 @@
         --text-sm                                   = 14px
         --text-base                                 = 16px
         --text-lg                                   = 18px
-        --text-xl                                   = 20px
-        --text-3xl                                  = 30px
+        --text-2xl                                  = 24px
+        --text-4xl                                  = 36px
         --tracking-wider                            = 0.1em
         --radius-sm                                 = 4px
         --radius-md                                 = 8px
         --radius-lg                                 = 12px
+        --font-sans   = 'Plus Jakarta Sans', Helvetica, Arial, sans-serif
 
-      Three deliberate departures from the app, none of which a token
-      can express in email:
+      Two departures from the app, neither expressible in email:
 
       1. The primary button is --gradient-accent in the app. Gradients
-         do not render in Outlook or in most webmail, so it is filled
-         with --color-accent, the ramp's mid stop.
+         do not render in Outlook or most webmail, so it is filled with
+         --color-accent, the ramp's mid stop.
       2. The feature card is a gradient from --color-feature-from to
-         --color-feature-to. Same reason; it is filled with the -to
-         stop, the darker of the two, so --color-on-feature keeps the
-         contrast it was measured at.
-      3. Body copy on the canvas uses --color-on-canvas-muted rather
-         than --color-fg-muted. --color-fg* is text on a SURFACE and
-         flips with the theme; text sitting directly on the plum canvas
-         is always light. Reaching for the wrong one of that pair is
-         the most likely mistake in this file.
+         --color-feature-to. Same reason; filled with the -to stop, the
+         darker of the two, so --color-on-feature keeps the contrast it
+         was measured at.
+
+      And one rule about which foreground to reach for: --color-fg* is
+      text on a SURFACE and flips with the theme. Text sitting directly
+      on the plum canvas is always light, and takes --color-on-canvas*.
+      Mixing those two up is the likeliest mistake in this file, and
+      the one that produces something still readable enough to send.
     -->
-    <mj-attributes>
-      <mj-all font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif" />
 
-      <mj-section padding="0" />
-      <mj-column padding="0" />
+    <!--
+      Plus Jakarta Sans is vendored locally for the web app, but email
+      cannot load /static/ fonts, so it is pulled from Google Fonts.
+      Only Apple Mail and a few others honour it, which is why the full
+      stack is spelled out on every element rather than relying on this.
+    -->
+    <mj-font
+      name="Plus Jakarta Sans"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&amp;display=swap" />
 
-      <mj-text
-        color="#1f002a"
-        font-size="16px"
-        line-height="1.5"
-        padding="0" />
-
-      <mj-button
-        background-color="#ffe11a"
-        color="#1f002a"
-        font-size="16px"
-        font-weight="700"
-        border-radius="8px"
-        inner-padding="14px 32px"
-        padding="0" />
-
-      <!-- Text roles. Applied with mj-class on the element. -->
-      <mj-class name="eyebrow"
-        color="#ffe11a" font-size="12px" font-weight="700"
-        line-height="1.4"
-        letter-spacing="0.1em" text-transform="uppercase" />
-      <mj-class name="h1"
-        color="#ffffff" font-size="30px" font-weight="700"
-        line-height="1.2" />
-      <mj-class name="h2"
-        color="#1f002a" font-size="20px" font-weight="700"
-        line-height="1.35" />
-      <mj-class name="h3"
-        color="#1f002a" font-size="18px" font-weight="700"
-        line-height="1.4" />
-      <mj-class name="lead"
-        color="#b3a6b8" font-size="18px" line-height="1.4" />
-      <mj-class name="body-copy"
-        color="#1f002a" font-size="16px" line-height="1.5" />
-      <mj-class name="muted"
-        color="#5e5868" font-size="14px" line-height="1.45" />
-      <mj-class name="on-feature"
-        color="#ffffff" font-size="14px" line-height="1.45" />
-      <mj-class name="footer-text"
-        color="#b3a6b8" font-size="12px" line-height="1.4" />
-      <mj-class name="footer-faint"
-        color="#9e8ca4" font-size="11px" line-height="1.45" />
-
-      <!-- Planes -->
-      <mj-class name="canvas" background-color="#270035" />
-      <mj-class name="surface" background-color="#ffffff" />
-      <mj-class name="feature" background-color="#492955" />
-
-      <mj-class name="rule-light" border-color="#ebebeb" border-width="1px" />
-      <mj-class name="rule-dark" border-color="#411f4d" border-width="1px" />
-    </mj-attributes>
-
-    <!-- The width at which the two-up block stops being two-up. This is
-         MJML's default, stated so the media query below and the stacking
-         it compensates for cannot drift apart. -->
+    <!-- The width at which the two-up block stops being two-up. MJML's
+         default, stated so the query below and the stacking it
+         compensates for cannot drift apart. -->
     <mj-breakpoint width="480px" />
 
     <mj-style>
       /*
         The gutter between the two cards belongs to the LEFT column's
-        right edge, not split across both. Padding on the right column
-        survives stacking, where it stops being a gutter and becomes an
-        indent under the card above it.
+        right edge, not split across both, because padding on the right
+        column survives stacking and turns from a gutter into an indent
+        under the card above it.
 
-        What stacking does lose is the vertical gap, so the second
-        column takes one back below the breakpoint only.
+        Stacking loses the vertical gap instead, so the second column
+        takes one back below the breakpoint only.
       */
       @media only screen and (max-width: 480px) {
         .stacked-gap { padding-top: 24px !important; }
       }
-
-      /*
-        Anchors inside mj-text, which mj-class cannot reach.
-
-        Both of these are on a dark plane, where the brand yellow is a
-        usable link colour. There is deliberately no rule for a link on
-        a white surface: the current copy has none, and the app answers
-        that case with --color-link rather than the yellow, which has
-        far too little contrast against white. Adding one means adding
-        that token to the table above first.
-      */
-      a.link-on-dark { color: #ffe11a; text-decoration: underline; }
-      a.link-footer { color: #b3a6b8; text-decoration: underline; }
-
-      code {
-        background-color: #f6f3f8;
-        border-radius: 4px;
-        padding: 2px 6px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 14px;
-      }
     </mj-style>
   </mj-head>
 
-  <mj-body background-color="#270035" width="640px">
+  <!-- 600px, not the 640 this started at. Two reasons, one functional
+       and one typographic: 600 is the width Outlook's renderer is safe
+       at and every client is built around, and at 640 the card's body
+       copy ran to about 95 characters a line, well past the 45-75 a
+       reader tracks comfortably. The left rail stays at 32px on every
+       section so the masthead, the hero, the card and the footer all
+       align down one edge. -->
+  <mj-body background-color="#270035" width="600px">
 
     <!--
       Masthead. Gmail, Outlook and Yahoo all refuse to render SVG, so
-      website/assets/images/logo-full.svg cannot be used directly and
-      website/static/img/anthias-logo-email.png is shipped for this
-      alone. It is drawn at 2x and displayed at half that, so it stays
-      sharp on a retina screen.
-
-      It is also flattened onto --color-canvas rather than left
-      transparent, because a transparent PNG picks up a black matte in
-      older Outlook builds. That bakes the canvas colour into an image
-      file, so test_email_tokens.py checks the PNG's own background
-      against the token too.
+      website/assets/images/logo-full.svg cannot be used and
+      website/static/img/anthias-logo-email.png ships for this alone.
+      Drawn at 2x and displayed at half, so it stays sharp on a retina
+      screen, and flattened onto --color-canvas rather than left
+      transparent, because older Outlook builds matte a transparent PNG
+      against black. That bakes a token into an image file, so the test
+      checks the PNG's own background against it.
     -->
-    <mj-section mj-class="canvas" padding="32px 32px 24px">
-      <mj-column>
+    <mj-section background-color="#270035" padding="40px 32px 28px">
+      <mj-column padding="0">
         <mj-image
           src="https://anthias.screenly.io/img/anthias-logo-email.png"
           alt="Anthias"
@@ -233,16 +188,48 @@
       </mj-column>
     </mj-section>
 
-    <!-- Hero -->
-    <mj-section mj-class="canvas" padding="8px 32px 40px">
-      <mj-column>
-        <mj-text mj-class="eyebrow" padding="0 0 12px">
+    <!--
+      Hero. The short accent rule is the one piece of structure this
+      email keeps, and it is an mj-divider rather than a border on a
+      div because a divider compiles to a table and a border does not
+      survive Word's renderer. The same device returns at full width
+      inside the card, which is what makes it read as a system rather
+      than as an ornament on the first screen.
+    -->
+    <mj-section background-color="#270035" padding="0 32px 44px">
+      <mj-column padding="0">
+        <mj-divider
+          border-color="#ffe11a"
+          border-width="2px"
+          width="40px"
+          align="left"
+          padding="0 0 20px" />
+        <mj-text
+          color="#ffe11a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="12px"
+          font-weight="700"
+          line-height="1.4"
+          letter-spacing="0.1em"
+          text-transform="uppercase"
+          padding="0 0 14px">
           Release {{var:release_version:"2026.08.2"}}
         </mj-text>
-        <mj-text mj-class="h1" padding="0 0 16px">
+        <mj-text
+          color="#ffffff"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="36px"
+          font-weight="700"
+          line-height="1.15"
+          padding="0 0 20px">
           Your player tells you when the hardware is in trouble
         </mj-text>
-        <mj-text mj-class="lead">
+        <mj-text
+          color="#b3a6b8"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="18px"
+          line-height="1.4"
+          padding="0">
           Hello {{var:first_name:"there"}}, here is what changed in
           Anthias this month, and what it means for the screens you
           already have running.
@@ -251,12 +238,26 @@
     </mj-section>
 
     <!-- Main content card -->
-    <mj-section mj-class="surface" border-radius="12px" padding="40px 32px">
-      <mj-column>
-        <mj-text mj-class="h2" padding="0 0 16px">
+    <mj-section
+      background-color="#ffffff"
+      border-radius="12px"
+      padding="40px 32px">
+      <mj-column padding="0">
+        <mj-text
+          color="#1f002a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="24px"
+          font-weight="700"
+          line-height="1.3"
+          padding="0 0 18px">
           Two new warnings, and both say what to do next
         </mj-text>
-        <mj-text mj-class="body-copy" padding="0 0 24px">
+        <mj-text
+          color="#1f002a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="16px"
+          line-height="1.5"
+          padding="0 0 28px">
           The web interface now tells you when the power supply cannot
           hold its voltage, and when the storage card starts developing
           bad blocks. Until now the only sign of either was the screen
@@ -266,38 +267,87 @@
           on every screen and in dark mode.
         </mj-text>
 
-        <mj-button align="left"
-                   href="https://github.com/Screenly/Anthias/releases/tag/v2026.08.2">
+        <mj-button
+          align="left"
+          background-color="#ffe11a"
+          color="#1f002a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="16px"
+          font-weight="700"
+          line-height="1.5"
+          border-radius="8px"
+          inner-padding="14px 28px"
+          padding="0"
+          href="https://github.com/Screenly/Anthias/releases/tag/v2026.08.2">
           Read the release notes
         </mj-button>
 
-        <mj-divider mj-class="rule-light" padding="32px 0" />
+        <mj-divider
+          border-color="#ebebeb"
+          border-width="1px"
+          padding="36px 0 32px" />
 
-        <mj-text mj-class="h3" padding="0 0 8px">
+        <mj-text
+          color="#1f002a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="18px"
+          font-weight="700"
+          line-height="1.4"
+          padding="0 0 8px">
           One design system behind the interface
         </mj-text>
-        <mj-text mj-class="muted" padding="0 0 24px">
+        <mj-text
+          color="#5e5868"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="16px"
+          line-height="1.5"
+          padding="0 0 28px">
           Color, spacing and type now come from a single set of design
           tokens rather than from whichever page you happen to be on.
           Nothing moves, but everything lines up, and it holds in both
           light and dark mode.
         </mj-text>
 
-        <mj-text mj-class="h3" padding="0 0 8px">
+        <mj-text
+          color="#1f002a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="18px"
+          font-weight="700"
+          line-height="1.4"
+          padding="0 0 8px">
           Smaller fixes you will notice
         </mj-text>
-        <mj-text mj-class="muted" padding="0 0 24px">
+        <mj-text
+          color="#5e5868"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="16px"
+          line-height="1.5"
+          padding="0 0 28px">
           Field labels in the Edit asset dialog no longer sit on top of
           their example text. Turning off certificate verification now
           shows a "Not secure" badge, so it is obvious at a glance. The
           disk and memory charts use the same color for the same thing.
         </mj-text>
 
-        <mj-text mj-class="h3" padding="0 0 8px">
+        <mj-text
+          color="#1f002a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="18px"
+          font-weight="700"
+          line-height="1.4"
+          padding="0 0 8px">
           How to get it
         </mj-text>
-        <mj-text mj-class="muted">
-          Run <code>./bin/upgrade_containers.sh</code> on the device.
+        <mj-text
+          color="#5e5868"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="16px"
+          line-height="1.5"
+          padding="0">
+          Run <span style="background-color: #f6f3f8; border-radius: 4px;
+          padding: 2px 6px; font-family: ui-monospace, SFMono-Regular,
+          Menlo, Consolas, monospace; font-size: 14px; color:
+          #1f002a;">./bin/upgrade_containers.sh</span> on the device.
           Balena fleets pick the release up on their own.
         </mj-text>
       </mj-column>
@@ -307,27 +357,62 @@
          An mj-spacer rather than padding on either card: padding inside
          a section with a background is filled by that background, which
          would close the gap it was added to open. -->
-    <mj-section mj-class="canvas">
-      <mj-column>
+    <mj-section background-color="#270035" padding="0">
+      <mj-column padding="0">
         <mj-spacer height="16px" />
       </mj-column>
     </mj-section>
 
     <!-- Two-up secondary block -->
-    <mj-section mj-class="feature" border-radius="12px" padding="32px">
+    <mj-section
+      background-color="#492955"
+      border-radius="12px"
+      padding="32px">
       <mj-column width="50%" padding="0 24px 0 0">
-        <mj-text mj-class="eyebrow" padding="0 0 8px">From the docs</mj-text>
-        <mj-text mj-class="on-feature">
-          <a class="link-on-dark" href="https://anthias.screenly.io/docs/balena-fleet-deployment/">
+        <mj-text
+          color="#ffe11a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="12px"
+          font-weight="700"
+          line-height="1.4"
+          letter-spacing="0.1em"
+          text-transform="uppercase"
+          padding="0 0 10px">
+          From the docs
+        </mj-text>
+        <mj-text
+          color="#ffffff"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="14px"
+          line-height="1.45"
+          padding="0">
+          <a href="https://anthias.screenly.io/docs/balena-fleet-deployment/"
+             style="color: #ffe11a; text-decoration: underline;">
             Deploying a Balena fleet
           </a><br />
           Updating every screen you run without touching them one by one.
         </mj-text>
       </mj-column>
-      <mj-column width="50%" css-class="stacked-gap">
-        <mj-text mj-class="eyebrow" padding="0 0 8px">Community</mj-text>
-        <mj-text mj-class="on-feature">
-          <a class="link-on-dark" href="https://forums.screenly.io/c/anthias/">
+      <mj-column width="50%" padding="0" css-class="stacked-gap">
+        <mj-text
+          color="#ffe11a"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="12px"
+          font-weight="700"
+          line-height="1.4"
+          letter-spacing="0.1em"
+          text-transform="uppercase"
+          padding="0 0 10px">
+          Community
+        </mj-text>
+        <mj-text
+          color="#ffffff"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="14px"
+          line-height="1.45"
+          padding="0">
+          <a href="https://forums.screenly.io/c/anthias/"
+             style="color: #ffe11a; text-decoration: underline;">
             The Anthias forum
           </a><br />
           Questions, hardware reports, and what people are building.
@@ -336,27 +421,54 @@
     </mj-section>
 
     <!-- Footer -->
-    <mj-section mj-class="canvas" padding="40px 32px 16px">
-      <mj-column>
-        <mj-divider mj-class="rule-dark" padding="0 0 24px" />
-        <mj-text mj-class="footer-text" padding="0 0 16px">
-          <a class="link-footer" href="https://anthias.screenly.io/">Website</a>
+    <mj-section background-color="#270035" padding="44px 32px 20px">
+      <mj-column padding="0">
+        <mj-divider
+          border-color="#411f4d"
+          border-width="1px"
+          padding="0 0 26px" />
+        <mj-text
+          color="#b3a6b8"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="12px"
+          line-height="1.4"
+          padding="0 0 18px">
+          <a href="https://anthias.screenly.io/"
+             style="color: #b3a6b8; text-decoration: underline;">Website</a>
           &nbsp;&middot;&nbsp;
-          <a class="link-footer" href="https://anthias.screenly.io/docs/">Documentation</a>
+          <a href="https://anthias.screenly.io/docs/"
+             style="color: #b3a6b8; text-decoration: underline;">Documentation</a>
           &nbsp;&middot;&nbsp;
-          <a class="link-footer" href="https://github.com/Screenly/Anthias">GitHub</a>
+          <a href="https://github.com/Screenly/Anthias"
+             style="color: #b3a6b8; text-decoration: underline;">GitHub</a>
         </mj-text>
-        <mj-text mj-class="footer-faint" padding="0 0 12px">
+        <mj-text
+          color="#9e8ca4"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="11px"
+          line-height="1.45"
+          padding="0 0 12px">
           Anthias is free and open source software, maintained by
           Screenly and its contributors.
         </mj-text>
-        <mj-text mj-class="footer-faint" padding="0 0 12px">
+        <mj-text
+          color="#9e8ca4"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="11px"
+          line-height="1.45"
+          padding="0 0 12px">
           Screenly Inc, 16192 Coastal Hwy., Lewes, DE 19958, United States
         </mj-text>
-        <mj-text mj-class="footer-faint">
+        <mj-text
+          color="#9e8ca4"
+          font-family="'Plus Jakarta Sans', Helvetica, Arial, sans-serif"
+          font-size="11px"
+          line-height="1.45"
+          padding="0">
           You are receiving this because you signed up for Anthias
           release notes.
-          <a class="link-footer" href="[[UNSUB_LINK_EN]]">Unsubscribe</a>
+          <a href="[[UNSUB_LINK_EN]]"
+             style="color: #b3a6b8; text-decoration: underline;">Unsubscribe</a>
         </mj-text>
       </mj-column>
     </mj-section>

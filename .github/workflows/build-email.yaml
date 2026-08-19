@@ -94,6 +94,35 @@ jobs:
             exit 1
           fi
 
+      # The design must not live in the head, and compiling with the
+      # head deleted is the only thing that proves it. The static guards
+      # in tests/test_email_tokens.py can look for the two constructs
+      # known to cause this; only mjml can tell you whether the result
+      # actually still renders.
+      #
+      # The signal is MJML's own fallback text colour. It is #000000,
+      # which on the plum canvas measures 1.6:1, and a single occurrence
+      # means some element took a default instead of naming its colour.
+      # That is exactly how this template shipped once: the whole design
+      # sat in one mj-attributes block, and anything taking the body
+      # without the head got black on purple, no cards, and MJML's
+      # default padding, in a layout that still looked like an email.
+      - name: Check the design survives without the head
+        run: |
+          sed '/<mj-head>/,/<\/mj-head>/d' emails/newsletter.mjml \
+            > /tmp/headless.mjml
+          bunx mjml@4.15.3 /tmp/headless.mjml -o /tmp/headless.html \
+            --config.validationLevel=strict
+          leaked=$(grep -c 'color:#000000' /tmp/headless.html || true)
+          if [ "${leaked:-0}" -gt 0 ]; then
+            msg="Compiled with mj-head removed, $leaked element(s) fell"
+            msg="$msg back to MJML's default black, which is 1.6:1 on the"
+            msg="$msg canvas. Set colour on the element, not in the head."
+            echo "::error file=emails/newsletter.mjml::$msg"
+            exit 1
+          fi
+          echo "No MJML defaults leaked with the head removed."
+
       # Only the source and the notes. No image: the template points at
       # the masthead hosted on the site, so the .mjml is already the
       # whole email. No compiled HTML either, for the reason at the top
