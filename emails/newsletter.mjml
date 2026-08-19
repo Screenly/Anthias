@@ -18,10 +18,18 @@
       entire design lived in them: one mj-attributes block set the text
       colours, the section backgrounds and every padding. Strip that
       block, which is what happens the moment anything takes the body
-      without the head, and MJML falls back to its own defaults: black
-      text on the plum canvas at 1.6:1, no cards, and 20px of default
-      padding everywhere. The result still looks like an email, which
-      is what makes it dangerous. It does not look like an error.
+      without the head, and MJML's documented defaults take over.
+      Precisely: mj-text falls to its default black at 13px on a
+      line-height of 1 in Ubuntu, and that black on the plum canvas is
+      1.6:1; mj-section pads 20px 0 and mj-text 10px 25px, so the
+      rhythm goes; and the section backgrounds vanish, so there are no
+      cards. The result still looks like an email, which is what makes
+      it dangerous. It does not look like an error.
+
+      The default black is deliberately not written out as a hex
+      anywhere in this file, including in this comment. The test treats
+      every hex here as a colour the email paints, and that rule is
+      worth more than the convenience of quoting one.
 
       So the head now carries only what cannot be inlined at all: the
       title, the preview text, the web font, and one media query. Delete
@@ -36,8 +44,8 @@
       it. Anything with a bigger blast radius belongs on the element.
 
       Link colours are written on each anchor rather than in a
-      stylesheet for the same reason, and because several clients drop a
-      <style> block outright.
+      stylesheet for the same reason: an inline style needs no head to
+      have survived.
 
       Repetition is the point. If you find yourself factoring a value
       out into one place, that place is the table below, which is
@@ -137,9 +145,11 @@
       name="Plus Jakarta Sans"
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&amp;display=swap" />
 
-    <!-- The width at which the two-up block stops being two-up. MJML's
-         default, stated so the query below and the stacking it
-         compensates for cannot drift apart. -->
+    <!-- The width at which the two-up block stops being two-up. This
+         is MJML's default: compiling without this tag still emits
+         min-width:480px, so the tag changes nothing today and is here
+         only so the query below and the stacking it compensates for
+         cannot drift apart. -->
     <mj-breakpoint width="480px" />
 
     <mj-style>
@@ -158,13 +168,13 @@
     </mj-style>
   </mj-head>
 
-  <!-- 600px, not the 640 this started at. Two reasons, one functional
-       and one typographic: 600 is the width Outlook's renderer is safe
-       at and every client is built around, and at 640 the card's body
-       copy ran to about 95 characters a line, well past the 45-75 a
-       reader tracks comfortably. The left rail stays at 32px on every
-       section so the masthead, the hero, the card and the footer all
-       align down one edge. -->
+  <!-- 600px, not the 640 this started at. Two reasons. It is MJML's
+       own documented default for mj-body, so it is the width the
+       component defaults and every client's quirks are built around,
+       and at 640 the card's copy measured 536px, about 95 characters a
+       line against the 45-75 a reader tracks comfortably. The left rail
+       stays at 32px on every section so the masthead, the hero, the
+       card and the footer all align down one edge. -->
   <mj-body background-color="#270035" width="600px">
 
     <!--
@@ -173,9 +183,9 @@
       website/static/img/anthias-logo-email.png ships for this alone.
       Drawn at 2x and displayed at half, so it stays sharp on a retina
       screen, and flattened onto --color-canvas rather than left
-      transparent, because older Outlook builds matte a transparent PNG
-      against black. That bakes a token into an image file, so the test
-      checks the PNG's own background against it.
+      transparent, so no client has to composite alpha correctly for the
+      masthead to look right. That bakes a token into an image file, so
+      the test checks the PNG's own background against it.
     -->
     <mj-section background-color="#270035" padding="40px 32px 28px">
       <mj-column padding="0">
@@ -190,11 +200,17 @@
 
     <!--
       Hero. The short accent rule is the one piece of structure this
-      email keeps, and it is an mj-divider rather than a border on a
-      div because a divider compiles to a table and a border does not
-      survive Word's renderer. The same device returns at full width
-      inside the card, which is what makes it read as a system rather
-      than as an ornament on the first screen.
+      email keeps, and it returns at full width inside the card, which
+      is what makes it read as a system rather than an ornament on the
+      first screen.
+
+      mj-divider rather than a bordered div, and worth being accurate
+      about why, because the obvious guess is wrong. The component does
+      emit a border: a <p> carrying border-top, exactly what you would
+      write by hand. What you would not write by hand is the mso
+      conditional table it emits alongside, carrying the same
+      border-top for Word's renderer. Read out of the compiled output,
+      not assumed.
     -->
     <mj-section background-color="#270035" padding="0 32px 44px">
       <mj-column padding="0">
