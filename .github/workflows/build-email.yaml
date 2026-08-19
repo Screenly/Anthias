@@ -118,7 +118,10 @@ jobs:
           # so a black-filled section would be reported as a text
           # failure, and it misses `color: #000000` if a future MJML
           # emits the space. Hence the leading [^-[:alnum:]] to rule out
-          # `*-color`, and the optional whitespace after the colon.
+          # `*-color`, and the optional whitespace after the colon. The
+          # `^` arm matters because that character class needs something
+          # to consume: without it a declaration starting a line is
+          # missed, and how MJML wraps its output is not our decision.
           #
           # The font is checked alongside it because it cannot false
           # positive at all: nothing in this template mentions Ubuntu,
@@ -131,7 +134,7 @@ jobs:
           # today, but adding `shell: bash` to this step would turn a
           # clean result into a failed job, which is a trap worth
           # closing rather than depending on.
-          black=$(grep -Eio '[^-[:alnum:]]color:[[:space:]]*#000000' \
+          black=$(grep -Eio '(^|[^-[:alnum:]])color:[[:space:]]*#000000' \
             /tmp/headless.html | wc -l || true)
           font=$(grep -c 'Ubuntu' /tmp/headless.html || true)
           if [ "${black:-0}" -gt 0 ] || [ "${font:-0}" -gt 0 ]; then

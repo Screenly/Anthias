@@ -208,6 +208,23 @@ def test_every_table_row_belongs_to_a_scanned_slot() -> None:
 # XML tolerates whitespace around the '=', so an exact substring
 # would let `mj-class = "x"` through the one guard meant to stop it.
 _MJ_CLASS = re.compile(r'\bmj-class\s*=')
+
+
+def _declares(attribute: str, tag: str) -> bool:
+    """Whether a tag sets this attribute itself.
+
+    A substring test is wrong in both directions here. `color="` is
+    contained in `background-color="`, so an mj-button that lost its own
+    colour and kept its fill would satisfy the check built to catch
+    exactly that; and XML allows whitespace around the '=' and either
+    quote, so a reformat with no change of meaning would report a tag as
+    missing something it sets.
+    """
+    return bool(
+        re.search(rf'(?<![-\w]){re.escape(attribute)}\s*=\s*["\']', tag)
+    )
+
+
 _STYLED_TAG = re.compile(r'<(mj-text|mj-button)(?=[\s>])[^>]*>', re.DOTALL)
 SELF_CONTAINED = ('color', 'font-family', 'font-size', 'line-height')
 
@@ -253,7 +270,7 @@ def test_every_styled_element_carries_its_own_styling() -> None:
     """
     offenders = []
     for tag in _STYLED_TAG.finditer(_template()):
-        missing = [a for a in SELF_CONTAINED if f'{a}="' not in tag[0]]
+        missing = [a for a in SELF_CONTAINED if not _declares(a, tag[0])]
         if missing:
             head = ' '.join(tag[0].split())[:58]
             offenders.append(f'  <{tag[1]}> missing {missing}: {head}')
