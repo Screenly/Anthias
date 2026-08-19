@@ -23,6 +23,12 @@
       answer: |
         Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5, 64-bit x86 PCs (Intel NUC or similar), and, on a best-effort basis, generic 64-bit ARM single-board computers via [Armbian](https://www.armbian.com/) (Rock Pi, Orange Pi, Banana Pi and similar boards). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
 
+    - question: Can I buy a ready-made Anthias player?
+      answer: |
+        Yes. Screenly sells the **Anthias Player Mk2**, a fanless arm64 player with 4 GB of RAM, 16 GB of industrial-grade flash storage, and the power, Ethernet, and HDMI cables in the box. It can drive a 4K display, and one player runs one screen, so order one player per screen. See the [Screenly shop](https://shop.screenly.io/products/anthias-player-mk2?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=buy-a-player&utm_content=faq) for the current price and shipping.
+
+        The player is hardware only: Anthias is not preinstalled, so you install the free software yourself the same way you would on any other supported board. Buying hardware is entirely optional, since Anthias runs just as well on a Raspberry Pi or PC you already own.
+
     - question: Does Anthias require an internet connection?
       answer: |
         No. Anthias runs entirely on your local network. You only need internet access for the initial installation and to display content from external URLs. Uploaded images and videos play from local storage.

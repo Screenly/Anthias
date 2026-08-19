@@ -29,6 +29,12 @@ disableKinds = ['taxonomy']
     pageRef = '/get-started'
     weight = 20
   [[menus.main]]
+    name = 'Buy a Player'
+    url = 'https://shop.screenly.io/products/anthias-player-mk2?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=buy-a-player&utm_content=nav'
+    weight = 22
+    [menus.main.params]
+      external = true
+  [[menus.main]]
     name = 'Docs'
     pageRef = '/docs'
     weight = 25
