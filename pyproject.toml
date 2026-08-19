@@ -48,7 +48,7 @@ server = [
     "certifi==2026.7.22",
     "channels==4.3.2",
     "channels-redis==4.3.0",
-    "Django==5.2.14",
+    "Django==5.2.17",
     "djangorestframework==3.18.0",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.9",
@@ -90,7 +90,7 @@ server = [
 ]
 viewer = [
     "certifi==2026.7.22",
-    "Django==5.2.14",
+    "Django==5.2.17",
     "Jinja2==3.1.6",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
@@ -142,7 +142,7 @@ mypy = [
     { include-group = "docker-image-builder" },
     "channels==4.3.2",
     "channels-redis==4.3.0",
-    "Django==5.2.14",
+    "Django==5.2.17",
     "django-dbbackup==5.3.0",
     "django-stubs-ext==6.0.9",
     "djangorestframework==3.18.0",
