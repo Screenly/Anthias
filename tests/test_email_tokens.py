@@ -44,7 +44,7 @@ ROOT_PX = 16
 # Rows of the RESOLVED TOKENS table, which are the only lines in the
 # file indented this far. Reading `--token [on --backdrop] = literal`.
 _ROW = re.compile(
-    r'^ {8}(--[a-z0-9-]+)(?: +on +(--[a-z0-9-]+))? *= *(\S+) *$',
+    r'^ {8}(--[a-z0-9-]+)(?: +on +(--[a-z0-9-]+))? *= *(.+?) *$',
     re.MULTILINE,
 )
 
@@ -56,6 +56,11 @@ _ROW = re.compile(
 # Padding and width are NOT checked. They are layout, not tokens: there
 # is no spacing scale in @theme for them to drift from.
 _HEX = re.compile(r'#[0-9a-fA-F]{3,8}')
+# Attribute form only. The one CSS-form font-family in the template is
+# the monospace stack on the code chip, and @theme declares no
+# --font-mono to check it against: --font-sans is the only family the
+# design system has.
+_FONT_FAMILY = re.compile(r'font-family="([^"]+)"')
 _FONT_SIZE = re.compile(r'font-size\s*[:=]\s*"?\s*([\d.]+)px')
 _RADIUS = re.compile(r'border-radius\s*[:=]\s*"?\s*([\d.]+)px')
 _TRACKING = re.compile(r'letter-spacing\s*[:=]\s*"?\s*([\d.]+em)')
@@ -66,18 +71,33 @@ SLOTS = {
     '--text-': 'font-size',
     '--radius-': 'border-radius',
     '--tracking-': 'letter-spacing',
+    '--font-': 'font-family',
 }
 
 # Tags that set paragraph type, and so owe a leading as well as a size.
 #
-# mj-button is deliberately not one of them: its label is a single line
-# inside a box whose height comes from inner-padding, so a paragraph
-# leading would only change the box. Neither is the `code` rule in
-# mj-style, which is an inline chip and has to keep the leading of the
-# paragraph it sits in.
-_TYPE_TAG = re.compile(r'<(mj-text|mj-class)\s[^>]*>', re.DOTALL)
+# mj-button is deliberately not one: its label is a single line in a box
+# whose height comes from inner-padding, so a paragraph leading would
+# only change the box. Neither is the code chip, which is inline and has
+# to keep the leading of the paragraph around it.
+# (?=[\s>]) rather than \s: a bare <mj-text> has no attributes to
+# separate, and that is precisely the tag this needs to see, since
+# one with nothing on it is one inheriting all of MJML's defaults.
+_TYPE_TAG = re.compile(r'<(mj-text)(?=[\s>])[^>]*>', re.DOTALL)
 _ATTR_SIZE = re.compile(r'font-size="([\d.]+)px"')
 _ATTR_LEADING = re.compile(r'line-height="([\d.]+)"')
+
+
+def _norm(value: str) -> str:
+    """Compare ignoring quote style and whitespace runs.
+
+    The font stack is the only row where this matters. @theme writes it
+    with double quotes, and an MJML attribute is itself double-quoted,
+    so the family name has to be single-quoted at every use site here.
+    That is a syntax difference, not a different font. Hex and px values
+    pass through untouched.
+    """
+    return re.sub(r'\s+', ' ', value.replace("'", '"')).strip()
 
 
 def _template() -> str:
@@ -92,7 +112,9 @@ def _rows() -> list[tuple[str, str | None, str]]:
 
 def _literals(prefix: str) -> set[str]:
     """The literal values of every table row under one token prefix."""
-    return {value for name, _, value in _rows() if name.startswith(prefix)}
+    return {
+        _norm(value) for name, _, value in _rows() if name.startswith(prefix)
+    }
 
 
 def _flatten(name: str, backdrop: str | None, tokens: dict[str, str]) -> str:
@@ -130,7 +152,7 @@ def test_token_table_matches_the_design_tokens() -> None:
             expected = f'{float(rem[:-3]) * ROOT_PX:g}px'
         else:
             expected = _resolve(name, tokens)
-        if literal != expected:
+        if _norm(literal) != _norm(expected):
             over = f' on {backdrop}' if backdrop else ''
             failures.append(
                 f'  {name}{over}: table says {literal}, tokens say {expected}'
@@ -152,12 +174,14 @@ def _painted() -> dict[str, set[str]]:
     by any font size that happens to end in it.
     """
     body = _ROW.sub('', _template())
-    return {
+    slots = {
         '--color-': set(_HEX.findall(body)),
         '--text-': {f'{value}px' for value in _FONT_SIZE.findall(body)},
         '--radius-': {f'{value}px' for value in _RADIUS.findall(body)},
         '--tracking-': set(_TRACKING.findall(body)),
+        '--font-': set(_FONT_FAMILY.findall(body)),
     }
+    return {k: {_norm(v) for v in vs} for k, vs in slots.items()}
 
 
 def test_every_table_row_belongs_to_a_scanned_slot() -> None:
@@ -176,6 +200,83 @@ def test_every_table_row_belongs_to_a_scanned_slot() -> None:
         'Token table rows in no slot _painted() scans, so nothing '
         'checks whether the template uses them or reaches past them:\n'
         + '\n'.join(unscanned)
+    )
+
+
+# Elements that paint text, and the attributes each must set on
+# itself for the design to survive without the head.
+# XML tolerates whitespace around the '=', so an exact substring
+# would let `mj-class = "x"` through the one guard meant to stop it.
+_MJ_CLASS = re.compile(r'\bmj-class\s*=')
+
+
+def _declares(attribute: str, tag: str) -> bool:
+    """Whether a tag sets this attribute itself.
+
+    A substring test is wrong in both directions here. `color="` is
+    contained in `background-color="`, so an mj-button that lost its own
+    colour and kept its fill would satisfy the check built to catch
+    exactly that; and XML allows whitespace around the '=' and either
+    quote, so a reformat with no change of meaning would report a tag as
+    missing something it sets.
+    """
+    return bool(
+        re.search(rf'(?<![-\w]){re.escape(attribute)}\s*=\s*["\']', tag)
+    )
+
+
+_STYLED_TAG = re.compile(r'<(mj-text|mj-button)(?=[\s>])[^>]*>', re.DOTALL)
+SELF_CONTAINED = ('color', 'font-family', 'font-size', 'line-height')
+
+
+def test_nothing_visual_depends_on_the_head() -> None:
+    """No mj-attributes block, and no mj-class on any element.
+
+    This is the test for the defect that produced it. The whole design
+    used to live in one mj-attributes block: the text colours, the
+    section backgrounds, and every padding. Anything that takes the
+    body without the head drops it, and MJML falls back to its own
+    defaults, which is black text on the plum canvas at 1.6:1, no
+    cards, and 20px of padding everywhere.
+
+    The reason it needs a test rather than a convention is that it does
+    not fail loudly. The output is still a laid-out email, still sends,
+    and still looks deliberate. It was only visibly wrong once someone
+    opened it.
+    """
+    text = _template()
+    offenders = []
+    if '<mj-attributes' in text:
+        offenders.append(
+            '  <mj-attributes>: put the values on the elements instead'
+        )
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if _MJ_CLASS.search(line):
+            offenders.append(f'  line {lineno}: {line.strip()[:60]}')
+    assert not offenders, (
+        'emails/newsletter.mjml is leaning on its own mj-head again. '
+        'Every colour, size and space has to be written on the element '
+        'that uses it, or the design disappears the moment the body is '
+        'taken without the head:\n' + '\n'.join(offenders)
+    )
+
+
+def test_every_styled_element_carries_its_own_styling() -> None:
+    """Each mj-text and mj-button names its own colour and type.
+
+    The complement to the guard above: removing mj-attributes is only
+    half of it, because an element that sets no colour still inherits
+    MJML's black. Nothing here may rely on a default, ours or MJML's.
+    """
+    offenders = []
+    for tag in _STYLED_TAG.finditer(_template()):
+        missing = [a for a in SELF_CONTAINED if not _declares(a, tag[0])]
+        if missing:
+            head = ' '.join(tag[0].split())[:58]
+            offenders.append(f'  <{tag[1]}> missing {missing}: {head}')
+    assert not offenders, (
+        'Elements relying on an inherited value for something the head '
+        'may not be around to supply:\n' + '\n'.join(offenders)
     )
 
 
@@ -223,7 +324,7 @@ def test_every_table_row_is_used() -> None:
         f'  {name} = {literal}'
         for name, _, literal in _rows()
         for prefix, used in painted.items()
-        if name.startswith(prefix) and literal not in used
+        if name.startswith(prefix) and _norm(literal) not in used
     ]
     assert not unused, (
         'Token table rows that nothing in the template uses:\n'
