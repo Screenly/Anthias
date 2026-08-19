@@ -31,6 +31,7 @@
 #include <QtGlobal>
 
 #include "view.h"
+#include "image_fallback.h"
 #include "rotation.h"
 
 // Attaches the operator-configured per-asset request headers (#2215) to
@@ -521,6 +522,7 @@ void View::loadPage(const QString &uri, bool skipSslVerify)
     hideVideoSurface();
 #endif
     currentImage = QImage();
+    fallbackToLastImageOnBlank = false;
     stopAnimation();
     // Drop any per-asset reload timer left over from the previous
     // webpage AND the prior asset's pending interval — the viewer
@@ -713,7 +715,15 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
     qDebug() << "Type: Image";
     const quint64 requestId = ++loadGenerationId;
 
-    // ``view_image('null')`` in src/anthias_viewer/__init__.py:495
+    // Set before hideVideoSurface() below, not after, so this doesn't
+    // rely on hideVideoSurface()'s setVisible(false) deferring the
+    // repaint to the event loop. A real image fetch is starting
+    // whenever preUri isn't the video-onset sentinel, full stop; the
+    // "null" branch further down still sets this explicitly too, for
+    // anyone reading top-to-bottom without this comment.
+    fallbackToLastImageOnBlank = (preUri != QLatin1String("null"));
+
+    // ``view_image('null')`` in src/anthias_viewer/__init__.py:1504
     // is called AFTER ``media_player.play()`` to sweep any
     // lingering web/image background out of the way of the new
     // video — it is NOT a request to take down the freshly-
@@ -730,6 +740,23 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
         hideVideoSurface();
     }
 #endif
+
+    // fallbackToLastImageOnBlank note for Qt5 armhf (Pi 1/2/3):
+    // playVideo(), and its own ``fallbackToLastImageOnBlank = false``,
+    // only exists in the Qt6 build (see the #if above; those boards
+    // never route video through this class at all, GstFbdevMediaPlayer
+    // in media_player.py spawns an external gst_fbdev_player process
+    // that paints straight to /dev/fb0). On Qt5 the ``"null"`` branch
+    // below is therefore the *only* place that clears the flag ahead
+    // of a video asset. The guarantee that actually holds isn't about
+    // the order of play() vs. this sentinel call (play() runs first);
+    // it's that the flag can only flip back to true inside a later,
+    // real loadImage() call, and GstFbdevMediaPlayer.stop()
+    // (media_player.py) blocks - SIGTERM then wait(), escalating to
+    // SIGKILL — until that external process has exited before
+    // view_video() returns, and asset_loop only calls the next
+    // view_image()/view_video() after that. So the flag can't reach
+    // true while the fbdev process might still be writing frames.
 
     // Cancel any pending page load so we don't keep streaming a web
     // page in the background after the user has switched to image
@@ -778,6 +805,11 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
     else if (preUri == "null")
     {
         qDebug() << "Black page";
+        // Already false from the top-of-function assignment; kept
+        // explicit here too since this is the branch it actually
+        // matters for (see the lastRasterImage comment in view.h and
+        // the matching comment in playVideo()).
+        fallbackToLastImageOnBlank = false;
         currentImage = QImage();
         update();
         return;
@@ -815,6 +847,16 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
             qDebug() << "Ignoring stale image response";
             return;
         }
+
+        // This request is over, whatever the outcome. Drop the fallback
+        // here, in the one place ``finished`` always fires (Qt emits it
+        // after errorOccurred() too), so a failed/corrupt fetch goes
+        // black rather than leaving the previous asset on screen:
+        // which would be indistinguishable from a successful rotation.
+        // The success branch below clears it again (harmlessly) via
+        // loadAsStaticImage()/tryLoadAsAnimatedGif(), so this is a no-op
+        // on the happy path.
+        fallbackToLastImageOnBlank = false;
 
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
@@ -889,6 +931,8 @@ void View::loadAsStaticImage(const QByteArray& data)
         webView1->setVisible(false);
         webView2->setVisible(false);
         currentImage = nextImage;
+        lastRasterImage = nextImage;
+        fallbackToLastImageOnBlank = false;
         update();
     } else {
         qDebug() << "Failed to load image from data:" << reader.errorString();
@@ -901,12 +945,26 @@ void View::paintEvent(QPaintEvent*)
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.fillRect(rect(), Qt::black);
 
-    if (currentImage.isNull()) {
+    // Issue #3262, a real image fetch that starts from a blanked
+    // state (typically right after a video asset) would otherwise
+    // paint solid black for the whole QNetworkReply round-trip.
+    // Fall back to the last real frame in that case only; the
+    // video-onset / loadPage() blanks leave the flag off and stay
+    // pure black, unchanged from before. The yes/no decision itself
+    // is a pure predicate (image_fallback.cpp) so it's covered by
+    // test_image_fallback.cpp without pulling in QtWebEngine.
+    const QImage &imageToPaint =
+        image_fallback::shouldUseLastRasterImage(
+            currentImage.isNull(), fallbackToLastImageOnBlank)
+            ? lastRasterImage
+            : currentImage;
+
+    if (imageToPaint.isNull()) {
         return;
     }
 
     if (imageRotation == 0) {
-        QSize scaledSize = currentImage.size();
+        QSize scaledSize = imageToPaint.size();
         scaledSize.scale(size(), Qt::KeepAspectRatio);
         painter.drawImage(
             QRect(
@@ -914,7 +972,7 @@ void View::paintEvent(QPaintEvent*)
                 (height() - scaledSize.height()) / 2,
                 scaledSize.width(),
                 scaledSize.height()),
-            currentImage);
+            imageToPaint);
         return;
     }
 
@@ -925,7 +983,7 @@ void View::paintEvent(QPaintEvent*)
     // pillar-boxed, matching the GStreamer videoflip path.
     const QSize box =
         (imageRotation % 180 == 0) ? size() : QSize(height(), width());
-    QSize scaledSize = currentImage.size();
+    QSize scaledSize = imageToPaint.size();
     scaledSize.scale(box, Qt::KeepAspectRatio);
     painter.translate(width() / 2.0, height() / 2.0);
     painter.rotate(imageRotation);
@@ -935,7 +993,7 @@ void View::paintEvent(QPaintEvent*)
             -scaledSize.height() / 2,
             scaledSize.width(),
             scaledSize.height()),
-        currentImage);
+        imageToPaint);
 }
 
 void View::resizeEvent(QResizeEvent* event)
@@ -950,6 +1008,21 @@ void View::resizeEvent(QResizeEvent* event)
 #endif
 }
 
+// Qt6-only: mpv/QtMultimedia video lives here. On the Qt5 linuxfb
+// boards (Pi 1/2/3), video is a separate gst_fbdev_player subprocess
+// painting straight to /dev/fb0 (see media_player.py), and this
+// function never compiles — so fallbackToLastImageOnBlank is cleared
+// on those boards only via the "null" sentinel branch in loadImage(),
+// which view_video() (anthias_viewer/__init__.py) calls before every
+// video asset. That ordering is relied on, not enforced here; if a
+// future change ever skips that call before a Qt5 video, the fallback
+// would stay armed into the video. Confirmed safe today: GstFbdev-
+// MediaPlayer.stop() blocks on Popen.wait() (SIGTERM, falling back to
+// SIGKILL) before view_video() returns, so the next view_image() for
+// the following asset can't run, and therefore can't repaint this
+// widget's currentImage onto /dev/fb0, until gst_fbdev_player has
+// actually exited and stopped writing frames. No cross-process lock
+// enforces that; it's an ordering guarantee from the caller.
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 void View::playVideo(const QString &uri, const QVariantMap &options)
 {
@@ -972,9 +1045,12 @@ void View::playVideo(const QString &uri, const QVariantMap &options)
     webView1->setVisible(false);
     webView2->setVisible(false);
     // Blank the image canvas so an old still doesn't flash through
-    // before the first mpv frame paints.
+    // before the first mpv frame paints. Deliberate blank: leave the
+    // lastRasterImage fallback off (see the comment on
+    // fallbackToLastImageOnBlank in view.h).
     stopAnimation();
     currentImage = QImage();
+    fallbackToLastImageOnBlank = false;
     update();
 
     if (!videoView) {
@@ -1040,6 +1116,8 @@ void View::setupAnimation()
     movie->start();
     movie->jumpToFrame(0);
     currentImage = movie->currentImage();
+    lastRasterImage = currentImage;
+    fallbackToLastImageOnBlank = false;
     update();
 }
 

@@ -18,16 +18,21 @@ CONFIG += c++17 console testcase
 # TestRotation — QTEST_MAIN only hosts one class). The qrc carries the
 # QML scene (videoview.qml) the production widget loads. rotation.cpp is
 # deliberately QtCore-only (no View / QtWebEngine) so these tests link
-# without the webengine modules.
+# without the webengine modules. image_fallback.cpp is the same shape:
+# the black-flash fallback's paint/no-paint decision, extracted from
+# View::paintEvent() so it's covered here too.
 SOURCES += \
     ../src/videoview.cpp \
     ../src/rotation.cpp \
+    ../src/image_fallback.cpp \
     test_videoview.cpp \
-    test_rotation.cpp
+    test_rotation.cpp \
+    test_image_fallback.cpp
 
 HEADERS += \
     ../src/videoview.h \
-    ../src/rotation.h
+    ../src/rotation.h \
+    ../src/image_fallback.h
 
 RESOURCES += ../src/videoview.qrc
 
