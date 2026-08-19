@@ -49,14 +49,119 @@ env:
   HUGO_VERSION: '0.157.0'
 
 jobs:
+  # Decide whether this run is the one that deploys this commit.
+  #
+  # A commit touching both website/ and application code matches this
+  # workflow's push paths AND the schema workflow's, so it fires here
+  # twice for one SHA: once on push, and again about ninety seconds
+  # later when Generate OpenAPI Schema finishes. Both build the same
+  # site and both want the `pages` group, so the later cancels the
+  # earlier and leaves a cancelled run against master that reads as a
+  # failure. Harmless, and the site does end up current, but it reads
+  # as a broken deploy on a green commit.
+  #
+  # The workflow_run copy is the one worth keeping. It is the only one
+  # whose Fetch OpenAPI schema step can find a schema built from this
+  # commit; the push copy runs before the schema workflow has finished,
+  # falls back to the previous successful run, and publishes an API
+  # page one commit behind. So the push copy is the one that stands
+  # down.
+  #
+  # Asked of the API rather than inferred from the changed paths. The
+  # schema workflow's filter is a long list of exclusions, and a second
+  # copy of it here would go stale the first time that list is edited,
+  # silently, and in whichever direction is worse.
+  triage:
+    name: Decide whether to deploy
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      proceed: ${{ steps.decide.outputs.proceed }}
+    steps:
+      - name: Look for a schema run on this commit
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCHEMA_WORKFLOW: generate-openapi-schema.yml
+          # Must stay in step with the branch filters on the push and
+          # workflow_run triggers above, which an `on:` block cannot
+          # read from `env`.
+          DEPLOY_BRANCH: master
+        # No `shell:` key here, so this runs under the Linux default of
+        # `bash -e {0}`: errexit and nothing else. The `-eo pipefail`
+        # people remember comes from writing `shell: bash` explicitly,
+        # which this does not. Both missing flags are set below rather
+        # than left resting on which of the two forms applies.
+        run: |
+          set -uo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            echo "Event is $GITHUB_EVENT_NAME; nothing to stand down for."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Scoped to master, and that is load-bearing rather than
+          # tidiness. Most runs of the schema workflow are pull_request
+          # runs carrying a BRANCH head SHA, and standing down for one of
+          # those would be standing down for a run whose completion
+          # cannot trigger this workflow at all, because the workflow_run
+          # trigger above is itself filtered to master. The commit would
+          # then never deploy. `branch=master` matches exactly the runs
+          # that will come back here.
+          query="branch=$DEPLOY_BRANCH&head_sha=$GITHUB_SHA"
+          api="repos/$GITHUB_REPOSITORY/actions/workflows"
+
+          # The schema run is created by the same push event as this one,
+          # so it is normally registered before this step even gets a
+          # runner. Retried regardless, because "not there yet" and "not
+          # coming at all" look identical from here.
+          for _ in 1 2 3 4 5 6; do
+            found=$(gh api "$api/$SCHEMA_WORKFLOW/runs?$query" \
+              --jq '.total_count' 2>/dev/null || true)
+            # Anything that is not a plain count counts as "nothing
+            # found", so a blip retries and then deploys. gh prints an
+            # error body on STDOUT, so this has to reject non-digits
+            # rather than trust a non-zero exit. Both ways of being
+            # wrong cost something, and a duplicate run that gets
+            # cancelled is only today's behaviour, where a skipped
+            # deploy is a stale site.
+            case "$found" in
+              '' | *[!0-9]*) found=0 ;;
+            esac
+            if [ "$found" -gt 0 ]; then
+              echo "Schema run on $DEPLOY_BRANCH for $GITHUB_SHA; it deploys."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "No schema run for $GITHUB_SHA; deploying from the push."
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: triage
+    # Two gates.
+    #
+    # triage.proceed is false only on the push copy of a commit that is
+    # also getting a workflow_run copy, so one commit produces one
+    # deployment.
+    #
     # A failed or cancelled schema run must not trigger a deploy: the
     # fetch step would find no successful run to pull from and ship the
-    # committed fallback, quietly republishing a stale API page. Only
-    # gates the workflow_run path; push and dispatch are unaffected.
+    # committed fallback, quietly republishing a stale API page.
+    #
+    # Together these mean a commit whose schema workflow FAILS does not
+    # deploy at all: the push copy has already stood down and this gate
+    # stops the workflow_run copy. That is the intended trade. Shipping
+    # a stale API reference is the failure this whole chain exists to
+    # prevent, and a commit that broke the schema workflow is going to
+    # be fixed or reverted anyway.
     if: >-
-      ${{ github.event_name != 'workflow_run'
-          || github.event.workflow_run.conclusion == 'success' }}
+      ${{ needs.triage.outputs.proceed == 'true'
+          && (github.event_name != 'workflow_run'
+              || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       # actions:read is required so the Fetch marketing screenshots and

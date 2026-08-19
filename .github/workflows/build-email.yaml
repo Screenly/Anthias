@@ -1,18 +1,25 @@
 name: Build Newsletter Email
 
-# Compiles emails/newsletter.mjml and publishes the result as a
-# downloadable zip on the run.
+# Validates emails/newsletter.mjml and publishes it as a downloadable
+# zip on the run.
 #
-# It exists because the person who sends the newsletter is not
-# necessarily the person who edits it, and asking them to install bun and
-# run a build to get an HTML file is how a stale hand-edited copy ends up
-# being the one that goes out. Every run of this workflow leaves a
-# send-ready bundle attached to the commit that produced it.
+# What ships is the .mjml itself, not the compiled HTML. Mailjet takes
+# MJML directly, and handing over the compiled output would mean handing
+# over the one artefact nobody can edit: a change to a headline in 35 KB
+# of nested tables is a change nobody will make in the source, which is
+# how the sent mail and the repo stop being the same email.
 #
-# It is also the only place the compiled size is checked. MJML expands a
-# template several times over, so copy that reads as a paragraph in the
-# .mjml can be a few KB of nested tables in the output, and nothing about
-# the source shows you when you have crossed Gmail's clipping threshold.
+# The compile still runs, as a check rather than as a deliverable: mjml
+# in strict validation mode, and the size of what it produces measured
+# against Gmail's clipping threshold. MJML expands a template several
+# times over, so copy that reads as a paragraph in the source can be a
+# few KB of output, and nothing you can see in the .mjml tells you how
+# close you are.
+#
+# The masthead is referenced by URL from anthias.screenly.io rather than
+# inlined. A base64 data: URI would make the file self-contained, but
+# Gmail, Outlook and Yahoo all refuse to render one, which would put a
+# broken image at the top of the newsletter for most of the list.
 
 on:
   push:
@@ -20,7 +27,6 @@ on:
       - master
     paths:
       - 'emails/**'
-      - 'website/static/img/anthias-logo-email.png'
       - 'package.json'
       - 'bun.lock'
       - '.github/workflows/build-email.yaml'
@@ -29,13 +35,12 @@ on:
       - master
     paths:
       - 'emails/**'
-      - 'website/static/img/anthias-logo-email.png'
       - 'package.json'
       - 'bun.lock'
       - '.github/workflows/build-email.yaml'
   # So a fresh bundle can be pulled off any ref without pushing a commit
   # to trigger one, which is the normal case when someone is about to
-  # send and just wants the current HTML.
+  # send and just wants the current template.
   workflow_dispatch:
 
 # Nothing here reads or writes repository state. upload-artifact uses a
@@ -67,7 +72,7 @@ jobs:
       # version rather than out of node_modules, precisely so it stays
       # off the dependency tree the device image builds from, so there is
       # nothing in the lockfile for this job to install.
-      - name: Build the email
+      - name: Compile the template to validate it
         run: bun run build:email
 
       - name: Check the compiled size against Gmail's clipping threshold
@@ -89,10 +94,10 @@ jobs:
             exit 1
           fi
 
-      # The masthead ships alongside the HTML even though the HTML points
-      # at the copy hosted on anthias.screenly.io. Whoever sends this may
-      # need to re-host it, and a bundle that carries its own image is
-      # one they can act on without going back to the repo.
+      # Only the source and the notes. No image: the template points at
+      # the masthead hosted on the site, so the .mjml is already the
+      # whole email. No compiled HTML either, for the reason at the top
+      # of this file.
       - name: Assemble the bundle
         run: |
           # Named for the commit, and the zip's top-level directory is
@@ -100,10 +105,9 @@ jobs:
           # it came from once it is sitting in someone's Downloads.
           bundle="anthias-newsletter-${GITHUB_SHA:0:7}"
           echo "BUNDLE=$bundle" >> "$GITHUB_ENV"
-          mkdir -p "$bundle/images"
-          cp emails/dist/newsletter.html "$bundle/"
+          mkdir -p "$bundle"
+          cp emails/newsletter.mjml "$bundle/"
           cp emails/README.md "$bundle/"
-          cp website/static/img/anthias-logo-email.png "$bundle/images/"
 
       # Zipped here rather than left to upload-artifact so the downloaded
       # file is one named, dated object a marketer can hand on, instead of
