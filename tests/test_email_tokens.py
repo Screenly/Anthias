@@ -80,7 +80,10 @@ SLOTS = {
 # whose height comes from inner-padding, so a paragraph leading would
 # only change the box. Neither is the code chip, which is inline and has
 # to keep the leading of the paragraph around it.
-_TYPE_TAG = re.compile(r'<(mj-text)\s[^>]*>', re.DOTALL)
+# (?=[\s>]) rather than \s: a bare <mj-text> has no attributes to
+# separate, and that is precisely the tag this needs to see, since
+# one with nothing on it is one inheriting all of MJML's defaults.
+_TYPE_TAG = re.compile(r'<(mj-text)(?=[\s>])[^>]*>', re.DOTALL)
 _ATTR_SIZE = re.compile(r'font-size="([\d.]+)px"')
 _ATTR_LEADING = re.compile(r'line-height="([\d.]+)"')
 
@@ -202,7 +205,10 @@ def test_every_table_row_belongs_to_a_scanned_slot() -> None:
 
 # Elements that paint text, and the attributes each must set on
 # itself for the design to survive without the head.
-_STYLED_TAG = re.compile(r'<(mj-text|mj-button)\s[^>]*>', re.DOTALL)
+# XML tolerates whitespace around the '=', so an exact substring
+# would let `mj-class = "x"` through the one guard meant to stop it.
+_MJ_CLASS = re.compile(r'\bmj-class\s*=')
+_STYLED_TAG = re.compile(r'<(mj-text|mj-button)(?=[\s>])[^>]*>', re.DOTALL)
 SELF_CONTAINED = ('color', 'font-family', 'font-size', 'line-height')
 
 
@@ -228,7 +234,7 @@ def test_nothing_visual_depends_on_the_head() -> None:
             '  <mj-attributes>: put the values on the elements instead'
         )
     for lineno, line in enumerate(text.splitlines(), 1):
-        if 'mj-class=' in line:
+        if _MJ_CLASS.search(line):
             offenders.append(f'  line {lineno}: {line.strip()[:60]}')
     assert not offenders, (
         'emails/newsletter.mjml is leaning on its own mj-head again. '
