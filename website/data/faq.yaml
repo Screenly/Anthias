@@ -25,7 +25,7 @@
 
     - question: Can I buy a ready-made Anthias player?
       answer: |
-        Yes. Screenly sells the **Anthias Player Mk2**, a fanless arm64 player with 4 GB of RAM, 16 GB of industrial-grade flash storage, and the power, Ethernet, and HDMI cables in the box. It can drive a 4K display, and one player runs one screen, so order one player per screen. See the [Screenly shop](https://shop.screenly.io/products/anthias-player-mk2?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=buy-a-player&utm_content=faq) for the current price and shipping.
+        Yes. Screenly sells the **Anthias Player Mk2**, a fanless arm64 player with 4 GB of RAM, 16 GB of industrial-grade flash storage, and the power, Ethernet, and HDMI cables in the box. One player runs one screen, so order one player per screen. See the [Screenly shop](https://shop.screenly.io/products/anthias-player-mk2?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=buy-a-player&utm_content=faq) for the current price and shipping.
 
         The player is hardware only: Anthias is not preinstalled, so you install the free software yourself the same way you would on any other supported board. Buying hardware is entirely optional, since Anthias runs just as well on a Raspberry Pi or PC you already own.
 
