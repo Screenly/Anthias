@@ -13,6 +13,7 @@ import {
   type AppsTabData,
   type EditAsset as AppEditAsset,
 } from './apps'
+import { uploadErrorMessage, type UploadFailure } from './home/upload-error'
 
 declare global {
   interface Window {
@@ -50,8 +51,17 @@ interface AssetEdit {
 type UploadState = null | 'sending' | 'processing'
 
 interface ToastStoreLike {
-  push(kind: 'success' | 'error' | 'info', message: string): number
+  push(
+    kind: 'success' | 'error' | 'info',
+    message: string,
+    ttlMs?: number,
+  ): number
 }
+
+// Longer than the 4s default in vendor.ts: these are the longest
+// strings the store carries and a dismissed toast cannot be brought
+// back.
+const UPLOAD_ERROR_TOAST_MS = 8000
 
 type SectionKey = 'active' | 'inactive'
 
@@ -100,8 +110,13 @@ interface HomeAppData {
 // 'rejected' — server reached, but it refused this file (HTTP 200 +
 //              error toast, e.g. invalid type). The toast already
 //              informed the user; the batch skips it and carries on.
-// 'error'    — transport failure / non-2xx. Aborts the batch.
-type UploadResult = 'ok' | 'rejected' | 'error'
+// 'error'    — transport failure / non-2xx. Aborts the batch, and
+//              carries the failure so the toast can say why — see
+//              home/upload-error.
+type UploadResult =
+  | { status: 'ok' }
+  | { status: 'rejected' }
+  | { status: 'error'; failure: UploadFailure }
 
 const DATE_FMT_MAP: Record<string, string> = {
   'mm/dd/yyyy': 'm/d/Y',
@@ -376,20 +391,20 @@ function homeApp(): HomeAppData {
 
       this.uploadTotal = files.length
       let succeeded = 0
-      let aborted = false
+      let failure: UploadFailure | null = null
       for (let i = 0; i < files.length; i++) {
         this.uploadIndex = i + 1
         this.uploadFileName = files[i].name
         const result = await this.uploadOne(url, csrf, files[i])
-        if (result === 'error') {
+        if (result.status === 'error') {
           // Transport failure — something's wrong with the request
           // itself, so stop the batch rather than hammering on.
-          aborted = true
+          failure = result.failure
           break
         }
         // 'rejected' files already surfaced their own server toast;
         // skip them and keep uploading the rest of the selection.
-        if (result === 'ok') succeeded += 1
+        if (result.status === 'ok') succeeded += 1
       }
 
       // Clear the input so re-selecting the same file(s) fires change
@@ -401,11 +416,15 @@ function homeApp(): HomeAppData {
       this.uploadIndex = 0
       this.uploadTotal = 0
 
-      if (aborted) {
+      if (failure) {
         const store = window.Alpine.store('toasts') as
           | ToastStoreLike
           | undefined
-        store?.push('error', 'Upload failed — check the file and try again')
+        store?.push(
+          'error',
+          uploadErrorMessage(failure),
+          UPLOAD_ERROR_TOAST_MS,
+        )
       }
       if (succeeded > 0) {
         this.mode = null
@@ -470,16 +489,27 @@ function homeApp(): HomeAppData {
         xhr.addEventListener('load', () => {
           const kind = fireToastFromHeader(xhr.getResponseHeader('HX-Trigger'))
           if (xhr.status < 200 || xhr.status >= 300) {
-            resolve('error')
+            // Pass the status up so the batch can name the cause. A
+            // proxy-generated 413 never reaches Django, so there is no
+            // HX-Trigger toast to replay and the status is all the
+            // information there is.
+            resolve({
+              status: 'error',
+              failure: { kind: 'http', status: xhr.status },
+            })
             return
           }
           // The server validates and may refuse a file with a 200 +
           // error toast (invalid type, missing file). Treat that as a
           // rejected file, not a silent success.
-          resolve(kind === 'error' ? 'rejected' : 'ok')
+          resolve({ status: kind === 'error' ? 'rejected' : 'ok' })
         })
-        xhr.addEventListener('error', () => resolve('error'))
-        xhr.addEventListener('abort', () => resolve('error'))
+        // No response at all (dropped connection, DNS, TLS): status is
+        // 0 here, so it is not an HTTP failure.
+        const networkFailure = () =>
+          resolve({ status: 'error', failure: { kind: 'network' } })
+        xhr.addEventListener('error', networkFailure)
+        xhr.addEventListener('abort', networkFailure)
         const fd = new FormData()
         fd.append('csrfmiddlewaretoken', csrf)
         fd.append('file_upload', file)
