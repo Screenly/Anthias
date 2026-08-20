@@ -70,7 +70,7 @@ _warned: set[str] = set()
 
 
 def _warn_once(key: str, message: str, exc: Exception) -> None:
-    """Log at WARNING the first time, DEBUG thereafter.
+    """Log at WARNING the first time, DEBUG until the next success.
 
     A local copy of the helper in :mod:`anthias_common.undervoltage`
     and :mod:`anthias_common.storage_health`, for the same reason they
@@ -80,13 +80,21 @@ def _warn_once(key: str, message: str, exc: Exception) -> None:
     call, and every render of the schedule table lands here — 12 lines
     a minute per open browser. GH #3268 measured that class of
     repetition evicting crash diagnostics from the volatile journal
-    inside a day.
+    inside a day. The latch re-arms on the next success, so a two-
+    second blip at container start doesn't silence a genuinely
+    different fault — a WRONGTYPE, a decode failure — for the life of
+    the process.
     """
     if key in _warned:
         logger.debug('%s: %s', message, exc)
         return
     _warned.add(key)
     logger.warning('%s: %s', message, exc)
+
+
+def _worked(key: str) -> None:
+    """Re-arm the warn-once latch after a call succeeds."""
+    _warned.discard(key)
 
 
 def publish(client: Any, asset_id: str | None) -> None:
@@ -105,6 +113,7 @@ def publish(client: Any, asset_id: str | None) -> None:
         _believed = asset_id
         if previous != asset_id:
             client.publish(NOW_PLAYING_CHANNEL, asset_id)
+        _worked('publish')
     except Exception as exc:
         _warn_once('publish', 'Could not publish the now-playing asset', exc)
 
@@ -124,6 +133,7 @@ def refresh(client: Any) -> None:
         return
     try:
         client.set(NOW_PLAYING_KEY, _believed, ex=TTL_S)
+        _worked('refresh')
     except Exception as exc:
         _warn_once('refresh', 'Could not refresh the now-playing asset', exc)
 
@@ -141,6 +151,7 @@ def clear(client: Any) -> None:
     try:
         if client.delete(NOW_PLAYING_KEY):
             client.publish(NOW_PLAYING_CHANNEL, '')
+        _worked('clear')
     except Exception as exc:
         _warn_once('clear', 'Could not clear the now-playing asset', exc)
 
@@ -154,6 +165,7 @@ def read(client: Any) -> str | None:
     """
     try:
         raw = client.get(NOW_PLAYING_KEY)
+        _worked('read')
     except Exception as exc:
         _warn_once('read', 'Could not read the now-playing asset', exc)
         return None

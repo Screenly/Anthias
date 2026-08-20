@@ -206,6 +206,25 @@ def test_read_returns_none_when_redis_is_unreachable() -> None:
     assert now_playing.read(client) is None
 
 
+def test_the_warn_latch_re_arms_after_a_success(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A blip at container start must not silence a later, different
+    fault for the life of the process — a WRONGTYPE from a key some
+    other code wrote, or a decode failure, deserves its own warning."""
+    client = _client()
+    client.get.side_effect = redis.ConnectionError('boom')
+    with caplog.at_level('DEBUG'):
+        now_playing.read(client)  # warns
+        now_playing.read(client)  # debug
+        client.get.side_effect = None  # Redis comes back
+        now_playing.read(client)  # re-arms the latch
+        client.get.side_effect = ValueError('decode failed')
+        now_playing.read(client)  # a new fault warns again
+    warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+    assert len(warnings) == 2
+
+
 def test_read_warns_once_then_drops_to_debug(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

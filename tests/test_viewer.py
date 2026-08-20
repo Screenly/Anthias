@@ -1574,9 +1574,8 @@ def test_asset_loop_clamps_out_of_range_duration() -> None:
 # ---------------------------------------------------------------------------
 #
 # The schedule table can't derive which row is on screen once shuffle
-# is on, so the viewer publishes it. The TTL comes from the clamped
-# duration, not the raw column, so a junk row can't write a key that
-# outlives the device.
+# is on, so the viewer publishes it. The fact's TTL is liveness rather
+# than content, so an asset's duration never reaches it.
 
 
 def test_asset_loop_publishes_the_now_playing_asset() -> None:
