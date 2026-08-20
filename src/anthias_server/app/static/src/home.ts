@@ -166,6 +166,29 @@ function interpretFinalResponse(res: RawUploadResponse): UploadResult {
   return { status: kind === 'error' ? 'rejected' : 'ok' }
 }
 
+function parseServerError(text: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+      const msg = (parsed as { error: unknown }).error
+      if (typeof msg === 'string' && msg.length > 0) return msg
+    }
+  } catch {
+    // Not a JSON body: the caller falls back to the status code.
+  }
+  return undefined
+}
+
+// Mint the id here rather than taking the server's. A retry of chunk
+// 0 would otherwise arrive with no id, the server would mint a second
+// one, and the bytes already staged under the first would sit
+// orphaned while the upload silently continued elsewhere.
+function newUploadId(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 function parseUploadId(text: string): string | undefined {
   try {
     const parsed: unknown = JSON.parse(text)
@@ -606,7 +629,7 @@ function homeApp(): HomeAppData {
       }
 
       const chunks = planChunks(file.size, chunkSize)
-      let uploadId: string | undefined
+      const uploadId = newUploadId()
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i]
         const isFinal = i === chunks.length - 1
@@ -646,22 +669,25 @@ function homeApp(): HomeAppData {
         if (isFinal) return interpretFinalResponse(res)
 
         if (res.status < 200 || res.status >= 300) {
+          const message = parseServerError(res.text)
           return {
             status: 'error',
-            failure:
-              res.status === 0
+            failure: message
+              ? { kind: 'server', message }
+              : res.status === 0
                 ? { kind: 'network' }
                 : { kind: 'http', status: res.status },
           }
         }
-        uploadId = parseUploadId(res.text) ?? uploadId
-        if (!uploadId) {
-          // Without an id the next chunk would start a second staged
-          // file and the upload could never complete.
-          return {
-            status: 'error',
-            failure: { kind: 'http', status: res.status },
-          }
+        // A 200 that is not the chunk acknowledgement means the server
+        // refused this file outright (wrong type, nothing uploaded)
+        // and answered with the asset table plus its own toast. That
+        // is a rejection of one file, not a transport failure: replay
+        // the toast and let the batch carry on, exactly as the
+        // single-shot path does.
+        if (parseUploadId(res.text) === undefined) {
+          fireToastFromHeader(res.trigger)
+          return { status: 'rejected' }
         }
       }
       return { status: 'error', failure: { kind: 'network' } }

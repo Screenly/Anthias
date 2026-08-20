@@ -10,6 +10,7 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
+import uuid
 from datetime import time, timedelta
 from typing import Any
 from unittest import mock
@@ -2709,6 +2710,117 @@ def test_assets_upload_chunk_past_the_end_drops_the_partial(
         assert gapped.status_code == 409
         assert Asset.objects.count() == 0
         assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_rejects_a_chunk_that_lies_about_its_length(
+    client: Client, tmp_path: Any
+) -> None:
+    """A body shorter or longer than its declared range would be
+    written at the wrong offset, leaving the asset misaligned at
+    exactly the right size."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'0123456789', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/20',
+            },
+        )
+
+    assert response.status_code == 400
+    assert Asset.objects.count() == 0
+    assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_refuses_a_file_larger_than_free_space(
+    client: Client, tmp_path: Any
+) -> None:
+    """Checked before any bytes are written: the alternative is an
+    hour of uploading followed by failure."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    usage = mock.Mock(free=10)
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.shutil.disk_usage', return_value=usage
+        ),
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/1000',
+            },
+        )
+
+    assert response.status_code == 507
+    assert Asset.objects.count() == 0
+    assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_final_chunk_truncates_a_longer_earlier_attempt(
+    client: Client, tmp_path: Any
+) -> None:
+    """A retry that declares a shorter total must not leave the tail of
+    a longer attempt on the end of the asset."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    upload_id = uuid.uuid4().hex
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'0' * 20, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-19/40',
+                'X-Upload-Id': upload_id,
+            },
+        )
+        # Same session, now finishing a shorter file.
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'1' * 5, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 5-9/10',
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+        asset = Asset.objects.get()
+        assert asset.uri is not None
+        with open(asset.uri, 'rb') as f:
+            assert f.read() == b'0' * 5 + b'1' * 5
 
 
 @pytest.mark.django_db

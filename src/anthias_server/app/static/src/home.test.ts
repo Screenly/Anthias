@@ -185,16 +185,20 @@ describe('chunked uploads', () => {
     ])
   })
 
-  test('the id from the first response rides on every later chunk', async () => {
+  // The client mints the id, so the server's echo cannot move an
+  // upload onto a different staged file part-way through.
+  test('the same id rides every chunk, whatever the server echoes', async () => {
     setChunkSizeMb('0.001')
     stubXhr([
-      { status: 200, body: '{"upload_id":"abc123"}' },
-      { status: 200, body: '{"upload_id":"abc123"}' },
+      { status: 200, body: '{"upload_id":"server-said-this"}' },
+      { status: 200, body: '{"upload_id":"and-then-this"}' },
       { status: 200 },
     ])
     await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
 
-    expect(requests.map((r) => r.uploadId)).toEqual([null, 'abc123', 'abc123'])
+    const ids = requests.map((r) => r.uploadId)
+    expect(new Set(ids).size).toBe(1)
+    expect(ids[0]).not.toBe('server-said-this')
   })
 
   // The regression this exists for: a raw Blob from File.slice()
@@ -259,15 +263,76 @@ describe('chunked uploads', () => {
     expect(toasts[0]?.message).toContain('File too large')
   })
 
-  // Without an id the next chunk would open a second staged file on
-  // the server and the upload could never complete.
-  test('a missing upload id fails instead of starting over', async () => {
+  // A 200 that is not the chunk acknowledgement is the server
+  // refusing this file and answering with its own toast, which the
+  // single-shot path would have replayed. Treat it the same way: one
+  // file rejected, batch intact.
+  test('a non-JSON 200 is a rejection, not a transport failure', async () => {
     setChunkSizeMb('0.001')
-    stubXhr([{ status: 200, body: 'not json' }])
+    stubXhr([{ status: 200 }])
     await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
 
     expect(sends).toBe(1)
-    expect(toasts).toHaveLength(1)
+    // No client-invented error: the server's own toast stands alone.
+    expect(toasts).toEqual([])
+  })
+})
+
+describe('chunked upload failures', () => {
+  // The server words these better than any status code can, and the
+  // free-space refusal in particular is something the operator can
+  // act on directly.
+  test("a chunk error shows the server's own explanation", async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 507, body: '{"error":"Not enough disk space, free some up"}' },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(toasts[0]?.message).toBe('Not enough disk space, free some up')
+  })
+
+  // Type validation runs before staging, so a refused file answers the
+  // first chunk with the asset table and its own toast. That is one
+  // file being rejected, not a transport failure: the rest of the
+  // selection must still upload, exactly as single-shot behaves.
+  test('a refused file does not kill the rest of the batch', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([{ status: 200 }])
+    const input = {
+      value: '',
+      files: [
+        new File([new Uint8Array(2500)], 'doc.pdf', { type: 'application/pdf' }),
+        new File([new Uint8Array(10)], 'ok.mp4', { type: 'video/mp4' }),
+      ],
+      form: {
+        getAttribute: () => '/assets/upload/',
+        querySelector: () => ({ value: 'test-csrf' }),
+      },
+    } as unknown as HTMLInputElement
+
+    await window.homeApp().uploadFiles(input)
+
+    // Both attempted: the rejection did not abort the batch.
+    expect(sends).toBe(2)
+  })
+
+  // The server mints nothing now: a retry of chunk 0 that lost its
+  // response would otherwise strand the staged bytes under an id the
+  // client never learned.
+  test('the upload id is the client\'s own, sent from the first chunk', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"ignored"}' },
+      { status: 200, body: '{"upload_id":"ignored"}' },
+      { status: 200 },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    const ids = requests.map((r) => r.uploadId)
+    expect(ids[0]).toMatch(/^[0-9a-f]{32}$/)
+    expect(new Set(ids).size).toBe(1)
   })
 })
 

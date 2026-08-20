@@ -61,19 +61,14 @@ def clamp_screen_rotation(value: Any) -> int:
 # the name cannot drift from the code that writes into it.
 STAGED_UPLOAD_DIR = '.uploads'
 
-# How long a partial upload survives without being written to. A full
-# day rather than the hour every other stray file in the asset dir
-# gets: an operator who pauses a large upload should find their bytes
-# still there, and a partial swept mid-upload is recreated by the next
-# chunk's seek as a sparse file, so the finished asset would be
-# silently corrupt instead of failing.
-STAGED_UPLOAD_MAX_AGE_MIN = 60 * 24
+# How long a partial upload survives without being written to. An
+# upload cannot be resumed once abandoned, so holding one longer only
+# occupies the card; the same hour every other stray file in the asset
+# dir gets is enough to cover a slow upload still in progress. A
+# partial swept mid-upload is caught by the offset guard in
+# _stage_upload_chunk and fails loudly rather than corrupting.
+STAGED_UPLOAD_MAX_AGE_MIN = 60
 
-# Headroom an upload must leave free on the device. A player that
-# fills its card stops being a player: the viewer cannot write, and
-# SQLite cannot either. 512 MB is roughly a normalisation pass plus
-# room for the database to breathe.
-STAGED_UPLOAD_FREE_MARGIN = 512 * 1024 * 1024
 
 # Operator-facing message for ENOSPC during an upload — shared by the
 # HTML upload toast and the API's 507 response so the wording can't

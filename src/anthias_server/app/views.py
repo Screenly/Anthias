@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import os
 import re
@@ -37,7 +36,6 @@ from django.views.decorators.http import require_http_methods
 from anthias_common.utils import (
     DISK_FULL_ERROR,
     STAGED_UPLOAD_DIR,
-    STAGED_UPLOAD_FREE_MARGIN,
     clamp_screen_rotation,
     connect_to_redis,
     is_disk_full,
@@ -92,36 +90,10 @@ _UPLOAD_ID_RE = re.compile(r'[0-9a-f]{32}')
 _CONTENT_RANGE_RE = re.compile(r'bytes (\d{1,19})-(\d{1,19})/(\d{1,19})')
 
 
-def _staged_upload_name(request: HttpRequest, upload_id: str) -> str:
-    """On-disk stem for ``upload_id``, scoped to the calling session.
-
-    Knowing a stranger's id would otherwise be enough to finish their
-    staged bytes as your own asset, or to delete their partial. With
-    auth off (the default) there is no session, and the stem degrades
-    to an unguessable function of the id.
-    """
-    session_key = getattr(request, 'session', None)
-    salt = getattr(session_key, 'session_key', None) or ''
-    digest = hashlib.sha256(f'{upload_id}:{salt}'.encode()).hexdigest()
-    return digest[:32]
-
-
-def _staged_upload_path(request: HttpRequest, upload_id: str) -> str:
+def _staged_upload_path(upload_id: str) -> str:
     """Absolute path of the partial file for ``upload_id``."""
-    stem = _staged_upload_name(request, upload_id)
-    return path.join(settings['assetdir'], STAGED_UPLOAD_DIR, f'{stem}.part')
-
-
-def _committed_upload_path(request: HttpRequest, upload_id: str) -> str:
-    """Marker left behind when an upload has already become an asset.
-
-    Retrying a chunk whose request timed out after it succeeded would
-    otherwise build a second asset: the staged file is renamed away on
-    commit, so nothing distinguishes the replay from a fresh upload.
-    Swept on the same deadline as the partials.
-    """
-    stem = _staged_upload_name(request, upload_id)
-    return path.join(settings['assetdir'], STAGED_UPLOAD_DIR, f'{stem}.done')
+    staged = path.join(settings['assetdir'], STAGED_UPLOAD_DIR)
+    return path.join(staged, f'{upload_id}.part')
 
 
 class _ChunkedUploadError(Exception):
@@ -187,13 +159,8 @@ def _stage_upload_chunk(
             raise _ChunkedUploadError('Malformed upload id. Please try again.')
 
     staged_dir = path.join(settings['assetdir'], STAGED_UPLOAD_DIR)
-    staged_path = _staged_upload_path(request, upload_id)
+    staged_path = _staged_upload_path(upload_id)
     is_final = end_bytes + 1 == total_bytes
-
-    if path.exists(_committed_upload_path(request, upload_id)):
-        raise _ChunkedUploadError(
-            'This upload has already finished.', status_code=409
-        )
 
     # Refuse an upload that cannot fit before writing any of it: the
     # alternative is an hour of sending followed by failure, with the
@@ -203,7 +170,7 @@ def _stage_upload_chunk(
             free = shutil.disk_usage(settings['assetdir']).free
         except OSError:
             free = None
-        if free is not None and total_bytes + STAGED_UPLOAD_FREE_MARGIN > free:
+        if free is not None and total_bytes > free:
             raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507)
 
     try:
@@ -870,10 +837,6 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
             # The bytes are already on disk in the asset dir, so this
             # is a rename within one filesystem rather than a copy.
             os.replace(staged_path, final_path)
-            # Before the row exists, so a retry arriving mid-request
-            # is turned away rather than building a second asset.
-            with suppress(OSError):
-                open(_committed_upload_path(request, upload_id), 'wb').close()
         else:
             with open(final_path, 'wb') as f:
                 f.writelines(file_upload.chunks())

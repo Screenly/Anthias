@@ -605,17 +605,16 @@ def cleanup() -> None:
     # outlive the hour above; see STAGED_UPLOAD_MAX_AGE_MIN for why.
     staged_dir = path.join(asset_dir, STAGED_UPLOAD_DIR)
     if path.isdir(staged_dir):
-        for pattern in ('*.part', '*.done'):
-            sh.find(
-                staged_dir,
-                '-name',
-                pattern,
-                '-type',
-                'f',
-                '-mmin',
-                f'+{STAGED_UPLOAD_MAX_AGE_MIN}',
-                '-delete',
-            )
+        sh.find(
+            staged_dir,
+            '-name',
+            '*.part',
+            '-type',
+            'f',
+            '-mmin',
+            f'+{STAGED_UPLOAD_MAX_AGE_MIN}',
+            '-delete',
+        )
 
     # Orphaned asset files: forum 6636 / GH #2657. Asset rows can be
     # deleted while their file lingers (e.g. URI didn't match assetdir
