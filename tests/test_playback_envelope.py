@@ -281,3 +281,52 @@ def test_as_dict_round_trips_for_templates() -> None:
     payload = warning.as_dict()
     assert set(payload) == {'code', 'severity', 'message', 'remedy'}
     assert payload['severity'] == env.BLOCKING
+
+
+# ---------------------------------------------------------------------------
+# Helpers — exercised directly, since evaluate() cannot reach every guard
+# ---------------------------------------------------------------------------
+
+
+def test_as_positive_int_rejects_unparseable_values() -> None:
+    """Metadata arrives from JSON and from rows written by older
+    releases, so a dimension can be a non-numeric string. That must
+    read as "not measured" rather than raising out of the filter that
+    renders every asset row."""
+    for value in ('abc', '', 'N/A', [], {}, object()):
+        assert env._as_positive_int(value) is None
+    # Booleans are ints in Python; treating True as 1 would invent a
+    # dimension out of a flag.
+    assert env._as_positive_int(True) is None
+    assert env._as_positive_int(False) is None
+    # Genuine values still pass, including numeric strings and floats.
+    assert env._as_positive_int('3840') == 3840
+    assert env._as_positive_int(1080.0) == 1080
+
+
+def test_dimensions_label_handles_unmeasured_dimensions() -> None:
+    """Defensive guard in the message builder. ``evaluate`` only calls
+    this once a dimension check has passed, so it is unreachable from
+    there — but the helper must not render ``NonexNone`` into an
+    operator-facing message if that ever changes."""
+    assert env._dimensions_label({}) == 'unknown size'
+    assert env._dimensions_label({'video_width': 1920}) == 'unknown size'
+    assert (
+        env._dimensions_label({'video_width': 3840, 'video_height': 2160})
+        == '3840x2160'
+    )
+
+
+def test_playback_warning_equality_and_repr() -> None:
+    """``__eq__`` is what lets tests compare findings by value, and
+    ``__repr__`` is what pytest prints when one fails."""
+    a = env.PlaybackWarning('code', env.BLOCKING, 'msg', 'fix')
+    same = env.PlaybackWarning('code', env.BLOCKING, 'msg', 'fix')
+    different = env.PlaybackWarning('code', env.ADVISORY, 'msg', 'fix')
+    assert a == same
+    assert a != different
+    # Comparing against a non-warning defers rather than raising, so
+    # `warning in [...]` and `== []` behave sanely.
+    assert a.__eq__('not a warning') is NotImplemented
+    assert a != 'not a warning'
+    assert repr(a) == "PlaybackWarning('code', 'blocking')"

@@ -3158,3 +3158,108 @@ def test_video_unmeasured_dimensions_do_not_block(
         'vid-unmeasured',
     )
     assert asset.is_processing is False
+
+
+@pytest.mark.parametrize(
+    'stream_rate,format_rate,expected',
+    [
+        # ffprobe writes the literal string 'N/A' rather than omitting
+        # the key on plenty of containers — the common real-world case.
+        ('N/A', '9000000', 9000000),
+        ('N/A', 'N/A', None),
+        (None, None, None),
+        # A zero or negative rate is not a measurement either, and must
+        # not stop the fallback to the container figure.
+        ('0', '8000000', 8000000),
+    ],
+)
+def test_ffprobe_summary_bitrate_survives_unparseable_values(
+    stream_rate: str | None, format_rate: str | None, expected: int | None
+) -> None:
+    """An unreadable bitrate must collapse to None, not raise.
+
+    ``_ffprobe_summary`` runs for every video upload, so a ValueError
+    here would fail the whole normalisation task over a diagnostic
+    field nothing branches on.
+    """
+    video: dict[str, object] = {
+        'codec_type': 'video',
+        'codec_name': 'h264',
+        'width': 1920,
+        'height': 1080,
+    }
+    if stream_rate is not None:
+        video['bit_rate'] = stream_rate
+    fmt: dict[str, object] = {'format_name': 'mp4'}
+    if format_rate is not None:
+        fmt['bit_rate'] = format_rate
+    fake = {'format': fmt, 'streams': [video]}
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_bit_rate'] == expected
+
+
+@pytest.mark.parametrize('level', ['N/A', 'high', '', [], {}])
+def test_ffprobe_summary_level_survives_unparseable_values(
+    level: object,
+) -> None:
+    """Same for the declared level. It is recorded for diagnostics and
+    nothing branches on it, so an exotic value must read as absent
+    rather than failing the upload."""
+    fake = {
+        'format': {'format_name': 'mp4'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 1920,
+                'height': 1080,
+                'level': level,
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_level'] is None
+    # The rest of the summary is still populated — one bad field must
+    # not poison the others.
+    assert summary['video_width'] == 1920
+    assert summary['video_codec'] == 'h264'
+
+
+def test_ffmpeg_recipe_hevc_only_board_emits_x265() -> None:
+    """The HEVC-only branch of the recipe builder.
+
+    No board currently ships an HEVC-only supported set (Pi 5 gained
+    an H.264 software-decode fallback), so this branch is unreachable
+    through the gate today and is exercised directly. It stays because
+    the codec sets are per-board data that can change, and a recipe
+    that silently emitted libx264 for an HEVC-only board would hand
+    the operator a file that fails the same gate again.
+    """
+    recipe = processing._ffmpeg_reencode_recipe(
+        frozenset({'hevc'}), 'clip.mov'
+    )
+    assert 'libx265' in recipe
+    assert '-tag:v hvc1' in recipe
+    assert 'libx264' not in recipe
+    assert recipe.endswith('clip.hevc.mp4')
+    # Neither optional clause is emitted unless asked for.
+    assert '-vf scale=' not in recipe
+    assert '-pix_fmt yuv420p' not in recipe
+
+
+def test_ffmpeg_recipe_hevc_branch_honours_downscale_and_pix_fmt() -> None:
+    """Both optional clauses land in the HEVC branch too, in the same
+    order as the H.264 one — scale before the encoder settings, pixel
+    format after them."""
+    recipe = processing._ffmpeg_reencode_recipe(
+        frozenset({'hevc'}),
+        'clip.mov',
+        cap_to_1080p=True,
+        force_8bit_420=True,
+    )
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert '-pix_fmt yuv420p' in recipe
+    assert recipe.index('-vf scale=') < recipe.index('libx265')
+    assert recipe.index('libx265') < recipe.index('-pix_fmt yuv420p')
