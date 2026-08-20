@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import certifi
 import pytz
 import redis
+import redis.asyncio
 import requests
 import sh
 import urllib3
@@ -727,6 +728,17 @@ def generate_perfect_paper_password(
 
 def connect_to_redis() -> 'redis.Redis':
     return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+
+
+def connect_to_redis_async() -> 'redis.asyncio.Redis':
+    """Async twin of :func:`connect_to_redis`, for the ASGI paths.
+
+    A separate client rather than a shared one: redis-py's sync and
+    async clients can't share a connection pool.
+    """
+    return redis.asyncio.Redis(
+        host='redis', decode_responses=True, port=6379, db=0
+    )
 
 
 def is_docker() -> bool:

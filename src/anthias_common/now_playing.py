@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 #: Redis key holding the asset_id the viewer is displaying.
 NOW_PLAYING_KEY = 'viewer:now_playing_asset_id'
 
+#: Pub/sub channel carrying the same value to anyone who wants it
+#: pushed rather than polled — today the WebSocket consumer, which
+#: nudges open browsers so the highlight arrives with the picture
+#: rather than up to 5s later. Its own channel, not the viewer command
+#: bus: the audience here is browsers, not the viewer.
+NOW_PLAYING_CHANNEL = 'anthias.now_playing'
+
 #: How long the fact outlives the last thing the viewer said. Same
 #: 3-minute window as the display-resolution fact, and for the same
 #: reason: it must survive an ordinary slow tick but not a dead viewer.
@@ -70,12 +77,19 @@ def _warn_once(key: str, message: str, exc: Exception) -> None:
 
 
 def publish(client: Any, asset_id: str | None) -> None:
-    """Record the asset now on screen."""
+    """Record — and announce — the asset now on screen."""
     if not asset_id:
         clear(client)
         return
     try:
-        client.set(NOW_PLAYING_KEY, asset_id, ex=TTL_S)
+        # SET always runs: it is what refreshes the TTL. The
+        # announcement is what gets deduped, because every open browser
+        # turns one into a full table re-render, and a single-asset
+        # playlist would otherwise pay that on every loop for no news.
+        # ``get=True`` returns the previous value (Redis >= 6.2).
+        previous = client.set(NOW_PLAYING_KEY, asset_id, ex=TTL_S, get=True)
+        if previous != asset_id:
+            client.publish(NOW_PLAYING_CHANNEL, asset_id)
     except Exception as exc:
         _warn_once('publish', 'Could not publish the now-playing asset', exc)
 
@@ -94,9 +108,16 @@ def refresh(client: Any) -> None:
 
 
 def clear(client: Any) -> None:
-    """Record that nothing is on screen."""
+    """Record that nothing is on screen.
+
+    Announced only when something actually stopped: the viewer clears
+    on every tick of an empty playlist, and an unconditional
+    announcement would nudge every open browser into a table re-render
+    several times a minute on an idle device.
+    """
     try:
-        client.delete(NOW_PLAYING_KEY)
+        if client.delete(NOW_PLAYING_KEY):
+            client.publish(NOW_PLAYING_CHANNEL, '')
     except Exception as exc:
         _warn_once('clear', 'Could not clear the now-playing asset', exc)
 

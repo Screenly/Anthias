@@ -25,9 +25,11 @@ def _reset_warn_latch() -> Iterator[None]:
     now_playing._warned.clear()
 
 
-def _client(get_value: Any = None) -> Any:
+def _client(get_value: Any = None, previous: Any = None) -> Any:
     client = mock.MagicMock()
     client.get.return_value = get_value
+    # SET ... GET returns the value the key held before the write.
+    client.set.return_value = previous
     return client
 
 
@@ -43,8 +45,32 @@ def test_publish_writes_the_asset_id_with_the_liveness_ttl() -> None:
     client = _client()
     now_playing.publish(client, 'abc123')
     client.set.assert_called_once_with(
-        now_playing.NOW_PLAYING_KEY, 'abc123', ex=now_playing.TTL_S
+        now_playing.NOW_PLAYING_KEY,
+        'abc123',
+        ex=now_playing.TTL_S,
+        get=True,
     )
+
+
+def test_publish_announces_a_change() -> None:
+    """Open browsers are told immediately rather than finding out on
+    their next 5s poll."""
+    client = _client(previous='something-else')
+    now_playing.publish(client, 'abc123')
+    client.publish.assert_called_once_with(
+        now_playing.NOW_PLAYING_CHANNEL, 'abc123'
+    )
+
+
+def test_publish_is_quiet_when_the_asset_has_not_changed() -> None:
+    """A one-asset playlist rotates forever with no news. Every
+    announcement costs every open browser a full table re-render, so
+    repeats must not be announced — but the write still happens,
+    because that is what refreshes the TTL."""
+    client = _client(previous='abc123')
+    now_playing.publish(client, 'abc123')
+    client.set.assert_called_once()
+    client.publish.assert_not_called()
 
 
 def test_publish_without_an_asset_id_clears_instead() -> None:
@@ -83,6 +109,23 @@ def test_refresh_swallows_redis_errors() -> None:
 # ---------------------------------------------------------------------------
 # clear
 # ---------------------------------------------------------------------------
+
+
+def test_clear_announces_that_nothing_is_playing() -> None:
+    client = _client()
+    client.delete.return_value = 1
+    now_playing.clear(client)
+    client.publish.assert_called_once_with(now_playing.NOW_PLAYING_CHANNEL, '')
+
+
+def test_clear_is_quiet_when_nothing_was_playing() -> None:
+    """The viewer clears on every tick of an empty playlist, so an
+    unconditional announcement would nudge every open browser into a
+    table re-render several times a minute on an idle device."""
+    client = _client()
+    client.delete.return_value = 0
+    now_playing.clear(client)
+    client.publish.assert_not_called()
 
 
 def test_clear_swallows_redis_errors() -> None:
