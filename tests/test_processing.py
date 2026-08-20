@@ -2925,3 +2925,236 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+# ---------------------------------------------------------------------------
+# Decode-envelope gate — the stream, not just the codec
+# ---------------------------------------------------------------------------
+
+
+def _envelope_summary(**overrides: object) -> dict[str, object]:
+    """An ``_ffprobe_summary``-shaped dict for envelope gate tests."""
+    summary: dict[str, object] = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 25.0,
+        'video_pix_fmt': 'yuv420p',
+        'video_bit_rate': 8_000_000,
+        'video_level': 40,
+        'video_profile': 'High',
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+    summary.update(overrides)
+    return summary
+
+
+def _run_envelope_gate(
+    asset_dir: str, summary: dict[str, object], asset_id: str
+) -> Asset:
+    """Run the video gate against ``summary`` on a high-RAM board."""
+    src = path.join(asset_dir, f'{asset_id}.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        asset_id,
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'clip.mp4'},
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+    return asset
+
+
+@pytest.mark.django_db
+def test_video_pi4_rejects_4k_h264_despite_supported_codec(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reported failure, as a regression test.
+
+    H.264 is in pi4-64's supported set and the board has plenty of
+    RAM, so both existing gates wave a 3840x2160 clip through — and
+    the viewer then plays it at roughly 4 fps because the frame is
+    too large for /dev/video10. The envelope gate is what catches it.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'fourk.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-4k-pi4',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'fringe-4k.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=3840, video_height=2160, video_pixels=3840 * 2160
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert '3840x2160' in msg
+    assert '1920' in msg
+    recipe = excinfo.value.recipe
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert 'libx264' in recipe
+    assert excinfo.value.handbrake
+    # Metadata is still committed so the operator can see what they
+    # uploaded next to the rejection.
+    asset.refresh_from_db()
+    assert asset.metadata.get('video_width') == 3840
+
+
+@pytest.mark.django_db
+def test_video_pi4_accepts_1080p_tagged_level_51(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The false positive the gate must never produce.
+
+    A 1920x1080 stream carrying an inflated ``level=51`` tag decodes
+    in hardware on a Pi 4 — the V4L2 driver exposes the level control
+    read-only and never validates the bitstream against it. Gating on
+    the level would have rejected this working file.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(video_level=51),
+        'vid-1080p-l51',
+    )
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_level') == 51
+    assert 'error_message' not in asset.metadata
+
+
+@pytest.mark.django_db
+def test_video_pi4_accepts_portrait_1080x1920(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MAX_H_CODEC is 1920, so portrait signage is inside the
+    envelope. Treating the bound as a 1080p area budget would reject
+    every portrait lobby screen."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(
+            video_width=1080, video_height=1920, video_pixels=1080 * 1920
+        ),
+        'vid-portrait',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.django_db
+def test_video_pi4_rejects_10bit_with_pix_fmt_recipe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A High 10 source is refused by the decoder's capture queue.
+
+    The recipe must carry ``-pix_fmt yuv420p``: libx264 preserves the
+    source bit depth by default, so without it the operator would
+    dutifully re-encode and produce another 10-bit file.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'tenbit.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-10bit', src, mimetype='video', metadata={'upload_name': 'a.mp4'}
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing,
+            '_ffprobe_summary',
+            return_value=_envelope_summary(video_pix_fmt='yuv420p10le'),
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert 'yuv420p10le' in str(excinfo.value)
+    assert '-pix_fmt yuv420p' in excinfo.value.recipe
+    # Frame size was fine, so the recipe must not also downscale.
+    assert '-vf scale=' not in excinfo.value.recipe
+
+
+@pytest.mark.django_db
+def test_video_pi5_accepts_4k_h264_advisory_only(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pi 5 decodes H.264 in software, so 4K is a judgement call
+    rather than a driver refusal — advisory, never a rejection."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(
+            video_width=3840, video_height=2160, video_pixels=3840 * 2160
+        ),
+        'vid-4k-pi5-h264',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.django_db
+def test_video_high_bitrate_alone_does_not_block(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """115 Mbps at 1080p uploads cleanly.
+
+    Measured on a Pi 4B: 1080p25 H.264 decodes through h264_v4l2m2m
+    at 62 fps even at ~137 Mbps, comfortably above the 25 fps the
+    clip needs. Bitrate on its own is not evidence of a playback
+    problem and must never gate an upload.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(video_bit_rate=115_305_441),
+        'vid-fat-bitrate',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.django_db
+def test_video_unmeasured_dimensions_do_not_block(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An asset whose dimensions ffprobe could not read must pass.
+    Rejecting on a measurement we never took is the false positive
+    that would erode trust in the whole gate."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(
+            video_width=None, video_height=None, video_pixels=None
+        ),
+        'vid-unmeasured',
+    )
+    assert asset.is_processing is False
