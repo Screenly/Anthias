@@ -1082,6 +1082,10 @@ def test_video_unknown_codec_is_rejected(
         'video_width': None,
         'video_height': None,
         'video_fps': None,
+        'video_pix_fmt': None,
+        'video_bit_rate': None,
+        'video_level': None,
+        'video_profile': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -1621,6 +1625,99 @@ def test_ffprobe_summary_parses_video_fps(
         assert summary['video_fps'] == pytest.approx(expected_fps)
 
 
+def test_ffprobe_summary_captures_envelope_fields() -> None:
+    """``pix_fmt`` / ``bit_rate`` feed the decode envelope, and
+    ``level`` / ``profile`` are recorded for diagnostics."""
+    fake = {
+        'format': {'format_name': 'mov,mp4', 'duration': '76.28'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 3840,
+                'height': 2160,
+                'pix_fmt': 'yuv420p',
+                'bit_rate': '115305441',
+                'level': 51,
+                'profile': 'High',
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_pix_fmt'] == 'yuv420p'
+    assert summary['video_bit_rate'] == 115305441
+    assert summary['video_level'] == 51
+    assert summary['video_profile'] == 'High'
+
+
+def test_ffprobe_summary_falls_back_to_container_bitrate() -> None:
+    """Matroska and some MP4 muxers omit the per-stream bitrate; the
+    container's overall figure is close enough for an advisory whose
+    threshold sits far above any audio track."""
+    fake = {
+        'format': {'format_name': 'matroska', 'bit_rate': '90000000'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 1920,
+                'height': 1080,
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mkv')
+    assert summary['video_bit_rate'] == 90000000
+
+
+def test_ffprobe_summary_envelope_fields_absent_are_none() -> None:
+    """A stream ffprobe couldn't fully characterise must yield
+    ``None`` rather than a placeholder — the envelope treats ``None``
+    as "not measured" and stays silent, which is the safe default.
+
+    ffprobe writes a negative ``level`` (commonly ``-99``) when the
+    container carries none; that must not survive as a real value.
+    """
+    fake = {
+        'format': {'format_name': 'mp4'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'level': -99,
+                'profile': '',
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_pix_fmt'] is None
+    assert summary['video_bit_rate'] is None
+    assert summary['video_level'] is None
+    assert summary['video_profile'] is None
+
+
+def test_ffprobe_summary_probe_failure_includes_envelope_keys() -> None:
+    """The all-unknown fallback must carry every key the normal path
+    returns, or callers reading ``video_pix_fmt`` would KeyError on a
+    probe that timed out."""
+    with mock.patch.object(
+        processing,
+        '_ffprobe_streams',
+        side_effect=sh.CommandNotFound('ffprobe'),
+    ):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    for key in (
+        'video_pix_fmt',
+        'video_bit_rate',
+        'video_level',
+        'video_profile',
+    ):
+        assert key in summary, f'{key} missing from probe-failure summary'
+        assert summary[key] is None
+
+
 def test_ffprobe_summary_prefers_extension_match_in_synonym_list() -> None:
     """ffprobe's ``format_name`` for the QuickTime family is a
     synonym list (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``). Operator-facing
@@ -1696,6 +1793,10 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
         'video_width': None,
         'video_height': None,
         'video_fps': None,
+        'video_pix_fmt': None,
+        'video_bit_rate': None,
+        'video_level': None,
+        'video_profile': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -1786,6 +1887,10 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
         'video_width': None,
         'video_height': None,
         'video_fps': None,
+        'video_pix_fmt': None,
+        'video_bit_rate': None,
+        'video_level': None,
+        'video_profile': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
