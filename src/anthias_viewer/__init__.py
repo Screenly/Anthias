@@ -19,7 +19,7 @@ import redis.exceptions
 import requests
 import sh as sh
 
-from anthias_common import smart, storage_health
+from anthias_common import now_playing, smart, storage_health
 from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.lib import cec, cec_client
@@ -781,6 +781,10 @@ def blank_display() -> None:
     global display_blanked, loop_is_stopped
     display_blanked = True
     loop_is_stopped = True
+    # Unlike stop, which freezes a visible frame, this leaves nothing on
+    # screen for the schedule table to point at (#3177). The loop stops
+    # running here, so this is the last chance to say so.
+    now_playing.clear(r)
     if _is_wayland_board():
         _apply_wlr_power(False)
     # Wake the main thread out of any in-progress asset sleep so it
@@ -2380,6 +2384,7 @@ def asset_loop(scheduler: Any) -> None:
                 EMPTY_PL_DELAY,
             )
             _empty_playlist_logged = True
+        now_playing.clear(r)
         view_image(STANDBY_SCREEN)
         skip_event = get_skip_event()
         skip_event.clear()
@@ -2404,6 +2409,9 @@ def asset_loop(scheduler: Any) -> None:
         # rejects such values on write, but a pre-existing row must
         # not take the screen down.
         duration = clamp_duration(asset['duration'])
+        # Before the blocking view_* call, so the table highlights the
+        # row as the asset goes up rather than after it comes down.
+        now_playing.publish(r, asset.get('asset_id'))
         logger.info('Showing asset %s (%s)', name, mime)
         logger.debug('Asset URI %s', uri)
         watchdog()
@@ -2638,6 +2646,33 @@ def _publish_display_resolution_loop() -> None:
     t.start()
 
 
+def _refresh_now_playing_loop() -> None:
+    """Background reporter — keep the now-playing fact from expiring.
+
+    The fact's TTL is a liveness signal (see
+    :mod:`anthias_common.now_playing`), so something has to say "still
+    here" more often than a rotation does: a pinned dashboard asset can
+    hold the screen for an hour, and a stopped viewer holds it
+    indefinitely. Both are cases where the row really is on screen and
+    the highlight should stay.
+
+    Runs regardless of ``loop_is_stopped`` for exactly that reason. It
+    can't resurrect a retired fact — ``blank`` deletes the key, and
+    EXPIRE on a missing key does nothing.
+    """
+    import threading
+
+    def tick() -> None:
+        while True:
+            now_playing.refresh(r)
+            sleep(now_playing.REFRESH_INTERVAL_S)
+
+    t = threading.Thread(
+        target=tick, name='now-playing-refresher', daemon=True
+    )
+    t.start()
+
+
 def _publish_smart_loop() -> None:
     """Background reporter -- sample SMART and publish it for the server.
 
@@ -2720,6 +2755,8 @@ def main() -> None:
     _publish_cec_availability()
 
     _publish_display_resolution_loop()
+
+    _refresh_now_playing_loop()
 
     _publish_smart_loop()
 

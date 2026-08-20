@@ -233,6 +233,14 @@
   --color-success-ring: rgb(52 211 153 / 0.18);
   --color-success-ring-pulse: rgb(52 211 153 / 0.32);
   --color-success-on-wash: var(--color-green-900);
+  /* --color-success-fill is a BACKGROUND, for the "Playing now"
+     chip, with --color-on-success written on top — the same
+     split --color-danger draws above. Neither is redeclared in
+     theme-dark.css, because --color-success-on-wash (the ink
+     for the translucent wash) flips to green-50 there, and
+     reusing it on a solid fill measures 1.85:1 in dark. */
+  --color-success-fill: var(--color-green-500);
+  --color-on-success: var(--color-green-900);
   --color-success-on-wash-strong: var(--color-green-50);
 
   --color-focus-ring: rgb(124 48 205 / 0.35);
