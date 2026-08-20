@@ -1082,6 +1082,10 @@ def test_video_unknown_codec_is_rejected(
         'video_width': None,
         'video_height': None,
         'video_fps': None,
+        'video_pix_fmt': None,
+        'video_bit_rate': None,
+        'video_level': None,
+        'video_profile': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -1621,6 +1625,99 @@ def test_ffprobe_summary_parses_video_fps(
         assert summary['video_fps'] == pytest.approx(expected_fps)
 
 
+def test_ffprobe_summary_captures_envelope_fields() -> None:
+    """``pix_fmt`` / ``bit_rate`` feed the decode envelope, and
+    ``level`` / ``profile`` are recorded for diagnostics."""
+    fake = {
+        'format': {'format_name': 'mov,mp4', 'duration': '76.28'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 3840,
+                'height': 2160,
+                'pix_fmt': 'yuv420p',
+                'bit_rate': '115305441',
+                'level': 51,
+                'profile': 'High',
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_pix_fmt'] == 'yuv420p'
+    assert summary['video_bit_rate'] == 115305441
+    assert summary['video_level'] == 51
+    assert summary['video_profile'] == 'High'
+
+
+def test_ffprobe_summary_falls_back_to_container_bitrate() -> None:
+    """Matroska and some MP4 muxers omit the per-stream bitrate; the
+    container's overall figure is close enough for an advisory whose
+    threshold sits far above any audio track."""
+    fake = {
+        'format': {'format_name': 'matroska', 'bit_rate': '90000000'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 1920,
+                'height': 1080,
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mkv')
+    assert summary['video_bit_rate'] == 90000000
+
+
+def test_ffprobe_summary_envelope_fields_absent_are_none() -> None:
+    """A stream ffprobe couldn't fully characterise must yield
+    ``None`` rather than a placeholder — the envelope treats ``None``
+    as "not measured" and stays silent, which is the safe default.
+
+    ffprobe writes a negative ``level`` (commonly ``-99``) when the
+    container carries none; that must not survive as a real value.
+    """
+    fake = {
+        'format': {'format_name': 'mp4'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'level': -99,
+                'profile': '',
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_pix_fmt'] is None
+    assert summary['video_bit_rate'] is None
+    assert summary['video_level'] is None
+    assert summary['video_profile'] is None
+
+
+def test_ffprobe_summary_probe_failure_includes_envelope_keys() -> None:
+    """The all-unknown fallback must carry every key the normal path
+    returns, or callers reading ``video_pix_fmt`` would KeyError on a
+    probe that timed out."""
+    with mock.patch.object(
+        processing,
+        '_ffprobe_streams',
+        side_effect=sh.CommandNotFound('ffprobe'),
+    ):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    for key in (
+        'video_pix_fmt',
+        'video_bit_rate',
+        'video_level',
+        'video_profile',
+    ):
+        assert key in summary, f'{key} missing from probe-failure summary'
+        assert summary[key] is None
+
+
 def test_ffprobe_summary_prefers_extension_match_in_synonym_list() -> None:
     """ffprobe's ``format_name`` for the QuickTime family is a
     synonym list (e.g. ``mov,mp4,m4a,3gp,3g2,mj2``). Operator-facing
@@ -1696,6 +1793,10 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
         'video_width': None,
         'video_height': None,
         'video_fps': None,
+        'video_pix_fmt': None,
+        'video_bit_rate': None,
+        'video_level': None,
+        'video_profile': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -1786,6 +1887,10 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
         'video_width': None,
         'video_height': None,
         'video_fps': None,
+        'video_pix_fmt': None,
+        'video_bit_rate': None,
+        'video_level': None,
+        'video_profile': None,
         'audio_codec': 'unknown',
         'duration_seconds': None,
     }
@@ -2820,3 +2925,341 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+# ---------------------------------------------------------------------------
+# Decode-envelope gate — the stream, not just the codec
+# ---------------------------------------------------------------------------
+
+
+def _envelope_summary(**overrides: object) -> dict[str, object]:
+    """An ``_ffprobe_summary``-shaped dict for envelope gate tests."""
+    summary: dict[str, object] = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 25.0,
+        'video_pix_fmt': 'yuv420p',
+        'video_bit_rate': 8_000_000,
+        'video_level': 40,
+        'video_profile': 'High',
+        'audio_codec': 'aac',
+        'duration_seconds': 60,
+    }
+    summary.update(overrides)
+    return summary
+
+
+def _run_envelope_gate(
+    asset_dir: str, summary: dict[str, object], asset_id: str
+) -> Asset:
+    """Run the video gate against ``summary`` on a high-RAM board."""
+    src = path.join(asset_dir, f'{asset_id}.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        asset_id,
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'clip.mp4'},
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+    asset.refresh_from_db()
+    return asset
+
+
+@pytest.mark.django_db
+def test_video_pi4_rejects_4k_h264_despite_supported_codec(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reported failure, as a regression test.
+
+    H.264 is in pi4-64's supported set and the board has plenty of
+    RAM, so both existing gates wave a 3840x2160 clip through — and
+    the viewer then plays it at roughly 4 fps because the frame is
+    too large for /dev/video10. The envelope gate is what catches it.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'fourk.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-4k-pi4',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'fringe-4k.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=3840, video_height=2160, video_pixels=3840 * 2160
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert '3840x2160' in msg
+    assert '1920' in msg
+    recipe = excinfo.value.recipe
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert 'libx264' in recipe
+    assert excinfo.value.handbrake
+    # Metadata is still committed so the operator can see what they
+    # uploaded next to the rejection.
+    asset.refresh_from_db()
+    assert asset.metadata.get('video_width') == 3840
+
+
+@pytest.mark.django_db
+def test_video_pi4_accepts_1080p_tagged_level_51(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The false positive the gate must never produce.
+
+    A 1920x1080 stream carrying an inflated ``level=51`` tag decodes
+    in hardware on a Pi 4 — the V4L2 driver exposes the level control
+    read-only and never validates the bitstream against it. Gating on
+    the level would have rejected this working file.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(video_level=51),
+        'vid-1080p-l51',
+    )
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_level') == 51
+    assert 'error_message' not in asset.metadata
+
+
+@pytest.mark.django_db
+def test_video_pi4_accepts_portrait_1080x1920(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MAX_H_CODEC is 1920, so portrait signage is inside the
+    envelope. Treating the bound as a 1080p area budget would reject
+    every portrait lobby screen."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(
+            video_width=1080, video_height=1920, video_pixels=1080 * 1920
+        ),
+        'vid-portrait',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.django_db
+def test_video_pi4_rejects_10bit_with_pix_fmt_recipe(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A High 10 source is refused by the decoder's capture queue.
+
+    The recipe must carry ``-pix_fmt yuv420p``: libx264 preserves the
+    source bit depth by default, so without it the operator would
+    dutifully re-encode and produce another 10-bit file.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'tenbit.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-10bit', src, mimetype='video', metadata={'upload_name': 'a.mp4'}
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing,
+            '_ffprobe_summary',
+            return_value=_envelope_summary(video_pix_fmt='yuv420p10le'),
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert 'yuv420p10le' in str(excinfo.value)
+    assert '-pix_fmt yuv420p' in excinfo.value.recipe
+    # Frame size was fine, so the recipe must not also downscale.
+    assert '-vf scale=' not in excinfo.value.recipe
+
+
+@pytest.mark.django_db
+def test_video_pi5_accepts_4k_h264_advisory_only(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pi 5 decodes H.264 in software, so 4K is a judgement call
+    rather than a driver refusal — advisory, never a rejection."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(
+            video_width=3840, video_height=2160, video_pixels=3840 * 2160
+        ),
+        'vid-4k-pi5-h264',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.django_db
+def test_video_high_bitrate_alone_does_not_block(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """115 Mbps at 1080p uploads cleanly.
+
+    Measured on a Pi 4B: 1080p25 H.264 decodes through h264_v4l2m2m
+    at 62 fps even at ~137 Mbps, comfortably above the 25 fps the
+    clip needs. Bitrate on its own is not evidence of a playback
+    problem and must never gate an upload.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(video_bit_rate=115_305_441),
+        'vid-fat-bitrate',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.django_db
+def test_video_unmeasured_dimensions_do_not_block(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An asset whose dimensions ffprobe could not read must pass.
+    Rejecting on a measurement we never took is the false positive
+    that would erode trust in the whole gate."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset = _run_envelope_gate(
+        asset_dir,
+        _envelope_summary(
+            video_width=None, video_height=None, video_pixels=None
+        ),
+        'vid-unmeasured',
+    )
+    assert asset.is_processing is False
+
+
+@pytest.mark.parametrize(
+    'stream_rate,format_rate,expected',
+    [
+        # ffprobe writes the literal string 'N/A' rather than omitting
+        # the key on plenty of containers — the common real-world case.
+        ('N/A', '9000000', 9000000),
+        ('N/A', 'N/A', None),
+        (None, None, None),
+        # A zero or negative rate is not a measurement either, and must
+        # not stop the fallback to the container figure.
+        ('0', '8000000', 8000000),
+    ],
+)
+def test_ffprobe_summary_bitrate_survives_unparseable_values(
+    stream_rate: str | None, format_rate: str | None, expected: int | None
+) -> None:
+    """An unreadable bitrate must collapse to None, not raise.
+
+    ``_ffprobe_summary`` runs for every video upload, so a ValueError
+    here would fail the whole normalisation task over a diagnostic
+    field nothing branches on.
+    """
+    video: dict[str, object] = {
+        'codec_type': 'video',
+        'codec_name': 'h264',
+        'width': 1920,
+        'height': 1080,
+    }
+    if stream_rate is not None:
+        video['bit_rate'] = stream_rate
+    fmt: dict[str, object] = {'format_name': 'mp4'}
+    if format_rate is not None:
+        fmt['bit_rate'] = format_rate
+    fake = {'format': fmt, 'streams': [video]}
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_bit_rate'] == expected
+
+
+@pytest.mark.parametrize('level', ['N/A', 'high', '', [], {}])
+def test_ffprobe_summary_level_survives_unparseable_values(
+    level: object,
+) -> None:
+    """Same for the declared level. It is recorded for diagnostics and
+    nothing branches on it, so an exotic value must read as absent
+    rather than failing the upload."""
+    fake = {
+        'format': {'format_name': 'mp4'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 1920,
+                'height': 1080,
+                'level': level,
+            },
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_level'] is None
+    # The rest of the summary is still populated — one bad field must
+    # not poison the others.
+    assert summary['video_width'] == 1920
+    assert summary['video_codec'] == 'h264'
+
+
+def test_ffmpeg_recipe_hevc_only_board_emits_x265() -> None:
+    """The HEVC-only branch of the recipe builder.
+
+    No board currently ships an HEVC-only supported set (Pi 5 gained
+    an H.264 software-decode fallback), so this branch is unreachable
+    through the gate today and is exercised directly. It stays because
+    the codec sets are per-board data that can change, and a recipe
+    that silently emitted libx264 for an HEVC-only board would hand
+    the operator a file that fails the same gate again.
+    """
+    recipe = processing._ffmpeg_reencode_recipe(
+        frozenset({'hevc'}), 'clip.mov'
+    )
+    assert 'libx265' in recipe
+    assert '-tag:v hvc1' in recipe
+    assert 'libx264' not in recipe
+    assert recipe.endswith('clip.hevc.mp4')
+    # Neither optional clause is emitted unless asked for.
+    assert '-vf scale=' not in recipe
+    assert '-pix_fmt yuv420p' not in recipe
+
+
+def test_ffmpeg_recipe_hevc_branch_honours_downscale_and_pix_fmt() -> None:
+    """Both optional clauses land in the HEVC branch too, in the same
+    order as the H.264 one — scale before the encoder settings, pixel
+    format after them."""
+    recipe = processing._ffmpeg_reencode_recipe(
+        frozenset({'hevc'}),
+        'clip.mov',
+        cap_to_1080p=True,
+        force_8bit_420=True,
+    )
+    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert '-pix_fmt yuv420p' in recipe
+    assert recipe.index('-vf scale=') < recipe.index('libx265')
+    assert recipe.index('libx265') < recipe.index('-pix_fmt yuv420p')

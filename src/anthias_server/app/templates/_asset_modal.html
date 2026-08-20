@@ -320,6 +320,35 @@
       >
         {% csrf_token %}
         <div class="modal-card__body">
+          {% comment %} Decode-envelope banner, for an asset already in
+             rotation whose stream is outside what this board can
+             decode. Distinct from the failure banner below: that one
+             reports an upload the pipeline refused, this one reports
+             a file that is still playing but will not play well. The
+             warnings are computed server-side in _to_dict, so the
+             per-board rules live in one place rather than being
+             reimplemented in Alpine.
+          {% endcomment %}
+          <template x-if="editAsset.playback_warnings && editAsset.playback_warnings.length">
+            <div class="modal-alert modal-alert--warning mb-4">
+              <div class="modal-alert__head">
+                <i class="ti ti-alert-triangle modal-alert__icon" aria-hidden="true"></i>
+                <div>
+                  <p class="modal-alert__title">
+                    <span x-text="editAsset.playback_warnings[0].severity === 'blocking'
+                      ? 'This video will not play well on this screen'
+                      : 'This video may not play well on this screen'"></span>
+                  </p>
+                  <template x-for="warning in editAsset.playback_warnings" :key="warning.code">
+                    <p class="modal-alert__body">
+                      <span x-text="warning.message"></span>
+                      <span x-text="warning.remedy"></span>
+                    </p>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
           {% comment %} Top-of-modal failure banner. Rendered when the
              normalisation pipeline wrote metadata.error_message via
              _NormalizeAssetTask.on_failure. UnsupportedVideoCodecError

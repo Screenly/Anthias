@@ -64,6 +64,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import is_low_ram_device, resolve_device_key
 from anthias_server.app.models import Asset
+from anthias_server.lib import playback_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -1096,6 +1097,25 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         envelope transcode to decide whether to emit
         ``-r envelope.max_fps`` (only when source > cap; the cap
         is one-way and never up-converts sub-cap content).
+      * ``video_pix_fmt`` — the first video stream's pixel format
+        (``'yuv420p'``, ``'yuv420p10le'``, …), or ``None``. The
+        decode envelope blocks on this: the VideoCore capture queue
+        is 8-bit 4:2:0 only, so a High 10 or 4:2:2 source falls to
+        software decode.
+      * ``video_bit_rate`` — bits per second as an int, taken from
+        the video stream and falling back to the container's overall
+        rate when the stream doesn't carry one (Matroska frequently
+        doesn't). ``None`` when neither is available. The container
+        figure includes audio, but the envelope's advisory threshold
+        sits far enough above any audio track for that to be
+        immaterial.
+      * ``video_level`` / ``video_profile`` — the declared H.264 /
+        HEVC level (``51`` for level 5.1) and profile (``'High'``).
+        Recorded for diagnostics **only**. Nothing branches on the
+        level: the V4L2 driver exposes it read-only and never
+        validates the bitstream against it, so an inflated level tag
+        on an otherwise-fine 1080p file is common and harmless. See
+        ``lib/playback_envelope.py``.
       * ``audio_codec`` — lowercase codec name, ``'none'`` when the
         file genuinely carries no audio stream, or ``'unknown'`` if
         the audio stream existed but ffprobe couldn't name its
@@ -1126,6 +1146,10 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
             'video_width': None,
             'video_height': None,
             'video_fps': None,
+            'video_pix_fmt': None,
+            'video_bit_rate': None,
+            'video_level': None,
+            'video_profile': None,
             'audio_codec': 'unknown',
             'duration_seconds': None,
         }
@@ -1185,6 +1209,50 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
                 video_fps = num / den
         except ValueError:
             video_fps = None
+    # Pixel format drives the envelope's 8-bit-4:2:0 check. ffprobe
+    # omits it for streams it couldn't fully parse, which reads as
+    # "not measured" and suppresses that check rather than failing it.
+    raw_pix_fmt = (video or {}).get('pix_fmt')
+    video_pix_fmt: str | None = None
+    if isinstance(raw_pix_fmt, str) and raw_pix_fmt.strip():
+        video_pix_fmt = raw_pix_fmt.strip().lower()
+    # Bitrate: the video stream's own figure where present, else the
+    # container's. Matroska and some MP4 muxers leave the per-stream
+    # value out entirely, and a missing bitrate would otherwise mean
+    # the advisory never fires on the files most likely to need it.
+    video_bit_rate: int | None = None
+    for candidate in (
+        (video or {}).get('bit_rate'),
+        fmt_data.get('bit_rate'),
+    ):
+        if candidate is None:
+            continue
+        try:
+            parsed = int(float(candidate))
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            video_bit_rate = parsed
+            break
+    # Declared level (ffprobe reports 5.1 as the integer 51) and
+    # profile. Diagnostics only — see the docstring. ffprobe writes
+    # -99 (and other negatives) when the container carries no level
+    # at all, so anything non-positive reads as absent.
+    video_level: int | None = None
+    raw_level = (video or {}).get('level')
+    if raw_level is not None:
+        try:
+            parsed_level = int(raw_level)
+        except (TypeError, ValueError):
+            parsed_level = 0
+        if parsed_level > 0:
+            video_level = parsed_level
+    raw_profile = (video or {}).get('profile')
+    video_profile: str | None = (
+        raw_profile.strip()
+        if isinstance(raw_profile, str) and raw_profile.strip()
+        else None
+    )
     if audio is None:
         audio_codec = 'none'
     else:
@@ -1211,6 +1279,10 @@ def _ffprobe_summary(input_path: str) -> dict[str, Any]:
         'video_width': video_width,
         'video_height': video_height,
         'video_fps': video_fps,
+        'video_pix_fmt': video_pix_fmt,
+        'video_bit_rate': video_bit_rate,
+        'video_level': video_level,
+        'video_profile': video_profile,
         'audio_codec': audio_codec,
         'duration_seconds': duration_seconds,
     }
@@ -1222,6 +1294,10 @@ _VIDEO_METADATA_KEYS = (
     'video_width',
     'video_height',
     'video_fps',
+    'video_pix_fmt',
+    'video_bit_rate',
+    'video_level',
+    'video_profile',
     'audio_codec',
 )
 
@@ -1329,6 +1405,7 @@ def _ffmpeg_reencode_recipe(
     supported: frozenset[str],
     source_filename: str = '',
     cap_to_1080p: bool = False,
+    force_8bit_420: bool = False,
 ) -> str:
     """Return an ``ffmpeg`` command line the operator can run on
     their workstation to transcode an unsupported upload into a
@@ -1356,18 +1433,27 @@ def _ffmpeg_reencode_recipe(
     608×1080 (height-bound). Used by the low-RAM resolution gate;
     omitted in the codec-only rejection path so we don't suggest a
     needless re-encode when an HD codec swap is all that's wanted.
+
+    ``force_8bit_420`` injects ``-pix_fmt yuv420p``, which the
+    pixel-format rejection needs: libx264 and libx265 both *preserve*
+    the source's bit depth by default, so a recipe handed to an
+    operator with a High 10 source would faithfully produce another
+    High 10 file and fail the same gate a second time. Only emitted
+    for that rejection — an 8-bit source doesn't need telling.
     """
     scale_clause = (
         '-vf scale=1920:1080:force_original_aspect_ratio=decrease '
         if cap_to_1080p
         else ''
     )
+    pix_fmt_clause = '-pix_fmt yuv420p ' if force_8bit_420 else ''
     if 'h264' in supported:
         template = (
             'ffmpeg -i {input} '
             + scale_clause
             + '-c:v libx264 -preset medium -crf 23 '
-            '-c:a aac -b:a 192k -movflags +faststart {output}'
+            + pix_fmt_clause
+            + '-c:a aac -b:a 192k -movflags +faststart {output}'
         )
         target_suffix = 'h264'
     elif 'hevc' in supported:
@@ -1375,7 +1461,8 @@ def _ffmpeg_reencode_recipe(
             'ffmpeg -i {input} '
             + scale_clause
             + '-c:v libx265 -preset medium -crf 28 '
-            '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
+            + pix_fmt_clause
+            + '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
             '{output}'
         )
         target_suffix = 'hevc'
@@ -1575,6 +1662,32 @@ def _run_video_normalisation(asset: Asset) -> None:
             )
             raise UnsupportedVideoCodecError(
                 message, recipe=recipe, handbrake=handbrake
+            )
+        # The codec is hardware-decoded on this board, but that only
+        # settles the codec. The stream itself still has to fit the
+        # decoder's envelope: bcm2835-codec refuses anything over
+        # 1920 on either axis or outside 8-bit 4:2:0, and a refused
+        # format means a silent fall back to software decode and a
+        # few frames per second on the screen. Only *blocking*
+        # findings reject here — the advisory tier annotates the
+        # asset list instead, and never stops an upload.
+        blocking = playback_envelope.blocking_warning(metadata)
+        if blocking is not None:
+            Asset.objects.filter(asset_id=asset_id).update(**update_dict)
+            recipe = _ffmpeg_reencode_recipe(
+                supported,
+                upload_name,
+                cap_to_1080p=playback_envelope.exceeds_dimension(
+                    video_width, video_height
+                ),
+                force_8bit_420=playback_envelope.is_unsupported_pix_fmt(
+                    metadata.get('video_pix_fmt')
+                ),
+            )
+            raise UnsupportedVideoCodecError(
+                f'{blocking.message} {blocking.remedy}'.strip(),
+                recipe=recipe,
+                handbrake=_handbrake_steps(supported),
             )
         update_dict['is_processing'] = False
         Asset.objects.filter(asset_id=asset_id).update(**update_dict)
