@@ -19,6 +19,7 @@ from django.template import Library
 from django.utils import timezone
 from django.utils.safestring import SafeString, mark_safe
 
+from anthias_server.lib import playback_envelope
 from anthias_server.settings import settings
 
 register = Library()
@@ -167,6 +168,16 @@ def _to_dict(obj: Any) -> Any:
             meta = dict(meta)
             meta['headers'] = normalize_asset_headers(meta['headers'])
             out['metadata'] = meta
+        # Decode-envelope findings, computed server-side so the modal
+        # never has to reimplement the per-board rules in JS. Always
+        # present (possibly empty) so the Alpine template can bind to
+        # it without an existence guard on every row.
+        meta = out.get('metadata')
+        out['playback_warnings'] = (
+            [w.as_dict() for w in playback_envelope.evaluate(meta)]
+            if isinstance(meta, dict)
+            else []
+        )
         return out
     return _coerce(obj)
 
@@ -378,3 +389,29 @@ def humanize_duration(value: Any) -> str:
             parts.append(f'{seconds}s')
         return ' '.join(parts)
     return f'{seconds}s'
+
+
+@register.filter
+def playback_warnings(asset: Any) -> list[dict[str, str]]:
+    """Return decode-envelope warnings for ``asset``, most severe
+    first.
+
+    Uploads that exceed the board's decoder are rejected outright by
+    the normalisation gate, so a *blocking* warning here can only mean
+    an asset that predates the gate — it is already on disk and still
+    in rotation, and the operator needs to be told why it looks wrong
+    rather than have it silently disappear. Advisory warnings never
+    block anything and only ever surface here.
+
+    Returns an empty list for images, web pages, assets whose
+    metadata we could not measure, and boards whose decode path is
+    not characterised well enough to judge. Empty means "nothing we
+    can prove is wrong", which is not a promise that playback is
+    fine, so the template must not render it as one.
+    """
+    metadata = _to_dict(getattr(asset, 'metadata', None))
+    if not isinstance(metadata, dict):
+        return []
+    return [
+        warning.as_dict() for warning in playback_envelope.evaluate(metadata)
+    ]
