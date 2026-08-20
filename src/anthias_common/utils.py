@@ -56,6 +56,20 @@ def clamp_screen_rotation(value: Any) -> int:
     return rotation if rotation in SCREEN_ROTATION_CHOICES else 0
 
 
+# Where chunked browser uploads stage their partial file, under the
+# asset dir. Shared with the cleanup sweep and the backup filter so
+# the name cannot drift from the code that writes into it.
+STAGED_UPLOAD_DIR = '.uploads'
+
+# How long a partial upload survives without being written to. An
+# upload cannot be resumed once abandoned, so holding one longer only
+# occupies the card; the same hour every other stray file in the asset
+# dir gets is enough to cover a slow upload still in progress. A
+# partial swept mid-upload is caught by the offset guard in
+# _stage_upload_chunk and fails loudly rather than corrupting.
+STAGED_UPLOAD_MAX_AGE_MIN = 60
+
+
 # Operator-facing message for ENOSPC during an upload — shared by the
 # HTML upload toast and the API's 507 response so the wording can't
 # drift between surfaces (Sentry ANTHIAS-3K).

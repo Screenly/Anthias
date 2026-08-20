@@ -8,9 +8,11 @@
 // sets `request_body { max_size 0 }`), so it always comes from an
 // intermediary the operator controls and retrying cannot help.
 //
-// No 507 case on purpose — assets_upload answers ENOSPC with 200 plus
-// an HX-Trigger toast carrying DISK_FULL_ERROR, which
-// fireToastFromHeader already replays. Only the REST API returns 507.
+// A single-shot upload answers ENOSPC with 200 plus an HX-Trigger
+// toast, which fireToastFromHeader replays. A chunk answers 507 with
+// the same text as JSON, which the caller passes through as a
+// `server` failure; the 507 branch below is the fallback for when
+// that body cannot be read.
 
 // A transport failure carries no HTTP status: XMLHttpRequest reports
 // `status === 0` and fires `error` or `abort`. Modelling that as its
@@ -18,8 +20,13 @@
 export type UploadFailure =
   | { kind: 'http'; status: number }
   | { kind: 'network' }
+  // The server explained itself in the response body. Its wording is
+  // better than anything derivable from a status code, so it wins.
+  | { kind: 'server'; message: string }
 
 export function uploadErrorMessage(failure: UploadFailure): string {
+  if (failure.kind === 'server') return failure.message
+
   // Both causes, neither asserted. A proxy enforcing a body limit
   // answers and closes while the browser is still writing, and the
   // browser does not always salvage that response — so a size
@@ -47,6 +54,13 @@ export function uploadErrorMessage(failure: UploadFailure): string {
   // answers 302 to /login/, which XHR follows transparently.
   if (status === 403) {
     return 'Upload rejected — reload the page and try again'
+  }
+
+  // Before the 5xx branch: a chunked upload reports a full disk as
+  // 507, and "check the device logs" would send the operator to the
+  // wrong place for something they can act on directly.
+  if (status === 507) {
+    return 'Not enough space on the device — free some up and try again'
   }
 
   if (status >= 500) {

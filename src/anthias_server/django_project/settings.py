@@ -754,6 +754,15 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Overridable via env so a device can be pointed at the staging index
 # (stage.signage-apps.com) or a self-hosted mirror; defaults to the
 # production store index.
+# Size of each request a large browser upload is split into. Kept
+# under FILE_UPLOAD_MAX_MEMORY_SIZE above so a chunk is buffered in
+# memory rather than spooled to FILE_UPLOAD_TEMP_DIR, which is /tmp
+# and therefore RAM on a stock Pi image: sizing chunks to a proxy's
+# limit instead would cost that much memory per upload on a board
+# that may have 512 MB. Lower it if a proxy in front of the device
+# caps request bodies below this.
+UPLOAD_CHUNK_SIZE_MB = int(getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '16'))
+
 APP_STORE_INDEX_URL = getenv(
     'APP_STORE_INDEX_URL',
     'https://signage-apps.com/manifest.json',

@@ -10,9 +10,25 @@ from datetime import UTC, datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
 
+from anthias_common.utils import STAGED_UPLOAD_DIR
+
 logger = logging.getLogger(__name__)
 
 directories = ['.anthias', 'anthias_assets']
+
+
+def _skip_staged_uploads(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """Keep partial chunked uploads out of a backup.
+
+    ``tar.add`` recurses, and an in-progress upload can be gigabytes of
+    a file the operator has not finished sending. It is meaningless
+    once restored (the upload session is gone), so backing it up only
+    inflates the archive.
+    """
+    parts = member.name.split('/')
+    return None if STAGED_UPLOAD_DIR in parts else member
+
+
 # Tarballs created by older releases used these top-level entry names.
 # Recognise them so users can still restore pre-rename backups.
 legacy_directories = ['.screenly', 'screenly_assets']
@@ -114,7 +130,11 @@ def stream_backup() -> Generator[bytes]:
                 ) as tar,
             ):
                 for directory in directories:
-                    tar.add(path.join(home, directory), arcname=directory)
+                    tar.add(
+                        path.join(home, directory),
+                        arcname=directory,
+                        filter=_skip_staged_uploads,
+                    )
         except BrokenPipeError:
             logger.info('backup download cancelled by the client')
         except Exception as exc:
@@ -212,7 +232,11 @@ def create_backup(name: str = default_archive_name) -> str:
         ) as tar:
             for directory in directories:
                 path_to_dir = path.join(home, directory)
-                tar.add(path_to_dir, arcname=directory)
+                tar.add(
+                    path_to_dir,
+                    arcname=directory,
+                    filter=_skip_staged_uploads,
+                )
     except OSError:
         remove(file_path)
         raise

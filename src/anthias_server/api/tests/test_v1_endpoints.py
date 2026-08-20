@@ -3,6 +3,7 @@ Tests for V1 API endpoints.
 """
 
 import os
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -30,8 +31,14 @@ def cleanup_asset_dir() -> Iterator[None]:
         yield
     finally:
         asset_directory_path = Path(anthias_settings['assetdir'])
-        for file in asset_directory_path.iterdir():
-            file.unlink()
+        for entry in asset_directory_path.iterdir():
+            # The asset dir is no longer flat: chunked uploads stage
+            # their partials in a subdirectory of it, so unlink() alone
+            # raises IsADirectoryError once one exists.
+            if entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                entry.unlink()
 
 
 def _get_asset_content_url(asset_id: str) -> str:
