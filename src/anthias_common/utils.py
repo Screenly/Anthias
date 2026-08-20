@@ -56,6 +56,25 @@ def clamp_screen_rotation(value: Any) -> int:
     return rotation if rotation in SCREEN_ROTATION_CHOICES else 0
 
 
+# Where chunked browser uploads stage their partial file, under the
+# asset dir. Shared with the cleanup sweep and the backup filter so
+# the name cannot drift from the code that writes into it.
+STAGED_UPLOAD_DIR = '.uploads'
+
+# How long a partial upload survives without being written to. A full
+# day rather than the hour every other stray file in the asset dir
+# gets: an operator who pauses a large upload should find their bytes
+# still there, and a partial swept mid-upload is recreated by the next
+# chunk's seek as a sparse file, so the finished asset would be
+# silently corrupt instead of failing.
+STAGED_UPLOAD_MAX_AGE_MIN = 60 * 24
+
+# Headroom an upload must leave free on the device. A player that
+# fills its card stops being a player: the viewer cannot write, and
+# SQLite cannot either. 512 MB is roughly a normalisation pass plus
+# room for the database to breathe.
+STAGED_UPLOAD_FREE_MARGIN = 512 * 1024 * 1024
+
 # Operator-facing message for ENOSPC during an upload — shared by the
 # HTML upload toast and the API's 507 response so the wording can't
 # drift between surfaces (Sentry ANTHIAS-3K).
