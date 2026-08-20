@@ -20,12 +20,12 @@ namespaces = false
 
 [dependency-groups]
 dev-host = [
-    "ansible-lint==26.6.0",
+    "ansible-lint==26.8.0",
     "celery-types==0.26.0",
-    "django-stubs==6.0.9",
+    "django-stubs==6.1.0",
     "djangorestframework-stubs==3.18.0",
-    "mypy==2.3.0",
-    "ruff==0.16.2",
+    "mypy==2.3.1",
+    "ruff==0.16.3",
     "tenacity==9.1.4",
     "types-gunicorn==26.0.0.20260807",
     # Direct dev dep: types-psutil used to arrive transitively via
@@ -51,7 +51,7 @@ server = [
     "Django==5.2.17",
     "djangorestframework==3.18.0",
     "django-dbbackup==5.3.0",
-    "django-stubs-ext==6.0.9",
+    "django-stubs-ext==6.1.0",
     "drf-spectacular==0.30.0",
     "Jinja2==3.1.6",
     "packaging==26.3",
@@ -80,11 +80,11 @@ server = [
     "PyYAML==6.0.3",
     "redis==8.1.0",
     "requests==2.34.2",
-    "sentry-sdk==2.66.1",
+    "sentry-sdk==2.68.0",
     "tenacity==9.1.4",
     "sh==2.4.0",
     "urllib3==2.7.0",
-    "uvicorn[standard]==0.52.1",
+    "uvicorn[standard]==0.52.3",
     "whitenoise==6.12.0",
     "yt-dlp>=2026.7.4",
 ]
@@ -97,7 +97,7 @@ viewer = [
     "pytz==2026.3.post1",
     "redis==8.1.0",
     "requests==2.34.2",
-    "sentry-sdk==2.66.1",
+    "sentry-sdk==2.68.0",
     "tenacity==9.1.4",
     "sh==2.4.0",
     "urllib3==2.7.0",
@@ -105,15 +105,15 @@ viewer = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "pytest-django==4.13.0",
+    "pytest-django==4.14.0",
     "pytest-mock==3.15.1",
     "pytest-xdist==3.8.0",
     "playwright==1.62.0",
-    "pytest-playwright==0.8.0",
-    "time-machine==3.3.1",
+    "pytest-playwright==0.9.0",
+    "time-machine==3.4.0",
 ]
 host = [
-    "ansible-core==2.21.2",
+    "ansible-core==2.21.3",
     "redis==8.1.0",
     "requests==2.34.2",
     "tenacity==9.1.4",
@@ -144,7 +144,7 @@ mypy = [
     "channels-redis==4.3.0",
     "Django==5.2.17",
     "django-dbbackup==5.3.0",
-    "django-stubs-ext==6.0.9",
+    "django-stubs-ext==6.1.0",
     "djangorestframework==3.18.0",
     "drf-spectacular==0.30.0",
     # Pillow ships PEP 561 stubs (py.typed). The processing module
@@ -155,7 +155,7 @@ mypy = [
     # ignored, mirroring the pydbus / sh pattern.
     "Pillow==12.3.0",
     "pytz==2026.3.post1",
-    "sentry-sdk==2.66.1",
+    "sentry-sdk==2.68.0",
     "whitenoise==6.12.0",
 ]
 
