@@ -64,6 +64,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import is_low_ram_device, resolve_device_key
 from anthias_server.app.models import Asset
+from anthias_server.lib import playback_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -1404,6 +1405,7 @@ def _ffmpeg_reencode_recipe(
     supported: frozenset[str],
     source_filename: str = '',
     cap_to_1080p: bool = False,
+    force_8bit_420: bool = False,
 ) -> str:
     """Return an ``ffmpeg`` command line the operator can run on
     their workstation to transcode an unsupported upload into a
@@ -1431,18 +1433,27 @@ def _ffmpeg_reencode_recipe(
     608×1080 (height-bound). Used by the low-RAM resolution gate;
     omitted in the codec-only rejection path so we don't suggest a
     needless re-encode when an HD codec swap is all that's wanted.
+
+    ``force_8bit_420`` injects ``-pix_fmt yuv420p``, which the
+    pixel-format rejection needs: libx264 and libx265 both *preserve*
+    the source's bit depth by default, so a recipe handed to an
+    operator with a High 10 source would faithfully produce another
+    High 10 file and fail the same gate a second time. Only emitted
+    for that rejection — an 8-bit source doesn't need telling.
     """
     scale_clause = (
         '-vf scale=1920:1080:force_original_aspect_ratio=decrease '
         if cap_to_1080p
         else ''
     )
+    pix_fmt_clause = '-pix_fmt yuv420p ' if force_8bit_420 else ''
     if 'h264' in supported:
         template = (
             'ffmpeg -i {input} '
             + scale_clause
             + '-c:v libx264 -preset medium -crf 23 '
-            '-c:a aac -b:a 192k -movflags +faststart {output}'
+            + pix_fmt_clause
+            + '-c:a aac -b:a 192k -movflags +faststart {output}'
         )
         target_suffix = 'h264'
     elif 'hevc' in supported:
@@ -1450,7 +1461,8 @@ def _ffmpeg_reencode_recipe(
             'ffmpeg -i {input} '
             + scale_clause
             + '-c:v libx265 -preset medium -crf 28 '
-            '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
+            + pix_fmt_clause
+            + '-tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart '
             '{output}'
         )
         target_suffix = 'hevc'
@@ -1650,6 +1662,32 @@ def _run_video_normalisation(asset: Asset) -> None:
             )
             raise UnsupportedVideoCodecError(
                 message, recipe=recipe, handbrake=handbrake
+            )
+        # The codec is hardware-decoded on this board, but that only
+        # settles the codec. The stream itself still has to fit the
+        # decoder's envelope: bcm2835-codec refuses anything over
+        # 1920 on either axis or outside 8-bit 4:2:0, and a refused
+        # format means a silent fall back to software decode and a
+        # few frames per second on the screen. Only *blocking*
+        # findings reject here — the advisory tier annotates the
+        # asset list instead, and never stops an upload.
+        blocking = playback_envelope.blocking_warning(metadata)
+        if blocking is not None:
+            Asset.objects.filter(asset_id=asset_id).update(**update_dict)
+            recipe = _ffmpeg_reencode_recipe(
+                supported,
+                upload_name,
+                cap_to_1080p=playback_envelope.exceeds_dimension(
+                    video_width, video_height
+                ),
+                force_8bit_420=playback_envelope.is_unsupported_pix_fmt(
+                    metadata.get('video_pix_fmt')
+                ),
+            )
+            raise UnsupportedVideoCodecError(
+                f'{blocking.message} {blocking.remedy}'.strip(),
+                recipe=recipe,
+                handbrake=_handbrake_steps(supported),
             )
         update_dict['is_processing'] = False
         Asset.objects.filter(asset_id=asset_id).update(**update_dict)
