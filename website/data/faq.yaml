@@ -246,6 +246,15 @@
 
         Multiple origins are comma-separated. Restart with `docker compose up -d`.
 
+        A proxy can also cap how large an upload may be, which is a different failure from the `Host` problem above: everything works except large videos. Anthias sets no size limit of its own, and the bundled Caddy sidecar disables one explicitly, so any limit you hit belongs to your proxy. nginx defaults to 1 MB, and Cloudflare rejects request bodies over 100 MB on its Free and Pro plans.
+
+        | Proxy      | Directive                                                  |
+        | ---------- | ---------------------------------------------------------- |
+        | nginx      | `client_max_body_size 0;`                                   |
+        | Apache     | `LimitRequestBody 0` (already the default)                  |
+        | Caddy      | `request_body { max_size 0 }`                               |
+        | Cloudflare | your plan sets the ceiling; you can lower it, not raise it   |
+
         The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you. The above is only relevant if you're terminating TLS or proxying with something else.
 
     - question: Where is the API reference?
