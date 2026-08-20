@@ -2743,6 +2743,78 @@ def test_assets_upload_rejects_a_chunk_that_lies_about_its_length(
 
 
 @pytest.mark.django_db
+def test_assets_upload_proceeds_when_free_space_is_unknowable(
+    client: Client, tmp_path: Any
+) -> None:
+    """If the filesystem will not say how much room is left, take the
+    upload rather than refuse it: a working upload matters more than a
+    check that cannot run."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.shutil.disk_usage',
+            side_effect=OSError('cannot stat'),
+        ),
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/10',
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()['upload_id']
+
+
+@pytest.mark.django_db
+def test_assets_upload_does_not_mistake_any_oserror_for_a_full_disk(
+    client: Client, tmp_path: Any
+) -> None:
+    """Only ENOSPC becomes the disk-full answer. Anything else is a
+    real fault and must surface rather than be reported to the
+    operator as something they can fix by freeing space."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.os.open',
+            side_effect=OSError(errno.EACCES, 'Permission denied'),
+        ),
+        pytest.raises(OSError),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/10',
+            },
+        )
+
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_assets_upload_refuses_a_file_larger_than_free_space(
     client: Client, tmp_path: Any
 ) -> None:
