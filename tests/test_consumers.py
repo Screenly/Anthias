@@ -259,3 +259,42 @@ def test_disconnect_without_a_watcher_is_harmless() -> None:
 
     # Must not raise.
     asyncio.run(consumer.disconnect(1006))
+
+
+def test_disconnect_discards_the_channel_even_if_teardown_wedges() -> None:
+    """The subscription's teardown closes a Redis connection, and the
+    async client sets no socket timeout, so a half-open socket to a
+    wedged Redis can stall it. That must not stop the channel leaving
+    the group — every later notify_asset_update would fan out to a dead
+    channel name — and it must not hang the disconnect either."""
+    import time
+
+    consumer = AssetConsumer()
+    consumer.channel_layer = mock.AsyncMock()
+    consumer.channel_name = 'test-channel'
+    consumer.NOW_PLAYING_TEARDOWN_S = 0.2
+    cancelled = asyncio.Event()
+
+    async def wedged() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            # Stands in for a close() that never returns.
+            await asyncio.sleep(30)
+
+    async def scenario() -> None:
+        consumer._now_playing_task = asyncio.create_task(wedged())
+        await asyncio.sleep(0)
+
+        started = time.monotonic()
+        await consumer.disconnect(1000)
+        elapsed = time.monotonic() - started
+
+        assert cancelled.is_set()
+        assert elapsed < 5, f'disconnect took {elapsed:.1f}s'
+        consumer.channel_layer.group_discard.assert_awaited_once_with(
+            'ws_server', 'test-channel'
+        )
+
+    asyncio.run(scenario())

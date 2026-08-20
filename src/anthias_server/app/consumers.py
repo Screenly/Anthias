@@ -25,18 +25,31 @@ class AssetConsumer(AsyncWebsocketConsumer):
         # subscription per open tab.
         self._now_playing_task = asyncio.create_task(self._watch_now_playing())
 
+    #: Ceiling on waiting for the subscription task to finish
+    #: unwinding. Its teardown closes a Redis connection, and
+    #: connect_to_redis_async sets no socket timeout, so a half-open
+    #: socket to a wedged Redis can stall the close indefinitely.
+    NOW_PLAYING_TEARDOWN_S: float = 5
+
     async def disconnect(self, code: int) -> None:
-        task = getattr(self, '_now_playing_task', None)
-        if task is not None:
-            task.cancel()
-            # Awaited, not just cancelled: an un-retrieved task exception
-            # (say the cleanup below failing) reaches asyncio's handler
-            # as an ERROR log, which the Sentry logging integration turns
-            # into a reported event — the same noise asset_update's
-            # RuntimeError handling exists to avoid.
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await task
+        # First, unconditionally: leaving a dead channel name in the
+        # group means every later notify_asset_update fans out to it.
+        # Nothing below is allowed to be able to skip this.
         await self.channel_layer.group_discard(WS_GROUP, self.channel_name)
+
+        task = getattr(self, '_now_playing_task', None)
+        if task is None:
+            return
+        task.cancel()
+        # Awaited, not just cancelled: an un-retrieved task exception
+        # reaches asyncio's handler as an ERROR log, which the Sentry
+        # logging integration turns into a reported event — the same
+        # noise asset_update's RuntimeError handling exists to avoid.
+        # CancelledError only: the task body already swallows Exception
+        # on both its paths, so a broader suppress would be dead code
+        # that also swallowed a cancellation aimed at disconnect itself.
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, self.NOW_PLAYING_TEARDOWN_S)
 
     async def _watch_now_playing(self) -> None:
         """Nudge this browser the moment the viewer changes asset.
