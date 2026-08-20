@@ -1,9 +1,14 @@
+import asyncio
+import contextlib
 import logging
 from typing import Any
 
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.layers import get_channel_layer
+
+from anthias_common import now_playing
+from anthias_common.utils import connect_to_redis_async
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +19,72 @@ class AssetConsumer(AsyncWebsocketConsumer):
     async def connect(self) -> None:
         await self.channel_layer.group_add(WS_GROUP, self.channel_name)
         await self.accept()
+        # Per-connection rather than process-wide, so its lifetime is
+        # exactly this socket's. Note that vendor.ts opens /ws on every
+        # page, not just the schedule page, so this is one Redis
+        # subscription per open tab.
+        self._now_playing_task = asyncio.create_task(self._watch_now_playing())
+
+    #: Ceiling on waiting for the subscription task to finish
+    #: unwinding. Its teardown closes a Redis connection, and
+    #: connect_to_redis_async sets no socket timeout, so a half-open
+    #: socket to a wedged Redis can stall the close indefinitely.
+    NOW_PLAYING_TEARDOWN_S: float = 5
 
     async def disconnect(self, code: int) -> None:
+        # First, unconditionally: leaving a dead channel name in the
+        # group means every later notify_asset_update fans out to it.
+        # Nothing below is allowed to be able to skip this.
         await self.channel_layer.group_discard(WS_GROUP, self.channel_name)
+
+        task = getattr(self, '_now_playing_task', None)
+        if task is None:
+            return
+        task.cancel()
+        # Awaited, not just cancelled: an un-retrieved task exception
+        # reaches asyncio's handler as an ERROR log, which the Sentry
+        # logging integration turns into a reported event — the same
+        # noise asset_update's RuntimeError handling exists to avoid.
+        # CancelledError only: the task body already swallows Exception
+        # on both its paths, so a broader suppress would be dead code
+        # that also swallowed a cancellation aimed at disconnect itself.
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, self.NOW_PLAYING_TEARDOWN_S)
+
+    async def _watch_now_playing(self) -> None:
+        """Nudge this browser the moment the viewer changes asset.
+
+        The table's 5s poll already keeps the now-playing highlight
+        correct; this only decides whether the operator sees it land
+        with the picture or up to 5s later (#3177). So every failure
+        here — no Redis, a dropped subscription, a closed socket —
+        ends the task quietly and leaves the poll in charge.
+        """
+        client = None
+        try:
+            client = connect_to_redis_async()
+            pubsub = client.pubsub(ignore_subscribe_messages=True)
+            await pubsub.subscribe(now_playing.NOW_PLAYING_CHANNEL)
+            async for message in pubsub.listen():
+                data = message.get('data')
+                if not isinstance(data, str):
+                    continue
+                await self.send(text_data=data)
+        except Exception:
+            logger.debug(
+                'now-playing subscription ended; this browser falls back '
+                'to the 5s table poll',
+                exc_info=True,
+            )
+        finally:
+            # Enough on its own: the client owns the pool the
+            # subscription's connection came from, and aclose()
+            # disconnects in-use connections too. Suppressed because
+            # this runs on the cancellation path, where a raise would
+            # become the task's unretrieved result.
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    await client.aclose()
 
     async def asset_update(self, event: dict[str, Any]) -> None:
         # Plain text frame: the client only needs to know "something

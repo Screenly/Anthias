@@ -19,7 +19,7 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
-from anthias_common import storage_health
+from anthias_common import now_playing, storage_health
 from anthias_server.app import page_context
 from anthias_server.app.models import DURATION_S_MAX, Asset
 from anthias_server.app.templatetags.asset_filters import to_json
@@ -135,6 +135,53 @@ def test_asset_table_partial(client: Client, asset: Asset) -> None:
     response = client.get(reverse('anthias_app:assets_table'))
     assert response.status_code == 200
     assert (asset.name or '') in response.content.decode()
+
+
+# ---------------------------------------------------------------------------
+# Now-playing highlight — issue #3177
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_page_context_flags_the_now_playing_asset(asset: Asset) -> None:
+    with mock.patch.object(now_playing, 'read', return_value=asset.asset_id):
+        ctx = page_context.assets()
+    assert [a.is_now_playing for a in ctx['active_assets']] == [True]
+
+
+@pytest.mark.django_db
+def test_page_context_flags_nothing_when_the_viewer_is_silent(
+    asset: Asset,
+) -> None:
+    """No fact published (viewer starting, Redis down, key expired)
+    means no highlight — never a guess at what might be on screen."""
+    with mock.patch.object(now_playing, 'read', return_value=None):
+        ctx = page_context.assets()
+    assert [a.is_now_playing for a in ctx['active_assets']] == [False]
+
+
+@pytest.mark.django_db
+def test_asset_row_marks_the_now_playing_asset(
+    client: Client, asset: Asset
+) -> None:
+    with mock.patch.object(now_playing, 'read', return_value=asset.asset_id):
+        response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert 'is-now-playing' in body
+    assert 'Playing now' in body
+
+
+@pytest.mark.django_db
+def test_asset_row_unmarked_when_another_asset_is_playing(
+    client: Client, asset: Asset
+) -> None:
+    with mock.patch.object(
+        now_playing, 'read', return_value='some-other-asset'
+    ):
+        response = client.get(reverse('anthias_app:assets_table'))
+    body = response.content.decode()
+    assert 'is-now-playing' not in body
+    assert 'Playing now' not in body
 
 
 @pytest.mark.django_db
