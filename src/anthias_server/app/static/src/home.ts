@@ -487,6 +487,18 @@ function homeApp(): HomeAppData {
           if (ev.loaded >= ev.total) this.uploadState = 'processing'
         })
         xhr.addEventListener('load', () => {
+          // An expired session answers with HX-Redirect rather than a
+          // 302 (see lib/auth._login_redirect): a redirect would be
+          // followed transparently and hand us the login page under a
+          // 200, which reads as a successful upload for a file that
+          // was never stored. Nothing here is htmx-managed, so act on
+          // the header ourselves and send the operator to sign in.
+          const redirect = xhr.getResponseHeader('HX-Redirect')
+          if (redirect) {
+            window.location.href = redirect
+            resolve({ status: 'error', failure: { kind: 'auth' } })
+            return
+          }
           const kind = fireToastFromHeader(xhr.getResponseHeader('HX-Trigger'))
           if (xhr.status < 200 || xhr.status >= 300) {
             // Pass the status up so the batch can name the cause. A
