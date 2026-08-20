@@ -10,13 +10,21 @@ would put a blocking BLPOP on the render path and wake the display
 loop for it. Same shape as ``cec:available`` and the SMART fact.
 
 The TTL is a liveness signal, not a content one: a short window kept
-alive by :func:`refresh` on a timer, exactly like the display-resolution
-and SMART facts. Deriving it from the asset's duration instead was
-tempting and wrong — durations run to a year, so a viewer that died
-mid-rotation could have gone on claiming a row for months, and a
-paused viewer would have dropped the highlight off a picture that was
-still on screen. Tying it to "the viewer said something recently"
-makes both cases right without either knowing about the other.
+alive by :func:`refresh` on a timer, like the display-resolution fact.
+Deriving it from the asset's duration instead was tempting and wrong —
+durations run to a year, so a viewer that died mid-rotation could have
+gone on claiming a row for months, and a paused viewer would have
+dropped the highlight off a picture that was still on screen.
+
+What :func:`refresh` re-asserts is this process's own memory of what it
+last put on screen, never whatever happens to be in Redis. Blind-
+extending the key with EXPIRE looks equivalent and is not: a viewer
+that restarts inherits its dead predecessor's claim and renews it on
+every tick while its own screen is still showing the splash, and one
+that crash-loops faster than the TTL renews it forever — the exact
+failure the TTL exists to end. Re-asserting a remembered value also
+restores the fact by itself if Redis is restarted or flushed under us,
+which EXPIRE cannot do.
 
 Every call is best-effort. The write sits in the display loop, where
 an exception would take the screen down, and the read gates a page
@@ -53,6 +61,11 @@ TTL_S = 180
 #: row still don't expire a fact that is merely late.
 REFRESH_INTERVAL_S = 60
 
+#: What THIS process last put on screen, or None if it hasn't put
+#: anything there yet. Only :func:`refresh` reads it; the module
+#: docstring says why it exists rather than trusting the key.
+_believed: str | None = None
+
 _warned: set[str] = set()
 
 
@@ -78,6 +91,7 @@ def _warn_once(key: str, message: str, exc: Exception) -> None:
 
 def publish(client: Any, asset_id: str | None) -> None:
     """Record — and announce — the asset now on screen."""
+    global _believed
     if not asset_id:
         clear(client)
         return
@@ -88,6 +102,7 @@ def publish(client: Any, asset_id: str | None) -> None:
         # playlist would otherwise pay that on every loop for no news.
         # ``get=True`` returns the previous value (Redis >= 6.2).
         previous = client.set(NOW_PLAYING_KEY, asset_id, ex=TTL_S, get=True)
+        _believed = asset_id
         if previous != asset_id:
             client.publish(NOW_PLAYING_CHANNEL, asset_id)
     except Exception as exc:
@@ -95,14 +110,20 @@ def publish(client: Any, asset_id: str | None) -> None:
 
 
 def refresh(client: Any) -> None:
-    """Keep the fact alive while the viewer still has that asset up.
+    """Re-assert what this process last put on screen.
 
     Called on a timer rather than per rotation, because a rotation can
-    be an hour long. ``EXPIRE`` on a missing key is a no-op, so this
-    can never resurrect a fact that :func:`clear` retired.
+    be an hour long. A no-op until this process has displayed
+    something, so a restarted viewer cannot keep its predecessor's
+    claim alive while its own screen is still on the splash, and
+    :func:`clear` retires the fact for good rather than for one tick.
+
+    Silent by design: it re-states a value the browsers already have.
     """
+    if _believed is None:
+        return
     try:
-        client.expire(NOW_PLAYING_KEY, TTL_S)
+        client.set(NOW_PLAYING_KEY, _believed, ex=TTL_S)
     except Exception as exc:
         _warn_once('refresh', 'Could not refresh the now-playing asset', exc)
 
@@ -115,6 +136,8 @@ def clear(client: Any) -> None:
     announcement would nudge every open browser into a table re-render
     several times a minute on an idle device.
     """
+    global _believed
+    _believed = None
     try:
         if client.delete(NOW_PLAYING_KEY):
             client.publish(NOW_PLAYING_CHANNEL, '')

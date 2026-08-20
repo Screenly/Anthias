@@ -3274,6 +3274,30 @@ def test_stop_playback_leaves_the_now_playing_fact_alone(
     now_playing.clear.assert_not_called()
 
 
+def test_refresh_tick_reasserts_while_something_is_on_screen(
+    restore_blank_state: None,
+) -> None:
+    viewer.display_blanked = False
+    with mock.patch('anthias_viewer.now_playing') as now_playing:
+        viewer._refresh_now_playing_once()
+    now_playing.refresh.assert_called_once_with(viewer.r)
+    now_playing.clear.assert_not_called()
+
+
+def test_refresh_tick_retires_the_fact_while_blanked(
+    restore_blank_state: None,
+) -> None:
+    """Closes the race between the two threads: blank_display() runs on
+    the subscriber thread and retires the fact, but a rotation already
+    past its check on the main thread can re-create it a moment later,
+    and the parked loop would never retire it again."""
+    viewer.display_blanked = True
+    with mock.patch('anthias_viewer.now_playing') as now_playing:
+        viewer._refresh_now_playing_once()
+    now_playing.clear.assert_called_once_with(viewer.r)
+    now_playing.refresh.assert_not_called()
+
+
 def test_blank_display_retires_the_now_playing_fact(
     restore_blank_state: None,
 ) -> None:

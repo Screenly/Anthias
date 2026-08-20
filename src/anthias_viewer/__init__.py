@@ -2646,6 +2646,24 @@ def _publish_display_resolution_loop() -> None:
     t.start()
 
 
+def _refresh_now_playing_once() -> None:
+    """One reporter tick.
+
+    Never raises: every call it makes swallows its own Redis errors, so
+    the thread survives a failed tick and tries again on the next one.
+    """
+    if display_blanked:
+        # Reconciles a race the two threads would otherwise lose:
+        # blank_display() runs on the subscriber thread and retires the
+        # fact, but a rotation already past its own check on the main
+        # thread can re-create it microseconds later. The loop is then
+        # parked on loop_is_stopped, so nothing would ever retire it
+        # again and the highlight would sit on a black screen for good.
+        now_playing.clear(r)
+        return
+    now_playing.refresh(r)
+
+
 def _refresh_now_playing_loop() -> None:
     """Background reporter — keep the now-playing fact from expiring.
 
@@ -2654,17 +2672,14 @@ def _refresh_now_playing_loop() -> None:
     here" more often than a rotation does: a pinned dashboard asset can
     hold the screen for an hour, and a stopped viewer holds it
     indefinitely. Both are cases where the row really is on screen and
-    the highlight should stay.
-
-    Runs regardless of ``loop_is_stopped`` for exactly that reason. It
-    can't resurrect a retired fact — ``blank`` deletes the key, and
-    EXPIRE on a missing key does nothing.
+    the highlight should stay, which is why this runs regardless of
+    ``loop_is_stopped``.
     """
     import threading
 
     def tick() -> None:
         while True:
-            now_playing.refresh(r)
+            _refresh_now_playing_once()
             sleep(now_playing.REFRESH_INTERVAL_S)
 
     t = threading.Thread(
@@ -2755,6 +2770,11 @@ def main() -> None:
     _publish_cec_availability()
 
     _publish_display_resolution_loop()
+
+    # A previous process may have left a fact behind, and what is on
+    # screen right now is the splash, not that asset. Retire it before
+    # the refresher starts rather than letting it expire on its own.
+    now_playing.clear(r)
 
     _refresh_now_playing_loop()
 

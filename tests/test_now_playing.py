@@ -21,8 +21,10 @@ def _reset_warn_latch() -> Iterator[None]:
     would make the first failure in a run behave differently from the
     rest."""
     now_playing._warned.clear()
+    now_playing._believed = None
     yield
     now_playing._warned.clear()
+    now_playing._believed = None
 
 
 def _client(get_value: Any = None, previous: Any = None) -> Any:
@@ -92,17 +94,59 @@ def test_publish_swallows_redis_errors() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_refresh_extends_the_ttl() -> None:
+def test_refresh_does_nothing_before_this_process_has_published() -> None:
+    """The heart of it: a viewer that restarts must not inherit its
+    dead predecessor's claim and renew it every tick while its own
+    screen is still showing the splash. A crash-looping viewer would
+    renew it forever — the failure the TTL exists to end."""
     client = _client()
     now_playing.refresh(client)
-    client.expire.assert_called_once_with(
-        now_playing.NOW_PLAYING_KEY, now_playing.TTL_S
+    client.set.assert_not_called()
+    client.expire.assert_not_called()
+
+
+def test_refresh_reasserts_what_this_process_published() -> None:
+    client = _client()
+    now_playing.publish(client, 'abc123')
+    client.reset_mock()
+
+    now_playing.refresh(client)
+    client.set.assert_called_once_with(
+        now_playing.NOW_PLAYING_KEY, 'abc123', ex=now_playing.TTL_S
     )
+    # Nothing changed, so the browsers have nothing to hear about.
+    client.publish.assert_not_called()
+
+
+def test_refresh_restores_the_fact_after_redis_loses_it() -> None:
+    """SET, not EXPIRE: an unclean Redis restart or a flush would
+    otherwise leave a pinned hour-long asset unhighlighted until it
+    finally rotated."""
+    client = _client()
+    now_playing.publish(client, 'abc123')
+    client.reset_mock()
+
+    now_playing.refresh(client)
+    args, kwargs = client.set.call_args
+    assert args[1] == 'abc123'
+    assert kwargs['ex'] == now_playing.TTL_S
+
+
+def test_refresh_stops_after_clear() -> None:
+    """clear() retires the fact for good, not for one tick."""
+    client = _client()
+    now_playing.publish(client, 'abc123')
+    now_playing.clear(client)
+    client.reset_mock()
+
+    now_playing.refresh(client)
+    client.set.assert_not_called()
 
 
 def test_refresh_swallows_redis_errors() -> None:
     client = _client()
-    client.expire.side_effect = redis.ConnectionError('boom')
+    now_playing.publish(client, 'abc123')
+    client.set.side_effect = redis.ConnectionError('boom')
     now_playing.refresh(client)
 
 
