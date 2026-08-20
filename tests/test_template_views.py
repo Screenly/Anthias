@@ -10,6 +10,7 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
+import json
 from datetime import time, timedelta
 from typing import Any
 from unittest import mock
@@ -4444,3 +4445,83 @@ def test_system_info_storage_card_exposes_the_evidence(
     assert 'ext4_find_entry' in body
     assert 'SanDisk SC32G' in body
     assert 'survives reboots' in body
+
+
+# ---------------------------------------------------------------------------
+# Decode-envelope warnings surfaced on the asset list
+
+
+@pytest.mark.django_db
+def test_playback_warnings_flags_existing_oversized_asset(
+    asset: Asset, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 4K H.264 row that predates the upload gate keeps playing but
+    must carry a blocking warning the operator can act on."""
+    from anthias_server.app.templatetags.asset_filters import (
+        playback_warnings,
+    )
+
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset.mimetype = 'video'
+    asset.metadata = {
+        'video_codec': 'h264',
+        'video_width': 3840,
+        'video_height': 2160,
+    }
+    asset.save()
+
+    warnings = playback_warnings(asset)
+    assert [w['code'] for w in warnings] == ['h264_frame_too_large']
+    assert warnings[0]['severity'] == 'blocking'
+    assert warnings[0]['remedy']
+
+
+@pytest.mark.django_db
+def test_playback_warnings_silent_for_ordinary_assets(
+    asset: Asset, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Images, web pages and in-envelope video must produce nothing —
+    a badge on a working asset teaches operators to ignore badges."""
+    from anthias_server.app.templatetags.asset_filters import (
+        playback_warnings,
+    )
+
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    for metadata in (
+        {},
+        {'video_codec': 'h264', 'video_width': 1920, 'video_height': 1080},
+        {'video_codec': 'h264', 'video_width': 1080, 'video_height': 1920},
+        {'video_codec': 'h264'},
+        {'video_codec': 'hevc', 'video_width': 3840, 'video_height': 2160},
+    ):
+        asset.metadata = metadata
+        asset.save()
+        assert playback_warnings(asset) == [], f'{metadata} should be silent'
+
+    # An object with no metadata attribute at all (defensive: the
+    # filter runs against whatever the template hands it).
+    assert playback_warnings(object()) == []
+
+
+@pytest.mark.django_db
+def test_to_json_carries_playback_warnings_for_the_modal(
+    asset: Asset, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The edit modal binds to editAsset.playback_warnings, so the key
+    must always be present — computed server-side rather than
+    reimplementing the per-board rules in Alpine."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    asset.mimetype = 'video'
+    asset.metadata = {
+        'video_codec': 'h264',
+        'video_width': 3840,
+        'video_height': 2160,
+    }
+    asset.save()
+    payload = json.loads(str(to_json(asset)).replace('\\u0027', "'"))
+    assert payload['playback_warnings'][0]['code'] == 'h264_frame_too_large'
+
+    asset.metadata = {}
+    asset.save()
+    payload = json.loads(str(to_json(asset)).replace('\\u0027', "'"))
+    assert payload['playback_warnings'] == []
