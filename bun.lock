@@ -7,7 +7,7 @@
       "dependencies": {
         "@fontsource/plus-jakarta-sans": "^5.3.0",
         "@tabler/icons-webfont": "^3.46.0",
-        "alpinejs": "^3.15.12",
+        "alpinejs": "^3.16.1",
         "flatpickr": "^4.6.13",
         "htmx.org": "^2.0.10",
         "leaflet": "^1.9.4",
@@ -187,7 +187,7 @@
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
-    "alpinejs": ["alpinejs@3.15.12", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-nJvPAQVNPdZZ0NrExJ/kzQco3ijR8LwvCOadQecllESiqT4NyZ/57sN9V2XyvhlBGAbmlKYgeWZvYdKq99ij/Q=="],
+    "alpinejs": ["alpinejs@3.16.1", "", { "dependencies": { "@vue/reactivity": "~3.1.1" } }, "sha512-QXcW8MK9JoG8GZ7vCt2cXJlcEPIA7Xk/7IQ1+L2iLp7sXcIxct0PrgidmHzK97gD9QlfUjHXPxujdZ1mC2PYVg=="],
 
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 
