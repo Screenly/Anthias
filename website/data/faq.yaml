@@ -255,6 +255,14 @@
         | Caddy      | `request_body { max_size 0 }`                               |
         | Cloudflare | your plan sets the ceiling; you can lower it, not raise it   |
 
+        If your proxy's ceiling is one you can't raise — Cloudflare's, for instance — Anthias splits a large upload into several smaller requests instead, so it clears the cap without you changing anything. Each request defaults to 16 MB. Lower it to fit a tighter cap by creating `/etc/anthias/anthias.env` on the device:
+
+        ```
+        ANTHIAS_UPLOAD_CHUNK_SIZE_MB=8
+        ```
+
+        Then re-run `./bin/upgrade_containers.sh`. That file is read on every upgrade, so the setting survives one; editing `docker-compose.yml` directly does not, since it's regenerated each time. On balena, set the same variable as a device or service variable in the dashboard instead. Values are clamped to 1–24 MB: the ceiling keeps each chunk inside the server's in-memory upload buffer, which matters on a 512 MB board.
+
         The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you. The above is only relevant if you're terminating TLS or proxying with something else.
 
     - question: Where is the API reference?

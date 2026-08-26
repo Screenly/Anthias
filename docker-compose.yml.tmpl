@@ -27,6 +27,13 @@ services:
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
       - no_proxy=${no_proxy}
+      # Chunk size for large browser uploads, for an operator behind a
+      # proxy that caps request bodies. Empty when unset, which the
+      # server reads as "use the default". Set it durably in
+      # /etc/anthias/anthias.env, which upgrade_containers.sh sources
+      # before envsubst; balena devices use a dashboard variable
+      # instead, which the supervisor injects into every service.
+      - ANTHIAS_UPLOAD_CHUNK_SIZE_MB=${ANTHIAS_UPLOAD_CHUNK_SIZE_MB}
     # Gate startup on redis actually answering PING (see the
     # healthcheck on the redis service below) — plain service_started
     # only orders container creation, so uvicorn's first Channels /

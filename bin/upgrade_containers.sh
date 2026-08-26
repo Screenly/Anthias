@@ -154,6 +154,19 @@ if [[ -f /etc/anthias/proxy.env ]]; then
     set +a
 fi
 
+# Operator-set device variables, same mechanism. Unlike proxy.env this
+# file is not managed by the ansible role: it is where an operator puts
+# a setting that has to survive an upgrade. This script regenerates
+# docker-compose.yml from the template on every run and passes -f
+# explicitly, so an edit to the generated file — or a
+# docker-compose.override.yml — does not survive one. Absent by
+# default; every variable it can carry works when unset.
+if [[ -f /etc/anthias/anthias.env ]]; then
+    set -a
+    . /etc/anthias/anthias.env
+    set +a
+fi
+
 cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml

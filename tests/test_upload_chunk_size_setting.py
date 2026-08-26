@@ -9,8 +9,10 @@ so the client cap is a second line of defence, not the only one.
 """
 
 import logging
+from pathlib import Path
 
 import pytest
+import yaml
 
 from anthias_server.django_project.settings import (
     UPLOAD_CHUNK_SIZE_MB_DEFAULT,
@@ -39,10 +41,20 @@ class TestResolveUploadChunkSizeMb:
         monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', ' 8 ')
         assert resolve_upload_chunk_size_mb() == 8
 
-    @pytest.mark.parametrize('value', ['16m', '', 'sixteen', '8.5', '0x10'])
+    @pytest.mark.parametrize('value', ['16m', 'sixteen', '0x10', '1_6'])
     def test_an_unparseable_value_falls_back_instead_of_raising(
         self, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
+        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', value)
+        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_DEFAULT
+
+    @pytest.mark.parametrize('value', ['', '   '])
+    def test_an_empty_value_uses_the_default(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        """Not a hypothetical: docker-compose.yml.tmpl always sets the
+        variable, and it renders empty for every operator who has not
+        chosen a value."""
         monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', value)
         assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_DEFAULT
 
@@ -83,3 +95,39 @@ class TestResolveUploadChunkSizeMb:
         with caplog.at_level(logging.WARNING):
             resolve_upload_chunk_size_mb()
         assert str(UPLOAD_CHUNK_SIZE_MB_MAX) in caplog.text
+
+
+class TestUploadChunkSizeIsReachable:
+    """The variable has to survive the trip from the operator to Django.
+
+    A setting only settings.py knows about is unreachable on the plain
+    docker-compose install: the template lists anthias-server's
+    environment explicitly, Compose passes only what it declares, and
+    upgrade_containers.sh regenerates the file from that template on
+    every run. This is the install the chunking exists for — balena
+    devices get dashboard variables injected into every service.
+    """
+
+    def test_compose_template_passes_the_variable_to_the_server(
+        self,
+    ) -> None:
+        template = (
+            Path(__file__).resolve().parents[1] / 'docker-compose.yml.tmpl'
+        )
+        services = yaml.safe_load(template.read_text())['services']
+        assert (
+            'ANTHIAS_UPLOAD_CHUNK_SIZE_MB=${ANTHIAS_UPLOAD_CHUNK_SIZE_MB}'
+            in services['anthias-server']['environment']
+        )
+
+    def test_upgrade_sources_the_operator_env_file(self) -> None:
+        """Without this, a value set on the device is reverted by the
+        next upgrade and the 413s come back unexplained."""
+        script = (
+            Path(__file__).resolve().parents[1]
+            / 'bin'
+            / 'upgrade_containers.sh'
+        ).read_text()
+        sourcing = script.index('. /etc/anthias/anthias.env')
+        rendering = script.index('| envsubst')
+        assert sourcing < rendering
