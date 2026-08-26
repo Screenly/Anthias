@@ -59,6 +59,14 @@ def clamp_screen_rotation(value: Any) -> int:
 # Where chunked browser uploads stage their partial file, under the
 # asset dir. Shared with the cleanup sweep and the backup filter so
 # the name cannot drift from the code that writes into it.
+#
+# It has to live inside the asset dir, tempting as ~/.anthias looks
+# for something never meant to be served: docker-compose.yml.tmpl
+# bind-mounts .anthias and anthias_assets separately, and rename(2)
+# across two mounts is EXDEV even when they share a filesystem. The
+# commit would become a full copy of a multi-GB file onto an SD card,
+# needing twice the free space. anthias_assets serves this tree, so
+# the fetchability that costs us is closed in views_files instead.
 STAGED_UPLOAD_DIR = '.uploads'
 
 # How long a partial upload survives without being written to. An

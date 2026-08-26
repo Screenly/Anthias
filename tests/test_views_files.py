@@ -194,6 +194,34 @@ def test_anthias_assets_symlink_escape_blocked(
             views_files.anthias_assets(request, filename='link.txt')
 
 
+# Staged chunked uploads live at `.uploads/<id>.part` inside the asset
+# dir so the commit stays a rename within one filesystem. They must
+# not be reachable over HTTP: the id is unguessable, but this view is
+# effectively open on the LAN in the default no-SSL install.
+def test_anthias_assets_staged_upload_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    staged = assets_root / '.uploads'
+    staged.mkdir()
+    (staged / 'abc.part').write_text('partial')
+    request = factory.get(
+        '/anthias_assets/.uploads/abc.part', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename='.uploads/abc.part')
+
+
+def test_anthias_assets_dotfile_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    (assets_root / '.secret').write_text('nope')
+    request = factory.get(
+        '/anthias_assets/.secret', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename='.secret')
+
+
 def test_anthias_assets_directory_request_404(
     factory: RequestFactory, assets_root: Path
 ) -> None:
