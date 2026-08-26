@@ -74,19 +74,14 @@ _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 # py/path-injection on ``open(final_path, ...)``).
 _SAFE_EXT_RE = re.compile(r'\.[A-Za-z0-9]{1,16}')
 
-# ``<staged>/<upload_id>.part``. The id is echoed by the client on
-# every chunk and lands in a filesystem path, so require the exact
-# 32-lowercase-hex shape we mint (``uuid4().hex``) and reject anything
-# else. This is a path-traversal guard: 32 hex characters cannot
-# contain a ``/`` or ``..``.
+# ``<staged>/<upload_id>.part``. The client echoes the id on every
+# chunk and it lands in a path, so require the exact shape we mint
+# (``uuid4().hex``): 32 hex characters cannot hold ``/`` or ``..``.
 _UPLOAD_ID_RE = re.compile(r'[0-9a-f]{32}')
 
-# ``bytes <start>-<end>/<total>``. A known numeric total is required
-# (``*`` is rejected): the last-chunk handoff below relies on it to
-# decide when the upload is complete.
-# Digit runs are bounded: ``int()`` raises above 4300 digits, and a
-# client-controlled header must not be able to turn that into a 500.
-# 19 digits covers any conceivable file size.
+# ``bytes <start>-<end>/<total>``. ``*`` is rejected: the last-chunk
+# handoff needs the total. 19 digits covers any file and keeps a
+# client header off ``int()``'s 4300-digit ValueError (a 500).
 _CONTENT_RANGE_RE = re.compile(r'bytes (\d{1,19})-(\d{1,19})/(\d{1,19})')
 
 
@@ -99,10 +94,9 @@ def _staged_upload_path(upload_id: str) -> str:
 class _ChunkedUploadError(Exception):
     """A ranged upload the server will not continue.
 
-    Every case means the client must start the upload over rather than
-    send more chunks, so this answers with a real status code: the
-    uploader is JavaScript reading a response, not a browser following
-    a form post.
+    Every case means starting over, and the uploader is JavaScript
+    reading a response rather than a browser following a form post, so
+    these answer with a real status code.
     """
 
     def __init__(self, message: str, status_code: int = 400) -> None:
@@ -115,17 +109,16 @@ def _stage_upload_chunk(
 ) -> tuple[str, str, bool]:
     """Write one ``Content-Range`` chunk of an upload to its partial file.
 
-    Returns ``(upload_id, staged_path, is_final)``. The caller renames
-    the staged file into the asset dir once ``is_final`` is true.
+    Returns ``(upload_id, staged_path, is_final)``; the caller renames
+    the staged file into the asset dir once ``is_final``.
 
-    Chunks for one upload id must arrive **strictly sequentially, one
-    in flight at a time**. What is tracked per upload is a byte count,
-    not a set of received ranges, so a chunk starting beyond the end of
-    what is already stored cannot be distinguished from a resumed
-    upload whose partial has gone, and is treated as the latter: the
-    partial is dropped and the operator asked to start over. Parallel
-    or out-of-order chunks would therefore throw the upload away rather
-    than degrade. Real resumability needs a received-ranges record.
+    Chunks for one id must arrive **strictly in sequence, one in
+    flight**: what is tracked is a byte count, not a set of received
+    ranges, so a chunk starting past the end cannot be told apart from
+    a resumed upload whose partial has gone. Both are treated as the
+    latter — partial dropped, operator asked to start over — so
+    parallel or out-of-order chunks discard the upload rather than
+    degrade it. Real resumability needs a received-ranges record.
     """
     match = _CONTENT_RANGE_RE.fullmatch(
         request.headers['Content-Range'].strip()
@@ -135,8 +128,8 @@ def _stage_upload_chunk(
 
     start_bytes, end_bytes, total_bytes = (int(g) for g in match.groups())
     if total_bytes == 0:
-        # No range can describe an empty file (0-0/0 would claim one
-        # byte). Nothing needs chunking at that size anyway.
+        # No range describes an empty file (0-0/0 claims one byte),
+        # and nothing that size needs chunking anyway.
         raise _ChunkedUploadError(
             'Cannot upload an empty file in chunks. Please try again.'
         )
@@ -147,9 +140,9 @@ def _stage_upload_chunk(
             'Upload chunk did not match its range. Please try again.'
         )
 
-    # The id is only honoured alongside a range: a single-shot upload
-    # never reaches here, so an echoed id cannot truncate an unrelated
-    # in-progress upload.
+    # Only honoured alongside a range — a single-shot upload never
+    # reaches here — so an echoed id cannot truncate an unrelated
+    # upload in progress.
     upload_id = request.headers.get('X-Upload-Id')
     if upload_id is None:
         upload_id = uuid.uuid4().hex
@@ -162,9 +155,9 @@ def _stage_upload_chunk(
     staged_path = _staged_upload_path(upload_id)
     is_final = end_bytes + 1 == total_bytes
 
-    # Refuse an upload that cannot fit before writing any of it: the
-    # alternative is an hour of sending followed by failure, with the
-    # partial then held for a day.
+    # Refuse one that cannot fit before writing any of it: otherwise
+    # an hour of sending, then failure, then the partial held until
+    # the sweep.
     if start_bytes == 0:
         try:
             free = shutil.disk_usage(settings['assetdir']).free
@@ -175,26 +168,23 @@ def _stage_upload_chunk(
 
     try:
         os.makedirs(staged_dir, exist_ok=True)
-        # Open first, then measure the file descriptor. Checking the
-        # size by path and then opening by path leaves a window in
-        # which the cleanup sweep (or a concurrent request's error
-        # path) can unlink the partial: the open would recreate it
-        # empty, the seek would leave a hole, and the finished asset
-        # would be silently corrupt at exactly the right size.
-        # O_NOFOLLOW because the name is derived from a client header.
+        # Measure the descriptor, not the path: between a stat and an
+        # open, the sweep (or a concurrent error path) can unlink the
+        # partial, and the open would recreate it empty, the seek would
+        # leave a hole, and the asset would be silently corrupt at
+        # exactly the right size. O_NOFOLLOW: the name comes from a
+        # client header.
         fd = os.open(
             staged_path,
             os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW,
             0o666,
         )
         with os.fdopen(fd, 'r+b') as f:
-            # Refuse to seek past the end of what we actually hold; see
-            # the sequential-only contract above.
+            # Never seek past what we hold; see the docstring.
             if start_bytes > os.fstat(f.fileno()).st_size:
-                # Don't tell the operator to upload it again: one way
-                # to land here is a commit whose response was lost,
-                # where os.replace has already moved the partial away
-                # and the asset exists. Point at the list first.
+                # Not "try again": one way here is a commit whose
+                # response was lost, where os.replace has already moved
+                # the partial away and the asset exists.
                 raise _ChunkedUploadError(
                     'This upload could not be resumed. Check whether it '
                     'already appears in the asset list before uploading '
@@ -208,18 +198,17 @@ def _stage_upload_chunk(
                 # Drop anything a longer earlier attempt left past the end.
                 f.truncate(total_bytes)
     except _ChunkedUploadError:
-        # The partial is unusable to this client now, and holding it
-        # for a day would only keep the operator stuck on the same
-        # error. Drop it so the retry starts clean.
+        # Unusable to this client now, and holding it would only keep
+        # the operator stuck on the same error.
         with suppress(OSError):
             remove(staged_path)
         raise
     except OSError as exc:
         if not is_disk_full(exc):
             raise
-        # Don't leave a partial squatting on the last free bytes of an
-        # already-full disk. Matches the single-shot path and the REST
-        # API, which both surface ENOSPC rather than raising.
+        # Don't squat on the last free bytes of an already-full disk.
+        # Matches the single-shot path and the REST API, which both
+        # surface ENOSPC rather than raising.
         with suppress(OSError):
             remove(staged_path)
         raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507) from exc
@@ -816,19 +805,18 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     final_name = uuid.uuid4().hex
     final_path = path.join(settings['assetdir'], f'{final_name}{src_ext}')
 
-    # A ranged upload arrives as several requests. Each one stages its
-    # bytes into a per-upload partial file and returns early; only the
-    # request carrying the final byte falls through to create the
-    # asset. Everything above this point (type detection, the display
-    # name, the extension) runs per chunk on the same filename, so a
-    # file Anthias will refuse is refused on the first chunk rather
-    # than after the operator has waited out the whole upload.
+    # A ranged upload arrives as several requests: each stages its
+    # bytes and returns early, and only the one carrying the final byte
+    # falls through to create the asset. Everything above (type,
+    # display name, extension) runs per chunk on the same filename, so
+    # a file Anthias will refuse is refused on the first chunk, not
+    # after the whole upload.
     staged_path = None
     if 'Content-Range' in request.headers:
-        # Answer a chunk with JSON and a real status rather than the
-        # asset table: the caller is our own uploader reading a
-        # response, and re-rendering the table per chunk would also fan
-        # out a websocket refresh for an asset that does not exist yet.
+        # JSON and a real status, not the asset table: our own
+        # uploader is reading this, and re-rendering per chunk would
+        # fan out a websocket refresh for an asset that does not exist
+        # yet.
         try:
             upload_id, staged_path, is_final = _stage_upload_chunk(
                 request, file_upload
@@ -840,8 +828,8 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
 
     try:
         if staged_path is not None:
-            # The bytes are already on disk in the asset dir, so this
-            # is a rename within one filesystem rather than a copy.
+            # Already on disk in the asset dir: a rename within one
+            # filesystem, not a copy.
             os.replace(staged_path, final_path)
         else:
             with open(final_path, 'wb') as f:

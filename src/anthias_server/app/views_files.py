@@ -96,14 +96,13 @@ def anthias_assets(request: HttpRequest, filename: str) -> HttpResponseBase:
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
         raise Http404
-    # Not everything in the asset dir is an asset. Chunked uploads
+    # Not everything in the asset dir is an asset: chunked uploads
     # stage a partial at `.uploads/<id>.part` (see STAGED_UPLOAD_DIR),
-    # which is the one thing in this tree that was never meant to be
-    # fetchable — and the CIDR gate above does not exclude LAN clients
-    # in the default no-SSL install. Uploaded assets are always
-    # `<uuid>.<ext>`, so no legitimate request has a dot-leading path
-    # component; refusing the lot covers whatever else lands here
-    # later without needing this list kept in sync.
+    # the one thing here never meant to be fetchable — and the CIDR
+    # gate above does not exclude LAN clients in the default no-SSL
+    # install. Assets are always `<uuid>.<ext>`, so nothing legitimate
+    # has a dot-leading component, and refusing the lot covers whatever
+    # lands here next without keeping a list in sync.
     if any(
         part.startswith('.')
         for part in os.path.relpath(target, base).split(os.sep)

@@ -21,9 +21,8 @@ def _skip_staged_uploads(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
     """Keep partial chunked uploads out of a backup.
 
     ``tar.add`` recurses, and an in-progress upload can be gigabytes of
-    a file the operator has not finished sending. It is meaningless
-    once restored (the upload session is gone), so backing it up only
-    inflates the archive.
+    a file nobody finished sending — meaningless once restored, since
+    the upload session is gone, so it only inflates the archive.
     """
     parts = member.name.split('/')
     return None if STAGED_UPLOAD_DIR in parts else member

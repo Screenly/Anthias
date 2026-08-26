@@ -760,24 +760,24 @@ APP_STORE_INDEX_URL = getenv(
     'https://signage-apps.com/manifest.json',
 )
 
-# Size of each request a large browser upload is split into. A chunk
-# under FILE_UPLOAD_MAX_MEMORY_SIZE above (25 MB) is held entirely in
-# RAM by MemoryFileUploadHandler, so this number is what one in-flight
-# upload costs resident — keep it small on a board that may have
-# 512 MB. Above that limit Django spools to FILE_UPLOAD_TEMP_DIR,
-# which is unset, so /tmp: no container here mounts a tmpfs there, so
-# that is the writable overlay, i.e. the SD card. Trading RAM for card
-# writes is the wrong way round on this hardware. Lower it if a proxy
-# in front of the device caps request bodies below this.
+# Size of each request a large browser upload is split into. Under
+# FILE_UPLOAD_MAX_MEMORY_SIZE above (25 MB) MemoryFileUploadHandler
+# holds a chunk entirely in RAM, so this is what one in-flight upload
+# costs resident — keep it small on a board that may have 512 MB.
+# Over it, Django spools to FILE_UPLOAD_TEMP_DIR, which is unset, so
+# /tmp: no container here mounts a tmpfs there, making it the writable
+# overlay, i.e. the SD card. Trading RAM for card writes is the wrong
+# way round on this hardware. Lower it if a proxy in front of the
+# device caps request bodies below this.
 UPLOAD_CHUNK_SIZE_MB_DEFAULT = 16
-# Same ceiling the browser applies in home/chunking.ts. Clamped here
-# too so the client cap is a second line of defence rather than the
-# only one: an operator who reads the docstring and sets 32 to match
-# their proxy would otherwise get 24 with nothing to say why.
+# The ceiling home/chunking.ts applies, enforced here too so the client
+# cap is a second line of defence rather than the only one: an operator
+# setting 32 to match their proxy otherwise got 24 with nothing to say
+# why.
 UPLOAD_CHUNK_SIZE_MB_MAX = 24
-# A floor as well, because there is no useful setting below it: 0.5
-# turns a 2 GB video into ~4000 sequential requests, each with its
-# own round trip and multipart parse.
+# A floor too — below it there is no useful setting: 0.5 turns a 2 GB
+# video into ~4000 sequential requests, each with its own round trip
+# and multipart parse.
 UPLOAD_CHUNK_SIZE_MB_MIN = 1
 
 
@@ -785,13 +785,13 @@ def resolve_upload_chunk_size_mb() -> int:
     """Effective upload chunk size, in MB.
 
     Parsed defensively and clamped to
-    ``[UPLOAD_CHUNK_SIZE_MB_MIN, UPLOAD_CHUNK_SIZE_MB_MAX]``: this is a
-    device variable, typically set once through the balena dashboard
-    and never looked at again. A trailing space or a stray unit
-    (``16m``) would otherwise raise ValueError while this module
-    imports, and the container would never come up — on a headless
-    device, with no shell to work out why. Same posture as
-    ``resolve_time_zone`` above: no value can wedge Django at startup.
+    ``[UPLOAD_CHUNK_SIZE_MB_MIN, UPLOAD_CHUNK_SIZE_MB_MAX]``. It is a
+    device variable, set once through the balena dashboard and never
+    looked at again: a trailing space or a stray unit (``16m``) would
+    otherwise raise ValueError as this module imports and the container
+    would never come up, on a headless device with no shell to work out
+    why. Same posture as ``resolve_time_zone`` above — no value can
+    wedge Django at startup.
     """
     raw = (getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB') or '').strip()
     if not raw:

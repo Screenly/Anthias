@@ -9,10 +9,9 @@
 // intermediary the operator controls and retrying cannot help.
 //
 // A single-shot upload answers ENOSPC with 200 plus an HX-Trigger
-// toast, which fireToastFromHeader replays. A chunk answers 507 with
-// the same text as JSON, which the caller passes through as a
-// `server` failure; the 507 branch below is the fallback for when
-// that body cannot be read.
+// toast, which fireToastFromHeader replays; a chunk answers 507 with
+// the same text as JSON, passed through as a `server` failure. The
+// 507 branch below is the fallback for when that body cannot be read.
 
 // A transport failure carries no HTTP status: XMLHttpRequest reports
 // `status === 0` and fires `error` or `abort`. Modelling that as its
@@ -21,8 +20,8 @@ export type UploadFailure =
   | { kind: 'http'; status: number }
   | { kind: 'network' }
   // A chunked upload whose commit got no response. The asset may
-  // exist: the server renames the partial into place before it
-  // answers, so a lost reply is indistinguishable from a lost commit.
+  // exist: the server renames the partial into place before answering,
+  // so a lost reply looks exactly like a lost commit.
   | { kind: 'unconfirmed' }
   // The server explained itself in the response body. Its wording is
   // better than anything derivable from a status code, so it wins.
@@ -31,8 +30,8 @@ export type UploadFailure =
 export function uploadErrorMessage(failure: UploadFailure): string {
   if (failure.kind === 'server') return failure.message
 
-  // Never "try again" here. Telling the operator to re-upload
-  // something that may have completed is what produces a duplicate.
+  // Never "try again": re-uploading something that may have completed
+  // is what produces the duplicate.
   if (failure.kind === 'unconfirmed') {
     return (
       'Upload may have finished — check the asset list before ' +
@@ -69,9 +68,9 @@ export function uploadErrorMessage(failure: UploadFailure): string {
     return 'Upload rejected — reload the page and try again'
   }
 
-  // Before the 5xx branch: a chunked upload reports a full disk as
-  // 507, and "check the device logs" would send the operator to the
-  // wrong place for something they can act on directly.
+  // Before the 5xx branch: a chunk reports a full disk as 507, and
+  // "check the device logs" is the wrong place for something the
+  // operator can act on directly.
   if (status === 507) {
     return 'Not enough space on the device — free some up and try again'
   }

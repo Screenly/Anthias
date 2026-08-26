@@ -57,24 +57,22 @@ def clamp_screen_rotation(value: Any) -> int:
 
 
 # Where chunked browser uploads stage their partial file, under the
-# asset dir. Shared with the cleanup sweep and the backup filter so
-# the name cannot drift from the code that writes into it.
+# asset dir. Shared with the cleanup sweep and the backup filter so the
+# name cannot drift from the code writing into it.
 #
-# It has to live inside the asset dir, tempting as ~/.anthias looks
-# for something never meant to be served: docker-compose.yml.tmpl
+# It has to be the asset dir, tempting as ~/.anthias looks for
+# something never meant to be served: docker-compose.yml.tmpl
 # bind-mounts .anthias and anthias_assets separately, and rename(2)
-# across two mounts is EXDEV even when they share a filesystem. The
-# commit would become a full copy of a multi-GB file onto an SD card,
-# needing twice the free space. anthias_assets serves this tree, so
-# the fetchability that costs us is closed in views_files instead.
+# across two mounts is EXDEV even on one filesystem — the commit would
+# become a full copy of a multi-GB file onto an SD card, needing twice
+# the free space. views_files closes the fetchability that costs us.
 STAGED_UPLOAD_DIR = '.uploads'
 
-# How long a partial upload survives without being written to. An
-# upload cannot be resumed once abandoned, so holding one longer only
-# occupies the card; the same hour every other stray file in the asset
-# dir gets is enough to cover a slow upload still in progress. A
-# partial swept mid-upload is caught by the offset guard in
-# _stage_upload_chunk and fails loudly rather than corrupting.
+# How long a partial survives without being written to. An abandoned
+# upload cannot be resumed, so holding it longer only occupies the
+# card, and the hour every other stray file in the asset dir gets
+# covers a slow upload still in progress. One swept mid-upload trips
+# the offset guard in _stage_upload_chunk: loud, not corrupt.
 STAGED_UPLOAD_MAX_AGE_MIN = 60
 
 

@@ -126,8 +126,8 @@ type UploadResult =
   | { status: 'error'; failure: UploadFailure }
 
 // One POST of an upload: the whole file, or one chunk of it.
-// `sentBytes` is what preceded this request, so progress can be
-// reported against the whole file.
+// `sentBytes` is what preceded it, so progress reads against the
+// whole file.
 interface UploadRequest {
   url: string
   csrf: string
@@ -147,15 +147,13 @@ interface RawUploadResponse {
   trigger: string | null
 }
 
-// Chunking turns one request into dozens, so a single dropped
-// connection should not lose an upload the operator has been waiting
-// on. Only transport failures and 5xx are resent; a 4xx is the
-// server's considered answer.
+// Chunking turns one request into dozens, so one dropped connection
+// should not lose an upload the operator has been waiting on.
 const CHUNK_RETRIES = 2
 const CHUNK_RETRY_DELAY_MS = 500
 
-// Send one request, resending it while the failure is one that might
-// not repeat. Staging a chunk is idempotent, so a dropped connection
+// Resend only what might not fail again — a 4xx is the server's
+// considered answer. Staging is idempotent, so a dropped connection
 // there is safe to resend; the final chunk commits, and a lost
 // response to that may mean the asset already exists.
 async function sendWithRetry(
@@ -204,10 +202,10 @@ function parseServerError(text: string): string | undefined {
   return undefined
 }
 
-// Mint the id here rather than taking the server's. A retry of chunk
-// 0 would otherwise arrive with no id, the server would mint a second
-// one, and the bytes already staged under the first would sit
-// orphaned while the upload silently continued elsewhere.
+// Minted here, not taken from the server: a retry of chunk 0 would
+// otherwise arrive with no id, the server would mint a second one, and
+// the bytes staged under the first would sit orphaned while the upload
+// continued elsewhere.
 function newUploadId(): string {
   const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)
@@ -222,9 +220,8 @@ function parseUploadId(text: string): string | undefined {
       if (typeof id === 'string' && id.length > 0) return id
     }
   } catch {
-    // A non-JSON body means the server answered something other than
-    // the chunk acknowledgement; the caller treats a missing id as
-    // fatal rather than starting a second staged file.
+    // A non-JSON body is not the chunk acknowledgement; the caller
+    // treats a missing id as fatal rather than staging a second file.
   }
   return undefined
 }
@@ -656,12 +653,11 @@ function homeApp(): HomeAppData {
           {
             url,
             csrf,
-            // Re-wrap the slice with the file's own type. A raw Blob
-            // from File.slice() reports application/octet-stream, and
-            // the server uses the browser's type to catch a file whose
-            // extension lies about it (a HEIC renamed to .jpg).
-            // Without this the chunked path would skip normalisation
-            // and the asset would render blank on the player.
+            // Re-wrapped with the file's own type: File.slice()
+            // reports application/octet-stream, and the server reads
+            // that type to catch an extension that lies (a HEIC
+            // renamed .jpg) — without it, normalisation is skipped and
+            // the asset renders blank.
             body: new Blob([file.slice(chunk.start, chunk.end + 1)], {
               type: file.type,
             }),
@@ -674,8 +670,8 @@ function homeApp(): HomeAppData {
           isFinal,
         )
 
-      // Every chunk but the last only stages bytes; the server
-      // acknowledges each with the upload id and nothing else.
+      // All but the last only stage bytes; the server acknowledges
+      // each with the upload id and nothing else.
       for (const chunk of chunks.slice(0, -1)) {
         const res = await sendChunk(chunk, false)
         if (res.status < 200 || res.status >= 300) {
@@ -689,25 +685,23 @@ function homeApp(): HomeAppData {
                 : { kind: 'http', status: res.status },
           }
         }
-        // A 200 that is not the chunk acknowledgement means the server
-        // refused this file outright (wrong type, nothing uploaded)
-        // and answered with the asset table plus its own toast. That
-        // is a rejection of one file, not a transport failure: replay
-        // the toast and let the batch carry on, exactly as the
-        // single-shot path does.
+        // A 200 that is not the acknowledgement is the server
+        // refusing the file (wrong type, nothing uploaded) and
+        // answering with the asset table and its own toast: one file
+        // rejected, not a transport failure. Replay and carry on, as
+        // single-shot does.
         if (parseUploadId(res.text) === undefined) {
           fireToastFromHeader(res.trigger)
           return { status: 'rejected' }
         }
       }
 
-      // The last chunk carries the final byte, so it is the one that
-      // creates the asset.
+      // The last carries the final byte, so it creates the asset.
       const res = await sendChunk(chunks[chunks.length - 1], true)
       if (res.status === 0) {
-        // No response to the commit. os.replace may already have moved
-        // the partial into place, so this is not a failure we can
-        // report as one: say so and let the operator look.
+        // No response to the commit: os.replace may already have
+        // moved the partial into place, so say so rather than
+        // reporting a failure we cannot claim.
         return { status: 'error', failure: { kind: 'unconfirmed' } }
       }
       return interpretFinalResponse(res)

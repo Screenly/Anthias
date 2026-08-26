@@ -1,30 +1,26 @@
 // Split a large upload into requests small enough to clear a proxy.
+// Anthias accepts a body of any size; a reverse proxy in front of the
+// device usually cannot (Cloudflare caps non-Enterprise plans at
+// 100 MB), so the bytes arrive in several requests, each carrying the
+// Content-Range the server stages by.
 //
-// Anthias itself accepts a body of any size, but an operator who puts
-// a reverse proxy in front of the device usually cannot: Cloudflare
-// caps every non-Enterprise plan at 100 MB. The bytes have to arrive
-// in several requests, each carrying the Content-Range the server
-// stages by.
-//
-// The arithmetic lives here, away from the DOM, because the failure it
-// guards against is silent: a wrong final range makes the server
-// truncate to the wrong length, and an off-by-one start leaves a hole
-// that reads back as zeros. Both produce an asset of exactly the right
-// size that will not play.
+// The arithmetic sits here, away from the DOM, because it fails
+// silently: a wrong final range truncates to the wrong length and an
+// off-by-one start leaves a hole reading back as zeros — both an asset
+// of exactly the right size that will not play.
 
 export interface Chunk {
   start: number
-  // Inclusive, matching the Content-Range wire format rather than the
-  // exclusive end that File.slice() takes.
+  // Inclusive, as Content-Range is on the wire — not the exclusive end
+  // File.slice() takes.
   end: number
   header: string
 }
 
-// Kept under the server's FILE_UPLOAD_MAX_MEMORY_SIZE (25 MB), which
-// means Django holds each chunk in RAM rather than spooling it to the
-// SD card — so this is what one in-flight upload costs resident on a
-// board that may have 512 MB. The server clamps to the same ceiling;
-// its own default is 16.
+// Under the server's FILE_UPLOAD_MAX_MEMORY_SIZE (25 MB), so Django
+// holds each chunk in RAM rather than spooling it to the SD card —
+// what one in-flight upload costs resident on a 512 MB board. The
+// server clamps to the same ceiling; its default is 16.
 const FALLBACK_CHUNK_MB = 16
 const MAX_CHUNK_MB = 24
 
@@ -37,11 +33,9 @@ export function chunkSizeFromMeta(raw: string | null): number {
   return Math.floor(mb * 1024 * 1024)
 }
 
-// Every chunk of a file, in the order they must be sent. The server
-// tracks a byte count rather than a set of received ranges, so a chunk
-// arriving out of order is indistinguishable from a resumed upload
-// whose partial has gone, and the whole upload is discarded. Send
-// these strictly in sequence, one in flight.
+// Every chunk of a file, in the order they must be sent: strictly in
+// sequence, one in flight (see _stage_upload_chunk in views.py for
+// why out-of-order discards the upload).
 export function planChunks(fileSize: number, chunkSize: number): Chunk[] {
   if (fileSize <= 0 || chunkSize <= 0) return []
   const chunks: Chunk[] = []
@@ -56,10 +50,9 @@ export function planChunks(fileSize: number, chunkSize: number): Chunk[] {
   return chunks
 }
 
-// Whether a file should be sent in pieces at all. A file that fits in
-// one chunk takes the original single-request path, which keeps the
-// common case on well-trodden code and leaves empty files (which have
-// no representable range) alone.
+// One that fits in a single chunk takes the original single-request
+// path: the common case stays on well-trodden code, and empty files —
+// which have no representable range — are left alone.
 export function needsChunking(fileSize: number, chunkSize: number): boolean {
   return fileSize > chunkSize
 }

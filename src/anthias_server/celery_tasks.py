@@ -601,8 +601,8 @@ def cleanup() -> None:
         '-delete',
     )
 
-    # Partial chunked uploads, renamed out on the final chunk. They
-    # outlive the hour above; see STAGED_UPLOAD_MAX_AGE_MIN for why.
+    # Partial chunked uploads, renamed out on the final chunk; see
+    # STAGED_UPLOAD_MAX_AGE_MIN.
     staged_dir = path.join(asset_dir, STAGED_UPLOAD_DIR)
     if path.isdir(staged_dir):
         sh.find(
