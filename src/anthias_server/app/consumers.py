@@ -20,33 +20,37 @@ WS_GROUP = 'ws_server'
 #: in the journal under the viewer-side module's logger name.
 _warn = WarnOnce(logger)
 
-#: How long each read on the subscription waits before looping. Only
-#: PubSub.check_health can notice a wedged connection, and it runs when
-#: parse_response is re-entered -- never during a blocking listen() --
-#: so a short poll is what gives health_check_interval anything to do.
-_SUBSCRIPTION_POLL_S = 1.0
+#: Ceiling on one read, not a delay: get_message returns the moment a
+#: message lands, so this costs nothing in latency. Its only job is to
+#: re-enter parse_response, because that is where PubSub.check_health
+#: runs and a blocking listen() would never get there. Matched to the
+#: client's health_check_interval, so an idle connection is probed
+#: about twice a minute rather than woken sixty times.
+_SUBSCRIPTION_POLL_S = 30.0
 
-#: The process's single now-playing subscriber, and how many sockets
-#: rely on it. Process-wide rather than per socket: /ws has no auth
+#: The process's single now-playing subscriber, and the sockets
+#: relying on it. A set of channel names rather than a counter: a
+#: double release, or a connect whose disconnect never ran, is then
+#: idempotent instead of leaving the arithmetic permanently off. Process-wide rather than per socket: /ws has no auth
 #: and vendor.ts opens it on every page, so per-socket would let
 #: anything that can reach the device claim a Redis connection and a
-#: task per socket it opens. Per *process*, so this is one subscriber
+#: Per *process*, so this is one subscriber
 #: per device only while bin/start_server.sh runs uvicorn without
 #: --workers; N workers would mean N group_sends per rotation, each
 #: fanning out to the whole shared group.
 _now_playing_watcher: 'asyncio.Task[None] | None' = None
-_open_sockets = 0
+_watchers_wanted: set[str] = set()
 
 
-def _acquire_now_playing_watcher() -> None:
+def _acquire_now_playing_watcher(channel_name: str) -> None:
     """Start the subscriber if this is the first socket to need it.
 
     Restarts a finished task too: the body ends on any Redis failure,
     so a server that outlives an outage retries on the next connect
     instead of staying poll-only until the container restarts.
     """
-    global _now_playing_watcher, _open_sockets
-    _open_sockets += 1
+    global _now_playing_watcher
+    _watchers_wanted.add(channel_name)
     task = _now_playing_watcher
     # cancelling() as well as done(): a task that has been asked to
     # stop but has not unwound yet is on its way out, and handing it
@@ -57,7 +61,7 @@ def _acquire_now_playing_watcher() -> None:
     _now_playing_watcher = asyncio.create_task(_watch_now_playing())
 
 
-def _release_now_playing_watcher() -> None:
+def _release_now_playing_watcher(channel_name: str) -> None:
     """Stop the subscriber once the last socket has gone.
 
     Cancelled, not awaited: a cancelled task is not an unretrieved
@@ -69,9 +73,8 @@ def _release_now_playing_watcher() -> None:
     holds only a weak one and the task still has an ``await`` to run
     in its ``finally``.
     """
-    global _open_sockets
-    _open_sockets = max(0, _open_sockets - 1)
-    if _open_sockets or _now_playing_watcher is None:
+    _watchers_wanted.discard(channel_name)
+    if _watchers_wanted or _now_playing_watcher is None:
         return
     _now_playing_watcher.cancel()
 
@@ -141,8 +144,7 @@ class AssetConsumer(AsyncWebsocketConsumer):
     async def connect(self) -> None:
         await self.channel_layer.group_add(WS_GROUP, self.channel_name)
         await self.accept()
-        self._holds_now_playing_watcher = True
-        _acquire_now_playing_watcher()
+        _acquire_now_playing_watcher(self.channel_name)
 
     async def disconnect(self, code: int) -> None:
         try:
@@ -152,14 +154,12 @@ class AssetConsumer(AsyncWebsocketConsumer):
         finally:
             # In a finally because group_discard raises when Redis is
             # unreachable, and Channels lets that escape rather than
-            # reaching StopConsumer. Skipping the release would ratchet
-            # _open_sockets up for good, leaving the subscription alive
-            # with no sockets behind it -- the exact thing the refcount
-            # exists to bound. Guarded because disconnect() also runs
-            # for a socket that never finished connect().
-            if getattr(self, '_holds_now_playing_watcher', False):
-                self._holds_now_playing_watcher = False
-                _release_now_playing_watcher()
+            # reaching StopConsumer. Skipping the release would leave
+            # the name in the set for good, and the subscription alive
+            # with no sockets behind it. Safe for a socket that never finished
+            # connect(), because discarding a name that was never
+            # added is a no-op.
+            _release_now_playing_watcher(self.channel_name)
 
     async def asset_update(self, event: dict[str, Any]) -> None:
         # Plain text frame: the client only needs to know "something

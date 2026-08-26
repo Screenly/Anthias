@@ -74,7 +74,7 @@ _believed: str | None = None
 _last_announced_at: float | None = None
 
 #: Warn-once latch for this module's Redis calls.
-latch = WarnOnce(logger)
+_latch = WarnOnce(logger)
 
 
 def _announce(client: Any, payload: str) -> None:
@@ -113,9 +113,9 @@ def publish(client: Any, asset_id: str | None) -> None:
         _believed = asset_id
         if previous != asset_id:
             _announce(client, asset_id)
-        latch.worked('publish')
+        _latch.worked('publish')
     except Exception as exc:
-        latch.warn('publish', 'Could not publish the now-playing asset', exc)
+        _latch.warn('publish', 'Could not publish the now-playing asset', exc)
 
 
 def refresh(client: Any) -> None:
@@ -131,9 +131,9 @@ def refresh(client: Any) -> None:
         return
     try:
         client.set(NOW_PLAYING_KEY, _believed, ex=TTL_S)
-        latch.worked('refresh')
+        _latch.worked('refresh')
     except Exception as exc:
-        latch.warn('refresh', 'Could not refresh the now-playing asset', exc)
+        _latch.warn('refresh', 'Could not refresh the now-playing asset', exc)
 
 
 def clear(client: Any) -> None:
@@ -149,9 +149,9 @@ def clear(client: Any) -> None:
     try:
         if client.delete(NOW_PLAYING_KEY):
             _announce(client, '')
-        latch.worked('clear')
+        _latch.worked('clear')
     except Exception as exc:
-        latch.warn('clear', 'Could not clear the now-playing asset', exc)
+        _latch.warn('clear', 'Could not clear the now-playing asset', exc)
 
 
 def read(client: Any) -> str | None:
@@ -163,9 +163,9 @@ def read(client: Any) -> str | None:
     """
     try:
         raw = client.get(NOW_PLAYING_KEY)
-        latch.worked('read')
+        _latch.worked('read')
     except Exception as exc:
-        latch.warn('read', 'Could not read the now-playing asset', exc)
+        _latch.warn('read', 'Could not read the now-playing asset', exc)
         return None
     if not raw:
         return None

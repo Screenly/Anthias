@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import itertools
 from collections.abc import Iterator
 from typing import Any
 from unittest import mock
@@ -18,11 +19,11 @@ def _reset_module_state() -> Iterator[None]:
     they have to be reset between tests or one test's open socket
     suppresses the next test's subscribe."""
     consumers._now_playing_watcher = None
-    consumers._open_sockets = 0
+    consumers._watchers_wanted.clear()
     consumers._warn.reset()
     yield
     consumers._now_playing_watcher = None
-    consumers._open_sockets = 0
+    consumers._watchers_wanted.clear()
     consumers._warn.reset()
 
 
@@ -275,6 +276,9 @@ def test_now_playing_watch_without_a_channel_layer_is_a_no_op() -> None:
     connect.assert_not_called()
 
 
+_channel_ids = itertools.count()
+
+
 async def _quiesce(task: 'asyncio.Task[None]') -> None:
     """Cancel and await, so asyncio.run() doesn't close the loop on a
     pending task and log "Task was destroyed but it is pending!"."""
@@ -286,7 +290,7 @@ async def _quiesce(task: 'asyncio.Task[None]') -> None:
 def _connected_consumer() -> AssetConsumer:
     consumer = AssetConsumer()
     consumer.channel_layer = mock.AsyncMock()
-    consumer.channel_name = 'test-channel'
+    consumer.channel_name = f'test-channel.{next(_channel_ids)}'
     return consumer
 
 
@@ -317,7 +321,7 @@ def test_one_subscription_no_matter_how_many_tabs() -> None:
             await asyncio.sleep(0)
 
             assert connect.call_count == 1
-            assert consumers._open_sockets == 3
+            assert len(consumers._watchers_wanted) == 3
 
             # Two tabs close; the third still wants the push.
             for tab in tabs[:2]:
@@ -345,9 +349,9 @@ def test_disconnect_discards_the_channel_without_a_prior_connect() -> None:
     asyncio.run(consumer.disconnect(1006))
 
     consumer.channel_layer.group_discard.assert_awaited_once_with(
-        'ws_server', 'test-channel'
+        'ws_server', consumer.channel_name
     )
-    assert consumers._open_sockets == 0
+    assert not consumers._watchers_wanted
 
 
 def test_a_dead_subscriber_is_restarted_by_the_next_tab() -> None:
@@ -431,7 +435,7 @@ def test_disconnect_releases_the_watcher_even_if_redis_is_gone() -> None:
         with layer_patch, redis_patch:
             tab = _connected_consumer()
             await _open(tab)
-            assert consumers._open_sockets == 1
+            assert len(consumers._watchers_wanted) == 1
 
             tab.channel_layer.group_discard.side_effect = (
                 redis.ConnectionError('channel layer is gone')
@@ -439,7 +443,7 @@ def test_disconnect_releases_the_watcher_even_if_redis_is_gone() -> None:
             with pytest.raises(redis.ConnectionError):
                 await tab.disconnect(1006)
 
-            assert consumers._open_sockets == 0
+            assert not consumers._watchers_wanted
             watcher = consumers._now_playing_watcher
             assert watcher is not None
             await _quiesce(watcher)
