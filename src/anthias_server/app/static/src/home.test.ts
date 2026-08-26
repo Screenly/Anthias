@@ -318,6 +318,42 @@ describe('chunked upload failures', () => {
     expect(sends).toBe(2)
   })
 
+  // The commit renames the partial into place before it answers, so a
+  // lost reply may mean the asset already exists. Resending would be
+  // met with the server's 409, and telling the operator to try again
+  // is what produces the duplicate.
+  test('a lost response to the final chunk is not resent', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { transport: true },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(sends).toBe(3)
+    expect(toasts[0]?.message).toBe(
+      'Upload may have finished — check the asset list before ' +
+        'uploading it again',
+    )
+  }, 10000)
+
+  // A staging chunk commits nothing, so resending one is safe — the
+  // server seeks and overwrites the same range.
+  test('a lost response to a staging chunk still is resent', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { transport: true },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200 },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(sends).toBe(4)
+    expect(toasts).toEqual([])
+  }, 10000)
+
   // The server mints nothing now: a retry of chunk 0 that lost its
   // response would otherwise strand the staged bytes under an id the
   // client never learned.

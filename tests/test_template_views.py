@@ -2715,6 +2715,10 @@ def test_assets_upload_chunk_past_the_end_drops_the_partial(
         )
 
         assert gapped.status_code == 409
+        # One way to land here is a commit whose response was lost and
+        # whose asset therefore exists, so the message must not say
+        # "upload it again" without qualification.
+        assert 'asset list' in gapped.json()['error']
         assert Asset.objects.count() == 0
         assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
 

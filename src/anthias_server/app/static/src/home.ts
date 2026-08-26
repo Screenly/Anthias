@@ -659,14 +659,26 @@ function homeApp(): HomeAppData {
           // worth resending: chunking turns one request into dozens,
           // so a single blip should not lose the whole upload. A 4xx
           // is the server's considered answer and will not change.
+          // Staging a chunk is idempotent, so resending one is safe —
+          // but the final chunk commits, and a lost response there
+          // may mean the asset already exists.
           const retryable =
-            res.status === 0 || (res.status >= 500 && res.status !== 507)
+            (res.status === 0 && !isFinal) ||
+            (res.status >= 500 && res.status !== 507)
           if (!retryable || attempt === CHUNK_RETRIES) break
           await new Promise((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS))
         }
         if (res === null) break
 
-        if (isFinal) return interpretFinalResponse(res)
+        if (isFinal) {
+          // No response to the commit. os.replace may already have
+          // moved the partial into place, so this is not a failure we
+          // can report as one: say so and let the operator look.
+          if (res.status === 0) {
+            return { status: 'error', failure: { kind: 'unconfirmed' } }
+          }
+          return interpretFinalResponse(res)
+        }
 
         if (res.status < 200 || res.status >= 300) {
           const message = parseServerError(res.text)

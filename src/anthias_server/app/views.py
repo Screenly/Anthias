@@ -191,8 +191,14 @@ def _stage_upload_chunk(
             # Refuse to seek past the end of what we actually hold; see
             # the sequential-only contract above.
             if start_bytes > os.fstat(f.fileno()).st_size:
+                # Don't tell the operator to upload it again: one way
+                # to land here is a commit whose response was lost,
+                # where os.replace has already moved the partial away
+                # and the asset exists. Point at the list first.
                 raise _ChunkedUploadError(
-                    'This upload expired. Please try uploading it again.',
+                    'This upload could not be resumed. Check whether it '
+                    'already appears in the asset list before uploading '
+                    'it again.',
                     status_code=409,
                 )
             f.seek(start_bytes)

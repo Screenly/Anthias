@@ -40,6 +40,15 @@ describe('uploadErrorMessage', () => {
     )
   })
 
+  // Never "try again": the asset may already be there, and a second
+  // upload is exactly the duplicate this wording exists to avoid.
+  test('an unconfirmed commit sends the operator to the list', () => {
+    expect(uploadErrorMessage({ kind: 'unconfirmed' })).toBe(
+      'Upload may have finished — check the asset list before ' +
+        'uploading it again',
+    )
+  })
+
   // The server's own wording beats anything derived from a status.
   test('a server-supplied message is passed through verbatim', () => {
     expect(

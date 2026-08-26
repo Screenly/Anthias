@@ -20,12 +20,25 @@
 export type UploadFailure =
   | { kind: 'http'; status: number }
   | { kind: 'network' }
+  // A chunked upload whose commit got no response. The asset may
+  // exist: the server renames the partial into place before it
+  // answers, so a lost reply is indistinguishable from a lost commit.
+  | { kind: 'unconfirmed' }
   // The server explained itself in the response body. Its wording is
   // better than anything derivable from a status code, so it wins.
   | { kind: 'server'; message: string }
 
 export function uploadErrorMessage(failure: UploadFailure): string {
   if (failure.kind === 'server') return failure.message
+
+  // Never "try again" here. Telling the operator to re-upload
+  // something that may have completed is what produces a duplicate.
+  if (failure.kind === 'unconfirmed') {
+    return (
+      'Upload may have finished — check the asset list before ' +
+      'uploading it again'
+    )
+  }
 
   // Both causes, neither asserted. A proxy enforcing a body limit
   // answers and closes while the browser is still writing, and the
