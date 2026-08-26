@@ -1,11 +1,29 @@
 import asyncio
+import contextlib
+from collections.abc import Iterator
 from typing import Any
 from unittest import mock
 
 import pytest
+import redis
 
 from anthias_common import now_playing
+from anthias_server.app import consumers
 from anthias_server.app.consumers import AssetConsumer
+
+
+@pytest.fixture(autouse=True)
+def _reset_module_state() -> Iterator[None]:
+    """The subscriber and its refcount are process-wide by design, so
+    they have to be reset between tests or one test's open socket
+    suppresses the next test's subscribe."""
+    consumers._now_playing_watcher = None
+    consumers._open_sockets = 0
+    consumers._warn.reset()
+    yield
+    consumers._now_playing_watcher = None
+    consumers._open_sockets = 0
+    consumers._warn.reset()
 
 
 def test_asset_update_sends_asset_id() -> None:
@@ -86,215 +104,345 @@ def test_asset_update_reraises_non_close_websocket_send_error() -> None:
 
 
 class _FakePubSub:
+    """Serves canned messages, then either idles or drops.
+
+    Idling returns ``None`` the way a real poll does when nothing was
+    published; dropping raises, which is how a lost subscription ends
+    the task in production.
+    """
+
     def __init__(
         self,
         messages: list[dict[str, object]],
-        listener: Any = None,
+        idle: bool = False,
     ) -> None:
-        self._messages = messages
+        self._messages = list(messages)
+        self._idle = idle
         self.subscribed_to: list[str] = []
-        if listener is not None:
-            self.listen = listener  # type: ignore[method-assign]
+        self.polls = 0
 
     async def subscribe(self, channel: str) -> None:
         self.subscribed_to.append(channel)
 
-    async def listen(self):  # type: ignore[no-untyped-def]
-        for message in self._messages:
-            yield message
+    async def get_message(
+        self,
+        ignore_subscribe_messages: bool = False,
+        timeout: float | None = None,
+    ) -> dict[str, object] | None:
+        self.polls += 1
+        if self._messages:
+            return self._messages.pop(0)
+        if self._idle:
+            await asyncio.sleep(0)
+            return None
+        raise redis.ConnectionError('subscription dropped')
 
 
 def _fake_redis(
     messages: list[dict[str, object]],
-    listener: Any = None,
+    idle: bool = False,
 ) -> tuple[mock.Mock, '_FakePubSub']:
-    pubsub = _FakePubSub(messages, listener)
+    pubsub = _FakePubSub(messages, idle)
     client = mock.Mock()
     client.pubsub.return_value = pubsub
     client.aclose = mock.AsyncMock()
     return client, pubsub
 
 
-def test_now_playing_watch_nudges_the_browser() -> None:
+def _fake_layer() -> mock.Mock:
+    layer = mock.Mock()
+    layer.group_send = mock.AsyncMock()
+    return layer
+
+
+def _watching(client: mock.Mock, layer: mock.Mock) -> Any:
+    return (
+        mock.patch(
+            'anthias_server.app.consumers.get_channel_layer',
+            return_value=layer,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.connect_to_redis_async',
+            return_value=client,
+        ),
+    )
+
+
+def test_now_playing_watch_fans_out_through_the_channel_layer() -> None:
+    """One subscription for the process, re-broadcast onto the group
+    every socket is already in — rather than a send per socket from a
+    task outside the consumer's dispatch loop."""
     client, pubsub = _fake_redis(
         [
             {'type': 'message', 'data': 'abc123'},
             {'type': 'message', 'data': ''},
         ]
     )
-    consumer = AssetConsumer()
-    send = mock.AsyncMock()
+    layer = _fake_layer()
+    layer_patch, redis_patch = _watching(client, layer)
 
-    with (
-        mock.patch.object(consumer, 'send', send),
-        mock.patch(
-            'anthias_server.app.consumers.connect_to_redis_async',
-            return_value=client,
-        ),
-    ):
-        asyncio.run(consumer._watch_now_playing())
+    with layer_patch, redis_patch:
+        asyncio.run(consumers._watch_now_playing())
 
     assert pubsub.subscribed_to == [now_playing.NOW_PLAYING_CHANNEL]
-    assert [c.kwargs['text_data'] for c in send.await_args_list] == [
-        'abc123',
-        '',
-    ]
+    assert layer.group_send.await_count == 2
     assert client.aclose.await_count == 1
 
 
-def test_now_playing_watch_survives_an_unreachable_redis() -> None:
-    """No Redis means no fast path, not a broken WebSocket — the
-    browser keeps its 5s poll and the socket stays up."""
-    consumer = AssetConsumer()
+def test_an_idle_poll_is_not_a_nudge() -> None:
+    """The subscription reads with a timeout rather than blocking, so
+    most polls return nothing. Those must not cost every open browser
+    a table render."""
+    client, pubsub = _fake_redis([], idle=True)
+    layer = _fake_layer()
+    layer_patch, redis_patch = _watching(client, layer)
 
+    async def scenario() -> None:
+        with layer_patch, redis_patch:
+            task = asyncio.create_task(consumers._watch_now_playing())
+            while pubsub.polls < 3:
+                await asyncio.sleep(0)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    asyncio.run(scenario())
+
+    layer.group_send.assert_not_awaited()
+
+
+def test_now_playing_watch_never_forwards_the_asset_id() -> None:
+    """/ws is unauthenticated and not origin-gated under the default
+    ALLOWED_HOSTS=['*'], and vendor.ts ignores the frame body anyway —
+    so the id must not reach the wire. The generic '*' sentinel the
+    write paths already send carries the same meaning."""
+    client, _ = _fake_redis([{'type': 'message', 'data': 'secret-uuid'}])
+    layer = _fake_layer()
+    layer_patch, redis_patch = _watching(client, layer)
+
+    with layer_patch, redis_patch:
+        asyncio.run(consumers._watch_now_playing())
+
+    (message,) = [c.args[1] for c in layer.group_send.await_args_list]
+    assert message == {'type': 'asset_update', 'asset_id': '*'}
+    assert 'secret-uuid' not in repr(layer.group_send.await_args_list)
+
+
+def test_now_playing_watch_survives_an_unreachable_redis(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No Redis means no fast path, not a broken WebSocket — the
+    browsers keep their 5s poll. Warned once rather than logged at
+    DEBUG, so a genuine defect here (a redis-py API change) is visible
+    in the journal at the default level instead of silently disabling
+    the feature."""
     with (
-        mock.patch.object(consumer, 'send', mock.AsyncMock()),
+        mock.patch(
+            'anthias_server.app.consumers.get_channel_layer',
+            return_value=_fake_layer(),
+        ),
         mock.patch(
             'anthias_server.app.consumers.connect_to_redis_async',
             side_effect=OSError('no redis here'),
         ),
+        caplog.at_level('DEBUG'),
     ):
         # Must not raise.
-        asyncio.run(consumer._watch_now_playing())
+        asyncio.run(consumers._watch_now_playing())
+        asyncio.run(consumers._watch_now_playing())
+
+    warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+    assert len(warnings) == 1
+    assert 'fall back to the 5s' in warnings[0].getMessage()
 
 
-def test_now_playing_watch_stops_when_the_browser_goes_away() -> None:
-    """A send on a closed socket raises the same send-after-close
-    RuntimeError asset_update guards against (ANTHIAS-1K); the task
-    must end quietly instead of surfacing it."""
-    client, _ = _fake_redis([{'type': 'message', 'data': 'abc123'}])
-    consumer = AssetConsumer()
-    send = mock.AsyncMock(
-        side_effect=RuntimeError(
-            "Unexpected ASGI message 'websocket.send', after sending "
-            "'websocket.close' or response already completed."
-        )
-    )
+def test_now_playing_watch_without_a_channel_layer_is_a_no_op() -> None:
+    """No CHANNEL_LAYERS configured — don't open a Redis connection
+    only to have nowhere to send what comes back."""
+    connect = mock.Mock()
 
     with (
-        mock.patch.object(consumer, 'send', send),
         mock.patch(
-            'anthias_server.app.consumers.connect_to_redis_async',
-            return_value=client,
+            'anthias_server.app.consumers.get_channel_layer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.connect_to_redis_async', connect
         ),
     ):
-        asyncio.run(consumer._watch_now_playing())
+        asyncio.run(consumers._watch_now_playing())
 
-    send.assert_awaited_once()
+    connect.assert_not_called()
 
 
-def test_connect_subscribes_and_disconnect_closes_the_connection() -> None:
-    """The subscription is tied to the socket: every closed tab must
-    take its Redis connection with it, or a device left on a dashboard
-    accumulates them. Drives the real _watch_now_playing — a stand-in
-    with no cleanup would pass this while the real body leaked."""
-    blocked = asyncio.Event()
+async def _quiesce(task: 'asyncio.Task[None]') -> None:
+    """Cancel and await, so asyncio.run() doesn't close the loop on a
+    pending task and log "Task was destroyed but it is pending!"."""
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
 
-    async def listen():  # type: ignore[no-untyped-def]
-        # Hold the subscription open the way a live pubsub does.
-        yield {'type': 'message', 'data': 'abc123'}
-        await blocked.wait()
 
-    client, _ = _fake_redis([], listener=listen)
+def _connected_consumer() -> AssetConsumer:
     consumer = AssetConsumer()
     consumer.channel_layer = mock.AsyncMock()
     consumer.channel_name = 'test-channel'
-    sent = asyncio.Event()
+    return consumer
 
-    async def send(text_data=None):  # type: ignore[no-untyped-def]
-        sent.set()
+
+async def _open(consumer: AssetConsumer) -> None:
+    with mock.patch.object(consumer, 'accept', mock.AsyncMock()):
+        await consumer.connect()
+
+
+def test_one_subscription_no_matter_how_many_tabs() -> None:
+    """The point of the process-wide task: /ws has no auth and
+    vendor.ts opens it on every page, so a subscription per socket
+    would let anything that can reach the device pin a Redis
+    connection per socket it opens."""
+    client, _ = _fake_redis([], idle=True)
+    connect = mock.Mock(return_value=client)
+    layer_patch, _ = _watching(client, _fake_layer())
 
     async def scenario() -> None:
+        tabs = [_connected_consumer() for _ in range(3)]
         with (
-            mock.patch.object(consumer, 'accept', mock.AsyncMock()),
-            mock.patch.object(consumer, 'send', send),
+            layer_patch,
             mock.patch(
-                'anthias_server.app.consumers.connect_to_redis_async',
-                return_value=client,
+                'anthias_server.app.consumers.connect_to_redis_async', connect
             ),
         ):
-            await consumer.connect()
-            await asyncio.wait_for(sent.wait(), timeout=2)
-            task = consumer._now_playing_task
-            assert not task.done()
+            for tab in tabs:
+                await _open(tab)
+            await asyncio.sleep(0)
 
-            await consumer.disconnect(1000)
-            assert task.done()
+            assert connect.call_count == 1
+            assert consumers._open_sockets == 3
+
+            # Two tabs close; the third still wants the push.
+            for tab in tabs[:2]:
+                await tab.disconnect(1000)
+            watcher = consumers._now_playing_watcher
+            assert watcher is not None and not watcher.done()
+
+            await tabs[2].disconnect(1000)
+            # Let the cancellation and the client close land.
+            for _ in range(3):
+                await asyncio.sleep(0)
+            assert watcher.cancelled()
             client.aclose.assert_awaited_once()
 
     asyncio.run(scenario())
 
 
-def test_now_playing_watch_ignores_non_text_frames() -> None:
-    """redis-py surfaces subscribe confirmations and binary payloads
-    through the same iterator; only a text frame is a nudge."""
-    client, _ = _fake_redis(
-        [
-            {'type': 'subscribe', 'data': 1},
-            {'type': 'message', 'data': b'\x00binary'},
-            {'type': 'message', 'data': 'abc123'},
-        ]
-    )
-    consumer = AssetConsumer()
-    send = mock.AsyncMock()
-
-    with (
-        mock.patch.object(consumer, 'send', send),
-        mock.patch(
-            'anthias_server.app.consumers.connect_to_redis_async',
-            return_value=client,
-        ),
-    ):
-        asyncio.run(consumer._watch_now_playing())
-
-    assert [c.kwargs['text_data'] for c in send.await_args_list] == ['abc123']
-
-
-def test_disconnect_without_a_watcher_is_harmless() -> None:
+def test_disconnect_discards_the_channel_without_a_prior_connect() -> None:
     """disconnect() also runs for a socket that never completed
-    connect(), where no task was ever created."""
-    consumer = AssetConsumer()
-    consumer.channel_layer = mock.AsyncMock()
-    consumer.channel_name = 'test-channel'
+    connect(). The channel must still leave the group — every later
+    notify_asset_update would fan out to a dead channel name — and the
+    refcount must not go negative and strand the subscriber."""
+    consumer = _connected_consumer()
 
-    # Must not raise.
     asyncio.run(consumer.disconnect(1006))
 
+    consumer.channel_layer.group_discard.assert_awaited_once_with(
+        'ws_server', 'test-channel'
+    )
+    assert consumers._open_sockets == 0
 
-def test_disconnect_discards_the_channel_even_if_teardown_wedges() -> None:
-    """The subscription's teardown closes a Redis connection, and the
-    async client sets no socket timeout, so a half-open socket to a
-    wedged Redis can stall it. That must not stop the channel leaving
-    the group — every later notify_asset_update would fan out to a dead
-    channel name — and it must not hang the disconnect either."""
-    import time
 
-    consumer = AssetConsumer()
-    consumer.channel_layer = mock.AsyncMock()
-    consumer.channel_name = 'test-channel'
-    consumer.NOW_PLAYING_TEARDOWN_S = 0.2
-    cancelled = asyncio.Event()
-
-    async def wedged() -> None:
-        try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            cancelled.set()
-            # Stands in for a close() that never returns.
-            await asyncio.sleep(30)
+def test_a_dead_subscriber_is_restarted_by_the_next_tab() -> None:
+    """The body ends on any Redis failure. A server that outlives a
+    Redis outage must get another attempt rather than staying
+    poll-only until the container restarts."""
+    dead, _ = _fake_redis([])  # drops as soon as it is polled
+    alive, _ = _fake_redis([], idle=True)
+    connect = mock.Mock(side_effect=[dead, alive])
+    layer_patch, _ = _watching(dead, _fake_layer())
 
     async def scenario() -> None:
-        consumer._now_playing_task = asyncio.create_task(wedged())
-        await asyncio.sleep(0)
+        with (
+            layer_patch,
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async', connect
+            ),
+        ):
+            await _open(_connected_consumer())
+            # Let the first subscriber drop and finish.
+            for _ in range(5):
+                await asyncio.sleep(0)
+            assert consumers._now_playing_watcher is not None
+            assert consumers._now_playing_watcher.done()
 
-        started = time.monotonic()
-        await consumer.disconnect(1000)
-        elapsed = time.monotonic() - started
+            await _open(_connected_consumer())
+            await asyncio.sleep(0)
 
-        assert cancelled.is_set()
-        assert elapsed < 5, f'disconnect took {elapsed:.1f}s'
-        consumer.channel_layer.group_discard.assert_awaited_once_with(
-            'ws_server', 'test-channel'
-        )
+            assert connect.call_count == 2
+            revived = consumers._now_playing_watcher
+            assert revived is not None and not revived.done()
+            await _quiesce(revived)
+
+    asyncio.run(scenario())
+
+
+def test_a_stopping_subscriber_is_not_handed_to_a_new_tab() -> None:
+    """cancel() is a request, not an ending: a task asked to stop
+    still reports done() as False for a moment. Reusing it would
+    leave the browser that just arrived on poll-only for good."""
+    first, _ = _fake_redis([], idle=True)
+    second, _ = _fake_redis([], idle=True)
+    connect = mock.Mock(side_effect=[first, second])
+    layer_patch, _ = _watching(first, _fake_layer())
+
+    async def scenario() -> None:
+        with (
+            layer_patch,
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async', connect
+            ),
+        ):
+            tab = _connected_consumer()
+            await _open(tab)
+            await asyncio.sleep(0)
+            stopping = consumers._now_playing_watcher
+
+            await tab.disconnect(1000)
+            assert stopping is not None and not stopping.done()
+
+            await _open(_connected_consumer())
+            assert consumers._now_playing_watcher is not stopping
+            await asyncio.sleep(0)
+            assert connect.call_count == 2
+            restarted = consumers._now_playing_watcher
+            assert restarted is not None
+            await _quiesce(restarted)
+
+    asyncio.run(scenario())
+
+
+def test_disconnect_releases_the_watcher_even_if_redis_is_gone() -> None:
+    """group_discard raises when the channel layer's Redis is
+    unreachable, and Channels lets that escape. If it skipped the
+    release, _open_sockets would ratchet up for good and the
+    subscription would outlive every socket that wanted it."""
+    client, _ = _fake_redis([], idle=True)
+    layer_patch, redis_patch = _watching(client, _fake_layer())
+
+    async def scenario() -> None:
+        with layer_patch, redis_patch:
+            tab = _connected_consumer()
+            await _open(tab)
+            assert consumers._open_sockets == 1
+
+            tab.channel_layer.group_discard.side_effect = (
+                redis.ConnectionError('channel layer is gone')
+            )
+            with pytest.raises(redis.ConnectionError):
+                await tab.disconnect(1006)
+
+            assert consumers._open_sockets == 0
+            watcher = consumers._now_playing_watcher
+            assert watcher is not None
+            await _quiesce(watcher)
+            assert watcher.cancelled()
 
     asyncio.run(scenario())
