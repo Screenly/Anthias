@@ -84,6 +84,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from anthias_common import smart
+from anthias_common.warn_once import WarnOnce
 
 logger = logging.getLogger(__name__)
 
@@ -219,29 +220,9 @@ EMMC_MANUFACTURER_IDS: dict[int, str | None] = {
 }
 
 
-_warned: set[str] = set()
-
-
-def _warn_once(key: str, message: str) -> None:
-    """Log ``message`` at WARNING the first time, DEBUG thereafter.
-
-    Deliberately a small local copy of the helper in
-    :mod:`anthias_common.undervoltage` rather than a shared import:
-    the two modules are siblings with no dependency between them, and
-    the alternative was reaching into another module's private
-    helper.
-
-    The conditions this guards (an unreadable boot id) are properties
-    of the device, not of an individual reading, so they are worth
-    stating once. The watcher and every page render call in here, so
-    without the throttle one persistent fault would bury the device
-    log.
-    """
-    if key in _warned:
-        logger.debug(message)
-        return
-    _warned.add(key)
-    logger.warning(message)
+#: As in :mod:`anthias_common.undervoltage` — its own instance so the
+#: shared ``no_boot_id`` key can't silence that module's warning.
+_warn = WarnOnce(logger)
 
 
 def _read_text(path: str) -> str | None:
@@ -866,7 +847,7 @@ def _save_latch(
     check whether the card is wearing out would be self-defeating.
     """
     if boot_id is None:
-        _warn_once(
+        _warn.warn(
             'no_boot_id',
             'No kernel boot id available; reporting storage health from '
             'live readings only and not persisting history.',

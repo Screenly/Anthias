@@ -20,10 +20,10 @@ def _reset_warn_latch() -> Iterator[None]:
     """The warn-once latch is module state; leaking it between tests
     would make the first failure in a run behave differently from the
     rest."""
-    now_playing._warned.clear()
+    now_playing.latch.reset()
     now_playing._believed = None
     yield
-    now_playing._warned.clear()
+    now_playing.latch.reset()
     now_playing._believed = None
 
 

@@ -565,7 +565,7 @@ class TestWarnThrottle:
         # the throttle a single persistent problem would repeat on
         # every watcher wake-up and every page render, burying
         # everything else in the device log.
-        monkeypatch.setattr(undervoltage, '_warned', set())
+        undervoltage._warn.reset()
         monkeypatch.setattr(undervoltage, 'get_boot_id', lambda: None)
 
         with caplog.at_level('WARNING'):
