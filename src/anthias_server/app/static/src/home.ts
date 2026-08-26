@@ -189,15 +189,20 @@ function interpretFinalResponse(res: RawUploadResponse): UploadResult {
   return { status: kind === 'error' ? 'rejected' : 'ok' }
 }
 
-function parseServerError(text: string): string | undefined {
+// One string field of a JSON response body — undefined if the body is
+// not JSON, lacks the field, or holds a non-string there. The chunk
+// endpoint answers with `{upload_id}` on success and `{error}` on
+// refusal, and anything else is the server not answering as a chunk
+// endpoint at all, which both callers handle the same way.
+function jsonStringField(text: string, key: string): string | undefined {
   try {
     const parsed: unknown = JSON.parse(text)
-    if (parsed && typeof parsed === 'object' && 'error' in parsed) {
-      const msg = (parsed as { error: unknown }).error
-      if (typeof msg === 'string' && msg.length > 0) return msg
+    if (parsed && typeof parsed === 'object' && key in parsed) {
+      const value = (parsed as Record<string, unknown>)[key]
+      if (typeof value === 'string' && value.length > 0) return value
     }
   } catch {
-    // Not a JSON body: the caller falls back to the status code.
+    // Not JSON: the same answer as a body without the field.
   }
   return undefined
 }
@@ -210,20 +215,6 @@ function newUploadId(): string {
   const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function parseUploadId(text: string): string | undefined {
-  try {
-    const parsed: unknown = JSON.parse(text)
-    if (parsed && typeof parsed === 'object' && 'upload_id' in parsed) {
-      const id = (parsed as { upload_id: unknown }).upload_id
-      if (typeof id === 'string' && id.length > 0) return id
-    }
-  } catch {
-    // A non-JSON body is not the chunk acknowledgement; the caller
-    // treats a missing id as fatal rather than staging a second file.
-  }
-  return undefined
 }
 
 const DATE_FMT_MAP: Record<string, string> = {
@@ -675,7 +666,9 @@ function homeApp(): HomeAppData {
       for (const chunk of chunks.slice(0, -1)) {
         const res = await sendChunk(chunk, false)
         if (res.status < 200 || res.status >= 300) {
-          const message = parseServerError(res.text)
+          // The server's own wording where it gave one; the status
+          // code is the fallback.
+          const message = jsonStringField(res.text, 'error')
           return {
             status: 'error',
             failure: message
@@ -690,7 +683,7 @@ function homeApp(): HomeAppData {
         // answering with the asset table and its own toast: one file
         // rejected, not a transport failure. Replay and carry on, as
         // single-shot does.
-        if (parseUploadId(res.text) === undefined) {
+        if (jsonStringField(res.text, 'upload_id') === undefined) {
           fireToastFromHeader(res.trigger)
           return { status: 'rejected' }
         }
