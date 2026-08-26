@@ -2653,12 +2653,10 @@ def _refresh_now_playing_once() -> None:
     the thread survives a failed tick and tries again on the next one.
     """
     if display_blanked:
-        # Reconciles a race the two threads would otherwise lose:
-        # blank_display() runs on the subscriber thread and retires the
-        # fact, but a rotation already past its own check on the main
-        # thread can re-create it microseconds later. The loop is then
-        # parked on loop_is_stopped, so nothing would ever retire it
-        # again and the highlight would sit on a black screen for good.
+        # blank_display() retires the fact from the subscriber
+        # thread, but a rotation already past its own check can
+        # re-create it microseconds later — and the loop then parks on
+        # loop_is_stopped, so nothing would retire it again.
         now_playing.clear(r)
         return
     now_playing.refresh(r)
@@ -2667,13 +2665,12 @@ def _refresh_now_playing_once() -> None:
 def _refresh_now_playing_loop() -> None:
     """Background reporter — keep the now-playing fact from expiring.
 
-    The fact's TTL is a liveness signal (see
+    The TTL is a liveness signal (see
     :mod:`anthias_common.now_playing`), so something has to say "still
-    here" more often than a rotation does: a pinned dashboard asset can
-    hold the screen for an hour, and a stopped viewer holds it
-    indefinitely. Both are cases where the row really is on screen and
-    the highlight should stay, which is why this runs regardless of
-    ``loop_is_stopped``.
+    here" more often than a rotation does: a pinned dashboard asset
+    holds the screen for an hour, a stopped viewer indefinitely. In
+    both the row really is on screen, which is why this runs
+    regardless of ``loop_is_stopped``.
     """
     import threading
 
