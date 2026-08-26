@@ -38,6 +38,7 @@ fresh connection pool per table render would be waste.
 """
 
 import logging
+from time import monotonic
 from typing import Any
 
 from anthias_common.warn_once import WarnOnce
@@ -63,15 +64,44 @@ TTL_S = 180
 #: row still don't expire a fact that is merely late.
 REFRESH_INTERVAL_S = 60
 
+#: Floor on how often a change is announced; the key write is never
+#: skipped. ``duration`` may be 0 (v2 serializer: ``min_value=0``), so
+#: rotation is not self-limiting, and every announcement costs each
+#: open tab a full table render. The 5s poll used to be the ceiling on
+#: that; this keeps one. A dropped nudge costs one poll of staleness.
+MIN_ANNOUNCE_INTERVAL_S = 1.0
+
 #: What THIS process last put on screen, or None if it hasn't put
 #: anything there yet. Only :func:`refresh` reads it; the module
 #: docstring says why it exists rather than trusting the key.
 _believed: str | None = None
 
-#: Warn-once latch. Shared with the WebSocket consumer's now-playing
-#: subscriber (:mod:`anthias_server.app.consumers`), which keys into it
-#: under its own name.
+#: When the last announcement went out, for MIN_ANNOUNCE_INTERVAL_S.
+_last_announced_at: float | None = None
+
+#: Warn-once latch for this module's Redis calls.
 latch = WarnOnce(logger)
+
+
+def _announce(client: Any, payload: str) -> None:
+    """Nudge the browsers, at most once per MIN_ANNOUNCE_INTERVAL_S.
+
+    The second gate after the callers' dedup, for a value that moves
+    faster than a browser can usefully redraw. No catch-up: the 5s
+    poll already carries whatever a dropped nudge would have.
+    """
+    global _last_announced_at
+    now = monotonic()
+    if (
+        _last_announced_at is not None
+        and now - _last_announced_at < MIN_ANNOUNCE_INTERVAL_S
+    ):
+        return
+    client.publish(NOW_PLAYING_CHANNEL, payload)
+    # After the publish, not before: a failed one is caught upstream,
+    # and advancing the floor anyway would drop the next genuine
+    # change too.
+    _last_announced_at = now
 
 
 def publish(client: Any, asset_id: str | None) -> None:
@@ -89,7 +119,7 @@ def publish(client: Any, asset_id: str | None) -> None:
         previous = client.set(NOW_PLAYING_KEY, asset_id, ex=TTL_S, get=True)
         _believed = asset_id
         if previous != asset_id:
-            client.publish(NOW_PLAYING_CHANNEL, asset_id)
+            _announce(client, asset_id)
         latch.worked('publish')
     except Exception as exc:
         latch.warn('publish', 'Could not publish the now-playing asset', exc)
@@ -127,7 +157,7 @@ def clear(client: Any) -> None:
     _believed = None
     try:
         if client.delete(NOW_PLAYING_KEY):
-            client.publish(NOW_PLAYING_CHANNEL, '')
+            _announce(client, '')
         latch.worked('clear')
     except Exception as exc:
         latch.warn('clear', 'Could not clear the now-playing asset', exc)

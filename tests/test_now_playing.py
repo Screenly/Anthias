@@ -22,9 +22,11 @@ def _reset_warn_latch() -> Iterator[None]:
     rest."""
     now_playing.latch.reset()
     now_playing._believed = None
+    now_playing._last_announced_at = None
     yield
     now_playing.latch.reset()
     now_playing._believed = None
+    now_playing._last_announced_at = None
 
 
 def _client(get_value: Any = None, previous: Any = None) -> Any:
@@ -73,6 +75,35 @@ def test_publish_is_quiet_when_the_asset_has_not_changed() -> None:
     now_playing.publish(client, 'abc123')
     client.set.assert_called_once()
     client.publish.assert_not_called()
+
+
+def test_publish_rate_limits_the_announcement_not_the_key() -> None:
+    """``duration`` may be 0 (v2 serializer: ``min_value=0``), so a
+    playlist of zero-duration assets rotates as fast as the display
+    loop turns, and each rotation is a genuine change the dedup can't
+    absorb. Every announcement costs each open browser a full table
+    render, so the nudge needs its own ceiling — but the SET must keep
+    running, because it is what refreshes the liveness TTL."""
+    client = _client(previous='something-else')
+
+    for asset_id in ('a', 'b', 'c', 'd'):
+        now_playing.publish(client, asset_id)
+
+    assert client.set.call_count == 4
+    assert client.publish.call_count == 1
+
+
+def test_publish_announces_again_once_the_floor_has_passed() -> None:
+    """The limit is a floor between nudges, not a budget — an ordinary
+    rotation is far slower than this and must always announce."""
+    client = _client(previous='something-else')
+
+    now_playing.publish(client, 'a')
+    assert now_playing._last_announced_at is not None
+    now_playing._last_announced_at -= now_playing.MIN_ANNOUNCE_INTERVAL_S
+    now_playing.publish(client, 'b')
+
+    assert client.publish.call_count == 2
 
 
 def test_publish_without_an_asset_id_clears_instead() -> None:
