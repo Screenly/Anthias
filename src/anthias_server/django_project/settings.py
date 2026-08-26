@@ -10,6 +10,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import asyncio
 import configparser
+import logging
 import platform
 import secrets
 import socket
@@ -754,6 +755,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Overridable via env so a device can be pointed at the staging index
 # (stage.signage-apps.com) or a self-hosted mirror; defaults to the
 # production store index.
+APP_STORE_INDEX_URL = getenv(
+    'APP_STORE_INDEX_URL',
+    'https://signage-apps.com/manifest.json',
+)
+
 # Size of each request a large browser upload is split into. Kept
 # under FILE_UPLOAD_MAX_MEMORY_SIZE above so a chunk is buffered in
 # memory rather than spooled to FILE_UPLOAD_TEMP_DIR, which is /tmp
@@ -761,12 +767,59 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # limit instead would cost that much memory per upload on a board
 # that may have 512 MB. Lower it if a proxy in front of the device
 # caps request bodies below this.
-UPLOAD_CHUNK_SIZE_MB = int(getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '16'))
+UPLOAD_CHUNK_SIZE_MB_DEFAULT = 16
+# Same ceiling the browser applies in home/chunking.ts. Clamped here
+# too so the client cap is a second line of defence rather than the
+# only one: an operator who reads the docstring and sets 32 to match
+# their proxy would otherwise get 24 with nothing to say why.
+UPLOAD_CHUNK_SIZE_MB_MAX = 24
+# A floor as well, because there is no useful setting below it: 0.5
+# turns a 2 GB video into ~4000 sequential requests, each with its
+# own round trip and multipart parse.
+UPLOAD_CHUNK_SIZE_MB_MIN = 1
 
-APP_STORE_INDEX_URL = getenv(
-    'APP_STORE_INDEX_URL',
-    'https://signage-apps.com/manifest.json',
-)
+
+def resolve_upload_chunk_size_mb() -> int:
+    """Effective upload chunk size, in MB.
+
+    Parsed defensively and clamped to
+    ``[UPLOAD_CHUNK_SIZE_MB_MIN, UPLOAD_CHUNK_SIZE_MB_MAX]``: this is a
+    device variable, typically set once through the balena dashboard
+    and never looked at again. A trailing space or a stray unit
+    (``16m``) would otherwise raise ValueError while this module
+    imports, and the container would never come up — on a headless
+    device, with no shell to work out why. Same posture as
+    ``resolve_time_zone`` above: no value can wedge Django at startup.
+    """
+    raw = (getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB') or '').strip()
+    if not raw:
+        return UPLOAD_CHUNK_SIZE_MB_DEFAULT
+    try:
+        parsed = int(raw)
+    except ValueError:
+        logging.getLogger(__name__).warning(
+            'Ignoring unparseable ANTHIAS_UPLOAD_CHUNK_SIZE_MB=%r; '
+            'using %d MB.',
+            raw,
+            UPLOAD_CHUNK_SIZE_MB_DEFAULT,
+        )
+        return UPLOAD_CHUNK_SIZE_MB_DEFAULT
+    clamped = max(
+        UPLOAD_CHUNK_SIZE_MB_MIN, min(parsed, UPLOAD_CHUNK_SIZE_MB_MAX)
+    )
+    if clamped != parsed:
+        logging.getLogger(__name__).warning(
+            'ANTHIAS_UPLOAD_CHUNK_SIZE_MB=%d is outside [%d, %d]; '
+            'using %d MB.',
+            parsed,
+            UPLOAD_CHUNK_SIZE_MB_MIN,
+            UPLOAD_CHUNK_SIZE_MB_MAX,
+            clamped,
+        )
+    return clamped
+
+
+UPLOAD_CHUNK_SIZE_MB = resolve_upload_chunk_size_mb()
 
 # Host suffixes an installed app's launch URL / manifest may live on.
 # The catalog is fetched client-side, so the create endpoint can't
