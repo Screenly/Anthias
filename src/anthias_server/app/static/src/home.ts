@@ -14,6 +14,7 @@ import {
   type EditAsset as AppEditAsset,
 } from './apps'
 import {
+  type Chunk,
   chunkSizeFromMeta,
   needsChunking,
   planChunks,
@@ -98,16 +99,7 @@ interface HomeAppData {
   uploadFiles(input: HTMLInputElement): Promise<void>
   dropFiles(event: DragEvent): void
   uploadOne(url: string, csrf: string, file: File): Promise<UploadResult>
-  sendUpload(opts: {
-    url: string
-    csrf: string
-    body: Blob
-    filename: string
-    range?: string
-    uploadId?: string
-    sentBytes: number
-    totalBytes: number
-  }): Promise<RawUploadResponse>
+  sendUpload(opts: UploadRequest): Promise<RawUploadResponse>
   // Bulk selection helpers
   isSelected(id: string): boolean
   toggleSelect(id: string): void
@@ -133,6 +125,20 @@ type UploadResult =
   | { status: 'rejected' }
   | { status: 'error'; failure: UploadFailure }
 
+// One POST of an upload: the whole file, or one chunk of it.
+// `sentBytes` is what preceded this request, so progress can be
+// reported against the whole file.
+interface UploadRequest {
+  url: string
+  csrf: string
+  body: Blob
+  filename: string
+  range?: string
+  uploadId?: string
+  sentBytes: number
+  totalBytes: number
+}
+
 // One request's outcome, before it means anything. `status` is 0 when
 // no response arrived at all.
 interface RawUploadResponse {
@@ -147,6 +153,25 @@ interface RawUploadResponse {
 // server's considered answer.
 const CHUNK_RETRIES = 2
 const CHUNK_RETRY_DELAY_MS = 500
+
+// Send one request, resending it while the failure is one that might
+// not repeat. Staging a chunk is idempotent, so a dropped connection
+// there is safe to resend; the final chunk commits, and a lost
+// response to that may mean the asset already exists.
+async function sendWithRetry(
+  send: (opts: UploadRequest) => Promise<RawUploadResponse>,
+  opts: UploadRequest,
+  isFinal: boolean,
+): Promise<RawUploadResponse> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await send(opts)
+    const retryable =
+      (res.status === 0 && !isFinal) ||
+      (res.status >= 500 && res.status !== 507)
+    if (!retryable || attempt === CHUNK_RETRIES) return res
+    await new Promise((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS))
+  }
+}
 
 // Decide what the response to a whole-file upload, or to the chunk
 // that commits one, means. Kept in one place so both paths agree.
@@ -554,16 +579,7 @@ function homeApp(): HomeAppData {
     // given status means for a chunk versus a final commit.
     sendUpload(
       this: HomeAppData,
-      opts: {
-        url: string
-        csrf: string
-        body: Blob
-        filename: string
-        range?: string
-        uploadId?: string
-        sentBytes: number
-        totalBytes: number
-      },
+      opts: UploadRequest,
     ): Promise<RawUploadResponse> {
       return new Promise<RawUploadResponse>((resolve) => {
         const xhr = new XMLHttpRequest()
@@ -630,56 +646,38 @@ function homeApp(): HomeAppData {
 
       const chunks = planChunks(file.size, chunkSize)
       const uploadId = newUploadId()
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i]
-        const isFinal = i === chunks.length - 1
-        // Re-wrap the slice with the file's own type. A raw Blob from
-        // File.slice() reports application/octet-stream, and the
-        // server uses the browser's type to catch a file whose
-        // extension lies about it (a HEIC renamed to .jpg). Without
-        // this the chunked path would skip normalisation and the
-        // asset would render blank on the player.
-        const body = new Blob([file.slice(chunk.start, chunk.end + 1)], {
-          type: file.type,
-        })
 
-        let res: RawUploadResponse | null = null
-        for (let attempt = 0; attempt <= CHUNK_RETRIES; attempt++) {
-          res = await this.sendUpload({
+      const sendChunk = (
+        chunk: Chunk,
+        isFinal: boolean,
+      ): Promise<RawUploadResponse> =>
+        sendWithRetry(
+          (opts) => this.sendUpload(opts),
+          {
             url,
             csrf,
-            body,
+            // Re-wrap the slice with the file's own type. A raw Blob
+            // from File.slice() reports application/octet-stream, and
+            // the server uses the browser's type to catch a file whose
+            // extension lies about it (a HEIC renamed to .jpg).
+            // Without this the chunked path would skip normalisation
+            // and the asset would render blank on the player.
+            body: new Blob([file.slice(chunk.start, chunk.end + 1)], {
+              type: file.type,
+            }),
             filename: file.name,
             range: chunk.header,
             uploadId,
             sentBytes: chunk.start,
             totalBytes: file.size,
-          })
-          // Only a dropped connection or a server-side stumble is
-          // worth resending: chunking turns one request into dozens,
-          // so a single blip should not lose the whole upload. A 4xx
-          // is the server's considered answer and will not change.
-          // Staging a chunk is idempotent, so resending one is safe —
-          // but the final chunk commits, and a lost response there
-          // may mean the asset already exists.
-          const retryable =
-            (res.status === 0 && !isFinal) ||
-            (res.status >= 500 && res.status !== 507)
-          if (!retryable || attempt === CHUNK_RETRIES) break
-          await new Promise((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS))
-        }
-        if (res === null) break
+          },
+          isFinal,
+        )
 
-        if (isFinal) {
-          // No response to the commit. os.replace may already have
-          // moved the partial into place, so this is not a failure we
-          // can report as one: say so and let the operator look.
-          if (res.status === 0) {
-            return { status: 'error', failure: { kind: 'unconfirmed' } }
-          }
-          return interpretFinalResponse(res)
-        }
-
+      // Every chunk but the last only stages bytes; the server
+      // acknowledges each with the upload id and nothing else.
+      for (const chunk of chunks.slice(0, -1)) {
+        const res = await sendChunk(chunk, false)
         if (res.status < 200 || res.status >= 300) {
           const message = parseServerError(res.text)
           return {
@@ -702,7 +700,17 @@ function homeApp(): HomeAppData {
           return { status: 'rejected' }
         }
       }
-      return { status: 'error', failure: { kind: 'network' } }
+
+      // The last chunk carries the final byte, so it is the one that
+      // creates the asset.
+      const res = await sendChunk(chunks[chunks.length - 1], true)
+      if (res.status === 0) {
+        // No response to the commit. os.replace may already have moved
+        // the partial into place, so this is not a failure we can
+        // report as one: say so and let the operator look.
+        return { status: 'error', failure: { kind: 'unconfirmed' } }
+      }
+      return interpretFinalResponse(res)
     },
   }
 }
