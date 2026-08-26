@@ -20,9 +20,11 @@ export interface Chunk {
   header: string
 }
 
-// Chunks must not exceed FILE_UPLOAD_MAX_MEMORY_SIZE on the server
-// (25 MB), or Django spools them to /tmp, which is RAM on a stock Pi
-// image. The server's own default is 16.
+// Kept under the server's FILE_UPLOAD_MAX_MEMORY_SIZE (25 MB), which
+// means Django holds each chunk in RAM rather than spooling it to the
+// SD card — so this is what one in-flight upload costs resident on a
+// board that may have 512 MB. The server clamps to the same ceiling;
+// its own default is 16.
 const FALLBACK_CHUNK_MB = 16
 const MAX_CHUNK_MB = 24
 

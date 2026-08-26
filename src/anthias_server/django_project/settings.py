@@ -760,13 +760,15 @@ APP_STORE_INDEX_URL = getenv(
     'https://signage-apps.com/manifest.json',
 )
 
-# Size of each request a large browser upload is split into. Kept
-# under FILE_UPLOAD_MAX_MEMORY_SIZE above so a chunk is buffered in
-# memory rather than spooled to FILE_UPLOAD_TEMP_DIR, which is /tmp
-# and therefore RAM on a stock Pi image: sizing chunks to a proxy's
-# limit instead would cost that much memory per upload on a board
-# that may have 512 MB. Lower it if a proxy in front of the device
-# caps request bodies below this.
+# Size of each request a large browser upload is split into. A chunk
+# under FILE_UPLOAD_MAX_MEMORY_SIZE above (25 MB) is held entirely in
+# RAM by MemoryFileUploadHandler, so this number is what one in-flight
+# upload costs resident — keep it small on a board that may have
+# 512 MB. Above that limit Django spools to FILE_UPLOAD_TEMP_DIR,
+# which is unset, so /tmp: no container here mounts a tmpfs there, so
+# that is the writable overlay, i.e. the SD card. Trading RAM for card
+# writes is the wrong way round on this hardware. Lower it if a proxy
+# in front of the device caps request bodies below this.
 UPLOAD_CHUNK_SIZE_MB_DEFAULT = 16
 # Same ceiling the browser applies in home/chunking.ts. Clamped here
 # too so the client cap is a second line of defence rather than the
