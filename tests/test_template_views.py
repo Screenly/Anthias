@@ -2864,13 +2864,23 @@ def test_assets_upload_refuses_a_file_larger_than_free_space(
 def test_assets_upload_final_chunk_truncates_a_longer_earlier_attempt(
     client: Client, tmp_path: Any
 ) -> None:
-    """A retry that declares a shorter total must not leave the tail of
-    a longer attempt on the end of the asset."""
+    """A partial longer than the file being committed must not leave
+    its tail on the end of the asset.
+
+    The staged file is whatever an earlier attempt under this id left
+    behind — abandoned, swept late, or simply longer. Every request
+    here declares the same total for the file it is actually sending:
+    the server does not compare a chunk's total against what earlier
+    chunks declared, and nothing should come to depend on that."""
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     from anthias_server.settings import settings as anthias_settings
 
     upload_id = uuid.uuid4().hex
+    staged = tmp_path / STAGED_UPLOAD_DIR
+    staged.mkdir()
+    (staged / f'{upload_id}.part').write_bytes(b'0' * 40)
+
     with (
         mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
         # See the round-trip test: the commit dispatches video
@@ -2881,26 +2891,12 @@ def test_assets_upload_final_chunk_truncates_a_longer_earlier_attempt(
             reverse('anthias_app:assets_upload'),
             data={
                 'file_upload': SimpleUploadedFile(
-                    'clip.mp4', b'0' * 20, content_type='video/mp4'
+                    'clip.mp4', b'1' * 10, content_type='video/mp4'
                 ),
             },
             headers={
                 'HX-Request': 'true',
-                'Content-Range': 'bytes 0-19/40',
-                'X-Upload-Id': upload_id,
-            },
-        )
-        # Same session, now finishing a shorter file.
-        client.post(
-            reverse('anthias_app:assets_upload'),
-            data={
-                'file_upload': SimpleUploadedFile(
-                    'clip.mp4', b'1' * 5, content_type='video/mp4'
-                ),
-            },
-            headers={
-                'HX-Request': 'true',
-                'Content-Range': 'bytes 5-9/10',
+                'Content-Range': 'bytes 0-9/10',
                 'X-Upload-Id': upload_id,
             },
         )
@@ -2908,7 +2904,7 @@ def test_assets_upload_final_chunk_truncates_a_longer_earlier_attempt(
         asset = Asset.objects.get()
         assert asset.uri is not None
         with open(asset.uri, 'rb') as f:
-            assert f.read() == b'0' * 5 + b'1' * 5
+            assert f.read() == b'1' * 10
 
 
 @pytest.mark.django_db
