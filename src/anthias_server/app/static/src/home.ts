@@ -140,11 +140,14 @@ interface UploadRequest {
 }
 
 // One request's outcome, before it means anything. `status` is 0 when
-// no response arrived at all.
+// no response arrived at all. `bodySent` says the browser finished
+// handing over the request body, which is what separates "the server
+// never saw this chunk" from "the server may have acted on it".
 interface RawUploadResponse {
   status: number
   text: string
   trigger: string | null
+  bodySent: boolean
 }
 
 // Chunking turns one request into dozens, so one dropped connection
@@ -153,9 +156,16 @@ const CHUNK_RETRIES = 2
 const CHUNK_RETRY_DELAY_MS = 500
 
 // Resend only what might not fail again — a 4xx is the server's
-// considered answer. Staging is idempotent, so a dropped connection
-// there is safe to resend; the final chunk commits, and a lost
-// response to that may mean the asset already exists.
+// considered answer. Staging a chunk is idempotent, so anything that
+// goes wrong there is safe to resend.
+//
+// The final chunk commits: the server renames the partial into place
+// and only then answers, so once its body has gone out, neither a
+// dropped socket nor a 5xx tells us whether the asset exists. Behind a
+// proxy the lost-commit case usually arrives as a gateway 502 or 504
+// rather than a socket error, so exempting only `status === 0` would
+// leave the common shape of it being resent — into the 409 that says
+// the upload cannot be resumed, for an upload that worked.
 async function sendWithRetry(
   send: (opts: UploadRequest) => Promise<RawUploadResponse>,
   opts: UploadRequest,
@@ -163,9 +173,10 @@ async function sendWithRetry(
 ): Promise<RawUploadResponse> {
   for (let attempt = 0; ; attempt++) {
     const res = await send(opts)
+    const mayHaveCommitted = isFinal && res.bodySent
     const retryable =
-      (res.status === 0 && !isFinal) ||
-      (res.status >= 500 && res.status !== 507)
+      !mayHaveCommitted &&
+      (res.status === 0 || (res.status >= 500 && res.status !== 507))
     if (!retryable || attempt === CHUNK_RETRIES) return res
     await new Promise((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS))
   }
@@ -516,6 +527,9 @@ function homeApp(): HomeAppData {
       this.uploadTotal = 0
 
       if (failure) {
+        // "Check the asset list" is unactionable with the Add modal
+        // sitting on top of it.
+        if (failure.kind === 'unconfirmed') this.mode = null
         const store = window.Alpine.store('toasts') as
           | ToastStoreLike
           | undefined
@@ -579,6 +593,12 @@ function homeApp(): HomeAppData {
         if (opts.range) xhr.setRequestHeader('Content-Range', opts.range)
         if (opts.uploadId) xhr.setRequestHeader('X-Upload-Id', opts.uploadId)
         this.uploadState = 'sending'
+        let bodySent = false
+        // Fires once the whole request body has gone out — before any
+        // response, and regardless of what comes back.
+        xhr.upload.addEventListener('load', () => {
+          bodySent = true
+        })
         xhr.upload.addEventListener('progress', (ev) => {
           if (!ev.lengthComputable || opts.totalBytes === 0) return
           // Against the whole file, not this request: otherwise a
@@ -595,11 +615,13 @@ function homeApp(): HomeAppData {
             status: xhr.status,
             text: xhr.responseText,
             trigger: xhr.getResponseHeader('HX-Trigger'),
+            bodySent: true,
           })
         })
         // No response at all (dropped connection, DNS, TLS): status is
         // 0 here, so it is not an HTTP failure.
-        const failed = () => resolve({ status: 0, text: '', trigger: null })
+        const failed = () =>
+          resolve({ status: 0, text: '', trigger: null, bodySent })
         xhr.addEventListener('error', failed)
         xhr.addEventListener('abort', failed)
         const fd = new FormData()
@@ -691,10 +713,17 @@ function homeApp(): HomeAppData {
 
       // The last carries the final byte, so it creates the asset.
       const res = await sendChunk(chunks[chunks.length - 1], true)
-      if (res.status === 0) {
-        // No response to the commit: os.replace may already have
-        // moved the partial into place, so say so rather than
-        // reporting a failure we cannot claim.
+      // The server's own words where it gave any — the 409 that says
+      // to check the asset list, or the 507 that names the disk — beat
+      // anything derivable from a status code.
+      const message = jsonStringField(res.text, 'error')
+      if (message) return { status: 'error', failure: { kind: 'server', message } }
+      // Otherwise: if the bytes went out and nothing intelligible came
+      // back, os.replace may already have moved the partial into
+      // place. Don't report that as a plain failure. A body that never
+      // finished sending could not have committed, so it falls through
+      // to the ordinary transport message.
+      if (res.bodySent && (res.status === 0 || res.status >= 500)) {
         return { status: 'error', failure: { kind: 'unconfirmed' } }
       }
       return interpretFinalResponse(res)

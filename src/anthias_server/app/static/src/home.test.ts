@@ -11,7 +11,20 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import './home'
 
 type Toast = { kind: string; message: string; ttlMs?: number }
-type Outcome = { status: number; body?: string } | { transport: true }
+type ProgressLike = {
+  lengthComputable: boolean
+  loaded: number
+  total: number
+}
+// `transport: true` is a response that never came back after the
+// request body had gone out — the ambiguous case, since the server may
+// have acted on it. `transport: 'cut'` is the connection dying while
+// the body was still going out, which the server cannot have seen in
+// full.
+type Outcome =
+  | { status: number; body?: string }
+  | { transport: true }
+  | { transport: 'cut' }
 
 // What each request actually carried, so the chunk tests can assert
 // on the wire format the server stages by.
@@ -37,11 +50,19 @@ function stubXhr(outcomes: Outcome[]): void {
     function XMLHttpRequestStub() {
       const outcome = outcomes[Math.min(index++, outcomes.length - 1)]
       const handlers: Record<string, (() => void)[]> = {}
+      const uploadHandlers: Record<
+        string,
+        ((ev: ProgressLike) => void)[]
+      > = {}
       const headers: Record<string, string> = {}
       return {
         status: 'status' in outcome ? outcome.status : 0,
         responseText: ('body' in outcome && outcome.body) || '',
-        upload: { addEventListener: () => {} },
+        upload: {
+          addEventListener(type: string, fn: (ev: ProgressLike) => void) {
+            ;(uploadHandlers[type] ??= []).push(fn)
+          },
+        },
         open: () => {},
         setRequestHeader: (name: string, value: string) => {
           headers[name] = value
@@ -59,8 +80,26 @@ function stubXhr(outcomes: Outcome[]): void {
             bodyType: body instanceof Blob ? body.type : '',
             bodySize: body instanceof Blob ? body.size : 0,
           })
+          // A real XHR streams the body out first: progress events,
+          // then upload.load once it is all gone, and only then the
+          // response (or the error). Modelled here because uploadOne
+          // reads the difference — a body that never finished cannot
+          // have committed anything.
+          const bodySize = requests[requests.length - 1].bodySize
+          const cutMidBody =
+            'transport' in outcome && outcome.transport === 'cut'
           const type = 'status' in outcome ? 'load' : 'error'
-          queueMicrotask(() => handlers[type]?.forEach((fn) => fn()))
+          queueMicrotask(() => {
+            uploadHandlers['progress']?.forEach((fn) =>
+              fn({
+                lengthComputable: true,
+                loaded: cutMidBody ? Math.floor(bodySize / 2) : bodySize,
+                total: bodySize,
+              }),
+            )
+            if (!cutMidBody) uploadHandlers['load']?.forEach((fn) => fn())
+            handlers[type]?.forEach((fn) => fn())
+          })
         },
       }
     }
@@ -336,6 +375,78 @@ describe('chunked upload failures', () => {
       'Upload may have finished — check the asset list before ' +
         'uploading it again',
     )
+  }, 10000)
+
+  // Behind a proxy the lost-commit case usually arrives as a gateway
+  // 502/504, not a socket error. Exempting only `status === 0` from
+  // the retry would leave the common shape of it being resent, into
+  // the server's 409, for an upload that had already worked.
+  test('a 5xx answer to the final chunk is not resent either', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 502 },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(sends).toBe(3)
+    expect(toasts[0]?.message).toBe(
+      'Upload may have finished — check the asset list before ' +
+        'uploading it again',
+    )
+  }, 10000)
+
+  // The 409 exists to say the asset may already be there. It is
+  // reachable almost only on the final chunk, so a commit that reports
+  // only its status code throws away the one message that matters.
+  test("the final chunk shows the server's own explanation", async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      {
+        status: 409,
+        body: '{"error":"This upload could not be resumed. Check whether it already appears in the asset list before uploading it again."}',
+      },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(toasts[0]?.message).toContain('already appears in the asset list')
+  })
+
+  // A body that never finished going out cannot have committed
+  // anything, so this one is safe to resend and must not be reported
+  // as "may have finished".
+  test('a connection cut mid-commit is resent, not called ambiguous', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { transport: 'cut' },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(sends).toBe(5)
+    expect(toasts[0]?.message).toBe(
+      'Upload failed mid-transfer — check your connection, or try a ' +
+        'smaller file',
+    )
+  }, 10000)
+
+  // The toast says to check the asset list; the Add modal covers it.
+  test('an unconfirmed commit closes the modal', async () => {
+    setChunkSizeMb('0.001')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { transport: true },
+    ])
+    const app = window.homeApp()
+    app.mode = 'add'
+    await app.uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(app.mode).toBeNull()
   }, 10000)
 
   // A staging chunk commits nothing, so resending one is safe — the
