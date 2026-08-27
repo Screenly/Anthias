@@ -3,7 +3,6 @@ Tests for V1 API endpoints.
 """
 
 import os
-import shutil
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -26,19 +25,21 @@ def api_client() -> APIClient:
 
 
 @pytest.fixture
-def cleanup_asset_dir() -> Iterator[None]:
-    try:
+def cleanup_asset_dir(tmp_path: Path) -> Iterator[None]:
+    """Give the test its own asset dir.
+
+    This used to empty ``settings['assetdir']`` on teardown, which is
+    one real directory — ~/anthias_assets on a developer's machine —
+    shared by every xdist worker. Under ``pytest -n auto`` one worker's
+    teardown deleted files another worker was still using, which
+    surfaced as rare failures in whichever upload test happened to be
+    mid-request. It also emptied a developer's actual asset directory,
+    the hazard the backup tests' own fixture calls out.
+    """
+    asset_dir = tmp_path / 'anthias_assets'
+    asset_dir.mkdir()
+    with mock.patch.dict(anthias_settings, {'assetdir': str(asset_dir)}):
         yield
-    finally:
-        asset_directory_path = Path(anthias_settings['assetdir'])
-        for entry in asset_directory_path.iterdir():
-            # The asset dir is no longer flat: chunked uploads stage
-            # their partials in a subdirectory of it, so unlink() alone
-            # raises IsADirectoryError once one exists.
-            if entry.is_dir():
-                shutil.rmtree(entry, ignore_errors=True)
-            else:
-                entry.unlink()
 
 
 def _get_asset_content_url(asset_id: str) -> str:
