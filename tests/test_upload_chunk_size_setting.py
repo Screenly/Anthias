@@ -9,6 +9,7 @@ so the client cap is a second line of defence, not the only one.
 """
 
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -146,3 +147,46 @@ class TestUploadChunkSizeIsReachable:
         sourcing = script.index('. /etc/anthias/anthias.env')
         rendering = script.index('| envsubst')
         assert sourcing < rendering
+
+
+class TestUploadChunkSizeBoundsAgree:
+    """The browser mirrors these bounds, and nothing else ties them.
+
+    chunking.ts cannot import a Python constant, so the two sets are
+    written out twice and can drift silently — which resurrects the
+    problem the server-side clamp was added to prevent. An operator
+    sets 32 to match their proxy, the server serves its own ceiling in
+    the meta tag, and a stale ceiling in the browser quietly overrides
+    it with something smaller.
+    """
+
+    @staticmethod
+    def _chunking_ts_const(name: str) -> int:
+        source = (
+            Path(__file__).resolve().parents[1]
+            / 'src'
+            / 'anthias_server'
+            / 'app'
+            / 'static'
+            / 'src'
+            / 'home'
+            / 'chunking.ts'
+        ).read_text()
+        match = re.search(rf'^const {name} = (\d+)$', source, re.MULTILINE)
+        assert match is not None, f'{name} not found in chunking.ts'
+        return int(match.group(1))
+
+    def test_ceiling_matches(self) -> None:
+        assert self._chunking_ts_const('MAX_CHUNK_MB') == (
+            UPLOAD_CHUNK_SIZE_MB_MAX
+        )
+
+    def test_floor_matches(self) -> None:
+        assert self._chunking_ts_const('MIN_CHUNK_MB') == (
+            UPLOAD_CHUNK_SIZE_MB_MIN
+        )
+
+    def test_fallback_matches_the_server_default(self) -> None:
+        assert self._chunking_ts_const('FALLBACK_CHUNK_MB') == (
+            UPLOAD_CHUNK_SIZE_MB_DEFAULT
+        )

@@ -80,6 +80,23 @@ def test_home_exposes_apps_tab_and_store_index(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_home_exposes_the_upload_chunk_size(client: Client) -> None:
+    """The one link that carries the configured chunk size to the
+    browser: settings -> helpers.template -> base.html -> the <meta>
+    chunkSizeFromMeta reads. Without it the tag renders empty and every
+    device silently falls back to the client's own 16 MB default,
+    ignoring whatever the operator set."""
+    from django.conf import settings as dj_settings
+
+    response = client.get(reverse('anthias_app:home'))
+    body = response.content.decode()
+    assert (
+        f'<meta name="anthias-upload-chunk-mb" '
+        f'content="{dj_settings.UPLOAD_CHUNK_SIZE_MB}">'
+    ) in body
+
+
+@pytest.mark.django_db
 def test_system_info_renders(client: Client) -> None:
     response = client.get(reverse('anthias_app:system_info'))
     assert response.status_code == 200

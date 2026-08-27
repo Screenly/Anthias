@@ -22,7 +22,7 @@ type ProgressLike = {
 // the body was still going out, which the server cannot have seen in
 // full.
 type Outcome =
-  | { status: number; body?: string }
+  | { status: number; body?: string; trigger?: string }
   | { transport: true }
   | { transport: 'cut' }
 
@@ -67,7 +67,10 @@ function stubXhr(outcomes: Outcome[]): void {
         setRequestHeader: (name: string, value: string) => {
           headers[name] = value
         },
-        getResponseHeader: () => null,
+        getResponseHeader: (name: string) =>
+          name === 'HX-Trigger' && 'trigger' in outcome
+            ? (outcome.trigger ?? null)
+            : null,
         addEventListener(type: string, fn: () => void) {
           ;(handlers[type] ??= []).push(fn)
         },
@@ -149,6 +152,9 @@ beforeEach(() => {
 // bun runs every test file in one process, so leaving these replaced
 // would hand the stubs to any later file that touches them.
 afterEach(() => {
+  document
+    .querySelectorAll('meta[name="anthias-upload-chunk-mb"]')
+    .forEach((m) => m.remove())
   globalThis.XMLHttpRequest = realXhr
   delete (window as unknown as { Alpine?: unknown }).Alpine
   delete (window as unknown as { htmx?: unknown }).htmx
@@ -197,9 +203,16 @@ describe('uploadFiles error reporting', () => {
 
 // A tiny chunk size keeps these fast: chunkSizeFromMeta reads MB, so
 // 0.001 gives ~1 KB chunks and a 3 KB file becomes 3 requests.
+// Appended rather than assigned over document.head: replacing it wipes
+// the anthias-date-format / anthias-use-24h metas home.ts reads, and —
+// since bun runs every file in one process — leaks the chunk size into
+// tests that never asked for it, silently rerouting them through the
+// chunked path. Cleared in afterEach.
 function setChunkSizeMb(mb: string): void {
-  document.head.innerHTML =
-    `<meta name="anthias-upload-chunk-mb" content="${mb}">`
+  const meta = document.createElement('meta')
+  meta.setAttribute('name', 'anthias-upload-chunk-mb')
+  meta.setAttribute('content', mb)
+  document.head.appendChild(meta)
 }
 
 function bigFile(bytes: number, name = 'big.mp4', type = 'video/mp4'): File {
@@ -468,6 +481,46 @@ describe('chunked upload failures', () => {
 
     expect(app.mode).toBeNull()
   }, 10000)
+
+  // The server refuses some files with 200 plus an error toast rather
+  // than a status code (invalid type, nothing uploaded). Treating that
+  // as success would close the modal, count it as uploaded and fire a
+  // table refresh for an asset that does not exist. No test supplied
+  // an HX-Trigger at all before, so the whole classification was
+  // unpinned.
+  test('a 200 carrying an error toast is a refusal, not a success', async () => {
+    setChunkSizeMb('16')
+    stubXhr([
+      {
+        status: 200,
+        trigger: '{"toast":{"kind":"error","message":"Invalid file type."}}',
+      },
+    ])
+    const app = window.homeApp()
+    app.mode = 'add'
+    await app.uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(toasts[0]?.message).toBe('Invalid file type.')
+    // Not counted as a success: modal stays open, no table refresh.
+    expect(app.mode).toBe('add')
+    expect(refreshes).toEqual([])
+  })
+
+  test('a 200 carrying a success toast is a success', async () => {
+    setChunkSizeMb('16')
+    stubXhr([
+      {
+        status: 200,
+        trigger: '{"toast":{"kind":"success","message":"Uploaded."}}',
+      },
+    ])
+    const app = window.homeApp()
+    app.mode = 'add'
+    await app.uploadFiles(fileInputFrom(bigFile(2500)))
+
+    expect(app.mode).toBeNull()
+    expect(refreshes).toEqual(['refresh-assets'])
+  })
 
   // A staging chunk commits nothing, so resending one is safe — the
   // server seeks and overwrites the same range.
