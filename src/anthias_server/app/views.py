@@ -120,53 +120,61 @@ def _stage_upload_chunk(
     parallel or out-of-order chunks discard the upload rather than
     degrade it. Real resumability needs a received-ranges record.
     """
-    match = _CONTENT_RANGE_RE.fullmatch(
-        request.headers['Content-Range'].strip()
-    )
-    if match is None:
-        raise _ChunkedUploadError('Malformed upload range. Please try again.')
-
-    start_bytes, end_bytes, total_bytes = (int(g) for g in match.groups())
-    if total_bytes == 0:
-        # No range describes an empty file (0-0/0 claims one byte),
-        # and nothing that size needs chunking anyway.
-        raise _ChunkedUploadError(
-            'Cannot upload an empty file in chunks. Please try again.'
-        )
-    if end_bytes < start_bytes or end_bytes >= total_bytes:
-        raise _ChunkedUploadError('Invalid upload range. Please try again.')
-    if file_upload.size != end_bytes - start_bytes + 1:
-        raise _ChunkedUploadError(
-            'Upload chunk did not match its range. Please try again.'
-        )
-
-    # Only honoured alongside a range — a single-shot upload never
-    # reaches here — so an echoed id cannot truncate an unrelated
-    # upload in progress.
+    # Resolved first: every rejection below abandons the upload, and
+    # dropping the partial it abandons needs the id. Only honoured
+    # alongside a range — a single-shot upload never reaches here — so
+    # an echoed id cannot truncate an unrelated upload in progress.
     upload_id = request.headers.get('X-Upload-Id')
     if upload_id is None:
         upload_id = uuid.uuid4().hex
     else:
         upload_id = upload_id.strip().lower()
         if not _UPLOAD_ID_RE.fullmatch(upload_id):
+            # Nothing to drop: without a well-formed id there is no
+            # partial whose name we could derive.
             raise _ChunkedUploadError('Malformed upload id. Please try again.')
 
     staged_dir = path.join(settings['assetdir'], STAGED_UPLOAD_DIR)
     staged_path = _staged_upload_path(upload_id)
-    is_final = end_bytes + 1 == total_bytes
-
-    # Refuse one that cannot fit before writing any of it: otherwise
-    # an hour of sending, then failure, then the partial held until
-    # the sweep.
-    if start_bytes == 0:
-        try:
-            free = shutil.disk_usage(settings['assetdir']).free
-        except OSError:
-            free = None
-        if free is not None and total_bytes > free:
-            raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507)
 
     try:
+        match = _CONTENT_RANGE_RE.fullmatch(
+            request.headers['Content-Range'].strip()
+        )
+        if match is None:
+            raise _ChunkedUploadError(
+                'Malformed upload range. Please try again.'
+            )
+
+        start_bytes, end_bytes, total_bytes = (int(g) for g in match.groups())
+        if total_bytes == 0:
+            # No range describes an empty file (0-0/0 claims one byte),
+            # and nothing that size needs chunking anyway.
+            raise _ChunkedUploadError(
+                'Cannot upload an empty file in chunks. Please try again.'
+            )
+        if end_bytes < start_bytes or end_bytes >= total_bytes:
+            raise _ChunkedUploadError(
+                'Invalid upload range. Please try again.'
+            )
+        if file_upload.size != end_bytes - start_bytes + 1:
+            raise _ChunkedUploadError(
+                'Upload chunk did not match its range. Please try again.'
+            )
+
+        is_final = end_bytes + 1 == total_bytes
+
+        # Refuse one that cannot fit before writing any of it:
+        # otherwise an hour of sending, then failure, then the partial
+        # held until the sweep.
+        if start_bytes == 0:
+            try:
+                free = shutil.disk_usage(settings['assetdir']).free
+            except OSError:
+                free = None
+            if free is not None and total_bytes > free:
+                raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507)
+
         os.makedirs(staged_dir, exist_ok=True)
         # Measure the descriptor, not the path: between a stat and an
         # open, the sweep (or a concurrent error path) can unlink the
@@ -182,9 +190,11 @@ def _stage_upload_chunk(
         with os.fdopen(fd, 'r+b') as f:
             # Never seek past what we hold; see the docstring.
             if start_bytes > os.fstat(f.fileno()).st_size:
-                # Not "try again": one way here is a commit whose
-                # response was lost, where os.replace has already moved
-                # the partial away and the asset exists.
+                # Not "try again": one way here is the sweep taking
+                # a partial that went an hour without a chunk. Another
+                # is a client resending a commit — ours does not,
+                # precisely because os.replace may already have moved
+                # the partial away and created the asset.
                 raise _ChunkedUploadError(
                     'This upload could not be resumed. Check whether it '
                     'already appears in the asset list before uploading '
@@ -198,8 +208,9 @@ def _stage_upload_chunk(
                 # Drop anything a longer earlier attempt left past the end.
                 f.truncate(total_bytes)
     except _ChunkedUploadError:
-        # Unusable to this client now, and holding it would only keep
-        # the operator stuck on the same error.
+        # Every rejection above abandons the upload — the client starts
+        # over under a fresh id — so whatever is staged is dead weight
+        # on the card until the sweep. Drop it now.
         with suppress(OSError):
             remove(staged_path)
         raise

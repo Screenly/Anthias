@@ -2724,6 +2724,55 @@ def test_assets_upload_chunk_past_the_end_drops_the_partial(
 
 
 @pytest.mark.django_db
+def test_assets_upload_drops_the_partial_when_a_chunk_is_rejected(
+    client: Client, tmp_path: Any
+) -> None:
+    """A rejection abandons the upload, so the bytes already staged are
+    dead weight on the card until the hourly sweep. The client starts
+    over under a fresh id and never asks for them again."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    upload_id = uuid.uuid4().hex
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        staged = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'0' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-9/100',
+                'X-Upload-Id': upload_id,
+            },
+        )
+        assert staged.status_code == 200
+        assert list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+        # Rejected before a single byte of it is written, and before
+        # the range is even parsed.
+        rejected = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'1' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes not-a-range/100',
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+        assert rejected.status_code == 400
+        assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
 def test_assets_upload_rejects_a_chunk_that_lies_about_its_length(
     client: Client, tmp_path: Any
 ) -> None:
