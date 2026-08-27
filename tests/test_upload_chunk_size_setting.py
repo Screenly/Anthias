@@ -41,7 +41,9 @@ class TestResolveUploadChunkSizeMb:
         monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', ' 8 ')
         assert resolve_upload_chunk_size_mb() == 8
 
-    @pytest.mark.parametrize('value', ['16m', 'sixteen', '0x10', '1_6'])
+    @pytest.mark.parametrize(
+        'value', ['16m', 'sixteen', '0x10', 'nan', 'inf', '9' * 5000]
+    )
     def test_an_unparseable_value_falls_back_instead_of_raising(
         self, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
@@ -67,6 +69,19 @@ class TestResolveUploadChunkSizeMb:
         with caplog.at_level(logging.WARNING):
             resolve_upload_chunk_size_mb()
         assert '16m' in caplog.text
+
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [('8.5', 8), ('1.9', 1), ('23.9', 23), ('0.5', 1)],
+    )
+    def test_a_fractional_value_rounds_down_not_up(
+        self, monkeypatch: pytest.MonkeyPatch, value: str, expected: int
+    ) -> None:
+        """MB is a decimal quantity, and this knob only ever exists to
+        get *under* a proxy's cap. An operator who writes 8.5 to fit a
+        10 MB limit must not be handed 16."""
+        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', value)
+        assert resolve_upload_chunk_size_mb() == expected
 
     def test_a_value_above_the_ceiling_is_clamped(
         self, monkeypatch: pytest.MonkeyPatch

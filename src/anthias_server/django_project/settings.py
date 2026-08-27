@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import asyncio
 import configparser
 import logging
+import math
 import platform
 import secrets
 import socket
@@ -796,9 +797,18 @@ def resolve_upload_chunk_size_mb() -> int:
     raw = (getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB') or '').strip()
     if not raw:
         return UPLOAD_CHUNK_SIZE_MB_DEFAULT
+    # Parsed as a float and rounded down rather than read as an int:
+    # MB is a decimal quantity, so ``8.5`` is a plausible thing for an
+    # operator with a 10 MB proxy cap to write, and rejecting it would
+    # hand them 16 — a value that cannot clear the cap they are trying
+    # to fit under. Every fallback in this function goes the other way
+    # for the same reason. float() also swallows nan/inf and the
+    # thousand-digit integer that would overflow int().
     try:
-        parsed = int(raw)
+        parsed_mb = float(raw)
     except ValueError:
+        parsed_mb = math.nan
+    if not math.isfinite(parsed_mb):
         logging.getLogger(__name__).warning(
             'Ignoring unparseable ANTHIAS_UPLOAD_CHUNK_SIZE_MB=%r; '
             'using %d MB.',
@@ -806,6 +816,7 @@ def resolve_upload_chunk_size_mb() -> int:
             UPLOAD_CHUNK_SIZE_MB_DEFAULT,
         )
         return UPLOAD_CHUNK_SIZE_MB_DEFAULT
+    parsed = math.floor(parsed_mb)
     clamped = max(
         UPLOAD_CHUNK_SIZE_MB_MIN, min(parsed, UPLOAD_CHUNK_SIZE_MB_MAX)
     )
