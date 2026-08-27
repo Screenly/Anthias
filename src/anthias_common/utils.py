@@ -65,7 +65,8 @@ def clamp_screen_rotation(value: Any) -> int:
 # bind-mounts .anthias and anthias_assets separately, and rename(2)
 # across two mounts is EXDEV even on one filesystem — the commit would
 # become a full copy of a multi-GB file onto an SD card, needing twice
-# the free space. views_files closes the fetchability that costs us.
+# the free space. views_files closes the fetchability that costs us,
+# for this and for the API and import staging files already here.
 STAGED_UPLOAD_DIR = '.uploads'
 
 # How long a partial survives without being written to. An abandoned

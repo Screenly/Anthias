@@ -96,17 +96,23 @@ def anthias_assets(request: HttpRequest, filename: str) -> HttpResponseBase:
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
         raise Http404
-    # Not everything in the asset dir is an asset: chunked uploads
-    # stage a partial at `.uploads/<id>.part` (see STAGED_UPLOAD_DIR),
-    # the one thing here never meant to be fetchable — and the CIDR
-    # gate above does not exclude LAN clients in the default no-SSL
-    # install. Assets are always `<uuid>.<ext>`, so nothing legitimate
-    # has a dot-leading component, and refusing the lot covers whatever
-    # lands here next without keeping a list in sync.
-    if any(
-        part.startswith('.')
-        for part in os.path.relpath(target, base).split(os.sep)
-    ):
+    # Not everything in the asset dir is an asset, and the rest of it
+    # was never meant to be fetchable — while the CIDR gate above does
+    # not exclude LAN clients in the default no-SSL install. Three
+    # kinds of transient file live here:
+    #
+    #   * `.uploads/<id>.part`   — a chunked browser upload
+    #   * `.import-<hex><ext>`   — a content import, and its `.part`
+    #   * `<upload_id>.tmp`      — a resumable REST API upload
+    #
+    # Assets are always `<uuid>.<ext>`, and never `.tmp`: the celery
+    # sweep deletes stale `*.tmp` from this directory outright, which
+    # only holds because nothing durable is named that way. So both
+    # rules refuse transient files and nothing else.
+    relative = os.path.relpath(target, base)
+    if any(part.startswith('.') for part in relative.split(os.sep)):
+        raise Http404
+    if relative.endswith('.tmp'):
         raise Http404
     try:
         return FileResponse(open(target, 'rb'))
