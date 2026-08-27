@@ -17,18 +17,25 @@ export interface Chunk {
   header: string
 }
 
-// Under the server's FILE_UPLOAD_MAX_MEMORY_SIZE (25 MB), so Django
-// holds each chunk in RAM rather than spooling it to the SD card —
-// what one in-flight upload costs resident on a 512 MB board. The
-// server clamps to the same ceiling; its default is 16.
+// The same three numbers resolve_upload_chunk_size_mb clamps to
+// server-side, mirrored here so a meta tag that is absent, empty or
+// hand-edited cannot produce a chunk size the server would refuse.
+// The ceiling keeps a chunk under FILE_UPLOAD_MAX_MEMORY_SIZE (25 MB),
+// where Django holds it in RAM rather than spooling it to the SD card
+// — what one in-flight upload costs resident on a 512 MB board. The
+// floor exists because below it a large file becomes thousands of
+// sequential requests; it also keeps this from ever returning 0,
+// which would make planChunks yield nothing for a file it had just
+// said needed chunking.
 const FALLBACK_CHUNK_MB = 16
 const MAX_CHUNK_MB = 24
+const MIN_CHUNK_MB = 1
 
 export function chunkSizeFromMeta(raw: string | null): number {
   const parsed = Number(raw)
   const mb =
     Number.isFinite(parsed) && parsed > 0
-      ? Math.min(parsed, MAX_CHUNK_MB)
+      ? Math.min(Math.max(parsed, MIN_CHUNK_MB), MAX_CHUNK_MB)
       : FALLBACK_CHUNK_MB
   return Math.floor(mb * 1024 * 1024)
 }

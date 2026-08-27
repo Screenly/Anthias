@@ -68,10 +68,21 @@ describe('chunkSizeFromMeta', () => {
     expect(chunkSizeFromMeta('8')).toBe(8 * 1024 * 1024)
   })
 
-  // Above the server's FILE_UPLOAD_MAX_MEMORY_SIZE, Django spools the
-  // chunk to /tmp, which is RAM on a stock Pi image.
+  // The ceiling keeps a chunk under the server's
+  // FILE_UPLOAD_MAX_MEMORY_SIZE, where Django holds it in RAM instead
+  // of spooling it to the SD card.
   test('caps the size so a chunk stays in memory server-side', () => {
     expect(chunkSizeFromMeta('512')).toBe(24 * 1024 * 1024)
+  })
+
+  // The server clamps to the same floor, so this only bites on a meta
+  // tag that was hand-edited — but a size below 1 MB turns a large
+  // video into thousands of sequential requests, and a small enough
+  // one used to floor to 0 bytes, which made planChunks return no
+  // chunks for a file needsChunking had just said to split.
+  test('floors the size the same way the server does', () => {
+    expect(chunkSizeFromMeta('0.5')).toBe(1024 * 1024)
+    expect(chunkSizeFromMeta('0.0000001')).toBe(1024 * 1024)
   })
 
   test('falls back when the tag is missing or nonsense', () => {

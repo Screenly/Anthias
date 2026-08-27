@@ -206,34 +206,54 @@ function bigFile(bytes: number, name = 'big.mp4', type = 'video/mp4'): File {
   return new File([new Uint8Array(bytes)], name, { type })
 }
 
+// 1 MB chunks is the smallest the server will ever hand the browser
+// (resolve_upload_chunk_size_mb clamps to [1, 24]), so drive these at
+// that rather than at a size no device can produce. 2.5 MB gives three
+// chunks with a short tail.
+const CHUNK_MB = 1
+const CHUNKED_FILE_BYTES = 2.5 * 1024 * 1024
+
 describe('chunked uploads', () => {
   test('a large file is split into sequential ranges covering it', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200 },
     ])
-    const file = bigFile(2500)
+    const file = bigFile(CHUNKED_FILE_BYTES)
     await window.homeApp().uploadFiles(fileInputFrom(file))
 
-    expect(requests.map((r) => r.range)).toEqual([
-      'bytes 0-1047/2500',
-      'bytes 1048-2095/2500',
-      'bytes 2096-2499/2500',
-    ])
+    // Asserted as properties rather than three literal ranges: the
+    // exact boundaries follow from the chunk size, and pinning them
+    // would make this fail for a change that is still correct. What
+    // must hold is that the ranges are contiguous, start at 0, end at
+    // the last byte, and all declare the same total — a gap reads back
+    // as zeros and an off-by-one truncates, both silently.
+    const parsed = requests.map((r) => {
+      const m = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(r.range ?? '')
+      if (m === null) throw new Error(`unparseable range: ${r.range}`)
+      return { start: +m[1], end: +m[2], total: +m[3] }
+    })
+    expect(parsed.length).toBeGreaterThan(1)
+    expect(parsed[0].start).toBe(0)
+    expect(parsed[parsed.length - 1].end).toBe(file.size - 1)
+    for (const p of parsed) expect(p.total).toBe(file.size)
+    for (let i = 1; i < parsed.length; i++) {
+      expect(parsed[i].start).toBe(parsed[i - 1].end + 1)
+    }
   })
 
   // The client mints the id, so the server's echo cannot move an
   // upload onto a different staged file part-way through.
   test('the same id rides every chunk, whatever the server echoes', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"server-said-this"}' },
       { status: 200, body: '{"upload_id":"and-then-this"}' },
       { status: 200 },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     const ids = requests.map((r) => r.uploadId)
     expect(new Set(ids).size).toBe(1)
@@ -246,13 +266,13 @@ describe('chunked uploads', () => {
   // HEIC renamed to .jpg). Losing it means the asset skips
   // normalisation and renders blank on the player.
   test('each chunk keeps the file type, not the slice default', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200 },
     ])
-    const file = bigFile(2500, 'photo.jpg', 'image/heic')
+    const file = bigFile(CHUNKED_FILE_BYTES, 'photo.jpg', 'image/heic')
     await window.homeApp().uploadFiles(fileInputFrom(file))
 
     expect(requests.map((r) => r.bodyType)).toEqual([
@@ -265,14 +285,14 @@ describe('chunked uploads', () => {
   test('a file that fits in one chunk sends no range at all', async () => {
     setChunkSizeMb('16')
     stubXhr([{ status: 200 }])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(1)
     expect(requests[0].range).toBeNull()
   })
 
   test('a dropped chunk is resent rather than losing the upload', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { transport: true },
@@ -281,7 +301,7 @@ describe('chunked uploads', () => {
     ])
     const app = window.homeApp()
     app.mode = 'add'
-    await app.uploadFiles(fileInputFrom(bigFile(2500)))
+    await app.uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(4)
     expect(toasts).toEqual([])
@@ -291,12 +311,12 @@ describe('chunked uploads', () => {
   // A 4xx is the server's considered answer: resending wastes the
   // operator's time and, for a proxy size limit, can never succeed.
   test('a rejected chunk is not resent', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 413 },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(2)
     expect(toasts[0]?.message).toContain('File too large')
@@ -307,9 +327,9 @@ describe('chunked uploads', () => {
   // single-shot path would have replayed. Treat it the same way: one
   // file rejected, batch intact.
   test('a non-JSON 200 is a rejection, not a transport failure', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([{ status: 200 }])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(1)
     // No client-invented error: the server's own toast stands alone.
@@ -322,12 +342,12 @@ describe('chunked upload failures', () => {
   // free-space refusal in particular is something the operator can
   // act on directly.
   test("a chunk error shows the server's own explanation", async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 507, body: '{"error":"Not enough disk space, free some up"}' },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(toasts[0]?.message).toBe('Not enough disk space, free some up')
   })
@@ -337,7 +357,7 @@ describe('chunked upload failures', () => {
   // file being rejected, not a transport failure: the rest of the
   // selection must still upload, exactly as single-shot behaves.
   test('a refused file does not kill the rest of the batch', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([{ status: 200 }])
     const input = {
       value: '',
@@ -362,13 +382,13 @@ describe('chunked upload failures', () => {
   // met with the server's 409, and telling the operator to try again
   // is what produces the duplicate.
   test('a lost response to the final chunk is not resent', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
       { transport: true },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(3)
     expect(toasts[0]?.message).toBe(
@@ -382,13 +402,13 @@ describe('chunked upload failures', () => {
   // the retry would leave the common shape of it being resent, into
   // the server's 409, for an upload that had already worked.
   test('a 5xx answer to the final chunk is not resent either', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 502 },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(3)
     expect(toasts[0]?.message).toBe(
@@ -401,7 +421,7 @@ describe('chunked upload failures', () => {
   // reachable almost only on the final chunk, so a commit that reports
   // only its status code throws away the one message that matters.
   test("the final chunk shows the server's own explanation", async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
@@ -410,7 +430,7 @@ describe('chunked upload failures', () => {
         body: '{"error":"This upload could not be resumed. Check whether it already appears in the asset list before uploading it again."}',
       },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(toasts[0]?.message).toContain('already appears in the asset list')
   })
@@ -419,13 +439,13 @@ describe('chunked upload failures', () => {
   // anything, so this one is safe to resend and must not be reported
   // as "may have finished".
   test('a connection cut mid-commit is resent, not called ambiguous', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
       { transport: 'cut' },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(5)
     expect(toasts[0]?.message).toBe(
@@ -436,7 +456,7 @@ describe('chunked upload failures', () => {
 
   // The toast says to check the asset list; the Add modal covers it.
   test('an unconfirmed commit closes the modal', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200, body: '{"upload_id":"abc"}' },
@@ -444,7 +464,7 @@ describe('chunked upload failures', () => {
     ])
     const app = window.homeApp()
     app.mode = 'add'
-    await app.uploadFiles(fileInputFrom(bigFile(2500)))
+    await app.uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(app.mode).toBeNull()
   }, 10000)
@@ -452,14 +472,14 @@ describe('chunked upload failures', () => {
   // A staging chunk commits nothing, so resending one is safe — the
   // server seeks and overwrites the same range.
   test('a lost response to a staging chunk still is resent', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"abc"}' },
       { transport: true },
       { status: 200, body: '{"upload_id":"abc"}' },
       { status: 200 },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(4)
     expect(toasts).toEqual([])
@@ -469,13 +489,13 @@ describe('chunked upload failures', () => {
   // response would otherwise strand the staged bytes under an id the
   // client never learned.
   test('the upload id is the client\'s own, sent from the first chunk', async () => {
-    setChunkSizeMb('0.001')
+    setChunkSizeMb('1')
     stubXhr([
       { status: 200, body: '{"upload_id":"ignored"}' },
       { status: 200, body: '{"upload_id":"ignored"}' },
       { status: 200 },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     const ids = requests.map((r) => r.uploadId)
     expect(ids[0]).toMatch(/^[0-9a-f]{32}$/)
