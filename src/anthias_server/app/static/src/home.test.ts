@@ -538,9 +538,11 @@ describe('chunked upload failures', () => {
     expect(toasts).toEqual([])
   }, 10000)
 
-  // The server mints nothing now: a retry of chunk 0 that lost its
-  // response would otherwise strand the staged bytes under an id the
-  // client never learned.
+  // The client no longer takes the server's id — the server still
+  // mints one when a chunk arrives without the header, for any other
+  // caller. A retry of chunk 0 that lost its response would otherwise
+  // come back with no id, get a second one, and strand the bytes
+  // already staged under an id the client never learned.
   test('the upload id is the client\'s own, sent from the first chunk', async () => {
     setChunkSizeMb('1')
     stubXhr([

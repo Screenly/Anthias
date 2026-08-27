@@ -74,9 +74,11 @@ _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 # py/path-injection on ``open(final_path, ...)``).
 _SAFE_EXT_RE = re.compile(r'\.[A-Za-z0-9]{1,16}')
 
-# ``<staged>/<upload_id>.part``. The client echoes the id on every
-# chunk and it lands in a path, so require the exact shape we mint
-# (``uuid4().hex``): 32 hex characters cannot hold ``/`` or ``..``.
+# ``<staged>/<upload_id>.part``. The id arrives on every chunk and
+# lands in a filesystem path — our own uploader mints it, anything
+# else may send what it likes — so require the exact shape minted
+# here (``uuid4().hex``): 32 hex characters cannot hold ``/`` or
+# ``..``.
 _UPLOAD_ID_RE = re.compile(r'[0-9a-f]{32}')
 
 # ``bytes <start>-<end>/<total>``. ``*`` is rejected: the last-chunk
