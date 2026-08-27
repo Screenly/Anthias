@@ -18,14 +18,23 @@ directories = ['.anthias', 'anthias_assets']
 
 
 def _skip_staged_uploads(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
-    """Keep partial chunked uploads out of a backup.
+    """Keep half-finished uploads out of a backup.
 
-    ``tar.add`` recurses, and an in-progress upload can be gigabytes of
-    a file nobody finished sending — meaningless once restored, since
-    the upload session is gone, so it only inflates the archive.
+    ``tar.add`` recurses, and the asset dir holds several kinds of
+    in-progress file, each of which can be gigabytes of something
+    nobody finished sending: ``.uploads/<id>.part`` from the browser,
+    ``<upload_id>.tmp`` from the REST API, and ``.import-<hex>`` (plus
+    its ``.part``) from the content importer, which allows 5 GiB. All
+    are meaningless once restored — the session that was writing them
+    is long gone — so they only inflate the archive.
     """
     parts = member.name.split('/')
-    return None if STAGED_UPLOAD_DIR in parts else member
+    if STAGED_UPLOAD_DIR in parts:
+        return None
+    leaf = parts[-1]
+    if leaf.endswith(('.tmp', '.part')) or leaf.startswith('.import-'):
+        return None
+    return member
 
 
 # Tarballs created by older releases used these top-level entry names.

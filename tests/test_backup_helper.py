@@ -12,6 +12,7 @@ from unittest import mock
 import pytest
 from django.http import StreamingHttpResponse
 
+from anthias_common.utils import STAGED_UPLOAD_DIR
 from anthias_server.lib.backup_helper import (
     BackupRecoverError,
     astream_backup,
@@ -308,3 +309,34 @@ def test_recover_skips_path_traversal_member(legacy_home: str) -> None:
     assert path.isfile(path.join(legacy_home, '.anthias', 'anthias.conf'))
     parent_of_home = path.dirname(legacy_home)
     assert not path.exists(path.join(parent_of_home, 'evil.txt'))
+
+
+@pytest.mark.parametrize(
+    'relative',
+    [
+        f'anthias_assets/{STAGED_UPLOAD_DIR}/abc.part',
+        'anthias_assets/deadbeef.tmp',
+        'anthias_assets/.import-deadbeef.mp4',
+        'anthias_assets/.import-deadbeef.mp4.part',
+    ],
+)
+def test_backup_excludes_half_finished_uploads(
+    backup_home: str, relative: str
+) -> None:
+    """A backup taken mid-upload would otherwise carry gigabytes of a
+    file nobody finished sending, and that is meaningless once
+    restored — the session writing it is gone."""
+    staged = path.join(backup_home, relative)
+    os.makedirs(path.dirname(staged), exist_ok=True)
+    with open(staged, 'wb') as f:
+        f.write(b'0' * 1024)
+    keep = path.join(backup_home, 'anthias_assets', 'deadbeef.mp4')
+    with open(keep, 'wb') as f:
+        f.write(b'1' * 16)
+
+    archive = create_backup(name='exclusion-test')
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = tar.getnames()
+
+    assert not [n for n in names if n.endswith(path.basename(staged))]
+    assert [n for n in names if n.endswith('deadbeef.mp4')]
