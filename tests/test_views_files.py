@@ -231,6 +231,21 @@ def test_anthias_assets_api_staging_file_not_served(
         views_files.anthias_assets(request, filename='deadbeef.tmp')
 
 
+def test_anthias_assets_download_in_progress_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    """celery_tasks stages a yt-dlp or remote-video download at
+    `<uuid>.<ext>.part` at the top level of the asset dir — not
+    dot-leading, not `.tmp`. Handing out a half-downloaded video is the
+    same mistake as handing out a half-uploaded one."""
+    (assets_root / 'deadbeef.mp4.part').write_text('half a video')
+    request = factory.get(
+        '/anthias_assets/deadbeef.mp4.part', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename='deadbeef.mp4.part')
+
+
 def test_anthias_assets_dotfile_not_served(
     factory: RequestFactory, assets_root: Path
 ) -> None:

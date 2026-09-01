@@ -101,18 +101,21 @@ def anthias_assets(request: HttpRequest, filename: str) -> HttpResponseBase:
     # not exclude LAN clients in the default no-SSL install. Three
     # kinds of transient file live here:
     #
-    #   * `.uploads/<id>.part`   — a chunked browser upload
-    #   * `.import-<hex><ext>`   — a content import, and its `.part`
-    #   * `<upload_id>.tmp`      — a resumable REST API upload
+    #   * `.uploads/<id>.part`      — a chunked browser upload
+    #   * `.import-<hex><ext>`      — a content import, and its `.part`
+    #   * `<upload_id>.tmp`         — a resumable REST API upload
+    #   * `<uuid>.<ext>.part`       — a yt-dlp or remote-video download
+    #                                 in progress (celery_tasks)
     #
-    # Assets are always `<uuid>.<ext>`, and never `.tmp`: the celery
-    # sweep deletes stale `*.tmp` from this directory outright, which
-    # only holds because nothing durable is named that way. So both
-    # rules refuse transient files and nothing else.
+    # Assets are always `<uuid>.<ext>`, and never `.tmp` or `.part`:
+    # _safe_ext refuses those as source extensions precisely so the
+    # celery sweep (which deletes `*.tmp` on sight) and the backup
+    # filter cannot swallow a real asset. So both rules below refuse
+    # transient files and nothing else.
     relative = os.path.relpath(target, base)
     if any(part.startswith('.') for part in relative.split(os.sep)):
         raise Http404
-    if relative.endswith('.tmp'):
+    if relative.endswith(('.tmp', '.part')):
         raise Http404
     try:
         return FileResponse(open(target, 'rb'))
