@@ -7,6 +7,9 @@ from the 4 fps slideshow — so every "must NOT warn" test below is
 guarding a real regression, not padding coverage.
 """
 
+import os
+import time
+
 import pytest
 
 from anthias_server.lib import playback_envelope as env
@@ -330,3 +333,112 @@ def test_playback_warning_equality_and_repr() -> None:
     assert a.__eq__('not a warning') is NotImplemented
     assert a != 'not a warning'
     assert repr(a) == "PlaybackWarning('code', 'blocking')"
+
+
+def test_non_h264_metadata_never_resolves_the_board(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The asset list renders every row through this, several times
+    over, on a 5 s poll. On the catch-all ``arm64`` image resolving
+    the board is a Redis round-trip plus a device-tree read, so an
+    image or an HEVC clip must settle on the codec alone and never
+    reach for it.
+    """
+    calls: list[int] = []
+
+    def _boom() -> str:
+        calls.append(1)
+        raise AssertionError('resolved the board for a non-H.264 asset')
+
+    monkeypatch.setattr(env, '_current_device_key', _boom)
+
+    assert env.evaluate({'upload_name': 'photo.jpg'}) == []
+    assert (
+        env.evaluate(
+            {
+                'video_codec': 'hevc',
+                'video_width': 3840,
+                'video_height': 2160,
+            }
+        )
+        == []
+    )
+    assert not calls
+
+
+def test_device_key_is_memoised_per_device_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeat renders on one board resolve it once, not once per row."""
+    env._device_key_cache.clear()
+    resolved: list[int] = []
+
+    def _counting() -> str:
+        resolved.append(1)
+        return 'pi4-64'
+
+    monkeypatch.setattr(env, 'resolve_device_key', _counting)
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+
+    metadata = {
+        'video_codec': 'h264',
+        'video_width': 3840,
+        'video_height': 2160,
+    }
+    for _ in range(20):
+        assert env.evaluate(metadata)
+    assert len(resolved) == 1
+
+
+def test_device_key_cache_is_keyed_on_device_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A board that re-reads a different ``DEVICE_TYPE`` must not be
+    served the previous one's answer — the cache keys on the raw env
+    value rather than caching a single global.
+    """
+    env._device_key_cache.clear()
+    monkeypatch.setattr(
+        env,
+        'resolve_device_key',
+        lambda: os.environ.get('DEVICE_TYPE', ''),
+    )
+    metadata = {
+        'video_codec': 'h264',
+        'video_width': 3840,
+        'video_height': 2160,
+    }
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    assert [w.severity for w in env.evaluate(metadata)] == [env.BLOCKING]
+    monkeypatch.setenv('DEVICE_TYPE', 'x86')
+    assert env.evaluate(metadata) == []
+
+
+def test_device_key_cache_expires_so_a_late_host_agent_is_seen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``host_agent`` can publish ``host:board_subtype`` seconds after
+    the server starts. A permanent cache would pin the board to the
+    un-upgraded ``arm64`` key for the life of the process and every
+    rule would silently match nothing, so the entry has to expire.
+    """
+    env._device_key_cache.clear()
+    answers = iter(['arm64', 'pi4-64'])
+    monkeypatch.setattr(env, 'resolve_device_key', lambda: next(answers))
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    metadata = {
+        'video_codec': 'h264',
+        'video_width': 3840,
+        'video_height': 2160,
+    }
+    # Uncharacterised board: silent.
+    assert env.evaluate(metadata) == []
+
+    clock = [0.0]
+    monkeypatch.setattr(time, 'monotonic', lambda: clock[0])
+    env._device_key_cache.clear()
+    answers = iter(['arm64', 'pi4-64'])
+    monkeypatch.setattr(env, 'resolve_device_key', lambda: next(answers))
+    assert env.evaluate(metadata) == []
+    clock[0] = env._DEVICE_KEY_TTL_SECONDS + 1
+    assert [w.severity for w in env.evaluate(metadata)] == [env.BLOCKING]
