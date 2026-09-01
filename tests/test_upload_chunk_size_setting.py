@@ -1,192 +1,169 @@
-"""Tests for ANTHIAS_UPLOAD_CHUNK_SIZE_MB parsing in the Django settings.
+"""Tests for how the upload chunk size is configured.
 
-The variable is set once through the balena dashboard and rarely
-looked at again, so a trailing space or a stray unit (``16m``) must
-not raise ValueError while the settings module imports — that would
-stop the container from coming up on a device with no shell to
-diagnose it. The bounds are enforced here as well as in the browser
-so the client cap is a second line of defence, not the only one.
+The value reaches Django from anthias.conf, then the
+ANTHIAS_UPLOAD_CHUNK_SIZE_MB env var, then a default — and reaches the
+browser through a <meta> tag. It is set once and rarely looked at
+again, typically through a balena dashboard field or a hand-edited
+config, so no value it can be given may raise: on a headless device
+the container would simply never come up.
 """
 
-import logging
+import os
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-import yaml
 
 from anthias_server.django_project.settings import (
     UPLOAD_CHUNK_SIZE_MB_DEFAULT,
     UPLOAD_CHUNK_SIZE_MB_MAX,
     UPLOAD_CHUNK_SIZE_MB_MIN,
+    get_configured_upload_chunk_size_mb,
     resolve_upload_chunk_size_mb,
+)
+from anthias_server.settings import DEFAULTS
+
+CHUNKING_TS = (
+    Path(__file__).resolve().parents[1]
+    / 'src/anthias_server/app/static/src/home/chunking.ts'
 )
 
 
-class TestResolveUploadChunkSizeMb:
-    def test_unset_uses_the_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+@pytest.fixture(autouse=True)
+def _empty_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Iterator[None]:
+    """Point HOME at an empty directory.
+
+    The config file is the first rung, so without this every env-var
+    case below fails on the machine of any developer who followed the
+    FAQ and set `upload_chunk_size_mb` in their own anthias.conf. CI
+    never sees it — a container's config has no such key.
+    """
+    monkeypatch.setenv('HOME', str(tmp_path))
+    yield
+
+
+def _resolve(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    conf: str | None,
+    env: str | None,
+) -> int:
+    if conf is not None:
+        (tmp_path / '.anthias').mkdir(exist_ok=True)
+        (tmp_path / '.anthias' / 'anthias.conf').write_text(
+            f'[main]\nupload_chunk_size_mb = {conf}\n'
+        )
+    if env is None:
         monkeypatch.delenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', raising=False)
-        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_DEFAULT
+    else:
+        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', env)
+    return resolve_upload_chunk_size_mb()
 
-    def test_a_plain_value_is_honoured(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '8')
-        assert resolve_upload_chunk_size_mb() == 8
 
-    def test_surrounding_whitespace_is_tolerated(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', ' 8 ')
-        assert resolve_upload_chunk_size_mb() == 8
+D = UPLOAD_CHUNK_SIZE_MB_DEFAULT
 
-    @pytest.mark.parametrize(
-        'value', ['16m', 'sixteen', '0x10', 'nan', 'inf', '9' * 5000]
+
+@pytest.mark.parametrize(
+    ('conf', 'env', 'expected', 'why'),
+    [
+        # Precedence. The config file wins because it is the rung that
+        # survives an upgrade; the env var is how balena sets it.
+        ('4', '20', 4, 'config beats the environment'),
+        ('', '20', 20, 'a blank config defers to the environment'),
+        (None, '20', 20, 'no config at all defers to the environment'),
+        (None, None, D, 'neither set'),
+        # Parsing. Either rung may hold anything a human can type.
+        (None, '8', 8, 'a plain value'),
+        (None, ' 8 ', 8, 'surrounding whitespace'),
+        # MB is decimal, and this knob exists to get UNDER a proxy cap,
+        # so 8.5 must not be rounded up or fall back to 16.
+        (None, '8.5', 8, 'a fractional value rounds down'),
+        ('2.9', None, 2, 'and does so from the config too'),
+        # Unparseable falls back rather than raising.
+        (None, '16m', D, 'a stray unit'),
+        (None, 'sixteen', D, 'not a number'),
+        (None, '0x10', D, 'not decimal'),
+        (None, 'nan', D, 'nan'),
+        (None, 'inf', D, 'inf'),
+        (None, '9' * 5000, D, 'longer than int() will parse'),
+        # docker-compose.yml.tmpl always sets the variable, so an
+        # operator who has chosen nothing sends an empty string.
+        (None, '', D, 'empty, which compose always renders'),
+        (None, '   ', D, 'whitespace only'),
+        # Clamped both ways.
+        (None, '32', UPLOAD_CHUNK_SIZE_MB_MAX, 'above the ceiling'),
+        (None, '0', UPLOAD_CHUNK_SIZE_MB_MIN, 'below the floor'),
+        (None, '-4', UPLOAD_CHUNK_SIZE_MB_MIN, 'negative'),
+        ('512', None, UPLOAD_CHUNK_SIZE_MB_MAX, 'clamped from the config'),
+    ],
+)
+def test_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    conf: str | None,
+    env: str | None,
+    expected: int,
+    why: str,
+) -> None:
+    assert _resolve(monkeypatch, tmp_path, conf, env) == expected, why
+
+
+@pytest.mark.parametrize('value', ['16m', '32'])
+def test_a_value_it_cannot_use_is_logged(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    value: str,
+) -> None:
+    """Reported as written, not as parsed: 0.5 logged as "0 is outside
+    [1, 24]" sends the operator looking for a zero they never typed."""
+    with caplog.at_level('WARNING'):
+        _resolve(monkeypatch, tmp_path, None, value)
+    assert value in caplog.text
+
+
+@pytest.mark.parametrize('kind', ['fifo', 'directory', 'binary'])
+def test_an_unreadable_config_is_not_an_error(
+    tmp_path: Path, kind: str
+) -> None:
+    """Read at startup, so a read that blocks or throws means the
+    container never comes up rather than one bad page."""
+    target = tmp_path / 'anthias.conf'
+    if kind == 'fifo':
+        os.mkfifo(target)
+    elif kind == 'directory':
+        target.mkdir()
+    else:
+        target.write_bytes(bytes(range(256)) * 4)
+
+    assert get_configured_upload_chunk_size_mb(str(target)) == ''
+
+
+def test_the_config_file_carries_it_across_an_upgrade() -> None:
+    """upgrade_containers.sh regenerates docker-compose.yml from its
+    template every run, so an env var set on the host is not
+    persistence. anthias.conf is on the mounted volume."""
+    assert 'upload_chunk_size_mb' in DEFAULTS['main']
+
+
+@pytest.mark.parametrize(
+    ('name', 'expected'),
+    [
+        ('MAX_CHUNK_MB', UPLOAD_CHUNK_SIZE_MB_MAX),
+        ('MIN_CHUNK_MB', UPLOAD_CHUNK_SIZE_MB_MIN),
+        ('FALLBACK_CHUNK_MB', UPLOAD_CHUNK_SIZE_MB_DEFAULT),
+    ],
+)
+def test_browser_bounds_match_the_server(name: str, expected: int) -> None:
+    """chunking.ts cannot import a Python constant, so the two sets are
+    written out twice. Drift resurrects the problem the server-side
+    clamp was added to prevent: a stale browser ceiling silently
+    overriding the value the server advertised."""
+    match = re.search(
+        rf'^const {name} = (\d+)$', CHUNKING_TS.read_text(), re.MULTILINE
     )
-    def test_an_unparseable_value_falls_back_instead_of_raising(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', value)
-        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_DEFAULT
-
-    @pytest.mark.parametrize('value', ['', '   '])
-    def test_an_empty_value_uses_the_default(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
-    ) -> None:
-        """Not a hypothetical: docker-compose.yml.tmpl always sets the
-        variable, and it renders empty for every operator who has not
-        chosen a value."""
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', value)
-        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_DEFAULT
-
-    def test_an_unparseable_value_says_so(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '16m')
-        with caplog.at_level(logging.WARNING):
-            resolve_upload_chunk_size_mb()
-        assert '16m' in caplog.text
-
-    @pytest.mark.parametrize(
-        ('value', 'expected'),
-        [('8.5', 8), ('1.9', 1), ('23.9', 23), ('0.5', 1)],
-    )
-    def test_a_fractional_value_rounds_down_not_up(
-        self, monkeypatch: pytest.MonkeyPatch, value: str, expected: int
-    ) -> None:
-        """MB is a decimal quantity, and this knob only ever exists to
-        get *under* a proxy's cap. An operator who writes 8.5 to fit a
-        10 MB limit must not be handed 16."""
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', value)
-        assert resolve_upload_chunk_size_mb() == expected
-
-    def test_a_value_above_the_ceiling_is_clamped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '32')
-        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_MAX
-
-    def test_a_value_below_the_floor_is_clamped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '0')
-        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_MIN
-
-    def test_a_negative_value_is_clamped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '-4')
-        assert resolve_upload_chunk_size_mb() == UPLOAD_CHUNK_SIZE_MB_MIN
-
-    def test_a_clamped_value_says_so(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        monkeypatch.setenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB', '32')
-        with caplog.at_level(logging.WARNING):
-            resolve_upload_chunk_size_mb()
-        assert str(UPLOAD_CHUNK_SIZE_MB_MAX) in caplog.text
-
-
-class TestUploadChunkSizeIsReachable:
-    """The variable has to survive the trip from the operator to Django.
-
-    A setting only settings.py knows about is unreachable on the plain
-    docker-compose install: the template lists anthias-server's
-    environment explicitly, Compose passes only what it declares, and
-    upgrade_containers.sh regenerates the file from that template on
-    every run. This is the install the chunking exists for — balena
-    devices get dashboard variables injected into every service.
-    """
-
-    def test_compose_template_passes_the_variable_to_the_server(
-        self,
-    ) -> None:
-        template = (
-            Path(__file__).resolve().parents[1] / 'docker-compose.yml.tmpl'
-        )
-        services = yaml.safe_load(template.read_text())['services']
-        assert (
-            'ANTHIAS_UPLOAD_CHUNK_SIZE_MB=${ANTHIAS_UPLOAD_CHUNK_SIZE_MB}'
-            in services['anthias-server']['environment']
-        )
-
-    def test_upgrade_sources_the_operator_env_file(self) -> None:
-        """Without this, a value set on the device is reverted by the
-        next upgrade and the 413s come back unexplained."""
-        script = (
-            Path(__file__).resolve().parents[1]
-            / 'bin'
-            / 'upgrade_containers.sh'
-        ).read_text()
-        sourcing = script.index('. /etc/anthias/anthias.env')
-        rendering = script.index('| envsubst')
-        assert sourcing < rendering
-
-
-class TestUploadChunkSizeBoundsAgree:
-    """The browser mirrors these bounds, and nothing else ties them.
-
-    chunking.ts cannot import a Python constant, so the two sets are
-    written out twice and can drift silently — which resurrects the
-    problem the server-side clamp was added to prevent. An operator
-    sets 32 to match their proxy, the server serves its own ceiling in
-    the meta tag, and a stale ceiling in the browser quietly overrides
-    it with something smaller.
-    """
-
-    @staticmethod
-    def _chunking_ts_const(name: str) -> int:
-        source = (
-            Path(__file__).resolve().parents[1]
-            / 'src'
-            / 'anthias_server'
-            / 'app'
-            / 'static'
-            / 'src'
-            / 'home'
-            / 'chunking.ts'
-        ).read_text()
-        match = re.search(rf'^const {name} = (\d+)$', source, re.MULTILINE)
-        assert match is not None, f'{name} not found in chunking.ts'
-        return int(match.group(1))
-
-    def test_ceiling_matches(self) -> None:
-        assert self._chunking_ts_const('MAX_CHUNK_MB') == (
-            UPLOAD_CHUNK_SIZE_MB_MAX
-        )
-
-    def test_floor_matches(self) -> None:
-        assert self._chunking_ts_const('MIN_CHUNK_MB') == (
-            UPLOAD_CHUNK_SIZE_MB_MIN
-        )
-
-    def test_fallback_matches_the_server_default(self) -> None:
-        assert self._chunking_ts_const('FALLBACK_CHUNK_MB') == (
-            UPLOAD_CHUNK_SIZE_MB_DEFAULT
-        )
+    assert match is not None, f'{name} not found in chunking.ts'
+    assert int(match.group(1)) == expected

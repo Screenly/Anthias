@@ -679,9 +679,14 @@ def get_configured_time_zone(
         config_file = str(Path(home) / CONFIG_DIR / CONFIG_FILE)
     parser = configparser.ConfigParser()
     try:
+        # See get_configured_upload_chunk_size_mb: this is read on
+        # every request too, so the same refusal of non-plain files
+        # and of undecodable content applies.
+        if not Path(config_file).is_file():
+            return None
         parser.read(config_file)
         time_zone = parser.get('main', 'timezone', fallback='').strip()
-    except (configparser.Error, OSError):
+    except (configparser.Error, OSError, UnicodeDecodeError):
         return None
     if not time_zone:
         return None
@@ -761,70 +766,83 @@ APP_STORE_INDEX_URL = getenv(
     'https://signage-apps.com/manifest.json',
 )
 
-# Size of each request a large browser upload is split into. Under
-# FILE_UPLOAD_MAX_MEMORY_SIZE above (25 MB) MemoryFileUploadHandler
-# holds a chunk entirely in RAM, so this is what one in-flight upload
-# costs resident — keep it small on a board that may have 512 MB.
-# Over it, Django spools to FILE_UPLOAD_TEMP_DIR, which is unset, so
-# /tmp: no container here mounts a tmpfs there, making it the writable
-# overlay, i.e. the SD card. Trading RAM for card writes is the wrong
-# way round on this hardware. Lower it if a proxy in front of the
-# device caps request bodies below this.
+# Size of each request a large browser upload is split into, for an
+# operator behind a proxy that caps request bodies. The ceiling keeps a
+# chunk under FILE_UPLOAD_MAX_MEMORY_SIZE above (25 MB), where Django
+# holds it in RAM rather than spooling it to the SD card; below the
+# floor a large video becomes thousands of sequential requests. Mirrored
+# in home/chunking.ts, which a test pins.
 UPLOAD_CHUNK_SIZE_MB_DEFAULT = 16
-# The ceiling home/chunking.ts applies, enforced here too so the client
-# cap is a second line of defence rather than the only one: an operator
-# setting 32 to match their proxy otherwise got 24 with nothing to say
-# why.
 UPLOAD_CHUNK_SIZE_MB_MAX = 24
-# A floor too — below it there is no useful setting: 0.5 turns a 2 GB
-# video into ~4000 sequential requests, each with its own round trip
-# and multipart parse.
 UPLOAD_CHUNK_SIZE_MB_MIN = 1
 
 
-def resolve_upload_chunk_size_mb() -> int:
-    """Effective upload chunk size, in MB.
+def get_configured_upload_chunk_size_mb(
+    config_file: str | None = None,
+) -> str:
+    """Raw ``[main] upload_chunk_size_mb`` from anthias.conf, or ''.
 
-    Parsed defensively and clamped to
-    ``[UPLOAD_CHUNK_SIZE_MB_MIN, UPLOAD_CHUNK_SIZE_MB_MAX]``. It is a
-    device variable, set once through the balena dashboard and never
-    looked at again: a trailing space or a stray unit (``16m``) would
-    otherwise raise ValueError as this module imports and the container
-    would never come up, on a headless device with no shell to work out
-    why. Same posture as ``resolve_time_zone`` above — no value can
-    wedge Django at startup.
+    Refuses anything that is not a plain file, and undecodable content:
+    a FIFO here blocks the import forever and the container never
+    starts. Same guards as ``get_configured_time_zone`` above.
     """
-    raw = (getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB') or '').strip()
+    if config_file is None:
+        home = getenv('HOME')
+        if not home:
+            return ''
+        config_file = str(Path(home) / CONFIG_DIR / CONFIG_FILE)
+    try:
+        if not Path(config_file).is_file():
+            return ''
+        parser = configparser.ConfigParser()
+        parser.read(config_file)
+        return parser.get('main', 'upload_chunk_size_mb', fallback='').strip()
+    except (configparser.Error, OSError, UnicodeDecodeError):
+        return ''
+
+
+def resolve_upload_chunk_size_mb() -> int:
+    """Effective upload chunk size in MB, clamped to [MIN, MAX].
+
+    anthias.conf first — the rung that survives an upgrade, since
+    docker-compose.yml is regenerated from its template every run —
+    then ANTHIAS_UPLOAD_CHUNK_SIZE_MB, which is how a balena dashboard
+    variable arrives. Resolved once at import; there is no Settings
+    field for it, so changing it already means a restart.
+
+    Read as a decimal and rounded down, because MB is decimal and an
+    operator writing 8.5 to fit a 10 MB cap must not be handed 16.
+    Nothing here may raise: on a headless device a bad value would mean
+    a container that never starts, with no shell to find out why.
+    """
+    raw = get_configured_upload_chunk_size_mb()
+    if not raw:
+        raw = (getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB') or '').strip()
     if not raw:
         return UPLOAD_CHUNK_SIZE_MB_DEFAULT
-    # Parsed as a float and rounded down rather than read as an int:
-    # MB is a decimal quantity, so ``8.5`` is a plausible thing for an
-    # operator with a 10 MB proxy cap to write, and rejecting it would
-    # hand them 16 — a value that cannot clear the cap they are trying
-    # to fit under. Every fallback in this function goes the other way
-    # for the same reason. float() also swallows nan/inf and the
-    # thousand-digit integer that would overflow int().
+
+    logger = logging.getLogger(__name__)
     try:
-        parsed_mb = float(raw)
-    except ValueError:
-        parsed_mb = math.nan
-    if not math.isfinite(parsed_mb):
-        logging.getLogger(__name__).warning(
-            'Ignoring unparseable ANTHIAS_UPLOAD_CHUNK_SIZE_MB=%r; '
-            'using %d MB.',
+        # float() then floor: one except covers a stray unit, nan, and
+        # the thousand-digit integer that overflows on the way down.
+        parsed = math.floor(float(raw))
+    except (ValueError, OverflowError):
+        logger.warning(
+            'Ignoring unparseable upload chunk size %r; using %d MB.',
             raw,
             UPLOAD_CHUNK_SIZE_MB_DEFAULT,
         )
         return UPLOAD_CHUNK_SIZE_MB_DEFAULT
-    parsed = math.floor(parsed_mb)
+
     clamped = max(
         UPLOAD_CHUNK_SIZE_MB_MIN, min(parsed, UPLOAD_CHUNK_SIZE_MB_MAX)
     )
     if clamped != parsed:
-        logging.getLogger(__name__).warning(
-            'ANTHIAS_UPLOAD_CHUNK_SIZE_MB=%d is outside [%d, %d]; '
-            'using %d MB.',
-            parsed,
+        # Reported as written, not as parsed: 0.5 logged as "0 is
+        # outside [1, 24]" sends the operator hunting for a zero.
+        logger.warning(
+            'Upload chunk size %r is outside [%d, %d]; using %d MB.',
+            raw,
             UPLOAD_CHUNK_SIZE_MB_MIN,
             UPLOAD_CHUNK_SIZE_MB_MAX,
             clamped,
@@ -833,6 +851,7 @@ def resolve_upload_chunk_size_mb() -> int:
 
 
 UPLOAD_CHUNK_SIZE_MB = resolve_upload_chunk_size_mb()
+
 
 # Host suffixes an installed app's launch URL / manifest may live on.
 # The catalog is fetched client-side, so the create endpoint can't

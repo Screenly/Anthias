@@ -9,6 +9,7 @@ apply the same check and fall back to UTC instead of letting Django
 raise ValueError at startup.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -298,3 +299,18 @@ class TestTimezoneActivationMiddleware:
         # Falls back to deactivate() rather than 500-ing.
         response = middleware(RequestFactory().get('/'))
         assert response.content == b'ok'
+
+
+class TestConfigReadIsRobust:
+    """TimezoneActivationMiddleware re-reads this on every request, so
+    a blocking or throwing read is an outage rather than one bad page."""
+
+    def test_a_fifo_does_not_hang_the_request(self, tmp_path: Path) -> None:
+        fifo = tmp_path / 'anthias.conf'
+        os.mkfifo(fifo)
+        assert get_configured_time_zone(str(fifo)) is None
+
+    def test_binary_content_does_not_raise(self, tmp_path: Path) -> None:
+        conf = tmp_path / 'anthias.conf'
+        conf.write_bytes(bytes(range(256)) * 4)
+        assert get_configured_time_zone(str(conf)) is None
