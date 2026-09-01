@@ -22,7 +22,10 @@ type ProgressLike = {
 // the body was still going out, which the server cannot have seen in
 // full.
 type Outcome =
-  | { status: number; body?: string; trigger?: string }
+  | { status: number; body?: string; trigger?: string; hxRedirect?: string }
+  // A response that arrived while the request body was still going
+  // out — what a proxy enforcing a body limit does.
+  | { status: number; body?: string; trigger?: string; bodyUnfinished: true }
   | { transport: true }
   | { transport: 'cut' }
 
@@ -67,10 +70,15 @@ function stubXhr(outcomes: Outcome[]): void {
         setRequestHeader: (name: string, value: string) => {
           headers[name] = value
         },
-        getResponseHeader: (name: string) =>
-          name === 'HX-Trigger' && 'trigger' in outcome
-            ? (outcome.trigger ?? null)
-            : null,
+        getResponseHeader: (name: string) => {
+          if (name === 'HX-Trigger' && 'trigger' in outcome) {
+            return outcome.trigger ?? null
+          }
+          if (name === 'HX-Redirect' && 'hxRedirect' in outcome) {
+            return outcome.hxRedirect ?? null
+          }
+          return null
+        },
         addEventListener(type: string, fn: () => void) {
           ;(handlers[type] ??= []).push(fn)
         },
@@ -90,7 +98,8 @@ function stubXhr(outcomes: Outcome[]): void {
           // have committed anything.
           const bodySize = requests[requests.length - 1].bodySize
           const cutMidBody =
-            'transport' in outcome && outcome.transport === 'cut'
+            ('transport' in outcome && outcome.transport === 'cut') ||
+            ('bodyUnfinished' in outcome && outcome.bodyUnfinished)
           const type = 'status' in outcome ? 'load' : 'error'
           queueMicrotask(() => {
             uploadHandlers['progress']?.forEach((fn) =>
@@ -134,10 +143,25 @@ function fileInputFrom(file: File): HTMLInputElement {
 
 let toasts: Toast[]
 let refreshes: string[]
+// window.location.href is not assignable in happy-dom, and the auth
+// path's whole job is to navigate — so record the assignment instead.
+let navigations: string[]
 
 beforeEach(() => {
   toasts = []
   refreshes = []
+  navigations = []
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: {
+      set href(url: string) {
+        navigations.push(url)
+      },
+      get href() {
+        return navigations[navigations.length - 1] ?? ''
+      },
+    },
+  })
   ;(window as unknown as { Alpine: unknown }).Alpine = {
     store: () => ({
       push: (kind: string, message: string, ttlMs?: number) =>
@@ -172,13 +196,46 @@ describe('uploadFiles error reporting', () => {
     )
   })
 
+  // Cut while the body was still going out: the server cannot have
+  // seen the whole file, so nothing was created and the operator can
+  // safely try again.
   test('a dead socket names both causes without asserting one', async () => {
-    stubXhr([{ transport: true }])
+    stubXhr([{ transport: 'cut' }])
     await window.homeApp().uploadFiles(fileInput('big-video.mp4'))
 
     expect(toasts[0]?.message).toBe(
       'Upload failed mid-transfer — check your connection, or try a ' +
         'smaller file',
+    )
+  })
+
+  // The single-shot path commits the same way a final chunk does — the
+  // server writes the file, creates the row, and answers afterwards —
+  // so a reply lost after the body went out is exactly as ambiguous
+  // here, and this is the path most uploads take.
+  test('a single-shot reply lost after the body went out is unconfirmed', async () => {
+    stubXhr([{ transport: true }])
+    const app = window.homeApp()
+    app.mode = 'add'
+    await app.uploadFiles(fileInput('big-video.mp4'))
+
+    expect(toasts[0]?.message).toBe(
+      'Upload may have finished — check the asset list before ' +
+        'uploading it again',
+    )
+    expect(app.mode).toBeNull()
+  })
+
+  // A proxy enforcing a body limit answers and closes while the
+  // browser is still writing, so the response arrives with the body
+  // unfinished. Nothing was committed, and saying "may have finished"
+  // would send the operator hunting for an asset that cannot exist.
+  test('a status answered mid-body is not called ambiguous', async () => {
+    stubXhr([{ status: 502, bodyUnfinished: true }])
+    await window.homeApp().uploadFiles(fileInput('big-video.mp4'))
+
+    expect(toasts[0]?.message).toBe(
+      'The server failed while handling the upload — check the device logs',
     )
   })
 
@@ -332,6 +389,22 @@ describe('chunked uploads', () => {
     await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(2)
+    // Not "File too large": the file was already split, so the remedy
+    // is a smaller chunk, and telling the operator to shrink the file
+    // sends them at the one thing that cannot help.
+    expect(toasts[0]?.message).toBe(
+      'Even split up, each part is too large for a proxy in front of ' +
+        'the device — lower the upload chunk size',
+    )
+  })
+
+  // The single-shot path keeps the original wording: there, the file
+  // really is what exceeded the limit.
+  test('a 413 on an unsplit upload still blames the file', async () => {
+    setChunkSizeMb('16')
+    stubXhr([{ status: 413 }])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(2500)))
+
     expect(toasts[0]?.message).toContain('File too large')
   })
 
@@ -339,14 +412,67 @@ describe('chunked uploads', () => {
   // refusing this file and answering with its own toast, which the
   // single-shot path would have replayed. Treat it the same way: one
   // file rejected, batch intact.
-  test('a non-JSON 200 is a rejection, not a transport failure', async () => {
+  // With a toast, the server has explained itself and the file is
+  // simply refused — replay it and carry on, as single-shot does.
+  test('a non-JSON 200 with a toast is a rejection', async () => {
+    setChunkSizeMb('1')
+    stubXhr([
+      {
+        status: 200,
+        trigger: '{"toast":{"kind":"error","message":"Invalid file type."}}',
+      },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
+
+    expect(sends).toBe(1)
+    // The server's own toast stands alone — no client-invented error.
+    expect(toasts.map((t) => t.message)).toEqual(['Invalid file type.'])
+  })
+
+  // Without one, nobody has told the operator anything. A login page, a
+  // captive portal or a proxy's own 200 all look like this, and
+  // dropping the file in silence leaves no asset, no error, and a
+  // progress bar that completed normally.
+  test('a non-JSON 200 with no toast is never silent', async () => {
     setChunkSizeMb('1')
     stubXhr([{ status: 200 }])
     await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(sends).toBe(1)
-    // No client-invented error: the server's own toast stands alone.
-    expect(toasts).toEqual([])
+    expect(toasts.length).toBe(1)
+    expect(toasts[0]?.kind).toBe('error')
+  })
+
+  // The expired-session case. An XHR follows a 302 invisibly, so the
+  // server answers 2xx + HX-Redirect; the batch must stop and the
+  // operator must land on the login page, not lose every file over the
+  // chunk size in silence.
+  test('an HX-Redirect on a staging chunk aborts and navigates', async () => {
+    setChunkSizeMb('1')
+    stubXhr([{ status: 200, hxRedirect: '/login/' }])
+    const app = window.homeApp()
+    await app.uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
+
+    expect(sends).toBe(1)
+    expect(navigations).toEqual(['/login/'])
+    expect(toasts[0]?.message).toBe(
+      'Your session expired — sign in again to upload',
+    )
+  })
+
+  test('an HX-Redirect on the commit aborts and navigates', async () => {
+    setChunkSizeMb('1')
+    stubXhr([
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, body: '{"upload_id":"abc"}' },
+      { status: 200, hxRedirect: '/login/' },
+    ])
+    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
+
+    expect(navigations).toEqual(['/login/'])
+    expect(toasts[0]?.message).toBe(
+      'Your session expired — sign in again to upload',
+    )
   })
 })
 
@@ -443,9 +569,14 @@ describe('chunked upload failures', () => {
         body: '{"error":"This upload could not be resumed. Check whether it already appears in the asset list before uploading it again."}',
       },
     ])
-    await window.homeApp().uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
+    const app = window.homeApp()
+    app.mode = 'add'
+    await app.uploadFiles(fileInputFrom(bigFile(CHUNKED_FILE_BYTES)))
 
     expect(toasts[0]?.message).toContain('already appears in the asset list')
+    // Same instruction as the unconfirmed toast, so the modal has to
+    // get out of the way of the list here too.
+    expect(app.mode).toBeNull()
   })
 
   // A body that never finished going out cannot have committed

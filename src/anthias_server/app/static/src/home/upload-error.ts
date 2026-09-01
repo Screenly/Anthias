@@ -23,12 +23,39 @@ export type UploadFailure =
   // exist: the server renames the partial into place before answering,
   // so a lost reply looks exactly like a lost commit.
   | { kind: 'unconfirmed' }
+  // The session expired: the server answered with HX-Redirect and the
+  // caller is navigating to the login page. Carries no status because
+  // the response was a perfectly ordinary 2xx. Deliberately the same
+  // shape as the fix in the htmx-auth-redirect PR, so whichever of the
+  // two rebases second resolves to the same thing twice rather than
+  // silently losing it.
+  | { kind: 'auth' }
+  // A proxy refused one CHUNK as too large. The file is not the
+  // problem — splitting it was supposed to be the fix — so the remedy
+  // is a smaller chunk, not a smaller file.
+  | { kind: 'chunk-too-large' }
   // The server explained itself in the response body. Its wording is
-  // better than anything derivable from a status code, so it wins.
-  | { kind: 'server'; message: string }
+  // better than anything derivable from a status code, so it wins —
+  // the status rides along because the caller still has to know a 409
+  // ("it may already be there") from a 507 ("the disk is full").
+  | { kind: 'server'; message: string; status: number }
 
 export function uploadErrorMessage(failure: UploadFailure): string {
+  // Usually unseen, since the caller navigates away on this. Worth
+  // having anyway: if the navigation is slow the operator gets an
+  // explanation rather than a blank moment.
+  if (failure.kind === 'auth') {
+    return 'Your session expired — sign in again to upload'
+  }
+
   if (failure.kind === 'server') return failure.message
+
+  if (failure.kind === 'chunk-too-large') {
+    return (
+      'Even split up, each part is too large for a proxy in front of ' +
+      'the device — lower the upload chunk size'
+    )
+  }
 
   // Never "try again": re-uploading something that may have completed
   // is what produces the duplicate.

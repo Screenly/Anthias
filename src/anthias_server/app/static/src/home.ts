@@ -148,12 +148,29 @@ interface RawUploadResponse {
   text: string
   trigger: string | null
   bodySent: boolean
+  // An expired session answers a 2xx carrying HX-Redirect rather than
+  // a 302 an XHR would follow invisibly. Carried here because this
+  // handler no longer classifies the response itself: without it the
+  // chunk loop cannot see the header at all, and every file over the
+  // chunk size would be dropped from the batch with the operator never
+  // sent to sign in.
+  redirect: string | null
 }
 
 // Chunking turns one request into dozens, so one dropped connection
 // should not lose an upload the operator has been waiting on.
 const CHUNK_RETRIES = 2
 const CHUNK_RETRY_DELAY_MS = 500
+
+// An expired session is not a failure of this upload, it is the end of
+// the batch: every remaining file answers the same way. Navigating is
+// what resolves it; the failure kind exists so a slow navigation still
+// explains itself.
+function followRedirect(res: RawUploadResponse): UploadResult | null {
+  if (!res.redirect) return null
+  window.location.href = res.redirect
+  return { status: 'error', failure: { kind: 'auth' } }
+}
 
 // Resend only what might not fail again — a 4xx is the server's
 // considered answer. Staging a chunk is idempotent, so anything that
@@ -182,10 +199,32 @@ async function sendWithRetry(
   }
 }
 
-// Decide what the response to a whole-file upload, or to the chunk
-// that commits one, means. Kept in one place so both paths agree.
+// Decide what the response to a request that COMMITS means — the
+// whole file on the single-shot path, or the last chunk of a split
+// one. Both create the asset and answer afterwards, so both carry the
+// same ambiguity when the answer does not arrive intact, and both go
+// through here so neither can drift from the other.
 function interpretFinalResponse(res: RawUploadResponse): UploadResult {
+  const authFailure = followRedirect(res)
+  if (authFailure) return authFailure
   const kind = fireToastFromHeader(res.trigger)
+  // The server's own words where it gave any — the 409 that says to
+  // check the asset list, the 507 that names the disk — beat anything
+  // derivable from a status code.
+  const message = jsonStringField(res.text, 'error')
+  if (message) {
+    return {
+      status: 'error',
+      failure: { kind: 'server', message, status: res.status },
+    }
+  }
+  // The bytes went out and nothing intelligible came back: the asset
+  // may already exist, so don't report a plain failure and don't send
+  // the operator off to upload a second copy. A body that never
+  // finished sending cannot have committed, so it falls through.
+  if (res.bodySent && (res.status === 0 || res.status >= 500)) {
+    return { status: 'error', failure: { kind: 'unconfirmed' } }
+  }
   if (res.status === 0) {
     return { status: 'error', failure: { kind: 'network' } }
   }
@@ -527,9 +566,13 @@ function homeApp(): HomeAppData {
       this.uploadTotal = 0
 
       if (failure) {
-        // "Check the asset list" is unactionable with the Add modal
-        // sitting on top of it.
-        if (failure.kind === 'unconfirmed') this.mode = null
+        // Every outcome that tells the operator the asset may already
+        // be there — ours, and the server's own 409 — is unactionable
+        // with the Add modal sitting on top of the asset list.
+        const mayAlreadyExist =
+          failure.kind === 'unconfirmed' ||
+          (failure.kind === 'server' && failure.status === 409)
+        if (mayAlreadyExist) this.mode = null
         const store = window.Alpine.store('toasts') as
           | ToastStoreLike
           | undefined
@@ -611,17 +654,28 @@ function homeApp(): HomeAppData {
           if (done >= opts.totalBytes) this.uploadState = 'processing'
         })
         xhr.addEventListener('load', () => {
+          // Not hardcoded true: a proxy enforcing a body limit answers
+          // and closes while the browser is still writing, so a
+          // response can arrive with the body unfinished — the one
+          // case this flag exists to catch.
           resolve({
             status: xhr.status,
             text: xhr.responseText,
             trigger: xhr.getResponseHeader('HX-Trigger'),
-            bodySent: true,
+            bodySent,
+            redirect: xhr.getResponseHeader('HX-Redirect'),
           })
         })
         // No response at all (dropped connection, DNS, TLS): status is
         // 0 here, so it is not an HTTP failure.
         const failed = () =>
-          resolve({ status: 0, text: '', trigger: null, bodySent })
+          resolve({
+            status: 0,
+            text: '',
+            trigger: null,
+            bodySent,
+            redirect: null,
+          })
         xhr.addEventListener('error', failed)
         xhr.addEventListener('abort', failed)
         const fd = new FormData()
@@ -657,6 +711,17 @@ function homeApp(): HomeAppData {
       const chunks = planChunks(file.size, chunkSize)
       const uploadId = newUploadId()
 
+      // A 413 means something in front of the device refused this
+      // request. On the single-shot path that is "your file is too
+      // large"; here the file has already been split, so the honest
+      // answer names the chunk size instead.
+      const named = (result: UploadResult): UploadResult =>
+        result.status === 'error' &&
+        result.failure.kind === 'http' &&
+        result.failure.status === 413
+          ? { status: 'error', failure: { kind: 'chunk-too-large' } }
+          : result
+
       const sendChunk = (
         chunk: Chunk,
         isFinal: boolean,
@@ -689,16 +754,17 @@ function homeApp(): HomeAppData {
         const res = await sendChunk(chunk, false)
         if (res.status < 200 || res.status >= 300) {
           // The server's own wording where it gave one; the status
-          // code is the fallback.
+          // code is the fallback. No ambiguity to weigh here: a
+          // staging chunk commits nothing.
           const message = jsonStringField(res.text, 'error')
-          return {
+          return named({
             status: 'error',
             failure: message
-              ? { kind: 'server', message }
+              ? { kind: 'server', message, status: res.status }
               : res.status === 0
                 ? { kind: 'network' }
                 : { kind: 'http', status: res.status },
-          }
+          })
         }
         // A 200 that is not the acknowledgement is the server
         // refusing the file (wrong type, nothing uploaded) and
@@ -706,27 +772,29 @@ function homeApp(): HomeAppData {
         // rejected, not a transport failure. Replay and carry on, as
         // single-shot does.
         if (jsonStringField(res.text, 'upload_id') === undefined) {
-          fireToastFromHeader(res.trigger)
+          const authFailure = followRedirect(res)
+          if (authFailure) return authFailure
+          // Only a rejection if the server actually said so.
+          // fireToastFromHeader pushes nothing when there is no
+          // HX-Trigger, so treating every unrecognised 2xx as a
+          // rejection drops the file with no asset, no error and a
+          // progress bar that completed — which is what a login page,
+          // a captive portal or a proxy's own 200 looks like here.
+          const kind = fireToastFromHeader(res.trigger)
+          if (kind === null) {
+            return {
+              status: 'error',
+              failure: { kind: 'http', status: res.status },
+            }
+          }
           return { status: 'rejected' }
         }
       }
 
       // The last carries the final byte, so it creates the asset.
-      const res = await sendChunk(chunks[chunks.length - 1], true)
-      // The server's own words where it gave any — the 409 that says
-      // to check the asset list, or the 507 that names the disk — beat
-      // anything derivable from a status code.
-      const message = jsonStringField(res.text, 'error')
-      if (message) return { status: 'error', failure: { kind: 'server', message } }
-      // Otherwise: if the bytes went out and nothing intelligible came
-      // back, os.replace may already have moved the partial into
-      // place. Don't report that as a plain failure. A body that never
-      // finished sending could not have committed, so it falls through
-      // to the ordinary transport message.
-      if (res.bodySent && (res.status === 0 || res.status >= 500)) {
-        return { status: 'error', failure: { kind: 'unconfirmed' } }
-      }
-      return interpretFinalResponse(res)
+      return named(
+        interpretFinalResponse(await sendChunk(chunks[chunks.length - 1], true)),
+      )
     },
   }
 }
