@@ -340,3 +340,21 @@ def test_backup_excludes_half_finished_uploads(
 
     assert not [n for n in names if n.endswith(path.basename(staged))]
     assert [n for n in names if n.endswith('deadbeef.mp4')]
+
+
+def test_backup_keeps_a_matching_name_outside_the_asset_dir(
+    backup_home: str,
+) -> None:
+    """The exclusions describe files the asset dir holds. `.anthias`
+    rides in the same archive and holds the config and the database,
+    where an atomic-write sidecar is a plausible name — dropping one of
+    those would mean a backup that silently restores incomplete."""
+    sidecar = path.join(backup_home, '.anthias', 'anthias.conf.tmp')
+    with open(sidecar, 'wb') as f:
+        f.write(b'[main]')
+
+    archive = create_backup(name='scope-test')
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = tar.getnames()
+
+    assert [n for n in names if n.endswith('anthias.conf.tmp')]

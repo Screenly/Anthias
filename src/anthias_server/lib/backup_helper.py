@@ -29,6 +29,13 @@ def _skip_staged_uploads(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
     is long gone — so they only inflate the archive.
     """
     parts = member.name.split('/')
+    # Scoped to the asset dir, which is where all four shapes are
+    # written. `.anthias` is in the same archive and holds the config
+    # and the database, where an atomic-write sidecar is a plausible
+    # future name — excluding one of those would mean a backup that
+    # silently restores incomplete.
+    if parts[0] != 'anthias_assets':
+        return member
     if STAGED_UPLOAD_DIR in parts:
         return None
     leaf = parts[-1]
