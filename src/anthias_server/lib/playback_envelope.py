@@ -83,6 +83,8 @@ that carry an inflated level tag and play perfectly. We record the
 level for diagnostics and branch on frame size instead.
 """
 
+import os
+import time
 from typing import Any
 
 from anthias_common.board import resolve_device_key
@@ -214,6 +216,43 @@ UNSUPPORTED_PIX_FMT_MARKERS = (
 )
 
 
+# ``resolve_device_key()`` is cheap on a Pi (one ``os.environ`` read),
+# but on the catch-all ``arm64`` image it reaches for the host_agent's
+# published subtype — a fresh Redis client per call, then a
+# ``/proc/device-tree/model`` read when Redis has nothing. That is
+# fine once per upload. It is not fine on the asset list, which
+# renders every row through ``to_json`` several times and re-renders
+# the whole table on a 5 s HTMX poll: measured at 284 ms per 40 rows
+# on ``arm64`` against 11 ms on ``x86``, all of it this lookup.
+#
+# Keyed on the raw ``DEVICE_TYPE`` so a test (or a board that is
+# re-imaged under a running process) flipping the env var still gets
+# its own answer rather than a neighbour's. The TTL is what keeps a
+# late ``host_agent`` honest: a compose install can publish
+# ``host:board_subtype`` seconds after the server starts, and a
+# permanent cache would pin the board to the un-upgraded ``arm64``
+# key for the life of the process — every rule silently matching
+# nothing, which is the exact failure mode this module is most
+# afraid of.
+_DEVICE_KEY_TTL_SECONDS = 30.0
+_device_key_cache: dict[str, tuple[float, str]] = {}
+
+
+def _current_device_key() -> str:
+    """``resolve_device_key()`` memoised for the asset-list render.
+
+    Bounded staleness rather than a permanent cache — see above.
+    """
+    raw = os.environ.get('DEVICE_TYPE', '').strip().lower()
+    now = time.monotonic()
+    cached = _device_key_cache.get(raw)
+    if cached is not None and now - cached[0] < _DEVICE_KEY_TTL_SECONDS:
+        return cached[1]
+    resolved = resolve_device_key()
+    _device_key_cache[raw] = (now, resolved)
+    return resolved
+
+
 def _as_positive_int(value: Any) -> int | None:
     """Coerce a metadata field to a positive int, or ``None``.
 
@@ -293,13 +332,18 @@ def evaluate(
     """
     if not metadata:
         return []
-    board = device_key if device_key is not None else resolve_device_key()
+    # Codec first: it is a dict lookup, while the board can be a Redis
+    # round-trip. Every image, web page and non-H.264 video on the
+    # asset list settles here without touching the network.
     codec = str(metadata.get('video_codec') or '').strip().lower()
+    if codec != 'h264':
+        return []
+    board = device_key if device_key is not None else _current_device_key()
     warnings: list[PlaybackWarning] = []
 
-    if codec == 'h264' and board in BCM2835_H264_BOARDS:
+    if board in BCM2835_H264_BOARDS:
         warnings.extend(_bcm2835_h264_warnings(metadata, board))
-    elif codec == 'h264' and board in SOFTWARE_H264_BOARDS:
+    elif board in SOFTWARE_H264_BOARDS:
         warnings.extend(_software_h264_warnings(metadata))
 
     warnings.sort(key=lambda w: 0 if w.is_blocking else 1)
