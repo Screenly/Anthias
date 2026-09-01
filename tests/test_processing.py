@@ -1250,7 +1250,12 @@ def test_video_low_ram_rejects_4k_with_resolution_message(
     # Recipe carries the downscale clause + a board-appropriate
     # codec. rockpi4 supports H.264 so libx264 is preferred.
     recipe = excinfo.value.recipe
-    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    # The low-RAM gate really is a pixel budget, so it keeps the
+    # 1080p box; only the guard against an odd output is new.
+    assert (
+        '-vf scale=1920:1080:force_original_aspect_ratio=decrease'
+        ':force_divisible_by=2' in recipe
+    )
     assert 'libx264' in recipe
     # Metadata still captured (operator sees what they uploaded).
     asset.refresh_from_db()
@@ -3019,7 +3024,13 @@ def test_video_pi4_rejects_4k_h264_despite_supported_codec(
     assert '3840x2160' in msg
     assert '1920' in msg
     recipe = excinfo.value.recipe
-    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    # The envelope box, not the low-RAM 1080p box: the driver bound is
+    # per axis, so the recipe must not squeeze the frame further than
+    # the decoder actually requires.
+    assert (
+        '-vf scale=1920:1920:force_original_aspect_ratio=decrease'
+        ':force_divisible_by=2' in recipe
+    )
     assert 'libx264' in recipe
     assert excinfo.value.handbrake
     # Metadata is still committed so the operator can see what they
@@ -3263,3 +3274,72 @@ def test_ffmpeg_recipe_hevc_branch_honours_downscale_and_pix_fmt() -> None:
     assert '-pix_fmt yuv420p' in recipe
     assert recipe.index('-vf scale=') < recipe.index('libx265')
     assert recipe.index('libx265') < recipe.index('-pix_fmt yuv420p')
+
+
+@pytest.mark.django_db
+def test_video_pi4_portrait_recipe_targets_the_envelope_not_1080p(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A portrait rejection must not hand back the landscape box.
+
+    The bcm2835-codec bound is per axis, so 1080x1920 is inside the
+    envelope and the rejection message says so ("1080x1920 for
+    portrait"). Emitting the low-RAM ``scale=1920:1080`` clause here
+    would contradict that in the one place the operator actually
+    copies: run verbatim, it turns a 2160x3840 source into 608x1080
+    and throws away two thirds of the frame the decoder would have
+    taken.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'portrait4k.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-portrait-4k',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'portrait-4k.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=2160, video_height=3840, video_pixels=2160 * 3840
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    recipe = excinfo.value.recipe
+    assert 'scale=1920:1920:force_original_aspect_ratio=decrease' in recipe
+    assert 'scale=1920:1080' not in recipe
+    # The message promises 1080x1920; the recipe has to be able to
+    # produce it.
+    assert '1080x1920' in str(excinfo.value)
+
+
+def test_scale_clauses_guard_against_an_odd_output() -> None:
+    """``decrease`` rounds to whatever the aspect ratio lands on, and
+    an odd dimension is fatal rather than cosmetic: a 2100x1900
+    source onto the 1920 box computes 1920x1737 and libx264 refuses
+    the job outright. Both boxes carry the guard so the operator
+    never pastes a command that cannot run.
+    """
+    supported = frozenset({'h264'})
+    envelope = processing._ffmpeg_reencode_recipe(
+        supported, 'clip.mp4', cap_to_envelope=True
+    )
+    low_ram = processing._ffmpeg_reencode_recipe(
+        supported, 'clip.mp4', cap_to_1080p=True
+    )
+    assert 'force_divisible_by=2' in envelope
+    assert 'force_divisible_by=2' in low_ram
+    # The two gates answer different questions and keep different
+    # boxes: a per-axis decoder bound vs a pixel budget.
+    assert 'scale=1920:1920' in envelope
+    assert 'scale=1920:1080' in low_ram

@@ -1405,6 +1405,7 @@ def _ffmpeg_reencode_recipe(
     supported: frozenset[str],
     source_filename: str = '',
     cap_to_1080p: bool = False,
+    cap_to_envelope: bool = False,
     force_8bit_420: bool = False,
 ) -> str:
     """Return an ``ffmpeg`` command line the operator can run on
@@ -1424,15 +1425,36 @@ def _ffmpeg_reencode_recipe(
     stem for ``OUTPUT.mp4`` so the operator can copy the recipe
     verbatim into their terminal without hand-editing it.
 
-    ``cap_to_1080p`` injects ``-vf scale=1920:1080:force_original_aspect_ratio=decrease``
-    so the recipe also downscales an over-resolution source onto the
-    1920×1080 envelope. ``force_original_aspect_ratio=decrease``
-    means the output fits *inside* 1920×1080 (no padding, no
-    stretch) — a 4K 16:9 source becomes exactly 1920×1080, a 4K 21:9
-    ultrawide lands at 1920×823, a portrait 1080×1920 lands at
-    608×1080 (height-bound). Used by the low-RAM resolution gate;
-    omitted in the codec-only rejection path so we don't suggest a
-    needless re-encode when an HD codec swap is all that's wanted.
+    ``cap_to_1080p`` injects ``-vf scale=1920:1080:...`` so the recipe
+    also downscales an over-resolution source onto the 1920×1080
+    envelope. ``force_original_aspect_ratio=decrease`` means the
+    output fits *inside* 1920×1080 (no padding, no stretch) — a 4K
+    16:9 source becomes exactly 1920×1080, a 4K 21:9 ultrawide lands
+    at 1920×823, a portrait 1080×1920 lands at 608×1080
+    (height-bound). Used by the low-RAM resolution gate, where the
+    constraint really is a *pixel budget* and squeezing a portrait
+    clip into the landscape box is the point; omitted in the
+    codec-only rejection path so we don't suggest a needless
+    re-encode when an HD codec swap is all that's wanted.
+
+    ``cap_to_envelope`` is the decode-envelope form of the same
+    clause and scales onto a **1920×1920 box** instead. The
+    bcm2835-codec bound is ``MAX_W_CODEC`` / ``MAX_H_CODEC`` per
+    *axis*, not an area budget, so a portrait 2160×3840 source is
+    inside the envelope at 1080×1920 — and the 1080p box would have
+    handed the operator a recipe producing 608×1080, throwing away
+    two thirds of the frame the decoder would have accepted, while
+    the rejection message told them to aim for 1080×1920. The two
+    flags are mutually exclusive in practice: the low-RAM gate
+    returns before the envelope check ever runs, so this path is
+    never a pixel budget.
+
+    Both scale clauses carry ``force_divisible_by=2``. Without it
+    ``decrease`` rounds to whatever the aspect ratio lands on, and an
+    odd result is fatal rather than cosmetic — a 2100×1900 source
+    onto the 1920 box computes 1920×1737 and libx264 refuses the job
+    outright (``height not divisible by 2``), so the operator would
+    paste the recipe we gave them and get an error instead of a file.
 
     ``force_8bit_420`` injects ``-pix_fmt yuv420p``, which the
     pixel-format rejection needs: libx264 and libx265 both *preserve*
@@ -1441,11 +1463,18 @@ def _ffmpeg_reencode_recipe(
     High 10 file and fail the same gate a second time. Only emitted
     for that rejection — an 8-bit source doesn't need telling.
     """
-    scale_clause = (
-        '-vf scale=1920:1080:force_original_aspect_ratio=decrease '
-        if cap_to_1080p
-        else ''
-    )
+    if cap_to_envelope:
+        scale_clause = (
+            '-vf scale=1920:1920:force_original_aspect_ratio=decrease'
+            ':force_divisible_by=2 '
+        )
+    elif cap_to_1080p:
+        scale_clause = (
+            '-vf scale=1920:1080:force_original_aspect_ratio=decrease'
+            ':force_divisible_by=2 '
+        )
+    else:
+        scale_clause = ''
     pix_fmt_clause = '-pix_fmt yuv420p ' if force_8bit_420 else ''
     if 'h264' in supported:
         template = (
@@ -1677,7 +1706,7 @@ def _run_video_normalisation(asset: Asset) -> None:
             recipe = _ffmpeg_reencode_recipe(
                 supported,
                 upload_name,
-                cap_to_1080p=playback_envelope.exceeds_dimension(
+                cap_to_envelope=playback_envelope.exceeds_dimension(
                     video_width, video_height
                 ),
                 force_8bit_420=playback_envelope.is_unsupported_pix_fmt(
