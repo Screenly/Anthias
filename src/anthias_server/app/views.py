@@ -74,6 +74,10 @@ _ANTHIAS_REPO_URL = 'https://github.com/Screenly/Anthias'
 # py/path-injection on ``open(final_path, ...)``).
 _SAFE_EXT_RE = re.compile(r'\.[A-Za-z0-9]{1,16}')
 
+# Extensions that mark a file as transient somewhere else in the
+# system, so an asset must never be stored under one. See _safe_ext.
+_RESERVED_EXTS = frozenset({'.tmp', '.part'})
+
 # ``<staged>/<upload_id>.part``. The id arrives on every chunk and
 # lands in a filesystem path — our own uploader mints it, anything
 # else may send what it likes — so require the exact shape minted
@@ -124,8 +128,10 @@ def _stage_upload_chunk(
     """
     # Resolved first: every rejection below abandons the upload, and
     # dropping the partial it abandons needs the id. Only honoured
-    # alongside a range — a single-shot upload never reaches here — so
-    # an echoed id cannot truncate an unrelated upload in progress.
+    # alongside a range, so a single-shot upload never reaches here at
+    # all. What keeps one caller off another's partial is the id
+    # itself — 32 unguessable hex, minted per upload — not the range
+    # checks, which now run after this point.
     upload_id = request.headers.get('X-Upload-Id')
     if upload_id is None:
         upload_id = uuid.uuid4().hex
@@ -163,19 +169,7 @@ def _stage_upload_chunk(
             raise _ChunkedUploadError(
                 'Upload chunk did not match its range. Please try again.'
             )
-
         is_final = end_bytes + 1 == total_bytes
-
-        # Refuse one that cannot fit before writing any of it:
-        # otherwise an hour of sending, then failure, then the partial
-        # held until the sweep.
-        if start_bytes == 0:
-            try:
-                free = shutil.disk_usage(settings['assetdir']).free
-            except OSError:
-                free = None
-            if free is not None and total_bytes > free:
-                raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507)
 
         os.makedirs(staged_dir, exist_ok=True)
         # Measure the descriptor, not the path: between a stat and an
@@ -190,8 +184,22 @@ def _stage_upload_chunk(
             0o666,
         )
         with os.fdopen(fd, 'r+b') as f:
+            held = os.fstat(f.fileno()).st_size
+            # Checked on every chunk, not just the first. `total_bytes`
+            # is re-read from each request and never pinned, so a
+            # client whose declared total grows after chunk 0 would
+            # otherwise never be measured against the disk at all —
+            # the refusal reads like a property of the upload and was
+            # a property of its first request. Costs one statvfs per
+            # chunk and needs no state.
+            try:
+                free = shutil.disk_usage(settings['assetdir']).free
+            except OSError:
+                free = None
+            if free is not None and total_bytes - held > free:
+                raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507)
             # Never seek past what we hold; see the docstring.
-            if start_bytes > os.fstat(f.fileno()).st_size:
+            if start_bytes > held:
                 # Not "try again": one way here is the sweep taking
                 # a partial that went an hour without a chunk. Another
                 # is a client resending a commit — ours does not,
@@ -798,7 +806,21 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     #      a clean Pi base image could slip past normalisation
     #      and fail to render.
     def _safe_ext(candidate: str) -> str:
-        return candidate if _SAFE_EXT_RE.fullmatch(candidate) else ''
+        if not _SAFE_EXT_RE.fullmatch(candidate):
+            return ''
+        # Suffixes the platform treats as transient. An asset stored
+        # under one is not merely odd, it is unstable: the celery
+        # sweep deletes `*.tmp` from this directory on sight, and the
+        # backup filter drops `*.part`, so the row would outlive its
+        # file or vanish from every backup. A crafted multipart part
+        # (filename `clip.tmp`, Content-Type `video/tmp`) reaches here
+        # — a browser cannot, it sends application/octet-stream, which
+        # the type gate above rejects. Falls through to the next
+        # candidate in the chain rather than erroring: the operator's
+        # file is fine, only the name we would store it under is not.
+        if candidate.lower() in _RESERVED_EXTS:
+            return ''
+        return candidate
 
     src_ext = _safe_ext(guess_extension(file_type) or '')
     if not src_ext:

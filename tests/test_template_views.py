@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import time, timedelta
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -81,15 +82,15 @@ def test_home_exposes_apps_tab_and_store_index(client: Client) -> None:
 
 @pytest.mark.django_db
 def test_home_exposes_the_upload_chunk_size(client: Client) -> None:
-    """The one link that carries the configured chunk size to the
-    browser: settings -> helpers.template -> base.html -> the <meta>
+    """The one link carrying the configured chunk size to the browser:
+    settings -> helpers.template -> base.html -> the <meta> tag
     chunkSizeFromMeta reads. Without it the tag renders empty and every
-    device silently falls back to the client's own 16 MB default,
-    ignoring whatever the operator set."""
+    device falls back to the browser's own default, ignoring whatever
+    the operator set."""
     from django.conf import settings as dj_settings
 
-    response = client.get(reverse('anthias_app:home'))
-    body = response.content.decode()
+    body = client.get(reverse('anthias_app:home')).content.decode()
+
     assert (
         f'<meta name="anthias-upload-chunk-mb" '
         f'content="{dj_settings.UPLOAD_CHUNK_SIZE_MB}">'
@@ -2787,6 +2788,90 @@ def test_assets_upload_drops_the_partial_when_a_chunk_is_rejected(
 
         assert rejected.status_code == 400
         assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('ext', ['.tmp', '.part'])
+def test_assets_upload_never_stores_an_asset_under_a_reserved_ext(
+    client: Client, tmp_path: Any, ext: str
+) -> None:
+    """An asset stored as `<uuid>.tmp` deletes itself: the celery sweep
+    removes `*.tmp` from the asset dir after an hour and the row is
+    left pointing at nothing. `<uuid>.part` survives but is dropped
+    from every backup by _skip_staged_uploads.
+
+    A browser cannot reach this — it sends application/octet-stream for
+    an unknown extension, which the type gate rejects — but a crafted
+    multipart part naming `video/tmp` passes, and did produce exactly
+    that before the extension was refused."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch('anthias_server.celery_tasks.normalize_video_asset.delay'),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    f'clip{ext}',
+                    b'\x00fake',
+                    content_type=f'video/{ext.lstrip(".")}',
+                ),
+            },
+            headers={'HX-Request': 'true'},
+        )
+
+    asset = Asset.objects.get()
+    assert asset.uri is not None
+    assert not asset.uri.endswith(ext)
+
+
+@pytest.mark.django_db
+def test_assets_upload_checks_free_space_on_every_chunk(
+    client: Client, tmp_path: Any
+) -> None:
+    """`total_bytes` is re-read from each request and never pinned, so
+    a declared total that grows after the first chunk would never be
+    measured against the disk if the check ran only at byte 0 — the
+    refusal would read as a property of the upload while being a
+    property of its first request."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    upload_id = uuid.uuid4().hex
+
+    def post(body: bytes, content_range: str) -> Any:
+        return client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', body, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': content_range,
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.shutil.disk_usage',
+            return_value=SimpleNamespace(total=0, used=0, free=100),
+        ),
+    ):
+        # Declares 50 against 100 free, so it passes.
+        assert post(b'0' * 10, 'bytes 0-9/50').status_code == 200
+        # Then grows its claim to 300. 290 still to come, 100 free.
+        assert post(b'1' * 290, 'bytes 10-299/300').status_code == 507
+
+    assert Asset.objects.count() == 0
 
 
 @pytest.mark.django_db
