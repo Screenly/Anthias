@@ -26,18 +26,27 @@ _warn = WarnOnce(logger)
 #: runs and a blocking listen() would never get there. Matched to the
 #: client's health_check_interval, so an idle connection is probed
 #: about twice a minute rather than woken sixty times.
+#:
+#: The loop depends on an expired read returning None rather than
+#: raising: read_response turns asyncio.TimeoutError into None when the
+#: timeout was passed explicitly, and only raises when it came from
+#: socket_timeout. Without that an idle device would kill the task
+#: every 30s.
 _SUBSCRIPTION_POLL_S = 30.0
 
 #: The process's single now-playing subscriber, and the sockets
-#: relying on it. A set of channel names rather than a counter: a
-#: double release, or a connect whose disconnect never ran, is then
-#: idempotent instead of leaving the arithmetic permanently off. Process-wide rather than per socket: /ws has no auth
+#: relying on it. Process-wide rather than per socket: /ws has no auth
 #: and vendor.ts opens it on every page, so per-socket would let
-#: anything that can reach the device claim a Redis connection and a
-#: Per *process*, so this is one subscriber
-#: per device only while bin/start_server.sh runs uvicorn without
-#: --workers; N workers would mean N group_sends per rotation, each
-#: fanning out to the whole shared group.
+#: anything that can reach the device claim a Redis connection and an
+#: event-loop task per socket it opens. Held by a set of channel names
+#: rather than a counter, so a double release, or a connect whose
+#: disconnect never ran, is idempotent instead of leaving the
+#: arithmetic permanently off.
+#:
+#: Per *process*, so this is one subscriber per device only while
+#: bin/start_server.sh runs uvicorn without --workers; N workers would
+#: mean N group_sends per rotation, each fanning out to the whole
+#: shared group.
 _now_playing_watcher: 'asyncio.Task[None] | None' = None
 _watchers_wanted: set[str] = set()
 

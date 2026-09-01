@@ -15,7 +15,7 @@ from anthias_server.app.consumers import AssetConsumer
 
 @pytest.fixture(autouse=True)
 def _reset_module_state() -> Iterator[None]:
-    """The subscriber and its refcount are process-wide by design, so
+    """The subscriber and its holder set are process-wide by design, so
     they have to be reset between tests or one test's open socket
     suppresses the next test's subscribe."""
     consumers._now_playing_watcher = None
@@ -342,8 +342,8 @@ def test_one_subscription_no_matter_how_many_tabs() -> None:
 def test_disconnect_discards_the_channel_without_a_prior_connect() -> None:
     """disconnect() also runs for a socket that never completed
     connect(). The channel must still leave the group — every later
-    notify_asset_update would fan out to a dead channel name — and the
-    refcount must not go negative and strand the subscriber."""
+    notify_asset_update would fan out to a dead channel name — and a
+    name that was never added must not strand the subscriber."""
     consumer = _connected_consumer()
 
     asyncio.run(consumer.disconnect(1006))
@@ -426,8 +426,8 @@ def test_a_stopping_subscriber_is_not_handed_to_a_new_tab() -> None:
 def test_disconnect_releases_the_watcher_even_if_redis_is_gone() -> None:
     """group_discard raises when the channel layer's Redis is
     unreachable, and Channels lets that escape. If it skipped the
-    release, _open_sockets would ratchet up for good and the
-    subscription would outlive every socket that wanted it."""
+    release, the channel name would sit in the holder set for good and
+    the subscription would outlive every socket that wanted it."""
     client, _ = _fake_redis([], idle=True)
     layer_patch, redis_patch = _watching(client, _fake_layer())
 
