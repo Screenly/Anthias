@@ -98,6 +98,45 @@ private:
     QNetworkAccessManager* networkManager;
     QImage currentImage;
     QImage nextImage;
+    // Last successfully decoded raster image (static or first GIF
+    // frame), kept independently of ``currentImage``. When a real
+    // ``loadImage()`` request starts from a blanked state (most
+    // commonly right after a video asset, since playVideo() /
+    // the ``"null"`` sentinel blank ``currentImage``), paintEvent()
+    // shows this instead of a black frame while the new image's
+    // QNetworkReply is in flight. Never used as a fallback for the
+    // video-onset blank itself or for loadPage(): those blanks are
+    // intentional (see playVideo()) and must stay pure black.
+    //
+    // Memory cost: none on the static-image path. ``nextImage``
+    // (above) is assigned once per successful load and never cleared
+    // anywhere in the class, so it already pinned the last decoded
+    // static image for the process's lifetime before this member
+    // existed; ``currentImage`` and ``lastRasterImage`` are
+    // copy-on-write aliases of that same buffer, reassigned together
+    // on the next successful load. The one place this genuinely
+    // retains a frame ``nextImage`` wouldn't have is setupAnimation():
+    // one animated-GIF frame, bounded, freed on the next load.
+    //
+    // Scope: deliberately not limited to the video handover. Any real
+    // loadImage() arms the fallback (see the top of loadImage()), so
+    // it also covers webpage-to-image transitions. lastRasterImage can
+    // therefore be an asset from further back than the one immediately
+    // preceding it (skipped over a webpage, or, rarely, one since
+    // deleted from the playlist) and briefly reappear before the new
+    // fetch lands. Accepted: a short-lived stale frame beats a black
+    // one, and the window is bounded by one network round-trip.
+    QImage lastRasterImage;
+    // True only while a real (non-"null") loadImage() fetch is
+    // outstanding. Set in loadImage() when such a fetch starts, and
+    // cleared on every terminal outcome of that fetch (success,
+    // network error, or decode failure, see the ``finished`` handler
+    // in loadImage()) so a failed fetch goes black rather than leaving
+    // a stale asset on screen, which would be indistinguishable from
+    // a successful rotation. Gates the lastRasterImage fallback in
+    // paintEvent() so it never fires for the video-onset or
+    // loadPage() blanks.
+    bool fallbackToLastImageOnBlank = false;
     QMovie* movie;
     bool isAnimatedImage;
     quint64 loadGenerationId;
