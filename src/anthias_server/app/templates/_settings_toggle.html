@@ -4,19 +4,24 @@
   black at any theme and would have been invisible on a dark surface.
 
   Pass warn_when_off to badge a setting whose OFF state is the risky one
-  (verify_ssl is the current caller). The badge tracks the live checkbox
-  rather than the saved value, so the warning appears the moment the
-  operator flips the switch instead of only after a save round-trip.
+  (verify_ssl is the current caller), or warn_when_on for the inverse —
+  a setting that is safe by default and dangerous once enabled. The
+  badge tracks the live checkbox rather than the saved value, so the
+  warning appears the moment the operator flips the switch instead of
+  only after a save round-trip.
 {% endcomment %}
 <div
   class="flex justify-between items-center gap-4 py-2 border-t border-divider first:border-t-0"
-  {% if warn_when_off %}x-data="{ on: {{ checked|yesno:'true,false' }} }"{% endif %}
+  {% if warn_when_off or warn_when_on %}x-data="{ on: {{ checked|yesno:'true,false' }} }"{% endif %}
 >
   <div class="min-w-0">
     <div class="flex items-center">
       <label class="block font-semibold text-sm" for="{{ name }}">{{ label }}</label>
       {% if warn_when_off %}
       <span class="settings-section__badge" x-show="!on" x-cloak role="status">{{ warn_when_off }}</span>
+      {% endif %}
+      {% if warn_when_on %}
+      <span class="settings-section__badge" x-show="on" x-cloak role="status">{{ warn_when_on }}</span>
       {% endif %}
     </div>
     {% if hint %}<p class="text-xs text-fg-muted mt-1 mb-0">{{ hint }}</p>{% endif %}
@@ -30,7 +35,7 @@
       name="{{ name }}"
       value="true"
       {% if checked %}checked{% endif %}
-      {% if warn_when_off %}@change="on = $event.target.checked"{% endif %}
+      {% if warn_when_off or warn_when_on %}@change="on = $event.target.checked"{% endif %}
     >
   </div>
 </div>

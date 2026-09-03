@@ -563,8 +563,9 @@ label { text-align: left; }
 
 // Decode-envelope chip, shown next to the asset name when a video
 // already in rotation is outside what this board's decoder can take.
-// Shares the .schedule-chip geometry so it sits in the same chip row
-// without reflowing it; the colour is what separates the two.
+// Shares the .schedule-chip geometry so it reads as the same family
+// of pill. It is a sibling after them in a flex column, so it sits on
+// its own row; the colour is what separates the two.
 // Rendered as a <button> — click opens the Edit Asset modal, which
 // carries the full explanation and the ffmpeg recipe.
 .playback-chip {
@@ -591,10 +592,16 @@ label { text-align: left; }
 
   i { font-size: 0.85em; opacity: 0.9; }
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     background: color-mix(in oklab, var(--color-warning-wash) 80%, #000);
+  }
+  // Keyboard focus gets the house ring rather than only a background
+  // shift. A darker wash is not a focus indicator: it is the same
+  // change hover makes, so a keyboard user cannot tell focus from a
+  // stray pointer, and against the warning wash it barely reads.
+  &:focus-visible {
     outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
   }
   &:active {
     transform: scale(0.97);
@@ -611,7 +618,12 @@ label { text-align: left; }
 .playback-chip--advisory {
   border-style: dashed;
   font-weight: 500;
-  opacity: 0.9;
+  // No opacity here. Element opacity composites the already-rendered
+  // chip over its backdrop, so it dims the fill and the label
+  // together — and the comment above is precisely about keeping the
+  // fill the label needs to stay legible. The dashed edge and lighter
+  // weight already carry the softer tier, so the opacity bought no
+  // signal and cost contrast.
 }
 
 // Schedule-window cell — replaces the prior pair of raw start/end
@@ -753,10 +765,16 @@ label { text-align: left; }
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease;
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     background: color-mix(in oklab, var(--color-warning-wash) 80%, #000);
+  }
+  // Keyboard focus gets the house ring rather than only a background
+  // shift. A darker wash is not a focus indicator: it is the same
+  // change hover makes, so a keyboard user cannot tell focus from a
+  // stray pointer, and against the warning wash it barely reads.
+  &:focus-visible {
     outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
   }
   &:active {
     transform: scale(0.97);

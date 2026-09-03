@@ -33,23 +33,29 @@
         </span>
         {% endif %}
         {% with warnings=asset|playback_warnings %}
-        {% if warnings %}
+        {% if warnings and not asset.metadata.error_message %}
         {% comment %} Decode-envelope findings for an asset that is
-           already on disk and still playing. New uploads that exceed
-           the board's decoder are rejected outright, so a blocking
-           finding here means a row that predates that gate — it keeps
-           its toggle and keeps playing, but the operator gets told
-           why the screen looks wrong instead of being left to guess.
-           Advisory findings only ever appear here. Clicking opens the
-           Edit Asset modal, which carries the full explanation and
-           the fix. {% endcomment %}
+           on disk and in rotation: a row that predates the upload
+           gate, or one the advisory tier flagged without blocking.
+           Either way it keeps its toggle and keeps playing, and the
+           operator gets told why the screen looks wrong instead of
+           being left to guess.
+
+           Suppressed when the row carries metadata.error_message. A
+           rejected upload keeps its row — the gate writes the probe
+           metadata before it raises, and on_failure adds the error to
+           the same row — so without this guard the operator gets two
+           amber pills saying the same thing, one of which claims the
+           asset is playing when it never got in. The Failed pill wins
+           there: it already carries the message, the ffmpeg recipe
+           and the HandBrake steps. {% endcomment %}
         <button type="button"
               class="playback-chip playback-chip--{{ warnings.0.severity }}"
               title="{{ warnings.0.message }}"
-              aria-label="Playback warning: {{ warnings.0.message }} — click to view details"
+              aria-label="Playback warning: {{ warnings.0.message }} Click to view details."
               @click='openEdit({{ asset|to_json }})'>
           <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-          <span>{% if warnings.0.severity == 'blocking' %}Will not play well{% else %}May not play well{% endif %}</span>
+          <span>{% if asset.metadata.playback_override %}Check the screen{% elif warnings.0.severity == 'blocking' %}Will not play well{% else %}May not play well{% endif %}</span>
         </button>
         {% endif %}
         {% endwith %}
