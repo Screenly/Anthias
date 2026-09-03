@@ -255,6 +255,17 @@
         | Caddy      | `request_body { max_size 0 }`                               |
         | Cloudflare | your plan sets the ceiling; you can lower it, not raise it   |
 
+        If your proxy's ceiling is one you can't raise — Cloudflare's, for instance — Anthias splits a large upload into several smaller requests instead, so it clears the cap without you changing anything. Each request defaults to 16 MB. To fit a tighter cap, lower it in `~/.anthias/anthias.conf` on the device:
+
+        ```
+        [main]
+        upload_chunk_size_mb = 8
+        ```
+
+        The change applies on the next page load. That file holds the device's own settings and isn't touched by upgrades, so the value stays put. On balena, where you have a dashboard instead of a shell, set `ANTHIAS_UPLOAD_CHUNK_SIZE_MB` as a device or service variable — the config file wins if both are set.
+
+        Values are clamped to 1–24 MB. The ceiling keeps each chunk inside the server's in-memory upload buffer, which matters on a 512 MB board; below 1 MB a large video turns into thousands of requests.
+
         The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you. The above is only relevant if you're terminating TLS or proxying with something else.
 
     - question: Where is the API reference?

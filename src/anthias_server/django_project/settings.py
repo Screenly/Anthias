@@ -10,6 +10,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import asyncio
 import configparser
+import logging
+import math
 import platform
 import secrets
 import socket
@@ -677,9 +679,14 @@ def get_configured_time_zone(
         config_file = str(Path(home) / CONFIG_DIR / CONFIG_FILE)
     parser = configparser.ConfigParser()
     try:
+        # See get_configured_upload_chunk_size_mb: this is read on
+        # every request too, so the same refusal of non-plain files
+        # and of undecodable content applies.
+        if not Path(config_file).is_file():
+            return None
         parser.read(config_file)
         time_zone = parser.get('main', 'timezone', fallback='').strip()
-    except (configparser.Error, OSError):
+    except (configparser.Error, OSError, UnicodeDecodeError):
         return None
     if not time_zone:
         return None
@@ -758,6 +765,93 @@ APP_STORE_INDEX_URL = getenv(
     'APP_STORE_INDEX_URL',
     'https://signage-apps.com/manifest.json',
 )
+
+# Size of each request a large browser upload is split into, for an
+# operator behind a proxy that caps request bodies. The ceiling keeps a
+# chunk under FILE_UPLOAD_MAX_MEMORY_SIZE above (25 MB), where Django
+# holds it in RAM rather than spooling it to the SD card; below the
+# floor a large video becomes thousands of sequential requests. Mirrored
+# in home/chunking.ts, which a test pins.
+UPLOAD_CHUNK_SIZE_MB_DEFAULT = 16
+UPLOAD_CHUNK_SIZE_MB_MAX = 24
+UPLOAD_CHUNK_SIZE_MB_MIN = 1
+
+
+def get_configured_upload_chunk_size_mb(
+    config_file: str | None = None,
+) -> str:
+    """Raw ``[main] upload_chunk_size_mb`` from anthias.conf, or ''.
+
+    Refuses anything that is not a plain file, and undecodable content:
+    a FIFO here blocks the import forever and the container never
+    starts. Same guards as ``get_configured_time_zone`` above.
+    """
+    if config_file is None:
+        home = getenv('HOME')
+        if not home:
+            return ''
+        config_file = str(Path(home) / CONFIG_DIR / CONFIG_FILE)
+    try:
+        if not Path(config_file).is_file():
+            return ''
+        parser = configparser.ConfigParser()
+        parser.read(config_file)
+        return parser.get('main', 'upload_chunk_size_mb', fallback='').strip()
+    except (configparser.Error, OSError, UnicodeDecodeError):
+        return ''
+
+
+def resolve_upload_chunk_size_mb() -> int:
+    """Effective upload chunk size in MB, clamped to [MIN, MAX].
+
+    anthias.conf first — the rung that survives an upgrade, since
+    docker-compose.yml is regenerated from its template every run —
+    then ANTHIAS_UPLOAD_CHUNK_SIZE_MB, which is how a balena dashboard
+    variable arrives. Resolved once at import; there is no Settings
+    field for it, so changing it already means a restart.
+
+    Read as a decimal and rounded down, because MB is decimal and an
+    operator writing 8.5 to fit a 10 MB cap must not be handed 16.
+    Nothing here may raise: on a headless device a bad value would mean
+    a container that never starts, with no shell to find out why.
+    """
+    raw = get_configured_upload_chunk_size_mb()
+    if not raw:
+        raw = (getenv('ANTHIAS_UPLOAD_CHUNK_SIZE_MB') or '').strip()
+    if not raw:
+        return UPLOAD_CHUNK_SIZE_MB_DEFAULT
+
+    logger = logging.getLogger(__name__)
+    try:
+        # float() then floor: one except covers a stray unit, nan, and
+        # the thousand-digit integer that overflows on the way down.
+        parsed = math.floor(float(raw))
+    except (ValueError, OverflowError):
+        logger.warning(
+            'Ignoring unparseable upload chunk size %r; using %d MB.',
+            raw,
+            UPLOAD_CHUNK_SIZE_MB_DEFAULT,
+        )
+        return UPLOAD_CHUNK_SIZE_MB_DEFAULT
+
+    clamped = max(
+        UPLOAD_CHUNK_SIZE_MB_MIN, min(parsed, UPLOAD_CHUNK_SIZE_MB_MAX)
+    )
+    if clamped != parsed:
+        # Reported as written, not as parsed: 0.5 logged as "0 is
+        # outside [1, 24]" sends the operator hunting for a zero.
+        logger.warning(
+            'Upload chunk size %r is outside [%d, %d]; using %d MB.',
+            raw,
+            UPLOAD_CHUNK_SIZE_MB_MIN,
+            UPLOAD_CHUNK_SIZE_MB_MAX,
+            clamped,
+        )
+    return clamped
+
+
+UPLOAD_CHUNK_SIZE_MB = resolve_upload_chunk_size_mb()
+
 
 # Host suffixes an installed app's launch URL / manifest may live on.
 # The catalog is fetched client-side, so the create endpoint can't

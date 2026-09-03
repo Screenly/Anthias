@@ -17,6 +17,10 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=development
+      # So the chunked-upload path can be exercised in dev — set it in
+      # your shell before `docker compose up`. Empty means the 16 MB
+      # default, same as production.
+      - ANTHIAS_UPLOAD_CHUNK_SIZE_MB=${ANTHIAS_UPLOAD_CHUNK_SIZE_MB:-}
     depends_on:
       redis:
         condition: service_healthy

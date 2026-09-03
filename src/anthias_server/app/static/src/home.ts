@@ -13,6 +13,12 @@ import {
   type AppsTabData,
   type EditAsset as AppEditAsset,
 } from './apps'
+import {
+  type Chunk,
+  chunkSizeFromMeta,
+  needsChunking,
+  planChunks,
+} from './home/chunking'
 import { uploadErrorMessage, type UploadFailure } from './home/upload-error'
 
 declare global {
@@ -93,6 +99,7 @@ interface HomeAppData {
   uploadFiles(input: HTMLInputElement): Promise<void>
   dropFiles(event: DragEvent): void
   uploadOne(url: string, csrf: string, file: File): Promise<UploadResult>
+  sendUpload(opts: UploadRequest): Promise<RawUploadResponse>
   // Bulk selection helpers
   isSelected(id: string): boolean
   toggleSelect(id: string): void
@@ -117,6 +124,148 @@ type UploadResult =
   | { status: 'ok' }
   | { status: 'rejected' }
   | { status: 'error'; failure: UploadFailure }
+
+// One POST of an upload: the whole file, or one chunk of it.
+// `sentBytes` is what preceded it, so progress reads against the
+// whole file.
+interface UploadRequest {
+  url: string
+  csrf: string
+  body: Blob
+  filename: string
+  range?: string
+  uploadId?: string
+  sentBytes: number
+  totalBytes: number
+}
+
+// One request's outcome, before it means anything. `status` is 0 when
+// no response arrived at all. `bodySent` says the browser finished
+// handing over the request body, which is what separates "the server
+// never saw this chunk" from "the server may have acted on it".
+interface RawUploadResponse {
+  status: number
+  text: string
+  trigger: string | null
+  bodySent: boolean
+  // An expired session answers a 2xx carrying HX-Redirect rather than
+  // a 302 an XHR would follow invisibly. Carried here because this
+  // handler no longer classifies the response itself: without it the
+  // chunk loop cannot see the header at all, and every file over the
+  // chunk size would be dropped from the batch with the operator never
+  // sent to sign in.
+  redirect: string | null
+}
+
+// Chunking turns one request into dozens, so one dropped connection
+// should not lose an upload the operator has been waiting on.
+const CHUNK_RETRIES = 2
+const CHUNK_RETRY_DELAY_MS = 500
+
+// An expired session is not a failure of this upload, it is the end of
+// the batch: every remaining file answers the same way. Navigating is
+// what resolves it; the failure kind exists so a slow navigation still
+// explains itself.
+function followRedirect(res: RawUploadResponse): UploadResult | null {
+  if (!res.redirect) return null
+  window.location.href = res.redirect
+  return { status: 'error', failure: { kind: 'auth' } }
+}
+
+// Resend only what might not fail again — a 4xx is the server's
+// considered answer. Staging a chunk is idempotent, so anything that
+// goes wrong there is safe to resend.
+//
+// The final chunk commits: the server renames the partial into place
+// and only then answers, so once its body has gone out, neither a
+// dropped socket nor a 5xx tells us whether the asset exists. Behind a
+// proxy the lost-commit case usually arrives as a gateway 502 or 504
+// rather than a socket error, so exempting only `status === 0` would
+// leave the common shape of it being resent — into the 409 that says
+// the upload cannot be resumed, for an upload that worked.
+async function sendWithRetry(
+  send: (opts: UploadRequest) => Promise<RawUploadResponse>,
+  opts: UploadRequest,
+  isFinal: boolean,
+): Promise<RawUploadResponse> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await send(opts)
+    const mayHaveCommitted = isFinal && res.bodySent
+    const retryable =
+      !mayHaveCommitted &&
+      (res.status === 0 || (res.status >= 500 && res.status !== 507))
+    if (!retryable || attempt === CHUNK_RETRIES) return res
+    await new Promise((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS))
+  }
+}
+
+// Decide what the response to a request that COMMITS means — the
+// whole file on the single-shot path, or the last chunk of a split
+// one. Both create the asset and answer afterwards, so both carry the
+// same ambiguity when the answer does not arrive intact, and both go
+// through here so neither can drift from the other.
+function interpretFinalResponse(res: RawUploadResponse): UploadResult {
+  const authFailure = followRedirect(res)
+  if (authFailure) return authFailure
+  const kind = fireToastFromHeader(res.trigger)
+  // The server's own words where it gave any — the 409 that says to
+  // check the asset list, the 507 that names the disk — beat anything
+  // derivable from a status code.
+  const message = jsonStringField(res.text, 'error')
+  if (message) {
+    return {
+      status: 'error',
+      failure: { kind: 'server', message, status: res.status },
+    }
+  }
+  // The bytes went out and nothing intelligible came back: the asset
+  // may already exist, so don't report a plain failure and don't send
+  // the operator off to upload a second copy. A body that never
+  // finished sending cannot have committed, so it falls through.
+  if (res.bodySent && (res.status === 0 || res.status >= 500)) {
+    return { status: 'error', failure: { kind: 'unconfirmed' } }
+  }
+  if (res.status === 0) {
+    return { status: 'error', failure: { kind: 'network' } }
+  }
+  if (res.status < 200 || res.status >= 300) {
+    // A proxy-generated 413 never reaches Django, so there is no
+    // HX-Trigger toast to replay and the status is all there is.
+    return { status: 'error', failure: { kind: 'http', status: res.status } }
+  }
+  // The server validates and may refuse a file with a 200 + error
+  // toast (invalid type, missing file). Treat that as a rejected
+  // file, not a silent success.
+  return { status: kind === 'error' ? 'rejected' : 'ok' }
+}
+
+// One string field of a JSON response body — undefined if the body is
+// not JSON, lacks the field, or holds a non-string there. The chunk
+// endpoint answers with `{upload_id}` on success and `{error}` on
+// refusal, and anything else is the server not answering as a chunk
+// endpoint at all, which both callers handle the same way.
+function jsonStringField(text: string, key: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (parsed && typeof parsed === 'object' && key in parsed) {
+      const value = (parsed as Record<string, unknown>)[key]
+      if (typeof value === 'string' && value.length > 0) return value
+    }
+  } catch {
+    // Not JSON: the same answer as a body without the field.
+  }
+  return undefined
+}
+
+// Minted here, not taken from the server: a retry of chunk 0 would
+// otherwise arrive with no id, the server would mint a second one, and
+// the bytes staged under the first would sit orphaned while the upload
+// continued elsewhere.
+function newUploadId(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 const DATE_FMT_MAP: Record<string, string> = {
   'mm/dd/yyyy': 'm/d/Y',
@@ -417,6 +566,13 @@ function homeApp(): HomeAppData {
       this.uploadTotal = 0
 
       if (failure) {
+        // Every outcome that tells the operator the asset may already
+        // be there — ours, and the server's own 409 — is unactionable
+        // with the Add modal sitting on top of the asset list.
+        const mayAlreadyExist =
+          failure.kind === 'unconfirmed' ||
+          (failure.kind === 'server' && failure.status === 409)
+        if (mayAlreadyExist) this.mode = null
         const store = window.Alpine.store('toasts') as
           | ToastStoreLike
           | undefined
@@ -463,58 +619,182 @@ function homeApp(): HomeAppData {
     // replay them here since this isn't an htmx-managed request.
     // Progress flips to "processing" once the bytes are up (the server
     // still has to write to disk + ffprobe).
-    uploadOne(
+    // POST one request of an upload: the whole file, or one chunk of
+    // it. Resolves the raw response so the caller can decide what a
+    // given status means for a chunk versus a final commit.
+    sendUpload(
+      this: HomeAppData,
+      opts: UploadRequest,
+    ): Promise<RawUploadResponse> {
+      return new Promise<RawUploadResponse>((resolve) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', opts.url)
+        xhr.setRequestHeader('X-CSRFToken', opts.csrf)
+        // Mark as an htmx request so assets_upload returns the table
+        // partial (+ HX-Trigger toast) instead of a full-page redirect.
+        xhr.setRequestHeader('HX-Request', 'true')
+        if (opts.range) xhr.setRequestHeader('Content-Range', opts.range)
+        if (opts.uploadId) xhr.setRequestHeader('X-Upload-Id', opts.uploadId)
+        this.uploadState = 'sending'
+        let bodySent = false
+        // Fires once the whole request body has gone out — before any
+        // response, and regardless of what comes back.
+        xhr.upload.addEventListener('load', () => {
+          bodySent = true
+        })
+        xhr.upload.addEventListener('progress', (ev) => {
+          if (!ev.lengthComputable || opts.totalBytes === 0) return
+          // Against the whole file, not this request: otherwise a
+          // chunked upload would run 0-100% once per chunk.
+          const done = opts.sentBytes + ev.loaded
+          this.uploadProgress = Math.min(
+            99,
+            Math.round((done / opts.totalBytes) * 100),
+          )
+          if (done >= opts.totalBytes) this.uploadState = 'processing'
+        })
+        xhr.addEventListener('load', () => {
+          // Not hardcoded true: a proxy enforcing a body limit answers
+          // and closes while the browser is still writing, so a
+          // response can arrive with the body unfinished — the one
+          // case this flag exists to catch.
+          resolve({
+            status: xhr.status,
+            text: xhr.responseText,
+            trigger: xhr.getResponseHeader('HX-Trigger'),
+            bodySent,
+            redirect: xhr.getResponseHeader('HX-Redirect'),
+          })
+        })
+        // No response at all (dropped connection, DNS, TLS): status is
+        // 0 here, so it is not an HTTP failure.
+        const failed = () =>
+          resolve({
+            status: 0,
+            text: '',
+            trigger: null,
+            bodySent,
+            redirect: null,
+          })
+        xhr.addEventListener('error', failed)
+        xhr.addEventListener('abort', failed)
+        const fd = new FormData()
+        fd.append('csrfmiddlewaretoken', opts.csrf)
+        fd.append('file_upload', opts.body, opts.filename)
+        xhr.send(fd)
+      })
+    },
+
+    async uploadOne(
       this: HomeAppData,
       url: string,
       csrf: string,
       file: File,
     ): Promise<UploadResult> {
-      return new Promise<UploadResult>((resolve) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', url)
-        xhr.setRequestHeader('X-CSRFToken', csrf)
-        // Mark as an htmx request so assets_upload returns the table
-        // partial (+ HX-Trigger toast) instead of a full-page redirect.
-        xhr.setRequestHeader('HX-Request', 'true')
-        this.uploadState = 'sending'
-        this.uploadProgress = 0
-        xhr.upload.addEventListener('progress', (ev) => {
-          if (!ev.lengthComputable || ev.total === 0) return
-          this.uploadProgress = Math.min(
-            99,
-            Math.round((ev.loaded / ev.total) * 100),
-          )
-          if (ev.loaded >= ev.total) this.uploadState = 'processing'
+      this.uploadProgress = 0
+      const chunkSize = chunkSizeFromMeta(
+        metaContent('anthias-upload-chunk-mb') || null,
+      )
+
+      if (!needsChunking(file.size, chunkSize)) {
+        const res = await this.sendUpload({
+          url,
+          csrf,
+          body: file,
+          filename: file.name,
+          sentBytes: 0,
+          totalBytes: file.size,
         })
-        xhr.addEventListener('load', () => {
-          const kind = fireToastFromHeader(xhr.getResponseHeader('HX-Trigger'))
-          if (xhr.status < 200 || xhr.status >= 300) {
-            // Pass the status up so the batch can name the cause. A
-            // proxy-generated 413 never reaches Django, so there is no
-            // HX-Trigger toast to replay and the status is all the
-            // information there is.
-            resolve({
+        return interpretFinalResponse(res)
+      }
+
+      const chunks = planChunks(file.size, chunkSize)
+      const uploadId = newUploadId()
+
+      // A 413 means something in front of the device refused this
+      // request. On the single-shot path that is "your file is too
+      // large"; here the file has already been split, so the honest
+      // answer names the chunk size instead.
+      const named = (result: UploadResult): UploadResult =>
+        result.status === 'error' &&
+        result.failure.kind === 'http' &&
+        result.failure.status === 413
+          ? { status: 'error', failure: { kind: 'chunk-too-large' } }
+          : result
+
+      const sendChunk = (
+        chunk: Chunk,
+        isFinal: boolean,
+      ): Promise<RawUploadResponse> =>
+        sendWithRetry(
+          (opts) => this.sendUpload(opts),
+          {
+            url,
+            csrf,
+            // Re-wrapped with the file's own type: File.slice()
+            // reports application/octet-stream, and the server reads
+            // that type to catch an extension that lies (a HEIC
+            // renamed .jpg) — without it, normalisation is skipped and
+            // the asset renders blank.
+            body: new Blob([file.slice(chunk.start, chunk.end + 1)], {
+              type: file.type,
+            }),
+            filename: file.name,
+            range: chunk.header,
+            uploadId,
+            sentBytes: chunk.start,
+            totalBytes: file.size,
+          },
+          isFinal,
+        )
+
+      // All but the last only stage bytes; the server acknowledges
+      // each with the upload id and nothing else.
+      for (const chunk of chunks.slice(0, -1)) {
+        const res = await sendChunk(chunk, false)
+        if (res.status < 200 || res.status >= 300) {
+          // The server's own wording where it gave one; the status
+          // code is the fallback. No ambiguity to weigh here: a
+          // staging chunk commits nothing.
+          const message = jsonStringField(res.text, 'error')
+          return named({
+            status: 'error',
+            failure: message
+              ? { kind: 'server', message, status: res.status }
+              : res.status === 0
+                ? { kind: 'network' }
+                : { kind: 'http', status: res.status },
+          })
+        }
+        // A 200 that is not the acknowledgement is the server
+        // refusing the file (wrong type, nothing uploaded) and
+        // answering with the asset table and its own toast: one file
+        // rejected, not a transport failure. Replay and carry on, as
+        // single-shot does.
+        if (jsonStringField(res.text, 'upload_id') === undefined) {
+          const authFailure = followRedirect(res)
+          if (authFailure) return authFailure
+          // Only a rejection if the server actually said so.
+          // fireToastFromHeader pushes nothing when there is no
+          // HX-Trigger, so treating every unrecognised 2xx as a
+          // rejection drops the file with no asset, no error and a
+          // progress bar that completed — which is what a login page,
+          // a captive portal or a proxy's own 200 looks like here.
+          const kind = fireToastFromHeader(res.trigger)
+          if (kind === null) {
+            return {
               status: 'error',
-              failure: { kind: 'http', status: xhr.status },
-            })
-            return
+              failure: { kind: 'http', status: res.status },
+            }
           }
-          // The server validates and may refuse a file with a 200 +
-          // error toast (invalid type, missing file). Treat that as a
-          // rejected file, not a silent success.
-          resolve({ status: kind === 'error' ? 'rejected' : 'ok' })
-        })
-        // No response at all (dropped connection, DNS, TLS): status is
-        // 0 here, so it is not an HTTP failure.
-        const networkFailure = () =>
-          resolve({ status: 'error', failure: { kind: 'network' } })
-        xhr.addEventListener('error', networkFailure)
-        xhr.addEventListener('abort', networkFailure)
-        const fd = new FormData()
-        fd.append('csrfmiddlewaretoken', csrf)
-        fd.append('file_upload', file)
-        xhr.send(fd)
-      })
+          return { status: 'rejected' }
+        }
+      }
+
+      // The last carries the final byte, so it creates the asset.
+      return named(
+        interpretFinalResponse(await sendChunk(chunks[chunks.length - 1], true)),
+      )
     },
   }
 }
