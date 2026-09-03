@@ -396,12 +396,16 @@ def playback_warnings(asset: Any) -> list[dict[str, str]]:
     """Return decode-envelope warnings for ``asset``, most severe
     first.
 
-    Uploads that exceed the board's decoder are rejected outright by
-    the normalisation gate, so a *blocking* warning here can only mean
-    an asset that predates the gate — it is already on disk and still
-    in rotation, and the operator needs to be told why it looks wrong
-    rather than have it silently disappear. Advisory warnings never
-    block anything and only ever surface here.
+    A *blocking* warning here usually means an asset that predates
+    the upload gate, or one the gate has just refused — but it can
+    also mean a card moved between boards, or a subtype that resolved
+    after the upload. The list is not closed, which is why nothing
+    branches on the reason. The
+    rejected row survives — the gate writes its probe metadata before
+    it raises — so both are reachable, and the row template suppresses
+    the chip when ``metadata.error_message`` is set so the operator
+    does not read the same sentence twice under two headings. Advisory
+    warnings never block anything and only ever surface here.
 
     Returns an empty list for images, web pages, assets whose
     metadata we could not measure, and boards whose decode path is

@@ -4036,3 +4036,53 @@ def test_override_does_not_reach_the_codec_or_low_ram_gates(
             pytest.raises(processing.UnsupportedVideoCodecError),
         ):
             processing._run_video_normalisation(asset)
+
+
+@pytest.mark.parametrize(
+    'codec,box,source,expected',
+    [
+        # Keeps the frame by changing codec: the Pi 4 / 4K case.
+        (
+            'hevc',
+            None,
+            'h264',
+            'Convert it to HEVC, which this screen plays at its current size.',
+        ),
+        # Must resize, same codec: the Pi 3 / 4K case.
+        (
+            'h264',
+            (1920, 1920),
+            'h264',
+            'Resize it so neither side is larger than 1920 pixels.',
+        ),
+        # Must resize AND change codec.
+        (
+            'hevc',
+            (1920, 1920),
+            'vp9',
+            (
+                'Resize it so neither side is larger than 1920 pixels. '
+                'The command below also converts it to HEVC.'
+            ),
+        ),
+        # Same codec, no resize: nothing specific to promise.
+        ('h264', None, 'h264', 'Convert it with the command below.'),
+        # No codec at all, on a board we cannot advise.
+        (None, None, 'h264', 'Convert it with the command below.'),
+    ],
+)
+def test_remedy_sentence_describes_what_the_recipe_will_do(
+    codec: str | None,
+    box: tuple[int, int] | None,
+    source: str,
+    expected: str,
+) -> None:
+    """The sentence beside the command has to describe that command.
+
+    These two have contradicted each other three times, most recently
+    by telling a Pi 4 operator to shrink a 4K master while the recipe
+    kept it. Every branch is pinned here because the failure is
+    invisible in isolation: both halves look correct, and only reading
+    them together shows the disagreement.
+    """
+    assert processing._remedy_sentence(codec, box, source) == expected
