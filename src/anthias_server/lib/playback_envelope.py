@@ -7,7 +7,7 @@ right, is the *stream itself* — its frame size, its pixel format —
 inside the envelope that board's decoder can actually take?
 
 The gap is not theoretical, and it is not a prediction. Measured on a
-Pi 4B with a 3840x2160 High L5.1 clip at 116 Mbps — the shape of an
+Pi 4B with a 3840x2160 High L5.1 clip at 115 Mbps — the shape of an
 export that reached a real screen — against a 1920x1080 re-encode of
 the *same content*:
 
@@ -161,11 +161,26 @@ BCM2835_MAX_DIMENSION = 1920
 # Boards on which H.264 is decoded in software. Pi 5's BCM2712 has no
 # H.264 hardware block at all (the codec gate accepts H.264 there
 # anyway, because a Cortex-A76 clears 1080p comfortably and YouTube
-# rarely serves HEVC). Above 1080p that stops being true, but "an
+# rarely serves HEVC). Past a point that stops being true, but "an
 # A76 will not hold 4K30 in software" is a performance judgement, not
 # a driver constant, so it is advisory.
+#
+# Applied PER AXIS, like the hardware bound, which is an admitted
+# approximation: software decode is bound by *pixels per second*, not
+# by either axis, so a 1920x1920 clip (3.7 Mpx, nearly twice 1080p)
+# draws no advisory today. An area budget would model the cost
+# properly. It is not used because nobody has measured where the A76
+# actually falls over, and inventing a threshold is the failure this
+# module exists to avoid — the same reasoning that removed the
+# bitrate rule. Measure before tightening this.
 SOFTWARE_H264_BOARDS = frozenset({'pi5'})
 SOFTWARE_H264_MAX_DIMENSION = 1920
+
+# Every codec that has a rule below. ``evaluate`` returns early
+# for anything else, which is what keeps the asset list off the
+# network for images and non-H.264 video. Keep in step with the
+# dispatch in ``evaluate``.
+_CODECS_WITH_RULES = frozenset({'h264'})
 
 # There is deliberately NO bitrate rule here.
 #
@@ -222,20 +237,32 @@ UNSUPPORTED_PIX_FMT_MARKERS = (
 # ``/proc/device-tree/model`` read when Redis has nothing. That is
 # fine once per upload. It is not fine on the asset list, which
 # renders every row through ``to_json`` several times and re-renders
-# the whole table on a 5 s HTMX poll: measured at 284 ms per 40 rows
-# on ``arm64`` against 11 ms on ``x86``, all of it this lookup.
+# the whole table on a 5 s HTMX poll. Measured on ``arm64``, a 40-row
+# render went from roughly 11 ms to a quarter of a second, all of it
+# this lookup; ``x86`` was unaffected, because ``DEVICE_TYPE`` is a
+# plain env read there and never reaches Redis at all.
 #
 # Keyed on the raw ``DEVICE_TYPE`` so a test (or a board that is
 # re-imaged under a running process) flipping the env var still gets
-# its own answer rather than a neighbour's. The TTL is what keeps a
-# late ``host_agent`` honest: a compose install can publish
-# ``host:board_subtype`` seconds after the server starts, and a
+# its own answer rather than a neighbour's.
+#
+# The TTL is future-proofing, and worth being straight about: it
+# guards nothing reachable today. A compose install can publish
+# ``host:board_subtype`` seconds after the server starts, so a
 # permanent cache would pin the board to the un-upgraded ``arm64``
-# key for the life of the process — every rule silently matching
-# nothing, which is the exact failure mode this module is most
-# afraid of.
+# key — but ``resolve_device_key`` only ever upgrades ``arm64`` to
+# ``rockpi4``, and neither key appears in any rule set, so the
+# module answers ``[]`` before and after. The expiry exists so that
+# stops being true the moment a rule set gains either key, rather
+# than turning into the silent no-op this module fears most.
 _DEVICE_KEY_TTL_SECONDS = 30.0
 _device_key_cache: dict[str, tuple[float, str]] = {}
+
+# An explicit seam for the clock, so a test can wind it forward
+# without reaching through this module's imports to patch the global
+# ``time.monotonic`` — which would apply to everything else running
+# in the same process for the duration of the test.
+_now = time.monotonic
 
 
 def _current_device_key() -> str:
@@ -244,9 +271,16 @@ def _current_device_key() -> str:
     Bounded staleness rather than a permanent cache — see above.
     """
     raw = os.environ.get('DEVICE_TYPE', '').strip().lower()
-    now = time.monotonic()
+    now = _now()
     cached = _device_key_cache.get(raw)
-    if cached is not None and now - cached[0] < _DEVICE_KEY_TTL_SECONDS:
+    # ``0 <=`` as well as the TTL: a *negative* age means the entry was
+    # stamped from a clock this process is no longer reading, which in
+    # practice means a test that faked ``time.monotonic`` and left an
+    # entry behind. Without the lower bound that entry reads as fresh
+    # for as long as the real monotonic clock stays below it — and
+    # CLOCK_MONOTONIC on Linux is uptime, so on a runner booted
+    # moments ago it never catches up within the session.
+    if cached is not None and 0 <= now - cached[0] < _DEVICE_KEY_TTL_SECONDS:
         return cached[1]
     resolved = resolve_device_key()
     _device_key_cache[raw] = (now, resolved)
@@ -261,12 +295,20 @@ def _as_positive_int(value: Any) -> int | None:
     numeric string, ``None``, or missing entirely. Anything that is
     not confidently a positive number reads as "not measured" and
     suppresses the warning that depends on it.
+
+    ``OverflowError`` is in the net alongside the obvious two: an
+    ``inf`` reaches ``int()`` perfectly happily through ``float()``
+    and only fails at the conversion, and an integer too large for a
+    float fails on the way in. Both escape as an exception rather
+    than a ``None`` unless caught, and this runs inside the template
+    filter that renders every asset row — so one odd metadata value
+    would take out the whole asset list rather than one warning.
     """
     if value is None or isinstance(value, bool):
         return None
     try:
         number = int(float(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return number if number > 0 else None
 
@@ -274,16 +316,19 @@ def _as_positive_int(value: Any) -> int | None:
 def exceeds_dimension(
     width: Any, height: Any, limit: int = BCM2835_MAX_DIMENSION
 ) -> bool:
-    """``True`` when either axis is known and above ``limit``.
+    """``True`` when both axes are known and either is above ``limit``.
 
     Per axis, not by pixel area: the decoder bound is a bound on each
     dimension, so an ultrawide 5760x1080 clip is out of envelope on
     width despite carrying fewer pixels than 4K, and a portrait
     1080x1920 clip is inside it despite being "taller than 1080p".
 
-    Unknown dimensions return ``False``. An asset row whose metadata
-    predates the field, or whose ffprobe failed, must not be flagged
-    on a measurement we never took.
+    A *partially* measured stream returns ``False`` too, which is
+    deliberate rather than an oversight: a known 3840 width with an
+    unreadable height clears the gate. Blocking an upload is the
+    strong action here, and half a measurement is not enough to take
+    it — an asset row whose metadata predates the field, or whose
+    ffprobe failed, must not be rejected on a number we never read.
     """
     w = _as_positive_int(width)
     h = _as_positive_int(height)
@@ -321,8 +366,12 @@ def evaluate(
 
     ``metadata`` is an asset's stored metadata dict — the same shape
     ``processing._ffprobe_summary`` writes. ``device_key`` defaults to
-    the running board via ``resolve_device_key()``; tests and the
-    board-enablement docs pass it explicitly.
+    the running board via ``_current_device_key()``, which memoises
+    ``resolve_device_key()`` for up to ``_DEVICE_KEY_TTL_SECONDS`` so
+    the asset list does not pay a Redis round-trip per row; tests
+    pass it explicitly. A board is a
+    boot-time fact, so the bounded staleness costs nothing an upload
+    would notice.
 
     Ordering is blocking-first so a caller rendering only the most
     serious finding gets the right one. An empty list means "nothing
@@ -330,13 +379,24 @@ def evaluate(
     not the same as "this will play well", and callers should not
     present it as a guarantee.
     """
-    if not metadata:
+    # ``isinstance`` rather than a falsy check: ``Asset.metadata`` is a
+    # free-form JSONField, and an admin edit or a restored backup can
+    # put a list or a string in it. A truthy non-dict would reach
+    # ``.get`` and raise straight out of the filter that renders every
+    # asset row — the one failure this module promises it cannot have.
+    if not isinstance(metadata, dict) or not metadata:
         return []
-    # Codec first: it is a dict lookup, while the board can be a Redis
+    # Codec first: it is a set lookup, while the board can be a Redis
     # round-trip. Every image, web page and non-H.264 video on the
     # asset list settles here without touching the network.
+    #
+    # Gated on ``_CODECS_WITH_RULES`` rather than a literal so this
+    # guard and the dispatch below cannot drift. Adding an HEVC or
+    # AV1 rule means adding its codec here too, and forgetting would
+    # fail *silently* — the new rule would simply never run, which is
+    # the worst outcome this module has.
     codec = str(metadata.get('video_codec') or '').strip().lower()
-    if codec != 'h264':
+    if codec not in _CODECS_WITH_RULES:
         return []
     board = device_key if device_key is not None else _current_device_key()
     warnings: list[PlaybackWarning] = []
@@ -363,17 +423,22 @@ def _bcm2835_h264_warnings(
                 code='h264_frame_too_large',
                 severity=BLOCKING,
                 message=(
-                    f'This video is {_dimensions_label(metadata)}. The '
-                    f'H.264 decoder on this board ({board}) cannot '
-                    f'accept a frame larger than '
-                    f'{BCM2835_MAX_DIMENSION} pixels on either side, '
-                    'so the video would be decoded in software and '
-                    'play at a few frames per second.'
+                    f'This video is {_dimensions_label(metadata)}. '
+                    f'This screen ({board}) plays H.264 video up to '
+                    f'{BCM2835_MAX_DIMENSION} pixels on each side, so '
+                    'this one would stutter badly instead of playing '
+                    'smoothly.'
                 ),
+                # Generic on purpose. The rejection path replaces this
+                # with a sentence built from the same plan the ffmpeg
+                # recipe uses, because the right answer differs by
+                # board: a Pi 4 keeps the frame and changes codec, a
+                # Pi 3 shrinks it. Naming one of those here would
+                # contradict the command printed underneath, which is
+                # a mistake this pair has already made three times.
                 remedy=(
-                    'Re-encode the video so neither side is larger '
-                    f'than {BCM2835_MAX_DIMENSION} pixels — 1920x1080 '
-                    'for landscape screens, 1080x1920 for portrait.'
+                    'Convert it to a size or format this screen can '
+                    'play. The details are below.'
                 ),
             )
         )
@@ -384,16 +449,12 @@ def _bcm2835_h264_warnings(
                 code='h264_pixel_format_unsupported',
                 severity=BLOCKING,
                 message=(
-                    f'This video uses the {pix_fmt} pixel format. The '
-                    f'H.264 decoder on this board ({board}) only '
-                    'produces 8-bit 4:2:0 video, so the file would be '
-                    'decoded in software and play at a few frames per '
-                    'second.'
+                    f'This video uses the {pix_fmt} colour format. '
+                    f'This screen ({board}) can only play 8-bit 4:2:0 '
+                    'H.264 video, so this one would stutter badly '
+                    'instead of playing smoothly.'
                 ),
-                remedy=(
-                    'Re-encode the video as 8-bit 4:2:0 — add '
-                    '-pix_fmt yuv420p to your ffmpeg command.'
-                ),
+                remedy=('Convert it to 8-bit 4:2:0. The details are below.'),
             )
         )
     return found
@@ -415,16 +476,72 @@ def _software_h264_warnings(
             severity=ADVISORY,
             message=(
                 f'This video is {_dimensions_label(metadata)}. This '
-                'board has no H.264 hardware decoder, so H.264 is '
-                'decoded on the CPU — which keeps up at 1080p but is '
-                'unlikely to at this size.'
+                'screen has no dedicated H.264 hardware, so it plays '
+                'H.264 on the processor. That keeps up around 1080p '
+                'but is unlikely to at this size.'
             ),
             remedy=(
-                'Re-encode to 1080p, or to HEVC, which this board '
-                'does decode in hardware.'
+                'Convert it so neither side is larger than '
+                f'{SOFTWARE_H264_MAX_DIMENSION} pixels, or to HEVC, '
+                'which this screen plays in hardware.'
             ),
         )
     ]
+
+
+def frame_bound_for(codec: str, device_key: str | None = None) -> int | None:
+    """The per-axis frame bound a *re-encode* has to meet, or ``None``.
+
+    ``exceeds_dimension`` answers "is this stream too big for the
+    bcm2835 decoder", with that decoder's bound baked in as the
+    default. That is the right question on the envelope path, where a
+    blocking warning has already established the board. It is the
+    wrong one for the codec-rejection path, which reaches every board
+    — including ``x86`` and ``rockpi4``, whose decode paths are
+    deliberately uncharacterised here. Asking ``exceeds_dimension``
+    there quietly borrows a Raspberry Pi limit and tells an x86
+    operator to downscale a 4K file their board may well play.
+
+    So this answers the question the recipe actually needs: given the
+    codec we are about to tell them to encode *to*, does this board
+    impose a frame bound on it at all? ``None`` means no bound is
+    known, and the recipe should not invent one.
+
+    Both tiers answer yes. A board that merely *decodes slowly* still
+    needs the box: skip it and the operator re-encodes, re-uploads,
+    and lands an asset wearing an advisory chip for the rest of its
+    life — the round trip the rejection existed to spare them.
+    """
+    board = device_key if device_key is not None else _current_device_key()
+    if codec.strip().lower() != 'h264':
+        # Only the H.264 path is bounded. The Pi 4's HEVC block does
+        # 4Kp60, and 10-bit at that, so an HEVC target inherits none
+        # of the bcm2835 H.264 limits.
+        return None
+    if board in BCM2835_H264_BOARDS:
+        return BCM2835_MAX_DIMENSION
+    if board in SOFTWARE_H264_BOARDS:
+        # Softer in kind — nothing refuses the format, the CPU just
+        # cannot keep up — but a recipe that ignores it hands the
+        # operator a file this board will flag the moment they upload
+        # it, which is the same round trip a rejection is supposed to
+        # save them.
+        return SOFTWARE_H264_MAX_DIMENSION
+    return None
+
+
+def requires_8bit_420(codec: str, device_key: str | None = None) -> bool:
+    """Does a re-encode to ``codec`` have to be 8-bit 4:2:0 here?
+
+    The restriction belongs to the VideoCore H.264 capture queue, not
+    to the board. The same Pi 4's HEVC node advertises ``Nc30``/
+    ``NC30``, so 10-bit HEVC decodes there in hardware — and forcing
+    ``-pix_fmt yuv420p`` on a recipe that targets HEVC would strip bit
+    depth the operator's file has and the board can play, to satisfy a
+    rule for a codec we are not recommending.
+    """
+    board = device_key if device_key is not None else _current_device_key()
+    return codec.strip().lower() == 'h264' and board in BCM2835_H264_BOARDS
 
 
 def blocking_warning(
