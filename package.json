@@ -28,19 +28,19 @@
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.3.0",
     "@tabler/icons-webfont": "^3.46.0",
-    "alpinejs": "^3.16.2",
+    "alpinejs": "^3.17.0",
     "flatpickr": "^4.6.13",
     "htmx.org": "^2.0.10",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.11.6",
+    "@happy-dom/global-registrator": "^20.12.0",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/forms": "^0.5.11",
     "@types/leaflet": "^1.9.22",
     "@types/qrcode": "^1.5.6",
-    "happy-dom": "^20.11.6",
+    "happy-dom": "^20.12.0",
     "sass": "^1.103.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
