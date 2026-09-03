@@ -320,6 +320,49 @@
       >
         {% csrf_token %}
         <div class="modal-card__body">
+          {% comment %} Decode-envelope banner, for an asset in
+             rotation whose stream is outside what this board can
+             decode. Distinct from the failure banner below: that one
+             reports an upload the pipeline refused, this one reports
+             a file that is still playing but will not play well.
+
+             The two are mutually exclusive by the guard on the
+             template below. A rejected upload keeps its row and its
+             probe metadata, so both would otherwise fire on the same
+             asset and print the same sentence twice under headings
+             that contradict each other. The failure banner wins,
+             because it carries the recipe as well as the reason.
+          {% endcomment %}
+          <template x-if="editAsset.playback_warnings && editAsset.playback_warnings.length && !(editAsset.metadata && editAsset.metadata.error_message)">
+            <div class="modal-alert modal-alert--warning mb-4">
+              <div class="modal-alert__head">
+                <i class="ti ti-alert-triangle modal-alert__icon" aria-hidden="true"></i>
+                <div>
+                  <p class="modal-alert__title">
+                    <span x-text="editAsset.metadata && editAsset.metadata.playback_override
+                      ? 'You allowed this video through'
+                      : (editAsset.playback_warnings[0].severity === 'blocking'
+                        ? 'This video will not play well on this screen'
+                        : 'This video may not play well on this screen')"></span>
+                  </p>
+                  <template x-if="editAsset.metadata && editAsset.metadata.playback_override">
+                    <p class="modal-alert__body">
+                      "Allow videos this screen can't play properly"
+                      is on in Settings, so this upload was not
+                      refused. Watch it on the screen to make sure it
+                      looks okay.
+                    </p>
+                  </template>
+                  <template x-for="warning in editAsset.playback_warnings" :key="warning.code">
+                    <p class="modal-alert__body">
+                      <span x-text="warning.message"></span>
+                      <span x-text="warning.remedy"></span>
+                    </p>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
           {% comment %} Top-of-modal failure banner. Rendered when the
              normalisation pipeline wrote metadata.error_message via
              _NormalizeAssetTask.on_failure. UnsupportedVideoCodecError

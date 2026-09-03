@@ -42,6 +42,15 @@ interface AssetEdit {
   play_days_list: number[]
   play_time_from: string | null
   play_time_to: string | null
+  // Decode-envelope findings, computed server-side in _to_dict so the
+  // per-board rules are not reimplemented in Alpine. Always present
+  // for an asset row, possibly empty.
+  playback_warnings?: {
+    code: string
+    severity: string
+    message: string
+    remedy: string
+  }[]
   metadata?: {
     refresh_interval_s?: number
     headers?: Record<string, string>

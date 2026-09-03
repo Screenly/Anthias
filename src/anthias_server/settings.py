@@ -32,6 +32,17 @@ DEFAULTS = {
         # time there.
         'timezone': '',
         'use_24_hour_clock': False,
+        # Escape hatch for the decode envelope's blocking tier. Off by
+        # default: the gate exists because an unplayable upload used to
+        # reach the screen silently, and the operator only found out by
+        # looking at it. On, an upload the board's decoder cannot accept
+        # is allowed through and only flagged — so whoever turns this on
+        # takes back the job of checking the screen themselves.
+        #
+        # Scoped to that one tier. The codec gate still refuses formats
+        # with no decoder at all, and the low-RAM cap still refuses
+        # frames that OOM the device rather than merely look bad.
+        'allow_unplayable_video': False,
         'use_ssl': False,
         'auth_backend': '',
         'django_secret_key': '',
