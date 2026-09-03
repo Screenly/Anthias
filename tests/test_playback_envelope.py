@@ -8,7 +8,7 @@ guarding a real regression, not padding coverage.
 """
 
 import os
-import time
+from typing import Any, cast
 
 import pytest
 
@@ -370,7 +370,6 @@ def test_device_key_is_memoised_per_device_type(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Repeat renders on one board resolve it once, not once per row."""
-    env._device_key_cache.clear()
     resolved: list[int] = []
 
     def _counting() -> str:
@@ -397,7 +396,6 @@ def test_device_key_cache_is_keyed_on_device_type(
     served the previous one's answer — the cache keys on the raw env
     value rather than caching a single global.
     """
-    env._device_key_cache.clear()
     monkeypatch.setattr(
         env,
         'resolve_device_key',
@@ -422,23 +420,112 @@ def test_device_key_cache_expires_so_a_late_host_agent_is_seen(
     un-upgraded ``arm64`` key for the life of the process and every
     rule would silently match nothing, so the entry has to expire.
     """
-    env._device_key_cache.clear()
-    answers = iter(['arm64', 'pi4-64'])
-    monkeypatch.setattr(env, 'resolve_device_key', lambda: next(answers))
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     metadata = {
         'video_codec': 'h264',
         'video_width': 3840,
         'video_height': 2160,
     }
-    # Uncharacterised board: silent.
-    assert env.evaluate(metadata) == []
-
-    clock = [0.0]
-    monkeypatch.setattr(time, 'monotonic', lambda: clock[0])
-    env._device_key_cache.clear()
+    clock = [1000.0]
+    monkeypatch.setattr(env, '_now', lambda: clock[0])
     answers = iter(['arm64', 'pi4-64'])
     monkeypatch.setattr(env, 'resolve_device_key', lambda: next(answers))
+    # Uncharacterised board: silent, and now cached.
     assert env.evaluate(metadata) == []
-    clock[0] = env._DEVICE_KEY_TTL_SECONDS + 1
+    clock[0] = 1000.0 + env._DEVICE_KEY_TTL_SECONDS + 1
     assert [w.severity for w in env.evaluate(metadata)] == [env.BLOCKING]
+
+
+def test_a_stale_fake_clock_entry_cannot_read_as_fresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cache entry stamped from a clock we are no longer reading
+    must expire immediately, not linger.
+
+    ``CLOCK_MONOTONIC`` is uptime on Linux, so a test that fakes it to
+    a small value and leaves an entry behind would, on a runner booted
+    moments ago, leave that entry reading as *fresh* for the rest of
+    the session — the age is negative, and a bare ``< TTL`` check
+    accepts negatives.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    env._device_key_cache['arm64'] = (1_000_000.0, 'pi4-64')
+    monkeypatch.setattr(env, 'resolve_device_key', lambda: 'rockpi4')
+    monkeypatch.setattr(env, '_now', lambda: 5.0)
+    assert env._current_device_key() == 'rockpi4'
+
+
+def test_as_positive_int_fails_open_on_overflow() -> None:
+    """Fail-open has to mean fail-open, including for OverflowError.
+
+    ``float('inf')`` passes ``float()`` happily and only fails at
+    ``int()``; an integer too large for a float fails on the way in.
+    Both escape as exceptions unless caught, and this runs inside the
+    filter that renders every asset row — so one odd metadata value
+    would take out the whole asset list rather than one warning.
+    """
+    assert env._as_positive_int(float('inf')) is None
+    assert env._as_positive_int(float('-inf')) is None
+    assert env._as_positive_int(float('nan')) is None
+    assert env._as_positive_int(10**400) is None
+    # And the same value must not escape through evaluate().
+    assert (
+        env.evaluate(
+            {
+                'video_codec': 'h264',
+                'video_width': float('inf'),
+                'video_height': 2160,
+            },
+            device_key='pi4-64',
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    'board,codec,expected',
+    [
+        ('pi4-64', 'h264', 1920),
+        ('pi3-64', 'h264', 1920),
+        ('pi2', 'h264', 1920),
+        # BCM2711's HEVC block does 4Kp60, so an HEVC target inherits
+        # none of the H.264 decoder's limits.
+        ('pi4-64', 'hevc', None),
+        # Pi 5 decodes H.264 in software: nothing refuses the format,
+        # but the recipe still needs the box or the operator lands an
+        # asset that wears an advisory chip forever.
+        ('pi5', 'h264', 1920),
+        # Boards this module deliberately does not characterise must
+        # not have a Raspberry Pi bound borrowed on their behalf.
+        ('x86', 'h264', None),
+        ('rockpi4', 'h264', None),
+        ('arm64', 'h264', None),
+    ],
+)
+def test_frame_bound_is_per_board_and_per_codec(
+    board: str, codec: str, expected: int | None
+) -> None:
+    assert env.frame_bound_for(codec, device_key=board) == expected
+
+
+@pytest.mark.parametrize(
+    'metadata', ['a string', ['a', 'list'], 42, 3.5, object()]
+)
+def test_non_dict_metadata_returns_empty_rather_than_raising(
+    metadata: object,
+) -> None:
+    """``Asset.metadata`` is a free-form JSONField.
+
+    An admin edit or a restored backup can put a list or a string in
+    it. A truthy non-dict used to reach ``.get`` and raise
+    ``AttributeError`` straight out of the filter that renders every
+    asset row — which is the one failure this module documents itself
+    as incapable of. Every call site happens to guard today; the
+    module should not depend on that.
+    """
+    # ``cast`` rather than a suppression: the whole point is to hand
+    # the function a type its annotation forbids and prove the runtime
+    # copes, which is exactly what a JSONField can deliver.
+    bad = cast('dict[str, Any]', metadata)
+    assert env.evaluate(bad, device_key='pi4-64') == []
+    assert env.blocking_warning(bad, device_key='pi4-64') is None

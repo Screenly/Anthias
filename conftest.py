@@ -395,3 +395,36 @@ def _isolated_settings_conf(tmp_path: Any) -> Any:
         # in-memory state is restored for any later test.
         settings.conf_file = original_conf_file
         settings.load()
+
+
+@pytest.fixture(autouse=True)
+def _clear_playback_envelope_device_cache() -> Iterator[None]:
+    """Keep the decode envelope's board memoisation out of other tests.
+
+    ``playback_envelope`` caches ``resolve_device_key()`` for 30 s so
+    the asset list does not resolve the board once per row. That cache
+    is a module global, and this guard is load-bearing rather than
+    prophylactic: with it disabled,
+    ``test_video_arm64_with_rockpi4_subtype_accepts_h264`` pins
+    ``arm64`` to ``rockpi4`` and
+    ``test_device_key_is_memoised_per_device_type`` then fails
+    deterministically. Serially those two run far enough apart for the
+    TTL to save them; the whole suite finishes in about 19 s under
+    ``-n auto``, so on CI they collide.
+
+    Lives in the root conftest, not ``tests/``, because ``testpaths``
+    declares two roots and ``src/anthias_server/api/tests`` is exactly
+    where a future asset-upload test would go. Gated on
+    ``_APP_AVAILABLE`` and importing inside the body for the same
+    reason ``_mock_redis`` above is: this file is also loaded by the
+    app-free ``tools/raspberry_pi_imager/tests``, which CI runs with
+    ``-p no:django`` in a lean venv that has neither Django nor pytz.
+    """
+    if not _APP_AVAILABLE:
+        yield
+        return
+    from anthias_server.lib import playback_envelope
+
+    playback_envelope._device_key_cache.clear()
+    yield
+    playback_envelope._device_key_cache.clear()

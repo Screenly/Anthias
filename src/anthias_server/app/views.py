@@ -1750,6 +1750,9 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['use_24_hour_clock'] = _checkbox(request, 'use_24_hour_clock')
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
         settings['verify_ssl'] = _checkbox(request, 'verify_ssl')
+        settings['allow_unplayable_video'] = _checkbox(
+            request, 'allow_unplayable_video'
+        )
 
         # Restrict to the four cardinal angles via the shared
         # clamp_screen_rotation() helper. The Qt linuxfb plugin only

@@ -830,8 +830,8 @@ def test_video_unsupported_codec_raises_with_ffmpeg_recipe(
     )  # Pi 3 supports H.264 — recipe encodes to H.264.
     tokens = _shlex.split(recipe)
     assert tokens[1] == '-i'
-    assert tokens[2] == 'beach-clip.mp4'
-    assert tokens[-1] == 'beach-clip.h264.mp4'
+    assert tokens[2] == './beach-clip.mp4'
+    assert tokens[-1] == './beach-clip.h264.mp4'
 
     handbrake = excinfo.value.handbrake
     assert handbrake
@@ -885,8 +885,8 @@ def test_video_unsupported_codec_recipe_falls_back_to_upload_placeholder(
     recipe = excinfo.value.recipe
     tokens = _shlex.split(recipe)
     assert tokens[1] == '-i'
-    assert tokens[2] == 'upload.mp4'
-    assert tokens[-1] == 'upload.h264.mp4'
+    assert tokens[2] == './upload.mp4'
+    assert tokens[-1] == './upload.h264.mp4'
 
 
 @pytest.mark.django_db
@@ -962,7 +962,7 @@ def test_video_unsupported_codec_still_rejected_on_pi5(
 
     recipe = excinfo.value.recipe
     tokens = _shlex.split(recipe)
-    assert tokens[-1] == 'upload.h264.mp4'
+    assert tokens[-1] == './upload.h264.mp4'
     assert 'libx264' in recipe
     assert 'libx265' not in recipe
 
@@ -1057,7 +1057,7 @@ def test_ffmpeg_recipe_quotes_hostile_filenames(filename: str) -> None:
     # ffmpeg -i <input> -c:v libx264 ... <output>
     assert tokens[0] == 'ffmpeg'
     assert tokens[1] == '-i'
-    assert tokens[2] == filename
+    assert tokens[2] == f'./{filename}'
     # Output filename ends with .h264.mp4 and is the recipe's last token.
     assert tokens[-1].endswith('.h264.mp4')
 
@@ -1083,6 +1083,7 @@ def test_video_unknown_codec_is_rejected(
         'video_height': None,
         'video_fps': None,
         'video_pix_fmt': None,
+        'video_rotation': None,
         'video_bit_rate': None,
         'video_level': None,
         'video_profile': None,
@@ -1253,8 +1254,8 @@ def test_video_low_ram_rejects_4k_with_resolution_message(
     # The low-RAM gate really is a pixel budget, so it keeps the
     # 1080p box; only the guard against an odd output is new.
     assert (
-        '-vf scale=1920:1080:force_original_aspect_ratio=decrease'
-        ':force_divisible_by=2' in recipe
+        '-vf "scale=1920:1080:force_original_aspect_ratio=decrease'
+        ',scale=trunc(iw/2)*2:trunc(ih/2)*2"' in recipe
     )
     assert 'libx264' in recipe
     # Metadata still captured (operator sees what they uploaded).
@@ -1392,30 +1393,35 @@ def test_video_low_ram_unsupported_codec_recipe_includes_downscale(
     # Recipe folds in the downscale so a single re-encode satisfies
     # both gates.
     recipe = excinfo.value.recipe
-    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert 'scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
 
 
-def test_ffmpeg_recipe_omits_scale_clause_by_default() -> None:
-    """The codec-only rejection path passes ``cap_to_1080p=False``
-    (the default). Recipe must NOT include a scale clause then — we
-    don't want to suggest a needless downscale when an HD codec
-    swap is all that's wanted."""
+def test_ffmpeg_recipe_omits_the_box_by_default() -> None:
+    """No ``scale_box`` means no downscale is suggested.
+
+    The recipe still carries the even-dimension guard — that one is
+    unconditional, because 4:2:2 and 4:4:4 sources may have an odd
+    dimension that libx264 refuses once the recipe converts them to
+    yuv420p. What must be absent is the *box*: suggesting a resize
+    when an HD codec swap is all that is wanted would be noise.
+    """
     recipe = processing._ffmpeg_reencode_recipe(frozenset({'h264'}), 'foo.mkv')
-    assert '-vf scale' not in recipe
+    assert 'force_original_aspect_ratio' not in recipe
+    assert '-vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"' in recipe
     assert '-c:v libx264' in recipe
 
 
 def test_ffmpeg_recipe_includes_scale_clause_when_capping() -> None:
-    """``cap_to_1080p=True`` injects the
+    """``scale_box=(1920, 1080)`` injects the
     ``-vf scale=1920:1080:force_original_aspect_ratio=decrease`` clause
     between the input and the codec arguments, so the operator's
     re-encode lands inside the 1920×1080 envelope. The
     ``force_original_aspect_ratio=decrease`` keeps the aspect ratio
     intact for landscape, ultrawide, and portrait sources alike."""
     recipe = processing._ffmpeg_reencode_recipe(
-        frozenset({'h264'}), 'foo.mkv', cap_to_1080p=True
+        frozenset({'h264'}), 'foo.mkv', scale_box=(1920, 1080)
     )
-    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert 'scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
     # Order matters — scale must be before the encoder so the encoder
     # sees the downscaled frames.
     scale_idx = recipe.index('-vf')
@@ -1799,6 +1805,7 @@ def test_ffprobe_summary_handles_probe_failure() -> None:
         'video_height': None,
         'video_fps': None,
         'video_pix_fmt': None,
+        'video_rotation': None,
         'video_bit_rate': None,
         'video_level': None,
         'video_profile': None,
@@ -1893,6 +1900,7 @@ def test_ffprobe_summary_handles_missing_ffprobe_binary() -> None:
         'video_height': None,
         'video_fps': None,
         'video_pix_fmt': None,
+        'video_rotation': None,
         'video_bit_rate': None,
         'video_level': None,
         'video_profile': None,
@@ -3027,11 +3035,11 @@ def test_video_pi4_rejects_4k_h264_despite_supported_codec(
     # The envelope box, not the low-RAM 1080p box: the driver bound is
     # per axis, so the recipe must not squeeze the frame further than
     # the decoder actually requires.
-    assert (
-        '-vf scale=1920:1920:force_original_aspect_ratio=decrease'
-        ':force_divisible_by=2' in recipe
-    )
-    assert 'libx264' in recipe
+    # The Pi 4's HEVC block does 4Kp60, so the remedy swaps codec and
+    # keeps the frame rather than destroying three quarters of the
+    # operator's master to satisfy a bound only H.264 has here.
+    assert 'libx265' in recipe
+    assert 'force_original_aspect_ratio' not in recipe
     assert excinfo.value.handbrake
     # Metadata is still committed so the operator can see what they
     # uploaded next to the rejection.
@@ -3112,8 +3120,12 @@ def test_video_pi4_rejects_10bit_with_pix_fmt_recipe(
 
     assert 'yuv420p10le' in str(excinfo.value)
     assert '-pix_fmt yuv420p' in excinfo.value.recipe
-    # Frame size was fine, so the recipe must not also downscale.
-    assert '-vf scale=' not in excinfo.value.recipe
+    # Frame size was fine, so the recipe must not suggest a resize —
+    # though it still carries the unconditional even-dimension guard,
+    # which this path actually needs: 4:4:4 permits an odd dimension
+    # that libx264 refuses once the recipe forces yuv420p.
+    assert 'force_original_aspect_ratio' not in excinfo.value.recipe
+    assert '-vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"' in excinfo.value.recipe
 
 
 @pytest.mark.django_db
@@ -3254,9 +3266,9 @@ def test_ffmpeg_recipe_hevc_only_board_emits_x265() -> None:
     assert 'libx265' in recipe
     assert '-tag:v hvc1' in recipe
     assert 'libx264' not in recipe
-    assert recipe.endswith('clip.hevc.mp4')
+    assert recipe.endswith('./clip.hevc.mp4')
     # Neither optional clause is emitted unless asked for.
-    assert '-vf scale=' not in recipe
+    assert 'force_original_aspect_ratio' not in recipe
     assert '-pix_fmt yuv420p' not in recipe
 
 
@@ -3267,12 +3279,12 @@ def test_ffmpeg_recipe_hevc_branch_honours_downscale_and_pix_fmt() -> None:
     recipe = processing._ffmpeg_reencode_recipe(
         frozenset({'hevc'}),
         'clip.mov',
-        cap_to_1080p=True,
+        scale_box=(1920, 1080),
         force_8bit_420=True,
     )
-    assert '-vf scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
+    assert 'scale=1920:1080:force_original_aspect_ratio=decrease' in recipe
     assert '-pix_fmt yuv420p' in recipe
-    assert recipe.index('-vf scale=') < recipe.index('libx265')
+    assert recipe.index('-vf "scale=') < recipe.index('libx265')
     assert recipe.index('libx265') < recipe.index('-pix_fmt yuv420p')
 
 
@@ -3316,11 +3328,17 @@ def test_video_pi4_portrait_recipe_targets_the_envelope_not_1080p(
         processing._run_video_normalisation(asset)
 
     recipe = excinfo.value.recipe
-    assert 'scale=1920:1920:force_original_aspect_ratio=decrease' in recipe
+    # Same for a portrait master: HEVC is unbounded here, so the
+    # 2160x3840 frame survives intact.
+    assert 'libx265' in recipe
     assert 'scale=1920:1080' not in recipe
-    # The message promises 1080x1920; the recipe has to be able to
-    # produce it.
-    assert '1080x1920' in str(excinfo.value)
+    # The invariant that has broken three times: whatever the message
+    # tells the operator to do, the command underneath must do the
+    # same thing. Here that means the message must not promise a
+    # resize, because the recipe keeps the frame and swaps codec.
+    message = str(excinfo.value)
+    assert 'HEVC' in message
+    assert 'Resize' not in message
 
 
 def test_scale_clauses_guard_against_an_odd_output() -> None:
@@ -3332,14 +3350,689 @@ def test_scale_clauses_guard_against_an_odd_output() -> None:
     """
     supported = frozenset({'h264'})
     envelope = processing._ffmpeg_reencode_recipe(
-        supported, 'clip.mp4', cap_to_envelope=True
+        supported, 'clip.mp4', scale_box=(1920, 1920)
     )
     low_ram = processing._ffmpeg_reencode_recipe(
-        supported, 'clip.mp4', cap_to_1080p=True
+        supported, 'clip.mp4', scale_box=(1920, 1080)
     )
-    assert 'force_divisible_by=2' in envelope
-    assert 'force_divisible_by=2' in low_ram
+    assert 'trunc(iw/2)*2' in envelope
+    assert 'trunc(iw/2)*2' in low_ram
     # The two gates answer different questions and keep different
     # boxes: a per-axis decoder bound vs a pixel budget.
     assert 'scale=1920:1920' in envelope
     assert 'scale=1920:1080' in low_ram
+
+
+@pytest.mark.django_db
+def test_codec_rejection_recipe_also_clears_the_envelope(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A codec swap has to clear every gate, not just the codec one.
+
+    A 4K 10-bit VP9 on a Pi 4 is rejected for its codec. Handed a bare
+    libx264 line, the operator re-encodes — libx264 preserves both the
+    frame size and the source bit depth — and the result is a 4K
+    High 10 H.264 file that the envelope rejects on *two* counts. The
+    recipe has to carry the box and the pixel format as well, or the
+    fix we hand out is a round trip to the same error.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'clip.webm')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-vp9-4k-10bit',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'clip.webm'},
+    )
+    summary = _envelope_summary(
+        video_codec='vp9',
+        video_width=3840,
+        video_height=2160,
+        video_pixels=3840 * 2160,
+        video_pix_fmt='yuv420p10le',
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    recipe = excinfo.value.recipe
+    assert "codec 'vp9' is not hardware-decoded" in str(excinfo.value)
+    # HEVC is unbounded on this board and its decode node takes
+    # 10-bit, so the remedy keeps the frame AND the bit depth rather
+    # than flattening both for a codec we are not recommending.
+    assert 'libx265' in recipe
+    assert 'force_original_aspect_ratio' not in recipe
+    assert '-pix_fmt yuv420p' not in recipe
+
+
+@pytest.mark.django_db
+def test_codec_rejection_recipe_stays_bare_when_the_stream_is_fine(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The mirror of the above: an in-envelope 8-bit clip rejected
+    only for its codec gets a plain swap, with no resize suggested."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'ok.webm')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-vp9-1080p',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'ok.webm'},
+    )
+    summary = _envelope_summary(video_codec='vp9')
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    recipe = excinfo.value.recipe
+    assert 'force_original_aspect_ratio' not in recipe
+    assert '-pix_fmt yuv420p' not in recipe
+    assert '-c:v libx264' in recipe
+
+
+def test_recipe_filtergraph_is_shell_quoted() -> None:
+    """The filtergraph must survive being pasted into a shell.
+
+    ``trunc(iw/2)*2`` is made of shell metacharacters: unquoted, the
+    ``(`` ends the command with ``Syntax error: "(" unexpected`` and
+    the ``*`` would glob. The recipe exists to be copied verbatim, so
+    an unquoted graph is the same failure the guard is meant to
+    prevent, one layer further out.
+    """
+    import shlex
+
+    for box in (None, (1920, 1080), (1920, 1920)):
+        recipe = processing._ffmpeg_reencode_recipe(
+            frozenset({'h264'}), 'clip.mp4', scale_box=box
+        )
+        # shlex parses the recipe the way /bin/sh would; the graph has
+        # to come back as exactly one argument, parentheses intact.
+        argv = shlex.split(recipe)
+        graph = argv[argv.index('-vf') + 1]
+        assert graph.startswith('scale=')
+        assert 'trunc(iw/2)*2:trunc(ih/2)*2' in graph
+
+
+@pytest.mark.django_db
+def test_codec_rejection_does_not_borrow_a_pi_bound_on_other_boards(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An x86 operator must not be told to downscale to 1920.
+
+    The decode envelope deliberately characterises no rule for x86 or
+    rockpi4 — their decode paths are open questions, and the module's
+    whole stance is that a guess there produces false rejections. The
+    recipe has to hold the same line: deriving the box from the
+    bcm2835 constant regardless of board quietly told an x86 operator
+    to shrink a 4K file on the authority of a Raspberry Pi limit.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'x86')
+    src = path.join(asset_dir, 'x86.webm')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-x86-4k', src, mimetype='video', metadata={'upload_name': 'a.webm'}
+    )
+    summary = _envelope_summary(
+        video_codec='vp9',
+        video_width=3840,
+        video_height=2160,
+        video_pixels=3840 * 2160,
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    recipe = excinfo.value.recipe
+    assert 'force_original_aspect_ratio' not in recipe
+    assert '1920' not in recipe
+
+
+def test_recipe_scale_box_is_board_aware() -> None:
+    """The shared box helper, across the fleet.
+
+    Both rejection paths route through this, so they cannot answer
+    the same question differently — which is how the x86 case got
+    through in the first place.
+    """
+    both = frozenset({'h264', 'hevc'})
+    # Low-RAM wins wherever it applies: that gate is a pixel budget.
+    assert (
+        processing._recipe_plan(both, True, 3840, 2160)[1]
+        == processing._LOW_RAM_BOX
+    )
+    # An HEVC-only board targets HEVC, which carries no H.264 bound.
+    assert (
+        processing._recipe_plan(frozenset({'hevc'}), False, 3840, 2160)[1]
+        is None
+    )
+
+
+def test_frame_bound_covers_software_decode_boards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Pi 5 recipe must still box the frame.
+
+    Pi 5 has no H.264 hardware block, so nothing *refuses* a 4K H.264
+    file — the CPU just cannot keep up, which the advisory tier flags.
+    A recipe that skips the box because the refusal is soft hands the
+    operator a 4K H.264 file, which uploads fine and then wears a
+    "May not play well" chip for the rest of its life: the round trip
+    the rejection existed to spare them.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi5')
+    # Given a choice, prefer the codec this board does not bound —
+    # on a Pi 5 that is HEVC, which is also its only hardware path and
+    # what _PREFERRED_DOWNLOAD_VCODEC already says.
+    assert (
+        processing._recipe_plan(
+            frozenset({'h264', 'hevc'}), False, 3840, 2160
+        )[0]
+        == 'hevc'
+    )
+    # A board offering only software H.264 must still be boxed.
+    assert processing._recipe_plan(frozenset({'h264'}), False, 3840, 2160)[
+        1
+    ] == (1920, 1920)
+
+
+@pytest.mark.parametrize(
+    'width,height,expected',
+    [
+        (3840, 2160, False),  # 16:9 — both boxes agree exactly
+        (2160, 3840, True),  # portrait — 1080p box would crop hard
+        (5760, 1080, False),  # ultrawide — bound by width either way
+        (1080, 1350, True),  # 4:5 social crop, taller than 16:9
+        (1920, 1080, False),
+        (None, None, False),  # unmeasured: no extra step
+        (0, 0, False),
+    ],
+)
+def test_envelope_box_drives_the_handbrake_dimensions_step(
+    width: int | None, height: int | None, expected: bool
+) -> None:
+    """HandBrake's Fast 1080p30 caps height at 1080, so it squeezes a
+    portrait clip to 608x1080 — the fault the ffmpeg recipe was
+    corrected for. Both remedies now derive from the same box."""
+    assert processing._is_taller_than_16_9(width, height) is expected
+    steps = processing._handbrake_steps(
+        frozenset({'h264'}),
+        scale_box=(1920, 1920),
+        width=width,
+        height=height,
+    )
+    assert any('Dimensions' in s for s in steps) is expected
+
+
+def test_handbrake_tells_uncharacterised_boards_to_stop_capping() -> None:
+    """With no box, the recipe preserves the frame — so the preset
+    must not quietly quarter it on a Raspberry Pi limit that does not
+    apply to this board."""
+    steps = processing._handbrake_steps(
+        frozenset({'h264'}), scale_box=None, width=3840, height=2160
+    )
+    joined = ' '.join(steps)
+    assert 'Resolution Limit' in joined and '"None"' in joined
+    # A source already inside the preset's box needs no such step.
+    small = processing._handbrake_steps(
+        frozenset({'h264'}), scale_box=None, width=1280, height=720
+    )
+    assert not any('Dimensions' in s for s in small)
+
+
+def test_handbrake_is_silent_when_the_preset_already_matches() -> None:
+    """The low-RAM box *is* 1920x1080, which is what the preset does."""
+    steps = processing._handbrake_steps(
+        frozenset({'h264'}),
+        scale_box=processing._LOW_RAM_BOX,
+        width=3840,
+        height=2160,
+    )
+    assert not any('Dimensions' in s for s in steps)
+
+
+@pytest.mark.parametrize(
+    'field,value',
+    [
+        ('bit_rate', '1e400'),
+        ('bit_rate', 10**400),
+        ('level', 1e400),
+        ('width', float('inf')),
+        ('height', float('inf')),
+    ],
+)
+def test_ffprobe_summary_survives_overflowing_values(
+    field: str, value: object
+) -> None:
+    """No metadata value may raise out of the probe summary.
+
+    ``int(float(x))`` raises OverflowError — not TypeError or
+    ValueError — for an infinity or for an int too large to be a
+    float. This runs inside the normalisation task, so an escape
+    disables the operator's asset with ``OverflowError: cannot
+    convert float infinity to integer`` as the reason and files a
+    Sentry error, instead of the field simply reading as unmeasured.
+    """
+    stream: dict[str, object] = {
+        'codec_type': 'video',
+        'codec_name': 'h264',
+        'width': 1920,
+        'height': 1080,
+    }
+    stream[field] = value
+    fake = {'format': {'format_name': 'mp4'}, 'streams': [stream]}
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    # The bad field reads as unmeasured; the rest still parses.
+    assert summary['video_codec'] == 'h264'
+
+
+def test_ffprobe_summary_survives_an_overflowing_duration() -> None:
+    """Same for the container duration, which feeds the asset's
+    playback length rather than a diagnostic field."""
+    fake = {
+        'format': {'format_name': 'mp4', 'duration': '1e400'},
+        'streams': [{'codec_type': 'video', 'codec_name': 'h264'}],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['duration_seconds'] is None
+
+
+@pytest.mark.django_db
+def test_low_ram_rejection_recipe_also_clears_the_pixel_format(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The low-RAM path was the one sibling left behind.
+
+    Three rejection paths learned to pass ``force_8bit_420``; this one
+    did not. So a 1 GB Pi refusing a 4K High 10 upload emitted a
+    recipe producing a 1080p **10-bit** file, which the envelope then
+    blocked on pixel format — the operator runs our command and is
+    refused a second time, for a reason we never mentioned.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'lowram.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-lowram-10bit',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'clip.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=3840,
+        video_height=2160,
+        video_pixels=3840 * 2160,
+        video_pix_fmt='yuv420p10le',
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    # Low-RAM boards are the 1 GB Pi 2/3/4 class, whose only hardware
+    # path is H.264 — so here the 8-bit pin really is required.
+    assert '-pix_fmt yuv420p' in excinfo.value.recipe
+
+
+@pytest.mark.parametrize(
+    'width,height,expected',
+    [
+        (3840, 2160, (1920, 1080)),
+        (2160, 3840, (1080, 1920)),
+        (1200, 2000, (1080, 1920)),
+        (5760, 1080, (1920, 1080)),
+        (None, None, (1920, 1080)),
+    ],
+)
+def test_low_ram_box_follows_the_source_orientation(
+    width: int | None, height: int | None, expected: tuple[int, int]
+) -> None:
+    """The low-RAM cap is an area budget, and both orientations bound
+    the same 2,073,600 pixels — so a portrait source has no business
+    being squeezed into the landscape box and losing two thirds of a
+    frame it was entitled to keep."""
+    assert processing._low_ram_box(width, height) == expected
+
+
+@pytest.mark.parametrize(
+    'filename', ['-leading-dash.mp4', '--help.mp4', 'ordinary.mp4']
+)
+def test_recipe_survives_a_filename_ffmpeg_would_misparse(
+    filename: str,
+) -> None:
+    """``shlex.quote`` leaves a leading dash bare — correct for the
+    shell, fatal for ffmpeg, which reads it as an option and refuses
+    the job. Django keeps a leading dash through upload sanitisation,
+    so this is reachable from any file somebody drags in."""
+    import shlex
+
+    recipe = processing._ffmpeg_reencode_recipe(frozenset({'h264'}), filename)
+    tokens = shlex.split(recipe)
+    src = tokens[tokens.index('-i') + 1]
+    assert not src.startswith('-'), 'ffmpeg would read this as an option'
+    assert not tokens[-1].startswith('-')
+    assert src.endswith(filename)
+
+
+@pytest.mark.parametrize(
+    'width,height,rotation,expected',
+    [
+        (3840, 2160, None, (3840, 2160)),
+        (3840, 2160, 90, (2160, 3840)),
+        (3840, 2160, 270, (2160, 3840)),
+        (3840, 2160, -90, (2160, 3840)),
+        (3840, 2160, 180, (3840, 2160)),
+        (2160, 3840, 90, (3840, 2160)),
+        (None, None, 90, (None, None)),
+    ],
+)
+def test_display_dimensions_follow_the_rotation_matrix(
+    width: int | None,
+    height: int | None,
+    rotation: int | None,
+    expected: tuple[int | None, int | None],
+) -> None:
+    """Rotation lives in the display matrix, not the dimensions.
+
+    A phone-shot vertical clip is coded 3840x2160 with a 90-degree
+    matrix, and ffmpeg applies that matrix before any filter we emit.
+    Deciding orientation from the coded numbers put a portrait master
+    through the landscape box and produced 608x1080 — the same fault
+    the box orientation was added to fix, arriving by a different
+    route.
+    """
+    assert processing._display_dimensions(width, height, rotation) == expected
+
+
+@pytest.mark.django_db
+def test_low_ram_portrait_keeps_its_shape_end_to_end(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The newest combination, driven through the real gate.
+
+    The two remedies on this branch have drifted three times, each
+    time because each was tested alone. This asserts the ffmpeg recipe
+    and the HandBrake steps agree on the same portrait box, for the
+    path that has never been covered end to end.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'portrait-lowram.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-lowram-portrait',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'tall.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=2160, video_height=3840, video_pixels=2160 * 3840
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert 'scale=1080:1920' in excinfo.value.recipe
+    assert '608' not in excinfo.value.recipe
+    steps = ' '.join(excinfo.value.handbrake)
+    assert '1080 for Width and 1920 for Height' in steps
+
+
+@pytest.mark.django_db
+def test_rotated_source_is_boxed_by_its_display_shape(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A coded-landscape, display-portrait source must box as portrait."""
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'phone.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-rotated',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'phone.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=3840,
+        video_height=2160,
+        video_pixels=3840 * 2160,
+        video_rotation=90,
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    # Coded 3840x2160 but displayed 2160x3840, so the portrait box.
+    assert 'scale=1080:1920' in excinfo.value.recipe
+
+
+@pytest.mark.parametrize('rotation', ['sideways', None, [], float('inf')])
+def test_ffprobe_summary_survives_an_unreadable_rotation(
+    rotation: object,
+) -> None:
+    """Rotation is side-channel data from an arbitrary container, so
+    an unparseable value must read as "not rotated" rather than raise
+    out of the normalisation task."""
+    fake = {
+        'format': {'format_name': 'mp4'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'width': 1920,
+                'height': 1080,
+                'side_data_list': [{'rotation': rotation}],
+            }
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_rotation'] is None
+    assert summary['video_width'] == 1920
+
+
+def test_ffprobe_summary_ignores_unrelated_side_data() -> None:
+    """Streams carry side data we do not care about; only a rotation
+    entry counts."""
+    fake = {
+        'format': {'format_name': 'mp4'},
+        'streams': [
+            {
+                'codec_type': 'video',
+                'codec_name': 'h264',
+                'side_data_list': [
+                    {'side_data_type': 'Content light level metadata'},
+                    {'rotation': -90},
+                ],
+            }
+        ],
+    }
+    with mock.patch.object(processing, '_ffprobe_streams', return_value=fake):
+        summary = processing._ffprobe_summary('fixture.mp4')
+    assert summary['video_rotation'] == 270
+
+
+@pytest.mark.parametrize(
+    'name,expected',
+    [
+        ('clip.mp4', './clip.mp4'),
+        ('./clip.mp4', './clip.mp4'),
+        ('/tmp/clip.mp4', '/tmp/clip.mp4'),
+        ('-clip.mp4', './-clip.mp4'),
+    ],
+)
+def test_shell_path_only_prefixes_what_needs_it(
+    name: str, expected: str
+) -> None:
+    """A path that already anchors itself is left alone; ffmpeg only
+    misreads a bare leading dash."""
+    import shlex
+
+    assert shlex.split(processing._shell_path(name))[0] == expected
+
+
+def test_recipe_falls_back_to_placeholders_without_a_filename() -> None:
+    """Callers with no upload name still get a runnable shape."""
+    recipe = processing._ffmpeg_reencode_recipe(frozenset({'h264'}))
+    assert ' INPUT ' in recipe
+    assert recipe.endswith('OUTPUT.h264.mp4')
+
+
+def test_needs_8bit_recipe_is_false_when_no_codec_is_supported() -> None:
+    """An uncharacterised board emits no recipe, so there is nothing
+    to pin a pixel format on."""
+    assert (
+        processing._needs_8bit_recipe(
+            frozenset(), {'video_pix_fmt': 'yuv420p10le'}, False, 3840, 2160
+        )
+        is False
+    )
+
+
+@pytest.mark.django_db
+def test_override_lets_an_unplayable_upload_through_but_flags_it(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the escape hatch on, the upload is accepted and marked.
+
+    The hardware fact does not change and the finding still rides on
+    the asset — the operator has taken back the decision, and with it
+    the job of checking the screen.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    src = path.join(asset_dir, 'override.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(
+        'vid-override',
+        src,
+        mimetype='video',
+        metadata={'upload_name': 'big.mp4'},
+    )
+    summary = _envelope_summary(
+        video_width=3840, video_height=2160, video_pixels=3840 * 2160
+    )
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=summary
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        mock.patch.dict(
+            'anthias_server.settings.settings',
+            {'allow_unplayable_video': True},
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata['playback_override'] is True
+    assert 'error_message' not in asset.metadata
+
+
+@pytest.mark.django_db
+def test_override_does_not_reach_the_codec_or_low_ram_gates(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scoped to the decode envelope on purpose.
+
+    A codec with no decoder at all cannot be argued with, and the
+    low-RAM cap guards against OOM-looping the device rather than
+    against looking bad. Neither is the operator's to wave through.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi4-64')
+    for label, summary, low_ram in (
+        ('codec', _envelope_summary(video_codec='vp9'), False),
+        (
+            'low-ram',
+            _envelope_summary(
+                video_width=3840,
+                video_height=2160,
+                video_pixels=3840 * 2160,
+            ),
+            True,
+        ),
+    ):
+        src = path.join(asset_dir, f'{label}.mp4')
+        with open(src, 'wb') as f:
+            f.write(b'\x00')
+        asset = _make_processing_asset(
+            f'vid-{label}',
+            src,
+            mimetype='video',
+            metadata={'upload_name': 'x.mp4'},
+        )
+        with (
+            mock.patch.object(processing, '_notify'),
+            mock.patch.object(
+                processing, '_ffprobe_summary', return_value=summary
+            ),
+            mock.patch(
+                'anthias_server.processing.is_low_ram_device',
+                return_value=low_ram,
+            ),
+            mock.patch.dict(
+                'anthias_server.settings.settings',
+                {'allow_unplayable_video': True},
+            ),
+            pytest.raises(processing.UnsupportedVideoCodecError),
+        ):
+            processing._run_video_normalisation(asset)
