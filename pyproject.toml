@@ -25,13 +25,13 @@ dev-host = [
     "django-stubs==6.1.0",
     "djangorestframework-stubs==3.18.1",
     "mypy==2.3.1",
-    "ruff==0.16.5",
+    "ruff==0.16.6",
     "tenacity==9.1.4",
     "types-gunicorn==26.2.0.20260827",
     # Direct dev dep: types-psutil used to arrive transitively via
     # djangorestframework-stubs, which dropped it in 3.17.1 — pin it
     # directly so the psutil import in the server keeps its stubs.
-    "types-psutil==7.2.2.20260827",
+    "types-psutil==7.2.2.20260906",
     "types-python-dateutil==2.9.0.20260807",
     "types-pytz==2026.3.1.20260727",
     "types-PyYAML==6.0.12.20260518",
