@@ -345,13 +345,35 @@ def _is_safe_login_next_source(request: HttpRequest) -> bool:
 
 def _login_redirect(request: HttpRequest) -> HttpResponse:
     """Send an unauthenticated request to the login page, preserving
-    the original destination via ``?next=`` when it's safe to do so."""
+    the original destination via ``?next=`` when it's safe to do so.
+
+    An htmx request gets ``HX-Redirect`` instead of a 302. A redirect
+    is meant for a browser navigating, and neither caller that reaches
+    this from JavaScript can act on one: XMLHttpRequest and fetch both
+    follow it transparently and hand the caller the *login page* under
+    a 200. htmx then swaps that whole page into whatever fragment it
+    asked for, and the raw-XHR uploader in home.ts reads the 200 as a
+    successful upload and reports a file as stored that never left the
+    browser. Naming the destination in a header the client can see
+    lets both do the right thing: htmx navigates to the login page,
+    and the uploader can tell an expired session from a stored file.
+
+    ``next`` is already dropped for htmx by _is_safe_login_next_source,
+    so the bare login URL is the whole answer here.
+    """
     from urllib.parse import urlencode
 
+    from django.http import HttpResponse as _HttpResponse
     from django.shortcuts import redirect
     from django.urls import reverse
 
     login_url = reverse('anthias_app:login')
+    if request.headers.get('HX-Request') is not None:
+        # 204: there is no body worth swapping, and htmx honours
+        # HX-Redirect regardless of status.
+        response = _HttpResponse(status=204)
+        response['HX-Redirect'] = login_url
+        return response
     if not _is_safe_login_next_source(request):
         return redirect(login_url)
     # request.get_full_path() preserves any query string. The login

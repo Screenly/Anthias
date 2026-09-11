@@ -177,10 +177,61 @@ def test_authorized_drops_next_for_unsafe_methods(monkeypatch: Any) -> None:
         assert 'next=' not in response['Location']
 
 
-def test_authorized_drops_next_for_htmx_partial(monkeypatch: Any) -> None:
+def test_authorized_answers_htmx_with_hx_redirect(monkeypatch: Any) -> None:
+    """An htmx caller cannot act on a 302: XMLHttpRequest and fetch
+    follow it themselves and hand the caller the login page under a
+    200. htmx would swap that whole page into the fragment it asked
+    for, and the raw-XHR uploader in home.ts reads the 200 as a
+    successful upload. Answer with HX-Redirect, which the client can
+    actually see."""
+    fake_settings = {'auth_backend': 'auth_basic'}
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
+
+    @authorized
+    def view(request: Any) -> str:
+        return 'ok'
+
+    factory = RequestFactory()
+    request = factory.post('/assets/upload/', HTTP_HX_REQUEST='true')
+    request.user = MagicMock(is_authenticated=False)
+    response = view(request)
+    assert isinstance(response, HttpResponse)
+    assert response.status_code == 204
+    assert response['HX-Redirect'].endswith('/login/')
+    # Must not also be a redirect: a Location header would be followed
+    # transparently and defeat the whole point.
+    assert not response.has_header('Location')
+
+
+def test_authorized_still_redirects_a_plain_navigation(
+    monkeypatch: Any,
+) -> None:
+    """Only htmx callers get the header treatment. A browser typing a
+    URL still wants a real 302 to the login page."""
+    fake_settings = {'auth_backend': 'auth_basic'}
+    monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
+
+    @authorized
+    def view(request: Any) -> str:
+        return 'ok'
+
+    factory = RequestFactory()
+    request = factory.get('/settings/')
+    request.user = MagicMock(is_authenticated=False)
+    response = view(request)
+    assert isinstance(response, HttpResponse)
+    assert response.status_code == 302
+    assert not response.has_header('HX-Redirect')
+
+
+def test_authorized_sends_htmx_partial_to_bare_login(
+    monkeypatch: Any,
+) -> None:
     """Dashboard polls htmx fragments every 5s; if the session expires
-    mid-poll we'd otherwise serialize the partial URL into next,
-    dumping the operator on a bare table fragment after sign-in."""
+    mid-poll we must not serialize the partial URL into next, which
+    would dump the operator on a bare table fragment after sign-in.
+    The destination now rides on HX-Redirect rather than a 302 (see
+    _login_redirect), so the same guarantee is asserted there."""
     fake_settings = {'auth_backend': 'auth_basic'}
     monkeypatch.setattr('anthias_server.settings.settings', fake_settings)
 
@@ -193,9 +244,9 @@ def test_authorized_drops_next_for_htmx_partial(monkeypatch: Any) -> None:
     request.user = MagicMock(is_authenticated=False)
     response = view(request)
     assert isinstance(response, HttpResponse)
-    assert response.status_code == 302
-    assert response['Location'].endswith('/login/')
-    assert 'next=' not in response['Location']
+    assert response.status_code == 204
+    assert response['HX-Redirect'].endswith('/login/')
+    assert 'next=' not in response['HX-Redirect']
 
 
 def test_authorized_no_args_raises(monkeypatch: Any) -> None:

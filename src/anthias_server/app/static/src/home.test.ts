@@ -11,7 +11,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import './home'
 
 type Toast = { kind: string; message: string; ttlMs?: number }
-type Outcome = { status: number } | { transport: true }
+type Outcome =
+  | { status: number; hxRedirect?: string }
+  | { transport: true }
 
 const realXhr = globalThis.XMLHttpRequest
 
@@ -31,7 +33,10 @@ function stubXhr(outcomes: Outcome[]): void {
         upload: { addEventListener: () => {} },
         open: () => {},
         setRequestHeader: () => {},
-        getResponseHeader: () => null,
+        getResponseHeader: (name: string) =>
+          name === 'HX-Redirect' && 'hxRedirect' in outcome
+            ? (outcome.hxRedirect ?? null)
+            : null,
         addEventListener(type: string, fn: () => void) {
           ;(handlers[type] ??= []).push(fn)
         },
@@ -102,6 +107,18 @@ describe('uploadFiles error reporting', () => {
       'Upload failed mid-transfer — check your connection, or try a ' +
         'smaller file',
     )
+  })
+
+  // The expired-session case: a 2xx carrying HX-Redirect must abort
+  // the batch and navigate, not count as a stored file.
+  test('an HX-Redirect aborts the batch instead of reporting success', async () => {
+    stubXhr([{ status: 204, hxRedirect: '/login/' }])
+    const app = window.homeApp()
+    app.mode = 'add'
+    await app.uploadFiles(fileInput('doomed.mp4'))
+
+    expect(refreshes).toEqual([])
+    expect(app.mode).toBe('add')
   })
 
   test('an unremarkable 400 keeps the original wording', async () => {

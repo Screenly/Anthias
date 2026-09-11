@@ -57,6 +57,14 @@ describe('uploadErrorMessage', () => {
     )
   })
 
+  // Rarely rendered, since the caller navigates to the login page on
+  // this, but a slow navigation should still explain itself.
+  test('an expired session names the session, not the file', () => {
+    expect(uploadErrorMessage({ kind: 'auth' })).toBe(
+      'Your session expired — sign in again to upload',
+    )
+  })
+
   // A stray status 0 should never reach here (the caller maps it to
   // `network`), but pin the fallback so a leak can't render an empty
   // or nonsensical toast.

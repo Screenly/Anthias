@@ -18,8 +18,19 @@
 export type UploadFailure =
   | { kind: 'http'; status: number }
   | { kind: 'network' }
+  // The session expired: the server answered with HX-Redirect and the
+  // caller is navigating to the login page. Carries no status because
+  // the response was a perfectly ordinary 2xx.
+  | { kind: 'auth' }
 
 export function uploadErrorMessage(failure: UploadFailure): string {
+  // Usually unseen, since the caller navigates away on this. Worth
+  // having anyway: if the navigation is slow the operator gets an
+  // explanation rather than a blank moment.
+  if (failure.kind === 'auth') {
+    return 'Your session expired — sign in again to upload'
+  }
+
   // Both causes, neither asserted. A proxy enforcing a body limit
   // answers and closes while the browser is still writing, and the
   // browser does not always salvage that response — so a size
