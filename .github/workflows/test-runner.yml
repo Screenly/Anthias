@@ -12,6 +12,34 @@ on:
         required: false
         default: '3.13'
         type: string
+      caller-event-name:
+        description: >-
+          The caller's `github.event_name`, passed explicitly rather than
+          read from the `github` context here.
+
+          The context is believed to carry the caller's event through a
+          `workflow_call`, but the failure mode of being wrong is silent:
+          the token warning below would simply never fire, which is the
+          exact class of bug this change exists to stop. An explicit
+          input costs one line and cannot be wrong. (Copilot review.)
+        required: false
+        default: ''
+        type: string
+    secrets:
+      CODECOV_TOKEN:
+        description: >-
+          Codecov upload token. Declared explicitly (rather than relying
+          on `secrets: inherit` at the call site) so this workflow only
+          receives the one secret it needs, and so the dependency is
+          visible here instead of being implied.
+
+          Optional: without it, uploads from *unprotected* refs still
+          work tokenlessly, which is what keeps fork PRs functional.
+          Uploads from a protected branch are rejected with
+          "Token required because branch is protected" — which is why
+          master had no coverage baseline and every PR reported a missing
+          BASE report.
+        required: false
 
 jobs:
   run-tests:
@@ -125,6 +153,22 @@ jobs:
           echo "All $max_attempts attempts failed"
           exit 1
 
+      # Surface a missing token instead of letting the upload fail
+      # silently. codecov-action defaults to fail_ci_if_error: false, and
+      # deliberately stays that way here — a Codecov outage must not block
+      # a merge — but that also meant a *misconfiguration* was invisible:
+      # master pushes were rejected with "Token required because branch is
+      # protected" while the step still reported success, so no baseline
+      # was ever stored and every PR warned about a missing BASE report.
+      - name: Warn when Codecov has no token for a protected ref
+        if: inputs.test-type == 'python' && inputs.caller-event-name == 'push'
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -z "${CODECOV_TOKEN}" ]; then
+            echo "::warning title=Codecov baseline will not be stored::CODECOV_TOKEN is empty, so this push's coverage upload will be rejected (\"Token required because branch is protected\"). Every PR will then report a missing BASE report. Set the CODECOV_TOKEN repo secret."
+          fi
+
       # The /usr/src/app bind-mount means coverage.xml lands directly on
       # the runner workspace, so no docker cp is needed. Codecov picks it
       # up via the explicit `files:` argument.
@@ -133,6 +177,15 @@ jobs:
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
         with:
           files: ./coverage.xml
+          # The documented input. Also exported below because the
+          # bundled CLI reads CODECOV_TOKEN from the environment.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Pinned explicitly rather than relying on the action's
+          # default, which could change across major versions while the
+          # comment above still claimed we depend on it. A Codecov
+          # outage must never block a merge; the warning step above is
+          # what keeps a *misconfiguration* from being silent.
+          fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
