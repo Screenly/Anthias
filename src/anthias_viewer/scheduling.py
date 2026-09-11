@@ -225,12 +225,21 @@ class Scheduler:
             # refresh shouldn't disturb the current play-through.
             return
 
+        # ``self.index`` points at the asset due to play *next*. Remember
+        # which one that is before the list is swapped so the cursor can
+        # be re-anchored by identity below.
+        next_asset_id = (
+            self.assets[self.index].get('asset_id')
+            if self.index < len(self.assets)
+            else None
+        )
+
         self.assets, self.deadline = new_assets, new_deadline
         self.counter = 0
         # Try to keep the same position in the play list. E.g., if a new asset
         # is added to the end of the list, we don't want to start over from
         # the beginning.
-        self.index = self.index % len(self.assets) if self.assets else 0
+        self.index = self._reanchor_index(next_asset_id)
         logger.debug(
             'update_playlist done, count %s, counter %s, index %s, deadline %s',
             len(self.assets),
@@ -238,6 +247,30 @@ class Scheduler:
             self.index,
             self.deadline,
         )
+
+    def _reanchor_index(self, next_asset_id: str | None) -> int:
+        """Where the cursor should sit in the freshly-built playlist.
+
+        Follow the asset that was due to play next by id rather than by
+        numeric position. A bare ``index % len`` is only correct when
+        the list changes *at or after* the cursor; when it shrinks
+        ahead of the cursor the whole tail slides back one slot and the
+        stale index lands past the asset that was up next, silently
+        skipping it. The common way to hit that is removing the asset
+        currently on screen — the operator drops one asset and two come
+        off the rotation.
+
+        Falls back to the historical modulo when the up-next asset is
+        itself gone (or there wasn't one), which still keeps an append
+        at the end of the list from restarting the play-through.
+        """
+        if not self.assets:
+            return 0
+        if next_asset_id is not None:
+            for position, asset in enumerate(self.assets):
+                if asset.get('asset_id') == next_asset_id:
+                    return position
+        return self.index % len(self.assets)
 
     def get_db_mtime(self) -> float:
         # Newest mtime across the SQLite database and its WAL sidecars.
