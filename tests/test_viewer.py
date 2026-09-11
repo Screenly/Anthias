@@ -1608,8 +1608,20 @@ def test_skip_when_current_asset_deleted() -> None:
     skip_event.set.assert_called_once()
 
 
-def test_skip_when_current_asset_deactivated() -> None:
+@pytest.fixture
+def restore_skip_deactivated_asset() -> Iterator[None]:
+    original = settings['skip_deactivated_asset']
+    try:
+        yield
+    finally:
+        settings['skip_deactivated_asset'] = original
+
+
+def test_skip_when_current_asset_deactivated(
+    restore_skip_deactivated_asset: None,
+) -> None:
     """Toggling is_enabled off on the displayed asset must skip."""
+    settings['skip_deactivated_asset'] = True
     scheduler = mock.Mock()
     scheduler.current_asset_id = 'asset-1'
     skip_event = mock.Mock()
@@ -1621,6 +1633,49 @@ def test_skip_when_current_asset_deactivated() -> None:
         mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
     ):
         objects_filter.return_value.first.return_value = inactive_asset
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_called_once()
+
+
+def test_no_skip_when_deactivated_and_setting_off(
+    restore_skip_deactivated_asset: None,
+) -> None:
+    """With skip_deactivated_asset off, an asset removed from the
+    playlist mid-rotation finishes what it started — the pre-#2430
+    behaviour operators asked to keep. The playlist itself is still
+    rebuilt by get_next_asset(), so it won't come round again."""
+    settings['skip_deactivated_asset'] = False
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'asset-1'
+    skip_event = mock.Mock()
+    inactive_asset = mock.Mock()
+    inactive_asset.is_active.return_value = False
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        objects_filter.return_value.first.return_value = inactive_asset
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_not_called()
+
+
+def test_skip_when_deleted_even_with_setting_off(
+    restore_skip_deactivated_asset: None,
+) -> None:
+    """skip_deactivated_asset only governs *deactivation*. A deleted
+    asset has had its file unlinked alongside the row, so it always
+    comes off the screen immediately."""
+    settings['skip_deactivated_asset'] = False
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'gone'
+    skip_event = mock.Mock()
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        objects_filter.return_value.first.return_value = None
         viewer._skip_if_current_asset_inactive()
     skip_event.set.assert_called_once()
 

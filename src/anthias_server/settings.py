@@ -77,6 +77,17 @@ DEFAULTS = {
         'screen_rotation': 0,
         'show_splash': True,
         'shuffle_playlist': False,
+        # What happens to the asset on screen when it leaves the
+        # playlist (disabled, or its schedule window closed). On (the
+        # behaviour shipped since #2430) cuts the rotation short so a
+        # long-duration asset comes off the screen immediately. Off
+        # lets it finish its current rotation and simply not come
+        # round again — the pre-#2430 behaviour, which operators who
+        # curate a running playlist asked to keep (forum thread
+        # "Skipping asset when removed from playlist"). A *deleted*
+        # asset is always cut short regardless: its file is unlinked
+        # with the row, so there is nothing left to keep showing.
+        'skip_deactivated_asset': True,
         'verify_ssl': True,
         'default_assets': False,
     },
