@@ -587,6 +587,7 @@ def device_settings() -> dict[str, Any]:
         'show_splash': settings['show_splash'],
         'default_assets': settings['default_assets'],
         'shuffle_playlist': settings['shuffle_playlist'],
+        'skip_deactivated_asset': settings['skip_deactivated_asset'],
         'use_24_hour_clock': settings['use_24_hour_clock'],
         'debug_logging': settings['debug_logging'],
         'prefer_dark_mode': settings['prefer_dark_mode'],

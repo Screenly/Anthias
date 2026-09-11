@@ -579,6 +579,7 @@ class DeviceSettingsViewV2(APIView):
                 'show_splash': settings['show_splash'],
                 'default_assets': settings['default_assets'],
                 'shuffle_playlist': settings['shuffle_playlist'],
+                'skip_deactivated_asset': settings['skip_deactivated_asset'],
                 'use_24_hour_clock': settings['use_24_hour_clock'],
                 'debug_logging': settings['debug_logging'],
                 'prefer_dark_mode': settings['prefer_dark_mode'],
@@ -670,6 +671,10 @@ class DeviceSettingsViewV2(APIView):
                 settings['default_assets'] = data['default_assets']
             if 'shuffle_playlist' in data:
                 settings['shuffle_playlist'] = data['shuffle_playlist']
+            if 'skip_deactivated_asset' in data:
+                settings['skip_deactivated_asset'] = data[
+                    'skip_deactivated_asset'
+                ]
             if 'use_24_hour_clock' in data:
                 settings['use_24_hour_clock'] = data['use_24_hour_clock']
             if 'debug_logging' in data:

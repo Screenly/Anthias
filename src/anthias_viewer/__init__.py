@@ -2236,6 +2236,22 @@ def _skip_if_current_asset_inactive() -> None:
     refresh itself happens inside ``get_next_asset`` via the existing
     ``get_db_mtime`` short-circuit, so we don't touch ``scheduler``
     state from the subscriber thread — we only signal.
+
+    Two cases, deliberately not treated the same:
+
+    * The row is **gone**. ``delete_asset_with_file`` unlinks the media
+      alongside the row, so whatever is on screen is already detached
+      from anything the operator can still manage. Always skip.
+
+    * The row still exists but is no longer active — disabled, removed
+      from the playlist, or outside its date / day / time window. The
+      content is still valid, so whether cutting the rotation short is
+      right depends on how the operator curates the playlist. Honour
+      ``settings['skip_deactivated_asset']``: on (default, the #2430
+      behaviour) skips immediately; off lets the asset finish the
+      rotation it already started and simply not come round again,
+      which is what the playlist stays consistent with either way —
+      ``get_next_asset`` rebuilds from the DB on the next tick.
     """
     if scheduler is None:
         return
@@ -2250,12 +2266,30 @@ def _skip_if_current_asset_inactive() -> None:
             current_id,
         )
         return
-    if asset is None or not asset.is_active():
+
+    if asset is None:
         logger.info(
-            'Current asset %s is no longer active; signalling skip',
-            current_id,
+            'Current asset %s was deleted; signalling skip', current_id
         )
         get_skip_event().set()
+        return
+
+    if asset.is_active():
+        return
+
+    if not settings['skip_deactivated_asset']:
+        logger.info(
+            'Current asset %s left the playlist; letting it finish its '
+            'rotation (skip_deactivated_asset is off)',
+            current_id,
+        )
+        return
+
+    logger.info(
+        'Current asset %s is no longer active; signalling skip',
+        current_id,
+    )
+    get_skip_event().set()
 
 
 def _asset_is_displayable(asset: dict[str, Any]) -> bool:
