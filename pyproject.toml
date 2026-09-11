@@ -243,8 +243,11 @@ exclude = [
 [[tool.mypy.overrides]]
 # Third-party libs without type stubs. Listed explicitly so a future stub
 # release is noticed (and the override removed) instead of silently ignored.
-# `channels` itself is covered by partial PEP 561 stubs in stubs/channels-stubs/;
-# only the helpers we actually call are typed there.
+# `channels` and asgiref's untyped `testing` module are covered by partial
+# PEP 561 stubs in stubs/channels-stubs/ and stubs/asgiref-stubs/; only the
+# helpers we actually call are typed there. (asgiref ships py.typed itself,
+# but not for asgiref.testing — the partial marker keeps the real stubs for
+# every other asgiref module.)
 module = [
     # Dev-only: emails/render_logo.py, run through `uv run --no-project`.
     "cairosvg",
