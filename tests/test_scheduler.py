@@ -211,6 +211,49 @@ def test_keep_same_position_on_playlist_update(
 
 
 @pytest.mark.django_db
+def test_removing_playing_asset_does_not_skip_the_next_one(
+    restore_shuffle_setting: None,
+) -> None:
+    """Removing the asset on screen must not cost the playlist a second
+    asset.
+
+    Playlist [Y, X, Z] with Y on screen leaves the cursor at index 1
+    (X is up next). Deactivating Y shortens the list to [X, Z]; holding
+    the numeric index would land on Z and X would never get its turn.
+    """
+    _create_assets([ASSET_X, ASSET_Y, ASSET_Z])
+    scheduler = Scheduler()
+    playing = scheduler.get_next_asset()
+    assert playing is not None
+
+    Asset.objects.filter(asset_id=playing['asset_id']).update(is_enabled=False)
+    scheduler.update_playlist()
+
+    next_asset = scheduler.get_next_asset()
+    assert next_asset is not None
+    assert next_asset['asset_id'] == ASSET_X['asset_id']
+
+
+@pytest.mark.django_db
+def test_removing_the_up_next_asset_falls_back_to_position(
+    restore_shuffle_setting: None,
+) -> None:
+    """When the asset that was up next is itself removed there is
+    nothing to anchor to, so the cursor holds its numeric position and
+    the asset that slid into that slot plays."""
+    _create_assets([ASSET_X, ASSET_Y, ASSET_Z])
+    scheduler = Scheduler()
+    scheduler.get_next_asset()  # plays Y, cursor now on X
+
+    Asset.objects.filter(asset_id=ASSET_X['asset_id']).update(is_enabled=False)
+    scheduler.update_playlist()
+
+    next_asset = scheduler.get_next_asset()
+    assert next_asset is not None
+    assert next_asset['asset_id'] == ASSET_Z['asset_id']
+
+
+@pytest.mark.django_db
 def test_counter_should_increment_after_full_asset_loop(
     restore_shuffle_setting: None,
 ) -> None:
