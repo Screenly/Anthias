@@ -11,7 +11,63 @@ WS_GROUP = 'ws_server'
 
 
 class AssetConsumer(AsyncWebsocketConsumer):
+    def _is_authorized(self) -> bool:
+        """WebSocket counterpart of :func:`anthias_server.lib.auth.authorized`.
+
+        Same feature flag, same trust model, so the two surfaces can't
+        drift into disagreeing about who may watch the device:
+
+        * ``settings['auth_backend'] == ''`` — the operator has auth
+          turned off and the documented contract is that the device is
+          fully open. /ws follows the HTTP views rather than inventing
+          a stricter rule of its own.
+        * Otherwise the handshake must carry a logged-in session.
+          ``AuthMiddlewareStack`` in ``django_project/asgi.py`` has
+          already resolved ``scope['user']`` from the session cookie by
+          the time ``connect()`` runs (``AuthMiddleware.__call__``
+          awaits ``get_user`` before dispatching), so this is a plain
+          in-memory attribute read — no sync-DB access from async code.
+
+        Session cookie only, deliberately: every page that opens /ws
+        extends base.html and is itself behind ``@authorized``, so an
+        operator browser is the sole legitimate client. The legacy
+        Basic-auth path (``DeprecatedBasicAuthentication``) is not
+        honoured here — browsers can't set an Authorization header on a
+        ``new WebSocket()`` handshake anyway, so accepting it would only
+        widen a deprecated credential to a surface that never had it.
+
+        ``settings`` is an in-process ``UserDict`` reloaded by
+        ``save()``, and the ASGI worker serving this socket is the same
+        process that serves the settings page — so flipping the flag
+        takes effect on the next handshake without a restart, exactly
+        as it does for the HTTP views.
+        """
+        from anthias_server.settings import settings
+
+        if not settings['auth_backend']:
+            return True
+        user = self.scope.get('user')
+        return bool(user is not None and user.is_authenticated)
+
     async def connect(self) -> None:
+        if not self._is_authorized():
+            # Refuse the handshake outright instead of accepting and
+            # then closing: the socket is never added to WS_GROUP, so
+            # an unauthenticated listener sees neither asset ids nor
+            # the *timing* of writes — which was the residual leak that
+            # survived narrowing the now-playing bridge's payload to
+            # '*' (SIRI-62). Closing before accept() means Channels
+            # answers the upgrade with a 403 rather than a close frame,
+            # so no custom close code reaches the browser; the client's
+            # reconnect stays on its existing capped backoff and the
+            # 5s htmx poll — which does get a 302 to /login — remains
+            # the thing that tells an expired session what happened.
+            logger.debug(
+                'Rejected an unauthenticated /ws handshake from %r',
+                self.scope.get('client'),
+            )
+            await self.close()
+            return
         await self.channel_layer.group_add(WS_GROUP, self.channel_name)
         await self.accept()
 
