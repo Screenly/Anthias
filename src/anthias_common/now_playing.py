@@ -104,13 +104,17 @@ def publish(client: Any, asset_id: str | None) -> None:
     if not asset_id:
         clear(client)
         return
+    # Before the write: this is what is on screen, whether or not Redis
+    # accepts it. Advanced only on success, one failed SET left refresh()
+    # renewing the previous asset until the next rotation, which while
+    # playback is stopped never comes.
+    _believed = asset_id
     try:
         # SET always runs: it is what refreshes the TTL. Only the
         # announcement is deduped, because a single-asset playlist
         # would otherwise re-render every open table on every loop for
         # no news. ``get=True`` returns the old value (Redis >= 6.2).
         previous = client.set(NOW_PLAYING_KEY, asset_id, ex=TTL_S, get=True)
-        _believed = asset_id
         if previous != asset_id:
             _announce(client, asset_id)
         _latch.worked('publish')

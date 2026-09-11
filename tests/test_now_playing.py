@@ -114,10 +114,37 @@ def test_publish_without_an_asset_id_clears_instead() -> None:
 
 
 def test_publish_swallows_redis_errors() -> None:
-    """Best-effort: a Redis hiccup must not take the screen down."""
+    """Best-effort: a Redis hiccup must not take the screen down. And
+    the belief still advances, because the asset went on screen whether
+    or not Redis heard about it."""
     client = _client()
     client.set.side_effect = redis.ConnectionError('boom')
     now_playing.publish(client, 'abc123')
+    assert now_playing._believed == 'abc123'
+
+
+def test_a_failed_write_does_not_leave_refresh_renewing_the_old_asset(
+) -> None:
+    """``_believed`` is what is on screen, not what Redis accepted.
+
+    Otherwise a SET that fails on one rotation leaves refresh()
+    re-asserting the previous asset with a full TTL every tick once
+    Redis is back, and the 5s poll reads that same wrong key, so it
+    cannot repair it. It only self-corrects on the next publish, which
+    while playback is stopped never comes.
+    """
+    client = _client()
+    now_playing.publish(client, 'abc123')
+
+    client.set.side_effect = redis.ConnectionError('boom')
+    now_playing.publish(client, 'def456')
+
+    client.set.side_effect = None
+    client.reset_mock()
+    now_playing.refresh(client)
+    client.set.assert_called_once_with(
+        now_playing.NOW_PLAYING_KEY, 'def456', ex=now_playing.TTL_S
+    )
 
 
 # ---------------------------------------------------------------------------
