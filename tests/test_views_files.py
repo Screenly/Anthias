@@ -9,6 +9,7 @@ import pytest
 from django.http import Http404, HttpRequest, HttpResponseBase
 from django.test import RequestFactory
 
+from anthias_common.utils import STAGED_UPLOAD_DIR
 from anthias_server.app import views_files
 from anthias_server.app.views_files import (
     DOCKER_BRIDGE_CIDR,
@@ -192,6 +193,68 @@ def test_anthias_assets_symlink_escape_blocked(
         )
         with pytest.raises(Http404):
             views_files.anthias_assets(request, filename='link.txt')
+
+
+# Staged chunked uploads live at `.uploads/<id>.part` inside the asset
+# dir so the commit stays a rename within one filesystem. They must
+# not be reachable over HTTP: the id is unguessable, but this view is
+# effectively open on the LAN in the default no-SSL install.
+def test_anthias_assets_staged_upload_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    staged = assets_root / STAGED_UPLOAD_DIR
+    staged.mkdir()
+    (staged / 'abc.part').write_text('partial')
+    # Built from the constant, not spelled out: a test that hardcodes
+    # the directory keeps passing after a rename, against a path
+    # nothing writes to any more, while real partials go back to being
+    # served.
+    name = f'{STAGED_UPLOAD_DIR}/abc.part'
+    request = factory.get(
+        f'/anthias_assets/{name}', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename=name)
+
+
+def test_anthias_assets_api_staging_file_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    """The REST API stages a resumable upload at `<id>.tmp` in this
+    same directory. Not dot-leading, and the same thing it would be
+    wrong to hand out."""
+    (assets_root / 'deadbeef.tmp').write_text('partial')
+    request = factory.get(
+        '/anthias_assets/deadbeef.tmp', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename='deadbeef.tmp')
+
+
+def test_anthias_assets_download_in_progress_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    """celery_tasks stages a yt-dlp or remote-video download at
+    `<uuid>.<ext>.part` at the top level of the asset dir — not
+    dot-leading, not `.tmp`. Handing out a half-downloaded video is the
+    same mistake as handing out a half-uploaded one."""
+    (assets_root / 'deadbeef.mp4.part').write_text('half a video')
+    request = factory.get(
+        '/anthias_assets/deadbeef.mp4.part', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename='deadbeef.mp4.part')
+
+
+def test_anthias_assets_dotfile_not_served(
+    factory: RequestFactory, assets_root: Path
+) -> None:
+    (assets_root / '.secret').write_text('nope')
+    request = factory.get(
+        '/anthias_assets/.secret', REMOTE_ADDR=DOCKER_BRIDGE_IP
+    )
+    with pytest.raises(Http404):
+        views_files.anthias_assets(request, filename='.secret')
 
 
 def test_anthias_assets_directory_request_404(

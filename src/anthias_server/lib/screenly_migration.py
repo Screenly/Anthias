@@ -182,9 +182,11 @@ def _resolve_local_path(uri: str) -> Path | None:
     """Return a safe absolute path under ANTHIAS_ASSETS_ROOT, or None.
 
     Returns None for non-local URIs (http://, https://, youtube://, …).
-    Uses the same realpath + startswith guard as ``views_files.anthias_assets``
-    so a tampered DB row can't trick us into opening a file outside the
-    asset directory.
+    Uses the same realpath + startswith traversal guard as
+    ``views_files.anthias_assets`` so a tampered DB row can't trick us
+    into opening a file outside the asset directory. That view also
+    refuses the asset dir's transient staging files, which is about
+    what it hands to HTTP clients and does not apply here.
     """
     if not uri.startswith(str(ANTHIAS_ASSETS_ROOT) + os.sep):
         return None

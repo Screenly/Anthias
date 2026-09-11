@@ -44,6 +44,8 @@ def template(
     # off a <meta> tag). Sourced from Django settings so it stays
     # env-overridable in one place.
     context['app_store_index_url'] = django_settings.APP_STORE_INDEX_URL
+    # Chunk size for large uploads, read client-side off a <meta> tag.
+    context['upload_chunk_size_mb'] = django_settings.UPLOAD_CHUNK_SIZE_MB
     # Navbar needs is_balena / up_to_date / player_name on every page.
     context.update(_navbar_context())
 

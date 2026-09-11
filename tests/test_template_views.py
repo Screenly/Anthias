@@ -10,7 +10,9 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
+import uuid
 from datetime import time, timedelta
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -20,6 +22,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from anthias_common import storage_health
+from anthias_common.utils import STAGED_UPLOAD_DIR
 from anthias_server.app import page_context
 from anthias_server.app.models import DURATION_S_MAX, Asset
 from anthias_server.app.templatetags.asset_filters import to_json
@@ -75,6 +78,23 @@ def test_home_exposes_apps_tab_and_store_index(client: Client) -> None:
     assert dj_settings.APP_STORE_INDEX_URL in body
     assert 'id="tab-apps"' in body
     assert 'appsTab()' in body
+
+
+@pytest.mark.django_db
+def test_home_exposes_the_upload_chunk_size(client: Client) -> None:
+    """The one link carrying the configured chunk size to the browser:
+    settings -> helpers.template -> base.html -> the <meta> tag
+    chunkSizeFromMeta reads. Without it the tag renders empty and every
+    device falls back to the browser's own default, ignoring whatever
+    the operator set."""
+    from django.conf import settings as dj_settings
+
+    body = client.get(reverse('anthias_app:home')).content.decode()
+
+    assert (
+        f'<meta name="anthias-upload-chunk-mb" '
+        f'content="{dj_settings.UPLOAD_CHUNK_SIZE_MB}">'
+    ) in body
 
 
 @pytest.mark.django_db
@@ -2471,6 +2491,571 @@ def test_assets_upload_disk_full_during_write_cleans_up_partial(
     assert 'disk is full' in response.headers.get('HX-Trigger', '')
     assert Asset.objects.count() == 0
     mock_remove.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_assets_upload_chunked_round_trip_is_byte_exact(
+    client: Client, tmp_path: Any
+) -> None:
+    """Three chunks must reassemble into exactly the bytes sent.
+
+    A wrong range fails silently rather than loudly: the view
+    truncates to the declared total, so an off-by-one produces an
+    asset of the right length that will not play."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    payload = bytes(range(256)) * 12
+    chunk = len(payload) // 3
+    bounds = [
+        (0, chunk - 1),
+        (chunk, 2 * chunk - 1),
+        (2 * chunk, len(payload) - 1),
+    ]
+
+    upload_id = None
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        # The commit creates a video asset, and the view dispatches
+        # normalisation for real — which reaches for the Celery result
+        # backend. Mocked like every other video-upload test here so
+        # the documented no-Redis host run stays green.
+        mock.patch('anthias_server.celery_tasks.normalize_video_asset.delay'),
+    ):
+        for start, end in bounds:
+            headers = {
+                'HX-Request': 'true',
+                'Content-Range': f'bytes {start}-{end}/{len(payload)}',
+            }
+            if upload_id:
+                headers['X-Upload-Id'] = upload_id
+            response = client.post(
+                reverse('anthias_app:assets_upload'),
+                data={
+                    'file_upload': SimpleUploadedFile(
+                        'clip.mp4',
+                        payload[start : end + 1],
+                        content_type='video/mp4',
+                    ),
+                },
+                headers=headers,
+            )
+            assert response.status_code == 200
+            if (start, end) != bounds[-1]:
+                upload_id = response.json()['upload_id']
+
+        assert Asset.objects.count() == 1
+        asset = Asset.objects.get()
+        assert asset.uri is not None
+        with open(asset.uri, 'rb') as f:
+            assert f.read() == payload
+        # The staging directory must not keep the partial around.
+        staged = tmp_path / STAGED_UPLOAD_DIR
+        assert not list(staged.glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_chunk_disk_full_is_reported_not_raised(
+    client: Client, tmp_path: Any
+) -> None:
+    """ENOSPC while staging must surface as 507 with the partial
+    removed, not escape as a 500. Chunked uploads are by definition the
+    large ones, so this is the path most likely to fill a card."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.os.open',
+            side_effect=OSError(errno.ENOSPC, 'No space left on device'),
+        ),
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/10',
+            },
+        )
+
+    assert response.status_code == 507
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_assets_upload_single_shot_ignores_a_stray_upload_id(
+    client: Client, tmp_path: Any
+) -> None:
+    """Without Content-Range the original path must run untouched, even
+    if a client sends an id: honouring one there would let a plain
+    upload truncate an unrelated staged file."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'photo.png', b'\x89PNG\r\n', content_type='image/png'
+                ),
+            },
+            headers={'HX-Request': 'true', 'X-Upload-Id': 'a' * 32},
+        )
+
+    assert response.status_code == 200
+    assert Asset.objects.count() == 1
+    assert not (tmp_path / STAGED_UPLOAD_DIR).exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'upload_id',
+    ['../../etc/passwd', 'a' * 31, 'a' * 33, '', 'g' * 32, 'a/b'],
+)
+def test_assets_upload_rejects_a_malformed_upload_id(
+    client: Client, tmp_path: Any, upload_id: str
+) -> None:
+    """The id lands in a filesystem path, so anything but the exact
+    shape we mint is refused."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/10',
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+    assert response.status_code == 400
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'content_range',
+    [
+        'bytes */100',
+        'bytes 5-1/10',
+        'bytes 0-10/10',
+        'bytes 0-9/5',
+        'bytes 0-0/0',
+        'bytes 0-4/' + '9' * 5000,
+        'nonsense',
+    ],
+)
+def test_assets_upload_rejects_a_malformed_range(
+    client: Client, tmp_path: Any, content_range: str
+) -> None:
+    """A client-controlled header must never reach a 500. The long
+    total is the case that used to: int() raises above 4300 digits."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': content_range,
+            },
+        )
+
+    assert response.status_code == 400
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_assets_upload_chunk_past_the_end_drops_the_partial(
+    client: Client, tmp_path: Any
+) -> None:
+    """A gap cannot be told from a resumed upload whose partial has
+    gone, and writing it would leave a hole reading back as zeros. The
+    upload is abandoned rather than silently corrupted."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        first = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'0' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-9/100',
+            },
+        )
+        upload_id = first.json()['upload_id']
+
+        gapped = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'1' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 50-59/100',
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+        assert gapped.status_code == 409
+        # One way to land here is a commit whose response was lost and
+        # whose asset therefore exists, so the message must not say
+        # "upload it again" without qualification.
+        assert 'asset list' in gapped.json()['error']
+        assert Asset.objects.count() == 0
+        assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_drops_the_partial_when_a_chunk_is_rejected(
+    client: Client, tmp_path: Any
+) -> None:
+    """A rejection abandons the upload, so the bytes already staged are
+    dead weight on the card until the hourly sweep. The client starts
+    over under a fresh id and never asks for them again."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    upload_id = uuid.uuid4().hex
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        staged = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'0' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-9/100',
+                'X-Upload-Id': upload_id,
+            },
+        )
+        assert staged.status_code == 200
+        assert list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+        # Rejected before a single byte of it is written, and before
+        # the range is even parsed.
+        rejected = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'1' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes not-a-range/100',
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+        assert rejected.status_code == 400
+        assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('ext', ['.tmp', '.part'])
+def test_assets_upload_never_stores_an_asset_under_a_reserved_ext(
+    client: Client, tmp_path: Any, ext: str
+) -> None:
+    """An asset stored as `<uuid>.tmp` deletes itself: the celery sweep
+    removes `*.tmp` from the asset dir after an hour and the row is
+    left pointing at nothing. `<uuid>.part` survives but is dropped
+    from every backup by _skip_staged_uploads.
+
+    A browser cannot reach this — it sends application/octet-stream for
+    an unknown extension, which the type gate rejects — but a crafted
+    multipart part naming `video/tmp` passes, and did produce exactly
+    that before the extension was refused."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch('anthias_server.celery_tasks.normalize_video_asset.delay'),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    f'clip{ext}',
+                    b'\x00fake',
+                    content_type=f'video/{ext.lstrip(".")}',
+                ),
+            },
+            headers={'HX-Request': 'true'},
+        )
+
+    asset = Asset.objects.get()
+    assert asset.uri is not None
+    assert not asset.uri.endswith(ext)
+
+
+@pytest.mark.django_db
+def test_assets_upload_checks_free_space_on_every_chunk(
+    client: Client, tmp_path: Any
+) -> None:
+    """`total_bytes` is re-read from each request and never pinned, so
+    a declared total that grows after the first chunk would never be
+    measured against the disk if the check ran only at byte 0 — the
+    refusal would read as a property of the upload while being a
+    property of its first request."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    upload_id = uuid.uuid4().hex
+
+    def post(body: bytes, content_range: str) -> Any:
+        return client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', body, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': content_range,
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.shutil.disk_usage',
+            return_value=SimpleNamespace(total=0, used=0, free=100),
+        ),
+    ):
+        # Declares 50 against 100 free, so it passes.
+        assert post(b'0' * 10, 'bytes 0-9/50').status_code == 200
+        # Then grows its claim to 300. 290 still to come, 100 free.
+        assert post(b'1' * 290, 'bytes 10-299/300').status_code == 507
+
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_assets_upload_rejects_a_chunk_that_lies_about_its_length(
+    client: Client, tmp_path: Any
+) -> None:
+    """A body shorter or longer than its declared range would be
+    written at the wrong offset, leaving the asset misaligned at
+    exactly the right size."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'0123456789', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/20',
+            },
+        )
+
+    assert response.status_code == 400
+    assert Asset.objects.count() == 0
+    assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_proceeds_when_free_space_is_unknowable(
+    client: Client, tmp_path: Any
+) -> None:
+    """If the filesystem will not say how much room is left, take the
+    upload rather than refuse it: a working upload matters more than a
+    check that cannot run."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.shutil.disk_usage',
+            side_effect=OSError('cannot stat'),
+        ),
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/10',
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()['upload_id']
+
+
+@pytest.mark.django_db
+def test_assets_upload_does_not_mistake_any_oserror_for_a_full_disk(
+    client: Client, tmp_path: Any
+) -> None:
+    """Only ENOSPC becomes the disk-full answer. Anything else is a
+    real fault and must surface rather than be reported to the
+    operator as something they can fix by freeing space."""
+    import errno
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.os.open',
+            side_effect=OSError(errno.EACCES, 'Permission denied'),
+        ),
+        pytest.raises(OSError),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/10',
+            },
+        )
+
+    assert Asset.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_assets_upload_refuses_a_file_larger_than_free_space(
+    client: Client, tmp_path: Any
+) -> None:
+    """Checked before any bytes are written: the alternative is an
+    hour of uploading followed by failure."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    usage = mock.Mock(free=10)
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        mock.patch(
+            'anthias_server.app.views.shutil.disk_usage', return_value=usage
+        ),
+    ):
+        response = client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'01234', content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-4/1000',
+            },
+        )
+
+    assert response.status_code == 507
+    assert Asset.objects.count() == 0
+    assert not list((tmp_path / STAGED_UPLOAD_DIR).glob('*.part'))
+
+
+@pytest.mark.django_db
+def test_assets_upload_final_chunk_truncates_a_longer_earlier_attempt(
+    client: Client, tmp_path: Any
+) -> None:
+    """A partial longer than the file being committed must not leave
+    its tail on the end of the asset.
+
+    The staged file is whatever an earlier attempt under this id left
+    behind — abandoned, swept late, or simply longer. Every request
+    here declares the same total for the file it is actually sending:
+    the server does not compare a chunk's total against what earlier
+    chunks declared, and nothing should come to depend on that."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from anthias_server.settings import settings as anthias_settings
+
+    upload_id = uuid.uuid4().hex
+    staged = tmp_path / STAGED_UPLOAD_DIR
+    staged.mkdir()
+    (staged / f'{upload_id}.part').write_bytes(b'0' * 40)
+
+    with (
+        mock.patch.dict(anthias_settings, {'assetdir': str(tmp_path)}),
+        # See the round-trip test: the commit dispatches video
+        # normalisation, which needs the Celery result backend.
+        mock.patch('anthias_server.celery_tasks.normalize_video_asset.delay'),
+    ):
+        client.post(
+            reverse('anthias_app:assets_upload'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.mp4', b'1' * 10, content_type='video/mp4'
+                ),
+            },
+            headers={
+                'HX-Request': 'true',
+                'Content-Range': 'bytes 0-9/10',
+                'X-Upload-Id': upload_id,
+            },
+        )
+
+        asset = Asset.objects.get()
+        assert asset.uri is not None
+        with open(asset.uri, 'rb') as f:
+            assert f.read() == b'1' * 10
 
 
 @pytest.mark.django_db

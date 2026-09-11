@@ -25,13 +25,25 @@ def api_client() -> APIClient:
 
 
 @pytest.fixture
-def cleanup_asset_dir() -> Iterator[None]:
-    try:
+def isolated_asset_dir(tmp_path: Path) -> Iterator[None]:
+    """Give the test its own asset dir.
+
+    Named for what it does: it isolates, it does not clean up. Most of
+    its users never write into the asset dir at all — the dependency is
+    vestigial there, so don't read coverage into it.
+
+    This used to empty ``settings['assetdir']`` on teardown, which is
+    one real directory — ~/anthias_assets on a developer's machine —
+    shared by every xdist worker. Under ``pytest -n auto`` one worker's
+    teardown deleted files another worker was still using, which
+    surfaced as rare failures in whichever upload test happened to be
+    mid-request. It also emptied a developer's actual asset directory,
+    the hazard the backup tests' own fixture calls out.
+    """
+    asset_dir = tmp_path / 'anthias_assets'
+    asset_dir.mkdir()
+    with mock.patch.dict(anthias_settings, {'assetdir': str(asset_dir)}):
         yield
-    finally:
-        asset_directory_path = Path(anthias_settings['assetdir'])
-        for file in asset_directory_path.iterdir():
-            file.unlink()
 
 
 def _get_asset_content_url(asset_id: str) -> str:
@@ -39,7 +51,9 @@ def _get_asset_content_url(asset_id: str) -> str:
 
 
 @pytest.mark.django_db
-def test_asset_content(api_client: APIClient, cleanup_asset_dir: None) -> None:
+def test_asset_content(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
     asset = Asset.objects.create(**ASSET_CREATION_DATA)
     asset_id = asset.asset_id
 
@@ -52,7 +66,7 @@ def test_asset_content(api_client: APIClient, cleanup_asset_dir: None) -> None:
 
 
 @pytest.mark.django_db
-def test_file_asset(api_client: APIClient, cleanup_asset_dir: None) -> None:
+def test_file_asset(api_client: APIClient, isolated_asset_dir: None) -> None:
     image_path = os.path.join(
         django_settings.BASE_DIR,
         'src/anthias_server/app/static/img/standby.png',
@@ -85,7 +99,7 @@ def test_file_asset_rejects_list_body(api_client: APIClient) -> None:
 
 @pytest.mark.django_db
 def test_file_asset_disk_full_returns_507(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """ENOSPC while writing the upload must come back as an actionable
     507 with the shared disk-full message, not an unhandled 500
@@ -116,7 +130,7 @@ def test_file_asset_disk_full_returns_507(
 
 @pytest.mark.django_db
 def test_file_asset_disk_full_during_parse_returns_507(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """The ANTHIAS-3K stack is ENOSPC during the multipart parse
     (Django spooling the body to a temp file), surfaced when the view
@@ -147,7 +161,7 @@ def test_file_asset_disk_full_during_parse_returns_507(
 
 @pytest.mark.django_db
 def test_file_asset_disk_full_during_write_cleans_up_partial(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """When the disk fills mid-write (open() succeeds, f.write() then
     raises ENOSPC), the handler must remove the partial .tmp and still
@@ -182,7 +196,7 @@ def test_file_asset_disk_full_during_write_cleans_up_partial(
 
 @pytest.mark.django_db
 def test_file_asset_chunked_out_of_order_reassembles(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """A resumable (Content-Range) upload must reassemble correctly
     even when chunks arrive out of order. Append mode ignored the
@@ -245,7 +259,7 @@ def test_file_asset_chunked_out_of_order_reassembles(
     ],
 )
 def test_file_asset_malformed_content_range_returns_400(
-    api_client: APIClient, cleanup_asset_dir: None, header: str
+    api_client: APIClient, isolated_asset_dir: None, header: str
 ) -> None:
     """A client-controlled ``Content-Range`` header must be validated:
     a syntactically malformed value or inconsistent numeric bounds
@@ -266,7 +280,7 @@ def test_file_asset_malformed_content_range_returns_400(
 
 @pytest.mark.django_db
 def test_file_asset_content_range_chunk_length_mismatch_returns_400(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """The chunk body length must match the declared range; a mismatch
     (here 4 bytes for a claimed 10-byte range) is a 400, not a silently
@@ -287,7 +301,7 @@ def test_file_asset_content_range_chunk_length_mismatch_returns_400(
 
 @pytest.mark.django_db
 def test_file_asset_same_name_uploads_are_isolated(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """Two uploads of the same filename must stage at different temp
     paths so they can't clobber or bleed into each other (issue #3135).
@@ -323,7 +337,7 @@ def test_file_asset_same_name_uploads_are_isolated(
 
 @pytest.mark.django_db
 def test_file_asset_content_range_truncates_on_shrink(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """Within one upload session (shared ``upload_id``), the final chunk
     truncates to the declared total so a shrunk re-write can't inherit
@@ -361,7 +375,7 @@ def test_file_asset_content_range_truncates_on_shrink(
 
 @pytest.mark.django_db
 def test_file_asset_malformed_upload_id_returns_400(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """``X-Upload-Id`` becomes a filesystem path, so a value that isn't
     the uuid4 hex shape we mint (here a traversal attempt) must 400
@@ -385,7 +399,7 @@ def test_file_asset_malformed_upload_id_returns_400(
 
 @pytest.mark.django_db
 def test_file_asset_upload_id_ignored_without_content_range(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     """A single-shot (no Content-Range) upload takes the ``open('wb')``
     truncating path, so ``X-Upload-Id`` must be ignored there — otherwise
@@ -523,7 +537,7 @@ def test_recover_streams_large_upload_to_disk(
 
 @pytest.mark.django_db
 def test_playlist_order(
-    api_client: APIClient, cleanup_asset_dir: None
+    api_client: APIClient, isolated_asset_dir: None
 ) -> None:
     playlist_order_url = reverse('api:playlist_order_v1')
 
@@ -570,7 +584,7 @@ def test_assets_control(
     send_to_viewer_mock: Any,
     command: str,
     api_client: APIClient,
-    cleanup_asset_dir: None,
+    isolated_asset_dir: None,
 ) -> None:
     assets_control_url = reverse('api:assets_control_v1', args=[command])
     response = api_client.get(assets_control_url)
@@ -589,7 +603,7 @@ def test_assets_control(
 def test_reboot(
     reboot_anthias_mock: Any,
     api_client: APIClient,
-    cleanup_asset_dir: None,
+    isolated_asset_dir: None,
 ) -> None:
     reboot_url = reverse('api:reboot_v1')
     response = api_client.post(reboot_url)
@@ -606,7 +620,7 @@ def test_reboot(
 def test_shutdown(
     shutdown_anthias_mock: Any,
     api_client: APIClient,
-    cleanup_asset_dir: None,
+    isolated_asset_dir: None,
 ) -> None:
     shutdown_url = reverse('api:shutdown_v1')
     response = api_client.post(shutdown_url)
@@ -623,7 +637,7 @@ def test_shutdown(
 def test_viewer_current_asset(
     send_to_viewer_mock: Any,
     api_client: APIClient,
-    cleanup_asset_dir: None,
+    isolated_asset_dir: None,
 ) -> None:
     asset = Asset.objects.create(
         **{

@@ -31,13 +31,29 @@ describe('uploadErrorMessage', () => {
     expect(uploadErrorMessage({ kind: 'http', status: 502 })).toBe(expected)
   })
 
-  // 507 is intentionally not special-cased: the browser upload path
-  // answers a full disk with 200 + an HX-Trigger toast, so this only
-  // arrives from an API caller and the generic 5xx line is right.
-  test('507 falls through to the generic server message', () => {
+  // A chunked upload answers a full disk with 507, so this is now
+  // reachable from the browser and must not send the operator to the
+  // logs for something they can fix themselves.
+  test('507 names the disk, not the logs', () => {
     expect(uploadErrorMessage({ kind: 'http', status: 507 })).toBe(
-      'The server failed while handling the upload — check the device logs',
+      'Not enough space on the device — free some up and try again',
     )
+  })
+
+  // Never "try again": the asset may already be there, and a second
+  // upload is exactly the duplicate this wording exists to avoid.
+  test('an unconfirmed commit sends the operator to the list', () => {
+    expect(uploadErrorMessage({ kind: 'unconfirmed' })).toBe(
+      'Upload may have finished — check the asset list before ' +
+        'uploading it again',
+    )
+  })
+
+  // The server's own wording beats anything derived from a status.
+  test('a server-supplied message is passed through verbatim', () => {
+    expect(
+      uploadErrorMessage({ kind: 'server', message: 'Disk is full.' }),
+    ).toBe('Disk is full.')
   })
 
   test('other 4xx keep the original generic wording', () => {

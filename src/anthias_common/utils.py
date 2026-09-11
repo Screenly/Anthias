@@ -56,6 +56,27 @@ def clamp_screen_rotation(value: Any) -> int:
     return rotation if rotation in SCREEN_ROTATION_CHOICES else 0
 
 
+# Where chunked browser uploads stage their partial file, under the
+# asset dir. Shared with the cleanup sweep and the backup filter so the
+# name cannot drift from the code writing into it.
+#
+# It has to be the asset dir, tempting as ~/.anthias looks for
+# something never meant to be served: docker-compose.yml.tmpl
+# bind-mounts .anthias and anthias_assets separately, and rename(2)
+# across two mounts is EXDEV even on one filesystem — the commit would
+# become a full copy of a multi-GB file onto an SD card, needing twice
+# the free space. views_files closes the fetchability that costs us,
+# for this and for the API and import staging files already here.
+STAGED_UPLOAD_DIR = '.uploads'
+
+# How long a partial survives without being written to. An abandoned
+# upload cannot be resumed, so holding it longer only occupies the
+# card, and the hour every other stray file in the asset dir gets
+# covers a slow upload still in progress. One swept mid-upload trips
+# the offset guard in _stage_upload_chunk: loud, not corrupt.
+STAGED_UPLOAD_MAX_AGE_MIN = 60
+
+
 # Operator-facing message for ENOSPC during an upload — shared by the
 # HTML upload toast and the API's 507 response so the wording can't
 # drift between surfaces (Sentry ANTHIAS-3K).

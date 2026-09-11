@@ -10,6 +10,7 @@ import pytest
 from celery.exceptions import SoftTimeLimitExceeded
 
 import anthias_server.celery_tasks as celery_tasks_module
+from anthias_common.utils import STAGED_UPLOAD_DIR
 from anthias_server.app.models import Asset
 from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
@@ -167,6 +168,38 @@ def test_cleanup_returns_when_assetdir_missing() -> None:
         mock_sh.find.assert_not_called()
     finally:
         settings['assetdir'] = original
+
+
+def test_cleanup_sweeps_stale_staged_uploads_only(tmp_path: Any) -> None:
+    """A partial nobody has written to for over an hour is swept; one
+    still being written to is not.
+
+    An upload cannot be resumed once abandoned, so an old partial only
+    occupies the card. Sweeping a live one would be worse: the next
+    chunk's offset guard would reject it and the operator would lose
+    the upload."""
+    staged = tmp_path / STAGED_UPLOAD_DIR
+    staged.mkdir()
+    stale = staged / f'{"a" * 32}.part'
+    fresh = staged / f'{"b" * 32}.part'
+    stale.write_bytes(b'old')
+    fresh.write_bytes(b'new')
+    # find compares mtime, so age the stale one by two hours.
+    two_hours_ago = time.time() - 2 * 60 * 60
+    os.utime(stale, (two_hours_ago, two_hours_ago))
+
+    original = settings['assetdir']
+    settings['assetdir'] = str(tmp_path)
+    try:
+        cleanup.apply()
+    finally:
+        settings['assetdir'] = original
+
+    assert not stale.exists()
+    assert fresh.exists()
+    # The directory itself must survive, or the next upload's first
+    # chunk has nowhere to land.
+    assert staged.is_dir()
 
 
 @pytest.mark.parametrize(

@@ -250,23 +250,62 @@ if _APP_AVAILABLE:
 
 
 @pytest.fixture(scope='session', autouse=True)
-def _ensure_assetdir() -> None:
-    """
-    Some legacy fixtures (e.g. ``api/tests/test_v1_endpoints.py::
-    cleanup_asset_dir``) iterate ``settings['assetdir']`` during
-    teardown without creating it first. The Docker test image creates
-    ``/data/anthias_assets`` in its build (see
-    ``docker/Dockerfile.test.j2``); local hosts have no such guarantee.
-    Materialise the path once per session so those fixtures don't
-    ``FileNotFoundError`` out before the test even runs.
+def _isolated_assetdir(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[None]:
+    """Point ``settings['assetdir']`` at a temp directory for the run.
+
+    Upload tests write real files. Unpatched, ``assetdir`` resolves to
+    ``~/anthias_assets`` — a developer's actual asset directory on a
+    host run, and a directory the suite has no business writing into.
+    The path also has to exist before a test touches it: the Docker
+    test image creates ``/data/anthias_assets`` in its build (see
+    ``docker/Dockerfile.test.j2``), local hosts guarantee nothing.
+
+    Redirecting the config file is what makes it hold, rather than
+    just setting the key. ``AnthiasSettings.load()`` rebuilds
+    ``assetdir`` from whatever the config file says — and ``save()``
+    ends in a ``load()`` — so setting the key alone is undone by the
+    next settings-saving test in the same worker. Patching ``home``
+    does not help either: the config stores an absolute
+    ``assetdir = /home/<user>/anthias_assets``, and ``path.join`` with
+    an absolute second argument discards the first.
+
+    So the singleton is pointed at a temp config that carries the temp
+    path, written from the values already in memory. Every later
+    ``load()`` then resolves back to the temp directory, including the
+    one in ``_isolated_settings_conf``'s teardown, which restores
+    whatever ``conf_file`` it found — this one.
     """
     if not _APP_AVAILABLE:
+        yield
         return
+    from unittest import mock
+
     from anthias_server.settings import settings as _anthias_settings
 
-    asset_dir = _anthias_settings.get('assetdir')
-    if asset_dir:
-        os.makedirs(asset_dir, exist_ok=True)
+    home = tmp_path_factory.mktemp('home')
+    asset_dir = home / 'anthias_assets'
+    asset_dir.mkdir()
+    conf_file = str(home / 'anthias.conf')
+    original_conf_file = _anthias_settings.conf_file
+    try:
+        with mock.patch.dict(_anthias_settings, {'assetdir': str(asset_dir)}):
+            _anthias_settings.conf_file = conf_file
+            # Writes the values already in memory — the developer's
+            # real settings — with `assetdir` redirected. `database`
+            # is redirected too: `_get` rebuilds both from the config
+            # the same way, so leaving one behind would point the
+            # suite at the real SQLite file. The secret key is blanked
+            # rather than copied into a world-readable-by-default
+            # temp tree.
+            _anthias_settings['database'] = str(home / 'anthias.db')
+            _anthias_settings['django_secret_key'] = ''
+            _anthias_settings.save()
+            yield
+    finally:
+        _anthias_settings.conf_file = original_conf_file
+        _anthias_settings.load()
 
 
 def pytest_collection_modifyitems(

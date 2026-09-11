@@ -10,9 +10,40 @@ from datetime import UTC, datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
 
+from anthias_common.utils import STAGED_UPLOAD_DIR
+
 logger = logging.getLogger(__name__)
 
 directories = ['.anthias', 'anthias_assets']
+
+
+def _skip_staged_uploads(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """Keep half-finished uploads out of a backup.
+
+    ``tar.add`` recurses, and the asset dir holds several kinds of
+    in-progress file, each of which can be gigabytes of something
+    nobody finished sending: ``.uploads/<id>.part`` from the browser,
+    ``<upload_id>.tmp`` from the REST API, and ``.import-<hex>`` (plus
+    its ``.part``) from the content importer, which allows 5 GiB. All
+    are meaningless once restored — the session that was writing them
+    is long gone — so they only inflate the archive.
+    """
+    parts = member.name.split('/')
+    # Scoped to the asset dir, which is where all four shapes are
+    # written. `.anthias` is in the same archive and holds the config
+    # and the database, where an atomic-write sidecar is a plausible
+    # future name — excluding one of those would mean a backup that
+    # silently restores incomplete.
+    if parts[0] != 'anthias_assets':
+        return member
+    if STAGED_UPLOAD_DIR in parts:
+        return None
+    leaf = parts[-1]
+    if leaf.endswith(('.tmp', '.part')) or leaf.startswith('.import-'):
+        return None
+    return member
+
+
 # Tarballs created by older releases used these top-level entry names.
 # Recognise them so users can still restore pre-rename backups.
 legacy_directories = ['.screenly', 'screenly_assets']
@@ -114,7 +145,11 @@ def stream_backup() -> Generator[bytes]:
                 ) as tar,
             ):
                 for directory in directories:
-                    tar.add(path.join(home, directory), arcname=directory)
+                    tar.add(
+                        path.join(home, directory),
+                        arcname=directory,
+                        filter=_skip_staged_uploads,
+                    )
         except BrokenPipeError:
             logger.info('backup download cancelled by the client')
         except Exception as exc:
@@ -212,7 +247,11 @@ def create_backup(name: str = default_archive_name) -> str:
         ) as tar:
             for directory in directories:
                 path_to_dir = path.join(home, directory)
-                tar.add(path_to_dir, arcname=directory)
+                tar.add(
+                    path_to_dir,
+                    arcname=directory,
+                    filter=_skip_staged_uploads,
+                )
     except OSError:
         remove(file_path)
         raise

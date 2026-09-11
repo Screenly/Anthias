@@ -31,6 +31,16 @@ DEFAULTS = {
         # UTC), so this is the only way to schedule/display in local
         # time there.
         'timezone': '',
+        # Size of each request a large browser upload is split into,
+        # for an operator behind a proxy that caps request bodies.
+        # Empty defers to the resolved default — see
+        # resolve_upload_chunk_size_mb() in django_project/settings.py
+        # for the config -> ANTHIAS_UPLOAD_CHUNK_SIZE_MB env -> 16
+        # precedence. Lives here so a docker-compose install has one
+        # place to set it that survives an upgrade: this file is on the
+        # mounted volume, while docker-compose.yml is regenerated from
+        # its template on every run.
+        'upload_chunk_size_mb': '',
         'use_24_hour_clock': False,
         'use_ssl': False,
         'auth_backend': '',
