@@ -233,6 +233,12 @@
   --color-success-ring: rgb(52 211 153 / 0.18);
   --color-success-ring-pulse: rgb(52 211 153 / 0.32);
   --color-success-on-wash: var(--color-green-900);
+  /* Ink-on-fill pair for the "Playing now" chip, split the way
+     --color-danger is above: --color-success-on-wash flips to green-50
+     in dark and measures 1.85:1 on a solid fill. Held by INK_ON_FILL
+     in tests/test_design_tokens.py. */
+  --color-success-fill: var(--color-green-500);
+  --color-on-success: var(--color-green-900);
   --color-success-on-wash-strong: var(--color-green-50);
 
   --color-focus-ring: rgb(124 48 205 / 0.35);

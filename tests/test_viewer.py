@@ -1570,6 +1570,103 @@ def test_asset_loop_clamps_out_of_range_duration() -> None:
 
 
 # ---------------------------------------------------------------------------
+# now-playing fact — issue #3177
+# ---------------------------------------------------------------------------
+#
+# The schedule table can't derive which row is on screen once shuffle
+# is on, so the viewer publishes it. The fact's TTL is liveness rather
+# than content, so an asset's duration never reaches it.
+
+
+def test_asset_loop_publishes_the_now_playing_asset() -> None:
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'onscreen',
+        'name': 'onscreen',
+        'uri': 'https://example.com/pinned.png',
+        'mimetype': 'image',
+        'duration': 42,
+        'skip_asset_check': True,
+        'is_reachable': True,
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer.view_image'),
+        mock.patch('anthias_viewer.watchdog'),
+        mock.patch('anthias_viewer.now_playing') as now_playing,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    now_playing.publish.assert_called_once_with(viewer.r, 'onscreen')
+
+
+def test_asset_loop_publishes_regardless_of_a_junk_duration() -> None:
+    """The fact's TTL is liveness, not content, so an out-of-range
+    duration can't reach it — but the row must still be marked."""
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'huge',
+        'name': 'huge',
+        'uri': 'https://example.com/pinned.png',
+        'mimetype': 'image',
+        'duration': 9999999999999,
+        'skip_asset_check': True,
+        'is_reachable': True,
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer.view_image'),
+        mock.patch('anthias_viewer.watchdog'),
+        mock.patch('anthias_viewer.now_playing') as now_playing,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    now_playing.publish.assert_called_once_with(viewer.r, 'huge')
+
+
+def test_asset_loop_clears_now_playing_on_an_empty_playlist() -> None:
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = None
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer.view_image'),
+        mock.patch('anthias_viewer.now_playing') as now_playing,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    now_playing.clear.assert_called_once_with(viewer.r)
+    now_playing.publish.assert_not_called()
+
+
+def test_asset_loop_keeps_now_playing_when_an_asset_is_unavailable() -> None:
+    """An undisplayable asset is skipped without clearing the screen,
+    so the previous asset is still what the operator sees."""
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = {
+        'asset_id': 'remote',
+        'name': 'remote',
+        'uri': 'https://example.com/offline.png',
+        'mimetype': 'image',
+        'duration': 10,
+        'skip_asset_check': False,
+        'is_reachable': False,
+    }
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer._trigger_asset_recheck'),
+        mock.patch('anthias_viewer.now_playing') as now_playing,
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+    ):
+        viewer.asset_loop(scheduler)
+    now_playing.publish.assert_not_called()
+    now_playing.clear.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # _handle_reload / _skip_if_current_asset_inactive — issue #2430
 # ---------------------------------------------------------------------------
 #
@@ -3162,6 +3259,56 @@ def test_stop_playback_sets_module_loop_flag(
     viewer.loop_is_stopped = False
     viewer.stop_playback()
     assert viewer.loop_is_stopped is True
+
+
+def test_stop_playback_leaves_the_now_playing_fact_alone(
+    restore_blank_state: None,
+) -> None:
+    """stop freezes the current asset on screen, so it is still what
+    the operator is looking at. The refresher keeps the fact alive; stop
+    must not retire it."""
+    viewer.loop_is_stopped = False
+    with mock.patch('anthias_viewer.now_playing') as now_playing:
+        viewer.stop_playback()
+    now_playing.clear.assert_not_called()
+
+
+def test_refresh_tick_reasserts_while_something_is_on_screen(
+    restore_blank_state: None,
+) -> None:
+    viewer.display_blanked = False
+    with mock.patch('anthias_viewer.now_playing') as now_playing:
+        viewer._refresh_now_playing_once()
+    now_playing.refresh.assert_called_once_with(viewer.r)
+    now_playing.clear.assert_not_called()
+
+
+def test_refresh_tick_retires_the_fact_while_blanked(
+    restore_blank_state: None,
+) -> None:
+    """Closes the race between the two threads: blank_display() runs on
+    the subscriber thread and retires the fact, but a rotation already
+    past its check on the main thread can re-create it a moment later,
+    and the parked loop would never retire it again."""
+    viewer.display_blanked = True
+    with mock.patch('anthias_viewer.now_playing') as now_playing:
+        viewer._refresh_now_playing_once()
+    now_playing.clear.assert_called_once_with(viewer.r)
+    now_playing.refresh.assert_not_called()
+
+
+def test_blank_display_retires_the_now_playing_fact(
+    restore_blank_state: None,
+) -> None:
+    """blank blacks the screen out, so unlike stop there is nothing on
+    screen for the highlight to point at. The asset loop stops running
+    here, so blank_display is the last chance to say so."""
+    with (
+        mock.patch('anthias_viewer._is_wayland_board', return_value=False),
+        mock.patch('anthias_viewer.now_playing') as now_playing,
+    ):
+        viewer.blank_display()
+    now_playing.clear.assert_called_once_with(viewer.r)
 
 
 def test_play_unblanks_when_display_blanked(

@@ -17,7 +17,12 @@ from typing import Any
 import psutil
 from django.template.defaultfilters import filesizeformat
 
-from anthias_common import device_helper, storage_health, undervoltage
+from anthias_common import (
+    device_helper,
+    now_playing,
+    storage_health,
+    undervoltage,
+)
 from anthias_common.board import LOW_RAM_THRESHOLD_KB
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -647,10 +652,15 @@ def assets() -> dict[str, Any]:
     """
     from anthias_server.app.models import Asset
 
+    # Absent when the viewer hasn't reported yet or Redis is down, in
+    # which case no row is marked rather than a guess (#3177).
+    current_asset_id = now_playing.read(_redis)
+
     qs = Asset.objects.all()
     active: list[Asset] = []
     inactive: list[Asset] = []
     for asset in qs:
+        asset.is_now_playing = asset.asset_id == current_asset_id
         if asset.is_enabled and not asset.is_processing:
             active.append(asset)
         else:

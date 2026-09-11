@@ -239,6 +239,22 @@ def test_get_assets_after_create_should_return_1_asset(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
+def test_get_assets_does_not_leak_view_only_attributes(
+    api_client: APIClient, version: str
+) -> None:
+    """``Asset.is_now_playing`` is device state annotated per render
+    for the schedule table (#3177), not a column and not part of any
+    API version's wire shape. Every serializer lists its fields
+    explicitly today, so this is insurance against a later switch to
+    ``fields = '__all__'``."""
+    _create_asset(api_client, ASSET_CREATION_DATA, version)
+
+    assets = _get_assets(api_client, version)
+    assert 'is_now_playing' not in assets[0]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1', 'v1_1', 'v1_2', 'v2'])
 def test_get_asset_by_id_should_return_asset(
     api_client: APIClient, version: str
 ) -> None:

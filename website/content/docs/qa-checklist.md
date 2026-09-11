@@ -40,7 +40,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 5. Enable **Show splash screen** and reboot the device. Make sure that the splash screen is being displayed upon boot.
 6. Enable **Default assets** and make sure that the default assets are added to the list of active assets. Also make sure that the assets are being displayed on the screen.
 7. Disable **Default assets** and make sure that the assets are deleted from the list of active assets. Also make sure that the assets are not being displayed on the screen.
-8. Enable **Shuffle playlist**. Activate some assets and make sure that the assets are being displayed in random order.
+8. Enable **Shuffle playlist**. Activate some assets and make sure that the assets are being displayed in random order. On the Schedule Overview, the **Playing now** chip should follow the screen, moving to whichever row is currently up.
 9. Enable **Use 24-hour clock**. Go to the assets page and make sure that the time field uses correct format.
 10. Enable any video asset with sounds and choose **HDMI** for the **Audio output**. Make sure that the sound works.
 11. Enable any video file with sounds and choose **3.5mm** jack for the **Audio output**. Make sure that the sound works.

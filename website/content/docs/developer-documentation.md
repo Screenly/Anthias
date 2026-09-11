@@ -17,7 +17,7 @@ These components and their dependencies are mostly installed and handled with An
 * The **web app** component (`anthias-server`) is the single HTTP entrypoint, served by uvicorn (ASGI). It runs the Django front-end + REST API, serves static assets via WhiteNoise, streams uploaded media at `/anthias_assets/`, and exposes the WebSocket endpoint at `/ws` via Django Channels. Always plain HTTP, TLS is opt-in via the **anthias-caddy** sidecar that `bin/enable_ssl.sh` installs (Caddy local CA by default, or Let's Encrypt with `--domain`).
 * The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video). It fetches media from `anthias-server` over HTTP.
 * The **Celery** (`anthias-celery`) component is for asynchronously queueing and executing tasks outside the HTTP request-response cycle (e.g., yt-dlp downloads, asset cleanup). It pushes asset-update events to connected WebSocket clients via the Redis-backed Channels layer.
-* **Redis** (`redis`) is used as the Celery broker/result backend and as the Channels channel layer.
+* **Redis** (`redis`) is used as the Celery broker/result backend, as the Channels channel layer, and as the signalling bus between the server and the viewer — commands on the `anthias.viewer` channel, and facts the viewer publishes for the server to read, such as which asset is on screen right now.
 * The **database** component uses **SQLite** for storing the assets information.
 
 ## Dockerized development environment

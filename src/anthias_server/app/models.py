@@ -241,6 +241,10 @@ class Asset(models.Model):
     # ``or {}`` guard.
     metadata = models.JSONField(default=dict, blank=True)
 
+    # Not a column. Device state, not asset state, so page_context
+    # annotates it per render (#3177) and it is False everywhere else.
+    is_now_playing: bool = False
+
     class Meta:
         db_table = 'assets'
 

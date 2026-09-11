@@ -161,6 +161,9 @@ def contrast(
 # a colour role means adding its pairs here, otherwise the role is
 # unaudited.
 PAIRS: list[tuple[str, str]] = [
+    # The "Playing now" chip: solid success fill with its own ink, which
+    # must hold in both themes (#3177).
+    ('--color-on-success', '--color-success-fill'),
     # Text on the surface plane. --color-fg is deliberately NOT paired
     # with the canvas: the canvas is brand plum in both themes, so text
     # sitting directly on it uses --color-on-canvas instead.
@@ -462,6 +465,7 @@ def test_no_magic_z_index_values() -> None:
 # a fill measures 2.75:1 in dark, which is what .app-btn-danger did.
 INK_ON_FILL: dict[str, str] = {
     '--color-on-danger': '--color-danger-fill',
+    '--color-on-success': '--color-success-fill',
 }
 
 _BG = re.compile(r'\bbackground(?:-color)?\s*:\s*var\((--[a-z0-9-]+)\)')

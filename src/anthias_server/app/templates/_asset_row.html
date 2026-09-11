@@ -1,6 +1,8 @@
 {% load asset_filters %}
 {% with pills=asset|schedule_pills %}
-<tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}" :class="isSelected('{{ asset.asset_id }}') && 'is-selected'">
+{% comment %} Alpine merges :class onto the static class attribute
+   rather than replacing it, so selecting a row keeps is-now-playing. {% endcomment %}
+<tr data-asset-id="{{ asset.asset_id }}" data-processing="{{ asset.is_processing|yesno:'true,false' }}" data-name="{{ asset.name|default:''|escape }}" data-duration="{{ asset.duration|default:0 }}"{% if asset.is_now_playing %} class="is-now-playing"{% endif %} :class="isSelected('{{ asset.asset_id }}') && 'is-selected'">
   <td class="asset-select-col" data-label="Select" data-no-label>
     <label class="asset-select">
       <input type="checkbox" class="app-check-input js-row-select"
@@ -20,8 +22,16 @@
       </span>
       <span class="asset-cell-name__title">
         <span class="asset-cell-name__primary" title="{{ asset.name }}">{{ asset.name }}</span>
-        {% if pills %}
+        {% if pills or asset.is_now_playing %}
         <span class="schedule-chips">
+          {% if asset.is_now_playing %}
+          <span class="schedule-chip schedule-chip--playing">
+            {% comment %} Outline name, not -filled: the webfont ships
+               the outline set only (see _toasts.html). {% endcomment %}
+            <i class="ti ti-player-play" aria-hidden="true"></i>
+            <span>Playing now</span>
+          </span>
+          {% endif %}
           {% for pill in pills %}
           <span class="schedule-chip schedule-chip--{{ pill.kind }}">
             {% if pill.kind == 'all' %}<i class="ti ti-calendar-check"></i>

@@ -54,6 +54,8 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
+from anthias_common.warn_once import WarnOnce
+
 # The hwmon class dir is kernel-global and readable from inside an
 # unprivileged container, which is the whole point of using it.
 HWMON_ROOT = '/sys/class/hwmon'
@@ -188,29 +190,10 @@ def _empty_state() -> dict[str, Any]:
     }
 
 
-_warned: set[str] = set()
-
-
-def _warn_once(key: str, message: str) -> None:
-    """Log ``message`` at WARNING the first time, DEBUG thereafter.
-
-    These conditions (an unreadable boot id, a Redis that will not
-    answer) are properties of the device, not of the individual
-    reading, so they are worth stating once and not repeating. The
-    watcher and every page render call into this module, so without
-    the throttle a single persistent fault would bury everything else
-    in the device log.
-
-    Scoped to the process, which for the celery worker means once per
-    boot in practice. It deliberately is not keyed on the kernel boot
-    id: the main caller is the branch that fires precisely *because*
-    the boot id could not be read.
-    """
-    if key in _warned:
-        logger.debug(message)
-        return
-    _warned.add(key)
-    logger.warning(message)
+#: Device-level faults here (an unreadable boot id, a Redis that will
+#: not answer) are worth stating once, not on every reading: the
+#: watcher and every page render call in here.
+_warn = WarnOnce(logger)
 
 
 def _coerce_count(value: Any) -> int:
@@ -261,7 +244,7 @@ def _load_latch(
     try:
         raw = redis_client.get(REDIS_KEY)
     except Exception:
-        _warn_once(
+        _warn.warn(
             'latch_unreadable',
             'Could not read the under-voltage latch from Redis; '
             'treating history as unknown rather than empty.',
@@ -344,7 +327,7 @@ def record_observation(
     # state; the live reading is still accurate, and the paired
     # discard in ``_load_latch`` keeps the two halves consistent.
     if boot_id is None:
-        _warn_once(
+        _warn.warn(
             'no_boot_id',
             'No kernel boot id available; reporting under-voltage from '
             'the live sensor only and not persisting history.',

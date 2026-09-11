@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import certifi
 import pytz
 import redis
+import redis.asyncio
 import requests
 import sh
 import urllib3
@@ -727,6 +728,38 @@ def generate_perfect_paper_password(
 
 def connect_to_redis() -> 'redis.Redis':
     return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+
+
+def connect_to_redis_async() -> 'redis.asyncio.Redis':
+    """Async twin of :func:`connect_to_redis`, for the ASGI paths.
+
+    A separate client rather than a shared one: redis-py's sync and
+    async clients can't share a connection pool.
+
+    Both timeouts are safe on a pub/sub client under redis-py 8.x:
+    ``PubSub.parse_response`` hands ``read_response`` ``math.inf`` for
+    a blocking read, which is its documented opt-out from
+    ``socket_timeout``. They therefore bound the dial, the SUBSCRIBE
+    and the retry layer's reconnect/AUTH/HELLO, but never a read that
+    is legitimately waiting for the next rotation.
+
+    The same opt-out means ``socket_timeout`` cannot notice a half-open
+    socket under a blocking ``listen()``, and neither can
+    ``health_check_interval``: it only fires from
+    ``PubSub.check_health``, which runs when ``parse_response`` is
+    re-entered. Detecting that is the caller's job -- see
+    ``_watch_now_playing`` in :mod:`anthias_server.app.consumers`,
+    which reads with an explicit timeout in a loop.
+    """
+    return redis.asyncio.Redis(
+        host='redis',
+        decode_responses=True,
+        port=6379,
+        db=0,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+        health_check_interval=30,
+    )
 
 
 def is_docker() -> bool:

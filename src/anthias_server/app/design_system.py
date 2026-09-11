@@ -153,10 +153,18 @@ COLOUR_GROUPS: list[tuple[str, str, list[str]]] = [
     ),
     (
         'Success',
-        'Live schedule windows, healthy states, success toasts.',
+        (
+            'Live schedule windows, healthy states, success toasts. Split '
+            'the same way as Danger: --color-success-fill is a background '
+            'with --color-on-success on top, because --color-success-on-wash '
+            'lightens for dark mode and reusing it on a solid fill measures '
+            '1.85:1 there.'
+        ),
         [
             'success',
             'success-bright',
+            'success-fill',
+            'on-success',
             'success-wash',
             'success-wash-strong',
             'success-edge',

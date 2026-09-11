@@ -450,6 +450,13 @@ label { text-align: left; }
   min-width: 0;
 }
 
+// Now-playing row (#3177). Declared before .is-selected so the
+// operator's own selection still wins the background; the chip carries
+// the meaning either way. Translucent, so it works on both surfaces.
+.asset-table tbody tr.is-now-playing td {
+  background: var(--color-success-wash);
+}
+
 .asset-table tbody tr.is-selected td {
   background: var(--color-accent-wash);
 }
@@ -559,6 +566,14 @@ label { text-align: left; }
   background: var(--chip-all-bg);
   color: var(--chip-all-text);
   border-color: var(--chip-all-edge);
+}
+// "Playing now" — device state, not schedule config, so it borrows the
+// live palette of the schedule dot. Solid rather than washed like every
+// other chip: beside the green --all pill, two washes read as one.
+.schedule-chip--playing {
+  background: var(--color-success-fill);
+  color: var(--color-on-success);
+  border-color: var(--color-success-fill);
 }
 
 // Schedule-window cell — replaces the prior pair of raw start/end
