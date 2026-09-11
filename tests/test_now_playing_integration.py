@@ -19,14 +19,19 @@ resolves there). They skip rather than fail anywhere else.
 """
 
 import asyncio
-from collections.abc import Coroutine, Iterator
+import contextlib
+import inspect
+from collections.abc import Callable, Coroutine, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from unittest import mock
 
 import pytest
 import redis
+import redis.asyncio
 
 from anthias_common import now_playing
+from anthias_common.utils import connect_to_redis_async
 from anthias_server.app import consumers
 
 pytestmark = pytest.mark.integration
@@ -217,3 +222,197 @@ def test_the_subscription_survives_an_idle_stretch(
     assert _run(scenario()), (
         'the subscription stopped delivering after an idle stretch'
     )
+
+
+class _Relay:
+    """A TCP hop between the subscriber and Redis that a test can cut.
+
+    ``CLIENT KILL`` is not enough to stand in for an outage: redis-py
+    reconnects and re-SUBSCRIBEs from inside ``get_message``, so an
+    instant drop against a live server never reaches the task at all.
+    What SIRI-61 describes is a server that is *gone* for longer than
+    that retry budget — ``docker compose restart redis`` — and a test
+    cannot restart the container it is running against. So it puts a
+    hop in the path and closes that instead: connections in flight
+    die and new ones are refused, which is what the subscriber sees
+    either way.
+    """
+
+    def __init__(self) -> None:
+        self.port = 0
+        self._server: asyncio.AbstractServer | None = None
+        self._sessions: set[asyncio.Future[Any]] = set()
+
+    async def open(self) -> None:
+        """Listen, reusing the same port across a cut so the client
+        under test keeps one address for the whole scenario."""
+        self._server = await asyncio.start_server(
+            self._handle, '127.0.0.1', self.port
+        )
+        self.port = self._server.sockets[0].getsockname()[1]
+
+    async def cut(self) -> None:
+        """Stop accepting, and drop what is already connected.
+
+        Deliberately not ``wait_closed()``: since 3.12.1 that waits
+        for the handlers, and the handlers are the sessions being
+        torn down here — waiting first is a deadlock. ``close()``
+        releases the listening socket on its own, which is what the
+        next ``open()`` needs.
+        """
+        if self._server is not None:
+            self._server.close()
+            self._server = None
+        sessions, self._sessions = self._sessions, set()
+        for session in sessions:
+            session.cancel()
+        await asyncio.gather(*sessions, return_exceptions=True)
+
+    async def _handle(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        try:
+            upstream_r, upstream_w = await asyncio.open_connection(
+                'redis', 6379
+            )
+        except OSError:
+            writer.close()
+            return
+        session = asyncio.gather(
+            self._pump(reader, upstream_w),
+            self._pump(upstream_r, writer),
+        )
+        self._sessions.add(session)
+        try:
+            await session
+        except (OSError, asyncio.CancelledError):
+            pass
+        finally:
+            self._sessions.discard(session)
+            writer.close()
+            upstream_w.close()
+
+    @staticmethod
+    async def _pump(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        while data := await reader.read(65536):
+            writer.write(data)
+            await writer.drain()
+
+
+#: Longer than redis-py's own reconnect budget, so the failure reaches
+#: the task rather than being absorbed under it — that is the whole
+#: point of the scenario. Kept short so the suite doesn't pay for it.
+OUTAGE_S = 4.0
+
+
+def _via(port: int) -> 'Callable[[], Any]':
+    """The shipped client, dialled through the relay.
+
+    Built from ``connect_to_redis_async``'s own connection kwargs
+    rather than a second copy of them, so the timeouts and the retry
+    policy under test stay the ones that ship; the address is the only
+    thing redirected. The pool records more than the constructor
+    takes (defaults it filled in itself), so the derived set is
+    narrowed to what ``Redis`` actually accepts.
+    """
+    accepted = inspect.signature(redis.asyncio.Redis).parameters
+    template = connect_to_redis_async()
+    kwargs = {
+        name: value
+        for name, value in template.connection_pool.connection_kwargs.items()
+        if name in accepted
+    }
+    kwargs.update(host='127.0.0.1', port=port)
+
+    def build() -> Any:
+        return redis.asyncio.Redis(**kwargs)
+
+    return build
+
+
+def test_the_subscription_comes_back_after_a_redis_outage(
+    client: Any,
+) -> None:
+    """SIRI-61: the subscriber re-establishes itself, with no new
+    WebSocket anywhere in the scenario.
+
+    That is the whole point. The browser's socket terminates at
+    uvicorn rather than at Redis, so an outage never closes it and
+    ``vendor.ts`` never reconnects — nothing fires the
+    restart-on-connect path, and before this every already-open tab
+    sat on the 5s poll until someone reloaded it.
+
+    The recovery is read off the server (``PUBSUB CHANNELS``) and off
+    a message actually arriving, not off a mock's call count.
+    """
+    from channels.layers import get_channel_layer
+
+    def subscribers() -> int:
+        return len(
+            client.execute_command(
+                'PUBSUB', 'CHANNELS', now_playing.NOW_PLAYING_CHANNEL
+            )
+        )
+
+    async def settle(want: int, what: str) -> None:
+        deadline = asyncio.get_running_loop().time() + TIMEOUT_S
+        while subscribers() != want:
+            if asyncio.get_running_loop().time() > deadline:
+                raise AssertionError(f'timed out waiting for {what}')
+            await asyncio.sleep(0.1)
+
+    async def scenario() -> None:
+        layer = get_channel_layer()
+        assert layer is not None, 'CHANNEL_LAYERS is not configured'
+        relay = _Relay()
+        await relay.open()
+
+        with mock.patch(
+            'anthias_server.app.consumers.connect_to_redis_async',
+            _via(relay.port),
+        ):
+            watcher = asyncio.create_task(consumers._watch_now_playing())
+            try:
+                await settle(1, 'the first SUBSCRIBE')
+
+                await relay.cut()
+                await settle(0, 'the subscriber to go with the server')
+                await asyncio.sleep(OUTAGE_S)
+                assert not watcher.done(), (
+                    'the subscriber gave up on the outage; every open tab '
+                    'is poll-only until the page is reloaded'
+                )
+
+                await relay.open()
+                await settle(1, 'the subscription to come back by itself')
+
+                # Joined only now, so nothing published before the
+                # outage can be waiting in it: a message arriving here
+                # came through the subscription that was rebuilt.
+                channel = await layer.new_channel()
+                await layer.group_add(consumers.WS_GROUP, channel)
+                try:
+                    received = asyncio.create_task(layer.receive(channel))
+                    deadline = asyncio.get_running_loop().time() + TIMEOUT_S
+                    while not received.done():
+                        if asyncio.get_running_loop().time() > deadline:
+                            received.cancel()
+                            raise AssertionError(
+                                'the rebuilt subscription is not forwarding'
+                            )
+                        client.publish(
+                            now_playing.NOW_PLAYING_CHANNEL, 'after-the-outage'
+                        )
+                        await asyncio.sleep(PUBLISH_EVERY_S)
+                    assert (await received)['type'] == 'asset_update'
+                finally:
+                    await layer.group_discard(consumers.WS_GROUP, channel)
+            finally:
+                watcher.cancel()
+                await asyncio.gather(watcher, return_exceptions=True)
+                with contextlib.suppress(AssertionError):
+                    await relay.cut()
+
+    _run(scenario())
