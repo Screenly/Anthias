@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import itertools
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 from unittest import mock
 
@@ -109,7 +109,7 @@ class _FakePubSub:
 
     Idling returns ``None`` the way a real poll does when nothing was
     published; dropping raises, which is how a lost subscription ends
-    the task in production.
+    an attempt in production.
     """
 
     def __init__(
@@ -169,6 +169,56 @@ def _watching(client: mock.Mock, layer: mock.Mock) -> Any:
     )
 
 
+async def _quiesce(task: 'asyncio.Task[None]') -> None:
+    """Cancel and await, so asyncio.run() doesn't close the loop on a
+    pending task and log "Task was destroyed but it is pending!"."""
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+async def _until(
+    predicate: Callable[[], bool], what: str, passes: int = 500
+) -> None:
+    """Hand the loop back until ``predicate`` holds.
+
+    The watcher is a task now rather than a coroutine these tests can
+    await to completion — it only ends on cancellation — so they drive
+    it to the point of interest and stop it there. A pass budget
+    rather than a wall-clock deadline, because the backoff waits are
+    patched out: a scenario that has stopped making progress has
+    stopped for good, and failing on the spot beats hanging CI.
+    """
+    for _ in range(passes):
+        if predicate():
+            return
+        await asyncio.sleep(0)
+    raise AssertionError(f'timed out waiting for {what}')
+
+
+@contextlib.contextmanager
+def _recorded_backoff() -> Iterator[list[float]]:
+    """Take the retry loop's waits instantly, recording what it asked
+    for.
+
+    Patching ``asyncio.sleep`` wholesale rather than cutting a seam
+    into the module for tests: the loop's own waits are the only
+    non-zero ones in these scenarios, and this keeps the assertions on
+    the shipped code path. ``_FakePubSub`` idles with ``sleep(0)``,
+    which is not a backoff and is left out.
+    """
+    real_sleep = asyncio.sleep
+    delays: list[float] = []
+
+    async def instant(delay: float, *args: Any, **kwargs: Any) -> Any:
+        if delay:
+            delays.append(delay)
+        return await real_sleep(0)
+
+    with mock.patch.object(asyncio, 'sleep', instant):
+        yield delays
+
+
 def test_now_playing_watch_fans_out_through_the_channel_layer() -> None:
     """One subscription for the process, re-broadcast onto the group
     every socket is already in — rather than a send per socket from a
@@ -177,13 +227,22 @@ def test_now_playing_watch_fans_out_through_the_channel_layer() -> None:
         [
             {'type': 'message', 'data': 'abc123'},
             {'type': 'message', 'data': ''},
-        ]
+        ],
+        idle=True,
     )
     layer = _fake_layer()
     layer_patch, redis_patch = _watching(client, layer)
 
-    with layer_patch, redis_patch:
-        asyncio.run(consumers._watch_now_playing())
+    async def scenario() -> None:
+        with layer_patch, redis_patch:
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(
+                lambda: layer.group_send.await_count == 2,
+                'both messages to reach the group',
+            )
+            await _quiesce(task)
+
+    asyncio.run(scenario())
 
     assert pubsub.subscribed_to == [now_playing.NOW_PLAYING_CHANNEL]
     assert layer.group_send.await_count == 2
@@ -217,12 +276,22 @@ def test_now_playing_watch_never_forwards_the_asset_id() -> None:
     ALLOWED_HOSTS=['*'], and vendor.ts ignores the frame body anyway —
     so the id must not reach the wire. The generic '*' sentinel the
     write paths already send carries the same meaning."""
-    client, _ = _fake_redis([{'type': 'message', 'data': 'secret-uuid'}])
+    client, _ = _fake_redis(
+        [{'type': 'message', 'data': 'secret-uuid'}], idle=True
+    )
     layer = _fake_layer()
     layer_patch, redis_patch = _watching(client, layer)
 
-    with layer_patch, redis_patch:
-        asyncio.run(consumers._watch_now_playing())
+    async def scenario() -> None:
+        with layer_patch, redis_patch:
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(
+                lambda: layer.group_send.await_count == 1,
+                'the message to reach the group',
+            )
+            await _quiesce(task)
+
+    asyncio.run(scenario())
 
     (message,) = [c.args[1] for c in layer.group_send.await_args_list]
     assert message == {'type': 'asset_update', 'asset_id': '*'}
@@ -236,25 +305,218 @@ def test_now_playing_watch_survives_an_unreachable_redis(
     browsers keep their 5s poll. Warned once rather than logged at
     DEBUG, so a genuine defect here (a redis-py API change) is visible
     in the journal at the default level instead of silently disabling
-    the feature."""
-    with (
-        mock.patch(
-            'anthias_server.app.consumers.get_channel_layer',
-            return_value=_fake_layer(),
-        ),
-        mock.patch(
-            'anthias_server.app.consumers.connect_to_redis_async',
-            side_effect=OSError('no redis here'),
-        ),
-        caplog.at_level('DEBUG'),
-    ):
-        # Must not raise.
-        asyncio.run(consumers._watch_now_playing())
-        asyncio.run(consumers._watch_now_playing())
+    the feature — and once for the whole outage, not once per retry."""
+    connect = mock.Mock(side_effect=OSError('no redis here'))
+
+    async def scenario() -> None:
+        with (
+            mock.patch(
+                'anthias_server.app.consumers.get_channel_layer',
+                return_value=_fake_layer(),
+            ),
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async',
+                connect,
+            ),
+            _recorded_backoff(),
+        ):
+            # Must not raise.
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(lambda: connect.call_count >= 4, 'four dials')
+            await _quiesce(task)
+
+    with caplog.at_level('DEBUG'):
+        asyncio.run(scenario())
 
     warnings = [r for r in caplog.records if r.levelname == 'WARNING']
     assert len(warnings) == 1
     assert 'fall back to the 5s' in warnings[0].getMessage()
+
+
+def test_the_subscriber_re_establishes_itself_after_a_drop() -> None:
+    """The fix for SIRI-61. The browser's socket terminates at uvicorn,
+    not at Redis, so a Redis blip never closes it and vendor.ts never
+    reconnects — the restart-on-connect path is uncorrelated with Redis
+    coming back. Every already-open tab used to stay poll-only until
+    someone reloaded the page; the task has to reconnect on its own,
+    with no new socket in the scenario at all."""
+    dropped, _ = _fake_redis([])  # raises as soon as it is polled
+    revived, _ = _fake_redis([{'type': 'message', 'data': 'back'}], idle=True)
+    connect = mock.Mock(side_effect=[dropped, revived])
+    layer = _fake_layer()
+    layer_patch, _ = _watching(dropped, layer)
+
+    async def scenario() -> None:
+        with (
+            layer_patch,
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async', connect
+            ),
+            _recorded_backoff(),
+        ):
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(
+                lambda: layer.group_send.await_count == 1,
+                'the push to come back by itself',
+            )
+            assert not task.done()
+            await _quiesce(task)
+
+    asyncio.run(scenario())
+
+    assert connect.call_count == 2
+    # The dropped attempt's client is closed rather than leaked, so a
+    # long outage does not accumulate one connection per retry.
+    assert dropped.aclose.await_count == 1
+
+
+def test_the_retry_backs_off_and_is_capped() -> None:
+    """A Redis that is down for the night must not cost a dial a
+    second. The waits double from the floor and stop at the ceiling."""
+    connect = mock.Mock(side_effect=OSError('no redis here'))
+
+    async def scenario() -> list[float]:
+        with (
+            mock.patch(
+                'anthias_server.app.consumers.get_channel_layer',
+                return_value=_fake_layer(),
+            ),
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async',
+                connect,
+            ),
+            _recorded_backoff() as delays,
+        ):
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(lambda: len(delays) >= 12, 'twelve retries')
+            await _quiesce(task)
+            return list(delays)
+
+    delays = asyncio.run(scenario())
+
+    floor = consumers._RETRY_MIN_S
+    assert delays[:4] == [floor, floor * 2, floor * 4, floor * 8]
+    assert max(delays) == consumers._RETRY_MAX_S
+    assert delays[-1] == consumers._RETRY_MAX_S
+
+
+def test_a_flapping_redis_is_one_warning_not_one_per_cycle(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A server that accepts SUBSCRIBE and drops the connection a
+    second later is the same fault continuing, not a recovery. If the
+    latch re-armed on every successful subscribe, that would be a
+    WARNING per cycle — the journal-flooding warn_once exists to
+    prevent (#3268)."""
+    flapping = [_fake_redis([])[0] for _ in range(6)]
+    connect = mock.Mock(side_effect=flapping)
+    layer_patch, _ = _watching(flapping[0], _fake_layer())
+
+    async def scenario() -> None:
+        with (
+            layer_patch,
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async', connect
+            ),
+            _recorded_backoff(),
+        ):
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(lambda: connect.call_count >= 5, 'five flaps')
+            await _quiesce(task)
+
+    with caplog.at_level('DEBUG'):
+        asyncio.run(scenario())
+
+    warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+    assert len(warnings) == 1
+
+
+def test_a_recovered_subscription_re_arms_the_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The other side of the latch: once an attempt has held long
+    enough to count as healthy, a later outage is news again rather
+    than being filed at DEBUG for the life of the process.
+
+    _STABLE_AFTER_S is patched to zero so the first poll of each
+    attempt clears the mark; at its real value these scenarios run in
+    well under a minute and would never reach it."""
+    served, _ = _fake_redis([{'type': 'message', 'data': 'x'}])
+    later, _ = _fake_redis([{'type': 'message', 'data': 'y'}])
+    connect = mock.Mock(
+        side_effect=[
+            served,
+            later,
+            *(_fake_redis([], idle=True)[0] for _ in range(2)),
+        ]
+    )
+    layer = _fake_layer()
+    layer_patch, _ = _watching(served, layer)
+
+    async def scenario() -> None:
+        with (
+            layer_patch,
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async', connect
+            ),
+            mock.patch.object(consumers, '_STABLE_AFTER_S', 0.0),
+            _recorded_backoff(),
+        ):
+            task = asyncio.create_task(consumers._watch_now_playing())
+            await _until(lambda: connect.call_count >= 3, 'two outages')
+            await _quiesce(task)
+
+    with caplog.at_level('DEBUG'):
+        asyncio.run(scenario())
+
+    warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+    assert len(warnings) == 2
+
+
+def test_cancelling_during_the_backoff_stops_the_task() -> None:
+    """_release_now_playing_watcher cancels when the last tab closes,
+    and that can land while the loop is waiting out a retry. The task
+    must stop there rather than sit out the wait and dial again on a
+    device nobody is looking at."""
+    connect = mock.Mock(side_effect=OSError('no redis here'))
+    waiting = asyncio.Event()
+
+    async def scenario() -> 'asyncio.Task[None]':
+        real_sleep = asyncio.sleep
+
+        async def block(delay: float, *args: Any, **kwargs: Any) -> Any:
+            if delay:
+                waiting.set()
+                # Long enough that the task is certainly still in the
+                # wait when the cancellation arrives.
+                return await real_sleep(30)
+            return await real_sleep(0)
+
+        with (
+            mock.patch(
+                'anthias_server.app.consumers.get_channel_layer',
+                return_value=_fake_layer(),
+            ),
+            mock.patch(
+                'anthias_server.app.consumers.connect_to_redis_async',
+                connect,
+            ),
+            mock.patch.object(asyncio, 'sleep', block),
+        ):
+            task = asyncio.create_task(consumers._watch_now_playing())
+            # Bounded, so a regression that skips the wait entirely
+            # fails the run rather than hanging it — the timer is the
+            # loop's own, not the patched-out sleep.
+            await asyncio.wait_for(waiting.wait(), timeout=10)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            return task
+
+    task = asyncio.run(scenario())
+
+    assert task.cancelled()
+    assert connect.call_count == 1
 
 
 def test_now_playing_watch_without_a_channel_layer_is_a_no_op() -> None:
@@ -277,14 +539,6 @@ def test_now_playing_watch_without_a_channel_layer_is_a_no_op() -> None:
 
 
 _channel_ids = itertools.count()
-
-
-async def _quiesce(task: 'asyncio.Task[None]') -> None:
-    """Cancel and await, so asyncio.run() doesn't close the loop on a
-    pending task and log "Task was destroyed but it is pending!"."""
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
 
 
 def _connected_consumer() -> AssetConsumer:
@@ -354,16 +608,21 @@ def test_disconnect_discards_the_channel_without_a_prior_connect() -> None:
     assert not consumers._watchers_wanted
 
 
-def test_a_dead_subscriber_is_restarted_by_the_next_tab() -> None:
-    """The body ends on any Redis failure. A server that outlives a
-    Redis outage must get another attempt rather than staying
-    poll-only until the container restarts."""
-    dead, _ = _fake_redis([])  # drops as soon as it is polled
+def test_a_finished_subscriber_is_restarted_by_the_next_tab() -> None:
+    """The body retries a dropped subscription itself now, so this is
+    a backstop rather than the recovery path: whatever ended the task
+    — no channel layer at the time it started, a BaseException the
+    retry loop deliberately does not catch — the next socket must get
+    a live subscriber rather than be handed a finished task."""
     alive, _ = _fake_redis([], idle=True)
-    connect = mock.Mock(side_effect=[dead, alive])
-    layer_patch, _ = _watching(dead, _fake_layer())
+    connect = mock.Mock(return_value=alive)
+    layer_patch, _ = _watching(alive, _fake_layer())
 
     async def scenario() -> None:
+        finished = asyncio.create_task(asyncio.sleep(0))
+        await finished
+        consumers._now_playing_watcher = finished
+
         with (
             layer_patch,
             mock.patch(
@@ -371,17 +630,11 @@ def test_a_dead_subscriber_is_restarted_by_the_next_tab() -> None:
             ),
         ):
             await _open(_connected_consumer())
-            # Let the first subscriber drop and finish.
-            for _ in range(5):
-                await asyncio.sleep(0)
-            assert consumers._now_playing_watcher is not None
-            assert consumers._now_playing_watcher.done()
-
-            await _open(_connected_consumer())
             await asyncio.sleep(0)
 
-            assert connect.call_count == 2
+            assert connect.call_count == 1
             revived = consumers._now_playing_watcher
+            assert revived is not finished
             assert revived is not None and not revived.done()
             await _quiesce(revived)
 

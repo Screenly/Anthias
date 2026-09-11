@@ -34,6 +34,27 @@ _warn = WarnOnce(logger)
 #: every 30s.
 _SUBSCRIPTION_POLL_S = 30.0
 
+#: Backoff bounds for re-establishing a subscription that dropped.
+#: What is bounded is the delay, not the number of attempts: the task
+#: only exists while a browser holds a socket open
+#: (``_release_now_playing_watcher`` cancels it at zero), so an attempt
+#: ceiling would reinstate exactly the bug this loop fixes — an outage
+#: that outlasts the budget leaving every already-open tab poll-only
+#: until someone reloads the page. Capping the delay instead means a
+#: Redis that has been down all night costs one dial a minute rather
+#: than one a second.
+_RETRY_MIN_S = 1.0
+_RETRY_MAX_S = 60.0
+
+#: How long an attempt has to survive before it counts as a recovery
+#: rather than one more cycle of a flapping Redis. Both the backoff
+#: reset and the warn-once re-arm hang off it. Without it, a server
+#: that accepts SUBSCRIBE and then drops the connection a second later
+#: would reset the backoff and re-arm the latch on every pass, turning
+#: one fault into a WARNING per second — the journal-flooding that
+#: :mod:`anthias_common.warn_once` exists to prevent (#3268).
+_STABLE_AFTER_S = _RETRY_MAX_S
+
 #: The process's single now-playing subscriber, and the sockets
 #: relying on it. Process-wide rather than per socket: /ws has no auth
 #: and vendor.ts opens it on every page, so per-socket would let
@@ -54,9 +75,14 @@ _watchers_wanted: set[str] = set()
 def _acquire_now_playing_watcher(channel_name: str) -> None:
     """Start the subscriber if this is the first socket to need it.
 
-    Restarts a finished task too: the body ends on any Redis failure,
-    so a server that outlives an outage retries on the next connect
-    instead of staying poll-only until the container restarts.
+    Restarts a finished task too. That is a backstop rather than the
+    recovery path: the body retries a dropped subscription itself, so
+    it now only ends on cancellation or on there being no channel
+    layer to send to. Recovering from a Redis outage must not depend
+    on a new ``connect()``, because the browser's socket terminates at
+    uvicorn rather than at Redis — a blip never closes it, so
+    ``vendor.ts`` never reconnects and nothing would trigger the
+    restart (SIRI-61).
     """
     global _now_playing_watcher
     _watchers_wanted.add(channel_name)
@@ -88,32 +114,40 @@ def _release_now_playing_watcher(channel_name: str) -> None:
     _now_playing_watcher.cancel()
 
 
-async def _watch_now_playing() -> None:
-    """Bridge the viewer's now-playing announcements onto WS_GROUP.
+async def _subscribe_and_forward(layer: Any) -> None:
+    """One attempt: subscribe, then forward until something breaks.
 
-    The table's 5s poll already keeps the highlight correct; this only
-    decides whether it lands with the picture or up to 5s later
-    (#3177), so any failure just ends the task.
+    Only ever leaves by raising (or by being cancelled) — the caller
+    treats a return as the end of an attempt either way.
 
     Fan-out goes through ``group_send`` rather than straight to a
     socket, which is what lets this be a background task at all:
     Channels dispatches a consumer's handlers one at a time, so a send
     from outside that loop could interleave with an ``asset_update``.
     """
-    layer = get_channel_layer()
-    if layer is None:
-        return
-    client = None
+    started = asyncio.get_running_loop().time()
+    settled = False
+    client = connect_to_redis_async()
     try:
-        client = connect_to_redis_async()
         pubsub = client.pubsub(ignore_subscribe_messages=True)
         await pubsub.subscribe(now_playing.NOW_PLAYING_CHANNEL)
-        _warn.worked('subscription')
         while True:
             message = await pubsub.get_message(
                 ignore_subscribe_messages=True,
                 timeout=_SUBSCRIPTION_POLL_S,
             )
+            if not settled:
+                # Re-armed here, once the subscription has held for
+                # _STABLE_AFTER_S, rather than the moment SUBSCRIBE
+                # returns: a connection that is accepted and then
+                # dropped is the fault continuing, not a recovery, and
+                # re-arming on it would warn again on the next pass.
+                # The read has a ceiling, so this is reached within a
+                # poll interval of the mark even on a silent device.
+                elapsed = asyncio.get_running_loop().time() - started
+                if elapsed >= _STABLE_AFTER_S:
+                    _warn.worked('subscription')
+                    settled = True
             if message is None:
                 continue
             # Payload dropped, not forwarded: vendor.ts fires htmx
@@ -127,26 +161,70 @@ async def _watch_now_playing() -> None:
             await layer.group_send(
                 WS_GROUP, {'type': 'asset_update', 'asset_id': '*'}
             )
-    except Exception as exc:
-        # Latched rather than DEBUG: "no Redis" is expected and stays
-        # one line, but a redis-py API change would otherwise disable
-        # the push with nothing in the journal, and the tests mock the
-        # client end to end. CancelledError is a BaseException, so an
-        # ordinary teardown does not land here.
-        _warn.warn(
-            'subscription',
-            'Now-playing push unavailable; browsers fall back to the 5s '
-            'schedule-table poll',
-            exc,
-        )
     finally:
         # Enough on its own: the client owns the subscription's pool,
         # and aclose() disconnects in-use connections too. Suppressed
         # because this also runs on the cancellation path, where a
-        # raise would become the task's unretrieved result.
-        if client is not None:
-            with contextlib.suppress(Exception):
-                await client.aclose()
+        # raise would become the task's unretrieved result. Per
+        # attempt, so a retry never leaks the dropped connection.
+        with contextlib.suppress(Exception):
+            await client.aclose()
+
+
+async def _watch_now_playing() -> None:
+    """Bridge the viewer's now-playing announcements onto WS_GROUP.
+
+    The table's 5s poll already keeps the highlight correct; this only
+    decides whether it lands with the picture or up to 5s later
+    (#3177), so a failure costs latency rather than correctness.
+
+    It still has to recover on its own, though. A dropped subscription
+    used to end the task, leaving the restart to the next WebSocket
+    ``connect()`` — an event uncorrelated with Redis coming back,
+    since the browser's socket terminates at uvicorn and a blip never
+    closes it. So every tab open across a ``docker compose restart
+    redis`` stayed poll-only until it was reloaded (SIRI-61). Retrying
+    in the body ties the recovery to the fault instead.
+
+    A failed ``group_send`` re-enters the same loop: the channel layer
+    points at the same Redis, so it is the same outage, and rebuilding
+    both halves keeps this to one recovery path.
+    """
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    delay = _RETRY_MIN_S
+    while True:
+        started = asyncio.get_running_loop().time()
+        try:
+            await _subscribe_and_forward(layer)
+        except Exception as exc:
+            # Latched rather than DEBUG: "no Redis" is expected and
+            # stays one line for the whole outage, but a redis-py API
+            # change would otherwise disable the push with nothing in
+            # the journal, and the tests mock the client end to end.
+            # CancelledError is a BaseException, so an ordinary
+            # teardown does not land here — and does not get retried.
+            _warn.warn(
+                'subscription',
+                'Now-playing push unavailable; browsers fall back to the '
+                '5s schedule-table poll',
+                exc,
+            )
+        # An attempt that held long enough to count as healthy starts
+        # the next outage at the floor; anything shorter is the same
+        # outage still going, so its wait keeps doubling. Reset before
+        # the sleep, so the first retry after a night of uptime is
+        # prompt rather than inheriting the last outage's ceiling.
+        lasted = asyncio.get_running_loop().time() - started
+        if lasted >= _STABLE_AFTER_S:
+            delay = _RETRY_MIN_S
+        # Cancellable: _release_now_playing_watcher fires when the last
+        # tab closes, and CancelledError unwinds out of the sleep
+        # rather than being caught above, so a device with no browser
+        # on it is not left waiting out a backoff.
+        await asyncio.sleep(delay)
+        delay = min(delay * 2, _RETRY_MAX_S)
 
 
 class AssetConsumer(AsyncWebsocketConsumer):
