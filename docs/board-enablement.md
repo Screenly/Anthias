@@ -204,9 +204,9 @@ questions (see the `anthias-hardware` skill), and a guess here produces
 false rejections of working assets, which is worse than the silence it
 replaces.
 
-**How to characterise a board:** ask its decoder, don't time a clip.
-The kernel enumerates the real bounds, which beats inferring them from
-playback:
+**How to characterise a board, step 1:** ask its decoder. The kernel
+enumerates its own bounds, which is cheaper and more exact than
+inferring them from playback:
 
 ```
 v4l2-ctl -d /dev/video10 --list-framesizes=H264   # frame bounds
@@ -215,8 +215,41 @@ v4l2-ctl -d /dev/video10 --list-formats-out       # accepted bitstreams
 ```
 
 On a Pi 4B this answers `Stepwise 32x32 - 1920x1920 with step 2/2`
-with `YU12`/`YV12`/`NV12`/`NV21`/`NC12` capture formats — exactly the
-`MAX_W_CODEC` / 8-bit-4:2:0 pair the envelope encodes.
+with `YU12`/`YV12`/`NV12`/`NV21`/`NC12` capture formats — the
+`MAX_W_CODEC` / 8-bit-4:2:0 pair the envelope encodes. pi2, pi3 and
+pi3-64 answer identically: one `bcm2835-codec`, four boards.
+
+**Step 2, and do not skip it: try to decode something.** The
+enumeration is necessary but not sufficient. It tells you what you may
+*ask for*, not what will be *accepted*. The VideoCore block is a Level
+4.1 decoder and separately refuses any frame over that level's
+8192-macroblock `MaxFS`, so 1920x1200 clears the enumerated 1920x1920
+range and is still refused:
+
+| frame | macroblocks | hardware |
+|---|---|---|
+| 1920x1080 | 8160 | ok |
+| 1456x1440 | 8190 | ok |
+| 1472x1440 | 8280 | refused |
+| 1920x1200 | 9000 | refused |
+| 1920x1920 | 14400 | refused |
+| 2560x720 | 7200 | refused, on width |
+
+The gate's first version trusted the enumeration alone and let
+1920x1200 through to silent software fallback, which is the failure it
+exists to prevent. Generate a clip at each size you care about and
+feed it to the board's decoder:
+
+```
+ffmpeg -f lavfi -i mandelbrot=s=1920x1200:r=25 -t 2 -c:v libx264 \
+    -profile:v high -pix_fmt yuv420p probe.mp4
+ffmpeg -hwaccel v4l2m2m -c:v h264_v4l2m2m -i probe.mp4 -f null -
+```
+
+A refusal shows up as `Error while opening decoder`. Bracket the
+boundary rather than sampling one size: two frames 16 pixels apart on
+one axis, one either side of the suspected limit, distinguish a real
+bound from a coincidence.
 
 Do this **per decode node**, not per board. The same Pi 4's HEVC node
 (`/dev/video19`, `rpi-hevc-dec`) is a *stateless* decoder taking
