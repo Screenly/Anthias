@@ -303,6 +303,69 @@ def test_unknown_pixel_format_is_not_flagged() -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Pi 5: software H.264 on the A76
+#
+# Decode-only fps measured on the testbed with real High-profile
+# content, at three levels of CPU contention. The middle column is the
+# one that matters: a loaded viewer is sharing its cores with
+# QtWebEngine and the scene graph.
+#
+#     frame                 idle    3 cores busy    1 thread
+#     1920x1080   2.07 Mpx  162.2       68.7          56.3
+#     2560x1440   3.69 Mpx   93.4       59.1          33.4
+#     1920x1920   3.69 Mpx   77.6       59.2          34.5
+#     3840x2160   8.29 Mpx   43.9       18.9          16.0
+#
+# 1440p holds 59 fps under heavy contention, which is 2.4x realtime
+# for 25 fps content. Only 4K is genuinely marginal.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'width,height,advises',
+    [
+        (1920, 1080, False),  # 68.7 fps loaded
+        (2560, 1440, False),  # 59.1 fps loaded - the commonest >1080p size
+        (1920, 1920, False),  # 59.2 fps loaded - same pixels, taller
+        (1080, 1920, False),  # portrait 1080p
+        (3840, 2160, True),  # 18.9 fps loaded
+        (4096, 2160, True),  # DCI 4K
+    ],
+)
+def test_pi5_advisory_follows_the_measurements(
+    width: int, height: int, advises: bool
+) -> None:
+    warnings = env.evaluate(
+        _meta(video_width=width, video_height=height), device_key='pi5'
+    )
+    if advises:
+        assert [w.code for w in warnings] == [
+            'h264_software_decode_oversized'
+        ], f'{width}x{height} runs at 18.9 fps loaded and must advise'
+    else:
+        assert warnings == [], (
+            f'{width}x{height} holds 59 fps under contention and must '
+            'not be flagged'
+        )
+
+
+def test_pi5_advisory_never_blocks_however_large_the_frame() -> None:
+    """The tier is a performance judgement, not a driver constant.
+
+    Nothing on a Pi 5 *refuses* an H.264 frame, so no size may ever
+    cost an operator the upload.
+    """
+    for width, height in ((3840, 2160), (7680, 4320), (16000, 16000)):
+        assert (
+            env.blocking_warning(
+                _meta(video_width=width, video_height=height),
+                device_key='pi5',
+            )
+            is None
+        )
+
+
 def test_4k_h264_on_pi5_advises_but_does_not_block() -> None:
     """Pi 5 has no H.264 hardware block, so 4K H.264 is software
     decode on the A76 — a real problem, but a performance judgement
@@ -596,10 +659,11 @@ def test_as_positive_int_fails_open_on_overflow() -> None:
         # BCM2711's HEVC block does 4Kp60, so an HEVC target inherits
         # none of the H.264 decoder's limits.
         ('pi4-64', 'hevc', None),
-        # Pi 5 decodes H.264 in software: nothing refuses the format,
-        # but the recipe still needs the box or the operator lands an
-        # asset that wears an advisory chip forever.
-        ('pi5', 'h264', 1920),
+        # Pi 5 decodes H.264 in software, and software decode is
+        # bound by pixels per second rather than by either axis, so
+        # there is no per-axis bound to report. Its budget lives in
+        # ``pixel_bound_for`` instead.
+        ('pi5', 'h264', None),
         # Boards this module deliberately does not characterise must
         # not have a Raspberry Pi bound borrowed on their behalf.
         ('x86', 'h264', None),

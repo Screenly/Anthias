@@ -229,20 +229,40 @@ BCM2835_ENCODE_BOX = (1920, 1080)
 # A76 will not hold 4K30 in software" is a performance judgement, not
 # a driver constant, so it is advisory.
 #
-# Applied PER AXIS, like the hardware bound, which is an admitted
-# approximation: software decode is bound by *pixels per second*, not
-# by either axis, so a 1920x1920 clip (3.7 Mpx, nearly twice 1080p)
-# draws no advisory today. An area budget would model the cost
-# properly. It is not used because nobody has measured where the A76
-# actually falls over, and inventing a threshold is the failure this
-# module exists to avoid — the same reasoning that removed the
-# bitrate rule. Measure before tightening this.
+# An AREA budget, not a per-axis bound. Software decode is bound by
+# pixels per second, and the earlier per-axis rule got this visibly
+# wrong in both directions: it fired on 2560x1440, which is fine, and
+# stayed silent on 1920x1920, which has exactly the same pixel count.
+#
+# Decode-only fps, real High-profile content, measured on the testbed:
+#
+#     frame                 idle    3 cores busy    1 thread
+#     1920x1080   2.07 Mpx  162.2       68.7          56.3
+#     2560x1440   3.69 Mpx   93.4       59.1          33.4
+#     1920x1920   3.69 Mpx   77.6       59.2          34.5
+#     3840x2160   8.29 Mpx   43.9       18.9          16.0
+#
+# The middle column is the honest one: a loaded viewer shares its
+# cores with QtWebEngine and the scene graph. 1440p holds 59 fps
+# there, 2.4x realtime for 25 fps content. Only 4K is marginal.
+#
+# The budget is therefore set at four times 1080p, which 3840x2160
+# meets exactly — hence ``>=`` rather than ``>``. That is the single
+# measured failure and nothing else, which is the point: the band
+# between 3.7 and 8.3 Mpx is unmeasured, and this module does not
+# invent thresholds. Fitting a power law through the two contended
+# figures puts the real 30 fps crossover nearer 6 Mpx, so this is
+# probably too generous — but the correction wants a measurement in
+# that band, not a curve through its edges. Take a reading at
+# 3000x2000 before lowering it.
 SOFTWARE_H264_BOARDS = frozenset({'pi5'})
-SOFTWARE_H264_MAX_DIMENSION = 1920
+SOFTWARE_H264_MAX_PIXELS = 4 * 1920 * 1080
 
-# The box a Pi 5 recipe scales into, square to match the per-axis
-# shape of the rule above.
-SOFTWARE_H264_ENCODE_BOX = (1920, 1920)
+# The largest frame measured to hold up under contention. Only
+# reachable if a software-decode board ever ships without an HEVC
+# path; on a Pi 5 the plan always prefers HEVC, which the BCM2712
+# block decodes in hardware at 4K, so the frame survives instead.
+SOFTWARE_H264_ENCODE_BOX = (2560, 1440)
 
 # Every codec that has a rule below. ``evaluate`` returns early
 # for anything else, which is what keeps the asset list off the
@@ -434,6 +454,22 @@ def exceeds_macroblocks(
     return total is not None and total > limit
 
 
+def exceeds_pixels(width: Any, height: Any, limit: int) -> bool:
+    """``True`` when both axes are known and the frame meets ``limit``.
+
+    Inclusive (``>=``) where the other two predicates are exclusive,
+    because the budget it serves is set *at* the one measured failure
+    rather than above it: 3840x2160 is exactly four times 1080p and
+    must be flagged. Fails open on a partial measurement like the
+    others.
+    """
+    w = _as_positive_int(width)
+    h = _as_positive_int(height)
+    if w is None or h is None:
+        return False
+    return w * h >= limit
+
+
 def is_unsupported_pix_fmt(pix_fmt: Any) -> bool:
     """``True`` when ``pix_fmt`` is certainly outside 8-bit 4:2:0.
 
@@ -583,10 +619,10 @@ def _software_h264_warnings(
     metadata: dict[str, Any],
 ) -> list[PlaybackWarning]:
     """Advisory finding for boards that decode H.264 in software."""
-    if not exceeds_dimension(
+    if not exceeds_pixels(
         metadata.get('video_width'),
         metadata.get('video_height'),
-        SOFTWARE_H264_MAX_DIMENSION,
+        SOFTWARE_H264_MAX_PIXELS,
     ):
         return []
     return [
@@ -596,13 +632,14 @@ def _software_h264_warnings(
             message=(
                 f'This video is {_dimensions_label(metadata)}. This '
                 'screen has no dedicated H.264 hardware, so it plays '
-                'H.264 on the processor. That keeps up around 1080p '
-                'but is unlikely to at this size.'
+                'H.264 on the processor. It handles that comfortably '
+                'up to about 2560x1440, but a frame this large is '
+                'likely to stutter.'
             ),
             remedy=(
-                'Convert it so neither side is larger than '
-                f'{SOFTWARE_H264_MAX_DIMENSION} pixels, or to HEVC, '
-                'which this screen plays in hardware.'
+                'Convert it to HEVC, which this screen plays in '
+                'hardware at this size. Making the video smaller '
+                'also works.'
             ),
         )
     ]
@@ -639,13 +676,33 @@ def frame_bound_for(codec: str, device_key: str | None = None) -> int | None:
         return None
     if board in BCM2835_H264_BOARDS:
         return BCM2835_MAX_DIMENSION
+    # Software-decode boards deliberately absent: their limit is a
+    # pixel budget, reported by ``pixel_bound_for``. Returning a
+    # per-axis number here would be the same category error the Pi 5
+    # advisory used to make, and would flag 2560x1440 — measured at
+    # 59 fps under contention — as needing a downscale.
+    return None
+
+
+def pixel_bound_for(codec: str, device_key: str | None = None) -> int | None:
+    """The pixels-per-frame budget on this board, or ``None``.
+
+    The third bound, and the only one that is a judgement rather than
+    a driver fact. It exists because software decode costs pixels: an
+    axis bound cannot express "2560x1440 and 1920x1920 are the same
+    amount of work", which is exactly what the Pi 5 measurements show.
+
+    Softer in kind than the hardware bounds — nothing refuses the
+    format, the CPU just cannot keep up — but the recipe still has to
+    honour it, or the operator re-encodes, re-uploads, and lands an
+    asset wearing an advisory chip for the rest of its life: the round
+    trip the rejection existed to spare them.
+    """
+    board = device_key if device_key is not None else _current_device_key()
+    if codec.strip().lower() != 'h264':
+        return None
     if board in SOFTWARE_H264_BOARDS:
-        # Softer in kind — nothing refuses the format, the CPU just
-        # cannot keep up — but a recipe that ignores it hands the
-        # operator a file this board will flag the moment they upload
-        # it, which is the same round trip a rejection is supposed to
-        # save them.
-        return SOFTWARE_H264_MAX_DIMENSION
+        return SOFTWARE_H264_MAX_PIXELS
     return None
 
 
@@ -693,7 +750,10 @@ def frame_exceeds_envelope(
     if bound is not None and exceeds_dimension(width, height, bound):
         return True
     budget = macroblock_bound_for(codec, board)
-    return budget is not None and exceeds_macroblocks(width, height, budget)
+    if budget is not None and exceeds_macroblocks(width, height, budget):
+        return True
+    pixels = pixel_bound_for(codec, board)
+    return pixels is not None and exceeds_pixels(width, height, pixels)
 
 
 def encode_box_for(

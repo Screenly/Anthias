@@ -3560,10 +3560,16 @@ def test_frame_bound_covers_software_decode_boards(
     )
     assert codec == 'hevc'
     assert box is None
-    # A board offering only software H.264 must still be boxed.
+    # A board offering only software H.264 must still be boxed, and
+    # boxed to a frame that was actually measured to keep up.
     assert processing._recipe_plan(frozenset({'h264'}), False, 3840, 2160)[
         1
-    ] == (1920, 1920)
+    ] == (2560, 1440)
+    # 1440p is inside the budget, so nothing is proposed at all.
+    assert processing._recipe_plan(frozenset({'h264'}), False, 2560, 1440) == (
+        'h264',
+        None,
+    )
 
 
 # ---------------------------------------------------------------------------
