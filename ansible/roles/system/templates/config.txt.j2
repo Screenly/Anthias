@@ -53,7 +53,7 @@ gpu_mem_256=96
 gpu_mem_512=128
 gpu_mem_1024=196
 
-{% if ansible_architecture == 'aarch64' %}
+{% if ansible_facts['architecture'] == 'aarch64' %}
 # 64-bit OS — boot kernel8.img.
 arm_64bit=1
 
