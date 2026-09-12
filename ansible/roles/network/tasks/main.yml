@@ -34,7 +34,7 @@
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
   when:
     - manage_network|bool
-    - ansible_distribution_major_version|int <= 12
+    - ansible_facts['distribution_major_version']|int <= 12
 
 - name: Set ResultAny to yes
   ansible.builtin.replace:
@@ -43,7 +43,7 @@
     dest: /var/lib/polkit-1/localauthority/10-vendor.d/org.freedesktop.NetworkManager.pkla
   when:
     - manage_network|bool
-    - ansible_distribution_major_version|int <= 12
+    - ansible_facts['distribution_major_version']|int <= 12
 
 - name: Get stat of org.freedesktop.NetworkManager.pkla
   ansible.builtin.stat:
@@ -57,7 +57,7 @@
       /etc/polkit-1/localauthority/50-local.d
   when:
     - manage_network|bool
-    - ansible_distribution_major_version|int <= 12
+    - ansible_facts['distribution_major_version']|int <= 12
   changed_when: not network_pkla_stat.stat.exists
 
 # NetworkManager only *Recommends* polkitd, so a minimal Trixie image
@@ -73,7 +73,7 @@
     state: present
   when:
     - manage_network|bool
-    - ansible_distribution_major_version|int >= 13
+    - ansible_facts['distribution_major_version']|int >= 13
 
 - name: Create polkit rules for NetworkManager (Trixie+)
   ansible.builtin.copy:
@@ -91,13 +91,13 @@
       });
   when:
     - manage_network|bool
-    - ansible_distribution_major_version|int >= 13
+    - ansible_facts['distribution_major_version']|int >= 13
 
 - name: Gather service facts
   ansible.builtin.service_facts:
   when:
-    - ansible_distribution_major_version|int >= 9
-    - ansible_distribution_major_version|int <= 11
+    - ansible_facts['distribution_major_version']|int >= 9
+    - ansible_facts['distribution_major_version']|int <= 11
     - manage_network|bool
 
 - name: Disable dhcpcd
@@ -106,8 +106,8 @@
     name: dhcpcd
     enabled: false
   when:
-    - ansible_distribution_major_version|int >= 9
-    - ansible_distribution_major_version|int <= 11
+    - ansible_facts['distribution_major_version']|int >= 9
+    - ansible_facts['distribution_major_version']|int <= 11
     - manage_network|bool
     - "'dhcpcd.service' in ansible_facts.services"
 
@@ -117,5 +117,5 @@
     name: NetworkManager
     enabled: true
   when:
-    - ansible_distribution_major_version|int >= 9
+    - ansible_facts['distribution_major_version']|int >= 9
     - manage_network|bool

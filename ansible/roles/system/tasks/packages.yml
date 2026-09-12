@@ -6,7 +6,7 @@
 # a different path and the original bug doesn't apply, so we'd just
 # be doing pointless reinstalls every run.
 - name: Reinstall libc6-dev if cdefs.h is missing (armhf only)
-  when: ansible_architecture == 'armv7l'
+  when: ansible_facts['architecture'] == 'armv7l'
   block:
     - name: Check if cdefs.h exists
       ansible.builtin.stat:
