@@ -867,6 +867,17 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
             }
         } else {
             qDebug() << "Network error:" << reply->errorString();
+            // fallbackToLastImageOnBlank is already false (set above,
+            // unconditionally, before this branch runs). But nothing
+            // repaints on its own here. Without this, the stale frame
+            // painted while the fetch was in flight just stays on
+            // screen for the rest of the asset's slot, which reads as
+            // "rotating normally" instead of "this asset is broken."
+            // Confirmed on hardware (Pi 4 + Pi 3 A+):before this call
+            // the failed slot showed the previous asset for its full
+            // duration; after, it goes black immediately, matching
+            // pre-PR(master) behaviour for this failure case.
+            update();
         }
     });
 
@@ -936,6 +947,14 @@ void View::loadAsStaticImage(const QByteArray& data)
         update();
     } else {
         qDebug() << "Failed to load image from data:" << reader.errorString();
+        // Same reasoning as the network-error branch in loadImage():
+        // fallbackToLastImageOnBlank was already cleared before this
+        // function ran, but that alone doesn't repaint. Without this
+        // call, a corrupt/undecodable image would leave the previous
+        // asset frozen on screen for the rest of the slot instead of
+        // going black.Confirmed on hardware alongside the network-
+        // error fix.
+        update();
     }
 }
 
