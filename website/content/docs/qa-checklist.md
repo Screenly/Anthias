@@ -48,6 +48,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 13. Enable authentication by selecting **Basic** from the **Authentication** dropdown, set a username + password, save, then reload. You should be prompted to log in. Verify both credential paths still reach the API:
     * Browser session: log in via the form, dashboard works.
     * Legacy HTTP Basic: `curl -u user:pass http://<device>/api/v2/assets` still works, and the server logs a `DEPRECATED: HTTP Basic auth used …` warning.
+    * WebSocket: with auth on, an unauthenticated `/ws` handshake is refused (`curl -i -N -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' http://<device>/ws` returns 403, not 101). Logged in, the dashboard still refreshes instantly when an asset changes — not only on the 5s poll.
 14. Click the **Get Backup** button. Delete all assets. Click on **Upload and Recover** and make sure that the assets are restored.
 15. Try to reboot or shutdown the device by clicking on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
 16. Go to the **System Info** page and make sure that all information are correct.

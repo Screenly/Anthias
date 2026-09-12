@@ -877,3 +877,85 @@ def test_device_settings_patch_blank_days_means_every_day(
     assert response.status_code == status.HTTP_200_OK
     settings.load()
     assert settings['display_power_days'] == '0,1,2,3,4,5,6'
+
+
+# ---------------------------------------------------------------------------
+# Auth changes reap open /ws sockets (Copilot review on PR 3324).
+#
+# The DRF surface has to behave exactly like the HTML form here, or a
+# device configured over the API would keep pre-change sockets alive.
+# ---------------------------------------------------------------------------
+
+
+def _device_settings_mock(settings_mock: Any, auth_backend: str = '') -> None:
+    settings_mock.load = mock.MagicMock()
+    settings_mock.save = mock.MagicMock()
+    settings_mock.__getitem__.side_effect = lambda key: {
+        'player_name': 'Old Player',
+        'audio_output': 'local',
+        'default_duration': '10',
+        'default_streaming_duration': '50',
+        'date_format': 'DD-MM-YYYY',
+        'auth_backend': auth_backend,
+        'show_splash': False,
+        'default_assets': [],
+        'shuffle_playlist': True,
+        'use_24_hour_clock': False,
+        'debug_logging': True,
+    }[key]
+    settings_mock.__setitem__ = mock.MagicMock()
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_drops_sockets_when_auth_is_enabled(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    _device_settings_mock(settings_mock, auth_backend='')
+    publisher_mock.get_instance.return_value = mock.MagicMock()
+
+    with mock.patch(
+        'anthias_server.app.consumers.disconnect_all'
+    ) as disconnect:
+        response = api_client.patch(
+            device_settings_url,
+            data={
+                'auth_backend': 'auth_basic',
+                'username': 'operator',
+                'password': 'a-str0ng-QA-passphrase',
+                'password_2': 'a-str0ng-QA-passphrase',
+            },
+            format='json',
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    disconnect.assert_called_once()
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_leaves_sockets_alone_when_auth_unchanged(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    _device_settings_mock(settings_mock, auth_backend='')
+    publisher_mock.get_instance.return_value = mock.MagicMock()
+
+    with mock.patch(
+        'anthias_server.app.consumers.disconnect_all'
+    ) as disconnect:
+        response = api_client.patch(
+            device_settings_url,
+            data={'player_name': 'New Player'},
+            format='json',
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    disconnect.assert_not_called()
