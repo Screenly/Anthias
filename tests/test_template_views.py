@@ -5029,3 +5029,76 @@ def test_system_info_storage_card_exposes_the_evidence(
     assert 'ext4_find_entry' in body
     assert 'SanDisk SC32G' in body
     assert 'survives reboots' in body
+
+
+# ---------------------------------------------------------------------------
+# Auth changes reap open /ws sockets (Copilot review on PR 3324).
+#
+# AssetConsumer decides authorization at handshake time, so a socket
+# opened before an auth change would otherwise keep streaming under the
+# old rules. The settings-save paths close them; these pin that the
+# HTML surface does, and that it stays quiet on an unrelated save.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_settings_save_drops_sockets_when_auth_is_enabled(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': 'auth_basic',
+                'user': 'operator',
+                'password': 'a-str0ng-QA-passphrase',
+                'password_2': 'a-str0ng-QA-passphrase',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_settings_save_leaves_sockets_alone_when_auth_is_unchanged(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """The form POSTs the whole page, so an unrelated save (a player
+    rename) must not bounce every operator's dashboard socket."""
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Renamed Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': '',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_not_called()
