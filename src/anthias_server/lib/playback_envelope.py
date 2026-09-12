@@ -71,6 +71,18 @@ The same table restricts the decoder's capture queue to 8-bit 4:2:0
 no 10-bit or 4:2:2 YUV entry, which is why High 10 and 4:2:2 sources
 fall to software.
 
+The driver's own numbers are *necessary but not sufficient*, which is
+the trap this module fell into first time round. What the device
+enumerates is the range of formats it will let you *set*; the hardware
+behind it is a Level 4.1 decoder and separately refuses any frame over
+that level's 8192-macroblock ``MaxFS``, whatever the axes say. So
+1920x1200 passes the enumerated range and is still refused. See
+``BCM2835_MAX_MACROBLOCKS`` for the measurements. The lesson
+generalises past this driver: when characterising a new board, an
+enumerated capability is a bound on what can be *asked for*, not a
+promise about what will be *accepted*, and only a decode attempt
+settles the difference.
+
 The driver deliberately does **not** validate the bitstream's declared
 H.264 *level*: ``V4L2_CID_MPEG_VIDEO_H264_LEVEL`` is exposed
 ``V4L2_CTRL_FLAG_READ_ONLY``. Raspberry Pi's own engineers put the
@@ -83,6 +95,7 @@ that carry an inflated level tag and play perfectly. We record the
 level for diagnostics and branch on frame size instead.
 """
 
+import math
 import os
 import time
 from typing import Any
@@ -142,7 +155,9 @@ class PlaybackWarning:
 
 # Boards whose H.264 decode path is the VideoCore ``bcm2835-codec``
 # V4L2 M2M device at ``/dev/video10``, and which therefore inherit its
-# 1920x1920 frame bound and 8-bit 4:2:0 capture queue verbatim.
+# frame bounds — both the enumerated 1920-per-axis one and the Level
+# 4.1 macroblock budget behind it — and its 8-bit 4:2:0 capture queue
+# verbatim. Confirmed identical on all four against driver 6.18.34.
 #
 #   pi2 / pi3      GStreamer ``v4l2h264dec`` (GstFbdevMediaPlayer)
 #   pi3-64         GStreamer ``v4l2h264dec`` -> kmssink overlay plane
@@ -157,6 +172,55 @@ BCM2835_H264_BOARDS = frozenset({'pi2', 'pi3', 'pi3-64', 'pi4-64'})
 # per axis, never as a pixel-area budget — 1080x1920 portrait is
 # inside the envelope and 3840x2160 is outside it on the width alone.
 BCM2835_MAX_DIMENSION = 1920
+
+# H.264 carves every frame into 16x16 macroblocks, and a decoder's
+# *level* caps how many of them one frame may hold. 8192 is ``MaxFS``
+# for Levels 4.0 and 4.1 (ITU-T H.264, Annex A, Table A-1), and the
+# VideoCore block is a Level 4.1 decoder.
+#
+# This is a SECOND bound, not a restatement of the first. The driver
+# enumerates ``32x32 - 1920x1920`` and means it, but the hardware
+# behind it still refuses a frame inside those axes that carries too
+# many macroblocks. Measured on the Screenly testbed against
+# ``h264_v4l2m2m``, with pi2, pi3, pi3-64 and pi4-64 agreeing
+# exactly:
+#
+#     1920x1080   8160 mb   accepted      1472x1440   8280 mb   refused
+#     1456x1440   8190 mb   accepted      1920x1200   9000 mb   refused
+#     1440x1440   8100 mb   accepted      1920x1920  14400 mb   refused
+#
+# 1456x1440 accepted against 1472x1440 refused is the pair that
+# settles it: same height, 16 pixels of width apart, one either side
+# of 8192. So it is not a height bound. It is not the declared level
+# either — both the accepted 1920x1080 and the refused 1920x1200 clip
+# carried ``-level 5.1``, which is independent confirmation that
+# refusing to gate on the level tag was right.
+#
+# Neither bound subsumes the other, and both are needed: 2560x720 is
+# 7200 macroblocks yet refused on width, while 1920x1200 is inside
+# both axes yet refused on macroblocks. 1080p sits at 8160 of 8192,
+# which is no accident: Level 4.1 was specified to fit it.
+MACROBLOCK_SIZE = 16
+BCM2835_MAX_MACROBLOCKS = 8192
+
+# The box a re-encode targeting this decoder has to fit inside, as
+# distinct from the bounds above, which describe what it will *accept*.
+#
+# Scaled with ``force_original_aspect_ratio=decrease``, the output is
+# bounded by the box on both axes, so a box that is itself legal makes
+# every possible output legal: 1920x1080 is 8160 macroblocks and sits
+# on the axis bound exactly. Oriented to the source before use, so a
+# portrait clip gets 1080x1920 rather than being squeezed to 608x1080.
+#
+# A square-ish source is the one case this leaves value on the table —
+# 1600x1600 becomes 1080x1080 where the hardware would have taken
+# 1440x1440 (8100 mb). Deriving the largest legal box per aspect ratio
+# would recover it, at the cost of a second way to compute a frame
+# size, in the part of this feature where every historical defect has
+# come from two code paths disagreeing about one. A square signage
+# clip is rare, the loss is quality rather than function, and a Pi 4
+# reaches the box only when it has no HEVC escape. Not worth it.
+BCM2835_ENCODE_BOX = (1920, 1080)
 
 # Boards on which H.264 is decoded in software. Pi 5's BCM2712 has no
 # H.264 hardware block at all (the codec gate accepts H.264 there
@@ -175,6 +239,10 @@ BCM2835_MAX_DIMENSION = 1920
 # bitrate rule. Measure before tightening this.
 SOFTWARE_H264_BOARDS = frozenset({'pi5'})
 SOFTWARE_H264_MAX_DIMENSION = 1920
+
+# The box a Pi 5 recipe scales into, square to match the per-axis
+# shape of the rule above.
+SOFTWARE_H264_ENCODE_BOX = (1920, 1920)
 
 # Every codec that has a rule below. ``evaluate`` returns early
 # for anything else, which is what keeps the asset list off the
@@ -337,6 +405,35 @@ def exceeds_dimension(
     return w > limit or h > limit
 
 
+def macroblocks(width: Any, height: Any) -> int | None:
+    """Macroblocks in one frame, or ``None`` if either axis is unknown.
+
+    Rounds each axis *up* to a whole 16-pixel block, which is what the
+    encoder does: a 1080-pixel height occupies 68 macroblock rows with
+    the last one only half used. Rounding down would put 1920x1080 and
+    1920x1088 in different classes when the hardware treats them as
+    the same 8160-macroblock frame.
+    """
+    w = _as_positive_int(width)
+    h = _as_positive_int(height)
+    if w is None or h is None:
+        return None
+    return math.ceil(w / MACROBLOCK_SIZE) * math.ceil(h / MACROBLOCK_SIZE)
+
+
+def exceeds_macroblocks(
+    width: Any, height: Any, limit: int = BCM2835_MAX_MACROBLOCKS
+) -> bool:
+    """``True`` when both axes are known and the frame is past ``limit``.
+
+    Fails open on a partial measurement for the same reason
+    ``exceeds_dimension`` does: rejecting an upload is the strong
+    action, and half a frame size is not enough to take it.
+    """
+    total = macroblocks(width, height)
+    return total is not None and total > limit
+
+
 def is_unsupported_pix_fmt(pix_fmt: Any) -> bool:
     """``True`` when ``pix_fmt`` is certainly outside 8-bit 4:2:0.
 
@@ -415,9 +512,21 @@ def _bcm2835_h264_warnings(
 ) -> list[PlaybackWarning]:
     """Blocking findings for the VideoCore H.264 decoder."""
     found: list[PlaybackWarning] = []
-    if exceeds_dimension(
-        metadata.get('video_width'), metadata.get('video_height')
-    ):
+    width = metadata.get('video_width')
+    height = metadata.get('video_height')
+    # Two independent bounds, one finding. The decoder refuses the
+    # frame either way and the fix is the same, so emitting two
+    # warnings would only put a second amber chip on the row saying
+    # what the first already said. Which sentence the operator gets
+    # depends on which bound broke, because they are surprising in
+    # different ways: an over-1920 axis is visible in the file's own
+    # dimensions, while an over-budget frame is not, and telling
+    # someone looking at 1920x1200 that the limit is "1920 per side"
+    # reads as a bug in us. The axis message wins when both are
+    # broken; it is the more obvious of the two.
+    over_axis = exceeds_dimension(width, height)
+    over_budget = exceeds_macroblocks(width, height)
+    if over_axis or over_budget:
         found.append(
             PlaybackWarning(
                 code='h264_frame_too_large',
@@ -427,6 +536,16 @@ def _bcm2835_h264_warnings(
                     f'This screen ({board}) plays H.264 video up to '
                     f'{BCM2835_MAX_DIMENSION} pixels on each side, so '
                     'this one would stutter badly instead of playing '
+                    'smoothly.'
+                )
+                if over_axis
+                else (
+                    f'This video is {_dimensions_label(metadata)}. '
+                    'Neither side is over '
+                    f'{BCM2835_MAX_DIMENSION} pixels, but this screen '
+                    f'({board}) also limits the whole frame to about '
+                    'the size of 1920x1080, and this video is larger. '
+                    'It would stutter badly instead of playing '
                     'smoothly.'
                 ),
                 # Generic on purpose. The rejection path replaces this
@@ -528,6 +647,99 @@ def frame_bound_for(codec: str, device_key: str | None = None) -> int | None:
         # save them.
         return SOFTWARE_H264_MAX_DIMENSION
     return None
+
+
+def macroblock_bound_for(
+    codec: str, device_key: str | None = None
+) -> int | None:
+    """The macroblock budget for ``codec`` on this board, or ``None``.
+
+    The companion to ``frame_bound_for``, and separate from it because
+    the two bounds have different scopes. The axis bound is a driver
+    constant that a software-decode board inherits as a performance
+    proxy; the macroblock budget is the *hardware decoder's* level
+    ceiling and means nothing where there is no hardware decoder. A
+    Pi 5 running H.264 on its A76 cores is limited by throughput, not
+    by MaxFS, so it gets no budget here.
+    """
+    board = device_key if device_key is not None else _current_device_key()
+    if codec.strip().lower() != 'h264':
+        return None
+    if board in BCM2835_H264_BOARDS:
+        return BCM2835_MAX_MACROBLOCKS
+    return None
+
+
+def frame_exceeds_envelope(
+    codec: str,
+    width: Any,
+    height: Any,
+    device_key: str | None = None,
+) -> bool:
+    """Would this board refuse ``width x height`` encoded as ``codec``?
+
+    The question the *recipe* has to ask, as opposed to the one
+    ``evaluate`` asks about an asset that already exists. Both bounds
+    are consulted, because neither implies the other: 2560x720 is
+    inside the macroblock budget and refused on width, while 1920x1200
+    is inside both axes and refused on macroblocks.
+
+    Fails open everywhere a bound is unknown — an unbounded codec, an
+    uncharacterised board, an unmeasured axis — so the recipe never
+    downscales on a limit this module cannot name.
+    """
+    board = device_key if device_key is not None else _current_device_key()
+    bound = frame_bound_for(codec, board)
+    if bound is not None and exceeds_dimension(width, height, bound):
+        return True
+    budget = macroblock_bound_for(codec, board)
+    return budget is not None and exceeds_macroblocks(width, height, budget)
+
+
+def encode_box_for(
+    codec: str,
+    width: Any,
+    height: Any,
+    device_key: str | None = None,
+) -> tuple[int, int] | None:
+    """The box a re-encode to ``codec`` must fit inside, or ``None``.
+
+    ``width`` / ``height`` are the *displayed* frame, not the coded
+    one: ffmpeg applies the rotation matrix before user filters, so
+    the ``scale`` clause sees a rotated clip the right way round, and
+    the box has to be turned to match or a portrait source loses two
+    thirds of its picture. (The acceptance question above is the
+    opposite: the decoder sees the coded frame, so rotation is
+    irrelevant there. The distinction only became visible once the box
+    stopped being square.)
+
+    ``None`` means this board bounds nothing for this codec and the
+    frame should survive the re-encode untouched.
+    """
+    board = device_key if device_key is not None else _current_device_key()
+    if codec.strip().lower() != 'h264':
+        return None
+    if board in BCM2835_H264_BOARDS:
+        return _oriented(BCM2835_ENCODE_BOX, width, height)
+    if board in SOFTWARE_H264_BOARDS:
+        return _oriented(SOFTWARE_H264_ENCODE_BOX, width, height)
+    return None
+
+
+def _oriented(
+    box: tuple[int, int], width: Any, height: Any
+) -> tuple[int, int]:
+    """``box`` turned to match a portrait source.
+
+    A square box is returned unchanged either way, and an unmeasured
+    frame keeps the landscape orientation, which is the safe default:
+    it can only shrink the output further, never past a bound.
+    """
+    w = _as_positive_int(width)
+    h = _as_positive_int(height)
+    if w is not None and h is not None and h > w:
+        return (box[1], box[0])
+    return box
 
 
 def requires_8bit_420(codec: str, device_key: str | None = None) -> bool:

@@ -50,6 +50,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_server import processing
 from anthias_server.app.models import Asset
+from anthias_server.lib import playback_envelope
 from anthias_server.settings import settings as anthias_settings
 
 # ---------------------------------------------------------------------------
@@ -3349,18 +3350,19 @@ def test_scale_clauses_guard_against_an_odd_output() -> None:
     never pastes a command that cannot run.
     """
     supported = frozenset({'h264'})
-    envelope = processing._ffmpeg_reencode_recipe(
-        supported, 'clip.mp4', scale_box=(1920, 1920)
+    # Every box that actually reaches an operator, including the
+    # portrait turn and the square box a Pi 5 still uses.
+    for box in ((1920, 1080), (1080, 1920), (1920, 1920)):
+        recipe = processing._ffmpeg_reencode_recipe(
+            supported, 'clip.mp4', scale_box=box
+        )
+        assert 'trunc(iw/2)*2' in recipe, box
+        assert f'scale={box[0]}:{box[1]}' in recipe, box
+    # The uncapped path needs the guard too: the pixel-format
+    # rejection can hand back an odd-sized source with no box at all.
+    assert 'trunc(iw/2)*2' in processing._ffmpeg_reencode_recipe(
+        supported, 'clip.mp4'
     )
-    low_ram = processing._ffmpeg_reencode_recipe(
-        supported, 'clip.mp4', scale_box=(1920, 1080)
-    )
-    assert 'trunc(iw/2)*2' in envelope
-    assert 'trunc(iw/2)*2' in low_ram
-    # The two gates answer different questions and keep different
-    # boxes: a per-axis decoder bound vs a pixel budget.
-    assert 'scale=1920:1920' in envelope
-    assert 'scale=1920:1080' in low_ram
 
 
 @pytest.mark.django_db
@@ -3539,29 +3541,107 @@ def test_recipe_scale_box_is_board_aware() -> None:
 def test_frame_bound_covers_software_decode_boards(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A Pi 5 recipe must still box the frame.
+    """A Pi 5 recipe must still respect the pixel budget.
 
     Pi 5 has no H.264 hardware block, so nothing *refuses* a 4K H.264
     file — the CPU just cannot keep up, which the advisory tier flags.
-    A recipe that skips the box because the refusal is soft hands the
-    operator a 4K H.264 file, which uploads fine and then wears a
+    A recipe that skips the budget because the refusal is soft hands
+    the operator a 4K H.264 file, which uploads fine and then wears a
     "May not play well" chip for the rest of its life: the round trip
     the rejection existed to spare them.
     """
     monkeypatch.setenv('DEVICE_TYPE', 'pi5')
     # Given a choice, prefer the codec this board does not bound —
     # on a Pi 5 that is HEVC, which is also its only hardware path and
-    # what _PREFERRED_DOWNLOAD_VCODEC already says.
-    assert (
-        processing._recipe_plan(
-            frozenset({'h264', 'hevc'}), False, 3840, 2160
-        )[0]
-        == 'hevc'
+    # what _PREFERRED_DOWNLOAD_VCODEC already says. The 4K frame
+    # survives, because the BCM2712 HEVC block decodes it in hardware.
+    codec, box = processing._recipe_plan(
+        frozenset({'h264', 'hevc'}), False, 3840, 2160
     )
+    assert codec == 'hevc'
+    assert box is None
     # A board offering only software H.264 must still be boxed.
     assert processing._recipe_plan(frozenset({'h264'}), False, 3840, 2160)[
         1
     ] == (1920, 1920)
+
+
+# ---------------------------------------------------------------------------
+# The invariant the recipe exists to satisfy
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('board', ['pi2', 'pi3', 'pi3-64', 'pi4-64'])
+@pytest.mark.parametrize(
+    'width,height',
+    [
+        (1920, 1200),  # inside both axes, over the macroblock budget
+        (1920, 1920),  # ditto, and the size the old box handed back
+        (1600, 1600),  # square, over budget
+        (1472, 1440),  # the measured refusal, 16px past its neighbour
+        (3840, 2160),  # over on width and budget
+        (2160, 3840),  # portrait 4K
+        (5760, 1080),  # ultrawide: over on width, inside the budget
+        (2560, 720),  # ditto, fewer pixels than 1080p
+    ],
+)
+def test_recipe_never_proposes_a_frame_the_decoder_refuses(
+    board: str,
+    width: int,
+    height: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Whatever the plan proposes must survive the gate it came from.
+
+    This is the loop that has bitten this feature repeatedly: the gate
+    rejects an upload, the recipe tells the operator how to fix it,
+    and the fixed file is rejected by the same gate. Asserting on the
+    *box* rather than on a scaled output is deliberate and stronger —
+    ``force_original_aspect_ratio=decrease`` bounds the result by the
+    box on both axes, so a box that is itself inside the envelope
+    makes every possible output inside it too.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', board)
+    supported = processing._HW_DECODE_VIDEO_CODECS[board]
+    codec, box = processing._recipe_plan(supported, False, width, height)
+    assert codec is not None
+    out_w, out_h = box if box is not None else (width, height)
+    assert (
+        playback_envelope.evaluate(
+            {
+                'video_codec': codec,
+                'video_width': out_w,
+                'video_height': out_h,
+                'video_pix_fmt': 'yuv420p',
+            },
+            device_key=board,
+        )
+        == []
+    ), (
+        f'{board}: {width}x{height} -> {codec} {out_w}x{out_h}, '
+        'which the same gate would reject again'
+    )
+
+
+def test_recipe_box_follows_the_display_frame_not_the_coded_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rotation decides which way the box is turned.
+
+    ffmpeg applies the display matrix before user filters, so the
+    ``scale`` clause sees the *displayed* frame. A coded 2160x3840
+    carrying a 90-degree rotation reaches the filter as 3840x2160 and
+    needs the landscape box; the same frame without the rotation needs
+    the portrait one. This only started to matter once the box stopped
+    being square — 1920x1920 hid the distinction entirely.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'pi3')
+    h264 = frozenset({'h264'})
+    assert processing._recipe_plan(h264, False, 2160, 3840, rotation=90)[
+        1
+    ] == (1920, 1080)
+    assert processing._recipe_plan(h264, False, 2160, 3840)[1] == (1080, 1920)
+    assert processing._recipe_plan(h264, False, 3840, 2160)[1] == (1920, 1080)
 
 
 @pytest.mark.parametrize(
@@ -4048,20 +4128,31 @@ def test_override_does_not_reach_the_codec_or_low_ram_gates(
             'h264',
             'Convert it to HEVC, which this screen plays at its current size.',
         ),
-        # Must resize, same codec: the Pi 3 / 4K case.
+        # Must resize, same codec: the Pi 3 / 4K case. Naming both
+        # numbers also covers the 1920x1200 source, where the old
+        # "neither side larger than 1920" described something the
+        # operator could see was already true.
         (
             'h264',
-            (1920, 1920),
+            (1920, 1080),
             'h264',
-            'Resize it so neither side is larger than 1920 pixels.',
+            'Resize it to fit inside 1920 by 1080 pixels.',
+        ),
+        # The portrait box. Naming only the larger side here would
+        # permit 1920x1920, which the decoder refuses.
+        (
+            'h264',
+            (1080, 1920),
+            'h264',
+            'Resize it to fit inside 1080 by 1920 pixels.',
         ),
         # Must resize AND change codec.
         (
             'hevc',
-            (1920, 1920),
+            (1920, 1080),
             'vp9',
             (
-                'Resize it so neither side is larger than 1920 pixels. '
+                'Resize it to fit inside 1920 by 1080 pixels. '
                 'The command below also converts it to HEVC.'
             ),
         ),

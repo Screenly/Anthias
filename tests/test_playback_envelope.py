@@ -93,12 +93,117 @@ def test_portrait_1080x1920_is_inside_the_envelope() -> None:
     assert warnings == []
 
 
-def test_exactly_1920x1920_is_inside_the_envelope() -> None:
-    """The bound is inclusive — ``> limit``, not ``>=``."""
+def test_1920x1088_sits_exactly_on_the_axis_bound() -> None:
+    """The per-axis bound is inclusive — ``> limit``, not ``>=``.
+
+    1920x1088 is the largest frame that touches ``MAX_W_CODEC``
+    exactly while staying inside the macroblock budget (8160 of
+    8192), so it pins the boundary of one rule without tripping the
+    other.
+    """
     warnings = env.evaluate(
-        _meta(video_width=1920, video_height=1920), device_key='pi4-64'
+        _meta(video_width=1920, video_height=1088), device_key='pi4-64'
     )
     assert warnings == []
+
+
+# ---------------------------------------------------------------------------
+# The macroblock budget
+#
+# Every row below was measured on the Screenly testbed against real
+# silicon — pi2, pi3, pi3-64 and pi4-64, all four agreeing — by
+# feeding the frame to ``h264_v4l2m2m`` and recording whether the
+# decoder took it. The driver enumerates 1920x1920, but the hardware
+# is a Level 4.1 decoder and refuses anything past that level's
+# MaxFS of 8192 macroblocks as well.
+#
+# The decisive pair is 1456x1440 accepted against 1472x1440 refused:
+# same height, 16 pixels of width apart, straddling 8192. It is
+# therefore not a height bound, and not the declared level either —
+# both the accepted 1920x1080 and the refused 1920x1200 clip carried
+# ``-level 5.1``.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'width,height,accepted',
+    [
+        # Accepted by the hardware.
+        (1920, 1080, True),  # 8160 mb - the signage default
+        (1088, 1920, True),  # 8160 mb - portrait equivalent
+        (1456, 1440, True),  # 8190 mb - two macroblocks of headroom
+        (1440, 1440, True),  # 8100 mb
+        # Refused on the macroblock budget alone. Every one of these
+        # is inside 1920 on both axes, so the per-axis rule lets them
+        # through and the asset falls to software decode in silence.
+        (1472, 1440, False),  # 8280 mb
+        (1920, 1104, False),  # 8280 mb
+        (1920, 1152, False),  # 8640 mb
+        (1920, 1200, False),  # 9000 mb - a common 16:10 export
+        (1472, 1472, False),  # 8464 mb
+        (1920, 1920, False),  # 14400 mb
+        # Refused on an axis, despite fitting the macroblock budget.
+        # Neither rule subsumes the other.
+        (2560, 720, False),  # 7200 mb
+        (3840, 544, False),  # 8160 mb
+    ],
+)
+@pytest.mark.parametrize('board', sorted(env.BCM2835_H264_BOARDS))
+def test_measured_decode_outcomes_are_predicted_exactly(
+    board: str, width: int, height: int, accepted: bool
+) -> None:
+    warnings = env.evaluate(
+        _meta(video_width=width, video_height=height), device_key=board
+    )
+    if accepted:
+        assert warnings == [], (
+            f'{width}x{height} decodes in hardware and must not warn'
+        )
+    else:
+        assert [w.code for w in warnings] == ['h264_frame_too_large'], (
+            f'{width}x{height} is refused by the decoder and must block'
+        )
+
+
+def test_oversized_macroblock_message_gives_the_operator_the_frame() -> None:
+    """A 1920x1200 rejection must not read as "1920 per side" — the
+    operator can see both sides are within 1920, and a message that
+    contradicts what they are looking at reads as a bug in us."""
+    warning = env.blocking_warning(
+        _meta(video_width=1920, video_height=1200), device_key='pi4-64'
+    )
+    assert warning is not None
+    assert warning.is_blocking
+    assert '1920x1200' in warning.message
+    assert f'{env.BCM2835_MAX_DIMENSION} pixels on each side' not in (
+        warning.message
+    )
+
+
+def test_macroblock_rule_fails_open_on_an_unmeasured_axis() -> None:
+    """Half a measurement must never reject an upload."""
+    for width, height in ((None, 1200), (1920, None), (0, 1200), (1920, 0)):
+        assert (
+            env.evaluate(
+                _meta(video_width=width, video_height=height),
+                device_key='pi4-64',
+            )
+            == []
+        ), f'{width}x{height} should not warn'
+
+
+def test_macroblocks_round_up_to_whole_blocks() -> None:
+    """A 1080-pixel height occupies 68 macroblock rows, not 67.5.
+
+    Rounding down would put 1920x1088 and 1920x1080 in different
+    classes when the hardware treats them identically.
+    """
+    assert env.macroblocks(1920, 1080) == 8160
+    assert env.macroblocks(1920, 1088) == 8160
+    assert env.macroblocks(1456, 1440) == 8190
+    assert env.macroblocks(1472, 1440) == 8280
+    assert env.macroblocks(None, 1080) is None
+    assert env.macroblocks(1920, 0) is None
 
 
 def test_ultrawide_is_flagged_on_width_despite_low_pixel_count() -> None:

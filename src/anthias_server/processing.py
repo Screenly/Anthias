@@ -1494,13 +1494,17 @@ def _recipe_plan(
             *_display_dimensions(width, height, rotation)
         )
     for codec in candidates:
-        bound = playback_envelope.frame_bound_for(codec)
-        if bound is None or not playback_envelope.exceeds_dimension(
-            width, height, bound
-        ):
+        # Coded dimensions on purpose: this asks what the *decoder*
+        # will accept, and the decoder never sees the rotation.
+        if not playback_envelope.frame_exceeds_envelope(codec, width, height):
             return codec, None
-    bound = playback_envelope.frame_bound_for(candidates[0])
-    return candidates[0], (None if bound is None else (bound, bound))
+    target = candidates[0]
+    # Displayed dimensions on purpose: this is the box handed to
+    # ffmpeg's ``scale``, which runs after the rotation matrix has
+    # been applied, and to the HandBrake step the operator types in.
+    return target, playback_envelope.encode_box_for(
+        target, *_display_dimensions(width, height, rotation)
+    )
 
 
 def _remedy_sentence(
@@ -1529,9 +1533,15 @@ def _remedy_sentence(
             )
         return 'Convert it with the command below.'
     box_w, box_h = scale_box
-    resize = (
-        f'Resize it so neither side is larger than {max(box_w, box_h)} pixels.'
-    )
+    # Name the box, both numbers, rather than its larger side. Once
+    # the box stopped being square, "neither side larger than 1920"
+    # became two different kinds of wrong at once: against a 1920x1200
+    # source it describes something already true and tells the
+    # operator nothing, and against the portrait box it is advice that
+    # permits 1920x1920 — a frame the decoder refuses. The command
+    # below scales into exactly this box, and so does the HandBrake
+    # step, so the sentence should say the same thing they do.
+    resize = f'Resize it to fit inside {box_w} by {box_h} pixels.'
     if changes_codec:
         return f'{resize} The command below also converts it to {name}.'
     return resize
@@ -1700,12 +1710,15 @@ def _ffmpeg_reencode_recipe(
       bound the same 2,073,600 pixels — so a portrait master keeps its
       shape instead of landing at 608x1080.
     * The **decode-envelope** gate passes
-      ``(BCM2835_MAX_DIMENSION, BCM2835_MAX_DIMENSION)``. That bound
-      is ``MAX_W_CODEC`` / ``MAX_H_CODEC`` per *axis*, not an area, so
-      a portrait 2160x3840 source is inside the envelope at 1080x1920.
-      Handing it the 1080p box would produce 608x1080 — two thirds of
-      a frame the decoder would have accepted — while the rejection
-      message alongside it says to aim for 1080x1920.
+      ``playback_envelope.encode_box_for(...)``, which on a VideoCore
+      board is ``(1920, 1080)`` turned to match the *displayed*
+      frame. It looks like the low-RAM box and is arrived at
+      differently: the decoder bounds each axis at 1920 *and* caps the
+      whole frame at 8192 macroblocks, and 1920x1080 is the largest
+      box satisfying both. Orientation is not cosmetic here either —
+      handing a portrait 2160x3840 source the landscape box produces
+      608x1080, two thirds of a frame the decoder would have taken,
+      while the rejection message alongside says to aim for 1080x1920.
 
     A single box rather than a flag per gate on purpose: two booleans
     made "which box wins" a question the type could not answer, and
