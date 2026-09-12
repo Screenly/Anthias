@@ -868,3 +868,130 @@ def test_auth_disabled_ignores_drf_authenticators(
     # but explicitly NOT 403 (the CSRF rejection we're guarding
     # against). The view dispatches and the auth/CSRF gate is silent.
     assert response.status_code != 403
+
+
+# ---------------------------------------------------------------------------
+# apply_auth_settings' return value — "did this invalidate credentials
+# that are already in use?" (Copilot review on PR 3324).
+#
+# Both settings-save surfaces use it to decide whether to close open
+# /ws sockets, which are authorized once at handshake time and would
+# otherwise outlive the credentials they were accepted under. Pinning
+# the decision table here rather than only through the views is what
+# covers the paths the view tests don't reach — notably *disabling*
+# auth, which never touches the User row at all.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_reports_initial_enable_as_a_change() -> None:
+    request = _request_with_user(MagicMock(is_authenticated=False))
+    assert (
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd='',
+            new_username='alice',
+            new_pwd=_PWD_INITIAL,
+            new_pwd_confirm=_PWD_INITIAL,
+            prev_auth_backend='',
+        )
+        is True
+    )
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_reports_disable_as_a_change() -> None:
+    """Turning auth off leaves the User row untouched, so the only
+    signal is the backend flip. Sockets accepted under the old regime
+    still have to be reaped."""
+    operator = _make_operator()
+    request = _request_with_user(operator)
+    assert (
+        apply_auth_settings(
+            request,
+            new_auth_backend='',
+            current_pwd=_PWD_OLD,
+            new_username='',
+            new_pwd='',
+            new_pwd_confirm='',
+            prev_auth_backend='auth_basic',
+        )
+        is True
+    )
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_reports_password_rotation_as_a_change() -> None:
+    """auth_backend is unchanged, but every existing session — and
+    every socket riding one — is now on stale credentials."""
+    operator = _make_operator()
+    request = _request_with_user(operator)
+    assert (
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd=_PWD_OLD,
+            new_username='',
+            new_pwd=_PWD_NEW,
+            new_pwd_confirm=_PWD_NEW,
+            prev_auth_backend='auth_basic',
+        )
+        is True
+    )
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_reports_username_rotation_as_a_change() -> None:
+    operator = _make_operator()
+    request = _request_with_user(operator)
+    assert (
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd=_PWD_OLD,
+            new_username='bob',
+            new_pwd='',
+            new_pwd_confirm='',
+            prev_auth_backend='auth_basic',
+        )
+        is True
+    )
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_reports_no_change_on_an_unrelated_save() -> None:
+    """The settings form POSTs the whole page, so this runs on every
+    save — a splash-screen toggle must not bounce every operator's
+    dashboard socket."""
+    operator = _make_operator()
+    request = _request_with_user(operator)
+    assert (
+        apply_auth_settings(
+            request,
+            new_auth_backend='auth_basic',
+            current_pwd='',
+            new_username='alice',
+            new_pwd='',
+            new_pwd_confirm='',
+            prev_auth_backend='auth_basic',
+        )
+        is False
+    )
+
+
+@pytest.mark.django_db
+def test_apply_auth_settings_reports_no_change_while_auth_stays_off() -> None:
+    request = _request_with_user(MagicMock(is_authenticated=False))
+    assert (
+        apply_auth_settings(
+            request,
+            new_auth_backend='',
+            current_pwd='',
+            new_username='',
+            new_pwd='',
+            new_pwd_confirm='',
+            prev_auth_backend='',
+        )
+        is False
+    )

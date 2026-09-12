@@ -571,11 +571,15 @@ def _update_existing_operator(
     new_pwd: str,
     new_pwd_confirm: str,
     current_pass_correct: bool | None,
-) -> None:
+) -> bool:
     """Mutate the existing operator row in response to the settings
     form. Each of username / password is independently optional —
     only changes that were actually requested validate the current
     password.
+
+    Returns True when the row actually changed, which the caller uses
+    to decide whether live sessions (and the WebSocket sockets riding
+    on them) have been invalidated.
 
     ``apply_auth_settings`` runs on every settings save (the form
     POSTs the whole page, even unrelated fields like splash-screen
@@ -606,6 +610,7 @@ def _update_existing_operator(
 
     if changed_fields:
         operator.save(update_fields=changed_fields)
+    return bool(changed_fields)
 
 
 def _create_initial_operator(
@@ -653,12 +658,22 @@ def apply_auth_settings(
     new_pwd: str,
     new_pwd_confirm: str,
     prev_auth_backend: str,
-) -> None:
+) -> bool:
     """Validate and persist auth-related settings changes.
 
     Raises ``AuthSettingsError`` with an operator-friendly message
     when the input is rejected. On success, mutates the
     ``django.contrib.auth.User`` row backing the operator account.
+
+    Returns True when the change invalidates credentials that are
+    already in use — the backend was switched on or off, or the
+    operator's username/password was rotated. Both settings-save
+    surfaces use that to close open /ws sockets (see
+    :func:`anthias_server.app.consumers.disconnect_all`), because a
+    socket is authorized once at handshake time and would otherwise
+    outlive the credentials it was accepted under. Keeping the
+    decision here rather than at the call sites is what stops the HTML
+    and DRF paths from drifting apart on it.
     The caller is responsible for persisting ``auth_backend`` itself
     (we don't touch the conf file from here so a failed write of one
     setting can't half-apply auth).
@@ -728,24 +743,30 @@ def apply_auth_settings(
         if not current_pass_correct:
             raise AuthSettingsError(_ERR_INCORRECT_CURRENT)
 
+    backend_changed = new_auth_backend != prev_auth_backend
+
     if new_auth_backend != 'auth_basic':
-        return
+        # Turning auth off: nothing to do to the User row (it is kept
+        # so re-enabling doesn't lose the operator), but every open
+        # socket was accepted under the old regime.
+        return backend_changed
 
     if operator is not None:
-        _update_existing_operator(
+        credentials_rotated = _update_existing_operator(
             operator,
             new_username=new_username,
             new_pwd=new_pwd,
             new_pwd_confirm=new_pwd_confirm,
             current_pass_correct=current_pass_correct,
         )
-        return
+        return backend_changed or credentials_rotated
 
     _create_initial_operator(
         new_username=new_username,
         new_pwd=new_pwd,
         new_pwd_confirm=new_pwd_confirm,
     )
+    return True
 
 
 def operator_username() -> str:
