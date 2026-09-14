@@ -1671,7 +1671,25 @@ def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
         logger.info(_webview_output.text())
 
 
-def view_video(uri: str, duration: int | str) -> None:
+def _seconds_until(deadline: float) -> float:
+    """Wait budget for the asset shown this tick.
+
+    ``deadline`` is ``tick_start + duration`` from ``asset_loop``. The
+    wait used to be a flat ``duration`` on top of everything the tick
+    did first (scheduler refresh, DB reads, the D-Bus load call), so
+    every rotation ran ``duration`` plus a device-specific overhead and
+    co-located players cycling the same playlist drifted apart by
+    seconds within hours (GH #3319). Anchoring on the tick start makes
+    the rotation take exactly ``duration``. Clamped at zero: a mid-tick
+    browser respawn or a stalled display probe can outlast a short
+    duration, and then the asset just moves on. Not logged on its own;
+    the caller's "Sleeping for 0.0" line already shows it, and a
+    zero-duration asset would otherwise warn on every tick.
+    """
+    return max(0.0, deadline - monotonic())
+
+
+def view_video(uri: str, duration: int | str, deadline: float) -> None:
     logger.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
@@ -1683,7 +1701,7 @@ def view_video(uri: str, duration: int | str) -> None:
     try:
         skip_event = get_skip_event()
         skip_event.clear()
-        if skip_event.wait(timeout=int(duration)):
+        if skip_event.wait(timeout=_seconds_until(deadline)):
             logger.info('Skip detected during video playback, stopping video')
             media_player.stop()
         else:
@@ -2342,6 +2360,9 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
 
 def asset_loop(scheduler: Any) -> None:
     global _empty_playlist_logged, _unavailable_asset_logged
+    # Anchor for the per-asset wait; see ``_seconds_until``. It must be
+    # the first thing in the tick so the wait absorbs everything below.
+    tick_start = monotonic()
     # Issue #2856 — consume any pending rotation bounce queued by the
     # subscriber thread BEFORE we do anything else this tick. The
     # subscriber can only set the flag (it doesn't own ``browser`` or
@@ -2404,6 +2425,7 @@ def asset_loop(scheduler: Any) -> None:
         # rejects such values on write, but a pre-existing row must
         # not take the screen down.
         duration = clamp_duration(asset['duration'])
+        deadline = tick_start + duration
         logger.info('Showing asset %s (%s)', name, mime)
         logger.debug('Asset URI %s', uri)
         watchdog()
@@ -2452,15 +2474,16 @@ def asset_loop(scheduler: Any) -> None:
             # or ('streaming' in mime)`` — the truthy literal short-
             # circuits and the branch runs for every mimetype, making
             # the ``else: Unknown MimeType`` arm below unreachable.
-            view_video(uri, duration)
+            view_video(uri, duration, deadline)
         else:
             logger.error('Unknown MimeType %s', mime)
 
         if 'image' in mime or 'web' in mime:
-            logger.info('Sleeping for %s', duration)
+            timeout = _seconds_until(deadline)
+            logger.info('Sleeping for %.1f of %ss', timeout, duration)
             skip_event = get_skip_event()
             skip_event.clear()
-            if skip_event.wait(timeout=duration):
+            if skip_event.wait(timeout=timeout):
                 # Skip was triggered, continue immediately to next iteration
                 logger.info('Skip detected, moving to next asset immediately')
             else:
