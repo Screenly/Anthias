@@ -591,6 +591,7 @@ def device_settings() -> dict[str, Any]:
         'debug_logging': settings['debug_logging'],
         'prefer_dark_mode': settings['prefer_dark_mode'],
         'verify_ssl': settings['verify_ssl'],
+        'allow_unplayable_video': settings['allow_unplayable_video'],
         # Clamp on the read side so a stale conf value (e.g. an
         # old 45 from a hand-edit) doesn't leave the dropdown with no
         # ``selected`` option — the template's {% if screen_rotation

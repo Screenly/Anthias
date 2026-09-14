@@ -561,6 +561,71 @@ label { text-align: left; }
   border-color: var(--chip-all-edge);
 }
 
+// Decode-envelope chip, shown next to the asset name when a video
+// already in rotation is outside what this board's decoder can take.
+// Shares the .schedule-chip geometry so it reads as the same family
+// of pill. It is a sibling after them in a flex column, so it sits on
+// its own row; the colour is what separates the two.
+// Rendered as a <button> — click opens the Edit Asset modal, which
+// carries the full explanation and the ffmpeg recipe.
+.playback-chip {
+  display: inline-flex;
+  align-items: center;
+  // The chip sits in a flex COLUMN (.asset-cell-name__title), which
+  // blockifies inline-flex to flex and then stretches it to the full
+  // column width under the default align-items: stretch. Pin it to
+  // the start so the pill hugs its label like the schedule chips do.
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 0.35em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: left;
+  border: 1px solid var(--color-warning-on-wash);
+  background: var(--color-warning-wash);
+  color: var(--color-warning-on-wash);
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+
+  i { font-size: 0.85em; opacity: 0.9; }
+
+  &:hover {
+    background: color-mix(in oklab, var(--color-warning-wash) 80%, #000);
+  }
+  // Keyboard focus gets the house ring rather than only a background
+  // shift. A darker wash is not a focus indicator: it is the same
+  // change hover makes, so a keyboard user cannot tell focus from a
+  // stray pointer, and against the warning wash it barely reads.
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+}
+// An advisory is a judgement call rather than a driver refusal, so it
+// reads quieter — but it keeps the wash behind it. --color-warning-on-wash
+// is contrast-matched to the WASH, not to the page, so dropping the fill
+// to differentiate the tier leaves the label unreadable wherever the page
+// ground and the wash disagree (the asset list resolves the light amber
+// tokens over a dark surface, so it always disagrees there). Signal the
+// softer tier with a dashed edge and lighter weight instead of by
+// removing the thing the text needs to be legible against.
+.playback-chip--advisory {
+  border-style: dashed;
+  font-weight: 500;
+  // No opacity here. Element opacity composites the already-rendered
+  // chip over its backdrop, so it dims the fill and the label
+  // together — and the comment above is precisely about keeping the
+  // fill the label needs to stay legible. The dashed edge and lighter
+  // weight already carry the softer tier, so the opacity bought no
+  // signal and cost contrast.
+}
+
 // Schedule-window cell — replaces the prior pair of raw start/end
 // datetime columns with a single human-readable block: status dot,
 // relative phrase ('Live · ends in 21 days'), compact absolute range
@@ -700,10 +765,16 @@ label { text-align: left; }
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease;
 
-  &:hover,
-  &:focus-visible {
+  &:hover {
     background: color-mix(in oklab, var(--color-warning-wash) 80%, #000);
+  }
+  // Keyboard focus gets the house ring rather than only a background
+  // shift. A darker wash is not a focus indicator: it is the same
+  // change hover makes, so a keyboard user cannot tell focus from a
+  // stray pointer, and against the warning wash it barely reads.
+  &:focus-visible {
     outline: none;
+    box-shadow: 0 0 0 var(--ring-width) var(--color-focus-ring);
   }
   &:active {
     transform: scale(0.97);

@@ -104,6 +104,7 @@
         {% include "_settings_toggle.html" with name="use_24_hour_clock" label="Use 24-hour clock" hint="Display times in 24-hour format across the UI." checked=use_24_hour_clock %}
         {% include "_settings_toggle.html" with name="debug_logging" label="Debug logging" hint="Verbose viewer logs. Leave off unless you're chasing a problem." checked=debug_logging %}
         {% include "_settings_toggle.html" with name="verify_ssl" label="Verify SSL certificates" hint="Keep on. Turn off only to allow media or web pages served over HTTPS with a self-signed or untrusted certificate (e.g. an intranet host). Disables certificate checks device-wide." checked=verify_ssl warn_when_off="Not secure" %}
+        {% include "_settings_toggle.html" with name="allow_unplayable_video" label="Allow videos this screen can't play properly" hint="Keep this off. Videos this screen's hardware can't handle stutter badly, so we normally refuse them and show you how to convert the file. Turn this on to upload them anyway. If you do this, go watch the video on the screen to make sure it looks okay." checked=allow_unplayable_video warn_when_on="Check the screen" %}
       </div>
     </section>
 
