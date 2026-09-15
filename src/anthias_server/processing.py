@@ -1291,7 +1291,17 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     # image on a NanoPi R3S LTS against 20 s noise-heavy 1080p30
     # clips: H.264 decodes at 2.56x real time, HEVC at only 1.15x —
     # too thin to survive the web UI running alongside, so HEVC stays
-    # out. The VPU can't help: the image's libavcodec exposes only the
+    # out. Decode throughput alone would not justify this: frames can
+    # decode faster than real time while presentation lags behind on
+    # the Qt6 scene graph. So it was also played end-to-end on the
+    # board's own display (cage/wayland, 4K panel) — the viewer
+    # container sat at 200-240 % of 400 % CPU at 1080p30 against
+    # 100-130 % at 720p30, with successive screen captures differing,
+    # i.e. the pipeline keeps advancing with headroom left. What is
+    # still *not* measured is presented-fps: neither this stack nor
+    # the Qt path exposes a frame-drop counter, so drops under heavier
+    # real-world content remain an operator observation. Instrumenting
+    # that is the open item; see docs/board-enablement.md. The VPU can't help: the image's libavcodec exposes only the
     # stateful *_v4l2m2m wrappers, and RK3566's rkvdec is a stateless
     # request-API decoder, the same mismatch documented for RK3399 in
     # docs/board-enablement.md.

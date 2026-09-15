@@ -202,9 +202,10 @@ def test_subscriber_loop_calls_set_board_subtype(
     ``set_board_subtype`` *and* ``set_total_mem_kb`` before flipping
     ``host_agent_ready`` — otherwise a consumer that polls for
     ``host_agent_ready=true`` and immediately reads either
-    ``host:board_subtype`` or ``host:total_mem_kb`` could observe a
-    stale (or empty) value. The two host-shape publishers run before
-    readiness; the order between them doesn't matter for consumers."""
+    ``host:board_subtype``, ``host:device_model`` or
+    ``host:total_mem_kb`` could observe a stale (or empty) value. All
+    three host-shape publishers run before readiness; the order
+    between them doesn't matter for consumers."""
     from anthias_host_agent import __main__ as ha
 
     fake_redis = mock.MagicMock()
@@ -215,6 +216,9 @@ def test_subscriber_loop_calls_set_board_subtype(
 
     def fake_set_total_mem(rdb: Any) -> None:
         call_order.append('total_mem')
+
+    def fake_set_device_model(rdb: Any) -> None:
+        call_order.append('device_model')
 
     def fake_set(key: str, value: Any) -> None:
         if key == 'host_agent_ready':
@@ -230,6 +234,7 @@ def test_subscriber_loop_calls_set_board_subtype(
     monkeypatch.setattr(redis_pkg, 'Redis', lambda **kw: fake_redis)
     monkeypatch.setattr(ha, 'set_board_subtype', fake_set_subtype)
     monkeypatch.setattr(ha, 'set_total_mem_kb', fake_set_total_mem)
+    monkeypatch.setattr(ha, 'set_device_model', fake_set_device_model)
 
     ha.subscriber_loop()
 
@@ -237,9 +242,17 @@ def test_subscriber_loop_calls_set_board_subtype(
         'host_agent_ready must flip last so consumers polling on it '
         'never observe a stale host:* publish'
     )
-    assert set(call_order[:-1]) == {'subtype', 'total_mem'}, (
-        'subscriber_loop must call both publishers exactly once '
-        'before flipping readiness'
+    assert set(call_order[:-1]) == {
+        'subtype',
+        'device_model',
+        'total_mem',
+    }, (
+        'subscriber_loop must call every host-shape publisher exactly '
+        'once before flipping readiness'
+    )
+    assert len(call_order) == 4, (
+        'each publisher runs exactly once — a duplicate publish would '
+        'hide an ordering bug behind a set comparison'
     )
 
 
