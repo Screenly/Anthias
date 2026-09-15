@@ -1271,12 +1271,18 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
 }
 
 
-# Resolution ceiling for boards whose accepted codecs run in
-# software. Distinct from the low-RAM cap below, which is about
-# *memory* — a 1 GB board OOMs allocating the decode pipeline. This
-# one is about *CPU throughput*: a board with ample RAM can still be
-# unable to decode 4K in real time. Boards absent from this map have
-# a hardware decoder for everything they accept and need no ceiling.
+# Measured resolution ceilings for software decode. Distinct from the
+# low-RAM cap below, which is about *memory* — a 1 GB board OOMs
+# allocating the decode pipeline. This one is about *CPU throughput*: a
+# board with ample RAM can still be unable to decode 4K in real time.
+#
+# A board is listed only once someone has measured its ceiling on
+# hardware, so absence means "no measurement", NOT "hardware-decodes
+# everything it accepts". ``pi5`` is the standing example: it accepts
+# h264 knowing it decodes in software (see its entry above), and is
+# unlisted only because nobody has timed 4K H.264 on a Cortex-A76.
+# Adding a board here needs a number off a real device — an invented
+# ceiling would reject uploads that play fine.
 _SW_DECODE_MAX_PIXELS: dict[str, int] = {
     # 2.56x real time at 1080p (see the rk3566 note above); 4K is ~4x
     # the pixel work, which lands under real time before the web UI
@@ -1411,9 +1417,10 @@ def _ffmpeg_reencode_recipe(
     means the output fits *inside* 1920×1080 (no padding, no
     stretch) — a 4K 16:9 source becomes exactly 1920×1080, a 4K 21:9
     ultrawide lands at 1920×823, a portrait 1080×1920 lands at
-    608×1080 (height-bound). Used by the low-RAM resolution gate;
-    omitted in the codec-only rejection path so we don't suggest a
-    needless re-encode when an HD codec swap is all that's wanted.
+    608×1080 (height-bound). Set by either resolution ceiling — the
+    low-RAM memory cap or the software-decode throughput cap; omitted
+    when neither applies, so we don't suggest a needless re-encode when
+    an HD codec swap is all that's wanted.
     """
     scale_clause = (
         '-vf scale=1920:1080:force_original_aspect_ratio=decrease '
@@ -1643,12 +1650,19 @@ def _run_video_normalisation(asset: Asset) -> None:
     display_codec = (
         src_codec if src_codec and src_codec != 'unknown' else 'unknown'
     )
-    # If the upload would *also* fail the low-RAM 1080p gate, fold
-    # the downscale into the codec recipe so the operator doesn't
-    # have to re-upload twice (once for the codec swap, once for the
-    # resolution shrink). The message remains codec-focused because
-    # the codec is the strictly stronger rejection.
-    cap = _exceeds_low_ram_pixel_cap(video_width, video_height)
+    # If the upload would *also* fail a resolution ceiling, fold the
+    # downscale into the codec recipe so the operator doesn't have to
+    # re-upload twice (once for the codec swap, once for the resolution
+    # shrink). The message remains codec-focused because the codec is
+    # the strictly stronger rejection.
+    #
+    # Both ceilings count, not just the low-RAM one: the codec we are
+    # steering the operator towards is by definition in ``supported``,
+    # and on a board with a software-decode ceiling that target codec is
+    # the software-decoded one. A 4K HEVC upload to an RK3566 would
+    # otherwise get a 4K H.264 recipe, and the re-upload would come
+    # straight back out of the throughput cap above.
+    cap = _pixel_cap_rejection(video_width, video_height) is not None
     recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
     handbrake = _handbrake_steps(supported)
     if supported:
