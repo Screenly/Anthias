@@ -231,6 +231,47 @@ Anthias does not maintain a custom kernel or distro
 the QtMultimedia side will also need a hwaccel-selection hook — Qt 6.5+ has
 no public knob today.
 
+### RK3566 (NanoPi R3S LTS) — measured playback envelope
+
+Same image as the device-tree section above. Decode is software throughout:
+the arm64 viewer image's Qt 6 multimedia backend is `libffmpegmediaplugin.so`,
+and that libavcodec exposes only the stateful `*_v4l2m2m` wrappers, which
+cannot drive RK3566's stateless rkvdec (the RK3399 mismatch again).
+
+Decode throughput, measured in the viewer image against 20 s noise-heavy
+1080p30 clips, `ffmpeg -benchmark -f null -`:
+
+| codec | rtime for 20 s | speed |
+| --- | --- | --- |
+| H.264 | 7.8 s | 2.56x real time |
+| HEVC | 17.5 s | 1.15x real time |
+
+End-to-end playback on the attached 4K panel (cage/wayland, viewer
+rendering to the display, 30 s H.264 clips at 8 Mbit/s 1080p and 4 Mbit/s
+720p):
+
+| clip | viewer container CPU | host idle | viewer RSS |
+| --- | --- | --- | --- |
+| 1080p30 | 200-240 % of 400 % | ~28 % | ~990 MiB |
+| 720p30 | 100-130 % of 400 % | ~58 % | ~890 MiB |
+
+Frames advance in both cases (successive `grim` captures differ). The
+numbers are the argument for the envelope in
+`processing._HW_DECODE_VIDEO_CODECS`: H.264 only, capped at 1080p by
+`_SW_DECODE_MAX_PIXELS`. HEVC at 1.15x leaves nothing for the compositor,
+and 4K H.264 is ~4x the 1080p work, which lands under real time.
+
+Note the RSS column against the container's 1.54 GiB cap: at 1080p the
+viewer sits around 990 MiB before anything else runs, so memory is as
+close to the limit as CPU is on this 2 GB board.
+
+Caveat on the drop question: neither the Qt path nor this board exposes a
+frame-drop counter — `ANTHIAS_DEBUG_DROPS` and `~/.anthias/mpv.log` in the
+sections above belong to the retired mpv subprocess player and do nothing
+here. Drops on real content are an operator observation, not something
+these measurements quantify. Wiring a drop counter into the QtMultimedia
+path is the missing instrument.
+
 ### Low-RAM mode
 
 Boards with less than 1.5 GiB MemTotal (Pi 2/Pi 3 1GB, Pi 4 1GB, Rock Pi 4
