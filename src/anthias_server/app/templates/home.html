@@ -8,7 +8,18 @@
 {% endblock %}
 
 {% block main %}
-<div class="app-container" :class="{ 'has-bulk-selection': selectedIds.length }" x-data="homeApp()" @asset-saved.window="closeModal()" @bulk-done.window="onBulkDone($event)">
+{% comment %} The drag listeners are bound with .window, not to this
+   container: a file dropped on the navbar, the footer or the margin
+   beside the table is still aimed at this page, and anything the
+   handlers do not claim the browser claims instead — it navigates the
+   tab to the dropped file and the page is gone. See the
+   "Page-wide drag and drop" block in home.ts.
+{% endcomment %}
+<div class="app-container" :class="{ 'has-bulk-selection': selectedIds.length }" x-data="homeApp()" @asset-saved.window="closeModal()" @bulk-done.window="onBulkDone($event)"
+  @dragenter.window="onPageDragEnter($event)"
+  @dragover.window="onPageDragOver($event)"
+  @dragleave.window="onPageDragLeave($event)"
+  @drop.window="onPageDrop($event)">
   <div class="page-header-bar">
     <div class="page-header-bar__title">
       <h1 class="page-header">Schedule Overview</h1>
@@ -83,6 +94,26 @@
           </button>
         </form>
       </div>
+    </div>
+  </div>
+
+  {% comment %} Page-wide drop feedback. Not shown while the Add/Edit
+     modal is up — the modal's own dropzone highlights instead, and an
+     overlay on top of it would hide the form the operator is filling
+     in. aria-hidden because it is pure feedback for a pointer gesture:
+     it appears only mid-drag, cannot be reached by keyboard, and says
+     nothing a screen-reader user can act on.
+  {% endcomment %}
+  <div
+    class="modal-overlay upload-drop-overlay"
+    x-show="pageDragActive && !mode && acceptsPageDrop()"
+    x-cloak
+    aria-hidden="true"
+  >
+    <div class="upload-drop-overlay__card">
+      <i class="ti ti-cloud-upload"></i>
+      <p class="upload-drop-overlay__title">Drop to upload</p>
+      <p class="muted-label m-0">Images and videos are added to the schedule.</p>
     </div>
   </div>
 

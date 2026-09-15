@@ -21,27 +21,27 @@
     </div>
 
     {# ---- Add mode ---- #}
-    <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
+    <div x-show="mode === 'add'">
       <div class="modal-card__body" style="padding-bottom: calc(var(--spacing) * 3)">
         <ul class="app-tabs mb-4" id="add-asset-nav-tabs">
           <li class="app-tab-item">
             <button type="button" id="tab-uri"
-              class="app-tab-link" :class="tab === 'uri' && 'active'"
-              @click="tab = 'uri'">
+              class="app-tab-link" :class="addTab === 'uri' && 'active'"
+              @click="addTab = 'uri'">
               <i class="ti ti-link mr-1"></i>From URL
             </button>
           </li>
           <li class="app-tab-item">
             <button type="button"
-              class="app-tab-link upload-asset-tab" :class="tab === 'file' && 'active'"
-              @click="tab = 'file'">
+              class="app-tab-link upload-asset-tab" :class="addTab === 'file' && 'active'"
+              @click="addTab = 'file'">
               <i class="ti ti-cloud-upload mr-1"></i>Upload file
             </button>
           </li>
           <li class="app-tab-item">
             <button type="button" id="tab-apps"
-              class="app-tab-link" :class="tab === 'apps' && 'active'"
-              @click="tab = 'apps'">
+              class="app-tab-link" :class="addTab === 'apps' && 'active'"
+              @click="addTab = 'apps'">
               <i class="ti ti-apps mr-1"></i>Apps
             </button>
           </li>
@@ -49,7 +49,7 @@
       </div>
 
       <form
-        x-show="tab === 'uri'"
+        x-show="addTab === 'uri'"
         method="post"
         action="{% url 'anthias_app:assets_create' %}"
         hx-post="{% url 'anthias_app:assets_create' %}"
@@ -83,7 +83,7 @@
          URL off the form and the CSRF token off its input.
       {% endcomment %}
       <form
-        x-show="tab === 'file'"
+        x-show="addTab === 'file'"
         method="post"
         action="{% url 'anthias_app:assets_upload' %}"
         enctype="multipart/form-data"
@@ -91,22 +91,21 @@
       >
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
-          {% comment %} The dashed dropzone reads as a drop target, so it
-             accepts drops as well as clicks. dropFiles() hands the
-             dropped FileList to the same uploadFiles() batch path the
-             <input>'s change event uses. {% endcomment %}
+          {% comment %} The dashed dropzone reads as a drop target, and
+             it is one — but it carries no drop handler of its own. The
+             page-wide listeners in home.html own every file drop on
+             this page, including the ones released in here, so there
+             is exactly one path into uploadFiles() and no chance of a
+             drop being handled twice. All this element does is echo
+             the drag state the page is already tracking. {% endcomment %}
           <label
             for="add-file"
             class="upload-dropzone"
-            :class="{ 'is-disabled': uploadState, 'is-dragover': dragActive }"
+            :class="{ 'is-disabled': uploadState, 'is-dragover': pageDragActive }"
             x-show="!uploadState"
-            @dragover.prevent
-            @dragenter.prevent="dragActive = true"
-            @dragleave.self.prevent="dragActive = false"
-            @drop.prevent="dragActive = false; dropFiles($event)"
           >
             <i class="ti ti-cloud-upload" style="font-size: 2.25rem; opacity: 0.55"></i>
-            <p class="mb-1 font-semibold mt-2">Click to choose files</p>
+            <p class="mb-1 font-semibold mt-2">Click to choose files, or drop them anywhere</p>
             <p class="muted-label mb-0">Images or videos. Select one or many — upload starts immediately.</p>
             {% comment %}
               Browser MIME globs cover JPEG/PNG/WebP/GIF/MP4/WebM/MKV out of
@@ -157,9 +156,9 @@
          #asset-table swap + asset-saved contract as the URI tab.
       {% endcomment %}
       <div
-        x-show="tab === 'apps'"
+        x-show="addTab === 'apps'"
         x-data="appsTab()"
-        x-effect="if (tab === 'apps') load()"
+        x-effect="if (addTab === 'apps') load()"
       >
         {# Loading #}
         <div class="modal-card__body app-cfg-state" x-show="phase === 'loading'" x-cloak>

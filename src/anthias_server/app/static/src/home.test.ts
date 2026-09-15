@@ -725,3 +725,159 @@ describe('uploadFiles batch behaviour', () => {
     expect(toasts).toHaveLength(1)
   })
 })
+
+// --- Page-wide drag and drop -------------------------------------------
+//
+// The gesture that has to work is "drag a video onto the asset list",
+// which is a window-level drop with no dropzone under the pointer. What
+// these pin is the routing around it: which drags are claimed from the
+// browser (an unclaimed one navigates the tab to the file and the page
+// is gone), when the overlay is up, and which drops reach the upload
+// path at all. The upload itself is covered above.
+
+type HomeAppLike = ReturnType<typeof window.homeApp>
+
+// happy-dom has no DataTransfer to hang files off, and the handlers
+// only ever read `types` and `files`, so a literal is steadier.
+type FakeDrag = DragEvent & { prevented: boolean }
+
+function fakeDrag(types: string[], files: File[]): FakeDrag {
+  const event = {
+    prevented: false,
+    dataTransfer: { types, files },
+    preventDefault() {
+      event.prevented = true
+    },
+  }
+  return event as unknown as FakeDrag
+}
+
+function fileDrag(...names: string[]): FakeDrag {
+  return fakeDrag(
+    ['Files'],
+    names.map((n) => new File(['x'], n, { type: 'video/mp4' })),
+  )
+}
+
+// Dragging selected text, a link, or an image already on the page
+// fires the identical events. None of it is an upload.
+function textDrag(): FakeDrag {
+  return fakeDrag(['text/plain'], [])
+}
+
+// What the add-asset modal contributes to the real page: the endpoint
+// on the form, the CSRF token, and the input dropFiles() hands the
+// FileList to.
+function mountUploadForm(): void {
+  document.body.innerHTML =
+    '<form action="/assets/upload/">' +
+    '<input name="csrfmiddlewaretoken" value="test-csrf">' +
+    '<input type="file" id="add-file" multiple>' +
+    '</form>'
+}
+
+describe('page-wide drag and drop', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  test('a file dragged over the page raises the overlay', () => {
+    const app = window.homeApp()
+    const event = fileDrag('clip.mp4')
+    app.onPageDragEnter(event)
+
+    expect(app.pageDragActive).toBe(true)
+    // Unclaimed, the browser keeps the drag and navigates to the file
+    // on drop — the whole bug this path exists to close.
+    expect(event.prevented).toBe(true)
+  })
+
+  test('a drag carrying no files is left to the browser', () => {
+    const app = window.homeApp()
+    const event = textDrag()
+    app.onPageDragEnter(event)
+
+    expect(app.pageDragActive).toBe(false)
+    expect(event.prevented).toBe(false)
+  })
+
+  // dragenter/dragleave fire once per element the pointer crosses, so
+  // without the depth counter the overlay would blink off every time
+  // the drag moved from one table row to the next.
+  test('crossing between elements does not flicker the overlay', () => {
+    const app = window.homeApp()
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+    app.onPageDragLeave(fileDrag('clip.mp4'))
+
+    expect(app.pageDragActive).toBe(true)
+
+    app.onPageDragLeave(fileDrag('clip.mp4'))
+    expect(app.pageDragActive).toBe(false)
+  })
+
+  // A dragleave with no matching dragenter would push an unfloored
+  // counter negative, and every later enter would land on -1 — the
+  // overlay would never come up again for the rest of the session.
+  test('a stray dragleave cannot strand the counter', () => {
+    const app = window.homeApp()
+    app.onPageDragLeave(fileDrag('clip.mp4'))
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+
+    expect(app.pageDragActive).toBe(true)
+  })
+
+  // The recovery path: a dragenter swallowed by an element that stops
+  // propagation still leaves a drag the page can see moving.
+  test('dragover raises a highlight that no dragenter did', () => {
+    const app = window.homeApp()
+    const event = fileDrag('clip.mp4')
+    app.onPageDragOver(event)
+
+    expect(app.pageDragActive).toBe(true)
+    expect(event.prevented).toBe(true)
+  })
+
+  test('a file dropped on the page uploads it', async () => {
+    mountUploadForm()
+    stubXhr([{ status: 200 }])
+    const app = window.homeApp()
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+    app.onPageDrop(fileDrag('clip.mp4'))
+    // The drop hands off to the batch without awaiting it.
+    await Bun.sleep(0)
+
+    expect(sends).toBe(1)
+    // Opened on the upload pane, which is where the batch's progress
+    // UI lives — otherwise a dropped file uploads with no feedback.
+    expect(app.addTab).toBe('file')
+    expect(app.pageDragActive).toBe(false)
+    expect(refreshes).toEqual(['refresh-assets'])
+  })
+
+  // Each of these owns the screen with an overlay of its own, so a file
+  // released over one is not aimed at the asset list. The drop is still
+  // claimed — letting the browser have it would navigate away from the
+  // half-finished edit underneath.
+  test.each([
+    ['an open edit modal', (app: HomeAppLike) => (app.mode = 'edit')],
+    [
+      'the preview modal',
+      (app: HomeAppLike) => (app.previewAsset = {} as never),
+    ],
+    ['the bulk-edit modal', (app: HomeAppLike) => (app.bulkEditOpen = true)],
+    ['the delete prompt', (app: HomeAppLike) => (app.pendingDeleteId = 'a1')],
+  ])('a drop over %s is refused, not navigated', async (_name, open) => {
+    mountUploadForm()
+    stubXhr([{ status: 200 }])
+    const app = window.homeApp()
+    open(app)
+    const event = fileDrag('clip.mp4')
+    app.onPageDrop(event)
+    await Bun.sleep(0)
+
+    expect(event.prevented).toBe(true)
+    expect(sends).toBe(0)
+    expect(app.addTab).toBe('uri')
+  })
+})
