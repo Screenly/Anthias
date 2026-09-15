@@ -14,9 +14,9 @@ Two Celery tasks that run on every fresh upload:
 * ``normalize_video_asset`` — runs ffprobe on the upload and records
   what it finds in ``metadata`` (codec, dimensions, fps, audio codec,
   container, duration). The file itself is never rewritten. Anthias
-  does not transcode video on-device: the viewer's per-board mpv
-  hwdec dispatch already handles every codec a modern board can play
-  in hardware (H.264, HEVC, plus VAAPI's wider set on x86), and the
+  does not transcode video on-device: the viewer's per-board hwdec
+  dispatch already handles every codec a modern board can play in
+  hardware (H.264, HEVC, plus VAAPI's wider set on x86), and the
   on-device libx265 / libx264 transcode path we tried in this PR's
   earlier revisions wedged a Pi 4's celery worker for 99 minutes on a
   single 4K60 H.264 → HEVC pass before zombieing. For codecs the
@@ -1230,7 +1230,9 @@ _VIDEO_METADATA_KEYS = (
 # stay in sync with what each board's player can actually keep up
 # with: pi2/pi3 through GStreamer's V4L2 elements
 # (``GstFbdevMediaPlayer`` — bcm2835 codec, H.264 only), every other
-# board through mpv/QtMultimedia + libavcodec. If the gate accepts a
+# board through the viewer's in-process QtMultimedia + libavcodec
+# pipeline (``MPVMediaPlayer`` — a legacy name; there is no mpv
+# binary). If the gate accepts a
 # codec the board cannot decode in real time, playback degrades
 # silently at the viewer (drops / black screen) — which this gate
 # exists to prevent.
@@ -1250,7 +1252,8 @@ _VIDEO_METADATA_KEYS = (
 # hardware" — every video upload is rejected. The catch-all ``arm64``
 # DEVICE_TYPE lands here when ``anthias_host_agent`` hasn't published
 # a more specific subtype to Redis; an unknown aarch64 SBC isn't
-# guaranteed to have a v4l2_request decoder mpv can address, so we
+# guaranteed to have a v4l2_request decoder the viewer can address,
+# so we
 # refuse rather than ship a clip that would SW-decode at play time.
 _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     'pi2': frozenset({'h264'}),
@@ -1606,8 +1609,8 @@ def _run_video_normalisation(asset: Asset) -> None:
     single 4K60 H.264 → HEVC pass before zombieing.
 
     Uploading a codec outside the board's HW set is rejected — the
-    viewer would otherwise fall through to mpv's software decode and
-    show drops the operator paid for hardware to avoid. The metadata
+    viewer would otherwise fall through to libavcodec's software
+    decode and show drops the operator paid for hardware to avoid. The metadata
     fields written before the rejection let the operator see what
     they uploaded (codec / dims / fps) alongside the error message.
     """

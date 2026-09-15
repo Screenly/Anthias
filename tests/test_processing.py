@@ -1104,7 +1104,7 @@ def test_video_arm64_catch_all_rejects_everything(
 ) -> None:
     """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
     decode map (an unknown aarch64 SBC isn't guaranteed to expose a
-    v4l2-request decoder mpv can address). Without a resolved subtype
+    v4l2-request decoder the viewer can address). Without a subtype
     every video upload is rejected, and the message has to explain why
     in terms the operator can act on — which differs by deployment, so
     it names both of them rather than one."""
