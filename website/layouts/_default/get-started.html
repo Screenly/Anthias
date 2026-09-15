@@ -123,13 +123,8 @@
                         <td class="py-3 pr-4">64-bit</td>
                         <td class="py-3"><span class="text-green-700 font-medium">Recommended</span></td>
                     </tr>
-                    <tr class="border-b border-black/5">
-                        <td class="py-3 pr-4">Generic 64-bit ARM SBC (Rock Pi, Orange Pi, Banana Pi&hellip;)</td>
-                        <td class="py-3 pr-4">64-bit</td>
-                        <td class="py-3"><span class="text-amber-600 font-medium">Best-effort</span></td>
-                    </tr>
                     <tr>
-                        <td class="py-3 pr-4">NanoPi R3S LTS (RK3566)</td>
+                        <td class="py-3 pr-4">Generic 64-bit ARM SBC (Rock Pi, Orange Pi, Banana Pi&hellip;)</td>
                         <td class="py-3 pr-4">64-bit</td>
                         <td class="py-3"><span class="text-amber-600 font-medium">Best-effort</span></td>
                     </tr>
@@ -137,7 +132,6 @@
             </table>
             <p class="text-zinc-500 text-sm mt-4 leading-relaxed">The <strong>Raspberry Pi 3 Model A+</strong> ships with only 512&nbsp;MB of RAM, too little to run the Anthias stack comfortably, so it&rsquo;s <strong>not recommended</strong>. For a low-cost board, choose a Pi with at least 1&nbsp;GB (Pi 3 Model B/B+ or newer).</p>
             <p class="text-zinc-500 text-sm mt-4 leading-relaxed">Generic 64-bit ARM SBCs run the same Anthias stack on <strong>Debian-based Armbian</strong> (Bookworm / Trixie) with software video decode. Ubuntu-based Armbian builds aren&rsquo;t supported: the installer wires up the Debian Docker apt repository, so Ubuntu releases fail at &ldquo;apt update&rdquo;. Hardware video decode varies per SoC and isn&rsquo;t wired up out of the box, so expect software decode (smooth at 720p, stutter-prone at 1080p, CPU-heavy at 4K). Per-SoC hardware decode is a follow-up; see <a class="text-brand-purple no-underline hover:underline" href="https://github.com/Screenly/Anthias/issues/2849" target="_blank" rel="noopener">issue #2849</a>.</p>
-            <p class="text-zinc-500 text-sm mt-4 leading-relaxed">The <strong>NanoPi R3S LTS</strong> is listed because we have run Anthias on one, and it marks the floor of what is usable: images and web pages are fine, 720p video is comfortable, and 1080p plays while using well over half the board, dropping frames on demanding content. Uploads above 1080p are refused. On the Armbian image we tested it also needs its device tree set to the LTS variant before HDMI works at all, which the <a class="text-brand-purple no-underline hover:underline" href="/faq/">FAQ</a> walks through.</p>
         </div>
     </div>
 </section>
