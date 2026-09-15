@@ -3531,6 +3531,20 @@ def test_schedule_pills_everyday_short_circuit(asset: Asset) -> None:
 # get_device_model_parts — (primary, secondary) for the two-line card
 
 
+@pytest.fixture
+def no_device_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the device-tree read to "no board name".
+
+    ``get_device_model_parts`` consults the device tree before DMI, so
+    without this the x86 branches below would short-circuit whenever
+    the suite runs on a host that has a tree (any SBC dev box, and the
+    arm64 CI runner).
+    """
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(device_helper, 'read_device_tree_model', lambda: '')
+
+
 def test_device_model_parts_pi(monkeypatch: pytest.MonkeyPatch) -> None:
     from anthias_common import device_helper
 
@@ -3551,6 +3565,7 @@ def test_device_model_parts_pi(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_device_model_parts_x86_with_dmi(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -3582,6 +3597,7 @@ def test_device_model_parts_x86_with_dmi(
 
 def test_device_model_parts_x86_drops_redundant_vendor(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     """Reference / whitebox boards set sys_vendor to the CPU maker
     ('Intel Corporation' next to an 'Intel Celeron' CPU). The stuttering
@@ -3614,6 +3630,7 @@ def test_device_model_parts_x86_drops_redundant_vendor(
 
 def test_device_model_parts_x86_keeps_branded_vendor(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     """A branded OEM vendor that differs from the CPU maker is kept, but
     its corporate suffix ('Inc.') is trimmed."""
@@ -3644,6 +3661,7 @@ def test_device_model_parts_x86_keeps_branded_vendor(
 
 def test_device_model_parts_drops_virt_chassis(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -3674,6 +3692,7 @@ def test_device_model_parts_drops_virt_chassis(
 
 def test_device_model_parts_generic_fallback(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 

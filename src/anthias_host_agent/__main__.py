@@ -29,7 +29,10 @@ from tenacity import (
 # systemd unit runs this module with PYTHONPATH=<repo>/src (see
 # ansible/roles/anthias/templates/anthias-host-agent.service), which
 # is what makes the import resolvable from the host venv.
-from anthias_common.device_helper import detect_board_subtype
+from anthias_common.device_helper import (
+    detect_board_subtype,
+    read_device_tree_model,
+)
 from anthias_host_agent.ifaddrs import interface_addresses
 
 logger = logging.getLogger(__name__)
@@ -254,6 +257,31 @@ def set_board_subtype(rdb: 'redis.Redis') -> None:
         )
 
 
+def set_device_model(rdb: 'redis.Redis') -> None:
+    """Publish the host's device-tree board model to Redis.
+
+    The server renders ``host:device_model`` as the System Info card's
+    device label. It cannot read the tree itself — Docker masks
+    ``/sys/firmware`` in unprivileged containers — so without this the
+    card falls through to 'Generic aarch64 Device' on every non-Pi
+    SBC. Written before ``host_agent_ready`` flips, like the other
+    host facts.
+
+    x86 hosts have no device tree and publish the empty string; the
+    reader treats empty / missing identically and keeps its existing
+    DMI-derived label.
+    """
+    model = read_device_tree_model()
+    rdb.set('host:device_model', model)
+    if model:
+        logger.info('Published host device model %r to redis', model)
+    else:
+        logger.info(
+            'No /proc/device-tree/model on this host — device label '
+            'falls back to DMI / CPU / generic'
+        )
+
+
 def subscriber_loop() -> None:
     # On first boot the redis container may not yet accept connections;
     # retry quietly instead of crashing the unit on every attempt.
@@ -275,6 +303,7 @@ def subscriber_loop() -> None:
             pubsub = rdb.pubsub(ignore_subscribe_messages=True)
             pubsub.subscribe(CHANNEL_NAME)
     set_board_subtype(rdb)
+    set_device_model(rdb)
     set_total_mem_kb(rdb)
     rdb.set('host_agent_ready', 'true')
     logger.info(

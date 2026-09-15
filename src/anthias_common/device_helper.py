@@ -103,7 +103,36 @@ def _strip_corporate_suffix(vendor: str) -> str:
     return ' '.join(tokens)
 
 
-def get_device_model_parts() -> tuple[str, str]:
+def read_device_tree_model() -> str:
+    """Host board name from the device tree, ``''`` when there is none.
+
+    The kernel writes ``/proc/device-tree/model`` as a NUL-terminated
+    UTF-8 string ('FriendlyElec NanoPi R3S LTS', 'Radxa ROCK Pi 4B').
+    x86 hosts have no device tree at all.
+
+    **Only readable where ``/sys/firmware`` is visible.**
+    ``/proc/device-tree`` is a symlink to
+    ``/sys/firmware/devicetree/base``, and ``/sys/firmware`` is on
+    Docker's default masked-paths list — so an *unprivileged*
+    container (anthias-server, anthias-celery) sees the symlink but
+    an empty target and gets ``''`` here, on every board. The host
+    and privileged containers (anthias-viewer) read it fine.
+
+    That is why ``anthias_host_agent`` publishes the value to Redis
+    and ``anthias_common.board`` reads it from there: the server
+    cannot obtain it on its own. Bind-mounting the tree in is not an
+    option — a mount onto the masked path is still empty, and x86
+    hosts have no source path to mount.
+    """
+    try:
+        with open('/proc/device-tree/model', 'rb') as f:
+            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+    except OSError:
+        return ''
+    return ' '.join(model.split())
+
+
+def get_device_model_parts(dt_model: str | None = None) -> tuple[str, str]:
     """(primary, secondary) label for the host, for a two-line card.
 
     Returns the board/chassis as the primary line and the CPU brand as
@@ -112,15 +141,30 @@ def get_device_model_parts() -> tuple[str, str]:
 
     Pi:  ('Raspberry Pi 5 Model B Rev 1.0', '') — the firmware Model
          line, no separate CPU line.
+    SBC: ('FriendlyElec NanoPi R3S LTS', '') — non-Pi boards write no
+         cpuinfo Model line and expose no DMI, so the device tree is
+         the only thing that names them.
     x86: ('Whiskey Platform', 'Intel Celeron 4205U @ 1.80GHz') when DMI
          exposes a real chassis; ('Intel Celeron ...', '') when it only
          yields a CPU. Falls back to ('Generic x86_64 Device', '') when
          neither is readable so the card never renders blank.
+
+    ``dt_model`` lets a caller inside an unprivileged container supply
+    the device-tree model it got from Redis, since it cannot read the
+    tree itself (see ``read_device_tree_model``); ``None`` means "read
+    it here", which is right on the host and in privileged containers.
+    Use ``anthias_common.board.get_device_model_parts`` to get the
+    Redis-resolved value wired in.
     """
     cpu_info = parse_cpu_info()
     pi_model = cpu_info.get('model')
     if isinstance(pi_model, str) and pi_model:
         return pi_model, ''
+
+    if dt_model is None:
+        dt_model = read_device_tree_model()
+    if dt_model:
+        return dt_model, ''
 
     vendor = _read_sysfs('/sys/class/dmi/id/sys_vendor')
     product = _read_sysfs('/sys/class/dmi/id/product_name')
@@ -227,17 +271,15 @@ def detect_board_subtype() -> str | None:
     * ``anthias_host_agent`` (docker-compose installs) detects on the
       host and publishes the token to Redis at ``host:board_subtype``.
     * ``anthias_common.board.get_board_subtype`` falls back to calling
-      this directly when Redis has no value — the device tree is
-      kernel-global, so it reads identically inside containers (this
-      is the same mechanism ``get_device_type`` above relies on). That
-      covers balena, where no host_agent service exists.
+      this directly when Redis has no value. That fallback only works
+      where the device tree is actually readable — the host and
+      privileged containers. In an unprivileged one it returns
+      ``None`` whatever the board, because Docker masks
+      ``/sys/firmware`` (see ``read_device_tree_model``), so the
+      host_agent-published value is what carries this on
+      docker-compose installs.
     """
-    try:
-        with open('/proc/device-tree/model', 'rb') as f:
-            # Kernel writes a null-terminated UTF-8 string.
-            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
-    except OSError:
-        return None
+    model = read_device_tree_model()
     if not model:
         return None
     model_low = model.lower()

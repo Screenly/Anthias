@@ -6,8 +6,9 @@ Server + viewer read it to upgrade the catch-all ``arm64``
 DEVICE_TYPE into a board-specific envelope when the silicon
 supports it. The detection table itself lives in
 ``anthias_common.device_helper.detect_board_subtype`` — shared with
-``anthias_common.board``'s in-container fallback (used on balena,
-where no host_agent service runs). We pin:
+``anthias_common.board``'s local fallback (which only resolves
+where the device tree is readable — the host and the privileged
+viewer, not an unprivileged server container). We pin:
 
 * the device-tree → subtype mapping for known boards (Rock Pi 4);
 * unknown / empty / missing device-tree all collapse to ``None``;
@@ -106,10 +107,11 @@ def test_get_board_subtype_prefers_redis_value() -> None:
 def test_get_board_subtype_falls_back_to_device_tree(
     redis_value: bytes | None,
 ) -> None:
-    """No host_agent (balena fleets) or an empty publish falls back
-    to reading the device tree in-container — this is what upgrades
-    the ``anthias-rockpi4`` balena fleet's codec gate from the empty
-    arm64 envelope without a host-side daemon."""
+    """A dead host_agent or an empty publish falls back to reading
+    the device tree directly, so a compose install whose agent died
+    mid-upgrade keeps its codec envelope. The read only succeeds
+    where ``/sys/firmware`` is visible; an unprivileged container
+    gets nothing from it whatever the board."""
     fake_redis = mock.MagicMock()
     fake_redis.get.return_value = redis_value
     mocked_open = mock.mock_open(read_data=b'Radxa ROCK Pi 4B\x00')
