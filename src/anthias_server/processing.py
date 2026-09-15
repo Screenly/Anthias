@@ -1226,14 +1226,24 @@ _VIDEO_METADATA_KEYS = (
 )
 
 
-# Per-board hardware-decode codec set. This upload-side gate must
-# stay in sync with what each board's player can actually decode in
-# hardware: pi2/pi3 through GStreamer's V4L2 elements
+# Per-board set of video codecs accepted at upload. This gate must
+# stay in sync with what each board's player can actually keep up
+# with: pi2/pi3 through GStreamer's V4L2 elements
 # (``GstFbdevMediaPlayer`` — bcm2835 codec, H.264 only), every other
 # board through mpv/QtMultimedia + libavcodec. If the gate accepts a
-# codec the board can't HW-decode, playback falls back to a silent
-# software decode at the viewer (drops / black screen) — which this
-# gate exists to prevent.
+# codec the board cannot decode in real time, playback degrades
+# silently at the viewer (drops / black screen) — which this gate
+# exists to prevent.
+#
+# NOT a hardware-decode certificate, despite the name — which is
+# historical, from when it was one. Some entries are deliberately
+# software-decoded where a measurement showed the CPU keeps up:
+# ``pi5``'s h264 (Cortex-A76) and all of ``rk3566`` (Cortex-A55), both
+# noted at their entries. Those boards carry a resolution ceiling in
+# ``_SW_DECODE_MAX_PIXELS`` because software decode runs out of
+# headroom with pixel count in a way hardware decode does not. Adding
+# a codec here on the assumption the silicon decodes it is therefore
+# not safe — check the entry's own note.
 #
 # Empty / missing entry means "no codec on this device decodes in
 # hardware" — every video upload is rejected. The catch-all ``arm64``
@@ -1365,7 +1375,14 @@ def _pixel_cap_rejection(
 
 
 def _hw_decoded_codecs(device_key: str) -> frozenset[str]:
-    """Codecs the board named by ``device_key`` can HW-decode via mpv.
+    """Video codecs the board named by ``device_key`` accepts.
+
+    Mostly the board's hardware-decode set — hence the name — but not
+    exclusively: ``pi5`` and ``rk3566`` accept H.264 on measured
+    software throughput, so a codec coming back from here is certified
+    to *play*, not certified to decode in hardware. Pair it with
+    ``_pixel_cap_rejection``, which holds the resolution ceiling those
+    software-decoded entries need.
 
     Callers resolve the key with
     ``anthias_common.board.resolve_device_key`` — so a Rock Pi 4 running
