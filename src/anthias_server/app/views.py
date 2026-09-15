@@ -1929,61 +1929,75 @@ def settings_save(request: HttpRequest) -> HttpResponse:
             new_pwd_confirm=request.POST.get('password_2', ''),
             prev_auth_backend=prev_auth_backend,
         )
-        settings['auth_backend'] = auth_backend
+        # try/finally rather than the happy path: apply_auth_settings()
+        # has already written the rotated User row by the time we get
+        # here, so sockets accepted under the old credentials have to be
+        # reaped even when the conf write below fails — a full or
+        # read-only /data volume is enough. The User-save signal covers a
+        # rotation on its own; this is what covers a bare auth_backend
+        # toggle, which never touches a User row.
+        try:
+            settings['auth_backend'] = auth_backend
 
-        settings['player_name'] = request.POST.get('player_name', '')
-        # Clamped for the same reason as the per-asset duration: these
-        # defaults get copied onto new asset rows and would reach the
-        # viewer's Event.wait (Sentry ANTHIAS-3E).
-        settings['default_duration'] = clamp_duration(
-            request.POST.get('default_duration') or 0
-        )
-        settings['default_streaming_duration'] = clamp_duration(
-            request.POST.get('default_streaming_duration') or 0
-        )
-        settings['audio_output'] = request.POST.get('audio_output', 'hdmi')
-        settings['date_format'] = request.POST.get('date_format', 'mm/dd/yyyy')
-        settings['timezone'] = tz_value
+            settings['player_name'] = request.POST.get('player_name', '')
+            # Clamped for the same reason as the per-asset duration: these
+            # defaults get copied onto new asset rows and would reach the
+            # viewer's Event.wait (Sentry ANTHIAS-3E).
+            settings['default_duration'] = clamp_duration(
+                request.POST.get('default_duration') or 0
+            )
+            settings['default_streaming_duration'] = clamp_duration(
+                request.POST.get('default_streaming_duration') or 0
+            )
+            settings['audio_output'] = request.POST.get('audio_output', 'hdmi')
+            settings['date_format'] = request.POST.get(
+                'date_format', 'mm/dd/yyyy'
+            )
+            settings['timezone'] = tz_value
 
-        new_default_assets = _checkbox(request, 'default_assets')
-        if new_default_assets and not settings['default_assets']:
-            add_default_assets()
-        elif not new_default_assets and settings['default_assets']:
-            remove_default_assets()
-        settings['default_assets'] = new_default_assets
+            new_default_assets = _checkbox(request, 'default_assets')
+            if new_default_assets and not settings['default_assets']:
+                add_default_assets()
+            elif not new_default_assets and settings['default_assets']:
+                remove_default_assets()
+            settings['default_assets'] = new_default_assets
 
-        settings['show_splash'] = _checkbox(request, 'show_splash')
-        settings['shuffle_playlist'] = _checkbox(request, 'shuffle_playlist')
-        settings['prefer_dark_mode'] = _checkbox(request, 'prefer_dark_mode')
-        settings['use_24_hour_clock'] = _checkbox(request, 'use_24_hour_clock')
-        settings['debug_logging'] = _checkbox(request, 'debug_logging')
-        settings['verify_ssl'] = _checkbox(request, 'verify_ssl')
+            settings['show_splash'] = _checkbox(request, 'show_splash')
+            settings['shuffle_playlist'] = _checkbox(
+                request, 'shuffle_playlist'
+            )
+            settings['prefer_dark_mode'] = _checkbox(
+                request, 'prefer_dark_mode'
+            )
+            settings['use_24_hour_clock'] = _checkbox(
+                request, 'use_24_hour_clock'
+            )
+            settings['debug_logging'] = _checkbox(request, 'debug_logging')
+            settings['verify_ssl'] = _checkbox(request, 'verify_ssl')
 
-        # Restrict to the four cardinal angles via the shared
-        # clamp_screen_rotation() helper. The Qt linuxfb plugin only
-        # honors 0/90/180/270 (anything else is silently treated as
-        # 0); wlr-randr rejects non-cardinal --transform values
-        # outright. Going through the helper keeps the HTML form
-        # path, the v2 serializer, and the viewer-side read sites on
-        # exactly the same allowed set.
-        settings['screen_rotation'] = clamp_screen_rotation(
-            request.POST.get('screen_rotation')
-        )
+            # Restrict to the four cardinal angles via the shared
+            # clamp_screen_rotation() helper. The Qt linuxfb plugin only
+            # honors 0/90/180/270 (anything else is silently treated as
+            # 0); wlr-randr rejects non-cardinal --transform values
+            # outright. Going through the helper keeps the HTML form
+            # path, the v2 serializer, and the viewer-side read sites on
+            # exactly the same allowed set.
+            settings['screen_rotation'] = clamp_screen_rotation(
+                request.POST.get('screen_rotation')
+            )
 
-        _apply_display_power_schedule_settings(request)
+            _apply_display_power_schedule_settings(request)
 
-        settings.save()
-        # Before the viewer publish, not after: send_to_viewer()
-        # goes over Redis and can raise, and the handler below
-        # would then finish the request with the new credentials
-        # already persisted and every old socket still attached. Still
-        # after settings.save(), so a socket that reconnects
-        # immediately is judged against the new auth_backend rather
-        # than the old one.
-        if auth_changed:
-            from anthias_server.app.consumers import disconnect_all
+            settings.save()
+        finally:
+            # After settings.save() on the happy path, so a socket that
+            # reconnects immediately is judged against the new
+            # auth_backend rather than the old one. Before the viewer
+            # publish below, which goes over Redis and can raise.
+            if auth_changed:
+                from anthias_server.app.consumers import disconnect_all
 
-            disconnect_all()
+                disconnect_all()
         ViewerPublisher.get_instance().send_to_viewer('reload')
 
         messages.success(request, 'Settings were successfully saved.')

@@ -933,7 +933,12 @@ def test_patch_device_settings_drops_sockets_when_auth_is_enabled(
         )
 
     assert response.status_code == status.HTTP_200_OK
-    disconnect.assert_called_once()
+    # Called, not called *once*: enabling auth both creates the operator
+    # row (which the User post_save receiver revokes on) and flips the
+    # backend (which this view revokes on explicitly). Two reaps of the
+    # same sockets is redundant, not wrong — the assertion that matters
+    # is the paired "unchanged save doesn't reap" test below.
+    assert disconnect.called
 
 
 @pytest.mark.django_db
@@ -994,4 +999,44 @@ def test_patch_device_settings_drops_sockets_if_viewer_publish_fails(
         )
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    disconnect.assert_called_once()
+    # Called, not called *once*: enabling auth both creates the operator
+    # row (which the User post_save receiver revokes on) and flips the
+    # backend (which this view revokes on explicitly). Two reaps of the
+    # same sockets is redundant, not wrong — the assertion that matters
+    # is the paired "unchanged save doesn't reap" test below.
+    assert disconnect.called
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_drops_sockets_if_the_conf_write_fails(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    """apply_auth_settings() persists the rotated User row before
+    settings.save() runs, so a conf write failure used to return through
+    the error handler with the new password live and every old socket
+    still attached. The reap is in a finally now."""
+    _device_settings_mock(settings_mock, auth_backend='')
+    settings_mock.save.side_effect = OSError('read-only file system')
+    publisher_mock.get_instance.return_value = mock.MagicMock()
+
+    with mock.patch(
+        'anthias_server.app.consumers.disconnect_all'
+    ) as disconnect:
+        response = api_client.patch(
+            device_settings_url,
+            data={
+                'auth_backend': 'auth_basic',
+                'username': 'operator',
+                'password': 'a-str0ng-QA-passphrase',
+                'password_2': 'a-str0ng-QA-passphrase',
+            },
+            format='json',
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert disconnect.called

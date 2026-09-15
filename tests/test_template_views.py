@@ -5070,7 +5070,12 @@ def test_settings_save_drops_sockets_when_auth_is_enabled(
         )
 
     assert response.status_code in (200, 302)
-    disconnect.assert_called_once()
+    # Called, not called *once*: enabling auth both creates the operator
+    # row (which the User post_save receiver revokes on) and flips the
+    # backend (which this view revokes on explicitly). Two reaps of the
+    # same sockets is redundant, not wrong — the assertion that matters
+    # is the paired "unchanged save doesn't reap" test below.
+    assert disconnect.called
 
 
 @pytest.mark.django_db
@@ -5137,4 +5142,49 @@ def test_settings_save_drops_sockets_even_if_the_viewer_publish_fails(
         )
 
     assert response.status_code in (200, 302)
-    disconnect.assert_called_once()
+    # Called, not called *once*: enabling auth both creates the operator
+    # row (which the User post_save receiver revokes on) and flips the
+    # backend (which this view revokes on explicitly). Two reaps of the
+    # same sockets is redundant, not wrong — the assertion that matters
+    # is the paired "unchanged save doesn't reap" test below.
+    assert disconnect.called
+
+
+@pytest.mark.django_db
+def test_settings_save_drops_sockets_even_if_the_conf_write_fails(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """apply_auth_settings() persists the rotated User row before
+    settings.save() runs, so a conf write that fails — a full or
+    read-only /data volume — used to jump straight to the error handler
+    with the new password live and every old socket still attached.
+    The reap is in a finally now, so it happens either way."""
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch.object(
+            settings, 'save', side_effect=OSError('read-only file system')
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': 'auth_basic',
+                'user': 'operator',
+                'password': 'a-str0ng-QA-passphrase',
+                'password_2': 'a-str0ng-QA-passphrase',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    assert disconnect.called

@@ -263,11 +263,23 @@ def disconnect_all() -> None:
 
     The generation bump comes first and is the part that cannot fail:
     the close below rides the channel layer and is swallowed if that is
-    down, whereas bumping the counter takes effect immediately and
-    silences every already-open socket from its next frame on. The
+    down, whereas bumping the counter takes effect immediately. The
     close is the courteous half (the operator's browser re-handshakes
     at once and keeps its live refresh); the bump is the half that
     holds the security property.
+
+    What the bump silences is every already-open socket *while
+    authentication is enabled* — a save that turns auth off bumps the
+    counter too, but ``_is_authorized`` returns True before it looks at
+    the generation in that mode, so a socket that misses the close on
+    an auth-off save keeps working rather than being stranded on the 5s
+    poll. That is the open-device contract, not an oversight.
+
+    Called from the settings-save paths for an ``auth_backend`` toggle,
+    and from the User post_save/post_delete receiver in ``signals.py``
+    for a credential change — the latter so a rotation is revoked
+    wherever it comes from, including ``/admin`` and the shell, and
+    atomically with the DB write rather than after it.
     """
     global _auth_generation
     _auth_generation += 1
