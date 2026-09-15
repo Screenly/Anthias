@@ -997,7 +997,8 @@ def test_pi3_64_hw_decode_set_is_h264_only(
     silicon as the 32-bit ``pi3`` — H.264-only HW decode, no HEVC. The
     gate must reject HEVC for it just like the armhf stream."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi3-64')
-    assert processing._hw_decoded_codecs() == frozenset({'h264'})
+    key = processing.resolve_device_key()
+    assert processing._hw_decoded_codecs(key) == frozenset({'h264'})
 
 
 # ---------------------------------------------------------------------------
@@ -1104,8 +1105,9 @@ def test_video_arm64_catch_all_rejects_everything(
     """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
     decode map (an unknown aarch64 SBC isn't guaranteed to expose a
     v4l2-request decoder mpv can address). Without a host_agent
-    subtype publish, every video upload is rejected — operator has
-    to install a board-specific image to get HW decode."""
+    subtype publish, every video upload is rejected — the operator
+    sees an explanation of the subtype gap, not a suggestion to
+    re-flash with a board-specific image that doesn't exist."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     src = path.join(asset_dir, 'sample.mp4')
     # Create an empty placeholder file so the FileNotFoundError check
@@ -1142,7 +1144,11 @@ def test_video_arm64_catch_all_rejects_everything(
     # than the misleading "Supported: none." that earlier revisions
     # surfaced.
     assert 'subtype' in msg.lower()
-    assert 'board-specific image' in msg.lower()
+    assert 'host-agent' in msg.lower()
+    # Never advertise a board-specific image — every SBC runs the
+    # generic arm64 build, so that advice sent operators re-flashing
+    # for an image that was never built.
+    assert 'board-specific image' not in msg.lower()
 
 
 @pytest.mark.django_db
@@ -1182,6 +1188,239 @@ def test_video_arm64_with_rockpi4_subtype_accepts_h264(
     asset.refresh_from_db()
     assert asset.is_processing is False
     assert asset.metadata.get('video_codec') == 'h264'
+
+
+@pytest.mark.django_db
+def test_video_arm64_with_rk3566_subtype_accepts_h264(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RK3566 boards (NanoPi R3S, Radxa Zero 3, Orange Pi 3B …) accept
+    H.264. It is software-decoded — measured at 2.56x real time for
+    1080p30 on a NanoPi R3S LTS — the same "CPU keeps up, so ship it"
+    call the pi5 h264 entry makes."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
+
+
+@pytest.mark.django_db
+def test_video_rk3566_rejects_hevc(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HEVC stays out of the RK3566 set: 1.15x real time at 1080p30
+    leaves nothing for the web UI running alongside, and the VPU can't
+    help (stateless rkvdec vs the image's stateful v4l2m2m wrappers)."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-hevc', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert 'hevc' in msg.lower()
+    assert 'h264' in msg.lower()
+
+
+@pytest.mark.django_db
+def test_video_rk3566_4k_hevc_recipe_also_downscales(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 4K HEVC upload fails on the codec, so it never reaches the
+    resolution branch — but the H.264 it is steered towards is the
+    codec this board decodes in *software*, and 4K H.264 is rejected by
+    the throughput ceiling. Folding only the low-RAM cap into the recipe
+    sent the operator round twice: transcode to 4K H.264, re-upload, get
+    rejected again for resolution. The recipe has to carry the
+    downscale even though this 2 GB board never trips the memory cap."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-4k-hevc', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        # 2 GB board: the memory cap is definitively not in play, so
+        # only the software-decode ceiling can put the scale filter in.
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    # Codec-focused message, because the codec is the stronger
+    # rejection — but a recipe that fixes both in one pass.
+    assert 'hevc' in str(excinfo.value).lower()
+    assert 'scale=1920:1080' in excinfo.value.recipe
+    assert 'libx264' in excinfo.value.recipe
+
+
+@pytest.mark.django_db
+def test_video_rk3566_rejects_4k_h264_on_throughput(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Accepting h264 must not let 4K through. This board has 2 GB so
+    the low-RAM cap never fires; the rejection has to come from the
+    software-decode ceiling, and must say so — an operator told "the
+    board OOMs" would go buy RAM for a board that is merely slow."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-4k', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        # 2 GB board — above LOW_RAM_THRESHOLD_KB, so the memory cap
+        # is definitively not what rejects this.
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert '3840x2160' in msg
+    assert 'software' in msg.lower()
+    assert 'oom' not in msg.lower()
+
+
+@pytest.mark.django_db
+def test_video_gate_resolves_the_board_once(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codec and resolution must judge the same board. On arm64 the
+    subtype comes from Redis, so resolving per-check let a transient
+    miss split the decision: the codec check sees ``rk3566`` and allows
+    h264, the cap check sees bare ``arm64``, finds no ceiling, and waves
+    a 4K file through onto a board that cannot decode it in real time.
+    The gate takes one snapshot and passes it down."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-flaky', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    reads: list[str] = []
+
+    def flaky_subtype() -> str:
+        # First read lands, every later one comes back empty — the
+        # shape of a Redis blip between two lookups.
+        reads.append('read')
+        return 'rk3566' if len(reads) == 1 else ''
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype',
+            side_effect=flaky_subtype,
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert '3840x2160' in str(excinfo.value)
+    # The invariant behind it: the board was identified exactly once.
+    assert len(reads) == 1
 
 
 # ---------------------------------------------------------------------------
