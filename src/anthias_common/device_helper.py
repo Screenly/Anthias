@@ -48,6 +48,23 @@ def sanitize_firmware_string(value: str) -> str:
     return ' '.join(printable.split())[:_MAX_FIRMWARE_STRING_LEN]
 
 
+def read_firmware_file(path: str) -> str:
+    """Read a firmware-supplied file, sanitised, ``''`` if unreadable.
+
+    The bounded read is the point: an oversized or malformed property
+    never lands in memory whole just to be truncated afterwards. Every
+    caller reading firmware-authored bytes (device tree, DMI, the
+    Sentry board tag) goes through here so the bound and the
+    normalisation can't drift apart between them.
+    """
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read(_MAX_FIRMWARE_READ_BYTES)
+    except OSError:
+        return ''
+    return sanitize_firmware_string(raw.decode('utf-8', 'replace'))
+
+
 def parse_cpu_info() -> dict[str, int | str]:
     """
     Extracts the various Raspberry Pi related data
@@ -178,14 +195,7 @@ def read_device_tree_model() -> str:
     option — a mount onto the masked path is still empty, and x86
     hosts have no source path to mount.
     """
-    try:
-        with open('/proc/device-tree/model', 'rb') as f:
-            # Bounded read: a malformed or hostile property must not
-            # be pulled into memory whole just to be truncated after.
-            raw = f.read(_MAX_FIRMWARE_READ_BYTES)
-    except OSError:
-        return ''
-    return sanitize_firmware_string(raw.decode('utf-8', 'replace'))
+    return read_firmware_file('/proc/device-tree/model')
 
 
 def get_device_model_parts(dt_model: str | None = None) -> tuple[str, str]:
