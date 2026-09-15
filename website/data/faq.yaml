@@ -179,7 +179,7 @@
       answer: |
         We have hit this once, on one board, and the fix took a couple of minutes over SSH. It was not an Anthias fault: the board had booted a device tree in which the HDMI port is switched off.
 
-        The board was a **NanoPi R3S LTS** running `Armbian_community_26.11.0-trunk.44_Nanopi-r3s_trixie_current_6.18.50_minimal.img.xz`. That image ships two device trees for this hardware — `rk3566-nanopi-r3s.dtb`, where HDMI is disabled, and `rk3566-nanopi-r3s-lts.dtb`, where it is enabled — and the bootloader picked the first by name, with nothing detecting which variant the board actually is. The board booted normally and the dashboard was reachable over the network; only the screen stayed dark, and the viewer could not start.
+        The board was a **NanoPi R3S LTS** running `Armbian_community_26.11.0-trunk.44_Nanopi-r3s_trixie_current_6.18.50_minimal.img.xz`. That image ships two device trees for this hardware — `rk3566-nanopi-r3s.dtb`, where HDMI is disabled, and `rk3566-nanopi-r3s-lts.dtb`, where it is enabled — and the bootloader booted the non-LTS one because that is the default compiled into its U-Boot build, with nothing detecting which variant the board actually is. Renaming or reordering the files does not change that default. The board booted normally and the dashboard was reachable over the network; only the screen stayed dark, and the viewer could not start.
 
         We have not surveyed other boards or other images, so we cannot say how common this is. If your own board shows a black screen, these are the checks that identified it here.
 
@@ -197,7 +197,7 @@
         find -L /boot/dtb -name '*.dtb' | grep -i nanopi
         ```
 
-        Set the one you want in `/boot/armbianEnv.txt` (add the line if it isn't there) and reboot:
+        Set the one you want in `/boot/armbianEnv.txt` (add the line if it isn't there) and reboot. **Use the path you just found — the line below is our board's, and pointing a different board at a device tree that isn't its own can stop it booting:**
 
         ```
         fdtfile=rockchip/rk3566-nanopi-r3s-lts.dtb
@@ -207,9 +207,10 @@
 
         ```
         grep -H . /sys/class/drm/*/status
+        grep -c . /sys/class/drm/*/modes
         ```
 
-        A line ending in `connected` is what you want. On our board that was `/sys/class/drm/card0-HDMI-A-1/status:connected`, and Anthias came up on the screen.
+        You want a connector whose status reads `connected` **and** whose `modes` file is not empty. Both matter: the status line only says a hotplug signal is present, while the viewer needs the mode list the display's EDID provides before it can bring the screen up, so a connector with zero modes still leaves you looking at black. On our board that was `/sys/class/drm/card0-HDMI-A-1/status:connected` with 25 modes listed, and Anthias came up on the screen.
 
         Worth knowing before you go hunting: some boards have no video output at all, and this fix cannot conjure one. If no device tree for your board enables HDMI, you will want different hardware for signage.
 
