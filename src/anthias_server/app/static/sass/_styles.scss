@@ -264,8 +264,8 @@ label { text-align: left; }
 // card without any parent-selector override.
 .app-btn-icon {
   padding: 0.5rem;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--btn-icon-size);
+  height: var(--btn-icon-size);
   flex: none;
   font-size: 0.95rem;
   background: transparent;
@@ -431,6 +431,22 @@ label { text-align: left; }
 .asset-select-col {
   width: 2.75rem;
   text-align: center;
+}
+
+// The actions column is sized from what it holds, not as a share of
+// the table. `table-layout: fixed` does not grow a column that is too
+// narrow for its content — it lets the content overflow — so the old
+// `width: 14%` put the four icon buttons past the table's right edge
+// at every viewport: 14% tops out at ~167px (the container caps at
+// --container-page) against the ~185px the buttons and the cell's
+// side padding actually need. The last button's hover background made
+// the overflow visible, and below ~1120px it cleared the .surface
+// card entirely and drew on the page background.
+.asset-actions-col {
+  width: calc(
+    4 * var(--btn-icon-size) + 3 * var(--action-group-gap) +
+      var(--spacing) * 6
+  );
 }
 
 .asset-select {
@@ -663,7 +679,7 @@ label { text-align: left; }
 // -----------------------------------------------------------------------------
 .action-group {
   display: inline-flex;
-  gap: 0.35rem;
+  gap: var(--action-group-gap);
 }
 
 .processing-pill {
