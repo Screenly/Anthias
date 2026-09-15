@@ -162,16 +162,26 @@ consumed through two paths:
 
 * on docker-compose installs, `anthias_host_agent` runs on the host,
   detects the subtype, and publishes `host:board_subtype` to Redis;
-* when Redis has no value — the `screenly_ose/anthias-rockpi4` balena
-  fleet ships no host_agent service — `anthias_common.board` reads
-  `/proc/device-tree/model` directly from inside the container (the
-  device tree is kernel-global, the same mechanism `get_device_type`
-  relies on for Pi detection).
+* when Redis has no value, `anthias_common.board` falls back to reading
+  `/proc/device-tree/model` itself — **but that fallback reads nothing
+  in the server and celery containers.** Docker masks `/sys/firmware`
+  (which `/proc/device-tree` points into) in unprivileged containers, so
+  only the host and the privileged viewer can do it.
+
+The host_agent's Redis publish is therefore the *only* working source on
+the server side. The `screenly_ose/anthias-rockpi4` balena fleet ships no
+host_agent service and runs an unprivileged server container, so it has
+no source at all: the subtype never resolves there and the board stays on
+the catch-all `arm64` key.
 
 The server uses the resolved key to pick the right entry in
 `processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4 accepts H.264 + HEVC
 uploads, the catch-all `arm64` accepts nothing (because we can't certify
-a decoder on an unknown SBC).
+a decoder on an unknown SBC). Read together with the paragraph above,
+that means **video upload is currently rejected outright on the balena
+Rock Pi 4 fleet**, and the operator-facing message in
+`processing._run_video_normalisation` says so rather than sending those
+operators after a host_agent their device has never had.
 
 The balena fleet (`screenly_ose/anthias-rockpi4`, device type
 `rockpi-4b-rk3399`) deploys the generic **arm64** container images — there
