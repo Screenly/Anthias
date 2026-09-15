@@ -197,7 +197,10 @@
         find -L /boot/dtb -name '*.dtb' | grep -i nanopi
         ```
 
-        Set the one you want in `/boot/armbianEnv.txt` (add the line if it isn't there) and reboot. **Use the path you just found — the line below is our board's, and pointing a different board at a device tree that isn't its own can stop it booting:**
+        Set the one you want in `/boot/armbianEnv.txt` (add the line if it isn't there) and reboot. Two things to get right here, because both can stop the board booting:
+
+        * **Drop the `/boot/dtb/` prefix.** The bootloader loads this value as `/boot/dtb/<what you set>`, so it wants `rockchip/rk3566-nanopi-r3s-lts.dtb`, not the full path `find` printed. Pasting the full path makes it look for `/boot/dtb//boot/dtb/...`, which doesn't exist.
+        * **Use *your* board's file.** The line below is ours.
 
         ```
         fdtfile=rockchip/rk3566-nanopi-r3s-lts.dtb
