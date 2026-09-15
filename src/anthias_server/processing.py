@@ -1247,9 +1247,13 @@ _VIDEO_METADATA_KEYS = (
 # Read it as a per-board codec allowlist, not a playback certificate.
 # The failure it exists to prevent is real — accept a codec the board
 # cannot decode in real time and playback degrades silently at the
-# viewer (drops / black screen) — but an entry certifies the *codec*,
-# and only a board listed in ``_SW_DECODE_MAX_PIXELS`` is bounded by
-# resolution too. Two gaps follow from that, admitted here rather than
+# viewer (drops / black screen) — but an entry certifies the *codec*.
+# Resolution is bounded separately and by two independent rules:
+# ``_LOW_RAM_MAX_PIXELS`` for any board under
+# ``LOW_RAM_THRESHOLD_KB`` of RAM, and ``_SW_DECODE_MAX_PIXELS`` for a
+# board whose throughput ceiling has been measured. A board in neither
+# — a 2 GB+ board with no measured ceiling — takes its accepted codecs
+# at any resolution. Two gaps follow from that, admitted here rather than
 # papered over: ``pi4-64`` takes H.264 with no ceiling, so 4K H.264
 # passes on a high-RAM Pi 4 even though Pi 4 falls back to software
 # above 1080p; ``rockpi4`` takes HEVC, which the board-enablement doc
@@ -1628,13 +1632,14 @@ class UnsupportedVideoCodecError(Exception):
 
 def _run_video_normalisation(asset: Asset) -> None:
     """Probe the upload, record what ffprobe finds in ``metadata``,
-    and reject the asset if its codec isn't hardware-decoded on this
-    device.
+    and reject the asset if its codec is outside what this board is
+    known to play.
 
     The file is never rewritten. Anthias does not re-encode video
-    on-device — every modern board the viewer supports already
-    hardware-decodes its accepted codec set (H.264 + HEVC on most
-    boards; HEVC only on Pi 5; H.264 only on Pi 2 / Pi 3), and the
+    on-device — most boards the viewer supports hardware-decode their
+    accepted codec set (H.264 + HEVC on most boards; HEVC only on
+    Pi 5; H.264 only on Pi 2 / Pi 3), while ``pi5``'s H.264 and
+    ``rk3566`` are accepted on measured software throughput — and the
     on-device libx265 / libx264 transcode path tried in earlier
     revisions wedged a Pi 4's celery worker for 99 minutes on a
     single 4K60 H.264 → HEVC pass before zombieing.
