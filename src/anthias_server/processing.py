@@ -14,17 +14,21 @@ Two Celery tasks that run on every fresh upload:
 * ``normalize_video_asset`` — runs ffprobe on the upload and records
   what it finds in ``metadata`` (codec, dimensions, fps, audio codec,
   container, duration). The file itself is never rewritten. Anthias
-  does not transcode video on-device: the viewer's per-board hwdec
-  dispatch already handles every codec a modern board can play in
-  hardware (H.264, HEVC, plus VAAPI's wider set on x86), and the
-  on-device libx265 / libx264 transcode path we tried in this PR's
-  earlier revisions wedged a Pi 4's celery worker for 99 minutes on a
-  single 4K60 H.264 → HEVC pass before zombieing. For codecs the
-  board genuinely can't decode (MPEG-2, MPEG-4 ASP, ...), playback
-  will stutter and the operator's recovery is to upload a transcoded
-  copy — the metadata fields surface what's on each row so the
-  operator can see the codec / dims / fps before pushing the asset to
-  the field.
+  does not transcode video on-device: the viewer already plays every
+  codec the upload gate accepts, and the on-device libx265 / libx264
+  transcode path we tried in this PR's earlier revisions wedged a
+  Pi 4's celery worker for 99 minutes on a single 4K60 H.264 → HEVC
+  pass before zombieing.
+
+  What the gate accepts is a per-board *playability* envelope, not a
+  hardware-decode guarantee: mostly hardware decode (H.264, HEVC, plus
+  VAAPI's wider set on x86), but ``pi5`` and ``rk3566`` accept H.264 on
+  measured software throughput, which is why a software-decoded entry
+  also carries a resolution ceiling. ``_HW_DECODE_VIDEO_CODECS`` and
+  ``_SW_DECODE_MAX_PIXELS`` below hold the two halves. For codecs the
+  board genuinely can't play, the upload is rejected with a re-encode
+  recipe, and the metadata fields surface the codec / dims / fps on
+  each row so the operator can see what they uploaded.
 
 Both tasks follow the YouTube-download Celery pattern in
 ``anthias_server.celery_tasks``:
