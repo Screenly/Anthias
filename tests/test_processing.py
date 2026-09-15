@@ -1104,10 +1104,10 @@ def test_video_arm64_catch_all_rejects_everything(
 ) -> None:
     """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
     decode map (an unknown aarch64 SBC isn't guaranteed to expose a
-    v4l2-request decoder mpv can address). Without a host_agent
-    subtype publish, every video upload is rejected — the operator
-    sees an explanation of the subtype gap, not a suggestion to
-    re-flash with a board-specific image that doesn't exist."""
+    v4l2-request decoder mpv can address). Without a resolved subtype
+    every video upload is rejected, and the message has to explain why
+    in terms the operator can act on — which differs by deployment, so
+    it names both of them rather than one."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     src = path.join(asset_dir, 'sample.mp4')
     # Create an empty placeholder file so the FileNotFoundError check
@@ -1139,16 +1139,25 @@ def test_video_arm64_catch_all_rejects_everything(
     ):
         processing._run_video_normalisation(asset)
 
-    msg = str(excinfo.value)
-    # Catch-all branch must explain the board-subtype gap rather
-    # than the misleading "Supported: none." that earlier revisions
-    # surfaced.
-    assert 'subtype' in msg.lower()
-    assert 'host-agent' in msg.lower()
+    msg = str(excinfo.value).lower()
+    # Explain that the board wasn't identified, rather than the
+    # misleading "Supported: none." earlier revisions surfaced, which
+    # reads like the board has no decoder at all.
+    assert 'could not identify this board' in msg
+    # Compose installs: a stopped agent and an unreachable Redis both
+    # land here, so naming only the agent would have operators certify
+    # a running service and conclude the board is unprofiled.
+    assert 'anthias-host-agent' in msg
+    assert 'redis' in msg
+    # balena ships no host agent, and the in-container device-tree read
+    # is masked in the unprivileged server container — there is no
+    # subtype source on that fleet, so the message must not send those
+    # operators after a service their device has never had.
+    assert 'balena' in msg
     # Never advertise a board-specific image — every SBC runs the
     # generic arm64 build, so that advice sent operators re-flashing
     # for an image that was never built.
-    assert 'board-specific image' not in msg.lower()
+    assert 'board-specific image' not in msg
 
 
 @pytest.mark.django_db
