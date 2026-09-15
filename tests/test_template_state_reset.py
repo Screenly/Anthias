@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import re
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -83,7 +84,7 @@ def _strip_comments(src: str) -> str:
     return DJANGO_COMMENT.sub(blank, src)
 
 
-def _iter_tags(src: str):
+def _iter_tags(src: str) -> Iterator[tuple[int, str, str, bool]]:
     """Yield ``(offset, tag_text, name, is_closing)`` for every HTML tag.
 
     Quote-aware on purpose: Alpine expressions routinely contain ``>``
