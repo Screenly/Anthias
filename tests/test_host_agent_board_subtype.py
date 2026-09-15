@@ -25,7 +25,10 @@ from unittest import mock
 import pytest
 
 from anthias_common.board import get_board_subtype
-from anthias_common.device_helper import detect_board_subtype
+from anthias_common.device_helper import (
+    detect_board_subtype,
+    read_device_tree_compatibles,
+)
 from anthias_host_agent.__main__ import (
     detect_total_mem_kb,
     set_board_subtype,
@@ -379,3 +382,35 @@ def test_detect_board_subtype_model_wins_over_soc() -> None:
         ),
     ):
         assert detect_board_subtype() == 'rockpi4'
+
+
+def test_compatible_entries_are_sanitized_and_bounded() -> None:
+    """The compatible list gets the same treatment as every other
+    firmware string: NUL-separated entries, each normalised, and the
+    count capped so a packed property can't be walked indefinitely.
+
+    A hostile entry can only ever fail to match the lookup table, so
+    this is about bounding the read, not about the match itself.
+    """
+    packed = b'\x00'.join(
+        [b'vendor,board-%d' % i for i in range(64)] + [b'rockchip,rk3566\x00']
+    )
+    with mock.patch(
+        'anthias_common.device_helper.open',
+        mock.mock_open(read_data=packed),
+        create=True,
+    ):
+        entries = read_device_tree_compatibles()
+    assert len(entries) <= 16
+    assert all(len(entry) <= 128 for entry in entries)
+
+
+def test_compatible_entry_control_characters_are_stripped() -> None:
+    esc = chr(0x1B)
+    payload = f'rockchip,rk3566{esc}[2J'.encode()
+    with mock.patch(
+        'anthias_common.device_helper.open',
+        mock.mock_open(read_data=payload),
+        create=True,
+    ):
+        assert read_device_tree_compatibles() == ('rockchip,rk3566[2J',)

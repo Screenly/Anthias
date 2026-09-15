@@ -317,13 +317,29 @@ def read_device_tree_compatibles() -> tuple[str, ...]:
     ``('friendlyarm,nanopi-r3s-lts', 'rockchip,rk3566')``. Subject to
     the same masking as ``read_device_tree_model`` — empty tuple in an
     unprivileged container, and on any host without a device tree.
+
+    Bounded and sanitised like every other firmware string (see
+    ``sanitize_firmware_string``). These entries only ever get
+    compared against a fixed lookup table, so a hostile value can't
+    do more than fail to match — but the read still has to be
+    bounded, and the count capped, so a property packed with entries
+    can't be walked indefinitely.
     """
     try:
         with open('/proc/device-tree/compatible', 'rb') as f:
-            raw = f.read().decode('utf-8', 'replace')
+            raw = f.read(_MAX_FIRMWARE_READ_BYTES).decode('utf-8', 'replace')
     except OSError:
         return ()
-    return tuple(entry.strip() for entry in raw.split('\x00') if entry.strip())
+    entries = (sanitize_firmware_string(entry) for entry in raw.split('\x00'))
+    return tuple(entry for entry in entries if entry)[
+        :_MAX_DEVICE_TREE_COMPATIBLES
+    ]
+
+
+# A root node's compatible list is board-then-SoC, usually two
+# entries and rarely more than a handful. The cap bounds the walk
+# without excluding anything a real device tree declares.
+_MAX_DEVICE_TREE_COMPATIBLES = 16
 
 
 # SoC ``compatible`` string → board subtype, for silicon whose decode
