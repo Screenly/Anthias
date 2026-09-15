@@ -159,7 +159,9 @@ def _offenders(path: Path) -> list[tuple[int, str]]:
     return found
 
 
-TEMPLATE_FILES = sorted(TEMPLATES.glob('*.html'))
+# rglob, matching test_design_tokens.py: a template moved into a
+# subdirectory must not drop out of a repo-wide guard silently.
+TEMPLATE_FILES = sorted(TEMPLATES.rglob('*.html'))
 
 
 def test_templates_were_found() -> None:

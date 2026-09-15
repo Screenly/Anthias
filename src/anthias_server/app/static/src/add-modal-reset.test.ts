@@ -9,15 +9,31 @@
 // @add-modal-open.window listener is actually wired. None of that is
 // observable from the component object alone.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test'
 import Alpine from 'alpinejs'
 
 import type { AppsTabData } from './apps'
 import './home'
 
+const TEMPLATE_PATH = new URL(
+  '../../templates/_asset_modal.html',
+  import.meta.url,
+).pathname
+
 // The panes the reset touches, trimmed to the attributes under test.
-// Kept in sync with _asset_modal.html by hand — a bun test can't render
-// a Django template.
+// A bun test can't render a Django template, so this is a hand-written
+// reduction of _asset_modal.html — which means it could drift from the
+// real markup and keep passing while production is broken. The
+// "matches the shipped template" cases at the bottom close that gap:
+// every Alpine attribute this fixture leans on is asserted to still be
+// in the template it stands in for.
 const MODAL = `
   <div x-data="homeApp()" @asset-saved.window="closeModal()">
     <button id="add-asset-button" @click="openAdd()"></button>
@@ -217,5 +233,36 @@ describe('the Apps install form seeds a fresh name', () => {
 
     expect(nameInput.value).toBe('Clock')
     expect(apps.nameEdited).toBe(false)
+  })
+})
+
+// The fixture above is only evidence about production if it still
+// mirrors it. These read the shipped template and assert the exact
+// attributes the cases above depend on, so dropping or renaming one in
+// the Django markup fails the suite rather than quietly narrowing it.
+describe('the fixture matches the shipped template', () => {
+  let template: string
+
+  beforeAll(async () => {
+    template = await Bun.file(TEMPLATE_PATH).text()
+  })
+
+  test('the Asset URL box is two-way bound', () => {
+    expect(template).toContain('id="add-uri"')
+    expect(template).toMatch(/id="add-uri"[^>]*x-model="addUri"/)
+  })
+
+  test('the Apps install Name box is two-way bound', () => {
+    expect(template).toMatch(/id="app-asset-name"[^>]*x-model="assetName"/)
+  })
+
+  test('the Apps pane listens for the reopen', () => {
+    expect(template).toContain('@add-modal-open.window="reset()"')
+  })
+
+  // The whole point of hoisting `tab` into homeApp() was that a nested
+  // x-data would put it out of openAdd()'s reach again.
+  test('the Add pane does not re-declare tab in a nested x-data', () => {
+    expect(template).not.toMatch(/x-data="\{[^"]*\btab\b/)
   })
 })
