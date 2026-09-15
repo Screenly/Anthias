@@ -997,7 +997,8 @@ def test_pi3_64_hw_decode_set_is_h264_only(
     silicon as the 32-bit ``pi3`` — H.264-only HW decode, no HEVC. The
     gate must reject HEVC for it just like the armhf stream."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi3-64')
-    assert processing._hw_decoded_codecs() == frozenset({'h264'})
+    key = processing.resolve_device_key()
+    assert processing._hw_decoded_codecs(key) == frozenset({'h264'})
 
 
 # ---------------------------------------------------------------------------
@@ -1365,6 +1366,61 @@ def test_video_rk3566_rejects_4k_h264_on_throughput(
     assert '3840x2160' in msg
     assert 'software' in msg.lower()
     assert 'oom' not in msg.lower()
+
+
+@pytest.mark.django_db
+def test_video_gate_resolves_the_board_once(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codec and resolution must judge the same board. On arm64 the
+    subtype comes from Redis, so resolving per-check let a transient
+    miss split the decision: the codec check sees ``rk3566`` and allows
+    h264, the cap check sees bare ``arm64``, finds no ceiling, and waves
+    a 4K file through onto a board that cannot decode it in real time.
+    The gate takes one snapshot and passes it down."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-flaky', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    reads: list[str] = []
+
+    def flaky_subtype() -> str:
+        # First read lands, every later one comes back empty — the
+        # shape of a Redis blip between two lookups.
+        reads.append('read')
+        return 'rk3566' if len(reads) == 1 else ''
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype',
+            side_effect=flaky_subtype,
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert '3840x2160' in str(excinfo.value)
+    # The invariant behind it: the board was identified exactly once.
+    assert len(reads) == 1
 
 
 # ---------------------------------------------------------------------------

@@ -1322,7 +1322,9 @@ def _exceeds_low_ram_pixel_cap(width: int | None, height: int | None) -> bool:
     return width * height > _LOW_RAM_MAX_PIXELS
 
 
-def _pixel_cap_rejection(width: int | None, height: int | None) -> str | None:
+def _pixel_cap_rejection(
+    width: int | None, height: int | None, device_key: str
+) -> str | None:
     """Operator-facing reason this resolution can't play here, or ``None``.
 
     Two independent ceilings, memory then throughput, both answered
@@ -1331,6 +1333,13 @@ def _pixel_cap_rejection(width: int | None, height: int | None) -> str | None:
     branch while each cap still explains its own cause — an operator
     told "the board OOMs" would go buy RAM for a board that is
     actually just too slow.
+
+    ``device_key`` is passed in rather than resolved here so the codec
+    and resolution decisions cannot disagree about what board this is.
+    On arm64 ``resolve_device_key`` reads the subtype from Redis, and a
+    transient miss between two calls would accept a 4K H.264 upload on
+    an RK3566: the codec check would see ``rk3566`` and allow h264
+    while this one saw bare ``arm64`` and found no ceiling.
     """
     if _exceeds_low_ram_pixel_cap(width, height):
         return (
@@ -1338,7 +1347,7 @@ def _pixel_cap_rejection(width: int | None, height: int | None) -> str | None:
             'on this device. Boards with less than 1.5 GiB of RAM OOM '
             'when decoding above 1920x1080 alongside the web UI.'
         )
-    cap = _SW_DECODE_MAX_PIXELS.get(resolve_device_key())
+    cap = _SW_DECODE_MAX_PIXELS.get(device_key)
     if (
         cap is not None
         and width is not None
@@ -1355,16 +1364,20 @@ def _pixel_cap_rejection(width: int | None, height: int | None) -> str | None:
     return None
 
 
-def _hw_decoded_codecs() -> frozenset[str]:
-    """Codecs the *current* board can hardware-decode through mpv.
+def _hw_decoded_codecs(device_key: str) -> frozenset[str]:
+    """Codecs the board named by ``device_key`` can HW-decode via mpv.
 
-    Resolves ``DEVICE_TYPE`` via ``anthias_common.board.resolve_device_key``
-    so a Rock Pi 4 running the catch-all ``arm64`` image still picks
-    up its ``{h264, hevc}`` set once ``anthias_host_agent`` publishes
-    ``host:board_subtype=rockpi4``. An unknown / unrecognised
-    DEVICE_TYPE returns the empty set so every video gets rejected.
+    Callers resolve the key with
+    ``anthias_common.board.resolve_device_key`` — so a Rock Pi 4 running
+    the catch-all ``arm64`` image still picks up its ``{h264, hevc}``
+    set once ``anthias_host_agent`` publishes
+    ``host:board_subtype=rockpi4``. An unknown / unrecognised key
+    returns the empty set so every video gets rejected. Taking the key
+    as an argument (rather than resolving it here) is what lets one
+    gate run every check against a single snapshot of the board
+    identity; see ``_pixel_cap_rejection``.
     """
-    return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
+    return _HW_DECODE_VIDEO_CODECS.get(device_key, frozenset())
 
 
 # Preferred yt-dlp ``vcodec`` sort key per board. Distinct from the
@@ -1602,7 +1615,11 @@ def _run_video_normalisation(asset: Asset) -> None:
         update_dict['duration'] = duration_seconds
 
     src_codec = (summary.get('video_codec') or '').lower()
-    supported = _hw_decoded_codecs()
+    # One snapshot of the board identity for the whole gate. On arm64
+    # this is a Redis read, so resolving per-check would let the codec
+    # and resolution decisions land on different boards.
+    device_key = resolve_device_key()
+    supported = _hw_decoded_codecs(device_key)
     video_width = summary.get('video_width')
     video_height = summary.get('video_height')
     # ``upload_name`` is stashed by the dashboard / API at upload
@@ -1618,7 +1635,9 @@ def _run_video_normalisation(asset: Asset) -> None:
     )
 
     if src_codec in supported:
-        cap_message = _pixel_cap_rejection(video_width, video_height)
+        cap_message = _pixel_cap_rejection(
+            video_width, video_height, device_key
+        )
         if cap_message is not None:
             # Codec is fine but the resolution is past what this board
             # can play — either it OOMs allocating the decode pipeline
@@ -1662,7 +1681,9 @@ def _run_video_normalisation(asset: Asset) -> None:
     # the software-decoded one. A 4K HEVC upload to an RK3566 would
     # otherwise get a 4K H.264 recipe, and the re-upload would come
     # straight back out of the throughput cap above.
-    cap = _pixel_cap_rejection(video_width, video_height) is not None
+    cap = (
+        _pixel_cap_rejection(video_width, video_height, device_key) is not None
+    )
     recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
     handbrake = _handbrake_steps(supported)
     if supported:
