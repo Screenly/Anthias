@@ -53,6 +53,15 @@
   --menu-min-width: 12rem;
   --container-page: 82.5rem;
 
+  /* The icon-button square and the gap between two of them in a row of
+     actions. Tokens rather than literals because the asset table's
+     actions column has to be sized from them: under
+     `table-layout: fixed` a column narrower than its content does not
+     grow, it lets the content overflow, so the column width and the
+     button geometry cannot be allowed to drift apart. */
+  --btn-icon-size: 2.25rem;
+  --action-group-gap: 0.35rem;
+
   /* Focus ring width. Paired with --color-focus-ring. */
   --ring-width: 0.1875rem;
 
