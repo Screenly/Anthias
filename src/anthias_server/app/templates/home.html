@@ -110,10 +110,26 @@
     x-cloak
     aria-hidden="true"
   >
+    {% comment %} Two states, because a batch already in flight owns the
+       progress UI and dropFiles() will not start a second one over it.
+       Saying "Drop to upload" then quietly discarding the file is the
+       one thing an overlay like this must never do, so mid-batch it
+       says what will actually happen instead. The drop is still taken
+       far enough to reopen the modal, which is where the running
+       upload can be seen.
+    {% endcomment %}
     <div class="upload-drop-overlay__card">
-      <i class="ti ti-cloud-upload"></i>
-      <p class="upload-drop-overlay__title">Drop to upload</p>
-      <p class="muted-label m-0">Images and videos are added to the schedule.</p>
+      <i class="ti" :class="uploadState ? 'ti-hourglass-high' : 'ti-cloud-upload'"></i>
+      <p
+        class="upload-drop-overlay__title"
+        x-text="uploadState ? 'Upload already in progress' : 'Drop to upload'"
+      ></p>
+      <p
+        class="muted-label m-0"
+        x-text="uploadState
+          ? 'Wait for the current batch to finish, then drop these again.'
+          : 'Images and videos are added to the schedule.'"
+      ></p>
     </div>
   </div>
 

@@ -855,6 +855,24 @@ describe('page-wide drag and drop', () => {
     expect(refreshes).toEqual(['refresh-assets'])
   })
 
+  // Hiding the modal mid-batch leaves uploadState set and mode null,
+  // so the page is still listening. dropFiles() refuses to start a
+  // second batch over a running one, and a file that vanished with no
+  // explanation is the worst outcome — so the drop reopens the modal
+  // onto the upload still in flight.
+  test('a drop mid-batch reopens the upload in progress', async () => {
+    mountUploadForm()
+    stubXhr([{ status: 200 }])
+    const app = window.homeApp()
+    app.uploadState = 'sending'
+    app.onPageDrop(fileDrag('second.mp4'))
+    await Bun.sleep(0)
+
+    expect(sends).toBe(0)
+    expect(app.mode).toBe('add')
+    expect(app.addTab).toBe('file')
+  })
+
   // Each of these owns the screen with an overlay of its own, so a file
   // released over one is not aimed at the asset list. The drop is still
   // claimed — letting the browser have it would navigate away from the

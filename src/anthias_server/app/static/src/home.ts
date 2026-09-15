@@ -650,10 +650,14 @@ function homeApp(): HomeAppData {
     // is one handler set for the whole page rather than a drop target
     // per region.
 
-    // Whether a dropped file would be taken right now. Bound by the
+    // Whether the page is listening for a drop at all. Bound by the
     // overlay as well as consulted by the drop handler, so the two
     // cannot drift: an overlay promising "drop to upload" over a modal
     // that then ignores the drop is worse than no overlay at all.
+    // A batch already in flight is deliberately NOT a refusal here —
+    // the drop still opens the modal onto the running upload, which is
+    // the answer to "why was my file ignored". The overlay reads
+    // uploadState itself and says so before the drop.
     acceptsPageDrop(this: HomeAppData) {
       // Each of these owns the screen with an overlay of its own, and a
       // file released over one is not aimed at the asset list. Opening
