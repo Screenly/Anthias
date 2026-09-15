@@ -14,8 +14,10 @@ Two Celery tasks that run on every fresh upload:
 * ``normalize_video_asset`` — runs ffprobe on the upload and records
   what it finds in ``metadata`` (codec, dimensions, fps, audio codec,
   container, duration). The file itself is never rewritten. Anthias
-  does not transcode video on-device: the viewer already plays every
-  codec the upload gate accepts, and the on-device libx265 / libx264
+  does not transcode video on-device: the upload gate is an allowlist
+  meant to keep unplayable codecs off the device in the first place
+  (three entries are known not to hold that line — see its note), and
+  the on-device libx265 / libx264
   transcode path we tried in this PR's earlier revisions wedged a
   Pi 4's celery worker for 99 minutes on a single 4K60 H.264 → HEVC
   pass before zombieing.
@@ -1439,11 +1441,14 @@ def _hw_decoded_codecs(device_key: str) -> frozenset[str]:
 
     Mostly the board's hardware-decode set — hence the name — but not
     exclusively: ``pi5`` and ``rk3566`` accept H.264 on software
-    throughput, so a codec coming back from here is certified to
-    *play*, not certified to decode in hardware. A software-decoded
-    entry also wants a resolution ceiling, which ``_pixel_cap_rejection``
-    applies from ``_SW_DECODE_MAX_PIXELS`` — for the boards measured so
-    far, which is ``rk3566`` and not yet ``pi5``.
+    throughput. So this is the *accepted* set, not a set certified to
+    decode in hardware, and not one certified to play either: three
+    entries are known not to (x86 HEVC, Rock Pi 4 HEVC, Pi 4 4K
+    H.264), listed as open defects at the map. A software-decoded
+    entry also wants a resolution ceiling, which
+    ``_pixel_cap_rejection`` applies from ``_SW_DECODE_MAX_PIXELS`` —
+    for the boards measured so far, which is ``rk3566`` and not yet
+    ``pi5``.
 
     Callers resolve the key with
     ``anthias_common.board.resolve_device_key`` — so a Rock Pi 4 running
