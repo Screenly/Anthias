@@ -73,6 +73,11 @@ type SectionKey = 'active' | 'inactive'
 
 interface HomeAppData {
   mode: 'add' | 'edit' | null
+  // Which pane of the Add modal is showing, and the "From URL" tab's
+  // input. Both live here rather than in a nested x-data on the modal
+  // so openAdd() can reset them — see the comment there.
+  tab: 'uri' | 'file' | 'apps'
+  addUri: string
   editAsset: AssetEdit | null
   previewAsset: AssetEdit | null
   pendingDeleteId: string | null
@@ -298,6 +303,8 @@ function csrfToken(): string {
 function homeApp(): HomeAppData {
   return {
     mode: null,
+    tab: 'uri',
+    addUri: '',
     editAsset: null,
     previewAsset: null,
     pendingDeleteId: null,
@@ -397,6 +404,21 @@ function homeApp(): HomeAppData {
     openAdd() {
       this.mode = 'add'
       this.editAsset = null
+      // The modal is only hidden (x-show), never torn down, so whatever
+      // the last Add left behind is still sitting there on the next
+      // open — the previous asset's URL in the input above all.
+      // Reset the whole Add pane here rather than in closeModal(): open
+      // is the one path every entry point goes through, so the form is
+      // fresh however the last one ended.
+      this.addUri = ''
+      // Exception: an upload the operator hid with the modal still runs,
+      // and its progress UI lives in the file tab. Yanking them back to
+      // the URL tab would hide the batch they came to check on.
+      if (!this.uploadState) this.tab = 'uri'
+      // The Apps pane is its own component (appsTab in apps.ts), so it
+      // resets itself off this event — otherwise a reopened modal is
+      // still parked on the last app's filled-in config form.
+      window.dispatchEvent(new CustomEvent('add-modal-open'))
     },
     openEdit(asset: AssetEdit) {
       this.mode = 'edit'

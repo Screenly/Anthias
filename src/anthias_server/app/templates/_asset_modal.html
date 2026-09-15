@@ -21,7 +21,11 @@
     </div>
 
     {# ---- Add mode ---- #}
-    <div x-show="mode === 'add'" x-data="{ tab: 'uri' }">
+    {% comment %} `tab` lives in homeApp(), not a nested x-data here, so
+       openAdd() can reset the pane between opens — the modal is only
+       hidden, so anything left in it survives a close.
+    {% endcomment %}
+    <div x-show="mode === 'add'">
       <div class="modal-card__body" style="padding-bottom: calc(var(--spacing) * 3)">
         <ul class="app-tabs mb-4" id="add-asset-nav-tabs">
           <li class="app-tab-item">
@@ -60,7 +64,7 @@
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
           <div class="app-floating mb-3">
-            <input type="url" class="app-input" id="add-uri" name="uri" placeholder=" " required>
+            <input type="url" class="app-input" id="add-uri" name="uri" placeholder=" " required x-model="addUri">
             <label for="add-uri">Asset URL</label>
           </div>
           <p class="muted-label m-0">Web pages, hosted images, hosted videos, and streaming URLs are all supported.</p>
@@ -160,6 +164,7 @@
         x-show="tab === 'apps'"
         x-data="appsTab()"
         x-effect="if (tab === 'apps') load()"
+        @add-modal-open.window="back()"
       >
         {# Loading #}
         <div class="modal-card__body app-cfg-state" x-show="phase === 'loading'" x-cloak>
