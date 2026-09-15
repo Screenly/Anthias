@@ -210,7 +210,7 @@
 
         ```
         grep -H . /sys/class/drm/*/status
-        grep -c . /sys/class/drm/*/modes
+        grep -cH . /sys/class/drm/*/modes
         ```
 
         You want a connector whose status reads `connected` **and** whose `modes` file is not empty. Both matter: the status line only says a hotplug signal is present, while the viewer needs the mode list the display's EDID provides before it can bring the screen up, so a connector with zero modes still leaves you looking at black. On our board that was `/sys/class/drm/card0-HDMI-A-1/status:connected` with 25 modes listed, and Anthias came up on the screen.
