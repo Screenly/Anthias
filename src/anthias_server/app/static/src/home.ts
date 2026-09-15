@@ -71,15 +71,15 @@ const UPLOAD_ERROR_TOAST_MS = 8000
 
 type SectionKey = 'active' | 'inactive'
 
-// Which pane of the Add-asset modal is showing. Held on homeApp rather
-// than in a nested x-data on the modal, because a file dropped on the
-// page has to open the modal *on the upload pane* — the parent cannot
-// reach into a child scope to set it.
-type AddTab = 'uri' | 'file' | 'apps'
-
 interface HomeAppData {
   mode: 'add' | 'edit' | null
-  addTab: AddTab
+  // Which pane of the Add modal is showing, and the "From URL" tab's
+  // input. Both live here rather than in a nested x-data on the modal
+  // so openAdd() can reset them — and so a file dropped on the page can
+  // open the modal straight onto the upload pane. Neither is reachable
+  // from a child scope.
+  tab: 'uri' | 'file' | 'apps'
+  addUri: string
   editAsset: AssetEdit | null
   previewAsset: AssetEdit | null
   pendingDeleteId: string | null
@@ -329,7 +329,8 @@ function csrfToken(): string {
 function homeApp(): HomeAppData {
   return {
     mode: null,
-    addTab: 'uri',
+    tab: 'uri',
+    addUri: '',
     editAsset: null,
     previewAsset: null,
     pendingDeleteId: null,
@@ -430,6 +431,23 @@ function homeApp(): HomeAppData {
     openAdd() {
       this.mode = 'add'
       this.editAsset = null
+      // The modal is only hidden (x-show), never torn down, so whatever
+      // the last Add left behind is still sitting there on the next
+      // open — the previous asset's URL in the input above all.
+      // Reset the whole Add pane here rather than in closeModal(): open
+      // is the one path every entry point goes through, so the form is
+      // fresh however the last one ended.
+      this.addUri = ''
+      // Exception: an upload the operator hid with the modal still runs,
+      // and its progress UI lives on the file tab. Reopening is how they
+      // check on it, so go there — the tab they happened to be looking
+      // at when they hid the modal (the tab strip stays clickable during
+      // a batch) is not where the progress is.
+      this.tab = this.uploadState ? 'file' : 'uri'
+      // The Apps pane is its own component (appsTab in apps.ts), so it
+      // resets itself off this event — otherwise a reopened modal is
+      // still parked on the last app's filled-in config form.
+      window.dispatchEvent(new CustomEvent('add-modal-open'))
     },
     openEdit(asset: AssetEdit) {
       this.mode = 'edit'
@@ -717,9 +735,13 @@ function homeApp(): HomeAppData {
       // batch is already running is ignored by dropFiles(), and
       // opening the modal is what explains why — it shows the upload
       // still in flight.
-      this.mode = 'add'
-      this.addTab = 'file'
-      this.editAsset = null
+      //
+      // Through openAdd(), so a drop gets the same reset every other
+      // way in does (a stale URL in the From-URL box, the Apps pane
+      // parked on the last config form). Its own tab choice is
+      // overridden after: it sends a non-upload open to 'uri'.
+      this.openAdd()
+      this.tab = 'file'
       this.dropFiles(event)
     },
 

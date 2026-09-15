@@ -850,7 +850,7 @@ describe('page-wide drag and drop', () => {
     expect(sends).toBe(1)
     // Opened on the upload pane, which is where the batch's progress
     // UI lives — otherwise a dropped file uploads with no feedback.
-    expect(app.addTab).toBe('file')
+    expect(app.tab).toBe('file')
     expect(app.pageDragActive).toBe(false)
     expect(refreshes).toEqual(['refresh-assets'])
   })
@@ -870,7 +870,7 @@ describe('page-wide drag and drop', () => {
 
     expect(sends).toBe(0)
     expect(app.mode).toBe('add')
-    expect(app.addTab).toBe('file')
+    expect(app.tab).toBe('file')
   })
 
   // Each of these owns the screen with an overlay of its own, so a file
@@ -896,6 +896,6 @@ describe('page-wide drag and drop', () => {
 
     expect(event.prevented).toBe(true)
     expect(sends).toBe(0)
-    expect(app.addTab).toBe('uri')
+    expect(app.tab).toBe('uri')
   })
 })

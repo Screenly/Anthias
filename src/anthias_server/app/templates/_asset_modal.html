@@ -21,27 +21,32 @@
     </div>
 
     {# ---- Add mode ---- #}
+    {% comment %} `tab` lives in homeApp(), not a nested x-data here, so
+       openAdd() can reset the pane between opens — the modal is only
+       hidden, so anything left in it survives a close — and so a file
+       dropped on the page can open straight onto the upload pane.
+    {% endcomment %}
     <div x-show="mode === 'add'">
       <div class="modal-card__body" style="padding-bottom: calc(var(--spacing) * 3)">
         <ul class="app-tabs mb-4" id="add-asset-nav-tabs">
           <li class="app-tab-item">
             <button type="button" id="tab-uri"
-              class="app-tab-link" :class="addTab === 'uri' && 'active'"
-              @click="addTab = 'uri'">
+              class="app-tab-link" :class="tab === 'uri' && 'active'"
+              @click="tab = 'uri'">
               <i class="ti ti-link mr-1"></i>From URL
             </button>
           </li>
           <li class="app-tab-item">
             <button type="button"
-              class="app-tab-link upload-asset-tab" :class="addTab === 'file' && 'active'"
-              @click="addTab = 'file'">
+              class="app-tab-link upload-asset-tab" :class="tab === 'file' && 'active'"
+              @click="tab = 'file'">
               <i class="ti ti-cloud-upload mr-1"></i>Upload file
             </button>
           </li>
           <li class="app-tab-item">
             <button type="button" id="tab-apps"
-              class="app-tab-link" :class="addTab === 'apps' && 'active'"
-              @click="addTab = 'apps'">
+              class="app-tab-link" :class="tab === 'apps' && 'active'"
+              @click="tab = 'apps'">
               <i class="ti ti-apps mr-1"></i>Apps
             </button>
           </li>
@@ -49,7 +54,7 @@
       </div>
 
       <form
-        x-show="addTab === 'uri'"
+        x-show="tab === 'uri'"
         method="post"
         action="{% url 'anthias_app:assets_create' %}"
         hx-post="{% url 'anthias_app:assets_create' %}"
@@ -60,7 +65,7 @@
         {% csrf_token %}
         <div class="modal-card__body" style="padding-top: 0">
           <div class="app-floating mb-3">
-            <input type="url" class="app-input" id="add-uri" name="uri" placeholder=" " required>
+            <input type="url" class="app-input" id="add-uri" name="uri" placeholder=" " required x-model="addUri">
             <label for="add-uri">Asset URL</label>
           </div>
           <p class="muted-label m-0">Web pages, hosted images, hosted videos, and streaming URLs are all supported.</p>
@@ -83,7 +88,7 @@
          URL off the form and the CSRF token off its input.
       {% endcomment %}
       <form
-        x-show="addTab === 'file'"
+        x-show="tab === 'file'"
         method="post"
         action="{% url 'anthias_app:assets_upload' %}"
         enctype="multipart/form-data"
@@ -156,9 +161,10 @@
          #asset-table swap + asset-saved contract as the URI tab.
       {% endcomment %}
       <div
-        x-show="addTab === 'apps'"
+        x-show="tab === 'apps'"
         x-data="appsTab()"
-        x-effect="if (addTab === 'apps') load()"
+        x-effect="if (tab === 'apps') load()"
+        @add-modal-open.window="reset()"
       >
         {# Loading #}
         <div class="modal-card__body app-cfg-state" x-show="phase === 'loading'" x-cloak>
@@ -256,7 +262,12 @@
             </div>
 
             <div class="app-floating mt-4 mb-3">
-              <input type="text" class="app-input" id="app-asset-name" name="name" :value="assetName" @input="nameEdited = true" placeholder=" " required>
+              {% comment %} x-model, not :value — a one-way bind lets the
+                 DOM drift from assetName the moment the operator types,
+                 so re-selecting the same app (identical seed, no
+                 reactive change) would leave the previous install's
+                 name in the box. {% endcomment %}
+              <input type="text" class="app-input" id="app-asset-name" name="name" x-model="assetName" @input="nameEdited = true" placeholder=" " required>
               <label for="app-asset-name">Name</label>
             </div>
 

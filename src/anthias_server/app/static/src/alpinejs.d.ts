@@ -19,6 +19,14 @@ declare module 'alpinejs' {
     magic(name: string, callback: (...args: unknown[]) => unknown): void
     directive(name: string, callback: (...args: unknown[]) => unknown): void
     start(): void
+    // The reactive data object bound to the nearest x-data ancestor of
+    // `el`. Tests read component state off a mounted tree with it.
+    $data(el: Element): Record<string, unknown>
+    // Mount / tear down Alpine on a subtree. start() may only run once
+    // per page, so a test that swaps the DOM between cases re-mounts
+    // through these instead.
+    initTree(el: Element): void
+    destroyTree(el: Element): void
   }
 
   const Alpine: Alpine
