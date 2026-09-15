@@ -1702,15 +1702,32 @@ def _run_video_normalisation(asset: Asset) -> None:
         # The advice is deliberately not "re-flash with the
         # board-specific image": there is no such image — every SBC
         # runs the generic arm64 build, including the Rock Pi 4 balena
-        # fleet (see docs/board-enablement.md). Either anthias_host_agent
-        # isn't running to publish ``host:board_subtype``, or this
-        # board's silicon hasn't been profiled yet.
+        # fleet (see docs/board-enablement.md).
+        #
+        # It is also deliberately per-deployment rather than a bare
+        # "check the host agent". The two installs fail here for
+        # different reasons and only one of them is actionable:
+        #
+        # * compose / bare metal — anthias_host_agent publishes
+        #   ``host:board_subtype`` to Redis. A stopped agent OR an
+        #   unreachable Redis both land here, so the message names both
+        #   rather than treating a running agent as proof the board is
+        #   unprofiled.
+        # * balena — ships no host_agent at all, and the in-container
+        #   device-tree fallback reads nothing because Docker masks
+        #   ``/sys/firmware`` in the unprivileged server container. So
+        #   there is no subtype source on that fleet and no action the
+        #   operator can take; saying so beats sending them after a
+        #   service their device has never had.
         message = (
             f'Video codec {display_codec!r} can not be verified for '
-            'playback on this device — the board has not reported a '
-            'known subtype. Check that anthias-host-agent is running; '
-            'if it is, this board has not been profiled yet and you '
-            'can open an issue asking for it.'
+            'playback on this device — Anthias could not identify this '
+            'board, so it cannot certify a decoder for it. On a '
+            'docker-compose install, check that anthias-host-agent and '
+            'Redis are both running. balena devices ship no host agent '
+            'and have no other way to identify the board, so aarch64 '
+            'boards there always land here. Otherwise this board has '
+            'not been profiled yet — please open an issue asking for it.'
         )
     raise UnsupportedVideoCodecError(
         message, recipe=recipe, handbrake=handbrake
