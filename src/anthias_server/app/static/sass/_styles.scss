@@ -1124,9 +1124,20 @@ label { text-align: left; }
   // refuses the drop without navigating anything.
   //
   // Only while a drag is in flight; the frame has to stay interactive
-  // the rest of the time. The pointer cannot reach the frame without
-  // first crossing the modal overlay, which is the page's own
-  // document, so pageDragActive is already set by then.
+  // the rest of the time. Arming it costs nothing in practice: the
+  // frame never touches the viewport edge (the nested overlay's
+  // padding and the card header sit between), so a drag arriving from
+  // the desktop crosses the page's own document first and sets
+  // pageDragActive on the way in.
+  //
+  // Known residual, accepted deliberately: drag events are sampled, so
+  // a fast enough flick can land its first sampled position inside the
+  // frame and skip the parent entirely. The frame then takes the drop
+  // and navigates itself — it is sandboxed without allow-top-navigation,
+  // so the page behind it is untouched and closing the preview restores
+  // it. Closing that last gap means either giving up preview
+  // interactivity outright or a click-to-interact shim with its own
+  // pointer plumbing, both of which cost more than the glitch does.
   &.is-drag-shielded { pointer-events: none; }
 }
 
