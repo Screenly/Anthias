@@ -563,6 +563,59 @@ def test_add_asset_via_url(reset_assets: None, page: Page) -> None:
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
+def test_add_asset_url_field_is_empty_on_reopen(
+    reset_assets: None, page: Page
+) -> None:
+    """Regression: the URL typed into one Add is gone by the
+    next one. The modal is hidden with ``x-show``, not unmounted, so
+    the field survives a close — the operator adding a second web
+    asset was met with the first one's URL still in the box, one
+    unnoticed Enter away from a duplicate. openAdd() resets the Add
+    pane on every open."""
+    page.goto(BASE_URL)
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+
+    page.locator('input[name="uri"]').fill('https://engadget.com')
+    page.locator('form[action*="assets/new"] button[type="submit"]').click()
+
+    _wait_db(
+        lambda: Asset.objects.filter(uri='https://engadget.com').exists(),
+        description='first asset persisted to DB',
+    )
+    _wait_alpine(page, 'state.mode', None)
+
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+    expect(page.locator('input[name="uri"]')).to_have_value('')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_add_modal_reopens_on_the_url_tab(
+    reset_assets: None, page: Page
+) -> None:
+    """Same staleness one tab over: leaving the modal on Upload
+    file (or Apps) parked the next open there too, so the default entry
+    point for a web asset was whatever the last visit happened to
+    touch."""
+    page.goto(BASE_URL)
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+
+    page.get_by_role('button', name='Upload file').click()
+    _wait_alpine(page, 'state.tab', 'file')
+    # Escape over the Cancel button: every pane renders its own footer,
+    # so several "Cancel" buttons live in this DOM at once.
+    page.keyboard.press('Escape')
+    _wait_alpine(page, 'state.mode', None)
+
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.tab', 'uri')
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
 def test_add_asset_via_image_upload(reset_assets: None, page: Page) -> None:
     image_file = '/tmp/image.png'
     page.goto(BASE_URL)
