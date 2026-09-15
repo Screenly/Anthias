@@ -23,8 +23,10 @@ Two Celery tasks that run on every fresh upload:
   What the gate accepts is a per-board *playability* envelope, not a
   hardware-decode guarantee: mostly hardware decode (H.264, HEVC, plus
   VAAPI's wider set on x86), but ``pi5`` and ``rk3566`` accept H.264 on
-  measured software throughput, which is why a software-decoded entry
-  also carries a resolution ceiling. ``_HW_DECODE_VIDEO_CODECS`` and
+  measured software throughput, which is why such an entry also wants
+  a resolution ceiling — one exists where it has been measured
+  (``rk3566``); ``pi5`` is deliberately unlisted until its 4K H.264
+  throughput is. ``_HW_DECODE_VIDEO_CODECS`` and
   ``_SW_DECODE_MAX_PIXELS`` below hold the two halves. For codecs the
   board genuinely can't play, the upload is rejected with a re-encode
   recipe, and the metadata fields surface the codec / dims / fps on
@@ -66,7 +68,11 @@ import sh
 from celery import Task
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from anthias_common.board import is_low_ram_device, resolve_device_key
+from anthias_common.board import (
+    ARM64_DEVICE_TYPES,
+    is_low_ram_device,
+    resolve_device_key,
+)
 from anthias_server.app.models import Asset
 
 logger = logging.getLogger(__name__)
@@ -1633,11 +1639,14 @@ def _run_video_normalisation(asset: Asset) -> None:
     revisions wedged a Pi 4's celery worker for 99 minutes on a
     single 4K60 H.264 → HEVC pass before zombieing.
 
-    Uploading a codec outside the board's HW set is rejected — the
-    viewer would otherwise fall through to libavcodec's software
-    decode and show drops the operator paid for hardware to avoid. The metadata
-    fields written before the rejection let the operator see what
-    they uploaded (codec / dims / fps) alongside the error message.
+    Uploading a codec outside the board's accepted set is rejected —
+    no playback path on this board has been shown to keep up with it,
+    so shipping it would mean drops or a black screen at the viewer
+    with nothing to warn the operator first. (Not "outside the
+    hardware set": ``pi5`` and ``rk3566`` accept H.264 on measured
+    software throughput.) The metadata fields written before the
+    rejection let the operator see what they uploaded (codec / dims /
+    fps) alongside the error message.
     """
     asset_id = asset.asset_id
     src_uri = asset.uri or ''
@@ -1768,13 +1777,20 @@ def _run_video_normalisation(asset: Asset) -> None:
         #   service their device has never had.
         message = (
             f'Video codec {display_codec!r} can not be verified for '
-            'playback on this device — Anthias could not identify this '
-            'board, so it cannot certify a decoder for it. On a '
-            'docker-compose install, check that anthias-host-agent and '
-            'Redis are both running. balena devices ship no host agent '
-            'and have no other way to identify the board, so aarch64 '
-            'boards there always land here. Otherwise this board has '
-            'not been profiled yet — please open an issue asking for it.'
+            'playback on this device — Anthias could not identify '
+            'this board, so it has no measured playback envelope for '
+            'it and cannot certify that any codec plays here.'
+            + (
+                ' On a docker-compose install, check that '
+                'anthias-host-agent and Redis are both running. balena '
+                'devices ship no host agent and have no other way to '
+                'identify the board, so aarch64 boards there always '
+                'land here. Otherwise this board has not been profiled '
+                'yet — please open an issue asking for it.'
+                if device_key in ARM64_DEVICE_TYPES
+                else ' DEVICE_TYPE is unset or unrecognised on this '
+                'install, so no board profile could be selected at all.'
+            )
         )
     raise UnsupportedVideoCodecError(
         message, recipe=recipe, handbrake=handbrake

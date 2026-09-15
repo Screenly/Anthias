@@ -3071,3 +3071,44 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+@pytest.mark.django_db
+def test_unidentified_board_message_scopes_the_balena_advice(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The empty-codec-set message is selected for *any* empty set, not
+    just the generic arm64 keys: an unset or unrecognised DEVICE_TYPE
+    resolves to a key with no entry too. Those installs get no
+    host-agent or balena diagnosis, because neither applies to them —
+    telling an x86 operator with a typo'd DEVICE_TYPE to check balena
+    would send them somewhere with no answer."""
+    monkeypatch.setenv('DEVICE_TYPE', 'not-a-real-board')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-unknown-key', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value).lower()
+    assert 'cannot certify that any codec plays here' in msg
+    assert 'balena' not in msg
+    assert 'device_type' in msg
