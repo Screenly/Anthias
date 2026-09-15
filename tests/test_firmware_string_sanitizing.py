@@ -138,3 +138,33 @@ def test_cpuinfo_model_is_sanitized() -> None:
     ):
         info = parse_cpu_info()
     assert info['model'] == 'Raspberry Pi 5[31m Model B Rev 1.0'
+
+
+def test_sentry_board_model_tag_is_sanitized() -> None:
+    """The Sentry ``board_model`` tag is another sink for a string we
+    don't author, and settings.py used to decode the device tree
+    itself with only a NUL/whitespace strip. It now shares the same
+    bounded, sanitised read as everything else."""
+    from anthias_server.django_project.settings import get_board_model
+
+    esc = chr(0x1B)
+    payload = f'NanoPi{esc}[2J R3S{"!" * 400}'.encode()
+    with mock.patch(
+        'anthias_common.device_helper.open',
+        mock.mock_open(read_data=payload),
+        create=True,
+    ):
+        tag = get_board_model('/proc/device-tree/model')
+    assert esc not in tag
+    assert len(tag) <= _MAX_FIRMWARE_STRING_LEN
+
+
+def test_read_firmware_file_missing_path_is_empty() -> None:
+    from anthias_common.device_helper import read_firmware_file
+
+    with mock.patch(
+        'anthias_common.device_helper.open',
+        side_effect=FileNotFoundError(),
+        create=True,
+    ):
+        assert read_firmware_file('/nope') == ''
