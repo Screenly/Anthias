@@ -5102,3 +5102,39 @@ def test_settings_save_leaves_sockets_alone_when_auth_is_unchanged(
 
     assert response.status_code in (200, 302)
     disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_settings_save_drops_sockets_even_if_the_viewer_publish_fails(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """send_to_viewer() publishes over Redis and can raise. The reap
+    must already have happened by then — otherwise a rotation that
+    coincides with a Redis hiccup persists the new credentials and
+    leaves every socket attached under the old ones."""
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            side_effect=RuntimeError('redis is down'),
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': 'auth_basic',
+                'user': 'operator',
+                'password': 'a-str0ng-QA-passphrase',
+                'password_2': 'a-str0ng-QA-passphrase',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_called_once()

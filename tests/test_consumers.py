@@ -8,11 +8,23 @@ from asgiref.testing import ApplicationCommunicator
 from django.contrib.auth.models import AnonymousUser, User
 from django.test import Client, override_settings
 
+from anthias_server.app import consumers as consumers_module
 from anthias_server.app.consumers import (
     AssetConsumer,
     disconnect_all,
     notify_asset_update,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_auth_generation() -> Any:
+    """``consumers._auth_generation`` is process-global by design — a
+    real device's counter only ever climbs. Restore it between tests so
+    a test that rotates credentials can't leave every socket built by a
+    later test looking stale."""
+    original = consumers_module._auth_generation
+    yield
+    consumers_module._auth_generation = original
 
 
 def test_asset_update_sends_asset_id() -> None:
@@ -460,6 +472,142 @@ def test_an_authorized_socket_survives_until_auth_settings_change() -> None:
         await sync_to_async(disconnect_all, thread_sensitive=True)()
         closed = await communicator.receive_output(timeout=5)
         assert closed['type'] == 'websocket.close'
+
+    with _auth_backend('auth_basic'):
+        async_to_sync(body)()
+
+
+# ---------------------------------------------------------------------------
+# Credential rotation fails closed even when the close is lost
+# (follow-up Copilot review on PR 3324).
+#
+# disconnect_all() rides the same best-effort channel layer _broadcast
+# swallows errors from, so the close frame can simply never arrive — a
+# Redis blip during the settings save is enough. The per-frame re-check
+# alone doesn't cover that case for a *rotation*: scope['user'] was
+# resolved at handshake and its is_authenticated stays True however the
+# password changes underneath it. The auth generation is what closes
+# that, in-process and with no DB hit per frame.
+# ---------------------------------------------------------------------------
+
+
+def _lost_fan_out() -> Any:
+    """Make the force_disconnect fan-out vanish, the way a channel-layer
+    outage does — _broadcast() logs and swallows, so the caller can't
+    tell. Everything disconnect_all() does *outside* the broadcast must
+    still be enough on its own."""
+    return mock.patch('anthias_server.app.consumers._broadcast')
+
+
+def test_asset_update_is_suppressed_after_a_rotation_loses_the_close() -> None:
+    """The gap Copilot found: an operator socket whose credentials were
+    rotated, whose close never arrived, and whose user object still
+    reports is_authenticated. It must go silent anyway."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    send = mock.AsyncMock()
+    close = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        disconnect_all()
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_not_awaited()
+    # Silent, not closed — same reasoning as the auth-toggle path: a
+    # close lands exactly on the write we're declining to disclose.
+    close.assert_not_awaited()
+
+
+def test_a_socket_opened_after_the_rotation_still_receives_updates() -> None:
+    """Mutation check: the generation must gate *stale* sockets, not
+    become a permanent kill switch on every socket after the first
+    credential change of the process's life."""
+    with _lost_fan_out():
+        disconnect_all()
+
+    # Built after the bump, so it carries the current generation.
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_awaited_once_with(text_data='abc123')
+
+
+def test_a_stale_socket_keeps_working_while_auth_is_disabled() -> None:
+    """Turning auth *off* also bumps the generation, but there are no
+    credentials left to revoke — the documented contract is that the
+    device is open. A socket that missed its close must not be
+    stranded on the 5s poll for the rest of its life."""
+    consumer, _ = _consumer_with_scope(AnonymousUser())
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend(''),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        disconnect_all()
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_awaited_once_with(text_data='abc123')
+
+
+def test_connect_is_unaffected_by_earlier_generations() -> None:
+    """A fresh handshake after any number of rotations must still be
+    decided on the session alone."""
+    with _lost_fan_out():
+        disconnect_all()
+        disconnect_all()
+
+    consumer, layer = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    accept, close = mock.AsyncMock(), mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'accept', accept),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        asyncio.run(consumer.connect())
+
+    layer.group_add.assert_awaited_once_with('ws_server', 'specific.abcdef!')
+    accept.assert_awaited_once()
+    close.assert_not_awaited()
+
+
+@pytest.mark.django_db
+@override_settings(CHANNEL_LAYERS=_IN_MEMORY_LAYER)
+def test_rotation_silences_a_live_socket_end_to_end() -> None:
+    """The same thing through the real ASGI stack with a genuine
+    session cookie: a socket that is receiving frames, a rotation whose
+    close is dropped, and no further frame after it."""
+    User.objects.create_user(username='alice', password='s3cret-pa55phrase')
+    headers = _session_cookie_header('alice', 's3cret-pa55phrase')
+
+    async def body() -> None:
+        communicator = _communicator(headers)
+        assert (await _handshake(communicator))['type'] == 'websocket.accept'
+        await sync_to_async(notify_asset_update, thread_sensitive=True)('*')
+        assert (await communicator.receive_output(timeout=5)) == {
+            'type': 'websocket.send',
+            'text': '*',
+        }
+
+        with _lost_fan_out():
+            await sync_to_async(disconnect_all, thread_sensitive=True)()
+        # The close never arrived...
+        assert await communicator.receive_nothing(timeout=1)
+        # ...and the socket is still silent on the next real write.
+        await sync_to_async(notify_asset_update, thread_sensitive=True)('*')
+        assert await communicator.receive_nothing(timeout=1)
 
     with _auth_backend('auth_basic'):
         async_to_sync(body)()

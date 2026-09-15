@@ -693,14 +693,19 @@ class DeviceSettingsViewV2(APIView):
                     settings[field] = data[field]
 
             settings.save()
-            publisher = ViewerPublisher.get_instance()
-            publisher.send_to_viewer('reload')
-            # After save(), so a socket that reconnects immediately is
-            # judged against the new auth_backend rather than the old one.
+            # Before the viewer publish, not after: send_to_viewer()
+            # goes over Redis and can raise, and the handler below
+            # would then return with the new credentials already
+            # persisted and every old socket still attached. Still
+            # after settings.save(), so a socket that reconnects
+            # immediately is judged against the new auth_backend rather
+            # than the old one.
             if auth_changed:
                 from anthias_server.app.consumers import disconnect_all
 
                 disconnect_all()
+            publisher = ViewerPublisher.get_instance()
+            publisher.send_to_viewer('reload')
 
             return Response({'message': 'Settings were successfully saved.'})
         except AuthSettingsError as exc:

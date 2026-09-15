@@ -1973,13 +1973,18 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         _apply_display_power_schedule_settings(request)
 
         settings.save()
-        ViewerPublisher.get_instance().send_to_viewer('reload')
-        # After save(), so a socket that reconnects immediately is
-        # judged against the new auth_backend rather than the old one.
+        # Before the viewer publish, not after: send_to_viewer()
+        # goes over Redis and can raise, and the handler below
+        # would then finish the request with the new credentials
+        # already persisted and every old socket still attached. Still
+        # after settings.save(), so a socket that reconnects
+        # immediately is judged against the new auth_backend rather
+        # than the old one.
         if auth_changed:
             from anthias_server.app.consumers import disconnect_all
 
             disconnect_all()
+        ViewerPublisher.get_instance().send_to_viewer('reload')
 
         messages.success(request, 'Settings were successfully saved.')
     except AuthSettingsError as exc:

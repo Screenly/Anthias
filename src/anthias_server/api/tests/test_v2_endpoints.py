@@ -959,3 +959,39 @@ def test_patch_device_settings_leaves_sockets_alone_when_auth_unchanged(
 
     assert response.status_code == status.HTTP_200_OK
     disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_drops_sockets_if_viewer_publish_fails(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    """send_to_viewer() publishes over Redis and can raise. The reap
+    must already have happened by then — otherwise the request exits
+    through the error handler with the new credentials persisted and
+    every socket still attached under the old ones."""
+    _device_settings_mock(settings_mock, auth_backend='')
+    publisher = mock.MagicMock()
+    publisher.send_to_viewer.side_effect = RuntimeError('redis is down')
+    publisher_mock.get_instance.return_value = publisher
+
+    with mock.patch(
+        'anthias_server.app.consumers.disconnect_all'
+    ) as disconnect:
+        response = api_client.patch(
+            device_settings_url,
+            data={
+                'auth_backend': 'auth_basic',
+                'username': 'operator',
+                'password': 'a-str0ng-QA-passphrase',
+                'password_2': 'a-str0ng-QA-passphrase',
+            },
+            format='json',
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    disconnect.assert_called_once()
