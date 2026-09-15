@@ -1920,7 +1920,7 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 
     try:
         prev_auth_backend = settings['auth_backend']
-        apply_auth_settings(
+        auth_changed = apply_auth_settings(
             request,
             new_auth_backend=auth_backend,
             current_pwd=current_password,
@@ -1974,6 +1974,12 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 
         settings.save()
         ViewerPublisher.get_instance().send_to_viewer('reload')
+        # After save(), so a socket that reconnects immediately is
+        # judged against the new auth_backend rather than the old one.
+        if auth_changed:
+            from anthias_server.app.consumers import disconnect_all
+
+            disconnect_all()
 
         messages.success(request, 'Settings were successfully saved.')
     except AuthSettingsError as exc:
