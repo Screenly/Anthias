@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from typing import Any
 from unittest import mock
 
@@ -6,6 +7,7 @@ import pytest
 from asgiref.sync import async_to_sync, sync_to_async
 from asgiref.testing import ApplicationCommunicator
 from django.contrib.auth.models import AnonymousUser, User
+from django.db import transaction
 from django.test import Client, override_settings
 from django.utils import timezone
 
@@ -628,7 +630,9 @@ def test_rotation_silences_a_live_socket_end_to_end() -> None:
 
 
 @pytest.mark.django_db
-def test_a_bare_user_save_revokes_authorization() -> None:
+def test_a_bare_user_save_revokes_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
     """The /admin change-password form, `manage.py changepassword` and a
     shell all end at ``User.save()`` — so that is where the revocation
     hangs, rather than on the settings views none of them go through."""
@@ -641,15 +645,18 @@ def test_a_bare_user_save_revokes_authorization() -> None:
         _lost_fan_out(),
         mock.patch.object(consumer, 'send', send),
     ):
-        user.set_password('a-rotated-pa55phrase')
-        user.save(update_fields=['password'])
+        with django_capture_on_commit_callbacks(execute=True):
+            user.set_password('a-rotated-pa55phrase')
+            user.save(update_fields=['password'])
         asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
 
     send.assert_not_awaited()
 
 
 @pytest.mark.django_db
-def test_deleting_the_operator_revokes_authorization() -> None:
+def test_deleting_the_operator_revokes_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
     """``scope['user']`` outlives the row it was resolved from, so a
     deleted account would otherwise keep its socket streaming."""
     user = User.objects.create_user(username='alice', password='s3cret-pa55')
@@ -661,14 +668,17 @@ def test_deleting_the_operator_revokes_authorization() -> None:
         _lost_fan_out(),
         mock.patch.object(consumer, 'send', send),
     ):
-        user.delete()
+        with django_capture_on_commit_callbacks(execute=True):
+            user.delete()
         asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
 
     send.assert_not_awaited()
 
 
 @pytest.mark.django_db
-def test_recording_a_login_does_not_revoke_authorization() -> None:
+def test_recording_a_login_does_not_revoke_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
     """Django writes ``last_login`` through save(update_fields=[...]) on
     every successful login. Revoking on that would drop the operator's
     dashboard socket at the exact moment they sign in — the one User
@@ -682,15 +692,18 @@ def test_recording_a_login_does_not_revoke_authorization() -> None:
         _lost_fan_out(),
         mock.patch.object(consumer, 'send', send),
     ):
-        user.last_login = timezone.now()
-        user.save(update_fields=['last_login'])
+        with django_capture_on_commit_callbacks(execute=True):
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
         asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
 
     send.assert_awaited_once_with(text_data='abc123')
 
 
 @pytest.mark.django_db
-def test_deactivating_the_operator_revokes_authorization() -> None:
+def test_deactivating_the_operator_revokes_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
     """Fail closed on update_fields we haven't explicitly cleared:
     is_active decides who may hold a session just as much as the
     password does."""
@@ -703,8 +716,44 @@ def test_deactivating_the_operator_revokes_authorization() -> None:
         _lost_fan_out(),
         mock.patch.object(consumer, 'send', send),
     ):
-        user.is_active = False
-        user.save(update_fields=['is_active'])
+        with django_capture_on_commit_callbacks(execute=True):
+            user.is_active = False
+            user.save(update_fields=['is_active'])
         asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
 
     send.assert_not_awaited()
+
+
+@pytest.mark.django_db
+def test_a_rolled_back_credential_change_does_not_revoke(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    """The receiver fires inside the caller's transaction, and Django's
+    admin wraps its change form in one — so the write it reacts to can
+    still roll back. A generation bump can't roll back with it, and a
+    socket that also missed the close would then be silent for good
+    over a credential change that never happened. Deferring to
+    transaction.on_commit is what ties the revocation to durability."""
+    user = User.objects.create_user(username='alice', password='s3cret-pa55')
+    consumer, _ = _consumer_with_scope(user)
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        # atomic() exits first and rolls back, then suppress() swallows
+        # the error the way the admin's own error handling would.
+        with (
+            django_capture_on_commit_callbacks(execute=True) as callbacks,
+            contextlib.suppress(RuntimeError),
+            transaction.atomic(),
+        ):
+            user.set_password('a-rotated-pa55phrase')
+            user.save(update_fields=['password'])
+            raise RuntimeError('the admin view blew up')
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    assert callbacks == []
+    send.assert_awaited_once_with(text_data='abc123')

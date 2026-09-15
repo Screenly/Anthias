@@ -5194,3 +5194,47 @@ def test_settings_save_reaps_sockets_even_if_the_conf_write_fails(
 
     assert response.status_code in (200, 302)
     disconnect.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_settings_save_leaves_the_reap_to_the_receiver_on_a_rotation(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """A password change with auth_backend unchanged writes the User
+    row, so app/signals.py reaps it. This view must not reap it again —
+    doing so fanned a second force_disconnect out over Redis for every
+    credential rotation, and closed every dashboard socket twice."""
+    _existing_operator()
+    settings['auth_backend'] = 'auth_basic'
+    settings.save()
+    operator = User.objects.get(username='operator')
+    client.force_login(operator)
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': 'auth_basic',
+                'current_password': _OPERATOR_PWD,
+                'password': 'a-rotated-QA-passphrase',
+                'password_2': 'a-rotated-QA-passphrase',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    operator.refresh_from_db()
+    assert operator.check_password('a-rotated-QA-passphrase')
+    disconnect.assert_not_called()

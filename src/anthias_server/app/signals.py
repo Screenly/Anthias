@@ -33,6 +33,7 @@ import logging
 from typing import Any
 
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,16 @@ def revoke_ws_authorization(
     Deleting the row counts as well as writing it: the socket's
     already-resolved ``scope['user']`` outlives the User it was
     resolved from, so a deleted account would otherwise keep streaming.
+
+    Deferred to ``transaction.on_commit`` because this signal fires
+    *inside* the caller's transaction, and Django's admin wraps its
+    change form in one — so the write we're reacting to may still roll
+    back. The generation bump can't roll back with it, and a socket
+    that also missed the close would then be silent for good over a
+    credential change that never happened. Outside a transaction
+    (``manage.py``, a shell, and the settings views, since this project
+    doesn't set ATOMIC_REQUESTS) ``on_commit`` runs the callback
+    immediately, so nothing is delayed on the paths that matter.
     """
     update_fields = kwargs.get('update_fields')
     if (
@@ -78,7 +89,7 @@ def revoke_ws_authorization(
     logger.debug(
         'Revoking /ws authorization after a change to user %r', instance.pk
     )
-    disconnect_all()
+    transaction.on_commit(disconnect_all)
 
 
 def register() -> None:

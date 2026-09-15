@@ -73,6 +73,7 @@ from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
+    NamedTuple,
     ParamSpec,
     TypeVar,
     cast,
@@ -458,6 +459,27 @@ _ERR_PWD_MISMATCH = 'New passwords do not match!'
 _VALID_AUTH_BACKENDS = frozenset({'', 'auth_basic'})
 
 
+class AuthChange(NamedTuple):
+    """What a settings save did to the device's authentication.
+
+    The two halves are reported separately because different things
+    revoke them. A User write is picked up by the ``post_save``
+    receiver in :mod:`anthias_server.app.signals`, wherever it came
+    from; a backend toggle touches no User row at all, so only the
+    caller can know about it. Collapsing both into one "something
+    changed" bool — which is what this used to be — made the settings
+    views fan a second, redundant ``force_disconnect`` out over Redis
+    for every credential rotation.
+    """
+
+    #: ``auth_backend`` itself was switched on or off. Nothing else
+    #: sees this, so the settings-save paths must reap sockets for it.
+    backend_changed: bool
+    #: The operator's username or password was rotated, or the initial
+    #: operator was created. Already reaped by the User receiver.
+    credentials_rotated: bool
+
+
 def _operator_user(
     request: AnyRequest,
 ) -> User | None:
@@ -658,22 +680,24 @@ def apply_auth_settings(
     new_pwd: str,
     new_pwd_confirm: str,
     prev_auth_backend: str,
-) -> bool:
+) -> AuthChange:
     """Validate and persist auth-related settings changes.
 
     Raises ``AuthSettingsError`` with an operator-friendly message
     when the input is rejected. On success, mutates the
     ``django.contrib.auth.User`` row backing the operator account.
 
-    Returns True when the change invalidates credentials that are
-    already in use — the backend was switched on or off, or the
-    operator's username/password was rotated. Both settings-save
-    surfaces use that to close open /ws sockets (see
-    :func:`anthias_server.app.consumers.disconnect_all`), because a
-    socket is authorized once at handshake time and would otherwise
-    outlive the credentials it was accepted under. Keeping the
-    decision here rather than at the call sites is what stops the HTML
-    and DRF paths from drifting apart on it.
+    Returns an :class:`AuthChange` saying which half of the device's
+    authentication this touched — the backend flag, the operator's
+    credentials, or both. Either invalidates credentials already in
+    use, so either has to close open /ws sockets (see
+    :func:`anthias_server.app.consumers.disconnect_all`): a socket is
+    authorized once at handshake time and would otherwise outlive the
+    credentials it was accepted under. They are reported separately
+    because the credential half is already reaped by the User
+    ``post_save`` receiver, so only ``backend_changed`` is the
+    caller's job. Keeping the decision here rather than at the call
+    sites is what stops the HTML and DRF paths from drifting apart.
     The caller is responsible for persisting ``auth_backend`` itself
     (we don't touch the conf file from here so a failed write of one
     setting can't half-apply auth).
@@ -749,7 +773,9 @@ def apply_auth_settings(
         # Turning auth off: nothing to do to the User row (it is kept
         # so re-enabling doesn't lose the operator), but every open
         # socket was accepted under the old regime.
-        return backend_changed
+        return AuthChange(
+            backend_changed=backend_changed, credentials_rotated=False
+        )
 
     if operator is not None:
         credentials_rotated = _update_existing_operator(
@@ -759,14 +785,19 @@ def apply_auth_settings(
             new_pwd_confirm=new_pwd_confirm,
             current_pass_correct=current_pass_correct,
         )
-        return backend_changed or credentials_rotated
+        return AuthChange(
+            backend_changed=backend_changed,
+            credentials_rotated=credentials_rotated,
+        )
 
     _create_initial_operator(
         new_username=new_username,
         new_pwd=new_pwd,
         new_pwd_confirm=new_pwd_confirm,
     )
-    return True
+    return AuthChange(
+        backend_changed=backend_changed, credentials_rotated=True
+    )
 
 
 def operator_username() -> str:

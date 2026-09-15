@@ -1065,3 +1065,40 @@ def test_patch_device_settings_reaps_sockets_if_the_conf_write_fails(
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     disconnect.assert_called_once()
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_leaves_the_reap_to_the_receiver_on_a_rotation(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    """A password change with auth_backend unchanged writes the User
+    row, so app/signals.py reaps it. This view must not reap it again."""
+    _device_settings_mock(settings_mock, auth_backend='auth_basic')
+    _existing_operator()
+    operator = User.objects.get(username='operator')
+    api_client.force_authenticate(user=operator)
+    publisher_mock.get_instance.return_value = mock.MagicMock()
+
+    with mock.patch(
+        'anthias_server.app.consumers.disconnect_all'
+    ) as disconnect:
+        response = api_client.patch(
+            device_settings_url,
+            data={
+                'auth_backend': 'auth_basic',
+                'current_password': _OPERATOR_PWD,
+                'password': 'a-rotated-QA-passphrase',
+                'password_2': 'a-rotated-QA-passphrase',
+            },
+            format='json',
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    operator.refresh_from_db()
+    assert operator.check_password('a-rotated-QA-passphrase')
+    disconnect.assert_not_called()

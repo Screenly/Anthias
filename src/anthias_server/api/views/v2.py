@@ -634,7 +634,7 @@ class DeviceSettingsViewV2(APIView):
             auth_backend = data.get('auth_backend', settings['auth_backend'])
             prev_auth_backend = settings['auth_backend']
 
-            auth_changed = apply_auth_settings(
+            auth_change = apply_auth_settings(
                 request,
                 new_auth_backend=auth_backend,
                 current_pwd=current_password,
@@ -643,76 +643,72 @@ class DeviceSettingsViewV2(APIView):
                 new_pwd_confirm=data.get('password_2', ''),
                 prev_auth_backend=prev_auth_backend,
             )
-            # try/finally rather than the happy path: apply_auth_settings()
-            # has already written the rotated User row by the time we get
-            # here, so sockets accepted under the old credentials have to be
-            # reaped even when the conf write below fails — a full or
-            # read-only /data volume is enough. The User-save signal covers a
-            # rotation on its own; this is what covers a bare auth_backend
-            # toggle, which never touches a User row.
+            settings['auth_backend'] = auth_backend
+
+            # Update settings
+            if 'player_name' in data:
+                settings['player_name'] = data['player_name']
+            if 'default_duration' in data:
+                settings['default_duration'] = data['default_duration']
+            if 'default_streaming_duration' in data:
+                settings['default_streaming_duration'] = data[
+                    'default_streaming_duration'
+                ]
+            if 'audio_output' in data:
+                settings['audio_output'] = data['audio_output']
+            if 'date_format' in data:
+                settings['date_format'] = data['date_format']
+            if 'timezone' in data:
+                settings['timezone'] = data['timezone']
+            if 'show_splash' in data:
+                settings['show_splash'] = data['show_splash']
+            if 'default_assets' in data:
+                if data['default_assets'] and not settings['default_assets']:
+                    add_default_assets()
+                elif not data['default_assets'] and settings['default_assets']:
+                    remove_default_assets()
+                settings['default_assets'] = data['default_assets']
+            if 'shuffle_playlist' in data:
+                settings['shuffle_playlist'] = data['shuffle_playlist']
+            if 'use_24_hour_clock' in data:
+                settings['use_24_hour_clock'] = data['use_24_hour_clock']
+            if 'debug_logging' in data:
+                settings['debug_logging'] = data['debug_logging']
+            if 'prefer_dark_mode' in data:
+                settings['prefer_dark_mode'] = data['prefer_dark_mode']
+            if 'verify_ssl' in data:
+                settings['verify_ssl'] = data['verify_ssl']
+            if 'screen_rotation' in data:
+                settings['screen_rotation'] = int(data['screen_rotation'])
+            # Scheduled display power. Already normalised by the
+            # serializer's validators ('HH:MM', sorted weekday list), so
+            # the beat can never read a value it cannot parse.
+            for field in (
+                'display_power_schedule_enabled',
+                'display_power_on_time',
+                'display_power_off_time',
+                'display_power_days',
+            ):
+                if field in data:
+                    settings[field] = data[field]
+
+            # Narrow on purpose: it guards the conf write, which is the
+            # only thing here that can fail *after* apply_auth_settings()
+            # has already committed its half. A toggle is live in the
+            # in-process settings dict from the assignment above — that is
+            # what _is_authorized() reads — so reaping is owed whether or
+            # not the write lands.
+            #
+            # backend_changed, not "anything changed": a credential
+            # rotation is already reaped by the User post_save receiver in
+            # app/signals.py, and firing here too would fan a second
+            # force_disconnect out over Redis for every password change. A
+            # backend toggle writes no User row, so nothing but this sees
+            # it.
             try:
-                settings['auth_backend'] = auth_backend
-
-                # Update settings
-                if 'player_name' in data:
-                    settings['player_name'] = data['player_name']
-                if 'default_duration' in data:
-                    settings['default_duration'] = data['default_duration']
-                if 'default_streaming_duration' in data:
-                    settings['default_streaming_duration'] = data[
-                        'default_streaming_duration'
-                    ]
-                if 'audio_output' in data:
-                    settings['audio_output'] = data['audio_output']
-                if 'date_format' in data:
-                    settings['date_format'] = data['date_format']
-                if 'timezone' in data:
-                    settings['timezone'] = data['timezone']
-                if 'show_splash' in data:
-                    settings['show_splash'] = data['show_splash']
-                if 'default_assets' in data:
-                    if (
-                        data['default_assets']
-                        and not settings['default_assets']
-                    ):
-                        add_default_assets()
-                    elif (
-                        not data['default_assets']
-                        and settings['default_assets']
-                    ):
-                        remove_default_assets()
-                    settings['default_assets'] = data['default_assets']
-                if 'shuffle_playlist' in data:
-                    settings['shuffle_playlist'] = data['shuffle_playlist']
-                if 'use_24_hour_clock' in data:
-                    settings['use_24_hour_clock'] = data['use_24_hour_clock']
-                if 'debug_logging' in data:
-                    settings['debug_logging'] = data['debug_logging']
-                if 'prefer_dark_mode' in data:
-                    settings['prefer_dark_mode'] = data['prefer_dark_mode']
-                if 'verify_ssl' in data:
-                    settings['verify_ssl'] = data['verify_ssl']
-                if 'screen_rotation' in data:
-                    settings['screen_rotation'] = int(data['screen_rotation'])
-                # Scheduled display power. Already normalised by the
-                # serializer's validators ('HH:MM', sorted weekday list), so
-                # the beat can never read a value it cannot parse.
-                for field in (
-                    'display_power_schedule_enabled',
-                    'display_power_on_time',
-                    'display_power_off_time',
-                    'display_power_days',
-                ):
-                    if field in data:
-                        settings[field] = data[field]
-
                 settings.save()
             finally:
-                # After settings.save() on the happy path, so a socket that
-                # reconnects immediately is judged against the new
-                # auth_backend rather than the old one. Before the viewer
-                # publish below, which goes over Redis and can raise.
-                if auth_changed:
+                if auth_change.backend_changed:
                     from anthias_server.app.consumers import disconnect_all
 
                     disconnect_all()
