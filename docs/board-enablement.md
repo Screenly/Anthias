@@ -239,7 +239,16 @@ and that libavcodec exposes only the stateful `*_v4l2m2m` wrappers, which
 cannot drive RK3566's stateless rkvdec (the RK3399 mismatch again).
 
 Decode throughput, measured in the viewer image against 20 s noise-heavy
-1080p30 clips, `ffmpeg -benchmark -f null -`:
+1080p30 clips:
+
+```
+$ ffmpeg -hide_banner -benchmark -i clip.mp4 -f null -
+...
+bench: utime=25.197s stime=0.714s rtime=7.802s
+```
+
+`rtime` is the wall clock for the whole decode, so 20 s of video in 7.8 s is
+2.56x real time:
 
 | codec | rtime for 20 s | speed |
 | --- | --- | --- |
