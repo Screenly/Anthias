@@ -1098,6 +1098,20 @@ label { text-align: left; }
   max-height: calc(100vh - 12rem);
   border: 0;
   background: var(--color-surface);
+
+  // A drag that crosses into an iframe belongs to the frame: drag
+  // events do not cross a browsing-context boundary, so the page-wide
+  // drop handlers in home.ts never see it and the frame falls back to
+  // the browser default — it navigates away from the preview to the
+  // dropped file. Taking the frame out of hit-testing for the length
+  // of the drag hands those events back to the page underneath, which
+  // refuses the drop without navigating anything.
+  //
+  // Only while a drag is in flight; the frame has to stay interactive
+  // the rest of the time. The pointer cannot reach the frame without
+  // first crossing the modal overlay, which is the page's own
+  // document, so pageDragActive is already set by then.
+  &.is-drag-shielded { pointer-events: none; }
 }
 
 // -----------------------------------------------------------------------------
