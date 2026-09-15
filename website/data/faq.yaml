@@ -177,41 +177,41 @@
 
     - question: My non-Pi board shows a black screen even though HDMI is plugged in, what now?
       answer: |
-        On an Armbian board this is usually a device tree mismatch rather than an Anthias problem, and you can fix it over SSH in a couple of minutes.
+        We have hit this once, on one board, and the fix took a couple of minutes over SSH. It was not an Anthias fault: the board had booted a device tree in which the HDMI port is switched off.
 
-        Armbian ships a separate device tree for every board it supports, and the bootloader picks one by name. If your board comes in hardware variants, that default pick can land on the variant *without* video output — the kernel then never enables the HDMI port. The board boots normally and the dashboard is reachable over the network, but the screen stays dark and the viewer can't start.
+        The board was a **NanoPi R3S LTS** running `Armbian_community_26.11.0-trunk.44_Nanopi-r3s_trixie_current_6.18.50_minimal.img.xz`. That image ships two device trees for this hardware — `rk3566-nanopi-r3s.dtb`, where HDMI is disabled, and `rk3566-nanopi-r3s-lts.dtb`, where it is enabled — and the bootloader picked the first by name, with nothing detecting which variant the board actually is. The board booted normally and the dashboard was reachable over the network; only the screen stayed dark, and the viewer could not start.
 
-        First confirm that's what you're looking at. SSH into the board and run:
+        We have not surveyed other boards or other images, so we cannot say how common this is. If your own board shows a black screen, these are the checks that identified it here.
+
+        First, does the kernel think the port exists? SSH in and run:
 
         ```
         ls /sys/class/drm/
         ```
 
-        A working setup lists a connector such as `card0-HDMI-A-1`. If all you see is `card0`, `card1` and `renderD128`, the kernel doesn't know the port exists. `dmesg | grep -i drm` confirms it with a line like `Cannot find any crtc or sizes`.
+        A working setup lists a connector such as `card0-HDMI-A-1`. On the board above, before the fix, there was no connector entry at all — only `card0`, `card1` and `renderD128` — and `dmesg | grep -i drm` showed `Cannot find any crtc or sizes`.
 
-        Next, list the device trees your kernel package shipped and find the one matching your exact model, variant suffix included. Swap `nanopi` for your own board's name:
+        If that matches, list the device trees your kernel package shipped and look for one naming your exact model, variant suffix included. Swap `nanopi` for your own board's name:
 
         ```
         find -L /boot/dtb -name '*.dtb' | grep -i nanopi
         ```
 
-        Add it to `/boot/armbianEnv.txt` (create the line if it isn't there) and reboot:
+        Set the one you want in `/boot/armbianEnv.txt` (add the line if it isn't there) and reboot:
 
         ```
         fdtfile=rockchip/rk3566-nanopi-r3s-lts.dtb
         ```
 
-        After the reboot the connector shows up and reports a display. The card and connector numbering varies between boards, so let the shell find it:
+        After the reboot, check for a connector reporting a display. Card and connector numbering differs between boards, so let the shell find it:
 
         ```
         grep -H . /sys/class/drm/*/status
         ```
 
-        You want a line ending in `connected` (not `disconnected`), and Anthias comes up on the screen.
+        A line ending in `connected` is what you want. On our board that was `/sys/class/drm/card0-HDMI-A-1/status:connected`, and Anthias came up on the screen.
 
-        That example is a real one. On a **NanoPi R3S LTS**, Armbian defaults to `rk3566-nanopi-r3s.dtb`, which has HDMI switched off, while the LTS variant of the board needs `rk3566-nanopi-r3s-lts.dtb`. Other boards follow the same pattern with their own file names.
-
-        One caveat before you go hunting: a few boards have no video output at all — router-style models are the usual case. If none of the device trees for your board enable HDMI, no amount of configuration will produce a picture, and you'll want different hardware for signage.
+        Worth knowing before you go hunting: some boards have no video output at all, and this fix cannot conjure one. If no device tree for your board enables HDMI, you will want different hardware for signage.
 
     - question: Can I add transitions (fade / crossfade) between assets?
       answer: |

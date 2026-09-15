@@ -201,13 +201,22 @@ userspace baseline is unaffected on every board.
 
 ### Armbian device-tree variants (black screen on first boot)
 
-Armbian ships one device tree per supported board and the bootloader picks
-by name, with no runtime variant detection. On a board that has hardware
-variants this can select the variant *without* video output — the kernel
-brings up the VOP but no encoder, so `/sys/class/drm` has no connector and
-the viewer's compositor exits immediately.
+One board, one image, so treat the mechanism as demonstrated and the
+prevalence as unknown — we have not surveyed other boards or other Armbian
+images.
 
-Observed on the NanoPi R3S LTS bring-up: U-Boot is built
+**Board:** NanoPi R3S LTS.
+**Image:** `Armbian_community_26.11.0-trunk.44_Nanopi-r3s_trixie_current_6.18.50_minimal.img.xz`
+(on-device: `BOARD=nanopi-r3s`, `VERSION=26.11.0-trunk.44`, `BRANCH=current`,
+`IMAGE_TYPE=nightly`, kernel `6.18.50-current-rockchip64`).
+
+On that image the bootloader selects a device tree by name with nothing
+detecting which hardware variant the board is, and it selected the variant
+whose HDMI is disabled: the kernel brings up the VOP but no encoder, so
+`/sys/class/drm` has no connector and the viewer's compositor exits
+immediately.
+
+The specifics: U-Boot is built
 `CONFIG_DEFAULT_DEVICE_TREE="rockchip/rk3566-nanopi-r3s"` with a
 `CONFIG_OF_LIST` naming only that one, and — because the same build sets
 `CONFIG_ENV_IS_NOWHERE=y` — there is no saved environment to override it.
