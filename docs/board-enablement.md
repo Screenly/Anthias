@@ -162,11 +162,23 @@ consumed through two paths:
 
 * on docker-compose installs, `anthias_host_agent` runs on the host,
   detects the subtype, and publishes `host:board_subtype` to Redis;
-* when Redis has no value — the `screenly_ose/anthias-rockpi4` balena
-  fleet ships no host_agent service — `anthias_common.board` reads
-  `/proc/device-tree/model` directly from inside the container (the
-  device tree is kernel-global, the same mechanism `get_device_type`
-  relies on for Pi detection).
+* when Redis has no value — the agent is down, or never ran —
+  `anthias_common.board` falls back to reading `/proc/device-tree/model`
+  directly from inside the container.
+
+**That fallback does not work in the server/celery containers.**
+`/proc/device-tree` is a symlink to `/sys/firmware/devicetree/base`, and
+`/sys/firmware` is on Docker's default masked-paths list, so an
+unprivileged container reads an empty directory on every board. Measured on
+a NanoPi R3S LTS: readable on the host and in the privileged `anthias-viewer`
+container, empty in `anthias-server` / `anthias-celery`. A bind mount onto
+the masked path stays empty too. The practical consequences: on
+docker-compose installs the host_agent's Redis value is the only working
+source, and on balena — no host_agent, unprivileged server container — the
+subtype has no source at all, so the `screenly_ose/anthias-rockpi4` fleet's
+codec gate does not actually get upgraded there. Fixing balena needs a
+host-side publisher (or `io.balena.features.sysfs` plus a path change);
+untested so far.
 
 The server uses the resolved key to pick the right entry in
 `processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4 accepts H.264 + HEVC
@@ -230,6 +242,56 @@ Anthias does not maintain a custom kernel or distro
 (["we don't want to maintain our own Yocto distro"]). When that day comes,
 the QtMultimedia side will also need a hwaccel-selection hook — Qt 6.5+ has
 no public knob today.
+
+### RK3566 (NanoPi R3S LTS) — measured playback envelope
+
+Same image as the device-tree section above. Decode is software throughout:
+the arm64 viewer image's Qt 6 multimedia backend is `libffmpegmediaplugin.so`,
+and that libavcodec exposes only the stateful `*_v4l2m2m` wrappers, which
+cannot drive RK3566's stateless rkvdec (the RK3399 mismatch again).
+
+Decode throughput, measured in the viewer image against 20 s noise-heavy
+1080p30 clips:
+
+```
+$ ffmpeg -hide_banner -benchmark -i clip.mp4 -f null -
+...
+bench: utime=25.197s stime=0.714s rtime=7.802s
+```
+
+`rtime` is the wall clock for the whole decode, so 20 s of video in 7.8 s is
+2.56x real time:
+
+| codec | rtime for 20 s | speed |
+| --- | --- | --- |
+| H.264 | 7.8 s | 2.56x real time |
+| HEVC | 17.5 s | 1.15x real time |
+
+End-to-end playback on the attached 4K panel (cage/wayland, viewer
+rendering to the display, 30 s H.264 clips at 8 Mbit/s 1080p and 4 Mbit/s
+720p):
+
+| clip | viewer container CPU | host idle | viewer RSS |
+| --- | --- | --- | --- |
+| 1080p30 | 200-240 % of 400 % | ~28 % | ~990 MiB |
+| 720p30 | 100-130 % of 400 % | ~58 % | ~890 MiB |
+
+Frames advance in both cases (successive `grim` captures differ). The
+numbers are the argument for the envelope in
+`processing._HW_DECODE_VIDEO_CODECS`: H.264 only, capped at 1080p by
+`_SW_DECODE_MAX_PIXELS`. HEVC at 1.15x leaves nothing for the compositor,
+and 4K H.264 is ~4x the 1080p work, which lands under real time.
+
+Note the RSS column against the container's 1.54 GiB cap: at 1080p the
+viewer sits around 990 MiB before anything else runs, so memory is as
+close to the limit as CPU is on this 2 GB board.
+
+Caveat on the drop question: neither the Qt path nor this board exposes a
+frame-drop counter — `ANTHIAS_DEBUG_DROPS` and `~/.anthias/mpv.log` in the
+sections above belong to the retired mpv subprocess player and do nothing
+here. Drops on real content are an operator observation, not something
+these measurements quantify. Wiring a drop counter into the QtMultimedia
+path is the missing instrument.
 
 ### Low-RAM mode
 

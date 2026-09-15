@@ -6,8 +6,9 @@ Server + viewer read it to upgrade the catch-all ``arm64``
 DEVICE_TYPE into a board-specific envelope when the silicon
 supports it. The detection table itself lives in
 ``anthias_common.device_helper.detect_board_subtype`` — shared with
-``anthias_common.board``'s in-container fallback (used on balena,
-where no host_agent service runs). We pin:
+``anthias_common.board``'s local fallback (which only resolves
+where the device tree is readable — the host and the privileged
+viewer, not an unprivileged server container). We pin:
 
 * the device-tree → subtype mapping for known boards (Rock Pi 4);
 * unknown / empty / missing device-tree all collapse to ``None``;
@@ -24,7 +25,10 @@ from unittest import mock
 import pytest
 
 from anthias_common.board import get_board_subtype
-from anthias_common.device_helper import detect_board_subtype
+from anthias_common.device_helper import (
+    detect_board_subtype,
+    read_device_tree_compatibles,
+)
 from anthias_host_agent.__main__ import (
     detect_total_mem_kb,
     set_board_subtype,
@@ -106,10 +110,11 @@ def test_get_board_subtype_prefers_redis_value() -> None:
 def test_get_board_subtype_falls_back_to_device_tree(
     redis_value: bytes | None,
 ) -> None:
-    """No host_agent (balena fleets) or an empty publish falls back
-    to reading the device tree in-container — this is what upgrades
-    the ``anthias-rockpi4`` balena fleet's codec gate from the empty
-    arm64 envelope without a host-side daemon."""
+    """A dead host_agent or an empty publish falls back to reading
+    the device tree directly, so a compose install whose agent died
+    mid-upgrade keeps its codec envelope. The read only succeeds
+    where ``/sys/firmware`` is visible; an unprivileged container
+    gets nothing from it whatever the board."""
     fake_redis = mock.MagicMock()
     fake_redis.get.return_value = redis_value
     mocked_open = mock.mock_open(read_data=b'Radxa ROCK Pi 4B\x00')
@@ -197,9 +202,10 @@ def test_subscriber_loop_calls_set_board_subtype(
     ``set_board_subtype`` *and* ``set_total_mem_kb`` before flipping
     ``host_agent_ready`` — otherwise a consumer that polls for
     ``host_agent_ready=true`` and immediately reads either
-    ``host:board_subtype`` or ``host:total_mem_kb`` could observe a
-    stale (or empty) value. The two host-shape publishers run before
-    readiness; the order between them doesn't matter for consumers."""
+    ``host:board_subtype``, ``host:device_model`` or
+    ``host:total_mem_kb`` could observe a stale (or empty) value. All
+    three host-shape publishers run before readiness; the order
+    between them doesn't matter for consumers."""
     from anthias_host_agent import __main__ as ha
 
     fake_redis = mock.MagicMock()
@@ -210,6 +216,9 @@ def test_subscriber_loop_calls_set_board_subtype(
 
     def fake_set_total_mem(rdb: Any) -> None:
         call_order.append('total_mem')
+
+    def fake_set_device_model(rdb: Any) -> None:
+        call_order.append('device_model')
 
     def fake_set(key: str, value: Any) -> None:
         if key == 'host_agent_ready':
@@ -225,6 +234,7 @@ def test_subscriber_loop_calls_set_board_subtype(
     monkeypatch.setattr(redis_pkg, 'Redis', lambda **kw: fake_redis)
     monkeypatch.setattr(ha, 'set_board_subtype', fake_set_subtype)
     monkeypatch.setattr(ha, 'set_total_mem_kb', fake_set_total_mem)
+    monkeypatch.setattr(ha, 'set_device_model', fake_set_device_model)
 
     ha.subscriber_loop()
 
@@ -232,9 +242,17 @@ def test_subscriber_loop_calls_set_board_subtype(
         'host_agent_ready must flip last so consumers polling on it '
         'never observe a stale host:* publish'
     )
-    assert set(call_order[:-1]) == {'subtype', 'total_mem'}, (
-        'subscriber_loop must call both publishers exactly once '
-        'before flipping readiness'
+    assert set(call_order[:-1]) == {
+        'subtype',
+        'device_model',
+        'total_mem',
+    }, (
+        'subscriber_loop must call every host-shape publisher exactly '
+        'once before flipping readiness'
+    )
+    assert len(call_order) == 4, (
+        'each publisher runs exactly once — a duplicate publish would '
+        'hide an ordering bug behind a set comparison'
     )
 
 
@@ -331,3 +349,81 @@ def test_set_total_mem_kb_writes_empty_string_on_unknown() -> None:
     ):
         set_total_mem_kb(fake_redis)
     fake_redis.set.assert_called_once_with('host:total_mem_kb', '')
+
+
+@pytest.mark.parametrize(
+    ('compatibles', 'expected'),
+    [
+        # Root compatible runs board-then-SoC; the SoC entry is what
+        # carries the decode envelope, so any RK3566 board resolves
+        # without a per-vendor table row.
+        (b'friendlyarm,nanopi-r3s-lts\x00rockchip,rk3566\x00', 'rk3566'),
+        (b'radxa,zero-3w\x00rockchip,rk3566\x00', 'rk3566'),
+        # SoCs we haven't profiled stay unknown.
+        (b'xunlong,orangepi-zero3\x00allwinner,sun50i-h618\x00', None),
+        (b'', None),
+    ],
+)
+def test_detect_board_subtype_falls_back_to_soc(
+    compatibles: bytes, expected: str | None
+) -> None:
+    with (
+        mock.patch(
+            'anthias_common.device_helper.read_device_tree_model',
+            return_value='',
+        ),
+        mock.patch(
+            'anthias_common.device_helper.open',
+            mock.mock_open(read_data=compatibles),
+            create=True,
+        ),
+    ):
+        assert detect_board_subtype() == expected
+
+
+def test_detect_board_subtype_model_wins_over_soc() -> None:
+    """The model table is the override — a board that needs to differ
+    from its SoC default must be able to say so."""
+    with (
+        mock.patch(
+            'anthias_common.device_helper.read_device_tree_model',
+            return_value='Radxa ROCK Pi 4B',
+        ),
+        mock.patch(
+            'anthias_common.device_helper.read_device_tree_compatibles',
+            return_value=('rockchip,rk3566',),
+        ),
+    ):
+        assert detect_board_subtype() == 'rockpi4'
+
+
+def test_compatible_entries_are_sanitized_and_bounded() -> None:
+    """The compatible list gets the same treatment as every other
+    firmware string: NUL-separated entries, each normalised, and the
+    count capped so a packed property can't be walked indefinitely.
+
+    A hostile entry can only ever fail to match the lookup table, so
+    this is about bounding the read, not about the match itself.
+    """
+    packed = b'\x00'.join(
+        [b'vendor,board-%d' % i for i in range(64)] + [b'rockchip,rk3566\x00']
+    )
+    with mock.patch(
+        'anthias_common.device_helper.open',
+        mock.mock_open(read_data=packed),
+        create=True,
+    ):
+        entries = read_device_tree_compatibles()
+    assert len(entries) <= 16
+    assert all(len(entry) <= 128 for entry in entries)
+
+
+def test_compatible_entry_control_characters_are_stripped() -> None:
+    esc = chr(0x1B)
+    payload = f'rockchip,rk3566{esc}[2J'.encode()
+    with mock.patch(
+        'anthias_common.device_helper.open',
+        mock.mock_open(read_data=payload),
+        create=True,
+    ):
+        assert read_device_tree_compatibles() == ('rockchip,rk3566[2J',)

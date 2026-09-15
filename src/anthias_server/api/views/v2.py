@@ -19,7 +19,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from anthias_common import device_helper, storage_health, undervoltage
+from anthias_common import (
+    board,
+    device_helper,
+    storage_health,
+    undervoltage,
+)
 from anthias_common.internal_auth import is_internal_request
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -897,6 +902,16 @@ class InfoViewV2(InfoViewMixin):
 
         if device_model is None and machine() == 'x86_64':
             device_model = 'Generic x86_64 Device'
+
+        if device_model is None:
+            # Non-Pi SBCs write no cpuinfo Model line, so this field was
+            # null on every one of them. The device tree names the
+            # board; board.get_device_model reads it via the
+            # host_agent's Redis key because this container can't open
+            # the tree itself. Pi and x86 keep the exact strings they
+            # already returned — this only fills in a field that was
+            # null before.
+            device_model = board.get_device_model() or None
 
         return device_model
 

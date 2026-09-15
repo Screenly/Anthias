@@ -295,19 +295,29 @@ sentry_sdk.init(
 def get_board_model(model_file: str = '/proc/device-tree/model') -> str:
     """Host board model from the device tree, '' when unavailable.
 
-    ``/proc/device-tree`` resolves to ``/sys/firmware/devicetree/base``,
-    which Docker exposes read-only inside every container — no bind
-    mount needed. x86 hosts have no device tree; boards that have one
-    expose the model as a NUL-terminated UTF-8 string, decoded and
-    trimmed with the same idiom as device_helper's board detection.
+    x86 hosts have no device tree; boards that have one expose the
+    model as a NUL-terminated UTF-8 string.
+
+    Read through ``device_helper.read_firmware_file`` like every other
+    firmware string, so the bound and the sanitising are shared rather
+    than reimplemented here: a Sentry tag is one more sink for a value
+    we don't author. The import is function-local and ``device_helper``
+    has no imports of its own, so settings load stays as light as it
+    was.
+
+    Note this reads '' in the server container on *every* board:
+    ``/proc/device-tree`` resolves to ``/sys/firmware/devicetree/base``
+    and Docker masks ``/sys/firmware`` in unprivileged containers, so
+    the Sentry ``board_model`` tag is only populated where the tree is
+    readable (the host, the privileged viewer). Reading the
+    host_agent's Redis key instead is not an option here — settings
+    load must stay import-light and can't block on a Redis that may
+    not be up yet — so triage should lean on ``device_type`` /
+    ``kernel_machine`` for server-side events.
     """
-    try:
-        with open(model_file, 'rb') as f:
-            # Kernel writes a null-terminated UTF-8 string — decode
-            # and trim exactly like device_helper's board detection.
-            return f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
-    except OSError:
-        return ''
+    from anthias_common.device_helper import read_firmware_file
+
+    return read_firmware_file(model_file)
 
 
 # Board / kernel context for fleet triage. Events are sent from inside

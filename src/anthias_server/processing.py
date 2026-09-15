@@ -1256,7 +1256,48 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     # would block all YouTube downloads on Pi 5.
     'pi5': frozenset({'hevc', 'h264'}),
     'rockpi4': frozenset({'h264', 'hevc'}),
+    # RK3566 (4x Cortex-A55 @ 1.8 GHz) — NanoPi R3S/R3S LTS, Radxa
+    # Zero 3, Orange Pi 3B and friends. h264: software-decoded, same
+    # reasoning as the pi5 entry above. Measured in the arm64 viewer
+    # image on a NanoPi R3S LTS against 20 s noise-heavy 1080p30
+    # clips: H.264 decodes at 2.56x real time, HEVC at only 1.15x —
+    # too thin to survive the web UI running alongside, so HEVC stays
+    # out. Decode throughput alone would not justify this: frames can
+    # decode faster than real time while presentation lags behind on
+    # the Qt6 scene graph. So it was also played end-to-end on the
+    # board's own display (cage/wayland, 4K panel) — the viewer
+    # container sat at 200-240 % of 400 % CPU at 1080p30 against
+    # 100-130 % at 720p30, with successive screen captures differing,
+    # i.e. the pipeline keeps advancing with headroom left. What is
+    # still *not* measured is presented-fps: neither this stack nor
+    # the Qt path exposes a frame-drop counter, so drops under heavier
+    # real-world content remain an operator observation. Instrumenting
+    # that is the open item; see docs/board-enablement.md. The VPU can't help: the image's libavcodec exposes only the
+    # stateful *_v4l2m2m wrappers, and RK3566's rkvdec is a stateless
+    # request-API decoder, the same mismatch documented for RK3399 in
+    # docs/board-enablement.md.
+    'rk3566': frozenset({'h264'}),
     'x86': frozenset({'h264', 'hevc'}),
+}
+
+
+# Measured resolution ceilings for software decode. Distinct from the
+# low-RAM cap below, which is about *memory* — a 1 GB board OOMs
+# allocating the decode pipeline. This one is about *CPU throughput*: a
+# board with ample RAM can still be unable to decode 4K in real time.
+#
+# A board is listed only once someone has measured its ceiling on
+# hardware, so absence means "no measurement", NOT "hardware-decodes
+# everything it accepts". ``pi5`` is the standing example: it accepts
+# h264 knowing it decodes in software (see its entry above), and is
+# unlisted only because nobody has timed 4K H.264 on a Cortex-A76.
+# Adding a board here needs a number off a real device — an invented
+# ceiling would reject uploads that play fine.
+_SW_DECODE_MAX_PIXELS: dict[str, int] = {
+    # 2.56x real time at 1080p (see the rk3566 note above); 4K is ~4x
+    # the pixel work, which lands under real time before the web UI
+    # takes its share.
+    'rk3566': 1920 * 1080,
 }
 
 
@@ -1291,16 +1332,62 @@ def _exceeds_low_ram_pixel_cap(width: int | None, height: int | None) -> bool:
     return width * height > _LOW_RAM_MAX_PIXELS
 
 
-def _hw_decoded_codecs() -> frozenset[str]:
-    """Codecs the *current* board can hardware-decode through mpv.
+def _pixel_cap_rejection(
+    width: int | None, height: int | None, device_key: str
+) -> str | None:
+    """Operator-facing reason this resolution can't play here, or ``None``.
 
-    Resolves ``DEVICE_TYPE`` via ``anthias_common.board.resolve_device_key``
-    so a Rock Pi 4 running the catch-all ``arm64`` image still picks
-    up its ``{h264, hevc}`` set once ``anthias_host_agent`` publishes
-    ``host:board_subtype=rockpi4``. An unknown / unrecognised
-    DEVICE_TYPE returns the empty set so every video gets rejected.
+    Two independent ceilings, memory then throughput, both answered
+    by the same "re-encode at 1080p" recipe. Returning the message
+    (rather than a bool per cap) keeps the caller to one rejection
+    branch while each cap still explains its own cause — an operator
+    told "the board OOMs" would go buy RAM for a board that is
+    actually just too slow.
+
+    ``device_key`` is passed in rather than resolved here so the codec
+    and resolution decisions cannot disagree about what board this is.
+    On arm64 ``resolve_device_key`` reads the subtype from Redis, and a
+    transient miss between two calls would accept a 4K H.264 upload on
+    an RK3566: the codec check would see ``rk3566`` and allow h264
+    while this one saw bare ``arm64`` and found no ceiling.
     """
-    return _HW_DECODE_VIDEO_CODECS.get(resolve_device_key(), frozenset())
+    if _exceeds_low_ram_pixel_cap(width, height):
+        return (
+            f'Video resolution {width}x{height} exceeds the 1080p cap '
+            'on this device. Boards with less than 1.5 GiB of RAM OOM '
+            'when decoding above 1920x1080 alongside the web UI.'
+        )
+    cap = _SW_DECODE_MAX_PIXELS.get(device_key)
+    if (
+        cap is not None
+        and width is not None
+        and height is not None
+        and width > 0
+        and height > 0
+        and width * height > cap
+    ):
+        return (
+            f'Video resolution {width}x{height} exceeds the 1080p cap '
+            'on this device. This board decodes video in software and '
+            'only keeps up in real time at 1920x1080 or below.'
+        )
+    return None
+
+
+def _hw_decoded_codecs(device_key: str) -> frozenset[str]:
+    """Codecs the board named by ``device_key`` can HW-decode via mpv.
+
+    Callers resolve the key with
+    ``anthias_common.board.resolve_device_key`` — so a Rock Pi 4 running
+    the catch-all ``arm64`` image still picks up its ``{h264, hevc}``
+    set once ``anthias_host_agent`` publishes
+    ``host:board_subtype=rockpi4``. An unknown / unrecognised key
+    returns the empty set so every video gets rejected. Taking the key
+    as an argument (rather than resolving it here) is what lets one
+    gate run every check against a single snapshot of the board
+    identity; see ``_pixel_cap_rejection``.
+    """
+    return _HW_DECODE_VIDEO_CODECS.get(device_key, frozenset())
 
 
 # Preferred yt-dlp ``vcodec`` sort key per board. Distinct from the
@@ -1353,9 +1440,10 @@ def _ffmpeg_reencode_recipe(
     means the output fits *inside* 1920×1080 (no padding, no
     stretch) — a 4K 16:9 source becomes exactly 1920×1080, a 4K 21:9
     ultrawide lands at 1920×823, a portrait 1080×1920 lands at
-    608×1080 (height-bound). Used by the low-RAM resolution gate;
-    omitted in the codec-only rejection path so we don't suggest a
-    needless re-encode when an HD codec swap is all that's wanted.
+    608×1080 (height-bound). Set by either resolution ceiling — the
+    low-RAM memory cap or the software-decode throughput cap; omitted
+    when neither applies, so we don't suggest a needless re-encode when
+    an HD codec swap is all that's wanted.
     """
     scale_clause = (
         '-vf scale=1920:1080:force_original_aspect_ratio=decrease '
@@ -1537,7 +1625,11 @@ def _run_video_normalisation(asset: Asset) -> None:
         update_dict['duration'] = duration_seconds
 
     src_codec = (summary.get('video_codec') or '').lower()
-    supported = _hw_decoded_codecs()
+    # One snapshot of the board identity for the whole gate. On arm64
+    # this is a Redis read, so resolving per-check would let the codec
+    # and resolution decisions land on different boards.
+    device_key = resolve_device_key()
+    supported = _hw_decoded_codecs(device_key)
     video_width = summary.get('video_width')
     video_height = summary.get('video_height')
     # ``upload_name`` is stashed by the dashboard / API at upload
@@ -1553,28 +1645,25 @@ def _run_video_normalisation(asset: Asset) -> None:
     )
 
     if src_codec in supported:
-        if _exceeds_low_ram_pixel_cap(video_width, video_height):
-            # Codec is fine but resolution exceeds the 1080p envelope
-            # on this 1 GB-class board. On-device validation (Rock
-            # Pi 4 1GB, 4K HEVC) showed the docker viewer container
-            # OOM-loops the moment QtMultimedia tries to allocate the
-            # decode pipeline — kernel logs ``global_oom``. Reject at
+        cap_message = _pixel_cap_rejection(
+            video_width, video_height, device_key
+        )
+        if cap_message is not None:
+            # Codec is fine but the resolution is past what this board
+            # can play — either it OOMs allocating the decode pipeline
+            # (on-device: Rock Pi 4 1GB, 4K HEVC, kernel ``global_oom``
+            # restart-looping the viewer container) or it can't decode
+            # that many pixels in real time in software. Reject at
             # upload with a downscale recipe so the operator sees a
             # clear failure and a copy-pasteable fix instead of a
-            # device stuck in an OOM cycle.
+            # device stuck in an OOM cycle or dropping most frames.
             Asset.objects.filter(asset_id=asset_id).update(**update_dict)
             recipe = _ffmpeg_reencode_recipe(
                 supported, upload_name, cap_to_1080p=True
             )
             handbrake = _handbrake_steps(supported)
-            message = (
-                f'Video resolution {video_width}x{video_height} '
-                'exceeds the 1080p cap on this device. Boards with '
-                'less than 1.5 GiB of RAM OOM when decoding above '
-                '1920x1080 alongside the web UI.'
-            )
             raise UnsupportedVideoCodecError(
-                message, recipe=recipe, handbrake=handbrake
+                cap_message, recipe=recipe, handbrake=handbrake
             )
         update_dict['is_processing'] = False
         Asset.objects.filter(asset_id=asset_id).update(**update_dict)
@@ -1590,12 +1679,21 @@ def _run_video_normalisation(asset: Asset) -> None:
     display_codec = (
         src_codec if src_codec and src_codec != 'unknown' else 'unknown'
     )
-    # If the upload would *also* fail the low-RAM 1080p gate, fold
-    # the downscale into the codec recipe so the operator doesn't
-    # have to re-upload twice (once for the codec swap, once for the
-    # resolution shrink). The message remains codec-focused because
-    # the codec is the strictly stronger rejection.
-    cap = _exceeds_low_ram_pixel_cap(video_width, video_height)
+    # If the upload would *also* fail a resolution ceiling, fold the
+    # downscale into the codec recipe so the operator doesn't have to
+    # re-upload twice (once for the codec swap, once for the resolution
+    # shrink). The message remains codec-focused because the codec is
+    # the strictly stronger rejection.
+    #
+    # Both ceilings count, not just the low-RAM one: the codec we are
+    # steering the operator towards is by definition in ``supported``,
+    # and on a board with a software-decode ceiling that target codec is
+    # the software-decoded one. A 4K HEVC upload to an RK3566 would
+    # otherwise get a 4K H.264 recipe, and the re-upload would come
+    # straight back out of the throughput cap above.
+    cap = (
+        _pixel_cap_rejection(video_width, video_height, device_key) is not None
+    )
     recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
     handbrake = _handbrake_steps(supported)
     if supported:
@@ -1606,16 +1704,23 @@ def _run_video_normalisation(asset: Asset) -> None:
         )
     else:
         # Empty ``supported`` means we hit the catch-all ``arm64``
-        # branch — DEVICE_TYPE is set but host_agent never published
-        # ``host:board_subtype`` so we can't certify any codec. Say
-        # so rather than the misleading "Supported: none." which
-        # reads like the board has no decoder at all.
+        # branch — DEVICE_TYPE is set but no board subtype resolved,
+        # so we can't certify any codec. Say so rather than the
+        # misleading "Supported: none." which reads like the board has
+        # no decoder at all.
+        #
+        # The advice is deliberately not "re-flash with the
+        # board-specific image": there is no such image — every SBC
+        # runs the generic arm64 build, including the Rock Pi 4 balena
+        # fleet (see docs/board-enablement.md). Either anthias_host_agent
+        # isn't running to publish ``host:board_subtype``, or this
+        # board's silicon hasn't been profiled yet.
         message = (
             f'Video codec {display_codec!r} can not be verified for '
-            'hardware decoding on this device — the board has not '
-            'reported a known subtype. Re-flash with the board-'
-            'specific image (e.g. Rock Pi 4) so anthias_host_agent '
-            'can publish its capabilities.'
+            'playback on this device — the board has not reported a '
+            'known subtype. Check that anthias-host-agent is running; '
+            'if it is, this board has not been profiled yet and you '
+            'can open an issue asking for it.'
         )
     raise UnsupportedVideoCodecError(
         message, recipe=recipe, handbrake=handbrake
