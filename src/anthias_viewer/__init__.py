@@ -1683,13 +1683,13 @@ def _seconds_until(deadline: float) -> float:
     the rotation take exactly ``duration``. Clamped at zero: a mid-tick
     browser respawn or a stalled display probe can outlast a short
     duration, and then the asset just moves on. Not logged on its own;
-    the caller's "Sleeping for 0.0" line already shows it, and a
-    zero-duration asset would otherwise warn on every tick.
+    both callers log the computed wait next to the configured duration,
+    and a zero-duration asset would otherwise warn on every tick.
     """
     return max(0.0, deadline - monotonic())
 
 
-def view_video(uri: str, duration: int | str, deadline: float) -> None:
+def view_video(uri: str, duration: int, deadline: float) -> None:
     logger.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
@@ -1699,9 +1699,11 @@ def view_video(uri: str, duration: int | str, deadline: float) -> None:
     view_image('null')
 
     try:
+        timeout = _seconds_until(deadline)
+        logger.info('Playing video for %.1f of %ss', timeout, duration)
         skip_event = get_skip_event()
         skip_event.clear()
-        if skip_event.wait(timeout=_seconds_until(deadline)):
+        if skip_event.wait(timeout=timeout):
             logger.info('Skip detected during video playback, stopping video')
             media_player.stop()
         else:
