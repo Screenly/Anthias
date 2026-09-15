@@ -48,6 +48,7 @@ import pytest
 import sh
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from anthias_common.board import resolve_device_key
 from anthias_server import processing
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
@@ -997,7 +998,7 @@ def test_pi3_64_hw_decode_set_is_h264_only(
     silicon as the 32-bit ``pi3`` — H.264-only HW decode, no HEVC. The
     gate must reject HEVC for it just like the armhf stream."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi3-64')
-    key = processing.resolve_device_key()
+    key = resolve_device_key()
     assert processing._hw_decoded_codecs(key) == frozenset({'h264'})
 
 
