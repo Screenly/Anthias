@@ -253,6 +253,34 @@ def get_device_type() -> str:
         return 'x86'
 
 
+def read_device_tree_compatibles() -> tuple[str, ...]:
+    """Root-node ``compatible`` entries, most specific first.
+
+    The kernel writes ``/proc/device-tree/compatible`` as a
+    NUL-separated list running board-then-SoC, e.g.
+    ``('friendlyarm,nanopi-r3s-lts', 'rockchip,rk3566')``. Subject to
+    the same masking as ``read_device_tree_model`` — empty tuple in an
+    unprivileged container, and on any host without a device tree.
+    """
+    try:
+        with open('/proc/device-tree/compatible', 'rb') as f:
+            raw = f.read().decode('utf-8', 'replace')
+    except OSError:
+        return ()
+    return tuple(entry.strip() for entry in raw.split('\x00') if entry.strip())
+
+
+# SoC ``compatible`` string → board subtype, for silicon whose decode
+# envelope we've measured. Keyed on the SoC rather than a vendor's
+# model string because the capability is a property of the chip: every
+# RK3566 board carries the same 4x Cortex-A55 and the same VPU, so one
+# entry covers NanoPi, Radxa, Orange Pi and the rest without a table
+# row each.
+_SOC_COMPATIBLE_SUBTYPES: dict[str, str] = {
+    'rockchip,rk3566': 'rk3566',
+}
+
+
 def detect_board_subtype() -> str | None:
     """Identify a non-Pi SBC by reading ``/proc/device-tree/model``.
 
@@ -260,11 +288,18 @@ def detect_board_subtype() -> str | None:
     string matches a known board, or ``None`` for unknown boards /
     hosts without a device tree.
 
+    Two levels, model first then SoC: the model string pins a
+    specific board (``'rockpi4'``), and the root ``compatible`` list's
+    SoC entry covers every board built on silicon we've profiled
+    (``rockchip,rk3566`` → ``'rk3566'``). The SoC level is what keeps
+    the table from needing a row per vendor model, since the decode
+    envelope is a property of the chip.
+
     ``bin/install.sh`` writes ``DEVICE_TYPE=arm64`` for every aarch64
-    SBC it doesn't recognise as a Pi. Most such boards have no
-    profiled HW-decode envelope, but a few (Rock Pi 4 — RK3399) do;
-    the subtype lets the asset processor's codec gate pick the
-    board-specific set instead of the conservative empty arm64 one.
+    SBC it doesn't recognise as a Pi. Without a subtype the asset
+    processor's codec gate falls back to the conservative empty arm64
+    set, which rejects every video upload; the subtype is what selects
+    a real envelope.
 
     Two callers share this single source of truth:
 
@@ -279,11 +314,16 @@ def detect_board_subtype() -> str | None:
       host_agent-published value is what carries this on
       docker-compose installs.
     """
-    model = read_device_tree_model()
-    if not model:
-        return None
-    model_low = model.lower()
+    model_low = read_device_tree_model().lower()
     # "Radxa ROCK Pi 4B" (and 4A / 4C variants — all RK3399).
     if 'rock pi 4' in model_low:
         return 'rockpi4'
+    # Fall back to the SoC. A board we've never seen still gets the
+    # right envelope when its silicon is one we've measured, and the
+    # model string stays the override for boards that need to differ
+    # from their SoC default.
+    for compatible in read_device_tree_compatibles():
+        subtype = _SOC_COMPATIBLE_SUBTYPES.get(compatible)
+        if subtype:
+            return subtype
     return None
