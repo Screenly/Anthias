@@ -1239,11 +1239,12 @@ _VIDEO_METADATA_KEYS = (
 # historical, from when it was one. Some entries are deliberately
 # software-decoded where a measurement showed the CPU keeps up:
 # ``pi5``'s h264 (Cortex-A76) and all of ``rk3566`` (Cortex-A55), both
-# noted at their entries. Those boards carry a resolution ceiling in
-# ``_SW_DECODE_MAX_PIXELS`` because software decode runs out of
-# headroom with pixel count in a way hardware decode does not. Adding
-# a codec here on the assumption the silicon decodes it is therefore
-# not safe — check the entry's own note.
+# noted at their entries. Software decode runs out of headroom with
+# pixel count in a way hardware decode does not, so such an entry also
+# wants a measured ceiling in ``_SW_DECODE_MAX_PIXELS`` — ``rk3566``
+# has one; ``pi5`` is still unmeasured and deliberately unlisted there,
+# see that map's own note. Adding a codec here on the assumption the
+# silicon decodes it is therefore not safe — check the entry's note.
 #
 # Empty / missing entry means "no codec on this device decodes in
 # hardware" — every video upload is rejected. The catch-all ``arm64``
@@ -1378,11 +1379,12 @@ def _hw_decoded_codecs(device_key: str) -> frozenset[str]:
     """Video codecs the board named by ``device_key`` accepts.
 
     Mostly the board's hardware-decode set — hence the name — but not
-    exclusively: ``pi5`` and ``rk3566`` accept H.264 on measured
-    software throughput, so a codec coming back from here is certified
-    to *play*, not certified to decode in hardware. Pair it with
-    ``_pixel_cap_rejection``, which holds the resolution ceiling those
-    software-decoded entries need.
+    exclusively: ``pi5`` and ``rk3566`` accept H.264 on software
+    throughput, so a codec coming back from here is certified to
+    *play*, not certified to decode in hardware. A software-decoded
+    entry also wants a resolution ceiling, which ``_pixel_cap_rejection``
+    applies from ``_SW_DECODE_MAX_PIXELS`` — for the boards measured so
+    far, which is ``rk3566`` and not yet ``pi5``.
 
     Callers resolve the key with
     ``anthias_common.board.resolve_device_key`` — so a Rock Pi 4 running
