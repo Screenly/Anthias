@@ -102,10 +102,16 @@ def get_device_model() -> str:
     balena, whose fleets run no host_agent and whose server container
     is unprivileged — those devices keep the old generic label until
     balena grows a host-side publisher.
+
+    Sanitised on the way out even though the host_agent already
+    sanitises on the way in: this side can't verify who wrote the key,
+    and the value goes straight to a rendered page and an API
+    response. Cheap, and it keeps the guarantee local to the reader.
     """
-    return _read_host_key('host:device_model') or (
-        device_helper.read_device_tree_model()
+    published = device_helper.sanitize_firmware_string(
+        _read_host_key('host:device_model')
     )
+    return published or device_helper.read_device_tree_model()
 
 
 def get_device_model_parts() -> tuple[str, str]:

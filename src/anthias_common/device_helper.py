@@ -1,3 +1,53 @@
+# Upper bound on a single firmware-supplied string. Real values are
+# far shorter — 'Raspberry Pi 5 Model B Rev 1.0' is 30 characters —
+# so this only ever truncates something malformed or hostile.
+_MAX_FIRMWARE_STRING_LEN = 128
+
+# Upper bound on a firmware-supplied *file*, applied at the read so a
+# huge property never lands in memory in the first place. Device-tree
+# properties and DMI fields are a few dozen bytes; 4 KiB is generous.
+_MAX_FIRMWARE_READ_BYTES = 4096
+
+
+def sanitize_firmware_string(value: str) -> str:
+    """Normalise a string that came from firmware rather than from us.
+
+    Device-tree properties, DMI/SMBIOS fields and ``/proc/cpuinfo``
+    lines are all data we merely read: a board vendor's DTB, an OEM's
+    SMBIOS tables, or — the case needing no physical access — the
+    synthetic DMI a hypervisor hands a VM guest. What we read ends up
+    in an HTML page, a JSON API response, a Redis value, a log line
+    and an outbound telemetry field.
+
+    This is deliberately *not* what stops injection at those sinks —
+    Django autoescapes the template and DRF JSON-encodes the API, and
+    that stays true regardless. It covers what no sink handles:
+
+    * **length** — nothing else bounds these strings, and they fan out
+      to every render of the System Info page and every ``/api/v2/info``
+      response;
+    * **control characters** — terminal escape sequences reaching an
+      operator's ``journalctl``, or NULs mid-value;
+    * **bidi / zero-width characters** — the class that makes a label
+      render as something other than what it says.
+
+    Kept narrow on purpose: fold whitespace, drop non-printables, cap
+    the length. Every string a real board reports survives unchanged.
+    """
+    # Device-tree properties are NUL-terminated, and a property
+    # holding a *list* packs several strings into one buffer — stop at
+    # the first terminator instead of concatenating across it.
+    head = value.partition('\x00')[0]
+    # Fold whitespace before dropping non-printables, so a newline
+    # separates two words instead of welding them together.
+    folded = ''.join(' ' if ch.isspace() else ch for ch in head)
+    # str.isprintable() is False for C0/C1 controls, surrogates and
+    # the format category — which is where the bidi overrides and
+    # zero-width characters live — while leaving ordinary space True.
+    printable = ''.join(ch for ch in folded if ch.isprintable())
+    return ' '.join(printable.split())[:_MAX_FIRMWARE_STRING_LEN]
+
+
 def parse_cpu_info() -> dict[str, int | str]:
     """
     Extracts the various Raspberry Pi related data
@@ -19,14 +69,18 @@ def parse_cpu_info() -> dict[str, int | str]:
                 )
 
             if key in ['Serial', 'Hardware', 'Revision', 'Model']:
-                cpu_info[key.lower()] = value
+                # ``Model`` reaches the System Info card, /api/v2/info
+                # and the telemetry payload; on a Pi the firmware
+                # sources it from the device tree, so it gets the same
+                # treatment as every other firmware string.
+                cpu_info[key.lower()] = sanitize_firmware_string(value)
     return cpu_info
 
 
 def _read_sysfs(path: str) -> str:
     try:
         with open(path) as f:
-            return f.read().strip()
+            return sanitize_firmware_string(f.read(_MAX_FIRMWARE_READ_BYTES))
     except OSError:
         return ''
 
@@ -57,7 +111,7 @@ def _read_cpu_brand() -> str:
                 with_idx = lower.find(' with ')
                 if with_idx != -1 and lower.rstrip().endswith('graphics'):
                     cleaned = cleaned[:with_idx]
-                return ' '.join(cleaned.split())
+                return sanitize_firmware_string(cleaned)
     except OSError:
         pass
     return ''
@@ -126,10 +180,12 @@ def read_device_tree_model() -> str:
     """
     try:
         with open('/proc/device-tree/model', 'rb') as f:
-            model = f.read().decode('utf-8', 'replace').strip('\x00 \n\t')
+            # Bounded read: a malformed or hostile property must not
+            # be pulled into memory whole just to be truncated after.
+            raw = f.read(_MAX_FIRMWARE_READ_BYTES)
     except OSError:
         return ''
-    return ' '.join(model.split())
+    return sanitize_firmware_string(raw.decode('utf-8', 'replace'))
 
 
 def get_device_model_parts(dt_model: str | None = None) -> tuple[str, str]:
