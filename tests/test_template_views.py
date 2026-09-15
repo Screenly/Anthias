@@ -5048,3 +5048,28 @@ def test_system_info_storage_card_exposes_the_evidence(
     assert 'ext4_find_entry' in body
     assert 'SanDisk SC32G' in body
     assert 'survives reboots' in body
+
+
+def test_system_info_card_renders_the_redis_resolved_model() -> None:
+    """The production wiring for the HTML card, which no test covered.
+
+    ``system_info()`` must resolve through ``anthias_common.board`` —
+    the Redis-aware path — not ``device_helper`` directly. Reverting
+    that one call would send the card back to 'Generic aarch64 Device'
+    on every SBC while the board-level and API tests all still passed,
+    which is exactly how the original bug survived.
+    """
+    from anthias_server.app import page_context
+
+    with mock.patch(
+        'anthias_server.app.page_context.board.get_device_model_parts',
+        return_value=('FriendlyElec NanoPi R3S LTS', 'Rockchip RK3566'),
+    ) as resolved:
+        ctx = page_context.system_info()
+
+    assert resolved.called, (
+        'the card must go through anthias_common.board so the '
+        'host_agent-published value is used'
+    )
+    assert ctx['device_model'] == 'FriendlyElec NanoPi R3S LTS'
+    assert ctx['device_model_detail'] == 'Rockchip RK3566'

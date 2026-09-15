@@ -1293,6 +1293,13 @@ _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
 # unlisted only because nobody has timed 4K H.264 on a Cortex-A76.
 # Adding a board here needs a number off a real device — an invented
 # ceiling would reject uploads that play fine.
+# Frame rate the software-decode ceilings were measured at. The cap
+# is really a pixel *rate*: _SW_DECODE_MAX_PIXELS x this. Kept as a
+# separate name so a future entry measured at 60 fps doesn't silently
+# inherit a 30 fps assumption baked into a bare pixel count.
+_CAP_FPS = 30.0
+
+
 _SW_DECODE_MAX_PIXELS: dict[str, int] = {
     # 2.56x real time at 1080p (see the rk3566 note above); 4K is ~4x
     # the pixel work, which lands under real time before the web UI
@@ -1333,7 +1340,10 @@ def _exceeds_low_ram_pixel_cap(width: int | None, height: int | None) -> bool:
 
 
 def _pixel_cap_rejection(
-    width: int | None, height: int | None, device_key: str
+    width: int | None,
+    height: int | None,
+    device_key: str,
+    fps: float | None = None,
 ) -> str | None:
     """Operator-facing reason this resolution can't play here, or ``None``.
 
@@ -1359,23 +1369,45 @@ def _pixel_cap_rejection(
         )
     cap = _SW_DECODE_MAX_PIXELS.get(device_key)
     if (
-        cap is not None
-        and width is not None
-        and height is not None
-        and width > 0
-        and height > 0
-        and width * height > cap
+        cap is None
+        or width is None
+        or height is None
+        or width <= 0
+        or height <= 0
     ):
+        return None
+    if width * height > cap:
         return (
             f'Video resolution {width}x{height} exceeds the 1080p cap '
             'on this device. This board decodes video in software and '
             'only keeps up in real time at 1920x1080 or below.'
         )
+    # Pixels alone under-describe the work: the ceiling came from a
+    # 30 fps measurement, and 1080p60 is twice the decode and twice
+    # the presentation of the clip that was actually timed. Compare
+    # the pixel *rate* so a high-frame-rate upload at or below the
+    # resolution cap can't slip past on geometry alone. Unknown fps
+    # (ffprobe couldn't read it) is left to the resolution check
+    # rather than guessed at — the same "don't block on a measurement
+    # gap" line the low-RAM cap takes.
+    if fps is not None and fps > 0 and width * height * fps > cap * _CAP_FPS:
+        return (
+            f'Video frame rate {fps:g} fps at {width}x{height} exceeds '
+            'what this device was measured to keep up with. This board '
+            'decodes video in software; the envelope behind the cap is '
+            f'{_CAP_FPS:g} fps at 1920x1080.'
+        )
     return None
 
 
 def _hw_decoded_codecs(device_key: str) -> frozenset[str]:
-    """Codecs the board named by ``device_key`` can HW-decode via mpv.
+    """Codecs accepted at upload for the board named by ``device_key``.
+
+    Not "codecs it can hardware-decode", and not via mpv: ``pi5``'s
+    H.264 and ``rk3566`` are accepted on measured software throughput,
+    and the Qt6 viewer decodes in-process through QtMultimedia. See
+    ``_HW_DECODE_VIDEO_CODECS`` for what each entry actually rests on,
+    including the three that are known not to play cleanly.
 
     Callers resolve the key with
     ``anthias_common.board.resolve_device_key`` — so a Rock Pi 4 running
@@ -1632,6 +1664,10 @@ def _run_video_normalisation(asset: Asset) -> None:
     supported = _hw_decoded_codecs(device_key)
     video_width = summary.get('video_width')
     video_height = summary.get('video_height')
+    # ffprobe already reported this; the throughput ceiling needs it
+    # because the measurement behind the ceiling was frame-rate
+    # specific (see _pixel_cap_rejection).
+    video_fps = summary.get('video_fps')
     # ``upload_name`` is stashed by the dashboard / API at upload
     # time — the on-disk file gets renamed to ``<uuid>.<ext>`` but
     # the recipe wants a name the operator can paste straight into
@@ -1646,7 +1682,7 @@ def _run_video_normalisation(asset: Asset) -> None:
 
     if src_codec in supported:
         cap_message = _pixel_cap_rejection(
-            video_width, video_height, device_key
+            video_width, video_height, device_key, video_fps
         )
         if cap_message is not None:
             # Codec is fine but the resolution is past what this board
@@ -1692,7 +1728,8 @@ def _run_video_normalisation(asset: Asset) -> None:
     # otherwise get a 4K H.264 recipe, and the re-upload would come
     # straight back out of the throughput cap above.
     cap = (
-        _pixel_cap_rejection(video_width, video_height, device_key) is not None
+        _pixel_cap_rejection(video_width, video_height, device_key, video_fps)
+        is not None
     )
     recipe = _ffmpeg_reencode_recipe(supported, upload_name, cap_to_1080p=cap)
     handbrake = _handbrake_steps(supported)

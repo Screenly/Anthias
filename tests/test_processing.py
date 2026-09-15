@@ -3060,3 +3060,75 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('fps', 'accepted'),
+    [
+        (30.0, True),  # the measured envelope
+        (25.0, True),  # below it
+        (60.0, False),  # twice the decode and presentation work
+        (120.0, False),
+        (None, True),  # unknown fps falls back to the geometry check
+    ],
+)
+def test_rk3566_cap_is_a_pixel_rate_not_just_geometry(
+    asset_dir: str,
+    monkeypatch: pytest.MonkeyPatch,
+    fps: float | None,
+    accepted: bool,
+) -> None:
+    """The RK3566 ceiling came from a 1080p30 measurement, so 1080p60
+    is twice the work at identical geometry. Checking width x height
+    alone would wave it through; the cap compares the pixel rate.
+
+    Unknown fps stays accepted at or below the resolution cap — the
+    same "don't block on a measurement gap" line the low-RAM cap
+    takes, rather than inventing a frame rate.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset(f'vid-rate-{fps}', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': fps,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    ctx = [
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+    ]
+    if accepted:
+        with ctx[0], ctx[1], ctx[2], ctx[3]:
+            processing._run_video_normalisation(asset)
+        asset.refresh_from_db()
+        assert asset.is_processing is False
+    else:
+        with (
+            ctx[0],
+            ctx[1],
+            ctx[2],
+            ctx[3],
+            pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+        ):
+            processing._run_video_normalisation(asset)
+        msg = str(excinfo.value).lower()
+        assert 'frame rate' in msg
+        assert '30 fps at 1920x1080' in msg
