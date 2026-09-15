@@ -1261,9 +1261,13 @@ _VIDEO_METADATA_KEYS = (
 # exist and say these fail:
 #
 #   * ``x86`` accepts ``hevc``, but HEVC through VAAPI black-screens on
-#     x86. The *download* path already avoids it for exactly that
-#     reason (see test_download_youtube_asset_x86_prefers_h264_format);
-#     a direct HEVC upload still walks straight through this gate.
+#     x86 — QMediaPlayer emits FormatError and decodes 0 frames. That
+#     is issue #3072, still open. The *download* path already steers
+#     around it (see
+#     test_download_youtube_asset_x86_prefers_h264_format); a direct
+#     HEVC upload walks straight through this gate into the failure
+#     the issue describes. Of the three this is the worst: x86 is the
+#     tier we recommend, and the failure is silent.
 #   * ``rockpi4`` accepts ``hevc``, measured dropping ~22 % of frames
 #     at 1080p30 (docs/board-enablement.md).
 #   * ``pi4-64`` accepts ``h264`` with no ceiling, so 4K H.264 passes
