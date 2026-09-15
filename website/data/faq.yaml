@@ -175,6 +175,38 @@
 
         See [issue #2849](https://github.com/Screenly/Anthias/issues/2849) for the roadmap on per-board hardware video acceleration.
 
+    - question: My non-Pi board shows a black screen even though HDMI is plugged in, what now?
+      answer: |
+        On an Armbian board this is usually a device tree mismatch rather than an Anthias problem, and you can fix it over SSH in a couple of minutes.
+
+        Armbian ships a separate device tree for every board it supports, and the bootloader picks one by name. If your board comes in hardware variants, that default pick can land on the variant *without* video output — the kernel then never enables the HDMI port. The board boots normally and the dashboard is reachable over the network, but the screen stays dark and the viewer can't start.
+
+        First confirm that's what you're looking at. SSH into the board and run:
+
+        ```
+        ls /sys/class/drm/
+        ```
+
+        A working setup lists a connector such as `card0-HDMI-A-1`. If all you see is `card0`, `card1` and `renderD128`, the kernel doesn't know the port exists. `dmesg | grep -i drm` confirms it with a line like `Cannot find any crtc or sizes`.
+
+        Next, list the device trees your kernel package shipped and find the one matching your exact model, variant suffix included:
+
+        ```
+        ls /boot/dtb/*/ | grep -i <your board name>
+        ```
+
+        Add it to `/boot/armbianEnv.txt` (create the line if it isn't there) and reboot:
+
+        ```
+        fdtfile=rockchip/rk3566-nanopi-r3s-lts.dtb
+        ```
+
+        After the reboot `cat /sys/class/drm/card0-HDMI-A-1/status` should read `connected`, and Anthias comes up on the screen.
+
+        That example is a real one. On a **NanoPi R3S LTS**, Armbian defaults to `rk3566-nanopi-r3s.dtb`, which has HDMI switched off, while the LTS variant of the board needs `rk3566-nanopi-r3s-lts.dtb`. Other boards follow the same pattern with their own file names.
+
+        One caveat before you go hunting: a few boards have no video output at all — router-style models are the usual case. If none of the device trees for your board enable HDMI, no amount of configuration will produce a picture, and you'll want different hardware for signage.
+
     - question: Can I add transitions (fade / crossfade) between assets?
       answer: |
         Not currently. Anthias plays one asset, then immediately switches to the next. Adding crossfades would require composited rendering on the viewer side, which the lightweight Pi WebView pipeline doesn't do. If this matters for your deployment, [Screenly](https://www.screenly.io) supports transitions.

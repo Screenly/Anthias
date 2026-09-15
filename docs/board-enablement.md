@@ -162,11 +162,23 @@ consumed through two paths:
 
 * on docker-compose installs, `anthias_host_agent` runs on the host,
   detects the subtype, and publishes `host:board_subtype` to Redis;
-* when Redis has no value — the `screenly_ose/anthias-rockpi4` balena
-  fleet ships no host_agent service — `anthias_common.board` reads
-  `/proc/device-tree/model` directly from inside the container (the
-  device tree is kernel-global, the same mechanism `get_device_type`
-  relies on for Pi detection).
+* when Redis has no value — the agent is down, or never ran —
+  `anthias_common.board` falls back to reading `/proc/device-tree/model`
+  directly from inside the container.
+
+**That fallback does not work in the server/celery containers.**
+`/proc/device-tree` is a symlink to `/sys/firmware/devicetree/base`, and
+`/sys/firmware` is on Docker's default masked-paths list, so an
+unprivileged container reads an empty directory on every board. Measured on
+a NanoPi R3S LTS: readable on the host and in the privileged `anthias-viewer`
+container, empty in `anthias-server` / `anthias-celery`. A bind mount onto
+the masked path stays empty too. The practical consequences: on
+docker-compose installs the host_agent's Redis value is the only working
+source, and on balena — no host_agent, unprivileged server container — the
+subtype has no source at all, so the `screenly_ose/anthias-rockpi4` fleet's
+codec gate does not actually get upgraded there. Fixing balena needs a
+host-side publisher (or `io.balena.features.sysfs` plus a path change);
+untested so far.
 
 The server uses the resolved key to pick the right entry in
 `processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4 accepts H.264 + HEVC
@@ -186,6 +198,50 @@ family Pi 4 / Pi 5 use. The `start_viewer.sh` entrypoint creates the
 (privileged docker mounts its own /dev tmpfs without udev's symlinks). The
 `+rpt1` repo is pinned to only override ffmpeg + libav* on arm64; Pi
 userspace baseline is unaffected on every board.
+
+### Armbian device-tree variants (black screen on first boot)
+
+Armbian ships one device tree per supported board and the bootloader picks
+by name, with no runtime variant detection. On a board that has hardware
+variants this can select the variant *without* video output — the kernel
+brings up the VOP but no encoder, so `/sys/class/drm` has no connector and
+the viewer's compositor exits immediately.
+
+Observed on the NanoPi R3S LTS bring-up: U-Boot is built
+`CONFIG_DEFAULT_DEVICE_TREE="rockchip/rk3566-nanopi-r3s"` with a
+`CONFIG_OF_LIST` naming only that one, and — because the same build sets
+`CONFIG_ENV_IS_NOWHERE=y` — there is no saved environment to override it.
+The kernel package ships both `rk3566-nanopi-r3s.dtb` (HDMI `disabled`) and
+`rk3566-nanopi-r3s-lts.dtb` (HDMI `okay`, HDMI PHY, `hdmi-con` connector,
+VOP→HDMI route), and the board booted the former. Symptoms, in order of
+usefulness:
+
+```
+$ ls /sys/class/drm/                 # no card0-HDMI-A-1 entry
+$ dmesg | grep -i drm
+rockchip-drm display-subsystem: [drm] Cannot find any crtc or sizes
+```
+
+and, in the viewer container, cage fails with `Found 0 GPUs, cannot create
+backend` / `Failed to open any DRM device`.
+
+The fix is one line in `/boot/armbianEnv.txt` plus a reboot — Armbian's
+`boot.cmd` imports that file into the U-Boot environment before loading
+`${prefix}dtb/${fdtfile}`:
+
+```
+fdtfile=rockchip/rk3566-nanopi-r3s-lts.dtb
+```
+
+After which the connector appears, EDID reads, and the viewer runs. Worth
+checking before concluding a board has no video output: diff the candidate
+DTBs (`dtc -I dtb -O dts`) and compare the `hdmi@*` node's `status` — on
+this board the two trees differ *only* in the display nodes. Boards that
+genuinely have no video output (router-style SKUs) have no DTB with HDMI
+enabled at all.
+
+The operator-facing version of this lives in the website FAQ under
+"Display & playback".
 
 ### Decode path (post-#2905)
 
