@@ -1236,10 +1236,19 @@ _VIDEO_METADATA_KEYS = (
 # (``GstFbdevMediaPlayer`` — bcm2835 codec, H.264 only), every other
 # board through the viewer's in-process QtMultimedia + libavcodec
 # pipeline (``MPVMediaPlayer`` — a legacy name; there is no mpv
-# binary). If the gate accepts a
-# codec the board cannot decode in real time, playback degrades
-# silently at the viewer (drops / black screen) — which this gate
-# exists to prevent.
+# binary).
+#
+# Read it as a per-board codec allowlist, not a playback certificate.
+# The failure it exists to prevent is real — accept a codec the board
+# cannot decode in real time and playback degrades silently at the
+# viewer (drops / black screen) — but an entry certifies the *codec*,
+# and only a board listed in ``_SW_DECODE_MAX_PIXELS`` is bounded by
+# resolution too. Two gaps follow from that, admitted here rather than
+# papered over: ``pi4-64`` takes H.264 with no ceiling, so 4K H.264
+# passes on a high-RAM Pi 4 even though Pi 4 falls back to software
+# above 1080p; ``rockpi4`` takes HEVC, which the board-enablement doc
+# measured dropping ~22 % of frames at 1080p30. Closing either needs a
+# measurement on that board, not a guess here.
 #
 # NOT a hardware-decode certificate, despite the name — which is
 # historical, from when it was one. Some entries are deliberately
