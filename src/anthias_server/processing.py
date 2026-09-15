@@ -1252,13 +1252,15 @@ _VIDEO_METADATA_KEYS = (
 # see that map's own note. Adding a codec here on the assumption the
 # silicon decodes it is therefore not safe — check the entry's note.
 #
-# Empty / missing entry means "no codec on this device decodes in
-# hardware" — every video upload is rejected. The catch-all ``arm64``
-# DEVICE_TYPE lands here when ``anthias_host_agent`` hasn't published
-# a more specific subtype to Redis; an unknown aarch64 SBC isn't
-# guaranteed to have a v4l2_request decoder the viewer can address,
-# so we
-# refuse rather than ship a clip that would SW-decode at play time.
+# Empty / missing entry means "nothing is certified to play here", not
+# "this board decodes nothing in hardware" — every video upload is
+# rejected either way, but the distinction is the whole reason the
+# operator message says the board could not be identified rather than
+# "Supported: none." The catch-all ``arm64`` DEVICE_TYPE lands here
+# when no board subtype resolved; such an SBC may well have a working
+# v4l2_request decoder, we just have no measurement or model match to
+# say which codecs, so we refuse rather than ship a clip that might
+# SW-decode at play time.
 _HW_DECODE_VIDEO_CODECS: dict[str, frozenset[str]] = {
     'pi2': frozenset({'h264'}),
     'pi3': frozenset({'h264'}),
