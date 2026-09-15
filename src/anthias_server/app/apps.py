@@ -7,8 +7,10 @@ class AnthiasAppConfig(AppConfig):
     label = 'anthias_app'
 
     def ready(self) -> None:
-        # Registers the User post_save/post_delete receiver that revokes
+        # Connects the User post_save/post_delete receiver that revokes
         # open /ws sockets on a credential change. Imported here rather
         # than at module scope because it touches the auth models, which
         # aren't loaded until the app registry is populated.
-        from anthias_server.app import signals  # noqa: F401
+        from anthias_server.app.signals import register
+
+        register()

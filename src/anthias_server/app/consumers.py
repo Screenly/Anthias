@@ -16,10 +16,19 @@ WS_GROUP = 'ws_server'
 # on the force_disconnect fan-out actually arriving. See
 # disconnect_all(), which is the only thing that bumps it.
 #
-# In-process is enough for the same reason ``settings`` being an
-# in-process UserDict is: uvicorn serves this app single-worker (see
-# bin/start_server.sh), so the process that handles the settings save
-# is the one holding every open socket.
+# In-process is enough for every surface that serves HTTP, for the
+# same reason ``settings`` being an in-process UserDict is: uvicorn
+# serves this app single-worker (see bin/start_server.sh), so the
+# process that handles a settings save — or an /admin password change
+# — is the one holding every open socket.
+#
+# It is therefore *only* those surfaces that fail closed. A credential
+# change made from another process (``manage.py changepassword``, a
+# shell on the device) bumps that process's copy of this counter,
+# which reaches nobody; all it has is the best-effort Redis fan-out in
+# disconnect_all(). Closing that gap would mean re-reading credential
+# state from the DB on a timer or per frame in the serving process,
+# which is exactly the SQLite/SBC cost this counter exists to avoid.
 _auth_generation = 0
 
 
@@ -278,8 +287,11 @@ def disconnect_all() -> None:
     Called from the settings-save paths for an ``auth_backend`` toggle,
     and from the User post_save/post_delete receiver in ``signals.py``
     for a credential change — the latter so a rotation is revoked
-    wherever it comes from, including ``/admin`` and the shell, and
-    atomically with the DB write rather than after it.
+    wherever it comes from, and atomically with the DB write rather
+    than after it. In-process callers (the settings page, the v2 API,
+    ``/admin``) get the generation bump as well as the close, so they
+    fail closed; an out-of-process caller has only the close. See the
+    note on ``_auth_generation``.
     """
     global _auth_generation
     _auth_generation += 1

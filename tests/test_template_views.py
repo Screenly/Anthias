@@ -17,6 +17,7 @@ from typing import Any
 from unittest import mock
 
 import pytest
+from django.contrib.auth.models import User
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -5032,50 +5033,89 @@ def test_system_info_storage_card_exposes_the_evidence(
 
 
 # ---------------------------------------------------------------------------
-# Auth changes reap open /ws sockets (Copilot review on PR 3324).
+# Auth changes reap open /ws sockets (Copilot reviews on PRs 3324/3336).
 #
 # AssetConsumer decides authorization at handshake time, so a socket
 # opened before an auth change would otherwise keep streaming under the
-# old rules. The settings-save paths close them; these pin that the
-# HTML surface does, and that it stays quiet on an unrelated save.
+# old rules. Two things reap them: this view, and the User post_save
+# receiver in app/signals.py.
+#
+# Every test here toggles auth_backend against an operator row that
+# already exists, so apply_auth_settings() returns "changed" without
+# writing the User — which keeps the receiver silent and leaves the
+# view as the only possible caller. Enabling auth from scratch would
+# create the operator and fire the receiver too, and then a passing
+# assertion would prove nothing about this view at all.
 # ---------------------------------------------------------------------------
+
+_OPERATOR_PWD = 'a-str0ng-QA-passphrase'
+
+
+def _existing_operator() -> None:
+    """The row a previous "enable auth" left behind — turning auth off
+    keeps it so that re-enabling doesn't lose the operator.
+
+    Creating it fires the post_save receiver, so the reap is patched out
+    for this one write: the tests below exist to observe what the *view*
+    does, and letting the receiver through here would also cost a real
+    channel-layer round-trip during setup.
+    """
+    with mock.patch('anthias_server.app.consumers.disconnect_all'):
+        User.objects.create_user(
+            username='operator',
+            password=_OPERATOR_PWD,
+            is_staff=True,
+            is_superuser=True,
+        )
+
+
+def _toggle_auth_on(client: Client, **extra: str) -> Any:
+    """Flip auth_backend with no new credentials, so the existing
+    operator row is left untouched."""
+    return client.post(
+        reverse('anthias_app:settings_save'),
+        data={
+            'player_name': 'Test Player',
+            'default_duration': '15',
+            'default_streaming_duration': '300',
+            'audio_output': 'hdmi',
+            'date_format': 'mm/dd/yyyy',
+            'auth_backend': 'auth_basic',
+            'current_password': _OPERATOR_PWD,
+            **extra,
+        },
+    )
 
 
 @pytest.mark.django_db
-def test_settings_save_drops_sockets_when_auth_is_enabled(
+def test_settings_save_reaps_sockets_before_the_viewer_publish(
     client: Client, _isolated_settings_conf: Any
 ) -> None:
+    """Order matters: send_to_viewer() goes over Redis and can raise,
+    and the handler would then finish the request with the auth change
+    live and every old socket still attached."""
+    _existing_operator()
+    ordering = mock.Mock()
+
     with (
         mock.patch(
             'anthias_server.settings.ViewerPublisher.send_to_viewer',
             return_value=None,
-        ),
+        ) as publish,
         mock.patch(
             'anthias_server.app.consumers.disconnect_all'
         ) as disconnect,
     ):
-        response = client.post(
-            reverse('anthias_app:settings_save'),
-            data={
-                'player_name': 'Test Player',
-                'default_duration': '15',
-                'default_streaming_duration': '300',
-                'audio_output': 'hdmi',
-                'date_format': 'mm/dd/yyyy',
-                'auth_backend': 'auth_basic',
-                'user': 'operator',
-                'password': 'a-str0ng-QA-passphrase',
-                'password_2': 'a-str0ng-QA-passphrase',
-            },
-        )
+        ordering.attach_mock(publish, 'publish')
+        ordering.attach_mock(disconnect, 'disconnect')
+        response = _toggle_auth_on(client)
 
     assert response.status_code in (200, 302)
-    # Called, not called *once*: enabling auth both creates the operator
-    # row (which the User post_save receiver revokes on) and flips the
-    # backend (which this view revokes on explicitly). Two reaps of the
-    # same sockets is redundant, not wrong — the assertion that matters
-    # is the paired "unchanged save doesn't reap" test below.
-    assert disconnect.called
+    disconnect.assert_called_once()
+    assert [call[0] for call in ordering.mock_calls] == [
+        'disconnect',
+        'publish',
+    ]
 
 
 @pytest.mark.django_db
@@ -5110,13 +5150,11 @@ def test_settings_save_leaves_sockets_alone_when_auth_is_unchanged(
 
 
 @pytest.mark.django_db
-def test_settings_save_drops_sockets_even_if_the_viewer_publish_fails(
+def test_settings_save_reaps_sockets_even_if_the_viewer_publish_fails(
     client: Client, _isolated_settings_conf: Any
 ) -> None:
-    """send_to_viewer() publishes over Redis and can raise. The reap
-    must already have happened by then — otherwise a rotation that
-    coincides with a Redis hiccup persists the new credentials and
-    leaves every socket attached under the old ones."""
+    _existing_operator()
+
     with (
         mock.patch(
             'anthias_server.settings.ViewerPublisher.send_to_viewer',
@@ -5126,39 +5164,20 @@ def test_settings_save_drops_sockets_even_if_the_viewer_publish_fails(
             'anthias_server.app.consumers.disconnect_all'
         ) as disconnect,
     ):
-        response = client.post(
-            reverse('anthias_app:settings_save'),
-            data={
-                'player_name': 'Test Player',
-                'default_duration': '15',
-                'default_streaming_duration': '300',
-                'audio_output': 'hdmi',
-                'date_format': 'mm/dd/yyyy',
-                'auth_backend': 'auth_basic',
-                'user': 'operator',
-                'password': 'a-str0ng-QA-passphrase',
-                'password_2': 'a-str0ng-QA-passphrase',
-            },
-        )
+        response = _toggle_auth_on(client)
 
     assert response.status_code in (200, 302)
-    # Called, not called *once*: enabling auth both creates the operator
-    # row (which the User post_save receiver revokes on) and flips the
-    # backend (which this view revokes on explicitly). Two reaps of the
-    # same sockets is redundant, not wrong — the assertion that matters
-    # is the paired "unchanged save doesn't reap" test below.
-    assert disconnect.called
+    disconnect.assert_called_once()
 
 
 @pytest.mark.django_db
-def test_settings_save_drops_sockets_even_if_the_conf_write_fails(
+def test_settings_save_reaps_sockets_even_if_the_conf_write_fails(
     client: Client, _isolated_settings_conf: Any
 ) -> None:
-    """apply_auth_settings() persists the rotated User row before
-    settings.save() runs, so a conf write that fails — a full or
-    read-only /data volume — used to jump straight to the error handler
-    with the new password live and every old socket still attached.
-    The reap is in a finally now, so it happens either way."""
+    """A conf write can fail on a full or read-only /data volume. The
+    reap is in a finally, so it happens on that path too."""
+    _existing_operator()
+
     with (
         mock.patch(
             'anthias_server.settings.ViewerPublisher.send_to_viewer',
@@ -5171,20 +5190,7 @@ def test_settings_save_drops_sockets_even_if_the_conf_write_fails(
             'anthias_server.app.consumers.disconnect_all'
         ) as disconnect,
     ):
-        response = client.post(
-            reverse('anthias_app:settings_save'),
-            data={
-                'player_name': 'Test Player',
-                'default_duration': '15',
-                'default_streaming_duration': '300',
-                'audio_output': 'hdmi',
-                'date_format': 'mm/dd/yyyy',
-                'auth_backend': 'auth_basic',
-                'user': 'operator',
-                'password': 'a-str0ng-QA-passphrase',
-                'password_2': 'a-str0ng-QA-passphrase',
-            },
-        )
+        response = _toggle_auth_on(client)
 
     assert response.status_code in (200, 302)
-    assert disconnect.called
+    disconnect.assert_called_once()

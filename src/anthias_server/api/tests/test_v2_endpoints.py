@@ -906,39 +906,77 @@ def _device_settings_mock(settings_mock: Any, auth_backend: str = '') -> None:
     settings_mock.__setitem__ = mock.MagicMock()
 
 
+# ---------------------------------------------------------------------------
+# Auth changes reap open /ws sockets (Copilot reviews on PRs 3324/3336).
+#
+# Each test flips auth_backend against an operator row that already
+# exists and sends no new credentials, so apply_auth_settings() reports
+# "changed" without writing the User. That keeps the post_save receiver
+# in app/signals.py silent and leaves this view as the only possible
+# caller of disconnect_all — enabling auth from scratch would create the
+# operator and fire the receiver too, and a passing assertion would then
+# say nothing about this view.
+# ---------------------------------------------------------------------------
+
+_OPERATOR_PWD = 'a-str0ng-QA-passphrase'
+
+
+def _existing_operator() -> None:
+    """The row a previous "enable auth" left behind — turning auth off
+    keeps it so that re-enabling doesn't lose the operator.
+
+    Creating it fires the post_save receiver, so the reap is patched out
+    for this one write: the tests below exist to observe what the *view*
+    does, and letting the receiver through here would also cost a real
+    channel-layer round-trip during setup.
+    """
+    with mock.patch('anthias_server.app.consumers.disconnect_all'):
+        User.objects.create_user(
+            username='operator',
+            password=_OPERATOR_PWD,
+            is_staff=True,
+            is_superuser=True,
+        )
+
+
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.settings')
 @mock.patch('anthias_server.api.views.v2.ViewerPublisher')
-def test_patch_device_settings_drops_sockets_when_auth_is_enabled(
+def test_patch_device_settings_reaps_sockets_before_the_viewer_publish(
     publisher_mock: Any,
     settings_mock: Any,
     api_client: APIClient,
     device_settings_url: str,
 ) -> None:
+    """Order matters: send_to_viewer() goes over Redis and can raise,
+    and the request would then return through the error handler with the
+    auth change live and every old socket still attached."""
     _device_settings_mock(settings_mock, auth_backend='')
-    publisher_mock.get_instance.return_value = mock.MagicMock()
+    _existing_operator()
+    publisher = mock.MagicMock()
+    publisher_mock.get_instance.return_value = publisher
+    ordering = mock.Mock()
 
     with mock.patch(
         'anthias_server.app.consumers.disconnect_all'
     ) as disconnect:
+        ordering.attach_mock(publisher.send_to_viewer, 'publish')
+        ordering.attach_mock(disconnect, 'disconnect')
         response = api_client.patch(
             device_settings_url,
             data={
                 'auth_backend': 'auth_basic',
-                'username': 'operator',
-                'password': 'a-str0ng-QA-passphrase',
-                'password_2': 'a-str0ng-QA-passphrase',
+                'current_password': _OPERATOR_PWD,
             },
             format='json',
         )
 
     assert response.status_code == status.HTTP_200_OK
-    # Called, not called *once*: enabling auth both creates the operator
-    # row (which the User post_save receiver revokes on) and flips the
-    # backend (which this view revokes on explicitly). Two reaps of the
-    # same sockets is redundant, not wrong — the assertion that matters
-    # is the paired "unchanged save doesn't reap" test below.
-    assert disconnect.called
+    disconnect.assert_called_once()
+    assert [call[0] for call in ordering.mock_calls] == [
+        'disconnect',
+        'publish',
+    ]
 
 
 @pytest.mark.django_db
@@ -969,17 +1007,14 @@ def test_patch_device_settings_leaves_sockets_alone_when_auth_unchanged(
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.settings')
 @mock.patch('anthias_server.api.views.v2.ViewerPublisher')
-def test_patch_device_settings_drops_sockets_if_viewer_publish_fails(
+def test_patch_device_settings_reaps_sockets_if_the_viewer_publish_fails(
     publisher_mock: Any,
     settings_mock: Any,
     api_client: APIClient,
     device_settings_url: str,
 ) -> None:
-    """send_to_viewer() publishes over Redis and can raise. The reap
-    must already have happened by then — otherwise the request exits
-    through the error handler with the new credentials persisted and
-    every socket still attached under the old ones."""
     _device_settings_mock(settings_mock, auth_backend='')
+    _existing_operator()
     publisher = mock.MagicMock()
     publisher.send_to_viewer.side_effect = RuntimeError('redis is down')
     publisher_mock.get_instance.return_value = publisher
@@ -991,37 +1026,29 @@ def test_patch_device_settings_drops_sockets_if_viewer_publish_fails(
             device_settings_url,
             data={
                 'auth_backend': 'auth_basic',
-                'username': 'operator',
-                'password': 'a-str0ng-QA-passphrase',
-                'password_2': 'a-str0ng-QA-passphrase',
+                'current_password': _OPERATOR_PWD,
             },
             format='json',
         )
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    # Called, not called *once*: enabling auth both creates the operator
-    # row (which the User post_save receiver revokes on) and flips the
-    # backend (which this view revokes on explicitly). Two reaps of the
-    # same sockets is redundant, not wrong — the assertion that matters
-    # is the paired "unchanged save doesn't reap" test below.
-    assert disconnect.called
+    disconnect.assert_called_once()
 
 
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.settings')
 @mock.patch('anthias_server.api.views.v2.ViewerPublisher')
-def test_patch_device_settings_drops_sockets_if_the_conf_write_fails(
+def test_patch_device_settings_reaps_sockets_if_the_conf_write_fails(
     publisher_mock: Any,
     settings_mock: Any,
     api_client: APIClient,
     device_settings_url: str,
 ) -> None:
-    """apply_auth_settings() persists the rotated User row before
-    settings.save() runs, so a conf write failure used to return through
-    the error handler with the new password live and every old socket
-    still attached. The reap is in a finally now."""
+    """A conf write can fail on a full or read-only /data volume. The
+    reap is in a finally, so it happens on that path too."""
     _device_settings_mock(settings_mock, auth_backend='')
     settings_mock.save.side_effect = OSError('read-only file system')
+    _existing_operator()
     publisher_mock.get_instance.return_value = mock.MagicMock()
 
     with mock.patch(
@@ -1031,12 +1058,10 @@ def test_patch_device_settings_drops_sockets_if_the_conf_write_fails(
             device_settings_url,
             data={
                 'auth_backend': 'auth_basic',
-                'username': 'operator',
-                'password': 'a-str0ng-QA-passphrase',
-                'password_2': 'a-str0ng-QA-passphrase',
+                'current_password': _OPERATOR_PWD,
             },
             format='json',
         )
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert disconnect.called
+    disconnect.assert_called_once()

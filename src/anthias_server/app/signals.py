@@ -11,10 +11,22 @@ The settings-save paths call it explicitly for an ``auth_backend``
 toggle, which never touches a User row. Credential changes can't be
 handled that way, because the settings page is not the only thing that
 makes them: ``/admin`` is a routed URL and the stock ``UserAdmin``
-ships a change-password form, ``manage.py changepassword`` exists, and
-so does a shell on the device. Hooking the model's own save is the one
+ships a change-password form. Hooking the model's own save is the one
 place that sees all of them at once — and a call site added later gets
 the revocation without having to remember it.
+
+Scope, precisely: what this buys is a *fail-closed* revocation for
+credential changes made **inside the uvicorn process** — the settings
+page, the v2 API, and ``/admin``. Those share the in-process auth
+generation with every open socket, so they are revoked whether or not
+the channel layer is up. A change made from another process —
+``manage.py changepassword``, a shell on the device, a Celery worker —
+runs this receiver in *that* process, where bumping its own generation
+counter reaches nobody; all such a change has is the Redis fan-out,
+which is best-effort. Making those fail closed too would mean the
+serving process re-reading credential state from the DB on a timer or
+per frame, which is the SQLite/SBC cost the generation exists to
+avoid. See :data:`anthias_server.app.consumers._auth_generation`.
 """
 
 import logging
@@ -22,9 +34,10 @@ from typing import Any
 
 from django.contrib.auth.models import User
 from django.db.models.signals import post_delete, post_save
-from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
+
+_DISPATCH_UID = 'anthias_revoke_ws_authorization'
 
 # Django writes ``last_login`` through ``save(update_fields=[...])`` on
 # every successful login. That is the one User write that must not
@@ -40,11 +53,6 @@ logger = logging.getLogger(__name__)
 _SESSION_NEUTRAL_FIELDS = frozenset({'last_login'})
 
 
-@receiver(
-    [post_save, post_delete],
-    sender=User,
-    dispatch_uid='anthias_revoke_ws_authorization',
-)
 def revoke_ws_authorization(
     sender: type[User], instance: User, **kwargs: Any
 ) -> None:
@@ -71,3 +79,20 @@ def revoke_ws_authorization(
         'Revoking /ws authorization after a change to user %r', instance.pk
     )
     disconnect_all()
+
+
+def register() -> None:
+    """Connect the receiver. Called from ``AnthiasAppConfig.ready()``.
+
+    An explicit call rather than ``@receiver`` plus a side-effect
+    import in ``apps.py``: that import is unused by definition and
+    would need a ``# noqa: F401`` to pass lint, which CLAUDE.md rules
+    out when an idiom fixes the root cause. ``dispatch_uid`` keeps a
+    second call idempotent.
+    """
+    post_save.connect(
+        revoke_ws_authorization, sender=User, dispatch_uid=_DISPATCH_UID
+    )
+    post_delete.connect(
+        revoke_ws_authorization, sender=User, dispatch_uid=_DISPATCH_UID
+    )
