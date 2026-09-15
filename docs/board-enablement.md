@@ -162,11 +162,23 @@ consumed through two paths:
 
 * on docker-compose installs, `anthias_host_agent` runs on the host,
   detects the subtype, and publishes `host:board_subtype` to Redis;
-* when Redis has no value — the `screenly_ose/anthias-rockpi4` balena
-  fleet ships no host_agent service — `anthias_common.board` reads
-  `/proc/device-tree/model` directly from inside the container (the
-  device tree is kernel-global, the same mechanism `get_device_type`
-  relies on for Pi detection).
+* when Redis has no value — the agent is down, or never ran —
+  `anthias_common.board` falls back to reading `/proc/device-tree/model`
+  directly from inside the container.
+
+**That fallback does not work in the server/celery containers.**
+`/proc/device-tree` is a symlink to `/sys/firmware/devicetree/base`, and
+`/sys/firmware` is on Docker's default masked-paths list, so an
+unprivileged container reads an empty directory on every board. Measured on
+a NanoPi R3S LTS: readable on the host and in the privileged `anthias-viewer`
+container, empty in `anthias-server` / `anthias-celery`. A bind mount onto
+the masked path stays empty too. The practical consequences: on
+docker-compose installs the host_agent's Redis value is the only working
+source, and on balena — no host_agent, unprivileged server container — the
+subtype has no source at all, so the `screenly_ose/anthias-rockpi4` fleet's
+codec gate does not actually get upgraded there. Fixing balena needs a
+host-side publisher (or `io.balena.features.sysfs` plus a path change);
+untested so far.
 
 The server uses the resolved key to pick the right entry in
 `processing._HW_DECODE_VIDEO_CODECS` — Rock Pi 4 accepts H.264 + HEVC
