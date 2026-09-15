@@ -262,7 +262,12 @@
             </div>
 
             <div class="app-floating mt-4 mb-3">
-              <input type="text" class="app-input" id="app-asset-name" name="name" :value="assetName" @input="nameEdited = true" placeholder=" " required>
+              {% comment %} x-model, not :value — a one-way bind lets the
+                 DOM drift from assetName the moment the operator types,
+                 so re-selecting the same app (identical seed, no
+                 reactive change) would leave the previous install's
+                 name in the box. {% endcomment %}
+              <input type="text" class="app-input" id="app-asset-name" name="name" x-model="assetName" @input="nameEdited = true" placeholder=" " required>
               <label for="app-asset-name">Name</label>
             </div>
 

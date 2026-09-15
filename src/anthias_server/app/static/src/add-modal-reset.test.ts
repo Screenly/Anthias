@@ -30,7 +30,13 @@ const MODAL = `
         </form>
         <div id="apps-pane" x-show="tab === 'apps'" x-data="appsTab()"
              x-effect="if (tab === 'apps') load()"
-             @add-modal-open.window="reset()"></div>
+             @add-modal-open.window="reset()">
+          <form x-show="phase === 'config'">
+            <input type="text" id="app-asset-name" name="name" required
+                   x-model="assetName" @input="nameEdited = true">
+            <div x-ref="configHost"></div>
+          </form>
+        </div>
       </div>
     </div>
   </div>`
@@ -45,6 +51,7 @@ interface ModalState {
 let state: ModalState
 let apps: AppsTabData
 let uriInput: HTMLInputElement
+let nameInput: HTMLInputElement
 
 // Alpine schedules its reactive effects on a microtask queue.
 const settle = (): Promise<void> =>
@@ -71,6 +78,7 @@ beforeEach(async () => {
     document.getElementById('apps-pane')!,
   ) as unknown as AppsTabData
   uriInput = document.getElementById('add-uri') as HTMLInputElement
+  nameInput = document.getElementById('app-asset-name') as HTMLInputElement
 })
 
 // Drop the tree's effects and window listeners, so the next case's
@@ -169,5 +177,45 @@ describe('the Add modal opens clean', () => {
 
     expect(apps.phase).toBe('error')
     expect(apps.error).toBe('No apps are available right now.')
+  })
+})
+
+// Same defect, one control over: the install form's Name box used a
+// one-way `:value` bind, so the operator's typing drifted the DOM away
+// from `assetName` with nothing to pull it back. Re-selecting the same
+// app re-seeds the identical string — no reactive change, no re-render
+// — and the previous install's name was still sitting there.
+describe('the Apps install form seeds a fresh name', () => {
+  const CLOCK = {
+    id: 'clock',
+    manifestUrl: 'https://store.example/clock.json',
+    manifest: {
+      id: 'clock',
+      manifestVersion: '1',
+      name: 'Clock',
+      launch: { baseUrl: 'https://apps.example/clock' },
+    },
+  } as unknown as Parameters<AppsTabData['select']>[0]
+
+  test('re-selecting the same app drops the last typed name', async () => {
+    apps.select(CLOCK)
+    await settle()
+    expect(nameInput.value).toBe('Clock')
+
+    nameInput.value = 'Lobby clock'
+    nameInput.dispatchEvent(new Event('input'))
+    await settle()
+    // The rename has to reach state, or the next seed has nothing to
+    // differ from.
+    expect(apps.assetName).toBe('Lobby clock')
+    expect(apps.nameEdited).toBe(true)
+
+    apps.back()
+    await settle()
+    apps.select(CLOCK)
+    await settle()
+
+    expect(nameInput.value).toBe('Clock')
+    expect(apps.nameEdited).toBe(false)
   })
 })
