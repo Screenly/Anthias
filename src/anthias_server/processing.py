@@ -20,17 +20,18 @@ Two Celery tasks that run on every fresh upload:
   Pi 4's celery worker for 99 minutes on a single 4K60 H.264 → HEVC
   pass before zombieing.
 
-  What the gate accepts is a per-board *playability* envelope, not a
-  hardware-decode guarantee: mostly hardware decode (H.264, HEVC, plus
-  VAAPI's wider set on x86), but ``pi5`` and ``rk3566`` accept H.264 on
-  measured software throughput, which is why such an entry also wants
-  a resolution ceiling — one exists where it has been measured
-  (``rk3566``); ``pi5`` is deliberately unlisted until its 4K H.264
-  throughput is. ``_HW_DECODE_VIDEO_CODECS`` and
-  ``_SW_DECODE_MAX_PIXELS`` below hold the two halves. For codecs the
-  board genuinely can't play, the upload is rejected with a re-encode
-  recipe, and the metadata fields surface the codec / dims / fps on
-  each row so the operator can see what they uploaded.
+  What the gate holds is a per-board *allowlist* of codecs accepted at
+  upload — deliberately not called a playability guarantee, because
+  the entries do not all rest on the same evidence and three of them
+  are known not to play cleanly (see the map's own note). Most rest on
+  hardware decode; ``pi5``'s H.264 and ``rk3566`` rest on measured
+  software throughput, which is why such an entry also wants a
+  resolution ceiling — ``rk3566`` has a measured one, ``pi5`` is
+  deliberately unlisted until its 4K H.264 throughput is measured.
+  ``_HW_DECODE_VIDEO_CODECS`` and ``_SW_DECODE_MAX_PIXELS`` below hold
+  the two halves. A rejected upload gets a re-encode recipe, and the
+  metadata fields surface the codec / dims / fps on each row so the
+  operator can see what they uploaded.
 
 Both tasks follow the YouTube-download Celery pattern in
 ``anthias_server.celery_tasks``:
@@ -1253,12 +1254,28 @@ _VIDEO_METADATA_KEYS = (
 # ``LOW_RAM_THRESHOLD_KB`` of RAM, and ``_SW_DECODE_MAX_PIXELS`` for a
 # board whose throughput ceiling has been measured. A board in neither
 # — a 2 GB+ board with no measured ceiling — takes its accepted codecs
-# at any resolution. Two gaps follow from that, admitted here rather than
-# papered over: ``pi4-64`` takes H.264 with no ceiling, so 4K H.264
-# passes on a high-RAM Pi 4 even though Pi 4 falls back to software
-# above 1080p; ``rockpi4`` takes HEVC, which the board-enablement doc
-# measured dropping ~22 % of frames at 1080p30. Closing either needs a
-# measurement on that board, not a guess here.
+# at any resolution.
+#
+# THREE ENTRIES BELOW ARE KNOWN NOT TO PLAY CLEANLY, and they are
+# listed as open defects, not as measurement gaps — the measurements
+# exist and say these fail:
+#
+#   * ``x86`` accepts ``hevc``, but HEVC through VAAPI black-screens on
+#     x86. The *download* path already avoids it for exactly that
+#     reason (see test_download_youtube_asset_x86_prefers_h264_format);
+#     a direct HEVC upload still walks straight through this gate.
+#   * ``rockpi4`` accepts ``hevc``, measured dropping ~22 % of frames
+#     at 1080p30 (docs/board-enablement.md).
+#   * ``pi4-64`` accepts ``h264`` with no ceiling, so 4K H.264 passes
+#     on a high-RAM Pi 4 although the Pi 4 decoder tops out at 1080p
+#     H.264 and anything above it falls back to software.
+#
+# Each wants either the codec removed or a measured cap added. Both
+# are behaviour changes that would start rejecting uploads operators
+# make today, on boards in the field, so they are a product call and
+# a separate change — not something to slip into a docs pass. Until
+# then this comment is the honest statement of what the map is: an
+# allowlist carrying three entries we know are wrong.
 #
 # NOT a hardware-decode certificate, despite the name — which is
 # historical, from when it was one. Some entries are deliberately
@@ -1750,15 +1767,19 @@ def _run_video_normalisation(asset: Asset) -> None:
     if supported:
         supported_str = ', '.join(sorted(supported))
         message = (
-            f'Video codec {display_codec!r} is not hardware-decoded on '
-            f'this device. Supported: {supported_str}.'
+            f'Video codec {display_codec!r} is not accepted on this '
+            f'device. Accepted: {supported_str}.'
         )
     else:
-        # Empty ``supported`` means we hit the catch-all ``arm64``
-        # branch — DEVICE_TYPE is set but no board subtype resolved,
-        # so we can't certify any codec. Say so rather than the
-        # misleading "Supported: none." which reads like the board has
-        # no decoder at all.
+        # Empty ``supported`` means no allowlist was found for this
+        # key, which happens two ways: the catch-all ``arm64`` with
+        # DEVICE_TYPE set but no subtype resolved, and an unset or
+        # unrecognised DEVICE_TYPE, which ``resolve_device_key``
+        # passes through to a key the map has no entry for. The branch
+        # below picks its advice from which of the two it is, because
+        # only the first has a host agent worth checking. Either way
+        # say *why* rather than the misleading "Supported: none.",
+        # which reads like the board decodes nothing at all.
         #
         # The advice is deliberately not "re-flash with the
         # board-specific image": there is no such image — every SBC
