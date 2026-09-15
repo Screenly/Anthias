@@ -1102,12 +1102,14 @@ def test_video_unknown_codec_is_rejected(
 def test_video_arm64_catch_all_rejects_everything(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
-    decode map (an unknown aarch64 SBC isn't guaranteed to expose a
-    v4l2-request decoder the viewer can address). Without a subtype
-    every video upload is rejected, and the message has to explain why
-    in terms the operator can act on — which differs by deployment, so
-    it names both of them rather than one."""
+    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the map of
+    codecs a board accepts (``_HW_DECODE_VIDEO_CODECS`` — the name is
+    historical), so nothing is certified to play there: an unidentified
+    aarch64 SBC may have a perfectly good decoder, we just have no
+    model match or measurement saying which codecs. Every video upload
+    is therefore rejected, and the message has to explain why in terms
+    the operator can act on — which differs by deployment, so it names
+    both rather than one."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     src = path.join(asset_dir, 'sample.mp4')
     # Create an empty placeholder file so the FileNotFoundError check
