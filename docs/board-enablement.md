@@ -234,9 +234,17 @@ fdtfile=rockchip/rk3566-nanopi-r3s-lts.dtb
 ```
 
 After which the connector appears, EDID reads, and the viewer runs. Worth
-checking before concluding a board has no video output: diff the candidate
-DTBs (`dtc -I dtb -O dts`) and compare the `hdmi@*` node's `status` — on
-this board the two trees differ *only* in the display nodes. Boards that
+checking before concluding a board has no video output: decompile each
+candidate and compare the `hdmi@*` node's `status`.
+
+```
+$ cd /boot/dtb/rockchip
+$ dtc -I dtb -O dts rk3566-nanopi-r3s.dtb -o /tmp/base.dts
+$ dtc -I dtb -O dts rk3566-nanopi-r3s-lts.dtb -o /tmp/lts.dts
+$ diff /tmp/base.dts /tmp/lts.dts
+```
+
+On this board the two trees differ *only* in the display nodes. Boards that
 genuinely have no video output (router-style SKUs) have no DTB with HDMI
 enabled at all.
 
