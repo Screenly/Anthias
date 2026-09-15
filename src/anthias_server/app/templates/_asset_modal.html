@@ -164,7 +164,7 @@
         x-show="tab === 'apps'"
         x-data="appsTab()"
         x-effect="if (tab === 'apps') load()"
-        @add-modal-open.window="back()"
+        @add-modal-open.window="reset()"
       >
         {# Loading #}
         <div class="modal-card__body app-cfg-state" x-show="phase === 'loading'" x-cloak>

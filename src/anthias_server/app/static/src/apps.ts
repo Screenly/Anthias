@@ -35,6 +35,8 @@ export interface AppsTabData {
   retry(): void
   select(app: CatalogApp): void
   back(): void
+  // Called when the Add modal reopens; see the implementation.
+  reset(): void
   // The app currently being configured has a settings schema.
   readonly hasConfig: boolean
   // Fields the install form needs alongside the built launch URL.
@@ -150,6 +152,17 @@ export function appsTab(): AppsTabData {
           }
         })
       })
+    },
+
+    // The Add modal is hidden, not unmounted, so this component carries
+    // across opens — a reopen must not land on the last app's filled-in
+    // config form. Only the config phase is ours to unwind: an empty or
+    // unreachable catalog set `phase = 'error'` with its own message,
+    // and back() would swap that for a `ready` pane showing an empty
+    // grid that load() then declines to re-fetch (`loaded` is true and
+    // the phase is no longer 'error').
+    reset(this: AppsTabData) {
+      if (this.phase === 'config') this.back()
     },
 
     back(this: AppsTabData) {

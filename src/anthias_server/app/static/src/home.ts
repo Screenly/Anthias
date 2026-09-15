@@ -412,9 +412,11 @@ function homeApp(): HomeAppData {
       // fresh however the last one ended.
       this.addUri = ''
       // Exception: an upload the operator hid with the modal still runs,
-      // and its progress UI lives in the file tab. Yanking them back to
-      // the URL tab would hide the batch they came to check on.
-      if (!this.uploadState) this.tab = 'uri'
+      // and its progress UI lives on the file tab. Reopening is how they
+      // check on it, so go there — the tab they happened to be looking
+      // at when they hid the modal (the tab strip stays clickable during
+      // a batch) is not where the progress is.
+      this.tab = this.uploadState ? 'file' : 'uri'
       // The Apps pane is its own component (appsTab in apps.ts), so it
       // resets itself off this event — otherwise a reopened modal is
       // still parked on the last app's filled-in config form.
