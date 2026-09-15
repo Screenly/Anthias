@@ -1145,6 +1145,68 @@ def test_preview_modal_renders_image_and_done_closes(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
+def test_preview_iframe_is_shielded_from_a_file_drag(
+    reset_assets: None, page: Page
+) -> None:
+    """Drag events do not cross a browsing-context boundary, so a file
+    released over a webpage preview would belong to the iframe and the
+    frame would navigate away from the asset — the one surface the
+    page-wide drop handlers cannot claim. The frame leaves hit-testing
+    for the length of the drag instead, handing those events back to
+    the page, which refuses the drop without navigating anything."""
+    Asset.objects.create(**dict(asset_active, mimetype='webpage'))
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Preview"]'
+    ).click()
+    _wait_alpine(
+        page,
+        'state.previewAsset && state.previewAsset.asset_id',
+        asset_active['asset_id'],
+    )
+    frame = page.locator('iframe.preview-media--frame')
+    expect(frame).to_be_visible()
+
+    pointer_events = """() => getComputedStyle(
+        document.querySelector('iframe.preview-media--frame')
+    ).pointerEvents"""
+
+    # With no drag in flight the frame stays interactive: the shield
+    # must not cost the operator the ability to use the preview.
+    assert page.evaluate(pointer_events) == 'auto'
+
+    # A file drag entering the page. It is dispatched on the modal
+    # overlay because that is the page's own document, which the
+    # pointer has to cross to reach the frame in the middle of it.
+    page.evaluate(
+        """() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            document.querySelector('.modal-overlay--nested').dispatchEvent(
+                new DragEvent('dragenter', {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        }"""
+    )
+
+    page.wait_for_function(
+        f'{pointer_events.strip()} === "none"', timeout=DEFAULT_TIMEOUT_MS
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
 def test_delete_confirm_modal_opens_with_pending_id(
     reset_assets: None, page: Page
 ) -> None:
