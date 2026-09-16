@@ -57,6 +57,33 @@ def _is_after_close_race(message: str, asgi_message: str) -> bool:
     )
 
 
+def stamp_auth_generation(app: Any) -> Any:
+    """ASGI middleware that records the revocation generation *before*
+    the session lookup.
+
+    ``AuthMiddlewareStack`` resolves ``scope['user']`` and only then
+    dispatches to the consumer, so a rotation committing inside that
+    window would be missed: the user came from a session that was
+    still valid when it was read, while the consumer — constructed
+    afterwards — would read the already-bumped counter, find it
+    current, and keep the socket for good. Stamping on the way in
+    means such a handshake carries the pre-rotation generation and is
+    refused, which is the fail-closed direction.
+
+    Installed outside ``AuthMiddlewareStack`` in ``asgi.py``; the
+    consumer falls back to the module counter when the stamp is
+    absent, so a directly-constructed consumer (unit tests) still
+    starts out current.
+    """
+
+    async def middleware(scope: Any, receive: Any, send: Any) -> Any:
+        scope = dict(scope)
+        scope['auth_generation'] = _auth_generation
+        return await app(scope, receive, send)
+
+    return middleware
+
+
 class AssetConsumer(AsyncWebsocketConsumer):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -67,6 +94,21 @@ class AssetConsumer(AsyncWebsocketConsumer):
         # current instead of inheriting a stale class-level default and
         # going silent for reasons that have nothing to do with it.
         self._auth_generation = _auth_generation
+
+    def _accepted_generation(self) -> int:
+        """The generation this socket was accepted under.
+
+        The scope stamp when there is one — it was taken before the
+        session lookup, so it cannot miss a rotation that landed
+        during it — and the value captured at construction otherwise.
+        """
+        scope = getattr(self, 'scope', None)
+        stamped = (
+            scope.get('auth_generation') if isinstance(scope, dict) else None
+        )
+        if isinstance(stamped, int):
+            return stamped
+        return self._auth_generation
 
     def _is_authorized(self) -> bool:
         """WebSocket counterpart of :func:`anthias_server.lib.auth.authorized`.
@@ -87,7 +129,12 @@ class AssetConsumer(AsyncWebsocketConsumer):
           ``scope['user']`` — ``is_authenticated`` is True for any real
           User row, whatever its password now is — so on its own the
           session check below would keep passing for a socket accepted
-          under the old password. ``disconnect_all()`` closes those,
+          under the old password. The generation compared is the one
+          stamped on the scope before the session was resolved (see
+          ``stamp_auth_generation``), so a handshake that straddles a
+          rotation is refused rather than accepted under credentials
+          that stopped being current while it was in flight.
+          ``disconnect_all()`` closes those,
           but that fan-out is best-effort (``_broadcast`` swallows
           channel-layer failures, and a transient Redis blip during the
           save would drop it while later asset writes still get
@@ -120,7 +167,7 @@ class AssetConsumer(AsyncWebsocketConsumer):
 
         if not settings['auth_backend']:
             return True
-        if self._auth_generation != _auth_generation:
+        if self._accepted_generation() != _auth_generation:
             return False
         user = self.scope.get('user')
         return bool(user is not None and user.is_authenticated)

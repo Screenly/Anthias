@@ -564,6 +564,83 @@ def test_a_stale_socket_keeps_working_while_auth_is_disabled() -> None:
     send.assert_awaited_once_with(text_data='abc123')
 
 
+def _stamped_scope() -> dict[str, Any]:
+    """The scope as the ASGI stack hands it down: stamped on the way
+    in, before AuthMiddlewareStack resolves the user."""
+    captured: dict[str, Any] = {}
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        captured.update(scope)
+
+    app = consumers_module.stamp_auth_generation(inner)
+    asyncio.run(app({'type': 'websocket'}, mock.AsyncMock(), mock.AsyncMock()))
+    return captured
+
+
+def test_a_handshake_that_straddles_a_rotation_is_refused() -> None:
+    """AuthMiddlewareStack resolves the user and only then builds the
+    consumer. A rotation committing inside that window would leave the
+    consumer reading the already-bumped counter — current — while its
+    user came from a session that stopped being valid mid-handshake,
+    and the socket would stay authorized for good.
+
+    The stamp is taken before the lookup, so the handshake carries the
+    pre-rotation generation and is refused. The consumer here is built
+    *after* the bump on purpose: without the stamp it would be accepted.
+    """
+    scope = _stamped_scope()
+    with _lost_fan_out():
+        disconnect_all()
+
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = scope['auth_generation']
+    accept, close = mock.AsyncMock(), mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'accept', accept),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        asyncio.run(consumer.connect())
+
+    close.assert_awaited_once()
+    accept.assert_not_awaited()
+
+
+def test_a_handshake_with_no_rotation_in_flight_is_accepted() -> None:
+    """Mutation check: the stamp must refuse only the straddling
+    handshake, not every stamped one."""
+    scope = _stamped_scope()
+
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = scope['auth_generation']
+    accept, close = mock.AsyncMock(), mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'accept', accept),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        asyncio.run(consumer.connect())
+
+    accept.assert_awaited_once()
+    close.assert_not_awaited()
+
+
+def test_the_stamp_does_not_mutate_the_servers_scope() -> None:
+    """The ASGI server owns the scope it passes in; stamping a copy
+    keeps a second connection from inheriting this one's generation."""
+    original: dict[str, Any] = {'type': 'websocket'}
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        assert scope['auth_generation'] == consumers_module._auth_generation
+
+    app = consumers_module.stamp_auth_generation(inner)
+    asyncio.run(app(original, mock.AsyncMock(), mock.AsyncMock()))
+
+    assert original == {'type': 'websocket'}
+
+
 def test_connect_is_unaffected_by_earlier_generations() -> None:
     """A fresh handshake after any number of rotations must still be
     decided on the session alone."""

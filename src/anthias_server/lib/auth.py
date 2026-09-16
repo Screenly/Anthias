@@ -643,6 +643,7 @@ def _create_initial_operator(
     """First-time enable: no User row exists yet, so both username
     and password are required and the form's confirm field must
     match."""
+    from django.contrib.auth.hashers import make_password
     from django.contrib.auth.models import User
 
     if not new_username:
@@ -663,17 +664,23 @@ def _create_initial_operator(
     # set_password()/save() is two User saves for a single operator
     # action, and post_save fires the /ws revocation receiver on each
     # — two disconnect_all() broadcasts, each paying the synchronous
-    # channel-layer timeout in full if Redis is down. Build the row
-    # (or load the existing one) in memory, hash the password onto it,
-    # and save once.
-    user = User.objects.filter(username=new_username).first() or User(
-        username=new_username
+    # channel-layer timeout in full if Redis is down.
+    #
+    # Still update_or_create rather than a read-then-save, so the
+    # upsert stays atomic: two first-time enables racing each other
+    # would otherwise both find no row and the loser would get an
+    # IntegrityError on the unique username instead of updating.
+    # Hashing up front is what collapses it to one write —
+    # make_password() is exactly what set_password() stores.
+    User.objects.update_or_create(
+        username=new_username,
+        defaults={
+            'password': make_password(new_pwd),
+            'is_staff': True,
+            'is_superuser': True,
+            'is_active': True,
+        },
     )
-    user.is_staff = True
-    user.is_superuser = True
-    user.is_active = True
-    user.set_password(new_pwd)
-    user.save()
 
 
 def apply_auth_settings(
