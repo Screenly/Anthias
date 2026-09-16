@@ -737,7 +737,16 @@ function homeApp(): HomeAppData {
     onPageDragOver(this: HomeAppData, event: DragEvent) {
       if (!dragCarriesFiles(event)) return
       event.preventDefault()
-      if (!this.pageDragActive) this.pageDragActive = true
+      if (!this.pageDragActive) {
+        this.pageDragActive = true
+        // Seed the counter as well. Re-arming with a depth of 0 leaves
+        // the next enter/leave pair (the pointer crossing one table
+        // row) running 0 -> 1 -> 0, which hides the overlay while the
+        // file is still over the page; it would only come back on the
+        // following dragover, so the highlight flickers for the rest
+        // of the drag. Math.max keeps a genuine deeper nesting intact.
+        this.pageDragDepth = Math.max(1, this.pageDragDepth)
+      }
     },
 
     onPageDragLeave(this: HomeAppData, event: DragEvent) {

@@ -864,6 +864,23 @@ describe('page-wide drag and drop', () => {
     expect(event.prevented).toBe(true)
   })
 
+  // Re-arming with a zero depth would make the very next enter/leave
+  // pair (the pointer crossing a row) hide the overlay again while the
+  // file is still over the page.
+  test('a recovered highlight survives the next element crossing', () => {
+    const app = window.homeApp()
+    // The dragenter that never arrived — an element that stopped
+    // propagation swallowed it — so the page recovers on dragover.
+    app.onPageDragOver(fileDrag('clip.mp4'))
+    expect(app.pageDragActive).toBe(true)
+
+    // Pointer crosses into a row and out again.
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+    app.onPageDragLeave(fileDrag('clip.mp4'))
+
+    expect(app.pageDragActive).toBe(true)
+  })
+
   test('a file dropped on the page uploads it', async () => {
     mountUploadForm()
     stubXhr([{ status: 200 }])
