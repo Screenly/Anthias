@@ -1,6 +1,7 @@
 import logging
 import threading
 from typing import Any
+from uuid import uuid4
 
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -31,6 +32,13 @@ WS_GROUP = 'ws_server'
 # state from the DB on a timer or per frame in the serving process,
 # which is exactly the SQLite/SBC cost this counter exists to avoid.
 _auth_generation = 0
+
+# Identifies this process in the events it publishes, so a consumer
+# can tell "my process bumped the counter" (where comparing
+# generations is meaningful) from "some other process did" (where it
+# is not). Regenerated per process, deliberately: two workers must not
+# share one.
+_PROCESS_ID = uuid4().hex
 
 # Guards the increment only. See disconnect_all().
 _auth_generation_lock = threading.Lock()
@@ -218,7 +226,25 @@ class AssetConsumer(AsyncWebsocketConsumer):
         re-authorized from scratch — the operator's tab picks its
         socket straight back up, an unauthenticated listener gets a
         403.
+
+        A socket accepted *after* the bump this event belongs to is
+        left alone: it joined the group in the window between the bump
+        and the publish, already stamped with the new generation, so
+        the revocation never applied to it and closing it would drop
+        an operator reconnect for nothing. Only this process's events
+        can be compared that way — another process's counter is
+        unrelated to ours, so those still close everything.
         """
+        generation = event.get('generation')
+        if (
+            event.get('origin') == _PROCESS_ID
+            and isinstance(generation, int)
+            and self._accepted_generation() >= generation
+        ):
+            logger.debug(
+                'force_disconnect: socket is newer than the revocation'
+            )
+            return
         try:
             await self.close()
         except RuntimeError as exc:
@@ -361,7 +387,20 @@ def disconnect_all() -> None:
     # attribute load can't tear.
     with _auth_generation_lock:
         _auth_generation += 1
+        generation = _auth_generation
+    # The event carries which bump it belongs to, and which process
+    # made it. A handshake completing between the bump above and this
+    # publish joins the group already stamped with the new generation
+    # — it was accepted *under* the new credentials — and closing it
+    # would drop the operator's reconnect for a revocation that never
+    # applied to it. force_disconnect() uses the two fields to tell
+    # those apart, and closes unconditionally for any other process,
+    # whose counter means nothing here.
     _broadcast(
-        {'type': 'force_disconnect'},
+        {
+            'type': 'force_disconnect',
+            'origin': _PROCESS_ID,
+            'generation': generation,
+        },
         description='disconnect_all',
     )

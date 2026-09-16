@@ -642,6 +642,11 @@ def test_the_stamp_does_not_mutate_the_servers_scope() -> None:
     assert original == {'type': 'websocket'}
 
 
+def _bump_many(rounds: int) -> None:
+    for _ in range(rounds):
+        disconnect_all()
+
+
 def test_concurrent_revocations_all_count() -> None:
     """Every concurrent revocation must count.
 
@@ -655,10 +660,7 @@ def test_concurrent_revocations_all_count() -> None:
     start = consumers_module._auth_generation
     rounds = 200
     threads = [
-        threading.Thread(
-            target=lambda: [disconnect_all() for _ in range(rounds)]
-        )
-        for _ in range(4)
+        threading.Thread(target=_bump_many, args=(rounds,)) for _ in range(4)
     ]
     with _lost_fan_out():
         for t in threads:
@@ -667,6 +669,84 @@ def test_concurrent_revocations_all_count() -> None:
             t.join()
 
     assert consumers_module._auth_generation == start + 4 * rounds
+
+
+def test_force_disconnect_spares_a_socket_newer_than_the_revocation() -> None:
+    """A handshake completing between the generation bump and the
+    publish joins the group already stamped with the new generation —
+    it was accepted under the new credentials. Closing it would drop
+    the operator's reconnect for a revocation that never applied."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = consumers_module._auth_generation
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(
+            consumer.force_disconnect(
+                {
+                    'type': 'force_disconnect',
+                    'origin': consumers_module._PROCESS_ID,
+                    'generation': consumers_module._auth_generation,
+                }
+            )
+        )
+
+    close.assert_not_awaited()
+
+
+def test_force_disconnect_still_closes_a_socket_older_than_it() -> None:
+    """Mutation check: the window above must not become a way to
+    survive a revocation that does apply."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = consumers_module._auth_generation
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(
+            consumer.force_disconnect(
+                {
+                    'type': 'force_disconnect',
+                    'origin': consumers_module._PROCESS_ID,
+                    'generation': consumers_module._auth_generation + 1,
+                }
+            )
+        )
+
+    close.assert_awaited_once()
+
+
+def test_force_disconnect_closes_for_another_processs_event() -> None:
+    """Another process's counter says nothing about ours — a
+    manage.py changepassword on the device must still close every
+    socket here, however this process's generations compare."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = consumers_module._auth_generation
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(
+            consumer.force_disconnect(
+                {
+                    'type': 'force_disconnect',
+                    'origin': 'some-other-process',
+                    'generation': consumers_module._auth_generation,
+                }
+            )
+        )
+
+    close.assert_awaited_once()
+
+
+def test_force_disconnect_closes_for_a_payloadless_event() -> None:
+    """An event published by an older build carries neither field and
+    must keep its original meaning: close."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(consumer.force_disconnect({'type': 'force_disconnect'}))
+
+    close.assert_awaited_once()
 
 
 def test_connect_is_unaffected_by_earlier_generations() -> None:
