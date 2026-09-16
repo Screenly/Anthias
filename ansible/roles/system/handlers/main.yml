@@ -13,14 +13,20 @@
     state: restarted
     daemon_reload: true
 
-- name: Restart watchdog daemon
-  ansible.builtin.systemd:
-    name: watchdog
-    state: restarted
-
 - name: Re-execute systemd to release the watchdog device
+  # Defined before "Restart watchdog daemon" on purpose: pending
+  # handlers run in definition order, so the other order would restart
+  # the daemon while systemd still held /dev/watchdog — it would open
+  # nothing, log alive=[none], and report active while protecting
+  # nothing.
+  #
   # daemon-reexec, not daemon-reload: RuntimeWatchdogSec is read by the
   # manager itself at startup, so only re-executing PID 1 makes it let
   # go of /dev/watchdog.
   ansible.builtin.systemd:
     daemon_reexec: true
+
+- name: Restart watchdog daemon
+  ansible.builtin.systemd:
+    name: watchdog
+    state: restarted

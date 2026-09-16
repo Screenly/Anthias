@@ -57,8 +57,10 @@
 
 # Which path gets written into the daemon and systemd configs. The
 # stable udev name is used only when it resolves to the very device
-# this run vetted; anything else keeps the numeric path, which is what
-# the role did before the rule existed.
+# this run vetted; anything else arms nothing at all. Falling back to
+# /dev/watchdogN would reintroduce the failure the rule prevents — the
+# number is registration order, so a later boot can point it at the
+# device measured to halt the board.
 - name: Watchdog device path selection
   hosts: localhost
   connection: local
@@ -75,12 +77,12 @@
         dev: /dev/watchdog1
         link_exists: true
         link_source: /dev/watchdog0
-        expect: /dev/watchdog1
+        expect: ""
       - name: udev produced no symlink
         dev: /dev/watchdog1
         link_exists: false
         link_source: ""
-        expect: /dev/watchdog1
+        expect: ""
       - name: no watchdog at all
         dev: ""
         link_exists: false
@@ -92,7 +94,7 @@
         result: >-
           {{ ('/dev/' + stable_name)
              if (item.link_exists and item.link_source == item.dev)
-             else item.dev }}
+             else '' }}
       loop: "{{ cases }}"
       register: evaluated
 

@@ -255,28 +255,64 @@
     - system_watchdog_device.stat.exists | bool
     - system_watchdog_ident_exact != ''
 
-# Use the stable name only once it actually resolves to the device we
-# vetted. udev not producing the link (an identity that changed under
-# the role's feet, a host without udev) leaves the numeric path in
-# place — no worse than before the rule existed, and still the device
-# this run classified.
+# Use the stable name, or arm nothing. Falling back to
+# /dev/watchdogN would reintroduce exactly the failure the rule exists
+# to prevent: the number is registration order, so a later boot — a
+# kernel that gained a driver, the softdog this role loads registering
+# first — can point the same path at the device measured to halt the
+# board. An unprotected board is recoverable by hand; a board that
+# halts on every wedge is not. Every target runs systemd-udevd, so
+# this arms in practice and fails closed only when something is
+# genuinely wrong.
 - name: Settle which path the daemon and systemd are pointed at
   ansible.builtin.set_fact:
     system_watchdog_arm_path: >-
       {{ ('/dev/' + system_watchdog_stable_name)
          if ((system_watchdog_stable_stat.stat.exists | default(false))
              and (system_watchdog_stable_stat.stat.lnk_source | default('')) == system_watchdog_dev_path)
-         else system_watchdog_dev_path }}
+         else '' }}
 
 - name: Report that the stable name could not be used
   ansible.builtin.debug:
     msg: >-
-      udev did not produce /dev/{{ system_watchdog_stable_name }} for
-      {{ system_watchdog_dev_path }}; falling back to the numeric path,
-      which a reboot may renumber.
+      udev did not produce /dev/{{ system_watchdog_stable_name }}
+      resolving to {{ system_watchdog_dev_path }}, so no watchdog is
+      being armed: a numeric path can be renumbered into the device
+      this run rejected.
   when:
     - system_watchdog_device.stat.exists | bool
-    - system_watchdog_arm_path == system_watchdog_dev_path
+    - system_watchdog_arm_path == ''
+
+# From here on, "there is a watchdog to arm" means the identity-named
+# device — not merely a node that was found.
+- name: Settle whether there is a watchdog to arm
+  ansible.builtin.set_fact:
+    system_watchdog_device:
+      stat:
+        exists: "{{ system_watchdog_arm_path != '' }}"
+
+# A host that had a safe watchdog on an earlier run and does not now
+# (softdog stopped loading, the driver identity changed under a kernel
+# upgrade) must not be left with the previous run's daemon still
+# petting a device this run rejected. The drop-in below is rewritten
+# either way — its no-device branch sets RebootWatchdogSec=0 — so the
+# only stale piece to clear is the daemon itself.
+- name: Stop the daemon when this run found nothing safe to arm
+  ansible.builtin.systemd:
+    name: watchdog
+    enabled: false
+    state: stopped
+  register: system_watchdog_teardown
+  failed_when:
+    - system_watchdog_teardown is failed
+    - not (system_watchdog_teardown.msg | default('') is search('(?i)could not find|not found|no such file'))
+  when: not system_watchdog_device.stat.exists
+
+- name: Remove the stale identity rule when nothing is armed
+  ansible.builtin.file:
+    path: /etc/udev/rules.d/60-anthias-watchdog.rules
+    state: absent
+  when: not system_watchdog_device.stat.exists
 
 - name: Install the watchdog daemon
   ansible.builtin.apt:
@@ -317,7 +353,31 @@
     enabled: false
     masked: true
     state: stopped
-  failed_when: false
+  register: system_wd_keepalive
+  # Only an absent unit is acceptable. A mask that failed for any other
+  # reason must stop the run: wd_keepalive pets the device whenever the
+  # main daemon is not running, so leaving it live means a health
+  # daemon that died is covered for and the board never resets — while
+  # the fd check further down still passes and reports protection.
+  failed_when:
+    - system_wd_keepalive is failed
+    - not (system_wd_keepalive.msg | default('') is search('(?i)could not find|not found|no such file'))
+  when: system_watchdog_device.stat.exists
+
+- name: Read back the service state
+  ansible.builtin.service_facts:
+  when: system_watchdog_device.stat.exists
+
+- name: Confirm wd_keepalive cannot cover for the health daemon
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.services['wd_keepalive.service'] | default({})).get('status', 'not-found') in ['masked', 'not-found']
+      - (ansible_facts.services['wd_keepalive.service'] | default({})).get('state', 'stopped') != 'running'
+    fail_msg: >-
+      wd_keepalive is still available on this host, so it would pet the
+      watchdog whenever the health daemon is not running and the board
+      would never reset.
+    success_msg: wd_keepalive is masked or absent.
   when: system_watchdog_device.stat.exists
 
 - name: Configure the watchdog daemon
@@ -353,7 +413,6 @@
     mode: "0755"  # NOSONAR - systemd requires this readable
     owner: root
     group: root
-  when: system_watchdog_hw.stat.exists or system_watchdog_device.stat.exists
 
 - name: Release the watchdog device from systemd
   ansible.builtin.template:
@@ -362,12 +421,13 @@
     mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
     owner: root
     group: root
-  # Gated on a device existing at all, NOT on having found a safe one.
-  # If softdog can't load on a DesignWare host we end up with no
-  # daemon — but systemd must still be stopped from arming the
-  # hardware watchdog that was just classified as unsafe, which is the
-  # failure that leaves a board dark.
-  when: system_watchdog_hw.stat.exists or system_watchdog_device.stat.exists
+  # Written on every host, with no `when`. Not because every host has
+  # a watchdog, but because the two things this file says both matter
+  # when one is missing: systemd must be stopped from arming a
+  # hardware watchdog this role classified as unsafe, and a host that
+  # had a safe device on an earlier run must not keep that run's
+  # WatchdogDevice once this run has none. An unconditional write is
+  # also the only version with no stale-state case to reason about.
   notify: Re-execute systemd to release the watchdog device
 
 # The ordering is the point, so make it explicit rather than leave it
