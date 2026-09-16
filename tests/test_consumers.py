@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import threading
 from typing import Any
 from unittest import mock
 
@@ -639,6 +640,33 @@ def test_the_stamp_does_not_mutate_the_servers_scope() -> None:
     asyncio.run(app(original, mock.AsyncMock(), mock.AsyncMock()))
 
     assert original == {'type': 'websocket'}
+
+
+def test_concurrent_revocations_all_count() -> None:
+    """Every concurrent revocation must count.
+
+    A lost update would leave a socket stamped between two changes
+    matching the final generation — still authorized after a
+    revocation. Honest about what this proves: CPython's GIL makes the
+    losing interleaving unobservable, so this passes with or without
+    the lock on a GIL build. It pins the invariant (and would catch a
+    regression on a free-threaded one), it does not demonstrate the
+    race."""
+    start = consumers_module._auth_generation
+    rounds = 200
+    threads = [
+        threading.Thread(
+            target=lambda: [disconnect_all() for _ in range(rounds)]
+        )
+        for _ in range(4)
+    ]
+    with _lost_fan_out():
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert consumers_module._auth_generation == start + 4 * rounds
 
 
 def test_connect_is_unaffected_by_earlier_generations() -> None:

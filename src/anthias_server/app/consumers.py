@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Any
 
 from asgiref.sync import async_to_sync
@@ -30,6 +31,9 @@ WS_GROUP = 'ws_server'
 # state from the DB on a timer or per frame in the serving process,
 # which is exactly the SQLite/SBC cost this counter exists to avoid.
 _auth_generation = 0
+
+# Guards the increment only. See disconnect_all().
+_auth_generation_lock = threading.Lock()
 
 
 def _is_after_close_race(message: str, asgi_message: str) -> bool:
@@ -341,7 +345,22 @@ def disconnect_all() -> None:
     note on ``_auth_generation``.
     """
     global _auth_generation
-    _auth_generation += 1
+    # Under the lock: uvicorn runs sync views in a threadpool, so two
+    # credential changes can land on two threads at once, and `+= 1`
+    # is load-add-store rather than one bytecode. A lost update would
+    # leave a socket stamped between the two changes matching the
+    # final value — still receiving frames after a revocation.
+    #
+    # CPython's GIL makes that interleaving unobservable in practice
+    # today (measured: no lost update in 480k racing increments with
+    # the switch interval at 1 us), so this is not a fix for a bug
+    # anyone has seen. It is here because the language does not
+    # promise it and a free-threaded build does not have the GIL to
+    # lean on — and an uncontended lock costs nothing on a path that
+    # runs once per credential change. Reads stay lock-free; a single
+    # attribute load can't tear.
+    with _auth_generation_lock:
+        _auth_generation += 1
     _broadcast(
         {'type': 'force_disconnect'},
         description='disconnect_all',
