@@ -1479,8 +1479,10 @@ def preferred_download_vcodec() -> str:
 
     Returns the codec string to place first in ``format_sort`` so
     yt-dlp biases downloads toward the board's best playback path.
-    Falls back to ``'h264'`` for unknown boards and all boards where
-    H.264 is the primary hardware decode path.
+    Falls back to ``'h264'`` for unknown boards and for every board
+    whose primary path is H.264 — hardware on most of them, measured
+    software throughput on ``pi5`` and ``rk3566``. Either way H.264 is
+    what the board plays best, which is all this sort key decides.
     """
     return _PREFERRED_DOWNLOAD_VCODEC.get(resolve_device_key(), 'h264')
 
@@ -1498,9 +1500,10 @@ def _ffmpeg_reencode_recipe(
     libx264 is roughly 5-10× faster than libx265 at comparable
     quality, which matters when the operator is doing the encode by
     hand. Falls back to libx265 + ``-tag:v hvc1`` for HEVC-only boards.
-    Returns an empty string when the board has no HW decode set at all —
-    there's nothing the operator can transcode to that would land in a
-    supported pipe.
+    Returns an empty string when the board has no accepted set at all
+    — there's nothing the operator can transcode to that would land in
+    a supported pipe. ("Accepted", not "hardware-decoded": ``pi5`` and
+    ``rk3566`` accept H.264 on measured software throughput.)
 
     ``source_filename``, when supplied, substitutes the bare upload
     filename (no path) for the ``INPUT`` placeholder and reuses its
@@ -1584,7 +1587,7 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
     H.265-at-1080p MP4 preset, so the encoder swap is the cleanest
     route to a 1080p HEVC MP4.
 
-    Returns an empty list when the board has no HW decode set at all —
+    Returns an empty list when the board has no accepted set at all —
     there's nothing to transcode to, exactly as the recipe returns an
     empty string. Step text embeds the download URL verbatim so the
     list stands alone when surfaced as plain text via the v2 API.
@@ -1792,10 +1795,15 @@ def _run_video_normalisation(asset: Asset) -> None:
         )
     else:
         # Empty ``supported`` means no allowlist was found for this
-        # key, which happens two ways: the catch-all ``arm64`` with
-        # DEVICE_TYPE set but no subtype resolved, and an unset or
-        # unrecognised DEVICE_TYPE, which ``resolve_device_key``
-        # passes through to a key the map has no entry for. The branch
+        # key, which happens three ways: the catch-all ``arm64`` with
+        # no subtype resolved; ``arm64`` with a subtype the map does
+        # not know yet (host_agent ahead of the server mid-rollout);
+        # and an unset or unrecognised DEVICE_TYPE, which
+        # ``resolve_device_key`` passes through to a key the map has
+        # no entry for. The first two are the same deployment and get
+        # the same advice, which is why the branch below keys on the
+        # environment DEVICE_TYPE rather than on the resolved key. The
+        # branch
         # below picks its advice from which of the two it is, because
         # only the first has a host agent worth checking. Either way
         # say *why* rather than the misleading "Supported: none.",
@@ -1822,7 +1830,7 @@ def _run_video_normalisation(asset: Asset) -> None:
         #   operator can take; saying so beats sending them after a
         #   service their device has never had.
         message = (
-            f'Video codec {display_codec!r} can not be verified for '
+            f'Video codec {display_codec!r} cannot be verified for '
             'playback on this device — Anthias could not identify '
             'this board, so it has no measured playback envelope for '
             'it and cannot certify that any codec plays here.'
