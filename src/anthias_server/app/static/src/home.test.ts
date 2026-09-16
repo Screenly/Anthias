@@ -928,6 +928,10 @@ describe('page-wide drag and drop', () => {
     ],
     ['the bulk-edit modal', (app: HomeAppLike) => (app.bulkEditOpen = true)],
     ['the delete prompt', (app: HomeAppLike) => (app.pendingDeleteId = 'a1')],
+    [
+      'the bulk-delete prompt',
+      (app: HomeAppLike) => (app.bulkDeleteOpen = true),
+    ],
   ])('a drop over %s is refused, not navigated', async (_name, open) => {
     mountUploadForm()
     stubXhr([{ status: 200 }])
