@@ -70,21 +70,25 @@
 # default — on these boards systemd arming the hardware watchdog is
 # the failure, not the protection.
 # Classify what is already there, by identity rather than by the
-# presence of /dev/watchdog. Three things make the naive check wrong:
+# presence of /dev/watchdog, and as an allowlist rather than a
+# denylist. A denylist ("anything that isn't DesignWare or softdog")
+# arms a driver nobody has watched reboot a board — including drivers
+# that don't exist yet, on the generic arm64 target this role also
+# runs on — and a hardware watchdog that halts instead of resetting
+# turns every wedge into a dark screen needing a physical visit. That
+# is exactly what DesignWare did to two boards here.
 #
-#   * an unreadable or empty identity must count as untrusted. Reading
-#     it is allowed to fail, and `'designware' not in ''` is true, so a
-#     default of '' would quietly arm an unidentifiable device — the
-#     opposite of the fail-safe this is for.
-#   * softdog registers a /dev/watchdog of its own. On the second run
-#     of this role on an x86 host, the softdog persisted by the first
-#     run looks exactly like "a hardware watchdog appeared", and
-#     treating it as one makes every later run skip the configuration
-#     it is supposed to be enforcing.
-#   * DesignWare halts rather than reboots (measured; see below).
+# So: arm hardware only for an identity someone has measured resetting
+# the board, and fall back to softdog for everything else. softdog
+# reboots through the kernel's ordinary restart path, which is
+# measured (below) and driver-independent, so the fallback is not a
+# downgrade in the case that matters. Adding a board means measuring
+# it and appending its identity to system_watchdog_hw_allowlist.
 #
-# So hardware is used only on a positive identification that is
-# neither of those.
+# Two cases the naive presence check gets wrong are subsumed by this:
+# an unreadable identity (matches nothing, so softdog), and the
+# softdog this role itself loaded looking like "a hardware watchdog
+# appeared" on the second run (its identity isn't on the list).
 - name: Classify the watchdog device
   ansible.builtin.set_fact:
     system_watchdog_ident: >-
@@ -96,8 +100,7 @@
     system_watchdog_use_hw: >-
       {{ system_watchdog_hw.stat.exists
          and (system_watchdog_ident | default('')) != ''
-         and 'designware' not in (system_watchdog_ident | default(''))
-         and 'software' not in (system_watchdog_ident | default('')) }}
+         and (system_watchdog_ident | default('')) in (system_watchdog_hw_allowlist | map('lower') | list) }}
 
 - name: Report why the hardware watchdog is not being used
   ansible.builtin.debug:
@@ -106,9 +109,12 @@
       {{ 'no hardware watchdog present' if not system_watchdog_hw.stat.exists
          else ('driver identity unreadable, treating as untrusted'
                if (system_watchdog_ident | default('')) == ''
-               else ('the existing device is softdog'
-                     if 'software' in (system_watchdog_ident | default(''))
-                     else 'this driver was measured halting the board rather than rebooting it')) }}
+               else ('this driver was measured halting the board rather than rebooting it'
+                     if 'designware' in (system_watchdog_ident | default(''))
+                     else ('the existing device is softdog'
+                           if 'software' in (system_watchdog_ident | default(''))
+                           else 'no one has measured this driver resetting a board (identity: '
+                                + (system_watchdog_ident | default('')) + ')'))) }}
   when: not system_watchdog_use_hw
 
 - name: Load the software watchdog where there is no hardware one
@@ -193,8 +199,9 @@
     system_watchdog_dev_path: "{{ (system_watchdog_path.stdout | default('')).split('\t') | first | trim }}"
     # Verbatim, because the udev rule compares it byte for byte. A
     # double quote would break out of the rule's quoting, so an
-    # identity containing one is treated as unusable and the role
-    # keeps the numeric path (what it did before the rule existed).
+    # identity containing one is treated as unusable — which means no
+    # rule, no stable name, and therefore nothing armed at all (see
+    # the fail-closed settle below).
     system_watchdog_ident_exact: >-
       {{ ((system_watchdog_path.stdout | default('')).split('\t')[1:] | first | default('') | trim)
          if '"' not in ((system_watchdog_path.stdout | default('')).split('\t')[1:] | first | default(''))
@@ -329,6 +336,12 @@
     group: root
   when: system_watchdog_device.stat.exists
 
+# The keepalive block below runs on *every* host, including the
+# fail-closed path where nothing is armed: a distro or an earlier
+# install can have wd_keepalive running already, and it would go on
+# petting the device this run rejected — defeating the health gate
+# while the role reports it armed nothing.
+#
 # Debian's watchdog package ships wd_keepalive, which pets the device
 # whenever the main daemon is not running — so an operator can stop the
 # daemon without the box resetting. For us that is precisely backwards:
@@ -341,6 +354,24 @@
     path: /etc/default/watchdog
     regexp: '^#?\s*run_wd_keepalive='
     line: run_wd_keepalive=0
+    create: true
+    mode: "0644"  # NOSONAR - distro default for /etc/default entries
+    owner: root
+    group: root
+  when: system_watchdog_device.stat.exists
+
+# The unit's ExecStart is `[ $run_watchdog != 1 ] || exec
+# /usr/sbin/watchdog ...`, so with run_watchdog at 0 the service
+# starts, exits 0, and reports active while running nothing. The
+# package's debconf default sets it to 1 on a fresh install, but the
+# postinst preserves an existing value — an install where it was ever
+# answered "no" would provision "successfully" with no daemon. Set it
+# explicitly.
+- name: Let the watchdog unit actually start the daemon
+  ansible.builtin.lineinfile:
+    path: /etc/default/watchdog
+    regexp: '^#?\s*run_watchdog='
+    line: run_watchdog=1
     create: true
     mode: "0644"  # NOSONAR - distro default for /etc/default entries
     owner: root
@@ -362,11 +393,9 @@
   failed_when:
     - system_wd_keepalive is failed
     - not (system_wd_keepalive.msg | default('') is search('(?i)could not find|not found|no such file'))
-  when: system_watchdog_device.stat.exists
 
 - name: Read back the service state
   ansible.builtin.service_facts:
-  when: system_watchdog_device.stat.exists
 
 - name: Confirm wd_keepalive cannot cover for the health daemon
   ansible.builtin.assert:
@@ -378,7 +407,6 @@
       watchdog whenever the health daemon is not running and the board
       would never reset.
     success_msg: wd_keepalive is masked or absent.
-  when: system_watchdog_device.stat.exists
 
 - name: Configure the watchdog daemon
   ansible.builtin.template:

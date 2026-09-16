@@ -3,7 +3,9 @@
 # actually exist in the fleet. Run with:
 #   uv run ansible-playbook -i localhost, tests/ansible/watchdog_classification.yml
 #
-# The x86 second-run case is the one worth keeping: softdog registers a
+# Hardware is armed only for an identity someone has measured
+# resetting the board; everything else falls back to softdog. The x86
+# second-run case is the one worth keeping: softdog registers a
 # /dev/watchdog of its own, so once the first run has persisted it, a
 # naive "is there a hardware watchdog" check flips to yes and every
 # later run silently skips configuring the thing it is meant to
@@ -14,6 +16,9 @@
   connection: local
   gather_facts: false
   vars:
+    # Mirrors roles/system/defaults/main.yml.
+    allowlist:
+      - broadcom bcm2835 watchdog timer
     cases:
       - name: x86 first run (no device)
         hw: false
@@ -35,14 +40,20 @@
         hw: true
         ident: ""
         expect_hw: false
+      # The allowlist's reason for being: a driver nobody has watched
+      # reset a board is not armed, because a watchdog that halts
+      # turns every wedge into a physical visit.
+      - name: unknown hardware driver
+        hw: true
+        ident: acme super watchdog
+        expect_hw: false
   tasks:
     - name: Evaluate the same expression the role uses
       ansible.builtin.set_fact:
         result: >-
           {{ item.hw
              and (item.ident | default('')) != ''
-             and 'designware' not in (item.ident | default(''))
-             and 'software' not in (item.ident | default('')) }}
+             and (item.ident | default('')) in (allowlist | map('lower') | list) }}
       loop: "{{ cases }}"
       register: evaluated
 

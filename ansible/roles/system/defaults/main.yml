@@ -23,3 +23,16 @@ system_watchdog_interval_sec: 10
 # daemon and systemd are pointed at this rather than at /dev/watchdogN,
 # whose numbering is registration order and can change across boots.
 system_watchdog_stable_name: anthias-watchdog
+
+# Watchdog driver identities (as /sys/class/watchdog/*/identity reports
+# them, compared lowercased) that someone has measured actually
+# resetting the board rather than halting it. Anything not on this
+# list — including drivers that don't exist yet — falls back to
+# softdog, which reboots through the kernel's ordinary restart path.
+#
+# Measured:
+#   * Broadcom BCM2835 (Raspberry Pi) — resets.
+#   * Synopsys DesignWare (Rockchip) — halts. Took two boards dark
+#     here, which is why this is an allowlist.
+system_watchdog_hw_allowlist:
+  - Broadcom BCM2835 Watchdog timer
