@@ -1,0 +1,17 @@
+---
+# How long PID 1 may go without pinging the hardware watchdog before
+# the silicon resets the board. Note this only catches PID 1 stalling
+# — see the measured limitation in tasks/resilience.yml before relying
+# on it for anything else. systemd pings at half this interval, so
+# 30 s means a ping every 15 s and a reset ~30 s into a real livelock.
+#
+# Overridable for a board whose watchdog cannot be set this low, or to
+# lengthen it on hardware where a slow boot risks a reset loop. Drivers
+# clamp to what they support rather than failing, so a value the
+# silicon cannot honour rounds rather than breaking the install.
+system_runtime_watchdog_sec: 30
+
+# Cap on a hung shutdown. systemd re-arms the watchdog across reboot so
+# a device that stalls while stopping services still comes back instead
+# of sitting dark until someone visits it.
+system_reboot_watchdog_sec: 5min

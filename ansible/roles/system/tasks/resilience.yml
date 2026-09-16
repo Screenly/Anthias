@@ -1,0 +1,86 @@
+---
+# Recovery from memory-pressure wedges. Two independent layers, because
+# they fail in different places:
+#
+#   1. keep the kernel OOM killer able to act promptly (no swap), so a
+#      runaway allocation is killed and `restart: always` recovers the
+#      container;
+#   2. a hardware watchdog for the case where nothing in userspace runs
+#      any more and there is nobody left to do the killing.
+#
+# Layer 1 is what has to do the work. Layer 2 is a backstop for PID 1
+# dying, and MEASURED NOT TO RECOVER A MEMORY-PRESSURE WEDGE:
+#
+#   NanoPi R3S LTS, 2 GB, RuntimeWatchdogSec=30 armed and confirmed
+#   (`systemd[1]: Watchdog running with a hardware timeout of 44s`,
+#   PID 1 holding /dev/watchdog0). Driven into a wedge with a memory
+#   hog, the board stopped answering SSH, then ICMP, and stayed down
+#   for 13 minutes until it was power-cycled by hand. No reset.
+#
+# The reason is what systemd's ping means: it proves PID 1 is
+# scheduled, not that the system is usable. PID 1 is small, resident
+# and rarely the thing that stalls, so it keeps petting while
+# everything an operator cares about is gone.
+#
+# Keep it anyway — it costs nothing and does cover a dead or hung PID
+# 1 — but do not treat it as the answer to memory pressure. The
+# recovery that would have fired here is a health-gated pet: the
+# classic `watchdog` daemon pets only while min-memory / max-load
+# checks pass, so exhaustion itself stops the petting and the silicon
+# resets. That is the follow-up; it is not wired up here because it
+# has not been tested on hardware yet, and this file has just
+# demonstrated what shipping an untested recovery claim is worth.
+
+- name: Check for Armbian's zram swap unit
+  ansible.builtin.stat:
+    path: /usr/lib/armbian/armbian-zram-config
+  register: system_armbian_zram
+
+# misc.yml runs `swapoff --all` at install time, but on Armbian that
+# lasts until the next boot: armbian-zram-config is WantedBy
+# sysinit.target and re-creates a zram swap device (985 MB on a 2 GB
+# board) every time. The installer's intent — no swap, so the OOM
+# killer acts instead of the box thrashing — silently stops holding,
+# which is the state the NanoPi R3S and Rock Pi 4 wedges were found in.
+#
+# SWAP=false leaves the rest of the unit alone: Armbian also uses zram
+# for /var/log (log2ram), which is unrelated and worth keeping.
+- name: Stop Armbian re-creating zram swap on every boot
+  ansible.builtin.lineinfile:
+    path: /etc/default/armbian-zram-config
+    regexp: '^#?\s*SWAP='
+    line: SWAP=false
+    create: true
+    mode: "0644"  # NOSONAR - distro default for /etc/default entries
+    owner: root
+    group: root
+  when: system_armbian_zram.stat.exists
+  notify: Disable active zram swap
+
+- name: Detect a hardware watchdog
+  ansible.builtin.stat:
+    path: /dev/watchdog
+  register: system_watchdog_device
+
+# systemd opens /dev/watchdog and pings it at half this interval; if PID
+# 1 cannot run, the silicon resets the board. Nothing in userspace has
+# to be alive for that to work, which is the whole point.
+#
+# The value is a request, not a guarantee: the driver clamps it to what
+# the silicon supports, and a coarse one rounds up (the RK3566's
+# Synopsys DesignWare watchdog reports 44 s for a 30 s request). Erring
+# short is safe — the device cannot exceed its own maximum.
+- name: Drive the hardware watchdog from systemd
+  ansible.builtin.copy:
+    dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
+    content: |
+      # Managed by Anthias. A signage player is unattended; a board that
+      # wedges under memory pressure has to come back on its own.
+      [Manager]
+      RuntimeWatchdogSec={{ system_runtime_watchdog_sec }}
+      RebootWatchdogSec={{ system_reboot_watchdog_sec }}
+    mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
+    owner: root
+    group: root
+  when: system_watchdog_device.stat.exists
+  notify: Reload systemd manager configuration
