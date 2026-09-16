@@ -1633,8 +1633,13 @@ def _handbrake_steps(supported: frozenset[str]) -> list[str]:
 
 
 class UnsupportedVideoCodecError(Exception):
-    """Raised by ``_run_video_normalisation`` when a video upload's
-    codec can't be hardware-decoded on this device.
+    """Raised by ``_run_video_normalisation`` when a video upload is
+    outside this board's accepted set.
+
+    Not "cannot be hardware-decoded": ``pi5`` and ``rk3566`` accept
+    H.264 on measured software throughput, and the same exception
+    carries the resolution rejections — an accepted codec above the
+    board's pixel cap (``rk3566`` H.264 over 1080p) fails here too.
 
     Carries the suggested ``recipe`` (an ``ffmpeg`` command the
     operator can run to fix the upload) plus ``handbrake`` (the
