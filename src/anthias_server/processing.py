@@ -1822,7 +1822,16 @@ def _run_video_normalisation(asset: Asset) -> None:
                 'identify the board, so aarch64 boards there always '
                 'land here. Otherwise this board has not been profiled '
                 'yet — please open an issue asking for it.'
-                if device_key in ARM64_DEVICE_TYPES
+                # Branch on the *environment* DEVICE_TYPE, not the
+                # resolved key. resolve_device_key() returns the
+                # subtype when Redis has one, so a subtype the codec
+                # map doesn't know yet — mid-rollout, host_agent ahead
+                # of the server — would fall into the "unset or
+                # unrecognised" arm and hide the compose/balena
+                # diagnosis from a deployment that is exactly the
+                # arm64 catch-all this text is written for.
+                if os.environ.get('DEVICE_TYPE', '').strip().lower()
+                in ARM64_DEVICE_TYPES
                 else ' DEVICE_TYPE is unset or unrecognised on this '
                 'install, so no board profile could be selected at all.'
             )

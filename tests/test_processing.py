@@ -3112,3 +3112,49 @@ def test_unidentified_board_message_scopes_the_balena_advice(
     assert 'cannot certify that any codec plays here' in msg
     assert 'balena' not in msg
     assert 'device_type' in msg
+
+
+@pytest.mark.django_db
+def test_unidentified_board_message_survives_an_unknown_subtype(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A subtype Redis knows but the codec map doesn't — host_agent
+    ahead of the server during a rollout — is still an arm64 catch-all
+    deployment, and must still get the host-agent/balena diagnosis.
+
+    Branching on the resolved key instead would call it "DEVICE_TYPE
+    unset or unrecognised", which is both wrong and unactionable.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-future-subtype', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        # A board the running server has never heard of.
+        mock.patch(
+            'anthias_common.board.get_board_subtype',
+            return_value='rk9999-from-the-future',
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value).lower()
+    assert 'anthias-host-agent' in msg
+    assert 'unset or unrecognised' not in msg
