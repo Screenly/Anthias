@@ -1761,7 +1761,7 @@ def _run_video_normalisation(asset: Asset) -> None:
         _notify(asset_id)
         return
 
-    # Codec is outside the board's HW decode set (or ffprobe couldn't
+    # Codec is outside the board's accepted set (or ffprobe couldn't
     # read it). Commit the metadata we *did* gather so the operator's
     # asset-list row carries the rejected codec / dims / fps, then
     # raise so ``_NormalizeAssetTask.on_failure`` fills in
