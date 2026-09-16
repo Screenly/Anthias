@@ -1,0 +1,55 @@
+---
+# Pins the watchdog hardware/softdog decision against the layouts that
+# actually exist in the fleet. Run with:
+#   uv run ansible-playbook -i localhost, tests/ansible/watchdog_classification.yml
+#
+# The x86 second-run case is the one worth keeping: softdog registers a
+# /dev/watchdog of its own, so once the first run has persisted it, a
+# naive "is there a hardware watchdog" check flips to yes and every
+# later run silently skips configuring the thing it is meant to
+# enforce. The Rockchip case is measured — its watchdog halts the board
+# instead of rebooting it (see roles/system/tasks/resilience.yml).
+- name: Watchdog hardware/softdog classification
+  hosts: localhost
+  gather_facts: false
+  vars:
+    cases:
+      - name: x86 first run (no device)
+        hw: false
+        ident: ""
+        expect_hw: false
+      - name: x86 second run (softdog present)
+        hw: true
+        ident: software watchdog
+        expect_hw: false
+      - name: Raspberry Pi (BCM2835)
+        hw: true
+        ident: broadcom bcm2835 watchdog timer
+        expect_hw: true
+      - name: Rockchip (DesignWare, halts)
+        hw: true
+        ident: synopsys designware watchdog
+        expect_hw: false
+      - name: identity unreadable
+        hw: true
+        ident: ""
+        expect_hw: false
+  tasks:
+    - name: Evaluate the same expression the role uses
+      ansible.builtin.set_fact:
+        result: >-
+          {{ item.hw
+             and (item.ident | default('')) != ''
+             and 'designware' not in (item.ident | default(''))
+             and 'software' not in (item.ident | default('')) }}
+      loop: "{{ cases }}"
+      register: evaluated
+
+    - name: Report and assert
+      ansible.builtin.assert:
+        that: (item.ansible_facts.result | bool) == (item.item.expect_hw | bool)
+        success_msg: "OK  {{ item.item.name }} -> use_hardware={{ item.ansible_facts.result }}"
+        fail_msg: "FAIL {{ item.item.name }} -> got {{ item.ansible_facts.result }}, expected {{ item.item.expect_hw }}"
+      loop: "{{ evaluated.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"

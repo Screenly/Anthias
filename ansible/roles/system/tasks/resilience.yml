@@ -69,22 +69,47 @@
 # below sets RuntimeWatchdogSec=0 rather than leaving the distro
 # default — on these boards systemd arming the hardware watchdog is
 # the failure, not the protection.
-- name: Decide whether the hardware watchdog can be trusted to reboot
+# Classify what is already there, by identity rather than by the
+# presence of /dev/watchdog. Three things make the naive check wrong:
+#
+#   * an unreadable or empty identity must count as untrusted. Reading
+#     it is allowed to fail, and `'designware' not in ''` is true, so a
+#     default of '' would quietly arm an unidentifiable device — the
+#     opposite of the fail-safe this is for.
+#   * softdog registers a /dev/watchdog of its own. On the second run
+#     of this role on an x86 host, the softdog persisted by the first
+#     run looks exactly like "a hardware watchdog appeared", and
+#     treating it as one makes every later run skip the configuration
+#     it is supposed to be enforcing.
+#   * DesignWare halts rather than reboots (measured; see below).
+#
+# So hardware is used only on a positive identification that is
+# neither of those.
+- name: Classify the watchdog device
   ansible.builtin.set_fact:
-    system_watchdog_hw_reboots: >-
-      {{ 'designware' not in
-         (system_watchdog_identity.content | default('') | b64decode | lower) }}
+    system_watchdog_ident: >-
+      {{ system_watchdog_identity.content | default('') | b64decode | lower | trim }}
   when: system_watchdog_hw.stat.exists
 
-- name: Report falling back to softdog on a watchdog that only halts
+- name: Decide whether to use hardware or fall back to softdog
+  ansible.builtin.set_fact:
+    system_watchdog_use_hw: >-
+      {{ system_watchdog_hw.stat.exists
+         and (system_watchdog_ident | default('')) != ''
+         and 'designware' not in (system_watchdog_ident | default(''))
+         and 'software' not in (system_watchdog_ident | default('')) }}
+
+- name: Report why the hardware watchdog is not being used
   ansible.builtin.debug:
     msg: >-
-      Hardware watchdog present but measured halting the board rather
-      than rebooting it; using softdog instead. See the comment in
-      roles/system/tasks/resilience.yml.
-  when:
-    - system_watchdog_hw.stat.exists
-    - not system_watchdog_hw_reboots
+      Falling back to softdog:
+      {{ 'no hardware watchdog present' if not system_watchdog_hw.stat.exists
+         else ('driver identity unreadable, treating as untrusted'
+               if (system_watchdog_ident | default('')) == ''
+               else ('the existing device is softdog'
+                     if 'software' in (system_watchdog_ident | default(''))
+                     else 'this driver was measured halting the board rather than rebooting it')) }}
+  when: not system_watchdog_use_hw
 
 - name: Load the software watchdog where there is no hardware one
   # Plain modprobe rather than community.general.modprobe: this repo
@@ -94,7 +119,7 @@
   register: system_softdog
   changed_when: system_softdog.rc == 0
   failed_when: false
-  when: not system_watchdog_hw.stat.exists or not system_watchdog_hw_reboots
+  when: not system_watchdog_use_hw
 
 - name: Keep the software watchdog across reboots
   ansible.builtin.copy:
@@ -124,9 +149,7 @@
 - name: Resolve which watchdog device to pet
   ansible.builtin.shell: |
     set -o pipefail
-    want_soft={{ (not system_watchdog_hw.stat.exists
-                  or not system_watchdog_hw_reboots | default(true))
-                 | ternary('yes', 'no') }}
+    want_soft={{ (not system_watchdog_use_hw) | ternary('yes', 'no') }}
     for w in /sys/class/watchdog/watchdog*; do
       [ -r "$w/identity" ] || continue
       id=$(tr '[:upper:]' '[:lower:]' < "$w/identity")
@@ -226,6 +249,19 @@
 # observed on a Pi 4 doing exactly that. The re-exec is a normal task
 # rather than a handler for this reason: handlers flush at the end of
 # the play, which is after the daemon would have started.
+- name: Ensure the systemd drop-in directory exists
+  # `copy` does not create parent directories, and a clean Debian or
+  # Raspberry Pi host may not ship /etc/systemd/system.conf.d — which
+  # would fail first provisioning right before the handover. Same
+  # pattern the Docker drop-in uses.
+  ansible.builtin.file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    mode: "0755"  # NOSONAR - systemd requires this readable
+    owner: root
+    group: root
+  when: system_watchdog_hw.stat.exists or system_watchdog_device.stat.exists
+
 - name: Release the watchdog device from systemd
   ansible.builtin.copy:
     dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
@@ -240,7 +276,12 @@
     mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
     owner: root
     group: root
-  when: system_watchdog_device.stat.exists
+  # Gated on a device existing at all, NOT on having found a safe one.
+  # If softdog can't load on a DesignWare host we end up with no
+  # daemon — but systemd must still be stopped from arming the
+  # hardware watchdog that was just classified as unsafe, which is the
+  # failure that leaves a board dark.
+  when: system_watchdog_hw.stat.exists or system_watchdog_device.stat.exists
   register: system_watchdog_handover
 
 - name: Re-execute systemd so it closes the watchdog device
