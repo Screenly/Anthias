@@ -1658,8 +1658,14 @@ class UnsupportedVideoCodecError(Exception):
 
 def _run_video_normalisation(asset: Asset) -> None:
     """Probe the upload, record what ffprobe finds in ``metadata``,
-    and reject the asset if its codec is outside what this board is
-    known to play.
+    and reject the asset if its codec is outside this board's accepted
+    set.
+
+    "Accepted" is not the same as "plays cleanly": the map keeps
+    three entries that are documented as failing or dropping frames
+    (x86 HEVC, Rock Pi 4 HEVC, 4K H.264 on ``pi4-64``) because
+    removing them would reject uploads that existing fleets already
+    run. See ``_HW_DECODE_VIDEO_CODECS`` for the per-entry evidence.
 
     The file is never rewritten. Anthias does not re-encode video
     on-device — most boards the viewer supports hardware-decode their
@@ -1817,11 +1823,14 @@ def _run_video_normalisation(asset: Asset) -> None:
             'it and cannot certify that any codec plays here.'
             + (
                 ' On a docker-compose install, check that '
-                'anthias-host-agent and Redis are both running. balena '
-                'devices ship no host agent and have no other way to '
-                'identify the board, so aarch64 boards there always '
-                'land here. Otherwise this board has not been profiled '
-                'yet — please open an issue asking for it.'
+                'anthias-host-agent and Redis are both running. On '
+                'balena, the generic arm64 fleet (Rock Pi 4) ships no '
+                'host agent and has no other subtype source, so those '
+                'devices always land here; balena fleets built from an '
+                'identified image (pi4-64, pi5) resolve their own key '
+                'and never reach this message. Otherwise this board '
+                'has not been profiled yet — please open an issue '
+                'asking for it.'
                 # Branch on the *environment* DEVICE_TYPE, not the
                 # resolved key. resolve_device_key() returns the
                 # subtype when Redis has one, so a subtype the codec
