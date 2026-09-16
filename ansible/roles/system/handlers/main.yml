@@ -13,15 +13,6 @@
     state: restarted
     daemon_reload: true
 
-- name: Disable active zram swap
-  # SWAP=false only governs the next boot. Turn off whatever the unit
-  # already created so the installer's swapoff intent holds from here
-  # rather than from the next reboot. `failed_when: false` because a
-  # board with no zram swap active is the state we wanted anyway.
-  ansible.builtin.command: /sbin/swapoff /dev/zram0
-  failed_when: false
-  changed_when: true
-
 - name: Restart watchdog daemon
   ansible.builtin.systemd:
     name: watchdog

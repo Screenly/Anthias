@@ -9,7 +9,8 @@
 # Why this exists rather than watchdog.conf's own `min-memory`: that
 # setting is an absolute page count, and this fleet spans a 361 MB
 # Pi 3A+ to an 8 GB x86. One number is either useless on the big boxes
-# or a reboot loop on the small ones. A *fraction* of MemTotal travels.
+# or a reboot loop on the small ones. A *fraction* travels, and so
+# does counting swap, which min-memory does not.
 #
 # Deliberately conservative. A false positive here reboots a working
 # player mid-content, which is worse than the wedge it guards against,
@@ -22,13 +23,31 @@
 
 total=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
 avail=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
+swapfree=$(awk '/^SwapFree:/{print $2}' /proc/meminfo)
 
 # MemAvailable has been in /proc/meminfo since 3.14 and is present on
 # every kernel this fleet runs; if it ever isn't, say healthy rather
 # than reboot on a missing field.
 [ -n "$total" ] && [ -n "$avail" ] && [ "$total" -gt 0 ] || exit 0
 
-pct=$((avail * 100 / total))
+# Count free swap as headroom. MemAvailable deliberately excludes it,
+# but a box with somewhere left to page is not the wedge this guards
+# against — and Anthias boards may run zram, where swap is compressed
+# RAM and genuinely does buy capacity. Ignoring it would reboot a
+# board that still had room, which is a worse outcome than the wedge.
+#
+# Note this makes the gate conservative on a zram box in the other
+# direction too: zram's pages are compressed, so free swap is cheaper
+# than the same number of free RAM pages, and the gate will hold on
+# slightly longer than a RAM-only reading would. That is the safe
+# direction for something whose failure mode is an unnecessary reboot.
+[ -n "$swapfree" ] || swapfree=0
+headroom=$((avail + swapfree))
+
+# Expressed against MemTotal, so this reads over 100% on a box whose
+# free swap exceeds its RAM shortfall. That is not a bug — it is a
+# threshold comparison, not a utilisation figure.
+pct=$((headroom * 100 / total))
 
 if [ "$pct" -ge "$ANTHIAS_WD_MIN_AVAIL_PCT" ]; then
     rm -f "$ANTHIAS_WD_STATE"
@@ -54,9 +73,9 @@ fi
 
 if [ "$strikes" -ge "$ANTHIAS_WD_STRIKES" ]; then
     logger -t anthias-watchdog \
-        "MemAvailable ${pct}% for ${strikes} consecutive checks — letting the watchdog reset the board"
+        "memory headroom ${pct}% for ${strikes} consecutive checks — letting the watchdog reset the board"
     exit 1
 fi
 
-logger -t anthias-watchdog "MemAvailable ${pct}% (strike ${strikes}/${ANTHIAS_WD_STRIKES})"
+logger -t anthias-watchdog "memory headroom ${pct}% (strike ${strikes}/${ANTHIAS_WD_STRIKES})"
 exit 0

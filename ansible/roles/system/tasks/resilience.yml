@@ -3,9 +3,12 @@
 # come back without a site visit. Two layers, because they fail in
 # different places.
 #
-# Layer 1 — prevention. No swap (misc.yml, kept durable below) so the
-# kernel OOM killer acts promptly, and start_viewer.sh marks the
-# process actually holding the memory so the kill frees something.
+# Layer 1 — prevention. start_viewer.sh marks the process actually
+# holding the memory as the OOM victim, so when the kernel does act it
+# frees something. Swap policy is deliberately NOT set here: misc.yml
+# already has the project's position on it, and zram in particular is
+# a capacity win on small boards rather than something a watchdog role
+# should quietly switch off.
 #
 # Layer 2 — reset. A watchdog device the box cannot pet once it is
 # unhealthy.
@@ -28,32 +31,6 @@
 # pets only while a health check passes, so starvation itself stops the
 # petting. Only one process can hold the device, so systemd has to be
 # told to let go first — that handover is the point of the drop-in.
-
-- name: Check for Armbian's zram swap unit
-  ansible.builtin.stat:
-    path: /usr/lib/armbian/armbian-zram-config
-  register: system_armbian_zram
-
-# misc.yml runs `swapoff --all` at install time, but on Armbian that
-# lasts until the next boot: armbian-zram-config is WantedBy
-# sysinit.target and re-creates a zram swap device (985 MB on a 2 GB
-# board) every time. The installer's intent — no swap, so the OOM
-# killer acts instead of the box thrashing — silently stops holding,
-# which is the state the NanoPi R3S and Rock Pi 4 wedges were found in.
-#
-# SWAP=false leaves the rest of the unit alone: Armbian also uses zram
-# for /var/log, which is unrelated and worth keeping.
-- name: Stop Armbian re-creating zram swap on every boot
-  ansible.builtin.lineinfile:
-    path: /etc/default/armbian-zram-config
-    regexp: '^#?\s*SWAP='
-    line: SWAP=false
-    create: true
-    mode: "0644"  # NOSONAR - distro default for /etc/default entries
-    owner: root
-    group: root
-  when: system_armbian_zram.stat.exists
-  notify: Disable active zram swap
 
 - name: Look for a hardware watchdog
   ansible.builtin.stat:
