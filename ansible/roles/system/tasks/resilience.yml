@@ -1,94 +1,65 @@
 ---
-# Recovery from a wedge: the board stops making progress and has to
-# come back without a site visit. Two layers, because they fail in
-# different places.
+# Automatic recovery for a board that stops responding.
 #
-# Layer 1 — prevention. start_viewer.sh marks the process actually
-# holding the memory as the OOM victim, so when the kernel does act it
-# frees something. Swap policy is deliberately NOT set here: misc.yml
-# already has the project's position on it, and zram in particular is
-# a capacity win on small boards rather than something a watchdog role
-# should quietly switch off.
+# The petting is systemd's: RuntimeWatchdogSec= makes PID 1 open
+# /dev/watchdog, program the timeout, and ping at half of it, for a
+# hardware device and softdog alike. Raspberry Pi OS already enables
+# it (RuntimeWatchdogSec=1m, shipped in
+# /usr/lib/systemd/system.conf.d/40-rpi-enable-watchdog.conf), which is
+# why this role does not install a watchdog daemon, does not take the
+# device away from systemd, and does not ship a petting script. It
+# configures the thing that is already there.
 #
-# Layer 2 — reset. A watchdog device the box cannot pet once it is
-# unhealthy.
+# What is left for us is the part systemd has no opinion about: WHICH
+# device it should open. That matters because one of the boards in the
+# fleet ships a watchdog that does not reboot:
 #
-# Layer 2 is deliberately NOT systemd's RuntimeWatchdogSec, which is
-# what a first pass reaches for. Measured, on hardware:
+#   * Rock Pi 4 / RK3566 (Synopsys DesignWare) — measured. The daemon
+#     stopped petting at 10:41:31 and the board went unreachable at
+#     10:42:05 and stayed dark: the block asserts a SoC reset these
+#     boards do not come back from, so arming it converts a wedge into
+#     a dead screen and a site visit.
+#   * softdog on the same board, same test immediately afterwards —
+#     unreachable by 10:49:23, back at 10:49:53 with uptime=20s,
+#     because it reboots through the kernel's ordinary restart path
+#     rather than that SoC reset.
 #
-#   * NanoPi R3S LTS, RuntimeWatchdogSec=30 armed and confirmed
-#     (`Watchdog running with a hardware timeout of 44s`, PID 1 holding
-#     /dev/watchdog0). Driven into a memory wedge the board stopped
-#     answering SSH, then ICMP, and stayed down 13 minutes until it was
-#     power-cycled by hand. No reset.
-#   * Raspberry Pi OS already ships this: on every Pi in the fleet
-#     (Pi 1 through Pi 5) systemd holds /dev/watchdog0 with a 60 s
-#     BCM2835 timeout, unconfigured by us — and those boards wedge too.
+# So: arm hardware only for a driver identity someone has watched
+# reset a board (system_watchdog_hw_allowlist), load softdog for
+# everything else, and point systemd at whichever one we picked.
 #
-# systemd's ping proves PID 1 is scheduled, not that the system works.
-# PID 1 is small, resident and rarely what stalls, so it keeps petting
-# while everything an operator cares about is gone. The watchdog daemon
-# pets only while a health check passes, so starvation itself stops the
-# petting. Only one process can hold the device, so systemd has to be
-# told to let go first — that handover is the point of the drop-in.
+# What this deliberately does NOT do is gate the petting on a health
+# check. An earlier revision installed the Debian watchdog daemon with
+# a memory-pressure test-binary so a board that was thrashing — but
+# whose PID 1 was still scheduled, so systemd kept petting happily —
+# would reset. It was ~870 lines of role, a third-party daemon, a
+# device handover away from systemd, and a keepalive to keep masked,
+# and there is no measurement showing it ever fires: the wedges we
+# reproduced were the viewer container being unkillable, which
+# bin/lib/viewer/common.sh fixes directly by making it the OOM
+# killer's preferred victim. If pressure-based recovery is wanted
+# later, the kernel-native routes (PSI and systemd-oomd where the
+# board has PSI, hung_task_panic where it does not) are where to look
+# — not a shell script pretending to be a watchdog daemon.
 
-- name: Look for a hardware watchdog
+- name: Look for a watchdog device
   ansible.builtin.stat:
     path: /dev/watchdog
   register: system_watchdog_hw
 
-- name: Identify the watchdog driver
+- name: Read the watchdog driver identity
   ansible.builtin.slurp:
     src: /sys/class/watchdog/watchdog0/identity
   register: system_watchdog_identity
   failed_when: false
   when: system_watchdog_hw.stat.exists
 
-# A watchdog is only useful if its reset actually brings the board
-# back, and on Rockchip the hardware one does not. MEASURED, on a
-# Rock Pi 4B (RK3399) with a health-gated daemon holding
-# /dev/watchdog at a 30 s timeout:
-#
-#   daemon SIGSTOPped 10:26:46, board unreachable by 10:27:12 — so the
-#   watchdog fired on schedule — and then stayed dark. No ping, no
-#   SSH, nine minutes later. It needed a power cycle. A NanoPi R3S LTS
-#   (RK3566, same Synopsys DesignWare IP) did the same thing.
-#
-# The DesignWare block asserts a SoC reset these boards do not come
-# back from, so arming it converts a wedge into a dead screen.
-#
-# softdog does come back, because it reboots through the kernel's
-# ordinary restart path rather than that SoC reset. Same board, same
-# test, immediately afterwards:
-#
-#   daemon SIGSTOPped 10:48:47, unreachable by 10:49:23, back at
-#   10:49:53 with uptime=20s.
-#
-# So an untrusted hardware watchdog is treated exactly like a missing
-# one: fall through to softdog. This is also why the systemd handover
-# below sets RuntimeWatchdogSec=0 rather than leaving the distro
-# default — on these boards systemd arming the hardware watchdog is
-# the failure, not the protection.
-# Classify what is already there, by identity rather than by the
-# presence of /dev/watchdog, and as an allowlist rather than a
-# denylist. A denylist ("anything that isn't DesignWare or softdog")
-# arms a driver nobody has watched reboot a board — including drivers
-# that don't exist yet, on the generic arm64 target this role also
-# runs on — and a hardware watchdog that halts instead of resetting
-# turns every wedge into a dark screen needing a physical visit. That
-# is exactly what DesignWare did to two boards here.
-#
-# So: arm hardware only for an identity someone has measured resetting
-# the board, and fall back to softdog for everything else. softdog
-# reboots through the kernel's ordinary restart path, which is
-# measured (below) and driver-independent, so the fallback is not a
-# downgrade in the case that matters. Adding a board means measuring
-# it and appending its identity to system_watchdog_hw_allowlist.
-#
-# Two cases the naive presence check gets wrong are subsumed by this:
-# an unreadable identity (matches nothing, so softdog), and the
-# softdog this role itself loaded looking like "a hardware watchdog
-# appeared" on the second run (its identity isn't on the list).
+# Allowlist, not denylist. "Anything that isn't DesignWare" would arm
+# a driver nobody has watched reset a board, including drivers that do
+# not exist yet, on the generic arm64 target this role also runs on —
+# and a watchdog that halts instead of resetting turns every wedge
+# into a physical visit. An unreadable identity matches nothing and so
+# falls back too, which is the safe direction.
 - name: Classify the watchdog device
   ansible.builtin.set_fact:
     system_watchdog_ident: >-
@@ -117,7 +88,7 @@
                                 + (system_watchdog_ident | default('')) + ')'))) }}
   when: not system_watchdog_use_hw
 
-- name: Load the software watchdog where there is no hardware one
+- name: Load the software watchdog where there is no vetted hardware one
   # Plain modprobe rather than community.general.modprobe: this repo
   # ships no collection requirements, and one task is not worth making
   # every install pull a collection.
@@ -131,8 +102,9 @@
   ansible.builtin.copy:
     dest: /etc/modules-load.d/anthias-softdog.conf
     content: |
-      # Managed by Anthias: no hardware watchdog on this host, so the
-      # kernel's software watchdog backs the reset instead.
+      # Managed by Anthias: no watchdog driver measured to reset this
+      # board, so the kernel's software watchdog backs the reset
+      # instead. See ansible/roles/system/tasks/resilience.yml.
       softdog
     mode: "0644"  # NOSONAR - modules-load.d entries are world-readable
     owner: root
@@ -142,28 +114,35 @@
     - system_softdog.rc is defined
     - system_softdog.rc == 0
 
-# Which device to pet is not obvious once both exist. /dev/watchdog is
-# an alias for whichever registered first, which on a Rockchip board is
-# the DesignWare block — the one that halts. Loading softdog there adds
-# watchdog1, and pointing the daemon at /dev/watchdog would arm exactly
-# the device we fell back to avoid. Observed on the Rock Pi 4:
+# Which device to point systemd at is not obvious once both exist.
+# /dev/watchdog is an alias for whichever registered first, which on a
+# Rockchip board is the DesignWare block — the one that halts. Loading
+# softdog there adds watchdog1, and leaving systemd on its default
+# would arm exactly the device we fell back to avoid. Observed on the
+# Rock Pi 4:
 #
 #   watchdog0 -> Synopsys DesignWare Watchdog
 #   watchdog1 -> Software Watchdog        <- the one that reboots
 #
 # So resolve by identity rather than by name.
-- name: Resolve which watchdog device to pet
+- name: Resolve which watchdog device systemd should open
   ansible.builtin.shell: |
     set -o pipefail
     want_soft={{ (not system_watchdog_use_hw) | ternary('yes', 'no') }}
     for w in /sys/class/watchdog/watchdog*; do
       [ -r "$w/identity" ] || continue
       id=$(tr '[:upper:]' '[:lower:]' < "$w/identity")
-      # Second field is the identity verbatim (not lowercased): the
-      # udev rule below matches on it exactly.
+      # Two lines, device then identity verbatim (not lowercased —
+      # the udev rule below matches on it byte for byte). Two lines
+      # rather than one tab-separated line because '\t' inside a YAML
+      # block scalar is a literal backslash-t, so a split on it
+      # silently returns the whole string and the identity comes back
+      # empty — which is how an earlier revision of this file ended up
+      # arming nothing at all on a board with a perfectly good
+      # watchdog. splitlines() has no escape to get wrong.
       case "$id" in
-        *software*) [ "$want_soft" = yes ] && { printf '%s\t%s\n' "/dev/$(basename "$w")" "$(cat "$w/identity")"; exit 0; } ;;
-        *)          [ "$want_soft" = no  ] && { printf '%s\t%s\n' "/dev/$(basename "$w")" "$(cat "$w/identity")"; exit 0; } ;;
+        *software*) [ "$want_soft" = yes ] && { printf '%s\n%s\n' "/dev/$(basename "$w")" "$(cat "$w/identity")"; exit 0; } ;;
+        *)          [ "$want_soft" = no  ] && { printf '%s\n%s\n' "/dev/$(basename "$w")" "$(cat "$w/identity")"; exit 0; } ;;
       esac
     done
     exit 1
@@ -176,50 +155,43 @@
 # Stat the resolved /dev/watchdogN, not /dev/watchdog: after modprobe
 # the sysfs entry the resolver reads can appear before udev has made
 # the numbered node, and gating on the alias would let the role sail
-# on with a watchdog-device that does not exist yet — failing later,
-# at the verification step, instead of waiting a moment here.
+# on with a WatchdogDevice that does not exist yet.
 - name: Wait for the resolved watchdog node to appear
   ansible.builtin.stat:
-    path: "{{ (system_watchdog_path.stdout | default('')).split('\t') | first | trim }}"
+    path: "{{ (system_watchdog_path.stdout | default('')).splitlines() | first | default('') | trim }}"
   register: system_watchdog_device_raw
   until: system_watchdog_device_raw.stat.exists | default(false)
   retries: 5
   delay: 1
   failed_when: false
-  when: (system_watchdog_path.stdout | default('')).split('\t') | first | trim != ''
+  when: (system_watchdog_path.stdout | default('')).splitlines() | first | default('') | trim != ''
 
-# Present *and* trusted to actually reboot. A board whose watchdog
-# only halts is left alone rather than armed.
-# Arm only what we could actually resolve. A board with no hardware
-# watchdog and no softdog module — a Raspberry Pi would be the case, if
-# Pi hardware didn't always provide one — ends up here with nothing,
-# and is left alone rather than half-configured.
 - name: Settle whether there is a watchdog worth arming
   ansible.builtin.set_fact:
-    system_watchdog_dev_path: "{{ (system_watchdog_path.stdout | default('')).split('\t') | first | trim }}"
+    system_watchdog_dev_path: "{{ (system_watchdog_path.stdout | default('')).splitlines() | first | default('') | trim }}"
     # Verbatim, because the udev rule compares it byte for byte. A
     # double quote would break out of the rule's quoting, so an
     # identity containing one is treated as unusable — which means no
     # rule, no stable name, and therefore nothing armed at all (see
     # the fail-closed settle below).
     system_watchdog_ident_exact: >-
-      {{ ((system_watchdog_path.stdout | default('')).split('\t')[1:] | first | default('') | trim)
-         if '"' not in ((system_watchdog_path.stdout | default('')).split('\t')[1:] | first | default(''))
+      {{ ((system_watchdog_path.stdout | default('')).splitlines()[1:] | first | default('') | trim)
+         if '"' not in ((system_watchdog_path.stdout | default('')).splitlines()[1:] | first | default(''))
          else '' }}
-    system_watchdog_device:
+    system_watchdog_found:
       stat:
         exists: >-
           {{ (system_watchdog_path.rc | default(1)) == 0
-             and ((system_watchdog_path.stdout | default('')).split('\t') | first | trim) != ''
+             and ((system_watchdog_path.stdout | default('')).splitlines() | first | default('') | trim) != ''
              and (system_watchdog_device_raw.stat.exists | default(false)) }}
 
-# Pin the daemon and systemd to a name that survives a reboot.
-# /dev/watchdogN is handed out in registration order: on a Rockchip
-# host the DesignWare block and the softdog this role loads can swap
-# numbers on a later boot, and a config pinned to the number would
-# then arm the device that halts instead of rebooting — the exact
-# failure the classification above exists to prevent. The rule matches
-# the driver identity, which boot order cannot change.
+# Pin systemd to a name that survives a reboot. /dev/watchdogN is
+# handed out in registration order: on a Rockchip host the DesignWare
+# block and the softdog this role loads can swap numbers on a later
+# boot, and WatchdogDevice pinned to the number would then arm the
+# device that halts — the exact failure the classification above
+# exists to prevent. The rule matches the driver identity, which boot
+# order cannot change.
 - name: Give the vetted watchdog a stable name
   ansible.builtin.template:
     src: anthias-watchdog.rules
@@ -228,7 +200,7 @@
     owner: root
     group: root
   when:
-    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_found.stat.exists | bool
     - system_watchdog_ident_exact != ''
 
 # Unconditional rather than gated on the template having changed: udev
@@ -239,14 +211,14 @@
   ansible.builtin.command: udevadm control --reload-rules
   changed_when: false
   when:
-    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_found.stat.exists | bool
     - system_watchdog_ident_exact != ''
 
 - name: Trigger the symlink for the running kernel
   ansible.builtin.command: udevadm trigger --subsystem-match=watchdog --settle
   changed_when: false
   when:
-    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_found.stat.exists | bool
     - system_watchdog_ident_exact != ''
 
 - name: Wait for the stable watchdog name
@@ -259,19 +231,17 @@
   delay: 1
   failed_when: false
   when:
-    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_found.stat.exists | bool
     - system_watchdog_ident_exact != ''
 
-# Use the stable name, or arm nothing. Falling back to
-# /dev/watchdogN would reintroduce exactly the failure the rule exists
-# to prevent: the number is registration order, so a later boot — a
-# kernel that gained a driver, the softdog this role loads registering
-# first — can point the same path at the device measured to halt the
-# board. An unprotected board is recoverable by hand; a board that
-# halts on every wedge is not. Every target runs systemd-udevd, so
-# this arms in practice and fails closed only when something is
-# genuinely wrong.
-- name: Settle which path the daemon and systemd are pointed at
+# Use the stable name, or arm nothing. Falling back to /dev/watchdogN
+# would reintroduce exactly the failure the rule exists to prevent: the
+# number is registration order, so a later boot — a kernel that gained
+# a driver, the softdog this role loads registering first — can point
+# the same path at the device measured to halt the board. An
+# unprotected board is recoverable by hand; a board that halts on every
+# wedge is not.
+- name: Settle which device systemd is pointed at
   ansible.builtin.set_fact:
     system_watchdog_arm_path: >-
       {{ ('/dev/' + system_watchdog_stable_name)
@@ -279,162 +249,37 @@
              and (system_watchdog_stable_stat.stat.lnk_source | default('')) == system_watchdog_dev_path)
          else '' }}
 
-- name: Report that the stable name could not be used
+# Loud, not a debug line. A host with a device we classified as safe
+# and a usable identity is a host where the symlink must appear; if it
+# doesn't, something is wrong with the rule or with udev, and the
+# board would otherwise provision "successfully" with no watchdog at
+# all. That is exactly the failure an earlier revision shipped.
+- name: Fail when the device we vetted could not be named
+  ansible.builtin.assert:
+    that: system_watchdog_arm_path != ''
+    fail_msg: >-
+      udev did not produce /dev/{{ system_watchdog_stable_name }}
+      resolving to {{ system_watchdog_dev_path }}, so no watchdog can
+      be armed: a numeric path can be renumbered into a device this
+      run rejected.
+    success_msg: "Arming {{ system_watchdog_arm_path }}."
+  when:
+    - system_watchdog_found.stat.exists | bool
+    - system_watchdog_ident_exact != ''
+
+- name: Report that no device could be armed
   ansible.builtin.debug:
     msg: >-
-      udev did not produce /dev/{{ system_watchdog_stable_name }}
-      resolving to {{ system_watchdog_dev_path }}, so no watchdog is
-      being armed: a numeric path can be renumbered into the device
-      this run rejected.
-  when:
-    - system_watchdog_device.stat.exists | bool
-    - system_watchdog_arm_path == ''
+      No watchdog is being armed on this host
+      ({{ 'no device this role trusts to reset the board'
+          if not (system_watchdog_found.stat.exists | bool)
+          else 'the driver identity cannot be expressed as a udev rule' }}).
+  when: system_watchdog_arm_path == ''
 
-# From here on, "there is a watchdog to arm" means the identity-named
-# device — not merely a node that was found.
-- name: Settle whether there is a watchdog to arm
-  ansible.builtin.set_fact:
-    system_watchdog_device:
-      stat:
-        exists: "{{ system_watchdog_arm_path != '' }}"
-
-# A host that had a safe watchdog on an earlier run and does not now
-# (softdog stopped loading, the driver identity changed under a kernel
-# upgrade) must not be left with the previous run's daemon still
-# petting a device this run rejected. The drop-in below is rewritten
-# either way — its no-device branch sets RebootWatchdogSec=0 — so the
-# only stale piece to clear is the daemon itself.
-- name: Stop the daemon when this run found nothing safe to arm
-  ansible.builtin.systemd:
-    name: watchdog
-    enabled: false
-    state: stopped
-  register: system_watchdog_teardown
-  failed_when:
-    - system_watchdog_teardown is failed
-    - not (system_watchdog_teardown.msg | default('') is search('(?i)could not find|not found|no such file'))
-  when: not system_watchdog_device.stat.exists
-
-- name: Remove the stale identity rule when nothing is armed
-  ansible.builtin.file:
-    path: /etc/udev/rules.d/60-anthias-watchdog.rules
-    state: absent
-  when: not system_watchdog_device.stat.exists
-
-- name: Install the watchdog daemon
-  ansible.builtin.apt:
-    name: watchdog
-    state: present
-  when: system_watchdog_device.stat.exists
-
-- name: Install the watchdog health gate
-  ansible.builtin.copy:
-    src: anthias-watchdog-health
-    dest: /usr/local/sbin/anthias-watchdog-health
-    mode: "0755"  # NOSONAR - executed by the watchdog daemon
-    owner: root
-    group: root
-  when: system_watchdog_device.stat.exists
-
-# The keepalive block below runs on *every* host, including the
-# fail-closed path where nothing is armed: a distro or an earlier
-# install can have wd_keepalive running already, and it would go on
-# petting the device this run rejected — defeating the health gate
-# while the role reports it armed nothing.
-#
-# Debian's watchdog package ships wd_keepalive, which pets the device
-# whenever the main daemon is not running — so an operator can stop the
-# daemon without the box resetting. For us that is precisely backwards:
-# it means a health daemon that has died, or one that deliberately
-# stopped petting, gets covered for and the board never resets.
-# Measured on x86: with the main daemon stopped and the device armed at
-# 30 s, wd_keepalive held the box up indefinitely.
-- name: Stop wd_keepalive covering for a failed health daemon
-  ansible.builtin.lineinfile:
-    path: /etc/default/watchdog
-    regexp: '^#?\s*run_wd_keepalive='
-    line: run_wd_keepalive=0
-    create: true
-    mode: "0644"  # NOSONAR - distro default for /etc/default entries
-    owner: root
-    group: root
-  when: system_watchdog_device.stat.exists
-
-# The unit's ExecStart is `[ $run_watchdog != 1 ] || exec
-# /usr/sbin/watchdog ...`, so with run_watchdog at 0 the service
-# starts, exits 0, and reports active while running nothing. The
-# package's debconf default sets it to 1 on a fresh install, but the
-# postinst preserves an existing value — an install where it was ever
-# answered "no" would provision "successfully" with no daemon. Set it
-# explicitly.
-- name: Let the watchdog unit actually start the daemon
-  ansible.builtin.lineinfile:
-    path: /etc/default/watchdog
-    regexp: '^#?\s*run_watchdog='
-    line: run_watchdog=1
-    create: true
-    mode: "0644"  # NOSONAR - distro default for /etc/default entries
-    owner: root
-    group: root
-  when: system_watchdog_device.stat.exists
-
-- name: Mask wd_keepalive
-  ansible.builtin.systemd:
-    name: wd_keepalive
-    enabled: false
-    masked: true
-    state: stopped
-  register: system_wd_keepalive
-  # Only an absent unit is acceptable. A mask that failed for any other
-  # reason must stop the run: wd_keepalive pets the device whenever the
-  # main daemon is not running, so leaving it live means a health
-  # daemon that died is covered for and the board never resets — while
-  # the fd check further down still passes and reports protection.
-  failed_when:
-    - system_wd_keepalive is failed
-    - not (system_wd_keepalive.msg | default('') is search('(?i)could not find|not found|no such file'))
-
-- name: Read back the service state
-  ansible.builtin.service_facts:
-
-- name: Confirm wd_keepalive cannot cover for the health daemon
-  ansible.builtin.assert:
-    that:
-      - (ansible_facts.services['wd_keepalive.service'] | default({})).get('status', 'not-found') in ['masked', 'not-found']
-      - (ansible_facts.services['wd_keepalive.service'] | default({})).get('state', 'stopped') != 'running'
-    fail_msg: >-
-      wd_keepalive is still available on this host, so it would pet the
-      watchdog whenever the health daemon is not running and the board
-      would never reset.
-    success_msg: wd_keepalive is masked or absent.
-
-- name: Configure the watchdog daemon
-  ansible.builtin.template:
-    src: watchdog.conf
-    dest: /etc/watchdog.conf
-    mode: "0644"  # NOSONAR - read by the daemon at startup
-    owner: root
-    group: root
-  when: system_watchdog_device.stat.exists
-  notify: Restart watchdog daemon
-
-# Hand the device over. systemd opens /dev/watchdog when
-# RuntimeWatchdogSec is non-zero — the Raspberry Pi OS default — and
-# only one process can hold it, so the daemon cannot start until
-# systemd lets go. Explicit 0 rather than relying on the distro
-# default, which differs between Pi OS and Debian.
-# Ordering matters, and getting it wrong is silent. Only one process
-# can hold /dev/watchdog: on Raspberry Pi OS systemd already owns it,
-# so a daemon started before systemd lets go opens nothing, logs
-# `alive=[none]`, and reports active while protecting nothing —
-# observed on a Pi 4 doing exactly that. The re-exec is a normal task
-# rather than a handler for this reason: handlers flush at the end of
-# the play, which is after the daemon would have started.
 - name: Ensure the systemd drop-in directory exists
-  # `copy` does not create parent directories, and a clean Debian or
-  # Raspberry Pi host may not ship /etc/systemd/system.conf.d — which
-  # would fail first provisioning right before the handover. Same
-  # pattern the Docker drop-in uses.
+  # `template` does not create parent directories, and a clean Debian
+  # host may not ship /etc/systemd/system.conf.d. Same pattern the
+  # Docker drop-in uses.
   ansible.builtin.file:
     path: /etc/systemd/system.conf.d
     state: directory
@@ -442,57 +287,44 @@
     owner: root
     group: root
 
-- name: Release the watchdog device from systemd
+# Written on every host, with no `when`. Not because every host has a
+# watchdog, but because the file has something to say either way: arm
+# the device we vetted, or — on a host where the only device is one
+# this role rejected — keep systemd from arming it, including the
+# stock Raspberry Pi OS drop-in's RuntimeWatchdogSec=1m and the
+# RebootWatchdogSec that fires during shutdown. An unconditional write
+# is also the only version with no stale-state case to reason about
+# when a later run finds nothing safe.
+- name: Point systemd's watchdog at the device we vetted
   ansible.builtin.template:
     src: anthias-watchdog-systemd.conf
     dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
     mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
     owner: root
     group: root
-  # Written on every host, with no `when`. Not because every host has
-  # a watchdog, but because the two things this file says both matter
-  # when one is missing: systemd must be stopped from arming a
-  # hardware watchdog this role classified as unsafe, and a host that
-  # had a safe device on an earlier run must not keep that run's
-  # WatchdogDevice once this run has none. An unconditional write is
-  # also the only version with no stale-state case to reason about.
-  notify: Re-execute systemd to release the watchdog device
+  notify: Re-execute systemd to apply the watchdog settings
 
-# The ordering is the point, so make it explicit rather than leave it
-# to end-of-play handler flushing: only one process can hold
-# /dev/watchdog, and a daemon started before systemd lets go opens
-# nothing, logs alive=[none], and reports active while protecting
-# nothing (observed on a Pi 4). Flushing here runs the handover
-# handler now, and keeps the intent visible to anyone reordering these
-# tasks later.
-- name: Apply the handover before anything tries to claim the device
+# The handler runs at end of play by default, and the verification
+# below has to see the new settings. Flushing here is what orders
+# them, and keeps the intent visible to anyone reordering these tasks.
+- name: Apply the watchdog settings before verifying them
   ansible.builtin.meta: flush_handlers
 
-- name: Enable the watchdog daemon
-  ansible.builtin.systemd:
-    name: watchdog
-    enabled: true
-    state: restarted
-  when: system_watchdog_device.stat.exists
-
-# A daemon that failed to open the device still reports active, so
-# "the service is running" proves nothing. Check the thing that
-# matters: the process holds an fd on the watchdog.
-# Match the resolved path exactly. Counting any fd containing
-# "watchdog" would also pass if the daemon had opened /dev/watchdog0 —
-# the unsafe DesignWare alias — and report protection while the wrong
-# device was armed. The comparison is against the numeric path even
-# when the daemon was pointed at the udev name, because /proc/PID/fd
-# shows what the symlink resolved to; that it resolved to this device
-# is exactly what wants confirming.
-- name: Confirm the daemon holds the watchdog device we resolved
+# "The drop-in is on disk" proves nothing: a typo'd device leaves
+# systemd running with the watchdog silently off. Ask the manager what
+# it actually did, and check it is holding the device we resolved —
+# /proc/1/fd shows what the symlink resolved to, which is exactly what
+# wants confirming.
+- name: Confirm systemd armed the watchdog we resolved
   ansible.builtin.shell: >-
     set -o pipefail;
-    ls -l /proc/$(pgrep -x watchdog | head -1)/fd 2>/dev/null
+    systemctl show --property=RuntimeWatchdogUSec --value
+    | grep -qv '^0$'
+    && ls -l /proc/1/fd 2>/dev/null
     | grep -c -- '-> {{ system_watchdog_dev_path }}$'
   args:
     executable: /bin/bash
-  register: system_watchdog_held
+  register: system_watchdog_armed
   changed_when: false
-  failed_when: system_watchdog_held.stdout | trim | int < 1
-  when: system_watchdog_device.stat.exists
+  failed_when: system_watchdog_armed.stdout | trim | int < 1
+  when: system_watchdog_arm_path != ''
