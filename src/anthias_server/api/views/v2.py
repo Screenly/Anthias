@@ -699,16 +699,23 @@ class DeviceSettingsViewV2(APIView):
             # what _is_authorized() reads — so reaping is owed whether or
             # not the write lands.
             #
-            # backend_changed, not "anything changed": a credential
+            # backend_changed AND NOT credentials_rotated. A credential
             # rotation is already reaped by the User post_save receiver in
             # app/signals.py, and firing here too would fan a second
             # force_disconnect out over Redis for every password change. A
             # backend toggle writes no User row, so nothing but this sees
-            # it.
+            # it — but one save can do both (enable auth *and* set the
+            # username/password), and checking only backend_changed
+            # double-reaps exactly that case: the receiver fires on the
+            # User write, then this fires again, bumping the generation
+            # twice for one operator action.
             try:
                 settings.save()
             finally:
-                if auth_change.backend_changed:
+                if (
+                    auth_change.backend_changed
+                    and not auth_change.credentials_rotated
+                ):
                     from anthias_server.app.consumers import disconnect_all
 
                     disconnect_all()

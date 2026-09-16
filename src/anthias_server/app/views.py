@@ -1984,11 +1984,18 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         # app/signals.py, and firing here too would fan a second
         # force_disconnect out over Redis for every password change. A
         # backend toggle writes no User row, so nothing but this sees
-        # it.
+        # it — but one save can do both (enable auth *and* set the
+        # username/password), and checking only backend_changed
+        # double-reaps exactly that case: the receiver fires on the User
+        # write, then this fires again, bumping the generation twice for
+        # one operator action.
         try:
             settings.save()
         finally:
-            if auth_change.backend_changed:
+            if (
+                auth_change.backend_changed
+                and not auth_change.credentials_rotated
+            ):
                 from anthias_server.app.consumers import disconnect_all
 
                 disconnect_all()

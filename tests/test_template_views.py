@@ -5238,3 +5238,39 @@ def test_settings_save_leaves_the_reap_to_the_receiver_on_a_rotation(
     operator.refresh_from_db()
     assert operator.check_password('a-rotated-QA-passphrase')
     disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_settings_save_reaps_once_when_enabling_auth_with_credentials(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """One operator action must produce one revocation.
+
+    Enabling auth *and* setting the username/password in the same save
+    returns ``AuthChange(backend_changed=True, credentials_rotated=True)``
+    — both halves true. The User write is already reaped by the
+    post_save receiver, so a view that keys only on ``backend_changed``
+    fans a second force_disconnect over Redis and bumps the generation
+    twice, which is the duplicate this split exists to prevent.
+    """
+    _existing_operator()
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as view_disconnect,
+    ):
+        response = _toggle_auth_on(
+            client,
+            user='alice',
+            password='Correct-Horse-9',
+            password_2='Correct-Horse-9',
+        )
+
+    assert response.status_code in (200, 302)
+    # The receiver owns this one; the view must stand down.
+    view_disconnect.assert_not_called()
