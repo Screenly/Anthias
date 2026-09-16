@@ -1,35 +1,33 @@
 ---
-# Recovery from memory-pressure wedges. Two independent layers, because
-# they fail in different places:
+# Recovery from a wedge: the board stops making progress and has to
+# come back without a site visit. Two layers, because they fail in
+# different places.
 #
-#   1. keep the kernel OOM killer able to act promptly (no swap), so a
-#      runaway allocation is killed and `restart: always` recovers the
-#      container;
-#   2. a hardware watchdog for the case where nothing in userspace runs
-#      any more and there is nobody left to do the killing.
+# Layer 1 — prevention. No swap (misc.yml, kept durable below) so the
+# kernel OOM killer acts promptly, and start_viewer.sh marks the
+# process actually holding the memory so the kill frees something.
 #
-# Layer 1 is what has to do the work. Layer 2 is a backstop for PID 1
-# dying, and MEASURED NOT TO RECOVER A MEMORY-PRESSURE WEDGE:
+# Layer 2 — reset. A watchdog device the box cannot pet once it is
+# unhealthy.
 #
-#   NanoPi R3S LTS, 2 GB, RuntimeWatchdogSec=30 armed and confirmed
-#   (`systemd[1]: Watchdog running with a hardware timeout of 44s`,
-#   PID 1 holding /dev/watchdog0). Driven into a wedge with a memory
-#   hog, the board stopped answering SSH, then ICMP, and stayed down
-#   for 13 minutes until it was power-cycled by hand. No reset.
+# Layer 2 is deliberately NOT systemd's RuntimeWatchdogSec, which is
+# what a first pass reaches for. Measured, on hardware:
 #
-# The reason is what systemd's ping means: it proves PID 1 is
-# scheduled, not that the system is usable. PID 1 is small, resident
-# and rarely the thing that stalls, so it keeps petting while
-# everything an operator cares about is gone.
+#   * NanoPi R3S LTS, RuntimeWatchdogSec=30 armed and confirmed
+#     (`Watchdog running with a hardware timeout of 44s`, PID 1 holding
+#     /dev/watchdog0). Driven into a memory wedge the board stopped
+#     answering SSH, then ICMP, and stayed down 13 minutes until it was
+#     power-cycled by hand. No reset.
+#   * Raspberry Pi OS already ships this: on every Pi in the fleet
+#     (Pi 1 through Pi 5) systemd holds /dev/watchdog0 with a 60 s
+#     BCM2835 timeout, unconfigured by us — and those boards wedge too.
 #
-# Keep it anyway — it costs nothing and does cover a dead or hung PID
-# 1 — but do not treat it as the answer to memory pressure. The
-# recovery that would have fired here is a health-gated pet: the
-# classic `watchdog` daemon pets only while min-memory / max-load
-# checks pass, so exhaustion itself stops the petting and the silicon
-# resets. That is the follow-up; it is not wired up here because it
-# has not been tested on hardware yet, and this file has just
-# demonstrated what shipping an untested recovery claim is worth.
+# systemd's ping proves PID 1 is scheduled, not that the system works.
+# PID 1 is small, resident and rarely what stalls, so it keeps petting
+# while everything an operator cares about is gone. The watchdog daemon
+# pets only while a health check passes, so starvation itself stops the
+# petting. Only one process can hold the device, so systemd has to be
+# told to let go first — that handover is the point of the drop-in.
 
 - name: Check for Armbian's zram swap unit
   ansible.builtin.stat:
@@ -44,7 +42,7 @@
 # which is the state the NanoPi R3S and Rock Pi 4 wedges were found in.
 #
 # SWAP=false leaves the rest of the unit alone: Armbian also uses zram
-# for /var/log (log2ram), which is unrelated and worth keeping.
+# for /var/log, which is unrelated and worth keeping.
 - name: Stop Armbian re-creating zram swap on every boot
   ansible.builtin.lineinfile:
     path: /etc/default/armbian-zram-config
@@ -57,30 +55,158 @@
   when: system_armbian_zram.stat.exists
   notify: Disable active zram swap
 
-- name: Detect a hardware watchdog
+- name: Look for a hardware watchdog
+  ansible.builtin.stat:
+    path: /dev/watchdog
+  register: system_watchdog_hw
+
+# No hardware watchdog (every x86 box in the fleet) — fall back to the
+# kernel's software one, which reboots from a kernel timer instead of
+# from silicon. Weaker: a hard kernel hang takes softdog down with it.
+# Strictly better than nothing for the userspace wedges this guards.
+#
+# Not available everywhere: Raspberry Pi OS ships no softdog module at
+# all. That costs nothing, because every Pi has the BCM2835 watchdog —
+# but it does mean "just modprobe softdog" is not a universal answer on
+# its own, and this task must not fail where the module is missing.
+- name: Load the software watchdog where there is no hardware one
+  # Plain modprobe rather than community.general.modprobe: this repo
+  # ships no collection requirements, and one task is not worth making
+  # every install pull a collection.
+  ansible.builtin.command: modprobe softdog
+  register: system_softdog
+  changed_when: system_softdog.rc == 0
+  failed_when: false
+  when: not system_watchdog_hw.stat.exists
+
+- name: Keep the software watchdog across reboots
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/anthias-softdog.conf
+    content: |
+      # Managed by Anthias: no hardware watchdog on this host, so the
+      # kernel's software watchdog backs the reset instead.
+      softdog
+    mode: "0644"  # NOSONAR - modules-load.d entries are world-readable
+    owner: root
+    group: root
+  when:
+    - not system_watchdog_hw.stat.exists
+    - system_softdog is defined
+    - system_softdog.rc is defined
+    - system_softdog.rc == 0
+
+- name: Re-check for a watchdog device after the softdog attempt
   ansible.builtin.stat:
     path: /dev/watchdog
   register: system_watchdog_device
 
-# systemd opens /dev/watchdog and pings it at half this interval; if PID
-# 1 cannot run, the silicon resets the board. Nothing in userspace has
-# to be alive for that to work, which is the whole point.
-#
-# The value is a request, not a guarantee: the driver clamps it to what
-# the silicon supports, and a coarse one rounds up (the RK3566's
-# Synopsys DesignWare watchdog reports 44 s for a 30 s request). Erring
-# short is safe — the device cannot exceed its own maximum.
-- name: Drive the hardware watchdog from systemd
+- name: Install the watchdog daemon
+  ansible.builtin.apt:
+    name: watchdog
+    state: present
+  when: system_watchdog_device.stat.exists
+
+- name: Install the watchdog health gate
+  ansible.builtin.copy:
+    src: anthias-watchdog-health
+    dest: /usr/local/sbin/anthias-watchdog-health
+    mode: "0755"  # NOSONAR - executed by the watchdog daemon
+    owner: root
+    group: root
+  when: system_watchdog_device.stat.exists
+
+# Debian's watchdog package ships wd_keepalive, which pets the device
+# whenever the main daemon is not running — so an operator can stop the
+# daemon without the box resetting. For us that is precisely backwards:
+# it means a health daemon that has died, or one that deliberately
+# stopped petting, gets covered for and the board never resets.
+# Measured on x86: with the main daemon stopped and the device armed at
+# 30 s, wd_keepalive held the box up indefinitely.
+- name: Stop wd_keepalive covering for a failed health daemon
+  ansible.builtin.lineinfile:
+    path: /etc/default/watchdog
+    regexp: '^#?\s*run_wd_keepalive='
+    line: run_wd_keepalive=0
+    create: true
+    mode: "0644"  # NOSONAR - distro default for /etc/default entries
+    owner: root
+    group: root
+  when: system_watchdog_device.stat.exists
+
+- name: Mask wd_keepalive
+  ansible.builtin.systemd:
+    name: wd_keepalive
+    enabled: false
+    masked: true
+    state: stopped
+  failed_when: false
+  when: system_watchdog_device.stat.exists
+
+- name: Configure the watchdog daemon
+  ansible.builtin.template:
+    src: watchdog.conf
+    dest: /etc/watchdog.conf
+    mode: "0644"  # NOSONAR - read by the daemon at startup
+    owner: root
+    group: root
+  when: system_watchdog_device.stat.exists
+  notify: Restart watchdog daemon
+
+# Hand the device over. systemd opens /dev/watchdog when
+# RuntimeWatchdogSec is non-zero — the Raspberry Pi OS default — and
+# only one process can hold it, so the daemon cannot start until
+# systemd lets go. Explicit 0 rather than relying on the distro
+# default, which differs between Pi OS and Debian.
+# Ordering matters, and getting it wrong is silent. Only one process
+# can hold /dev/watchdog: on Raspberry Pi OS systemd already owns it,
+# so a daemon started before systemd lets go opens nothing, logs
+# `alive=[none]`, and reports active while protecting nothing —
+# observed on a Pi 4 doing exactly that. The re-exec is a normal task
+# rather than a handler for this reason: handlers flush at the end of
+# the play, which is after the daemon would have started.
+- name: Release the watchdog device from systemd
   ansible.builtin.copy:
     dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
     content: |
-      # Managed by Anthias. A signage player is unattended; a board that
-      # wedges under memory pressure has to come back on its own.
+      # Managed by Anthias. The watchdog daemon owns /dev/watchdog so
+      # petting is gated on a health check; systemd's own ping only
+      # proves PID 1 is scheduled, which a wedged board still is.
+      # See ansible/roles/system/tasks/resilience.yml.
       [Manager]
-      RuntimeWatchdogSec={{ system_runtime_watchdog_sec }}
+      RuntimeWatchdogSec=0
       RebootWatchdogSec={{ system_reboot_watchdog_sec }}
     mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
     owner: root
     group: root
   when: system_watchdog_device.stat.exists
-  notify: Reload systemd manager configuration
+  register: system_watchdog_handover
+
+- name: Re-execute systemd so it closes the watchdog device
+  # daemon-reexec, not daemon-reload: RuntimeWatchdogSec is read by the
+  # manager itself at startup, so only re-executing PID 1 makes it let
+  # go of the device.
+  ansible.builtin.systemd:
+    daemon_reexec: true
+  when: system_watchdog_handover.changed  # noqa: no-handler
+
+- name: Enable the watchdog daemon
+  ansible.builtin.systemd:
+    name: watchdog
+    enabled: true
+    state: restarted
+  when: system_watchdog_device.stat.exists
+
+# A daemon that failed to open the device still reports active, so
+# "the service is running" proves nothing. Check the thing that
+# matters: the process holds an fd on the watchdog.
+- name: Confirm the daemon actually holds the watchdog device
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    ls -l /proc/$(pgrep -x watchdog | head -1)/fd 2>/dev/null
+    | grep -c watchdog
+  args:
+    executable: /bin/bash
+  register: system_watchdog_held
+  changed_when: false
+  failed_when: system_watchdog_held.stdout | trim | int < 1
+  when: system_watchdog_device.stat.exists

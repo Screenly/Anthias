@@ -22,9 +22,7 @@
   failed_when: false
   changed_when: true
 
-- name: Reload systemd manager configuration
-  # daemon-reexec, not daemon-reload: RuntimeWatchdogSec is read by the
-  # manager itself at startup, so re-executing PID 1 is what makes it
-  # open /dev/watchdog. A plain reload leaves the watchdog unarmed.
+- name: Restart watchdog daemon
   ansible.builtin.systemd:
-    daemon_reexec: true
+    name: watchdog
+    state: restarted

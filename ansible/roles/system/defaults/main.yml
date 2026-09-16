@@ -15,3 +15,13 @@ system_runtime_watchdog_sec: 30
 # a device that stalls while stopping services still comes back instead
 # of sitting dark until someone visits it.
 system_reboot_watchdog_sec: 5min
+
+# Watchdog device timeout. Every device in the fleet supports at least
+# this (BCM2835 60 s on Pi, DesignWare 30-44 s on Rockchip, softdog
+# 60 s on x86); drivers clamp rather than reject, so a board with a
+# shorter maximum rounds down safely.
+system_watchdog_timeout_sec: 30
+
+# Pet interval, comfortably inside the timeout so a slow health check
+# still lands before the device gives up.
+system_watchdog_interval_sec: 10

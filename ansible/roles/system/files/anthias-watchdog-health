@@ -1,0 +1,62 @@
+#!/bin/sh
+# Health gate for the watchdog daemon (run as its `test-binary`).
+#
+# Exit non-zero and the daemon stops petting, so the watchdog device —
+# hardware where the board has one, softdog where it doesn't — resets
+# the box. That is the point: a signage player that can no longer make
+# progress has to come back without someone visiting it.
+#
+# Why this exists rather than watchdog.conf's own `min-memory`: that
+# setting is an absolute page count, and this fleet spans a 361 MB
+# Pi 3A+ to an 8 GB x86. One number is either useless on the big boxes
+# or a reboot loop on the small ones. A *fraction* of MemTotal travels.
+#
+# Deliberately conservative. A false positive here reboots a working
+# player mid-content, which is worse than the wedge it guards against,
+# so it needs the box to be both starved AND stay starved across
+# consecutive checks before it gives up.
+
+: "${ANTHIAS_WD_STATE:=/run/anthias-watchdog-health.strikes}"
+: "${ANTHIAS_WD_MIN_AVAIL_PCT:=4}"
+: "${ANTHIAS_WD_STRIKES:=5}"
+
+total=$(awk '/^MemTotal:/{print $2}' /proc/meminfo)
+avail=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
+
+# MemAvailable has been in /proc/meminfo since 3.14 and is present on
+# every kernel this fleet runs; if it ever isn't, say healthy rather
+# than reboot on a missing field.
+[ -n "$total" ] && [ -n "$avail" ] && [ "$total" -gt 0 ] || exit 0
+
+pct=$((avail * 100 / total))
+
+if [ "$pct" -ge "$ANTHIAS_WD_MIN_AVAIL_PCT" ]; then
+    rm -f "$ANTHIAS_WD_STATE"
+    exit 0
+fi
+
+# Starved on this check. Only give up once it has stayed that way:
+# a transient dip during a container start or a large upload is not a
+# wedge, and rebooting through one would be its own outage.
+strikes=$(cat "$ANTHIAS_WD_STATE" 2>/dev/null || echo 0)
+case "$strikes" in *[!0-9]*) strikes=0 ;; esac
+strikes=$((strikes + 1))
+
+# No writable state means strikes can never accumulate, so the gate
+# would quietly never fire. Failing open is right for something that
+# reboots boards — but say so, rather than letting a permission error
+# disable the guard in silence.
+if ! echo "$strikes" > "$ANTHIAS_WD_STATE" 2>/dev/null; then
+    logger -t anthias-watchdog \
+        "cannot write $ANTHIAS_WD_STATE — health gate is disabled, not tripping"
+    exit 0
+fi
+
+if [ "$strikes" -ge "$ANTHIAS_WD_STRIKES" ]; then
+    logger -t anthias-watchdog \
+        "MemAvailable ${pct}% for ${strikes} consecutive checks — letting the watchdog reset the board"
+    exit 1
+fi
+
+logger -t anthias-watchdog "MemAvailable ${pct}% (strike ${strikes}/${ANTHIAS_WD_STRIKES})"
+exit 0
