@@ -45,28 +45,30 @@
   when: system_watchdog_hw.stat.exists
 
 # A watchdog is only useful if its reset actually brings the board
-# back. On Rockchip it does not. MEASURED, twice:
+# back, and on Rockchip the hardware one does not. MEASURED, on a
+# Rock Pi 4B (RK3399) with a health-gated daemon holding
+# /dev/watchdog at a 30 s timeout:
 #
-#   Rock Pi 4B (RK3399), health-gated daemon holding /dev/watchdog at
-#   a 30 s timeout. Daemon SIGSTOPped at 10:26:46, board unreachable
-#   by 10:27:12 — so the watchdog fired on schedule — and then stayed
-#   dark. No ping, no SSH, nine minutes later. It needed a power
-#   cycle. The same thing happened on a NanoPi R3S LTS (RK3566, same
-#   Synopsys DesignWare IP) during the earlier round.
+#   daemon SIGSTOPped 10:26:46, board unreachable by 10:27:12 — so the
+#   watchdog fired on schedule — and then stayed dark. No ping, no
+#   SSH, nine minutes later. It needed a power cycle. A NanoPi R3S LTS
+#   (RK3566, same Synopsys DesignWare IP) did the same thing.
 #
-# So on these boards the watchdog does not recover the player, it
-# switches it off — which for an unattended screen is worse than the
-# wedge it was meant to fix, because a wedged board might still be
-# talked back down and a halted one certainly cannot.
+# The DesignWare block asserts a SoC reset these boards do not come
+# back from, so arming it converts a wedge into a dead screen.
 #
-# Skipping it here is deliberate, and it leaves the boards that suffer
-# most with no layer 2. The alternative — shipping it anyway because
-# it "should" reset — is how a recovery feature turns into a fleet of
-# dark screens. softdog may well reboot these correctly, since it
-# goes through the kernel's ordinary restart path (PSCI) rather than
-# the SoC reset the DesignWare block asserts, and normal `reboot`
-# works fine on both boards. That is the obvious next thing to test,
-# on a board someone can physically reach.
+# softdog does come back, because it reboots through the kernel's
+# ordinary restart path rather than that SoC reset. Same board, same
+# test, immediately afterwards:
+#
+#   daemon SIGSTOPped 10:48:47, unreachable by 10:49:23, back at
+#   10:49:53 with uptime=20s.
+#
+# So an untrusted hardware watchdog is treated exactly like a missing
+# one: fall through to softdog. This is also why the systemd handover
+# below sets RuntimeWatchdogSec=0 rather than leaving the distro
+# default — on these boards systemd arming the hardware watchdog is
+# the failure, not the protection.
 - name: Decide whether the hardware watchdog can be trusted to reboot
   ansible.builtin.set_fact:
     system_watchdog_hw_reboots: >-
@@ -74,25 +76,16 @@
          (system_watchdog_identity.content | default('') | b64decode | lower) }}
   when: system_watchdog_hw.stat.exists
 
-- name: Report a hardware watchdog that is not trusted to reboot
+- name: Report falling back to softdog on a watchdog that only halts
   ansible.builtin.debug:
     msg: >-
-      Hardware watchdog present but not armed: its reset was measured
-      halting the board instead of rebooting it. See the comment in
+      Hardware watchdog present but measured halting the board rather
+      than rebooting it; using softdog instead. See the comment in
       roles/system/tasks/resilience.yml.
   when:
     - system_watchdog_hw.stat.exists
     - not system_watchdog_hw_reboots
 
-# No hardware watchdog (every x86 box in the fleet) — fall back to the
-# kernel's software one, which reboots from a kernel timer instead of
-# from silicon. Weaker: a hard kernel hang takes softdog down with it.
-# Strictly better than nothing for the userspace wedges this guards.
-#
-# Not available everywhere: Raspberry Pi OS ships no softdog module at
-# all. That costs nothing, because every Pi has the BCM2835 watchdog —
-# but it does mean "just modprobe softdog" is not a universal answer on
-# its own, and this task must not fail where the module is missing.
 - name: Load the software watchdog where there is no hardware one
   # Plain modprobe rather than community.general.modprobe: this repo
   # ships no collection requirements, and one task is not worth making
@@ -101,7 +94,7 @@
   register: system_softdog
   changed_when: system_softdog.rc == 0
   failed_when: false
-  when: not system_watchdog_hw.stat.exists
+  when: not system_watchdog_hw.stat.exists or not system_watchdog_hw_reboots
 
 - name: Keep the software watchdog across reboots
   ansible.builtin.copy:
@@ -114,10 +107,40 @@
     owner: root
     group: root
   when:
-    - not system_watchdog_hw.stat.exists
     - system_softdog is defined
     - system_softdog.rc is defined
     - system_softdog.rc == 0
+
+# Which device to pet is not obvious once both exist. /dev/watchdog is
+# an alias for whichever registered first, which on a Rockchip board is
+# the DesignWare block — the one that halts. Loading softdog there adds
+# watchdog1, and pointing the daemon at /dev/watchdog would arm exactly
+# the device we fell back to avoid. Observed on the Rock Pi 4:
+#
+#   watchdog0 -> Synopsys DesignWare Watchdog
+#   watchdog1 -> Software Watchdog        <- the one that reboots
+#
+# So resolve by identity rather than by name.
+- name: Resolve which watchdog device to pet
+  ansible.builtin.shell: |
+    set -o pipefail
+    want_soft={{ (not system_watchdog_hw.stat.exists
+                  or not system_watchdog_hw_reboots | default(true))
+                 | ternary('yes', 'no') }}
+    for w in /sys/class/watchdog/watchdog*; do
+      [ -r "$w/identity" ] || continue
+      id=$(tr '[:upper:]' '[:lower:]' < "$w/identity")
+      case "$id" in
+        *software*) [ "$want_soft" = yes ] && { echo "/dev/$(basename "$w")"; exit 0; } ;;
+        *)          [ "$want_soft" = no  ] && { echo "/dev/$(basename "$w")"; exit 0; } ;;
+      esac
+    done
+    exit 1
+  args:
+    executable: /bin/bash
+  register: system_watchdog_path
+  changed_when: false
+  failed_when: false
 
 - name: Re-check for a watchdog device after the softdog attempt
   ansible.builtin.stat:
@@ -126,13 +149,18 @@
 
 # Present *and* trusted to actually reboot. A board whose watchdog
 # only halts is left alone rather than armed.
+# Arm only what we could actually resolve. A board with no hardware
+# watchdog and no softdog module — a Raspberry Pi would be the case, if
+# Pi hardware didn't always provide one — ends up here with nothing,
+# and is left alone rather than half-configured.
 - name: Settle whether there is a watchdog worth arming
   ansible.builtin.set_fact:
+    system_watchdog_dev_path: "{{ system_watchdog_path.stdout | default('') | trim }}"
     system_watchdog_device:
       stat:
         exists: >-
-          {{ system_watchdog_device_raw.stat.exists
-             and system_watchdog_hw_reboots | default(true) }}
+          {{ (system_watchdog_path.rc | default(1)) == 0
+             and (system_watchdog_path.stdout | default('') | trim) != '' }}
 
 - name: Install the watchdog daemon
   ansible.builtin.apt:
