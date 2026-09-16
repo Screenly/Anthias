@@ -659,14 +659,19 @@ def _create_initial_operator(
     # password against the proposed username.
     _validate_password_strength(new_pwd, User(username=new_username))
 
-    user, _ = User.objects.update_or_create(
-        username=new_username,
-        defaults={
-            'is_staff': True,
-            'is_superuser': True,
-            'is_active': True,
-        },
+    # One write, deliberately. update_or_create() followed by
+    # set_password()/save() is two User saves for a single operator
+    # action, and post_save fires the /ws revocation receiver on each
+    # — two disconnect_all() broadcasts, each paying the synchronous
+    # channel-layer timeout in full if Redis is down. Build the row
+    # (or load the existing one) in memory, hash the password onto it,
+    # and save once.
+    user = User.objects.filter(username=new_username).first() or User(
+        username=new_username
     )
+    user.is_staff = True
+    user.is_superuser = True
+    user.is_active = True
     user.set_password(new_pwd)
     user.save()
 

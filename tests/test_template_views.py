@@ -18,6 +18,7 @@ from unittest import mock
 
 import pytest
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -5274,3 +5275,61 @@ def test_settings_save_reaps_once_when_enabling_auth_with_credentials(
     assert response.status_code in (200, 302)
     # The receiver owns this one; the view must stand down.
     view_disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_first_time_auth_setup_writes_the_operator_once(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """Enabling auth from scratch must write the User row once.
+
+    The revocation receiver is on ``post_save``, so every extra write
+    in this path is another ``disconnect_all()`` scheduled for the same
+    operator action — and each one pays the channel-layer timeout in
+    full when Redis is down. Building the row and hashing the password
+    before a single ``save()`` keeps it at one; the earlier
+    ``update_or_create()`` + ``set_password()`` + ``save()`` was two.
+    """
+    assert not User.objects.exists()
+    writes: list[bool] = []
+
+    def _count(
+        sender: Any, instance: User, created: bool, **kwargs: Any
+    ) -> None:
+        writes.append(created)
+
+    post_save.connect(_count, sender=User, dispatch_uid='test_count_writes')
+    try:
+        with (
+            mock.patch(
+                'anthias_server.settings.ViewerPublisher.send_to_viewer',
+                return_value=None,
+            ),
+            mock.patch('anthias_server.app.consumers.disconnect_all'),
+        ):
+            response = client.post(
+                reverse('anthias_app:settings_save'),
+                data={
+                    'player_name': 'Test Player',
+                    'default_duration': '15',
+                    'default_streaming_duration': '300',
+                    'audio_output': 'hdmi',
+                    'date_format': 'mm/dd/yyyy',
+                    'auth_backend': 'auth_basic',
+                    'current_password': '',
+                    'user': 'alice',
+                    'password': 'Correct-Horse-9',
+                    'password_2': 'Correct-Horse-9',
+                },
+            )
+    finally:
+        post_save.disconnect(sender=User, dispatch_uid='test_count_writes')
+
+    assert response.status_code in (200, 302)
+    # One create, no follow-up update.
+    assert writes == [True]
+    # And the credentials that were saved are the ones the operator
+    # typed — a single write must not cost the password hash.
+    operator = User.objects.get(username='alice')
+    assert operator.check_password('Correct-Horse-9')
+    assert operator.is_staff and operator.is_superuser and operator.is_active
