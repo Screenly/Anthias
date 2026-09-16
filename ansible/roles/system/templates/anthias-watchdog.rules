@@ -1,0 +1,13 @@
+# Managed by Anthias — see ansible/roles/system/tasks/resilience.yml.
+#
+# /dev/watchdogN numbering is registration order, not identity. On a
+# Rockchip host with the DesignWare block plus the softdog this role
+# loads, a later boot can register them the other way round — and a
+# config pinned to "watchdog1" would then arm the device measured to
+# halt the board instead of rebooting it, silently undoing the
+# fallback. Match the driver identity, which is a property of the
+# driver rather than of boot order, and give it a stable name.
+#
+# No match means no symlink, so a host whose identity changed (kernel
+# upgrade, different board) arms nothing rather than the wrong thing.
+SUBSYSTEM=="watchdog", KERNEL=="watchdog[0-9]*", ATTR{identity}=="{{ system_watchdog_ident_exact }}", SYMLINK+="{{ system_watchdog_stable_name }}"

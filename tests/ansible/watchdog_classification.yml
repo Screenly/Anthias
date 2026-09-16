@@ -54,3 +54,53 @@
       loop: "{{ evaluated.results }}"
       loop_control:
         label: "{{ item.item.name }}"
+
+# Which path gets written into the daemon and systemd configs. The
+# stable udev name is used only when it resolves to the very device
+# this run vetted; anything else keeps the numeric path, which is what
+# the role did before the rule existed.
+- name: Watchdog device path selection
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    stable_name: anthias-watchdog
+    cases:
+      - name: symlink present and resolving to the vetted device
+        dev: /dev/watchdog1
+        link_exists: true
+        link_source: /dev/watchdog1
+        expect: /dev/anthias-watchdog
+      - name: symlink points at the other watchdog (renumbered mid-run)
+        dev: /dev/watchdog1
+        link_exists: true
+        link_source: /dev/watchdog0
+        expect: /dev/watchdog1
+      - name: udev produced no symlink
+        dev: /dev/watchdog1
+        link_exists: false
+        link_source: ""
+        expect: /dev/watchdog1
+      - name: no watchdog at all
+        dev: ""
+        link_exists: false
+        link_source: ""
+        expect: ""
+  tasks:
+    - name: Evaluate the same expression the role uses
+      ansible.builtin.set_fact:
+        result: >-
+          {{ ('/dev/' + stable_name)
+             if (item.link_exists and item.link_source == item.dev)
+             else item.dev }}
+      loop: "{{ cases }}"
+      register: evaluated
+
+    - name: Report and assert
+      ansible.builtin.assert:
+        that: (item.ansible_facts.result | trim) == (item.item.expect | trim)
+        success_msg: "OK  {{ item.item.name }} -> {{ item.ansible_facts.result | trim }}"
+        fail_msg: "FAIL {{ item.item.name }} -> got {{ item.ansible_facts.result | trim }}, expected {{ item.item.expect }}"
+      loop: "{{ evaluated.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"

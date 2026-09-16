@@ -153,9 +153,11 @@
     for w in /sys/class/watchdog/watchdog*; do
       [ -r "$w/identity" ] || continue
       id=$(tr '[:upper:]' '[:lower:]' < "$w/identity")
+      # Second field is the identity verbatim (not lowercased): the
+      # udev rule below matches on it exactly.
       case "$id" in
-        *software*) [ "$want_soft" = yes ] && { echo "/dev/$(basename "$w")"; exit 0; } ;;
-        *)          [ "$want_soft" = no  ] && { echo "/dev/$(basename "$w")"; exit 0; } ;;
+        *software*) [ "$want_soft" = yes ] && { printf '%s\t%s\n' "/dev/$(basename "$w")" "$(cat "$w/identity")"; exit 0; } ;;
+        *)          [ "$want_soft" = no  ] && { printf '%s\t%s\n' "/dev/$(basename "$w")" "$(cat "$w/identity")"; exit 0; } ;;
       esac
     done
     exit 1
@@ -172,13 +174,13 @@
 # at the verification step, instead of waiting a moment here.
 - name: Wait for the resolved watchdog node to appear
   ansible.builtin.stat:
-    path: "{{ system_watchdog_path.stdout | default('') | trim }}"
+    path: "{{ (system_watchdog_path.stdout | default('')).split('\t') | first | trim }}"
   register: system_watchdog_device_raw
   until: system_watchdog_device_raw.stat.exists | default(false)
   retries: 5
   delay: 1
   failed_when: false
-  when: (system_watchdog_path.stdout | default('') | trim) != ''
+  when: (system_watchdog_path.stdout | default('')).split('\t') | first | trim != ''
 
 # Present *and* trusted to actually reboot. A board whose watchdog
 # only halts is left alone rather than armed.
@@ -188,13 +190,93 @@
 # and is left alone rather than half-configured.
 - name: Settle whether there is a watchdog worth arming
   ansible.builtin.set_fact:
-    system_watchdog_dev_path: "{{ system_watchdog_path.stdout | default('') | trim }}"
+    system_watchdog_dev_path: "{{ (system_watchdog_path.stdout | default('')).split('\t') | first | trim }}"
+    # Verbatim, because the udev rule compares it byte for byte. A
+    # double quote would break out of the rule's quoting, so an
+    # identity containing one is treated as unusable and the role
+    # keeps the numeric path (what it did before the rule existed).
+    system_watchdog_ident_exact: >-
+      {{ ((system_watchdog_path.stdout | default('')).split('\t')[1:] | first | default('') | trim)
+         if '"' not in ((system_watchdog_path.stdout | default('')).split('\t')[1:] | first | default(''))
+         else '' }}
     system_watchdog_device:
       stat:
         exists: >-
           {{ (system_watchdog_path.rc | default(1)) == 0
-             and (system_watchdog_path.stdout | default('') | trim) != ''
+             and ((system_watchdog_path.stdout | default('')).split('\t') | first | trim) != ''
              and (system_watchdog_device_raw.stat.exists | default(false)) }}
+
+# Pin the daemon and systemd to a name that survives a reboot.
+# /dev/watchdogN is handed out in registration order: on a Rockchip
+# host the DesignWare block and the softdog this role loads can swap
+# numbers on a later boot, and a config pinned to the number would
+# then arm the device that halts instead of rebooting — the exact
+# failure the classification above exists to prevent. The rule matches
+# the driver identity, which boot order cannot change.
+- name: Give the vetted watchdog a stable name
+  ansible.builtin.template:
+    src: anthias-watchdog.rules
+    dest: /etc/udev/rules.d/60-anthias-watchdog.rules
+    mode: "0644"  # NOSONAR - udev requires readable rules
+    owner: root
+    group: root
+  when:
+    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_ident_exact != ''
+
+# Unconditional rather than gated on the template having changed: udev
+# holds rules in memory, so a host that already has the file but was
+# rebooted into a kernel without the link still needs the reload, and
+# both commands are idempotent and take milliseconds.
+- name: Apply the rule to the device that is already registered
+  ansible.builtin.command: udevadm control --reload-rules
+  changed_when: false
+  when:
+    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_ident_exact != ''
+
+- name: Trigger the symlink for the running kernel
+  ansible.builtin.command: udevadm trigger --subsystem-match=watchdog --settle
+  changed_when: false
+  when:
+    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_ident_exact != ''
+
+- name: Wait for the stable watchdog name
+  ansible.builtin.stat:
+    path: "/dev/{{ system_watchdog_stable_name }}"
+    follow: false
+  register: system_watchdog_stable_stat
+  until: system_watchdog_stable_stat.stat.exists | default(false)
+  retries: 5
+  delay: 1
+  failed_when: false
+  when:
+    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_ident_exact != ''
+
+# Use the stable name only once it actually resolves to the device we
+# vetted. udev not producing the link (an identity that changed under
+# the role's feet, a host without udev) leaves the numeric path in
+# place — no worse than before the rule existed, and still the device
+# this run classified.
+- name: Settle which path the daemon and systemd are pointed at
+  ansible.builtin.set_fact:
+    system_watchdog_arm_path: >-
+      {{ ('/dev/' + system_watchdog_stable_name)
+         if ((system_watchdog_stable_stat.stat.exists | default(false))
+             and (system_watchdog_stable_stat.stat.lnk_source | default('')) == system_watchdog_dev_path)
+         else system_watchdog_dev_path }}
+
+- name: Report that the stable name could not be used
+  ansible.builtin.debug:
+    msg: >-
+      udev did not produce /dev/{{ system_watchdog_stable_name }} for
+      {{ system_watchdog_dev_path }}; falling back to the numeric path,
+      which a reboot may renumber.
+  when:
+    - system_watchdog_device.stat.exists | bool
+    - system_watchdog_arm_path == system_watchdog_dev_path
 
 - name: Install the watchdog daemon
   ansible.builtin.apt:
@@ -311,7 +393,10 @@
 # Match the resolved path exactly. Counting any fd containing
 # "watchdog" would also pass if the daemon had opened /dev/watchdog0 —
 # the unsafe DesignWare alias — and report protection while the wrong
-# device was armed.
+# device was armed. The comparison is against the numeric path even
+# when the daemon was pointed at the udev name, because /proc/PID/fd
+# shows what the symlink resolved to; that it resolved to this device
+# is exactly what wants confirming.
 - name: Confirm the daemon holds the watchdog device we resolved
   ansible.builtin.shell: >-
     set -o pipefail;

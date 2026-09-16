@@ -18,3 +18,8 @@ system_watchdog_timeout_sec: 30
 # Pet interval, comfortably inside the timeout so a slow health check
 # still lands before the device gives up.
 system_watchdog_interval_sec: 10
+
+# The stable name the udev rule gives the vetted watchdog. Both the
+# daemon and systemd are pointed at this rather than at /dev/watchdogN,
+# whose numbering is registration order and can change across boots.
+system_watchdog_stable_name: anthias-watchdog
