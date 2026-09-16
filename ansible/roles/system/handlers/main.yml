@@ -17,3 +17,10 @@
   ansible.builtin.systemd:
     name: watchdog
     state: restarted
+
+- name: Re-execute systemd to release the watchdog device
+  # daemon-reexec, not daemon-reload: RuntimeWatchdogSec is read by the
+  # manager itself at startup, so only re-executing PID 1 makes it let
+  # go of /dev/watchdog.
+  ansible.builtin.systemd:
+    daemon_reexec: true

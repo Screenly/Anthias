@@ -11,6 +11,7 @@
 # instead of rebooting it (see roles/system/tasks/resilience.yml).
 - name: Watchdog hardware/softdog classification
   hosts: localhost
+  connection: local
   gather_facts: false
   vars:
     cases:

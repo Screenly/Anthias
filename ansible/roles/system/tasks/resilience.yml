@@ -165,10 +165,20 @@
   changed_when: false
   failed_when: false
 
-- name: Re-check for a watchdog device after the softdog attempt
+# Stat the resolved /dev/watchdogN, not /dev/watchdog: after modprobe
+# the sysfs entry the resolver reads can appear before udev has made
+# the numbered node, and gating on the alias would let the role sail
+# on with a watchdog-device that does not exist yet — failing later,
+# at the verification step, instead of waiting a moment here.
+- name: Wait for the resolved watchdog node to appear
   ansible.builtin.stat:
-    path: /dev/watchdog
+    path: "{{ system_watchdog_path.stdout | default('') | trim }}"
   register: system_watchdog_device_raw
+  until: system_watchdog_device_raw.stat.exists | default(false)
+  retries: 5
+  delay: 1
+  failed_when: false
+  when: (system_watchdog_path.stdout | default('') | trim) != ''
 
 # Present *and* trusted to actually reboot. A board whose watchdog
 # only halts is left alone rather than armed.
@@ -183,7 +193,8 @@
       stat:
         exists: >-
           {{ (system_watchdog_path.rc | default(1)) == 0
-             and (system_watchdog_path.stdout | default('') | trim) != '' }}
+             and (system_watchdog_path.stdout | default('') | trim) != ''
+             and (system_watchdog_device_raw.stat.exists | default(false)) }}
 
 - name: Install the watchdog daemon
   ansible.builtin.apt:
@@ -263,16 +274,9 @@
   when: system_watchdog_hw.stat.exists or system_watchdog_device.stat.exists
 
 - name: Release the watchdog device from systemd
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: anthias-watchdog-systemd.conf
     dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
-    content: |
-      # Managed by Anthias. The watchdog daemon owns /dev/watchdog so
-      # petting is gated on a health check; systemd's own ping only
-      # proves PID 1 is scheduled, which a wedged board still is.
-      # See ansible/roles/system/tasks/resilience.yml.
-      [Manager]
-      RuntimeWatchdogSec=0
-      RebootWatchdogSec={{ system_reboot_watchdog_sec }}
     mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
     owner: root
     group: root
@@ -282,15 +286,17 @@
   # hardware watchdog that was just classified as unsafe, which is the
   # failure that leaves a board dark.
   when: system_watchdog_hw.stat.exists or system_watchdog_device.stat.exists
-  register: system_watchdog_handover
+  notify: Re-execute systemd to release the watchdog device
 
-- name: Re-execute systemd so it closes the watchdog device
-  # daemon-reexec, not daemon-reload: RuntimeWatchdogSec is read by the
-  # manager itself at startup, so only re-executing PID 1 makes it let
-  # go of the device.
-  ansible.builtin.systemd:
-    daemon_reexec: true
-  when: system_watchdog_handover.changed  # noqa: no-handler
+# The ordering is the point, so make it explicit rather than leave it
+# to end-of-play handler flushing: only one process can hold
+# /dev/watchdog, and a daemon started before systemd lets go opens
+# nothing, logs alive=[none], and reports active while protecting
+# nothing (observed on a Pi 4). Flushing here runs the handover
+# handler now, and keeps the intent visible to anyone reordering these
+# tasks later.
+- name: Apply the handover before anything tries to claim the device
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable the watchdog daemon
   ansible.builtin.systemd:
@@ -302,11 +308,15 @@
 # A daemon that failed to open the device still reports active, so
 # "the service is running" proves nothing. Check the thing that
 # matters: the process holds an fd on the watchdog.
-- name: Confirm the daemon actually holds the watchdog device
+# Match the resolved path exactly. Counting any fd containing
+# "watchdog" would also pass if the daemon had opened /dev/watchdog0 —
+# the unsafe DesignWare alias — and report protection while the wrong
+# device was armed.
+- name: Confirm the daemon holds the watchdog device we resolved
   ansible.builtin.shell: >-
     set -o pipefail;
     ls -l /proc/$(pgrep -x watchdog | head -1)/fd 2>/dev/null
-    | grep -c watchdog
+    | grep -c -- '-> {{ system_watchdog_dev_path }}$'
   args:
     executable: /bin/bash
   register: system_watchdog_held
