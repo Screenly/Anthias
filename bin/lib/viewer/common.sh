@@ -413,8 +413,27 @@ monitor_hdmi_resolution "$PID" &
 # returns the memory. The write is best-effort: the viewer can exit
 # between `pidof` and here, and a missing /proc entry must not take the
 # container down.
+#
+# Descendants that already exist get it explicitly. oom_score_adj is
+# inherited at fork, so every helper the viewer spawns *after* this
+# point (the gst_fbdev_player.py the linuxfb video path starts per
+# clip — hundreds of MB while a video plays) is covered for free; one
+# already running when this line executes would otherwise keep the
+# default 0 and be the last thing the kernel considers.
+mark_oom_victim() {
+  echo 1000 > "/proc/$1/oom_score_adj" 2>/dev/null || true
+  # /proc, not pgrep: the armhf viewer image ships no procps-ng.
+  for status in /proc/[0-9]*/status; do
+    child=${status#/proc/}
+    child=${child%/status}
+    [ "$child" = "$1" ] && continue
+    ppid=$(awk '/^PPid:/{print $2}' "$status" 2>/dev/null)
+    [ "$ppid" = "$1" ] && mark_oom_victim "$child"
+  done
+}
+
 echo 1000 > /proc/$$/oom_score_adj
-echo 1000 > "/proc/$PID/oom_score_adj" 2>/dev/null || true
+mark_oom_victim "$PID"
 
 # Exit when the viewer stops
 while kill -0 "$PID"; do
