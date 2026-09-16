@@ -472,6 +472,15 @@ function homeApp(): HomeAppData {
       // anyway.
       this.mode = null
       this.editAsset = null
+      // Clear the page-level drag state too. A drag cancelled with
+      // Escape, or a modal closed before the browser delivers the
+      // matching dragleave, otherwise leaves the page believing a drag
+      // is still in progress: reopening Add shows its dropzone lit,
+      // and the overlay/iframe shield can stay armed indefinitely. A
+      // genuine ongoing drag re-arms both on the next dragover, so
+      // resetting here costs nothing.
+      this.pageDragActive = false
+      this.pageDragDepth = 0
       if (!this.uploadState) {
         this.uploadProgress = 0
         this.uploadFileName = ''
