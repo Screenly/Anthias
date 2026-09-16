@@ -68,13 +68,13 @@
     x-show="pendingDeleteId"
     x-cloak
     class="modal-overlay modal-overlay--nested"
-    @keydown.escape.window="pendingDeleteId = null"
-    @click.self="pendingDeleteId = null"
+    @keydown.escape.window="closeDelete()"
+    @click.self="closeDelete()"
   >
     <div class="modal-card modal-card--sm">
       <div class="modal-card__header">
         <h2>Delete asset?</h2>
-        <button type="button" class="modal-card__close" @click="pendingDeleteId = null" aria-label="Close">
+        <button type="button" class="modal-card__close" @click="closeDelete()" aria-label="Close">
           <i class="ti ti-x"></i>
         </button>
       </div>
@@ -86,7 +86,7 @@
         </p>
       </div>
       <div class="modal-card__footer">
-        <button type="button" class="app-btn app-btn-link" @click="pendingDeleteId = null">Cancel</button>
+        <button type="button" class="app-btn app-btn-link" @click="closeDelete()">Cancel</button>
         <form method="post" :action="`/assets/${pendingDeleteId}/delete/`" class="inline m-0">
           {% csrf_token %}
           <button type="submit" class="app-btn app-btn-danger confirm-delete">

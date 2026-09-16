@@ -827,6 +827,32 @@ describe('page-wide drag and drop', () => {
     expect(app.pageDragActive).toBe(true)
   })
 
+  // Every overlay that owns the screen closes through a method that
+  // clears the drag state. Without it, a drag in flight when the
+  // overlay closed (Escape before the browser delivers the matching
+  // dragleave) strands the depth counter: the page overlay and the
+  // preview iframe's pointer-events shield stay armed for the rest of
+  // the session, and the next Add opens with its dropzone already lit.
+  test.each([
+    ['closeModal', (app: ReturnType<typeof window.homeApp>) => app.closeModal()],
+    ['closePreview', (app: ReturnType<typeof window.homeApp>) => app.closePreview()],
+    ['closeBulkEdit', (app: ReturnType<typeof window.homeApp>) => app.closeBulkEdit()],
+    ['closeDelete', (app: ReturnType<typeof window.homeApp>) => app.closeDelete()],
+    ['closeBulkDelete', (app: ReturnType<typeof window.homeApp>) => app.closeBulkDelete()],
+  ])('%s clears a drag left in flight', (_name, close) => {
+    const app = window.homeApp()
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+    app.onPageDragEnter(fileDrag('clip.mp4'))
+    expect(app.pageDragActive).toBe(true)
+
+    close(app)
+
+    expect(app.pageDragActive).toBe(false)
+    // The counter too: a stale depth would keep the next dragleave
+    // from ever reaching zero.
+    expect(app.pageDragDepth).toBe(0)
+  })
+
   // The recovery path: a dragenter swallowed by an element that stops
   // propagation still leaves a drag the page can see moving.
   test('dragover raises a highlight that no dragenter did', () => {

@@ -111,6 +111,9 @@ interface HomeAppData {
   openDelete(id: string, name: string): void
   closeModal(): void
   closePreview(): void
+  closeDelete(): void
+  closeBulkDelete(): void
+  resetPageDrag(): void
   bindFlatpickr(): void
   uploadFiles(input: HTMLInputElement): Promise<void>
   dropFiles(event: DragEvent): void
@@ -472,15 +475,7 @@ function homeApp(): HomeAppData {
       // anyway.
       this.mode = null
       this.editAsset = null
-      // Clear the page-level drag state too. A drag cancelled with
-      // Escape, or a modal closed before the browser delivers the
-      // matching dragleave, otherwise leaves the page believing a drag
-      // is still in progress: reopening Add shows its dropzone lit,
-      // and the overlay/iframe shield can stay armed indefinitely. A
-      // genuine ongoing drag re-arms both on the next dragover, so
-      // resetting here costs nothing.
-      this.pageDragActive = false
-      this.pageDragDepth = 0
+      this.resetPageDrag()
       if (!this.uploadState) {
         this.uploadProgress = 0
         this.uploadFileName = ''
@@ -488,8 +483,33 @@ function homeApp(): HomeAppData {
         this.uploadTotal = 0
       }
     },
-    closePreview() {
+    closePreview(this: HomeAppData) {
       this.previewAsset = null
+      this.resetPageDrag()
+    },
+    // The delete-confirm and bulk-delete overlays used to close by
+    // assigning their flag inline from the template (four call sites
+    // each: Escape, backdrop, the X, Cancel). They go through a method
+    // so closing them clears the drag state like every other overlay —
+    // an inline assignment cannot.
+    closeDelete(this: HomeAppData) {
+      this.pendingDeleteId = null
+      this.resetPageDrag()
+    },
+    closeBulkDelete(this: HomeAppData) {
+      this.bulkDeleteOpen = false
+      this.resetPageDrag()
+    },
+    // Every overlay close path calls this. A drag cancelled with
+    // Escape, or an overlay closed before the browser delivers the
+    // matching dragleave, otherwise leaves the page believing a drag
+    // is still in progress: the next Add shows its dropzone lit, and
+    // the page overlay / preview-iframe shield can stay armed
+    // indefinitely. A genuine ongoing drag re-arms both on the next
+    // dragover, so resetting here costs nothing.
+    resetPageDrag(this: HomeAppData) {
+      this.pageDragActive = false
+      this.pageDragDepth = 0
     },
 
     // --- Bulk selection (#3046) ---------------------------------------
@@ -551,8 +571,9 @@ function homeApp(): HomeAppData {
     openBulkEdit() {
       this.bulkEditOpen = true
     },
-    closeBulkEdit() {
+    closeBulkEdit(this: HomeAppData) {
       this.bulkEditOpen = false
+      this.resetPageDrag()
     },
     // Bridged from the bulk forms' hx-on::after-request via a global
     // window 'bulk-done' CustomEvent (hx-on runs in global scope and
@@ -565,7 +586,7 @@ function homeApp(): HomeAppData {
         (event as CustomEvent<{ closeDelete?: boolean; closeEdit?: boolean }>)
           .detail || {}
       this.clearSelection()
-      if (detail.closeDelete) this.bulkDeleteOpen = false
+      if (detail.closeDelete) this.closeBulkDelete()
       if (detail.closeEdit) this.closeBulkEdit()
     },
 
