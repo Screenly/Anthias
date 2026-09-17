@@ -7,20 +7,20 @@
       "dependencies": {
         "@fontsource/plus-jakarta-sans": "^5.3.0",
         "@tabler/icons-webfont": "^3.46.0",
-        "alpinejs": "^3.17.1",
+        "alpinejs": "^3.17.2",
         "flatpickr": "^4.6.13",
         "htmx.org": "^2.0.10",
         "leaflet": "^1.9.4",
         "qrcode": "^1.5.4",
       },
       "devDependencies": {
-        "@happy-dom/global-registrator": "^20.14.0",
+        "@happy-dom/global-registrator": "^20.14.5",
         "@tailwindcss/cli": "^4.3.3",
         "@tailwindcss/forms": "^0.5.11",
         "@types/leaflet": "^1.9.22",
         "@types/qrcode": "^1.5.6",
-        "happy-dom": "^20.14.0",
-        "sass": "^1.104.0",
+        "happy-dom": "^20.14.5",
+        "sass": "^1.104.1",
         "tailwindcss": "^4.3.3",
         "typescript": "^7.0.2",
       },
@@ -29,7 +29,7 @@
   "packages": {
     "@fontsource/plus-jakarta-sans": ["@fontsource/plus-jakarta-sans@5.3.0", "", {}, "sha512-9WRw3G74Ve4cyPApAZSXLPY5DiLOZXDn7Q7dIBjFBpA0Pj56ljDItEdy2UUajjJxRuTg2HkMLO5C3K2nAQORWg=="],
 
-    "@happy-dom/global-registrator": ["@happy-dom/global-registrator@20.14.0", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^20.14.0" } }, "sha512-Xn0kdkaA1eHOaFFopr+YQ37sPNTZ3JScpUMz3j4rIsn1Nneqoh94z79iW23Ej0Ytt99+LlFr4JrSDd6ow9c7MQ=="],
+    "@happy-dom/global-registrator": ["@happy-dom/global-registrator@20.14.5", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^20.14.5" } }, "sha512-B05ID9DhSwLs6mlm1fzlkAtTIvB3duCvjJjfr19LBrlTK7VZtRjDqoTRIVv13GuYuNdhByu8LSZgThwV3Rkj7g=="],
 
     "@isaacs/cliui": ["@isaacs/cliui@9.0.0", "", {}, "sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg=="],
 
@@ -187,7 +187,7 @@
 
     "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
 
-    "alpinejs": ["alpinejs@3.17.1", "", { "dependencies": { "@vue/reactivity": "~3.5.40" } }, "sha512-HDUhA9juSA/pNYZ5FAAlW4qNsdeVORFSVONEIu0hVasqCOqLitf15R9tCr5GBCV0ZxiZW2Qx6BYdMSF7iGLT/Q=="],
+    "alpinejs": ["alpinejs@3.17.2", "", { "dependencies": { "@vue/reactivity": "~3.5.40" } }, "sha512-xbnG3LlnmFkiNO49C+qhqjEDqOdB0snKqvT48ZVp8TakpZOpsoQbc/jAxpptQRjZi7c9rLeCfvwQ/XOSirIZFQ=="],
 
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 
@@ -317,7 +317,7 @@
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
 
-    "happy-dom": ["happy-dom@20.14.3", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-0KMb/Eh8rsd+aMNkOk5h8LkAjo9Na1aksnEGmsuZf+GXl6UkAdIi0VbUHU7d59lXhNmawODgwwuCMiZpCxwwCw=="],
+    "happy-dom": ["happy-dom@20.14.5", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ=="],
 
     "htmlparser2": ["htmlparser2@9.1.0", "", { "dependencies": { "domelementtype": "^2.3.0", "domhandler": "^5.0.3", "domutils": "^3.1.0", "entities": "^4.5.0" } }, "sha512-5zfg6mHUoaer/97TxnGpxmbR7zJtPwIYFMZ/H5ucTlPZhKvtum05yiPK3Mgai3a0DyVxv7qYqoweaEd2nrYQzQ=="],
 
@@ -503,7 +503,7 @@
 
     "safer-buffer": ["safer-buffer@2.1.2", "", {}, "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="],
 
-    "sass": ["sass@1.104.0", "", { "dependencies": { "chokidar": "^5.0.0", "immutable": "^5.1.5", "source-map-js": ">=0.6.2 <2.0.0" }, "optionalDependencies": { "@parcel/watcher": "^2.4.1" }, "bin": { "sass": "sass.js" } }, "sha512-btHMApW2bgolvClhRW8AlQJzgI9lUB3pPSofBQQT+E46GWvf9o0TVQ13SYv5riWZVFyPN+JNz3TKW9XhBlc10w=="],
+    "sass": ["sass@1.104.1", "", { "dependencies": { "chokidar": "^5.0.0", "immutable": "^5.1.5", "source-map-js": ">=0.6.2 <2.0.0" }, "optionalDependencies": { "@parcel/watcher": "^2.4.1" }, "bin": { "sass": "sass.js" } }, "sha512-yDA+1aIG3EHgN4V/BvuhCvu61FF6hEd4e+9DxikUm9U0CAGuvdIZ/UYy7qbOxjhbbWQraoyLlMuzdRGOSV5Bmw=="],
 
     "sax": ["sax@1.6.0", "", {}, "sha512-6R3J5M4AcbtLUdZmRv2SygeVaM7IhrLXu9BmnOGmmACak8fiUtOsYNWUS4uK7upbmHIBbLBeFeI//477BKLBzA=="],
 
