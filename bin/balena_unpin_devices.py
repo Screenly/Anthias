@@ -7,9 +7,14 @@ release forever instead of tracking the fleet's OTA channel — and new
 such devices keep coming online as people flash old images. This runs
 hourly from .github/workflows/balena-unpin-devices.yaml.
 
-It has three independent phases, each dry-run by default and each
-selectable on its own:
+It has a read-only audit plus three independent mutating phases,
+each dry-run by default and each selectable on its own:
 
+  0. --audit — report each fleet's balenaOS and supervisor version
+     spread, and how much of it already runs a supervisor new enough to
+     retrieve a queued host OS update by itself. Mutates nothing; it
+     exists to size and then track the supervisor uplift that has to
+     land before devices can self-update against a self-hosted backend.
   1. unpin (always on) — clear the app-release pin so the device tracks
      the fleet's latest stable app. ONE filtered bulk PATCH per fleet.
   2. --os-update — start a host OS update (resinhup) toward the latest
@@ -61,8 +66,9 @@ Notes:
     keep their OS and supervisor too;
   * a failure on one fleet (or one device's HUP) is logged and counted,
     never aborting the rest;
-  * output is aggregate-only (per-fleet counts and a pinned-release
-    histogram) because the hourly workflow's logs are world-readable —
+  * output is aggregate-only (per-fleet counts, a pinned-release
+    histogram and the audit's version histograms) because the hourly
+    workflow's logs are world-readable —
     this is a public repo. Per-device uuid lines need --verbose, which
     must stay out of CI.
 
@@ -76,6 +82,8 @@ deploy workflows use). Examples:
         --os-update --supervisor --apply
     BALENA_TOKEN=... bin/balena_unpin_devices.py \
         --fleet screenly_ose/anthias-pi4 --os-update --os-limit 50 --apply
+    # read-only: where is the fleet on the supervisor uplift?
+    BALENA_TOKEN=... bin/balena_unpin_devices.py --audit
 """
 
 from __future__ import annotations
@@ -146,6 +154,16 @@ HUP_MIN_TARGET = (2, 16, 0, 0)
 # supervisor builds"; legacy-OS fleets keep their OS-matched supervisor.
 SUPERVISOR_MIN_TARGET_OS_MAJOR = 2025
 
+# balena supervisor v19 (2026-07-20) is the first release whose
+# `core-next` service retrieves a queued host OS update itself; every
+# older supervisor depends on the cloud pushing the update over
+# Cloudlink via the device-actions service. That service is a
+# balenaCloud-only component, so a device still below this major cannot
+# be host-updated at all once it is pointed at a self-hosted backend —
+# which makes "supervisor major >= 19" the readiness line the audit
+# reports against.
+SUPERVISOR_SELF_UPDATE_MIN_MAJOR = 19
+
 # Defensive pagination: the API returns the full set by default, but a
 # bounded page keeps one pathological fleet listing from becoming one
 # huge response body.
@@ -154,6 +172,11 @@ PAGE_SIZE = 500
 # Per-device log lines printed per fleet under --verbose before
 # collapsing into the release histogram.
 DETAIL_CAP = 25
+
+# Rows printed per audit histogram before the tail is collapsed into a
+# single "... and N more" line. A fleet spanning many balenaOS point
+# releases would otherwise bury the readiness number it exists to show.
+HISTOGRAM_CAP = 12
 
 
 def api_request(
@@ -563,6 +586,99 @@ def pin_supervisor(token: str, ids: list[int], release_id: int) -> None:
 
 
 # --------------------------------------------------------------------------
+# Audit (read-only) phase.
+# --------------------------------------------------------------------------
+
+
+def list_fleet_inventory(token: str, fleet: str) -> list[dict[str, Any]]:
+    """Every device in `fleet`, online or not, with just the version
+    fields the audit reports on.
+
+    Deliberately unfiltered on `is_online`, unlike list_fleet_devices():
+    the offline tail is exactly the population the supervisor uplift has
+    to wait for, so excluding it would flatter the burndown. It also
+    never selects `uuid` — the audit has no per-device output mode, so
+    not fetching identifiers at all keeps them out of reach of the
+    world-readable workflow logs.
+    """
+    devices: list[dict[str, Any]] = []
+    skip = 0
+    flt = f"belongs_to__application/any(a:a/slug eq '{fleet}')"
+    while True:
+        page = api_request(
+            token,
+            'GET',
+            'device',
+            params={
+                '$filter': flt,
+                '$select': 'id,os_version,supervisor_version,is_online',
+                '$orderby': 'id asc',
+                '$top': str(PAGE_SIZE),
+                '$skip': str(skip),
+            },
+        )
+        batch = page.get('d', []) if isinstance(page, dict) else []
+        devices.extend(batch)
+        if len(batch) < PAGE_SIZE:
+            return devices
+        skip += PAGE_SIZE
+
+
+def supervisor_major(device: dict[str, Any]) -> int:
+    """Supervisor major version, or 0 when the device has never
+    reported one (newly registered, or never yet online)."""
+    return parse_version(str(device.get('supervisor_version') or ''))[0]
+
+
+def self_update_capable(device: dict[str, Any]) -> bool:
+    """True when this device's supervisor can retrieve a queued host OS
+    update on its own. See SUPERVISOR_SELF_UPDATE_MIN_MAJOR."""
+    return supervisor_major(device) >= SUPERVISOR_SELF_UPDATE_MIN_MAJOR
+
+
+def percent(count: int, total: int) -> str:
+    """`count` as a percentage of `total`; 'n/a' for an empty fleet."""
+    return f'{100.0 * count / total:.1f}%' if total else 'n/a'
+
+
+def report_versions(label: str, versions: list[str]) -> None:
+    """Print one aggregate version histogram, most common first, with
+    the long tail collapsed at HISTOGRAM_CAP rows."""
+    histogram = Counter(version or 'unknown' for version in versions)
+    print(f'  by {label}:')
+    for version, count in histogram.most_common(HISTOGRAM_CAP):
+        print(f'    {count:6d} x {version}')
+    extra = len(histogram) - HISTOGRAM_CAP
+    if extra > 0:
+        print(f'    ... and {extra} more {label}(s)')
+
+
+def run_audit_phase(token: str, fleet: str, totals: dict[str, int]) -> None:
+    """Report one fleet's OS/supervisor spread and readiness. Read-only:
+    it issues GETs and prints, and never mutates device state."""
+    devices = list_fleet_inventory(token, fleet)
+    online = sum(1 for dev in devices if dev.get('is_online'))
+    ready = sum(1 for dev in devices if self_update_capable(dev))
+    totals['audit_total'] += len(devices)
+    totals['audit_online'] += online
+    totals['audit_ready'] += ready
+    print(
+        f'\n# {fleet}: devices={len(devices)} online={online} '
+        f'self-update-capable={ready} ({percent(ready, len(devices))})'
+    )
+    if not devices:
+        return
+    report_versions(
+        'balenaOS version',
+        [normalize_os(str(dev.get('os_version') or '')) for dev in devices],
+    )
+    report_versions(
+        'supervisor version',
+        [str(dev.get('supervisor_version') or '') for dev in devices],
+    )
+
+
+# --------------------------------------------------------------------------
 # Driver.
 # --------------------------------------------------------------------------
 
@@ -735,6 +851,13 @@ def main() -> int:
         'default: all anthias fleets)',
     )
     ap.add_argument(
+        '--audit',
+        action='store_true',
+        help="report each fleet's balenaOS/supervisor version spread and "
+        'how much of it can already retrieve its own host OS updates '
+        '(read-only; never mutates, regardless of --apply)',
+    )
+    ap.add_argument(
         '--os-update',
         action='store_true',
         help='also start a host OS update toward the latest balenaOS on a '
@@ -781,7 +904,10 @@ def main() -> int:
 
     fleets = args.fleets or FLEETS
     mode = 'APPLY' if args.apply else 'DRY-RUN'
-    phases = ['unpin']
+    phases = []
+    if args.audit:
+        phases.append('audit')
+    phases.append('unpin')
     if args.os_update:
         phases.append('os-update')
     if args.supervisor:
@@ -799,6 +925,9 @@ def main() -> int:
             )
 
     totals = {
+        'audit_total': 0,
+        'audit_online': 0,
+        'audit_ready': 0,
         'pinned': 0,
         'kept': 0,
         'unpinned': 0,
@@ -810,6 +939,15 @@ def main() -> int:
         'failed': 0,
     }
     for fleet in fleets:
+        if args.audit:
+            try:
+                run_audit_phase(token, fleet, totals)
+            except OSError as exc:
+                print(
+                    f'\n# {fleet}: audit listing failed: {exc}',
+                    file=sys.stderr,
+                )
+                totals['failed'] += 1
         try:
             run_unpin_phase(token, fleet, args.apply, args.verbose, totals)
         except OSError as exc:
@@ -867,6 +1005,13 @@ def main() -> int:
                 totals,
             )
 
+    if args.audit:
+        print(
+            f'\n== supervisor >= {SUPERVISOR_SELF_UPDATE_MIN_MAJOR} '
+            f'readiness: {totals["audit_ready"]}/{totals["audit_total"]} '
+            f'({percent(totals["audit_ready"], totals["audit_total"])}) '
+            f'| online={totals["audit_online"]} =='
+        )
     print(
         f'\n== summary: pinned={totals["pinned"]} kept={totals["kept"]} '
         f'unpinned={totals["unpinned"]} | os: eligible={totals["os_eligible"]} '
