@@ -75,7 +75,9 @@ interface HomeAppData {
   mode: 'add' | 'edit' | null
   // Which pane of the Add modal is showing, and the "From URL" tab's
   // input. Both live here rather than in a nested x-data on the modal
-  // so openAdd() can reset them — see the comment there.
+  // so openAdd() can reset them — and so a file dropped on the page can
+  // open the modal straight onto the upload pane. Neither is reachable
+  // from a child scope.
   tab: 'uri' | 'file' | 'apps'
   addUri: string
   editAsset: AssetEdit | null
@@ -87,7 +89,16 @@ interface HomeAppData {
   uploadFileName: string
   uploadIndex: number
   uploadTotal: number
-  dragActive: boolean
+  // True while a file drag is anywhere over the window. Drives the
+  // page-wide drop overlay AND the modal dropzone's highlight: a drop
+  // lands in the same place wherever it is released, so one flag is
+  // the honest thing to bind both to.
+  pageDragActive: boolean
+  // How many nested elements the drag is currently inside. dragenter
+  // and dragleave fire once per element the pointer crosses, so
+  // without a counter the overlay would blink off every time the drag
+  // moved from one table row to the next.
+  pageDragDepth: number
   // Bulk selection / actions (#3046)
   selectedIds: string[]
   visibleIds: Record<SectionKey, string[]>
@@ -100,9 +111,17 @@ interface HomeAppData {
   openDelete(id: string, name: string): void
   closeModal(): void
   closePreview(): void
+  closeDelete(): void
+  closeBulkDelete(): void
+  resetPageDrag(): void
   bindFlatpickr(): void
   uploadFiles(input: HTMLInputElement): Promise<void>
   dropFiles(event: DragEvent): void
+  acceptsPageDrop(): boolean
+  onPageDragEnter(event: DragEvent): void
+  onPageDragOver(event: DragEvent): void
+  onPageDragLeave(event: DragEvent): void
+  onPageDrop(event: DragEvent): void
   uploadOne(url: string, csrf: string, file: File): Promise<UploadResult>
   sendUpload(opts: UploadRequest): Promise<RawUploadResponse>
   // Bulk selection helpers
@@ -284,6 +303,16 @@ const DATE_FMT_MAP: Record<string, string> = {
   'yyyy.mm.dd': 'Y.m.d',
 }
 
+// Whether a drag is carrying files, i.e. whether it is an upload
+// gesture at all. Dragging selected text, an image already on the page
+// or a link fires the very same events, and `types` is the only thing
+// a drag reveals before it is released — dataTransfer.files stays
+// empty until the drop, by design.
+function dragCarriesFiles(event: DragEvent): boolean {
+  const types = event.dataTransfer?.types
+  return types ? Array.from(types).includes('Files') : false
+}
+
 function metaContent(name: string): string {
   const el = document.querySelector<HTMLMetaElement>(
     `meta[name="${name}"]`,
@@ -314,7 +343,8 @@ function homeApp(): HomeAppData {
     uploadFileName: '',
     uploadIndex: 0,
     uploadTotal: 0,
-    dragActive: false,
+    pageDragActive: false,
+    pageDragDepth: 0,
     selectedIds: [],
     visibleIds: { active: [], inactive: [] },
     bulkEditOpen: false,
@@ -445,11 +475,7 @@ function homeApp(): HomeAppData {
       // anyway.
       this.mode = null
       this.editAsset = null
-      // Clear any leftover drag highlight: dragging into the dropzone and
-      // then closing the modal (Esc/backdrop/Cancel) before dragleave
-      // fires would otherwise leave dragActive true, so the dropzone
-      // re-opens still highlighted.
-      this.dragActive = false
+      this.resetPageDrag()
       if (!this.uploadState) {
         this.uploadProgress = 0
         this.uploadFileName = ''
@@ -457,8 +483,33 @@ function homeApp(): HomeAppData {
         this.uploadTotal = 0
       }
     },
-    closePreview() {
+    closePreview(this: HomeAppData) {
       this.previewAsset = null
+      this.resetPageDrag()
+    },
+    // The delete-confirm and bulk-delete overlays used to close by
+    // assigning their flag inline from the template (four call sites
+    // each: Escape, backdrop, the X, Cancel). They go through a method
+    // so closing them clears the drag state like every other overlay —
+    // an inline assignment cannot.
+    closeDelete(this: HomeAppData) {
+      this.pendingDeleteId = null
+      this.resetPageDrag()
+    },
+    closeBulkDelete(this: HomeAppData) {
+      this.bulkDeleteOpen = false
+      this.resetPageDrag()
+    },
+    // Every overlay close path calls this. A drag cancelled with
+    // Escape, or an overlay closed before the browser delivers the
+    // matching dragleave, otherwise leaves the page believing a drag
+    // is still in progress: the next Add shows its dropzone lit, and
+    // the page overlay / preview-iframe shield can stay armed
+    // indefinitely. A genuine ongoing drag re-arms both on the next
+    // dragover, so resetting here costs nothing.
+    resetPageDrag(this: HomeAppData) {
+      this.pageDragActive = false
+      this.pageDragDepth = 0
     },
 
     // --- Bulk selection (#3046) ---------------------------------------
@@ -520,8 +571,9 @@ function homeApp(): HomeAppData {
     openBulkEdit() {
       this.bulkEditOpen = true
     },
-    closeBulkEdit() {
+    closeBulkEdit(this: HomeAppData) {
       this.bulkEditOpen = false
+      this.resetPageDrag()
     },
     // Bridged from the bulk forms' hx-on::after-request via a global
     // window 'bulk-done' CustomEvent (hx-on runs in global scope and
@@ -534,7 +586,7 @@ function homeApp(): HomeAppData {
         (event as CustomEvent<{ closeDelete?: boolean; closeEdit?: boolean }>)
           .detail || {}
       this.clearSelection()
-      if (detail.closeDelete) this.bulkDeleteOpen = false
+      if (detail.closeDelete) this.closeBulkDelete()
       if (detail.closeEdit) this.closeBulkEdit()
     },
 
@@ -620,10 +672,10 @@ function homeApp(): HomeAppData {
       }
     },
 
-    // Drag-and-drop entry point for the dropzone. Assigns the dropped
-    // FileList to the hidden <input> (so input.form / re-select still
-    // behave) and runs it through the same sequential uploadFiles()
-    // batch path the input's change event uses.
+    // Drag-and-drop entry point. Assigns the dropped FileList to the
+    // hidden <input> (so input.form / re-select still behave) and runs
+    // it through the same sequential uploadFiles() batch path the
+    // input's change event uses.
     dropFiles(event: DragEvent) {
       const dropped = event.dataTransfer?.files
       if (!dropped || !dropped.length || this.uploadState) return
@@ -633,6 +685,103 @@ function homeApp(): HomeAppData {
       if (!input) return
       input.files = dropped
       void this.uploadFiles(input)
+    },
+
+    // --- Page-wide drag and drop --------------------------------------
+    // Dropping a file anywhere on the Schedule Overview uploads it.
+    // Only the dropzone inside the Add-asset modal used to take drops,
+    // so the gesture everybody actually tries first — drag a video
+    // straight onto the asset list — hit the browser's own default and
+    // navigated the tab away to the local file, losing the page.
+    //
+    // The listeners are bound with Alpine's .window modifier, so this
+    // is one handler set for the whole page rather than a drop target
+    // per region.
+
+    // Whether the page is listening for a drop at all. Bound by the
+    // overlay as well as consulted by the drop handler, so the two
+    // cannot drift: an overlay promising "drop to upload" over a modal
+    // that then ignores the drop is worse than no overlay at all.
+    // A batch already in flight is deliberately NOT a refusal here —
+    // the drop still opens the modal onto the running upload, which is
+    // the answer to "why was my file ignored". The overlay reads
+    // uploadState itself and says so before the drop.
+    acceptsPageDrop(this: HomeAppData) {
+      // Each of these owns the screen with an overlay of its own, and a
+      // file released over one is not aimed at the asset list. Opening
+      // the Add modal underneath would also bury whatever the operator
+      // was in the middle of.
+      return (
+        this.mode !== 'edit' &&
+        !this.previewAsset &&
+        !this.bulkEditOpen &&
+        !this.bulkDeleteOpen &&
+        !this.pendingDeleteId
+      )
+    },
+
+    onPageDragEnter(this: HomeAppData, event: DragEvent) {
+      if (!dragCarriesFiles(event)) return
+      // Claim the drag. A drop only fires on a target that cancelled
+      // the preceding dragenter/dragover — without this the browser
+      // keeps the drag for itself and opens the file.
+      event.preventDefault()
+      this.pageDragDepth += 1
+      this.pageDragActive = true
+    },
+
+    // Fires continuously while the drag moves, so it stays free of
+    // reactive writes except the one that recovers a highlight we
+    // never got to raise (a dragenter swallowed by an element that
+    // stopped propagation, or a drag that began off-window).
+    onPageDragOver(this: HomeAppData, event: DragEvent) {
+      if (!dragCarriesFiles(event)) return
+      event.preventDefault()
+      if (!this.pageDragActive) {
+        this.pageDragActive = true
+        // Seed the counter as well. Re-arming with a depth of 0 leaves
+        // the next enter/leave pair (the pointer crossing one table
+        // row) running 0 -> 1 -> 0, which hides the overlay while the
+        // file is still over the page; it would only come back on the
+        // following dragover, so the highlight flickers for the rest
+        // of the drag. Math.max keeps a genuine deeper nesting intact.
+        this.pageDragDepth = Math.max(1, this.pageDragDepth)
+      }
+    },
+
+    onPageDragLeave(this: HomeAppData, event: DragEvent) {
+      if (!dragCarriesFiles(event)) return
+      // Floor at zero: a dragleave with no matching dragenter (the
+      // recovery case above) would otherwise push the counter negative
+      // and leave the overlay stuck on for the rest of the session.
+      this.pageDragDepth = Math.max(0, this.pageDragDepth - 1)
+      if (this.pageDragDepth === 0) this.pageDragActive = false
+    },
+
+    onPageDrop(this: HomeAppData, event: DragEvent) {
+      if (!dragCarriesFiles(event)) return
+      // Claimed even when the drop is refused below: whatever is on
+      // screen, letting the browser navigate to the dropped file would
+      // throw the page away.
+      event.preventDefault()
+      this.pageDragDepth = 0
+      this.pageDragActive = false
+      if (!this.acceptsPageDrop()) return
+      // The batch's progress UI lives in the Add modal's upload pane,
+      // so open it there: a dropped file reports "File 2 of 5 · 40%"
+      // exactly as a picked one does, and uploadFiles() closes the
+      // modal again once the last file lands. A drop arriving while a
+      // batch is already running is ignored by dropFiles(), and
+      // opening the modal is what explains why — it shows the upload
+      // still in flight.
+      //
+      // Through openAdd(), so a drop gets the same reset every other
+      // way in does (a stale URL in the From-URL box, the Apps pane
+      // parked on the last config form). Its own tab choice is
+      // overridden after: it sends a non-upload open to 'uri'.
+      this.openAdd()
+      this.tab = 'file'
+      this.dropFiles(event)
     },
 
     // POST a single file and resolve an UploadResult: 'ok' on a 2xx

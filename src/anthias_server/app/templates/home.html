@@ -8,7 +8,18 @@
 {% endblock %}
 
 {% block main %}
-<div class="app-container" :class="{ 'has-bulk-selection': selectedIds.length }" x-data="homeApp()" @asset-saved.window="closeModal()" @bulk-done.window="onBulkDone($event)">
+{% comment %} The drag listeners are bound with .window, not to this
+   container: a file dropped on the navbar, the footer or the margin
+   beside the table is still aimed at this page, and anything the
+   handlers do not claim the browser claims instead — it navigates the
+   tab to the dropped file and the page is gone. See the
+   "Page-wide drag and drop" block in home.ts.
+{% endcomment %}
+<div class="app-container" :class="{ 'has-bulk-selection': selectedIds.length }" x-data="homeApp()" @asset-saved.window="closeModal()" @bulk-done.window="onBulkDone($event)"
+  @dragenter.window="onPageDragEnter($event)"
+  @dragover.window="onPageDragOver($event)"
+  @dragleave.window="onPageDragLeave($event)"
+  @drop.window="onPageDrop($event)">
   <div class="page-header-bar">
     <div class="page-header-bar__title">
       <h1 class="page-header">Schedule Overview</h1>
@@ -57,13 +68,13 @@
     x-show="pendingDeleteId"
     x-cloak
     class="modal-overlay modal-overlay--nested"
-    @keydown.escape.window="pendingDeleteId = null"
-    @click.self="pendingDeleteId = null"
+    @keydown.escape.window="closeDelete()"
+    @click.self="closeDelete()"
   >
     <div class="modal-card modal-card--sm">
       <div class="modal-card__header">
         <h2>Delete asset?</h2>
-        <button type="button" class="modal-card__close" @click="pendingDeleteId = null" aria-label="Close">
+        <button type="button" class="modal-card__close" @click="closeDelete()" aria-label="Close">
           <i class="ti ti-x"></i>
         </button>
       </div>
@@ -75,7 +86,7 @@
         </p>
       </div>
       <div class="modal-card__footer">
-        <button type="button" class="app-btn app-btn-link" @click="pendingDeleteId = null">Cancel</button>
+        <button type="button" class="app-btn app-btn-link" @click="closeDelete()">Cancel</button>
         <form method="post" :action="`/assets/${pendingDeleteId}/delete/`" class="inline m-0">
           {% csrf_token %}
           <button type="submit" class="app-btn app-btn-danger confirm-delete">
@@ -83,6 +94,42 @@
           </button>
         </form>
       </div>
+    </div>
+  </div>
+
+  {% comment %} Page-wide drop feedback. Not shown while the Add/Edit
+     modal is up — the modal's own dropzone highlights instead, and an
+     overlay on top of it would hide the form the operator is filling
+     in. aria-hidden because it is pure feedback for a pointer gesture:
+     it appears only mid-drag, cannot be reached by keyboard, and says
+     nothing a screen-reader user can act on.
+  {% endcomment %}
+  <div
+    class="modal-overlay upload-drop-overlay"
+    x-show="pageDragActive && !mode && acceptsPageDrop()"
+    x-cloak
+    aria-hidden="true"
+  >
+    {% comment %} Two states, because a batch already in flight owns the
+       progress UI and dropFiles() will not start a second one over it.
+       Saying "Drop to upload" then quietly discarding the file is the
+       one thing an overlay like this must never do, so mid-batch it
+       says what will actually happen instead. The drop is still taken
+       far enough to reopen the modal, which is where the running
+       upload can be seen.
+    {% endcomment %}
+    <div class="upload-drop-overlay__card">
+      <i class="ti" :class="uploadState ? 'ti-hourglass-high' : 'ti-cloud-upload'"></i>
+      <p
+        class="upload-drop-overlay__title"
+        x-text="uploadState ? 'Upload already in progress' : 'Drop to upload'"
+      ></p>
+      <p
+        class="muted-label m-0"
+        x-text="uploadState
+          ? 'Wait for the current batch to finish, then drop these again.'
+          : 'Images and videos are added to the schedule.'"
+      ></p>
     </div>
   </div>
 

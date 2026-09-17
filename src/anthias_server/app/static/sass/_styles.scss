@@ -1114,6 +1114,31 @@ label { text-align: left; }
   max-height: calc(100vh - 12rem);
   border: 0;
   background: var(--color-surface);
+
+  // A drag that crosses into an iframe belongs to the frame: drag
+  // events do not cross a browsing-context boundary, so the page-wide
+  // drop handlers in home.ts never see it and the frame falls back to
+  // the browser default — it navigates away from the preview to the
+  // dropped file. Taking the frame out of hit-testing for the length
+  // of the drag hands those events back to the page underneath, which
+  // refuses the drop without navigating anything.
+  //
+  // Only while a drag is in flight; the frame has to stay interactive
+  // the rest of the time. Arming it costs nothing in practice: the
+  // frame never touches the viewport edge (the nested overlay's
+  // padding and the card header sit between), so a drag arriving from
+  // the desktop crosses the page's own document first and sets
+  // pageDragActive on the way in.
+  //
+  // Known residual, accepted deliberately: drag events are sampled, so
+  // a fast enough flick can land its first sampled position inside the
+  // frame and skip the parent entirely. The frame then takes the drop
+  // and navigates itself — it is sandboxed without allow-top-navigation,
+  // so the page behind it is untouched and closing the preview restores
+  // it. Closing that last gap means either giving up preview
+  // interactivity outright or a click-to-interact shim with its own
+  // pointer plumbing, both of which cost more than the glitch does.
+  &.is-drag-shielded { pointer-events: none; }
 }
 
 // -----------------------------------------------------------------------------
@@ -2492,14 +2517,65 @@ body.auth-body {
   transition: border-color var(--t-fast), background var(--t-fast);
 
   // The dashed border + cloud icon read as "drop files here", so the
-  // zone now accepts drops (dropFiles() in home.ts). Mirror the hover
-  // treatment while a drag is over it for feedback.
+  // zone lights up while a file drag is over the page (pageDragActive
+  // in home.ts) as well as on hover.
   &:hover,
   &.is-dragover {
     border-color: var(--color-link);
-    background: #ece4f5;
+    // A role, not a literal: the #ece4f5 that was here is a light
+    // lavender, which stayed light in the dark theme and made the
+    // hovered zone the brightest thing on a dark page.
+    background: var(--color-link-wash);
   }
   &.is-disabled { pointer-events: none; opacity: 0.5; }
+}
+
+// Page-wide drop target (home.html). A drop anywhere on the Schedule
+// Overview uploads, so the feedback has to be page-wide too: a dashed
+// outline confined to the modal would keep implying the only target is
+// the one you have to open a modal to reach.
+//
+// Worn alongside .modal-overlay rather than redeclaring its veil,
+// blur and stacking rung — this dims the page for the same reason, and
+// the two must not read as different depths. Only the differences are
+// below; the two selectors tie on specificity and this block comes
+// later in the file, so these win.
+//
+// pointer-events: none is load-bearing, not tidiness. If the overlay
+// could become the drag's target, crossing into it would fire a
+// dragleave for the element underneath with no matching dragenter, and
+// the depth counter in home.ts would never return to zero.
+.upload-drop-overlay {
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+
+  &__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    text-align: center;
+    padding: calc(var(--spacing) * 10) calc(var(--spacing) * 12);
+    border: 2px dashed var(--color-link);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-fg);
+    animation: modal-in 160ms var(--ease-standard) both;
+
+    i {
+      font-size: 2.75rem;
+      color: var(--color-link);
+      line-height: 1;
+    }
+  }
+
+  &__title {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.125rem;
+  }
 }
 
 .upload-progress {

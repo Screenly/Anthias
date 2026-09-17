@@ -29,8 +29,10 @@ straight DOM query.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import json
+import mimetypes
 import os
 import shutil
 import tempfile
@@ -149,6 +151,62 @@ def _disable_asset_poll(page: Page) -> None:
             if (el) el.removeAttribute('hx-trigger');
             if (window.htmx) window.htmx.process(document.body);
         }"""
+    )
+
+
+def _drop_files_on_page(
+    page: Page, paths: list[str], selector: str = 'body'
+) -> None:
+    """Drop real files on an arbitrary element, the way an operator
+    drags them in from the desktop.
+
+    Playwright has no API for a drag that starts outside the browser
+    (``set_input_files`` bypasses the gesture entirely), so the
+    DataTransfer is assembled inside the page and the three events a
+    real drop fires are dispatched by hand. The bytes are the file's
+    own, so the server receives exactly what a real drop would deliver.
+
+    ``selector`` defaults to somewhere with no dropzone under it: the
+    point of the feature is that the whole page takes drops, and the
+    handlers are bound on ``window``, so a dispatch anywhere that
+    bubbles reaches them.
+    """
+    payload = []
+    for path in paths:
+        with open(path, 'rb') as handle:
+            payload.append(
+                {
+                    'name': os.path.basename(path),
+                    'type': mimetypes.guess_type(path)[0]
+                    or 'application/octet-stream',
+                    'data': base64.b64encode(handle.read()).decode(),
+                }
+            )
+    page.evaluate(
+        """({ files, selector }) => {
+            const transfer = new DataTransfer();
+            for (const file of files) {
+                const binary = atob(file.data);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                transfer.items.add(
+                    new File([bytes], file.name, { type: file.type })
+                );
+            }
+            const target = document.querySelector(selector);
+            for (const type of ['dragenter', 'dragover', 'drop']) {
+                target.dispatchEvent(
+                    new DragEvent(type, {
+                        dataTransfer: transfer,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+            }
+        }""",
+        {'files': payload, 'selector': selector},
     )
 
 
@@ -805,6 +863,83 @@ def test_multi_upload_skips_rejected_file_and_continues(
     assert asset.mimetype == 'image'
 
 
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_drop_file_anywhere_on_page_uploads_it(
+    reset_assets: None, page: Page
+) -> None:
+    """Dragging a file onto the asset list uploads it.
+
+    The drop target used to be the dashed zone inside the add-asset
+    modal and nothing else, so the gesture everyone tries first — drag
+    a video straight onto the schedule — fell through to the browser,
+    which navigated the tab to the local file. The drop here is
+    dispatched on the asset table, which is not a dropzone and never
+    was.
+    """
+    with _TemporaryCopy(
+        'src/anthias_server/app/static/img/standby.png', 'dropped.png'
+    ) as image:
+        page.goto(BASE_URL)
+        _disable_asset_poll(page)
+        _drop_files_on_page(page, [image], selector='#asset-table')
+
+        # The batch's progress UI lives in the add modal's upload pane,
+        # so a drop opens it there rather than uploading invisibly.
+        _wait_alpine(page, 'state.tab', 'file')
+
+        _wait_db(
+            lambda: Asset.objects.count() == 1,
+            timeout=30.0,
+            description='dropped image persisted',
+        )
+
+    asset = Asset.objects.first()
+    assert asset is not None
+    assert asset.name == 'Dropped'
+    assert asset.mimetype == 'image'
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_file_drag_is_claimed_from_the_browser(
+    reset_assets: None, page: Page
+) -> None:
+    """A drag the page does not cancel belongs to the browser, which
+    opens the dropped file and takes the page with it. Cancelling both
+    dragenter and dragover is what keeps the drop ours, so it is
+    asserted directly rather than inferred from the upload landing."""
+    page.goto(BASE_URL)
+    _disable_asset_poll(page)
+
+    claimed = page.evaluate(
+        """() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            const target = document.getElementById('asset-table');
+            const dispatch = (type) => {
+                const event = new DragEvent(type, {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                target.dispatchEvent(event);
+                return event.defaultPrevented;
+            };
+            return {
+                dragenter: dispatch('dragenter'),
+                dragover: dispatch('dragover'),
+            };
+        }"""
+    )
+
+    assert claimed == {'dragenter': True, 'dragover': True}
+    # And the operator is told the page will take it.
+    expect(page.locator('.upload-drop-overlay')).to_be_visible()
+
+
 # ---------------------------------------------------------------------------
 # 4. Edit / preview / delete modals
 # ---------------------------------------------------------------------------
@@ -1059,6 +1194,68 @@ def test_preview_modal_renders_image_and_done_closes(
 
     page.get_by_role('button', name='Done').click()
     _wait_alpine(page, 'state.previewAsset', None)
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_preview_iframe_is_shielded_from_a_file_drag(
+    reset_assets: None, page: Page
+) -> None:
+    """Drag events do not cross a browsing-context boundary, so a file
+    released over a webpage preview would belong to the iframe and the
+    frame would navigate away from the asset — the one surface the
+    page-wide drop handlers cannot claim. The frame leaves hit-testing
+    for the length of the drag instead, handing those events back to
+    the page, which refuses the drop without navigating anything."""
+    Asset.objects.create(**dict(asset_active, mimetype='webpage'))
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Preview"]'
+    ).click()
+    _wait_alpine(
+        page,
+        'state.previewAsset && state.previewAsset.asset_id',
+        asset_active['asset_id'],
+    )
+    frame = page.locator('iframe.preview-media--frame')
+    expect(frame).to_be_visible()
+
+    pointer_events = """() => getComputedStyle(
+        document.querySelector('iframe.preview-media--frame')
+    ).pointerEvents"""
+
+    # With no drag in flight the frame stays interactive: the shield
+    # must not cost the operator the ability to use the preview.
+    assert page.evaluate(pointer_events) == 'auto'
+
+    # A file drag entering the page. It is dispatched on the modal
+    # overlay because that is the page's own document, which the
+    # pointer has to cross to reach the frame in the middle of it.
+    page.evaluate(
+        """() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            document.querySelector('.modal-overlay--nested').dispatchEvent(
+                new DragEvent('dragenter', {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        }"""
+    )
+
+    page.wait_for_function(
+        f'{pointer_events.strip()} === "none"', timeout=DEFAULT_TIMEOUT_MS
+    )
 
 
 @pytest.mark.integration
