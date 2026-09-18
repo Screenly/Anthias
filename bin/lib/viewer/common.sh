@@ -394,8 +394,46 @@ PID=${PID##* }
 # the viewer. No-op on eglfs/wayland boards (guarded inside).
 monitor_hdmi_resolution "$PID" &
 
-# If the viewer runs OOM, force the OOM killer to kill this script so the container restarts
+# Under memory pressure we want this container killed, because
+# `restart: always` brings it back clean — so both the wrapper and the
+# viewer are marked as preferred OOM victims.
+#
+# Marking only the wrapper (what this did before) picked a victim that
+# frees nothing. Measured on a 2 GB RK3566 board under a deliberate
+# memory hog: the kernel chose this script twice in a row and reclaimed
+# 172 kB and 128 kB — `oom_score_adj:1000` on a few-hundred-kB shell
+# outranks a 900 MB Qt process sitting at the default score — then had
+# to invoke the OOM killer again for the actual allocation. On a board
+# that is already thrashing, each of those passes costs seconds of swap
+# churn before anything is freed.
+#
+# Marking the viewer too keeps the same recovery path — its exit ends
+# the `kill -0` wait below, the script returns and the container stops
+# — while making the kill that happens first the one that actually
+# returns the memory. The write is best-effort: the viewer can exit
+# between `pidof` and here, and a missing /proc entry must not take the
+# container down.
+#
+# Descendants that already exist get it explicitly. oom_score_adj is
+# inherited at fork, so every helper the viewer spawns *after* this
+# point (the gst_fbdev_player.py the linuxfb video path starts per
+# clip — hundreds of MB while a video plays) is covered for free; one
+# already running when this line executes would otherwise keep the
+# default 0 and be the last thing the kernel considers.
+mark_oom_victim() {
+  echo 1000 > "/proc/$1/oom_score_adj" 2>/dev/null || true
+  # /proc, not pgrep: the armhf viewer image ships no procps-ng.
+  for status in /proc/[0-9]*/status; do
+    child=${status#/proc/}
+    child=${child%/status}
+    [ "$child" = "$1" ] && continue
+    ppid=$(awk '/^PPid:/{print $2}' "$status" 2>/dev/null)
+    [ "$ppid" = "$1" ] && mark_oom_victim "$child"
+  done
+}
+
 echo 1000 > /proc/$$/oom_score_adj
+mark_oom_victim "$PID"
 
 # Exit when the viewer stops
 while kill -0 "$PID"; do

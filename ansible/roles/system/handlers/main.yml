@@ -12,3 +12,10 @@
     name: docker
     state: restarted
     daemon_reload: true
+
+- name: Re-execute systemd to apply the watchdog settings
+  # daemon-reexec, not daemon-reload: RuntimeWatchdogSec and
+  # WatchdogDevice are read by the manager itself at startup, so only
+  # re-executing PID 1 makes it open (or let go of) the device.
+  ansible.builtin.systemd:
+    daemon_reexec: true

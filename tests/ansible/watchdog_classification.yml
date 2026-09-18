@@ -1,0 +1,126 @@
+---
+# Pins the watchdog hardware/softdog decision against the layouts that
+# actually exist in the fleet. Run with:
+#   uv run ansible-playbook -i localhost, tests/ansible/watchdog_classification.yml
+#
+# These pin the decision expressions only. They cannot catch a bug in
+# how the role *feeds* them — an earlier revision split the resolver's
+# output on '\t' inside a YAML block scalar, where that is a literal
+# backslash-t, and every board ended up with no watchdog armed while
+# this playbook still passed. Run the role against a real board (see
+# .claude/skills/testbed-qa) before trusting it.
+#
+# Hardware is armed only for an identity someone has measured
+# resetting the board; everything else falls back to softdog. The x86
+# second-run case is the one worth keeping: softdog registers a
+# /dev/watchdog of its own, so once the first run has persisted it, a
+# naive "is there a hardware watchdog" check flips to yes and every
+# later run silently skips configuring the thing it is meant to
+# enforce. The Rockchip case is measured — its watchdog halts the board
+# instead of rebooting it (see roles/system/tasks/resilience.yml).
+- name: Watchdog hardware/softdog classification
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    # Mirrors roles/system/defaults/main.yml.
+    allowlist:
+      - broadcom bcm2835 watchdog timer
+    cases:
+      - name: x86 first run (no device)
+        hw: false
+        ident: ""
+        expect_hw: false
+      - name: x86 second run (softdog present)
+        hw: true
+        ident: software watchdog
+        expect_hw: false
+      - name: Raspberry Pi (BCM2835)
+        hw: true
+        ident: broadcom bcm2835 watchdog timer
+        expect_hw: true
+      - name: Rockchip (DesignWare, halts)
+        hw: true
+        ident: synopsys designware watchdog
+        expect_hw: false
+      - name: identity unreadable
+        hw: true
+        ident: ""
+        expect_hw: false
+      # The allowlist's reason for being: a driver nobody has watched
+      # reset a board is not armed, because a watchdog that halts
+      # turns every wedge into a physical visit.
+      - name: unknown hardware driver
+        hw: true
+        ident: acme super watchdog
+        expect_hw: false
+  tasks:
+    - name: Evaluate the same expression the role uses
+      ansible.builtin.set_fact:
+        result: >-
+          {{ item.hw
+             and (item.ident | default('')) != ''
+             and (item.ident | default('')) in (allowlist | map('lower') | list) }}
+      loop: "{{ cases }}"
+      register: evaluated
+
+    - name: Report and assert
+      ansible.builtin.assert:
+        that: (item.ansible_facts.result | bool) == (item.item.expect_hw | bool)
+        success_msg: "OK  {{ item.item.name }} -> use_hardware={{ item.ansible_facts.result }}"
+        fail_msg: "FAIL {{ item.item.name }} -> got {{ item.ansible_facts.result }}, expected {{ item.item.expect_hw }}"
+      loop: "{{ evaluated.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+# Which path gets written into systemd's WatchdogDevice. The
+# stable udev name is used only when it resolves to the very device
+# this run vetted; anything else arms nothing at all. Falling back to
+# /dev/watchdogN would reintroduce the failure the rule prevents — the
+# number is registration order, so a later boot can point it at the
+# device measured to halt the board.
+- name: Watchdog device path selection
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    stable_name: anthias-watchdog
+    cases:
+      - name: symlink present and resolving to the vetted device
+        dev: /dev/watchdog1
+        link_exists: true
+        link_source: /dev/watchdog1
+        expect: /dev/anthias-watchdog
+      - name: symlink points at the other watchdog (renumbered mid-run)
+        dev: /dev/watchdog1
+        link_exists: true
+        link_source: /dev/watchdog0
+        expect: ""
+      - name: udev produced no symlink
+        dev: /dev/watchdog1
+        link_exists: false
+        link_source: ""
+        expect: ""
+      - name: no watchdog at all
+        dev: ""
+        link_exists: false
+        link_source: ""
+        expect: ""
+  tasks:
+    - name: Evaluate the same expression the role uses
+      ansible.builtin.set_fact:
+        result: >-
+          {{ ('/dev/' + stable_name)
+             if (item.link_exists and item.link_source == item.dev)
+             else '' }}
+      loop: "{{ cases }}"
+      register: evaluated
+
+    - name: Report and assert
+      ansible.builtin.assert:
+        that: (item.ansible_facts.result | trim) == (item.item.expect | trim)
+        success_msg: "OK  {{ item.item.name }} -> {{ item.ansible_facts.result | trim }}"
+        fail_msg: "FAIL {{ item.item.name }} -> got {{ item.ansible_facts.result | trim }}, expected {{ item.item.expect }}"
+      loop: "{{ evaluated.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
