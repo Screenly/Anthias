@@ -30,6 +30,7 @@ from django.test import Client, RequestFactory
 
 from anthias_server.lib import auth
 from anthias_server.lib.auth import (
+    AuthChange,
     AuthSettingsError,
     _is_legacy_sha256,
     apply_auth_settings,
@@ -880,24 +881,27 @@ def test_auth_disabled_ignores_drf_authenticators(
 # the decision table here rather than only through the views is what
 # covers the paths the view tests don't reach — notably *disabling*
 # auth, which never touches the User row at all.
+#
+# The two halves are asserted separately (PR 3336): only
+# ``backend_changed`` is the settings views' job to reap, because a
+# User write is already reaped by the post_save receiver in
+# app/signals.py. Collapsing them is what made a password change fan
+# two force_disconnects out over Redis.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_reports_initial_enable_as_a_change() -> None:
     request = _request_with_user(MagicMock(is_authenticated=False))
-    assert (
-        apply_auth_settings(
-            request,
-            new_auth_backend='auth_basic',
-            current_pwd='',
-            new_username='alice',
-            new_pwd=_PWD_INITIAL,
-            new_pwd_confirm=_PWD_INITIAL,
-            prev_auth_backend='',
-        )
-        is True
-    )
+    assert apply_auth_settings(
+        request,
+        new_auth_backend='auth_basic',
+        current_pwd='',
+        new_username='alice',
+        new_pwd=_PWD_INITIAL,
+        new_pwd_confirm=_PWD_INITIAL,
+        prev_auth_backend='',
+    ) == AuthChange(backend_changed=True, credentials_rotated=True)
 
 
 @pytest.mark.django_db
@@ -907,18 +911,15 @@ def test_apply_auth_settings_reports_disable_as_a_change() -> None:
     still have to be reaped."""
     operator = _make_operator()
     request = _request_with_user(operator)
-    assert (
-        apply_auth_settings(
-            request,
-            new_auth_backend='',
-            current_pwd=_PWD_OLD,
-            new_username='',
-            new_pwd='',
-            new_pwd_confirm='',
-            prev_auth_backend='auth_basic',
-        )
-        is True
-    )
+    assert apply_auth_settings(
+        request,
+        new_auth_backend='',
+        current_pwd=_PWD_OLD,
+        new_username='',
+        new_pwd='',
+        new_pwd_confirm='',
+        prev_auth_backend='auth_basic',
+    ) == AuthChange(backend_changed=True, credentials_rotated=False)
 
 
 @pytest.mark.django_db
@@ -927,36 +928,30 @@ def test_apply_auth_settings_reports_password_rotation_as_a_change() -> None:
     every socket riding one — is now on stale credentials."""
     operator = _make_operator()
     request = _request_with_user(operator)
-    assert (
-        apply_auth_settings(
-            request,
-            new_auth_backend='auth_basic',
-            current_pwd=_PWD_OLD,
-            new_username='',
-            new_pwd=_PWD_NEW,
-            new_pwd_confirm=_PWD_NEW,
-            prev_auth_backend='auth_basic',
-        )
-        is True
-    )
+    assert apply_auth_settings(
+        request,
+        new_auth_backend='auth_basic',
+        current_pwd=_PWD_OLD,
+        new_username='',
+        new_pwd=_PWD_NEW,
+        new_pwd_confirm=_PWD_NEW,
+        prev_auth_backend='auth_basic',
+    ) == AuthChange(backend_changed=False, credentials_rotated=True)
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_reports_username_rotation_as_a_change() -> None:
     operator = _make_operator()
     request = _request_with_user(operator)
-    assert (
-        apply_auth_settings(
-            request,
-            new_auth_backend='auth_basic',
-            current_pwd=_PWD_OLD,
-            new_username='bob',
-            new_pwd='',
-            new_pwd_confirm='',
-            prev_auth_backend='auth_basic',
-        )
-        is True
-    )
+    assert apply_auth_settings(
+        request,
+        new_auth_backend='auth_basic',
+        current_pwd=_PWD_OLD,
+        new_username='bob',
+        new_pwd='',
+        new_pwd_confirm='',
+        prev_auth_backend='auth_basic',
+    ) == AuthChange(backend_changed=False, credentials_rotated=True)
 
 
 @pytest.mark.django_db
@@ -966,32 +961,26 @@ def test_apply_auth_settings_reports_no_change_on_an_unrelated_save() -> None:
     dashboard socket."""
     operator = _make_operator()
     request = _request_with_user(operator)
-    assert (
-        apply_auth_settings(
-            request,
-            new_auth_backend='auth_basic',
-            current_pwd='',
-            new_username='alice',
-            new_pwd='',
-            new_pwd_confirm='',
-            prev_auth_backend='auth_basic',
-        )
-        is False
-    )
+    assert apply_auth_settings(
+        request,
+        new_auth_backend='auth_basic',
+        current_pwd='',
+        new_username='alice',
+        new_pwd='',
+        new_pwd_confirm='',
+        prev_auth_backend='auth_basic',
+    ) == AuthChange(backend_changed=False, credentials_rotated=False)
 
 
 @pytest.mark.django_db
 def test_apply_auth_settings_reports_no_change_while_auth_stays_off() -> None:
     request = _request_with_user(MagicMock(is_authenticated=False))
-    assert (
-        apply_auth_settings(
-            request,
-            new_auth_backend='',
-            current_pwd='',
-            new_username='',
-            new_pwd='',
-            new_pwd_confirm='',
-            prev_auth_backend='',
-        )
-        is False
-    )
+    assert apply_auth_settings(
+        request,
+        new_auth_backend='',
+        current_pwd='',
+        new_username='',
+        new_pwd='',
+        new_pwd_confirm='',
+        prev_auth_backend='',
+    ) == AuthChange(backend_changed=False, credentials_rotated=False)
