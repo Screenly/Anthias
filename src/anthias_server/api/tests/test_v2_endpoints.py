@@ -47,6 +47,7 @@ def test_get_device_settings(
         'show_splash': True,
         'default_assets': [],
         'shuffle_playlist': False,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': True,
         'debug_logging': False,
         'prefer_dark_mode': True,
@@ -73,6 +74,7 @@ def test_get_device_settings(
         'show_splash': True,
         'default_assets': [],
         'shuffle_playlist': False,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': True,
         'debug_logging': False,
         'prefer_dark_mode': True,
@@ -102,6 +104,7 @@ def test_patch_device_settings_invalid_auth_backend(
         'show_splash': False,
         'default_assets': [],
         'shuffle_playlist': True,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': False,
         'debug_logging': True,
     }[key]
@@ -141,6 +144,7 @@ def test_patch_device_settings_success(
         'show_splash': False,
         'default_assets': [],
         'shuffle_playlist': True,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': False,
         'debug_logging': True,
     }[key]
@@ -296,6 +300,7 @@ def test_enable_basic_auth(
         'show_splash': False,
         'default_assets': [],
         'shuffle_playlist': True,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': False,
         'debug_logging': True,
     }[key]
@@ -368,6 +373,7 @@ def test_disable_basic_auth(
         'show_splash': True,
         'default_assets': [],
         'shuffle_playlist': False,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': True,
         'debug_logging': False,
         'prefer_dark_mode': False,
@@ -410,6 +416,49 @@ def test_disable_basic_auth(
 @pytest.mark.django_db
 @mock.patch('anthias_server.api.views.v2.settings')
 @mock.patch('anthias_server.api.views.v2.ViewerPublisher')
+def test_patch_device_settings_skip_deactivated_asset(
+    publisher_mock: Any,
+    settings_mock: Any,
+    api_client: APIClient,
+    device_settings_url: str,
+) -> None:
+    """The toggle that decides whether an asset removed from the
+    playlist mid-rotation comes off the screen immediately must be
+    settable over the API, not just the HTML form."""
+    settings_mock.load = mock.MagicMock()
+    settings_mock.save = mock.MagicMock()
+    settings_mock.__getitem__.side_effect = lambda key: {
+        'player_name': 'Test Player',
+        'auth_backend': '',
+        'audio_output': 'hdmi',
+        'default_duration': '10',
+        'default_streaming_duration': '50',
+        'date_format': 'DD-MM-YYYY',
+        'show_splash': True,
+        'default_assets': False,
+        'shuffle_playlist': False,
+        'skip_deactivated_asset': True,
+        'use_24_hour_clock': False,
+        'debug_logging': False,
+    }[key]
+    settings_mock.__setitem__ = mock.MagicMock()
+
+    publisher_mock.get_instance.return_value = mock.MagicMock()
+
+    response = api_client.patch(
+        device_settings_url,
+        data={'skip_deactivated_asset': False},
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    settings_mock.__setitem__.assert_any_call('skip_deactivated_asset', False)
+    settings_mock.save.assert_called_once()
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.views.v2.settings')
+@mock.patch('anthias_server.api.views.v2.ViewerPublisher')
 @mock.patch('anthias_server.api.views.v2.add_default_assets')
 @mock.patch('anthias_server.api.views.v2.remove_default_assets')
 def test_patch_device_settings_default_assets(
@@ -432,6 +481,7 @@ def test_patch_device_settings_default_assets(
         'show_splash': False,
         'default_assets': False,
         'shuffle_playlist': True,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': False,
         'debug_logging': True,
     }[key]
@@ -476,6 +526,7 @@ def test_patch_device_settings_default_assets(
         'show_splash': False,
         'default_assets': True,
         'shuffle_playlist': True,
+        'skip_deactivated_asset': True,
         'use_24_hour_clock': False,
         'debug_logging': True,
     }[key]
