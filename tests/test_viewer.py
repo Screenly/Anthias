@@ -1564,9 +1564,82 @@ def test_asset_loop_clamps_out_of_range_duration() -> None:
         mock.patch('anthias_viewer.view_image'),
         mock.patch('anthias_viewer.watchdog'),
         mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.monotonic', return_value=0.0),
     ):
         viewer.asset_loop(scheduler)
     skip_event.wait.assert_called_once_with(timeout=DURATION_S_MAX)
+
+
+def _timed_asset(mimetype: str, duration: int) -> dict[str, Any]:
+    return {
+        'asset_id': 'a',
+        'name': 'a',
+        'uri': 'https://example.com/a',
+        'mimetype': mimetype,
+        'duration': duration,
+        'skip_asset_check': True,
+        'is_reachable': True,
+    }
+
+
+def _run_timed_tick(
+    mimetype: str, duration: int, scheduler_cost: float, view_cost: float
+) -> mock.Mock:
+    """Run one asset_loop tick on a fake monotonic clock that advances
+    by ``scheduler_cost`` inside ``get_next_asset`` and by ``view_cost``
+    inside ``view_image`` (which ``view_video`` also calls, to blank the
+    webview), and return the skip event so the caller can assert on the
+    wait timeout. Costs are binary fractions so the expected remainder
+    compares exactly."""
+    clock = [100.0]
+
+    def get_next_asset() -> dict[str, Any]:
+        clock[0] += scheduler_cost
+        return _timed_asset(mimetype, duration)
+
+    def slow_view(*_args: Any, **_kwargs: Any) -> None:
+        clock[0] += view_cost
+
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.side_effect = get_next_asset
+    skip_event = mock.Mock()
+    skip_event.wait.return_value = False
+    with (
+        mock.patch('anthias_viewer.view_image', side_effect=slow_view),
+        mock.patch('anthias_viewer.watchdog'),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.monotonic', side_effect=lambda: clock[0]),
+        mock.patch(
+            'anthias_viewer.MediaPlayerProxy.get_instance',
+            return_value=mock.Mock(),
+        ),
+    ):
+        viewer.asset_loop(scheduler)
+    return skip_event
+
+
+def test_asset_loop_wait_is_a_deadline_not_a_flat_duration() -> None:
+    """The wait must absorb the tick's own overhead, both the scheduler
+    refresh before the display call and the display call itself, so
+    one rotation takes exactly ``duration`` and co-located players
+    don't drift apart (GH #3319)."""
+    skip_event = _run_timed_tick('image', 10, 0.5, 1.5)
+    skip_event.wait.assert_called_once_with(timeout=8.0)
+
+
+def test_asset_loop_video_wait_is_the_same_deadline() -> None:
+    """``view_video`` has its own wait; it must be anchored on the same
+    tick start, or playlists with video keep drifting."""
+    skip_event = _run_timed_tick('video', 10, 0.5, 1.5)
+    skip_event.wait.assert_called_once_with(timeout=8.0)
+
+
+def test_asset_loop_wait_never_goes_negative() -> None:
+    """A browser respawn inside the tick can outlast a short duration;
+    the asset then moves on at once rather than waiting a negative
+    remainder."""
+    skip_event = _run_timed_tick('image', 2, 0.0, 30.0)
+    skip_event.wait.assert_called_once_with(timeout=0.0)
 
 
 # ---------------------------------------------------------------------------
