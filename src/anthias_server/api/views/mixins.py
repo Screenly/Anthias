@@ -149,6 +149,11 @@ class RecoverViewMixin(APIView):
 
             try:
                 backup_helper.recover(location)
+            except backup_helper.IncompatibleBackupError as exc:
+                # Version mismatch is operator-actionable ("upgrade
+                # first"); surface its specific message.
+                logger.warning('Backup restore rejected: %s', exc)
+                raise ValidationError({'backup_upload': str(exc)})
             except (
                 backup_helper.BackupRecoverError,
                 tarfile.TarError,

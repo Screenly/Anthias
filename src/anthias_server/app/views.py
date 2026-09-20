@@ -2054,6 +2054,11 @@ def settings_recover(request: HttpRequest) -> HttpResponse:
         try:
             backup_helper.recover(location)
             messages.success(request, 'Recovery successful.')
+        except backup_helper.IncompatibleBackupError as exc:
+            # Version mismatch is operator-actionable ("upgrade first"),
+            # so surface the specific message rather than the generic one.
+            logger.warning('Backup restore rejected: %s', exc)
+            messages.error(request, str(exc))
         except (backup_helper.BackupRecoverError, tarfile.TarError) as exc:
             # Same operator-input case as the API recover view: a bad /
             # non-backup upload is validation, not a bug (the error
