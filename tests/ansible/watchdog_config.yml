@@ -1,0 +1,49 @@
+---
+# Pins what actually ships: the rendered systemd drop-in. Run with:
+#   uv run ansible-playbook -i localhost, tests/ansible/watchdog_config.yml
+#
+# The armed branch has to name the device explicitly — the
+# /dev/watchdog0 default is whichever watchdog registered first, which
+# on Rockchip is the block that halts the board. The unarmed branch has
+# to say RuntimeWatchdogSec=0 out loud rather than write nothing, because
+# Raspberry Pi OS ships RuntimeWatchdogSec=1m and "no opinion" there
+# means "arm whatever is at /dev/watchdog0".
+#
+# Which device the probe picks is not testable here; that is verified by
+# running the role against real boards (see .claude/skills/testbed-qa).
+- name: Watchdog drop-in rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    system_watchdog_timeout_sec: 30
+    system_reboot_watchdog_sec: 5min
+    template_path: "{{ playbook_dir }}/../../ansible/roles/system/templates/anthias-watchdog.conf"
+  tasks:
+    - name: Render the armed branch
+      ansible.builtin.set_fact:
+        armed: "{{ lookup('template', template_path) }}"
+      vars:
+        system_watchdog_device: /dev/watchdog1
+
+    - name: Render the unarmed branch
+      ansible.builtin.set_fact:
+        unarmed: "{{ lookup('template', template_path) }}"
+      vars:
+        system_watchdog_device: ""
+
+    - name: A vetted device is named, not left to the default
+      ansible.builtin.assert:
+        that:
+          - "'WatchdogDevice=/dev/watchdog1' in armed"
+          - "'RuntimeWatchdogSec=30' in armed"
+          - "'RebootWatchdogSec=5min' in armed"
+        success_msg: Armed branch names the device and both timeouts.
+
+    - name: With nothing safe to arm, both watchdogs are explicitly off
+      ansible.builtin.assert:
+        that:
+          - "'RuntimeWatchdogSec=0' in unarmed"
+          - "'RebootWatchdogSec=0' in unarmed"
+          - "'WatchdogDevice' not in unarmed"
+        success_msg: Unarmed branch overrides the distro default instead of inheriting it.

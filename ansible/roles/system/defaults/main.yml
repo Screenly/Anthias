@@ -1,35 +1,21 @@
 ---
-# Watchdog timeout systemd programs into the device, and the interval
-# it pets at (systemd pets at half the timeout, automatically). Every
-# device in the fleet supports at least this — BCM2835 reports 60 s on
-# Pi, softdog 60 s — and drivers clamp rather than reject, so a board
-# with a shorter maximum rounds down safely.
-#
-# Raspberry Pi OS already ships RuntimeWatchdogSec=1m in
-# /usr/lib/systemd/system.conf.d/40-rpi-enable-watchdog.conf. This is
-# the same mechanism with a shorter timeout, not a replacement for it.
+# Watchdog timeout systemd programs into the device; it pings at half
+# of this. Every device in the fleet supports at least 30s (BCM2835
+# reports 60s, softdog 60s) and drivers clamp rather than reject, so a
+# board with a shorter maximum rounds down safely.
 system_watchdog_timeout_sec: 30
 
-# Cap on a hung shutdown: systemd re-arms the device after PID 1 has
-# been replaced by systemd-shutdown, so a board that stalls while
-# stopping services comes back rather than sitting dark until someone
-# visits it.
+# Cap on a hung shutdown, applied after PID 1 has been replaced by
+# systemd-shutdown.
 system_reboot_watchdog_sec: 5min
 
-# The stable name the udev rule gives the vetted watchdog. systemd's
-# WatchdogDevice is pointed at this rather than at /dev/watchdogN,
-# whose numbering is registration order and can change across boots.
-system_watchdog_stable_name: anthias-watchdog
-
-# Watchdog driver identities (as /sys/class/watchdog/*/identity reports
-# them, compared lowercased) that someone has measured actually
-# resetting the board rather than halting it. Anything not on this
-# list — including drivers that don't exist yet — falls back to
-# softdog, which reboots through the kernel's ordinary restart path.
+# Driver identities (/sys/class/watchdog/*/identity) measured to
+# actually reset a board rather than halt it. Matched case-insensitively
+# as an extended regex. Anything not matching — including drivers
+# nobody has tested yet — gets softdog instead, which reboots through
+# the kernel's ordinary restart path.
 #
-# Measured:
-#   * Broadcom BCM2835 (Raspberry Pi) — resets.
-#   * Synopsys DesignWare (Rockchip) — halts. Took two boards dark
-#     here, which is why this is an allowlist rather than a denylist.
-system_watchdog_hw_allowlist:
-  - Broadcom BCM2835 Watchdog timer
+# Measured: Broadcom BCM2835 (Raspberry Pi) resets. Synopsys DesignWare
+# (Rockchip) halts, and took two boards dark here, which is why this is
+# an allowlist rather than a list of things to avoid.
+system_watchdog_reboots_pattern: 'bcm2835'
