@@ -2798,7 +2798,7 @@ def test_assets_upload_never_stores_an_asset_under_a_reserved_ext(
     """An asset stored as `<uuid>.tmp` deletes itself: the celery sweep
     removes `*.tmp` from the asset dir after an hour and the row is
     left pointing at nothing. `<uuid>.part` survives but is dropped
-    from every backup by _skip_staged_uploads.
+    from every backup by _exclude_from_backup.
 
     A browser cannot reach this — it sends application/octet-stream for
     an unknown extension, which the type gate rejects — but a crafted
