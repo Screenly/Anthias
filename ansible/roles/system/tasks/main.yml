@@ -48,3 +48,6 @@
 
 - name: Miscellaneous host-level config (rc.local, dpkg, swap)
   ansible.builtin.include_tasks: misc.yml
+
+- name: Configure memory-pressure recovery (watchdog, durable swapoff)
+  ansible.builtin.include_tasks: resilience.yml

@@ -394,8 +394,41 @@ PID=${PID##* }
 # the viewer. No-op on eglfs/wayland boards (guarded inside).
 monitor_hdmi_resolution "$PID" &
 
-# If the viewer runs OOM, force the OOM killer to kill this script so the container restarts
-echo 1000 > /proc/$$/oom_score_adj
+# Under memory pressure we want this container killed, because
+# `restart: always` brings it back clean — so both the wrapper and the
+# viewer are marked as preferred OOM victims.
+#
+# Marking only the wrapper (what this did before) picked a victim that
+# frees nothing. Measured on a 2 GB RK3566 board under a deliberate
+# memory hog: the kernel chose this script twice in a row and reclaimed
+# 172 kB and 128 kB — `oom_score_adj:1000` on a few-hundred-kB shell
+# outranks a 900 MB Qt process sitting at the default score — then had
+# to invoke the OOM killer again for the actual allocation. On a board
+# that is already thrashing, each of those passes costs seconds of swap
+# churn before anything is freed.
+#
+# Marking the viewer too keeps the same recovery path — its exit ends
+# the `kill -0` wait below, the script returns and the container stops
+# — while making the kill that happens first the one that actually
+# returns the memory. The write is best-effort: the viewer can exit
+# between `pidof` and here, and a missing /proc entry must not take the
+# container down.
+#
+# Every process in the container, not just the viewer and its
+# children. The container is the unit `restart: always` brings back,
+# so everything in it should be a candidate — and an earlier revision
+# that walked only the viewer's subtree left the Wayland compositor
+# (cage), pulseaudio and the dbus-run-session wrapper sitting at the
+# default 0, because they are siblings of the viewer rather than its
+# descendants (measured on a NanoPi R3S). A flat loop over this PID
+# namespace is both shorter and complete; anything spawned later
+# inherits oom_score_adj from its already-marked parent.
+#
+# Best-effort per process: one can exit between the glob and the
+# write, and a missing /proc entry must not take the container down.
+for proc in /proc/[0-9]*; do
+  echo 1000 > "$proc/oom_score_adj" 2>/dev/null || true
+done
 
 # Exit when the viewer stops
 while kill -0 "$PID"; do

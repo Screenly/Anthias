@@ -1,0 +1,152 @@
+---
+# Two things are pinned here: which device the probe picks, and what
+# the systemd drop-in ends up saying. Run with:
+#   uv run ansible-playbook -i localhost, tests/ansible/watchdog_config.yml
+#
+# The probe cases run the real script against fabricated sysfs trees,
+# which is the only way to cover the x86-with-hardware branch: the one
+# x86 box in the rig has its iTCO locked off by firmware, so it can
+# only ever exercise the softdog fallback. Every case below either
+# matches hardware or already contains a softdog entry, so none of
+# them reaches the modprobe.
+- name: Watchdog device selection
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    probe: "{{ playbook_dir }}/../../ansible/roles/system/files/anthias-pick-watchdog"
+    soc_allowlist: bcm2835
+    cases:
+      - name: PC with a chipset watchdog uses it
+        arch: x86_64
+        devices:
+          - {node: watchdog0, identity: "iTCO_wdt"}
+        expect: "/dev/watchdog0 hw"
+      - name: PC prefers its chipset watchdog over an already-loaded softdog
+        arch: x86_64
+        devices:
+          - {node: watchdog0, identity: "Software Watchdog"}
+          - {node: watchdog1, identity: "iTCO_wdt"}
+        expect: "/dev/watchdog1 hw"
+      - name: PC with a BMC watchdog uses it
+        arch: x86_64
+        devices:
+          - {node: watchdog0, identity: "IPMI"}
+        expect: "/dev/watchdog0 hw"
+      - name: PC with no hardware watchdog falls back to softdog
+        arch: x86_64
+        devices:
+          - {node: watchdog0, identity: "Software Watchdog"}
+        expect: "/dev/watchdog0 soft"
+      - name: SoC on the allowlist uses its hardware watchdog
+        arch: aarch64
+        devices:
+          - {node: watchdog0, identity: "Broadcom BCM2835 Watchdog timer"}
+        expect: "/dev/watchdog0 hw"
+      # The case that cost two boards: an SoC watchdog nobody has
+      # watched reset a board must not be armed, even though the same
+      # device would be used without question on a PC.
+      - name: SoC off the allowlist is left alone for softdog
+        arch: aarch64
+        devices:
+          - {node: watchdog0, identity: "Synopsys DesignWare Watchdog"}
+          - {node: watchdog1, identity: "Software Watchdog"}
+        expect: "/dev/watchdog1 soft"
+      - name: SoC with an unreadable identity is left alone for softdog
+        arch: aarch64
+        devices:
+          - {node: watchdog0, identity: ""}
+          - {node: watchdog1, identity: "Software Watchdog"}
+        expect: "/dev/watchdog1 soft"
+  tasks:
+    # mkdtemp, not a fixed /tmp path: a predictable name in a shared
+    # directory is something another user can pre-create or point at
+    # something else, and these trees decide which device the probe
+    # names. The modes below keep them to this user for the same
+    # reason — nothing here has any business being world-readable.
+    - name: Make a private directory for the fake sysfs trees
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: anthias-wd-test.
+      register: wd_fixtures
+
+    - name: Build a fake sysfs tree per case
+      ansible.builtin.file:
+        path: "{{ wd_fixtures.path }}/{{ item.0.name | replace(' ', '_') }}/{{ item.1.node }}"
+        state: directory
+        mode: "0700"
+      loop: "{{ cases | subelements('devices') | map('list') | list }}"
+      loop_control:
+        label: "{{ item.0.name }}/{{ item.1.node }}"
+
+    - name: Write each device's identity
+      ansible.builtin.copy:
+        dest: "{{ wd_fixtures.path }}/{{ item.0.name | replace(' ', '_') }}/{{ item.1.node }}/identity"
+        content: "{{ item.1.identity }}\n"
+        mode: "0600"
+      loop: "{{ cases | subelements('devices') | map('list') | list }}"
+      loop_control:
+        label: "{{ item.0.name }}/{{ item.1.node }}"
+
+    - name: Run the real probe against each tree
+      ansible.builtin.command: "bash {{ probe }}"
+      environment:
+        WD_SYSFS: "{{ wd_fixtures.path }}/{{ item.name | replace(' ', '_') }}"
+        WD_ARCH: "{{ item.arch }}"
+        WD_SOC_ALLOWLIST: "{{ soc_allowlist }}"
+      register: probed
+      changed_when: false
+      loop: "{{ cases }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Assert each pick
+      ansible.builtin.assert:
+        that: (item.stdout_lines | join(' ') | trim) == (item.item.expect | trim)
+        success_msg: "OK  {{ item.item.name }} -> {{ item.stdout_lines | join(' ') }}"
+        fail_msg: "FAIL {{ item.item.name }} -> got '{{ item.stdout_lines | join(' ') }}', expected '{{ item.item.expect }}'"
+      loop: "{{ probed.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Clean up the fake trees
+      ansible.builtin.file:
+        path: "{{ wd_fixtures.path }}"
+        state: absent
+
+- name: Watchdog drop-in rendering
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    system_watchdog_timeout_sec: 30
+    system_reboot_watchdog_sec: 5min
+    template_path: "{{ playbook_dir }}/../../ansible/roles/system/templates/anthias-watchdog.conf"
+  tasks:
+    - name: Render the armed branch
+      ansible.builtin.set_fact:
+        armed: "{{ lookup('template', template_path) }}"
+      vars:
+        system_watchdog_device: /dev/watchdog1
+
+    - name: Render the unarmed branch
+      ansible.builtin.set_fact:
+        unarmed: "{{ lookup('template', template_path) }}"
+      vars:
+        system_watchdog_device: ""
+
+    - name: A vetted device is named, not left to the default
+      ansible.builtin.assert:
+        that:
+          - "'WatchdogDevice=/dev/watchdog1' in armed"
+          - "'RuntimeWatchdogSec=30' in armed"
+          - "'RebootWatchdogSec=5min' in armed"
+        success_msg: Armed branch names the device and both timeouts.
+
+    - name: With nothing safe to arm, both watchdogs are explicitly off
+      ansible.builtin.assert:
+        that:
+          - "'RuntimeWatchdogSec=0' in unarmed"
+          - "'RebootWatchdogSec=0' in unarmed"
+          - "'WatchdogDevice' not in unarmed"
+        success_msg: Unarmed branch overrides the distro default instead of inheriting it.
