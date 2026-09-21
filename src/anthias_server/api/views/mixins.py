@@ -71,6 +71,7 @@ def build_file_content_response(
     size: int,
     filename: str,
     mimetype: str,
+    accepted_media_type: str | None = None,
 ) -> StreamingHttpResponse:
     """Stream ``{"type": "file", ..., "content": "<base64>"}``.
 
@@ -100,13 +101,19 @@ def build_file_content_response(
     the negotiated ``Response``.
     """
     sentinel = uuid.uuid4().hex.encode()
+    # ``accepted_media_type`` is forwarded so an ``application/json;
+    # indent=4`` request still pretty-prints. Without it this branch
+    # would quietly ignore the parameter that the URL branch — still a
+    # DRF ``Response`` — keeps honouring, and one endpoint would format
+    # its two shapes differently.
     envelope = JSONRenderer().render(
         {
             'type': 'file',
             'filename': filename,
             'content': sentinel.decode(),
             'mimetype': mimetype,
-        }
+        },
+        accepted_media_type=accepted_media_type,
     )
     head, found, tail = envelope.partition(b'"' + sentinel + b'"')
     if not found:
@@ -168,8 +175,11 @@ def build_file_content_response(
                 return
             yield piece
 
+    # Wrapped rather than passed bare so Django registers a teardown
+    # closer for the handle — see ``_ClosingAsyncBody``.
     response = StreamingHttpResponse(
-        apieces(), content_type='application/json'
+        _ClosingAsyncBody(apieces(), handle),
+        content_type='application/json',
     )
     # Known up front, so clients keep the progress bar the buffered
     # response gave them.
@@ -177,6 +187,33 @@ def build_file_content_response(
         len(head) + 1 + _b64_len(size) + 1 + len(tail)
     )
     return response
+
+
+class _ClosingAsyncBody:
+    """An async response body that owns — and can close — its file.
+
+    ``StreamingHttpResponse`` registers a teardown closer only when the
+    object it is handed exposes ``close``. A bare async generator
+    exposes ``aclose`` instead, so nothing is registered and the asset's
+    fd survives ``response.close()`` — which, on a download the client
+    aborts, is the only cleanup Django runs. The fd and its inode would
+    then stay pinned until GC finalised the abandoned generator, so a
+    deleted asset would not even give its disk space back.
+
+    Wrapping the generator in an object with a real ``close`` hands the
+    handle to Django's own resource management, rather than reaching
+    into ``response._resource_closers`` behind its back.
+    """
+
+    def __init__(self, body: AsyncIterator[bytes], handle: BinaryIO) -> None:
+        self._body = body
+        self._handle = handle
+
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self._body
+
+    def close(self) -> None:
+        self._handle.close()
 
 
 def _b64_len(size: int) -> int:
@@ -634,20 +671,32 @@ class AssetContentViewMixin(APIView):
         # an asset deleted between the ``isfile`` above and the first
         # read then still surfaces as a clean 404 instead of a 200 whose
         # body dies halfway through, after the status line has shipped.
+        #
+        # Only ``FileNotFoundError``, deliberately. A broader ``OSError``
+        # would dress a failing SD card (EIO/EUCLEAN), a permissions
+        # mistake (EACCES) or fd exhaustion (EMFILE) up as "no such
+        # asset" — a clean 404 that tells Sentry nothing and that a
+        # backup client silently skips over. Those belong in a 500.
         try:
             # SIM115 false positive: the handle *is* managed, by the
             # generator in build_file_content_response, which owns it
             # for the life of the response. A ``with`` here would
             # close it before the first byte is streamed.
             handle = open(asset.uri, 'rb')  # noqa: SIM115
-        except OSError as exc:
+        except FileNotFoundError as exc:
             raise NotFound('Asset content is no longer available.') from exc
 
         # Size the body from the open handle rather than the path, so
         # the Content-Length we advertise describes exactly the bytes
         # the generator below reads from *this* handle.
         size = os.fstat(handle.fileno()).st_size
-        return build_file_content_response(handle, size, filename, mimetype)
+        return build_file_content_response(
+            handle,
+            size,
+            filename,
+            mimetype,
+            accepted_media_type=request.accepted_media_type,
+        )
 
 
 class PlaylistOrderViewMixin(APIView):

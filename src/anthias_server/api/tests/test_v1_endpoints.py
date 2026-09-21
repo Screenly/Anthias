@@ -3,10 +3,12 @@ Tests for V1 API endpoints.
 """
 
 import base64
+import errno
 import json
 import os
 import warnings
 from collections.abc import Iterator
+from contextlib import suppress
 from mimetypes import guess_type
 from pathlib import Path
 from typing import Any, cast
@@ -943,3 +945,111 @@ def test_asset_content_404s_when_file_vanishes_before_streaming(
         response = api_client.get(_get_asset_content_url(asset.asset_id))
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_asset_content_releases_the_fd_when_the_response_closes(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """An aborted download must not pin the asset's file descriptor.
+
+    The streaming handle outlives the view, so something has to close
+    it. Django only auto-registers a closer when ``streaming_content``
+    exposes ``close``, and an async generator exposes ``aclose`` — so
+    the registration silently does not happen and ``response.close()``,
+    the only cleanup Django runs for an abandoned streaming response,
+    would leave the fd and its inode pinned until GC.
+    """
+    asset = _make_file_asset('clip.png', b'x' * 4096)
+
+    def open_fds() -> list[str]:
+        found = []
+        for fd in os.listdir('/proc/self/fd'):
+            with suppress(OSError):
+                if os.readlink(f'/proc/self/fd/{fd}') == asset.uri:
+                    found.append(fd)
+        return found
+
+    response = api_client.get(_get_asset_content_url(asset.asset_id))
+    assert open_fds(), 'expected the view to hold the asset open'
+
+    # Never drain the body — exactly what an aborted download looks
+    # like from the server's side.
+    response.close()
+
+    assert open_fds() == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('errno_code', [errno.EIO, errno.EACCES, errno.EMFILE])
+def test_asset_content_does_not_disguise_io_errors_as_404(
+    api_client: APIClient, isolated_asset_dir: None, errno_code: int
+) -> None:
+    """Only a missing file is a 404.
+
+    A failing SD card (EIO), a permissions mistake (EACCES) or fd
+    exhaustion (EMFILE) dressed up as "no such asset" is a clean 404
+    that tells Sentry nothing and that a backup client skips over
+    without ever reporting a problem. Those have to surface as errors.
+    """
+    asset = _make_file_asset('clip.png', b'hello')
+    real_open = open
+
+    def failing_open(file: Any, *args: Any, **kwargs: Any) -> Any:
+        if str(file) == asset.uri:
+            raise OSError(errno_code, os.strerror(errno_code))
+        return real_open(file, *args, **kwargs)
+
+    with mock.patch(
+        'anthias_server.api.views.mixins.open', failing_open, create=True
+    ):
+        response = api_client.get(_get_asset_content_url(asset.asset_id))
+
+    assert response.status_code != status.HTTP_404_NOT_FOUND
+    assert response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR
+
+
+@pytest.mark.django_db
+def test_asset_content_honours_the_indent_media_type_parameter(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """``application/json; indent=4`` must format both shapes alike.
+
+    The URL branch is still a DRF ``Response`` and honours the
+    parameter; the file branch renders its own envelope, so it has to
+    be handed the negotiated media type or one endpoint would format
+    its two shapes differently.
+    """
+    body = b'hi'
+    file_asset = _make_file_asset('clip.png', body)
+    url_asset = Asset.objects.create(
+        name='somewhere',
+        uri='https://anthias.screenly.io',
+        mimetype='webpage',
+        is_enabled=False,
+        duration=10,
+    )
+    accept = 'application/json; indent=4'
+
+    file_response = api_client.get(
+        _get_asset_content_url(file_asset.asset_id), HTTP_ACCEPT=accept
+    )
+    url_response = api_client.get(
+        _get_asset_content_url(url_asset.asset_id), HTTP_ACCEPT=accept
+    )
+
+    streamed = _body(file_response)
+    assert streamed == JSONRenderer().render(
+        {
+            'type': 'file',
+            'filename': 'clip.png',
+            'content': base64.b64encode(body).decode(),
+            'mimetype': 'image/png',
+        },
+        accepted_media_type=accept,
+    )
+    # Both branches pretty-printed, and the advertised length still
+    # describes the indented body.
+    assert streamed.startswith(b'{\n    ')
+    assert url_response.content.startswith(b'{\n    ')
+    assert int(file_response['Content-Length']) == len(streamed)
