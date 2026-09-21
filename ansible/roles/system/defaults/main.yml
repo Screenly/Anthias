@@ -15,7 +15,16 @@ system_reboot_watchdog_sec: 5min
 # nobody has tested yet — gets softdog instead, which reboots through
 # the kernel's ordinary restart path.
 #
-# Measured: Broadcom BCM2835 (Raspberry Pi) resets. Synopsys DesignWare
-# (Rockchip) halts, and took two boards dark here, which is why this is
-# an allowlist rather than a list of things to avoid.
+# Measured:
+#   * Broadcom BCM2835 (Raspberry Pi) — resets.
+#   * Synopsys DesignWare — HALTS, on both Rockchip boards in the rig.
+#     Rock Pi 4 (RK3399): petting stopped 10:41:31, unreachable 10:42:05,
+#     stayed dark. NanoPi R3S LTS (RK3566): armed 10:27:03 with its 44 s
+#     timeout while systemd went on petting softdog normally, last
+#     reachable 10:27:36, dead from 10:27:53 and still dark 12 minutes
+#     later — a power cycle got it back. softdog on that same board
+#     resets it in ~30 s and has it reachable again in ~64 s.
+#
+# That is why this is an allowlist rather than a list of things to
+# avoid: a driver nobody has watched reset a board is not armed.
 system_watchdog_reboots_pattern: 'bcm2835'

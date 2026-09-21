@@ -9,7 +9,9 @@
 # and Debian ship it off. So this is one drop-in template, plus the
 # one thing systemd cannot work out on its own: which device to open.
 #
-# That question is not academic. Measured on the Rock Pi 4:
+# That question is not academic. Measured on both Rockchip boards in
+# the rig — the Rock Pi 4 (RK3399) and the NanoPi R3S LTS (RK3566) —
+# whose DesignWare blocks both halt rather than reset. On the Rock Pi 4:
 #
 #   * Synopsys DesignWare (its only hardware watchdog) HALTS instead of
 #     resetting — petting stopped 10:41:31, unreachable 10:42:05, still
@@ -18,7 +20,13 @@
 #     back 10:49:53 with uptime=20s, because it reboots through the
 #     kernel's ordinary restart path.
 #
-# and the DesignWare driver is built into that kernel
+# The R3S behaves the same way: its DesignWare block was armed on its
+# own (44 s timeout) with systemd still petting softdog normally, so
+# nothing else could have been responsible, and the board was dead
+# 15 s after the timeout expired and stayed dark until it was power
+# cycled. softdog on that board resets it in ~30 s.
+#
+# The DesignWare driver is built into both kernels
 # (CONFIG_DW_WATCHDOG=y), so it cannot be blacklisted away: it will
 # always be watchdog0 there, and softdog — loaded from userspace —
 # will always be watchdog1. Hence one probe task that names the right
