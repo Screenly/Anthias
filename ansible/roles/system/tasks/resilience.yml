@@ -9,8 +9,21 @@
 # and Debian ship it off. So this is one drop-in template, plus the
 # one thing systemd cannot work out on its own: which device to open.
 #
-# That question is not academic. Measured on both Rockchip boards in
-# the rig — the Rock Pi 4 (RK3399) and the NanoPi R3S LTS (RK3566) —
+# The answer differs by platform, and deliberately so
+# (anthias-pick-watchdog holds the logic):
+#
+#   * On a PC, any hardware watchdog it exposes is used. iTCO,
+#     sp5100_tco, ACPI WDAT, hpwdt, an IPMI BMC — these are chipset or
+#     firmware devices whose specified behaviour is a full system
+#     reset, and preferring softdog over one of them would throw away
+#     the better recovery path (softdog cannot help if the kernel
+#     itself is wedged, a hardware watchdog can).
+#   * On an SoC, only a driver identity someone has watched reset a
+#     board is armed, because vendor IP does what the vendor felt
+#     like.
+#
+# That second rule is not academic. Measured on both Rockchip boards
+# in the rig — the Rock Pi 4 (RK3399) and the NanoPi R3S LTS (RK3566) —
 # whose DesignWare blocks both halt rather than reset. On the Rock Pi 4:
 #
 #   * Synopsys DesignWare (its only hardware watchdog) HALTS instead of
@@ -41,35 +54,16 @@
 # unkillable, which bin/lib/viewer/common.sh fixes directly.
 
 - name: Pick a watchdog device that reboots rather than halts
-  # Line 1 is the device path, line 2 is 'hw' or 'soft'; both empty if
-  # this board has nothing safe to arm. Two lines rather than one
-  # delimited line on purpose — '\t' inside a YAML block scalar is a
-  # literal backslash-t, and an earlier revision silently resolved
-  # every board to "no watchdog" that way.
-  ansible.builtin.shell:
+  # Two lines out: the device path, then 'hw' or 'soft'; nothing at all
+  # if this machine has neither. Lines rather than one delimited line
+  # on purpose — '\t' inside a YAML block scalar is a literal
+  # backslash-t, and an earlier revision silently resolved every board
+  # to "no watchdog" that way.
+  ansible.builtin.script: anthias-pick-watchdog
+  args:
     executable: /bin/bash
-    # The pattern arrives through the environment rather than being
-    # interpolated into the script: no quoting to get wrong, and
-    # ansible-lint can parse the block.
-    cmd: |
-      set -u
-      pick() {
-        for id in /sys/class/watchdog/watchdog*/identity; do
-          [ -r "$id" ] || continue
-          if grep -qiE "$1" "$id"; then
-            printf '/dev/%s\n%s\n' "$(basename "$(dirname "$id")")" "$2"
-            return 0
-          fi
-        done
-        return 1
-      }
-      pick "$WD_REBOOTS" hw && exit 0
-      # Nothing here is known to reset the board, so use the kernel's
-      # software watchdog, which is. Already loaded is fine.
-      modprobe softdog 2>/dev/null || true
-      pick 'software watchdog' soft || true
   environment:
-    WD_REBOOTS: "{{ system_watchdog_reboots_pattern }}"
+    WD_SOC_ALLOWLIST: "{{ system_watchdog_soc_allowlist_pattern }}"
   register: system_watchdog_probe
   changed_when: false
 

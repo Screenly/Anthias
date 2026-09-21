@@ -9,11 +9,15 @@ system_watchdog_timeout_sec: 30
 # systemd-shutdown.
 system_reboot_watchdog_sec: 5min
 
-# Driver identities (/sys/class/watchdog/*/identity) measured to
-# actually reset a board rather than halt it. Matched case-insensitively
-# as an extended regex. Anything not matching — including drivers
-# nobody has tested yet — gets softdog instead, which reboots through
-# the kernel's ordinary restart path.
+# SoC watchdog driver identities (/sys/class/watchdog/*/identity)
+# measured to actually reset a board rather than halt it. Matched
+# case-insensitively as an extended regex.
+#
+# This applies to SoC platforms only. On x86 any hardware watchdog the
+# machine exposes is used — iTCO, sp5100_tco, ACPI WDAT, hpwdt, IPMI
+# are chipset/firmware devices specified to assert a system reset, and
+# they recover a wedged kernel that softdog cannot. An SoC watchdog is
+# vendor IP with vendor behaviour, so there it is opt-in per driver.
 #
 # Measured:
 #   * Broadcom BCM2835 (Raspberry Pi) — resets.
@@ -25,6 +29,6 @@ system_reboot_watchdog_sec: 5min
 #     later — a power cycle got it back. softdog on that same board
 #     resets it in ~30 s and has it reachable again in ~64 s.
 #
-# That is why this is an allowlist rather than a list of things to
-# avoid: a driver nobody has watched reset a board is not armed.
-system_watchdog_reboots_pattern: 'bcm2835'
+# Anything not matching falls back to softdog, which reboots through
+# the kernel's ordinary restart path.
+system_watchdog_soc_allowlist_pattern: 'bcm2835'
