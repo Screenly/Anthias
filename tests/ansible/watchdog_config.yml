@@ -59,20 +59,31 @@
           - {node: watchdog1, identity: "Software Watchdog"}
         expect: "/dev/watchdog1 soft"
   tasks:
+    # mkdtemp, not a fixed /tmp path: a predictable name in a shared
+    # directory is something another user can pre-create or point at
+    # something else, and these trees decide which device the probe
+    # names. The modes below keep them to this user for the same
+    # reason — nothing here has any business being world-readable.
+    - name: Make a private directory for the fake sysfs trees
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: anthias-wd-test.
+      register: wd_fixtures
+
     - name: Build a fake sysfs tree per case
       ansible.builtin.file:
-        path: "/tmp/anthias-wd-test/{{ item.0.name | replace(' ', '_') }}/{{ item.1.node }}"
+        path: "{{ wd_fixtures.path }}/{{ item.0.name | replace(' ', '_') }}/{{ item.1.node }}"
         state: directory
-        mode: "0755"
+        mode: "0700"
       loop: "{{ cases | subelements('devices') | map('list') | list }}"
       loop_control:
         label: "{{ item.0.name }}/{{ item.1.node }}"
 
     - name: Write each device's identity
       ansible.builtin.copy:
-        dest: "/tmp/anthias-wd-test/{{ item.0.name | replace(' ', '_') }}/{{ item.1.node }}/identity"
+        dest: "{{ wd_fixtures.path }}/{{ item.0.name | replace(' ', '_') }}/{{ item.1.node }}/identity"
         content: "{{ item.1.identity }}\n"
-        mode: "0644"
+        mode: "0600"
       loop: "{{ cases | subelements('devices') | map('list') | list }}"
       loop_control:
         label: "{{ item.0.name }}/{{ item.1.node }}"
@@ -80,7 +91,7 @@
     - name: Run the real probe against each tree
       ansible.builtin.command: "bash {{ probe }}"
       environment:
-        WD_SYSFS: "/tmp/anthias-wd-test/{{ item.name | replace(' ', '_') }}"
+        WD_SYSFS: "{{ wd_fixtures.path }}/{{ item.name | replace(' ', '_') }}"
         WD_ARCH: "{{ item.arch }}"
         WD_SOC_ALLOWLIST: "{{ soc_allowlist }}"
       register: probed
@@ -100,7 +111,7 @@
 
     - name: Clean up the fake trees
       ansible.builtin.file:
-        path: /tmp/anthias-wd-test
+        path: "{{ wd_fixtures.path }}"
         state: absent
 
 - name: Watchdog drop-in rendering
