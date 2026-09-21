@@ -1,7 +1,17 @@
 #!/bin/bash
 # Print the watchdog device systemd should open, and whether it is a
-# hardware device or the kernel's software one. Two lines: path, then
-# 'hw' or 'soft'. Nothing at all if this machine has neither.
+# hardware device or the kernel's software one:
+#
+#   WATCHDOG_DEVICE=/dev/watchdog1
+#   WATCHDOG_KIND=soft
+#
+# Nothing at all if this machine has neither.
+#
+# Keyed lines, not bare positional ones: a Pi 1 B in the rig emits a
+# blank line from its shell startup before the script's own output,
+# and reading "the first line" there gave an empty device and a board
+# left with no watchdog at all — while overriding the 1m that
+# Raspberry Pi OS ships. The caller greps for the key instead.
 #
 # Run by ansible/roles/system/tasks/resilience.yml. A file rather than
 # an inline block so tests/ansible/watchdog_config.yml can run the
@@ -24,7 +34,7 @@ pick_hw() {
     [ -r "$id" ] || continue
     grep -qi 'software watchdog' "$id" && continue
     grep -qiE "$1" "$id" || continue
-    printf '/dev/%s\nhw\n' "$(basename "$(dirname "$id")")"
+    printf 'WATCHDOG_DEVICE=/dev/%s\nWATCHDOG_KIND=hw\n' "$(basename "$(dirname "$id")")"
     return 0
   done
   return 1
@@ -35,7 +45,7 @@ pick_soft() {
   for id in "$root"/watchdog*/identity; do
     [ -r "$id" ] || continue
     grep -qi 'software watchdog' "$id" || continue
-    printf '/dev/%s\nsoft\n' "$(basename "$(dirname "$id")")"
+    printf 'WATCHDOG_DEVICE=/dev/%s\nWATCHDOG_KIND=soft\n' "$(basename "$(dirname "$id")")"
     return 0
   done
   return 1

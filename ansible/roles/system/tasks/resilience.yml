@@ -54,11 +54,13 @@
 # unkillable, which bin/lib/viewer/common.sh fixes directly.
 
 - name: Pick a watchdog device that reboots rather than halts
-  # Two lines out: the device path, then 'hw' or 'soft'; nothing at all
-  # if this machine has neither. Lines rather than one delimited line
-  # on purpose — '\t' inside a YAML block scalar is a literal
-  # backslash-t, and an earlier revision silently resolved every board
-  # to "no watchdog" that way.
+  # Emits WATCHDOG_DEVICE= and WATCHDOG_KIND= lines; nothing at all if
+  # this machine has neither. Parsed by key below, never by position:
+  # the Pi 1 B's shell prints a blank line ahead of the script's
+  # output, which made "the first line" empty and left that board
+  # unprotected. (And keyed lines rather than one delimited line
+  # because '\t' inside a YAML block scalar is a literal backslash-t,
+  # which silently broke an earlier revision the same way.)
   ansible.builtin.script: anthias-pick-watchdog
   args:
     executable: /bin/bash
@@ -69,8 +71,14 @@
 
 - name: Note which device will be armed
   ansible.builtin.set_fact:
-    system_watchdog_device: "{{ (system_watchdog_probe.stdout | default('')).splitlines() | first | default('') | trim }}"
-    system_watchdog_kind: "{{ (system_watchdog_probe.stdout | default('')).splitlines()[1:] | first | default('') | trim }}"
+    system_watchdog_device: >-
+      {{ ((system_watchdog_probe.stdout | default('')).splitlines()
+          | select('match', '^WATCHDOG_DEVICE=') | first | default('='))
+         .split('=', 1)[1] | trim }}
+    system_watchdog_kind: >-
+      {{ ((system_watchdog_probe.stdout | default('')).splitlines()
+          | select('match', '^WATCHDOG_KIND=') | first | default('='))
+         .split('=', 1)[1] | trim }}
 
 - name: Report the decision
   ansible.builtin.debug:
