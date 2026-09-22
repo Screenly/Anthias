@@ -398,8 +398,13 @@ def _soft_limit_raised_in(module_name: str) -> BaseException:
         compile(source, f'{module_name.replace(".", "/")}.py', 'exec'),
         namespace,
     )
+    frame = namespace['frame']
+    # ``exec`` only promises to populate the namespace, so the value
+    # comes back as ``object``. Narrow it at runtime rather than
+    # suppressing the type checker.
+    assert callable(frame)
     try:
-        namespace['frame']()  # type: ignore[operator]
+        frame()
     except SoftTimeLimitExceeded as exc:
         return exc
     raise AssertionError('frame() did not raise')
