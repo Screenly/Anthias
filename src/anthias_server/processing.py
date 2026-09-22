@@ -68,7 +68,11 @@ import sh
 from celery import Task
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from anthias_common.board import is_low_ram_device, resolve_device_key
+from anthias_common.board import (
+    ARM64_DEVICE_TYPES,
+    is_low_ram_device,
+    resolve_device_key,
+)
 from anthias_server.app.models import Asset
 
 logger = logging.getLogger(__name__)
@@ -1783,28 +1787,74 @@ def _run_video_normalisation(asset: Asset) -> None:
     if supported:
         supported_str = ', '.join(sorted(supported))
         message = (
-            f'Video codec {display_codec!r} is not hardware-decoded on '
-            f'this device. Supported: {supported_str}.'
+            f'Video codec {display_codec!r} is not accepted on this '
+            f'device. Accepted: {supported_str}.'
         )
     else:
-        # Empty ``supported`` means we hit the catch-all ``arm64``
-        # branch — DEVICE_TYPE is set but no board subtype resolved,
-        # so we can't certify any codec. Say so rather than the
-        # misleading "Supported: none." which reads like the board has
-        # no decoder at all.
+        # Empty ``supported`` means no allowlist was found for this
+        # key, which happens three ways: the catch-all ``arm64`` with
+        # no subtype resolved; ``arm64`` with a subtype the map does
+        # not know yet (host_agent ahead of the server mid-rollout);
+        # and an unset or unrecognised DEVICE_TYPE, which
+        # ``resolve_device_key`` passes through to a key the map has
+        # no entry for. The first two are the same deployment and get
+        # the same advice, which is why the branch below keys on the
+        # environment DEVICE_TYPE rather than on the resolved key —
+        # only that deployment has a host agent worth checking. Either
+        # way say *why* rather than the misleading "Supported: none.",
+        # which reads like the board decodes nothing at all.
         #
         # The advice is deliberately not "re-flash with the
         # board-specific image": there is no such image — every SBC
         # runs the generic arm64 build, including the Rock Pi 4 balena
-        # fleet (see docs/board-enablement.md). Either anthias_host_agent
-        # isn't running to publish ``host:board_subtype``, or this
-        # board's silicon hasn't been profiled yet.
+        # fleet (see docs/board-enablement.md).
+        #
+        # It is also deliberately per-deployment rather than a bare
+        # "check the host agent". The two installs fail here for
+        # different reasons and only one of them is actionable:
+        #
+        # * compose / bare metal — anthias_host_agent publishes
+        #   ``host:board_subtype`` to Redis. A stopped agent OR an
+        #   unreachable Redis both land here, so the message names both
+        #   rather than treating a running agent as proof the board is
+        #   unprofiled.
+        # * balena — ships no host_agent at all, and the in-container
+        #   device-tree fallback reads nothing because Docker masks
+        #   ``/sys/firmware`` in the unprivileged server container. So
+        #   there is no subtype source on that fleet and no action the
+        #   operator can take; saying so beats sending them after a
+        #   service their device has never had.
+        #
+        # Read the *environment* DEVICE_TYPE, not the resolved key.
+        # resolve_device_key() returns the subtype when Redis has one,
+        # so a subtype the codec map doesn't know yet — mid-rollout,
+        # host_agent ahead of the server — would look "unset or
+        # unrecognised" here and hide the compose/balena diagnosis
+        # from a deployment that is exactly the arm64 catch-all that
+        # text is written for.
+        is_generic_arm64 = (
+            os.environ.get('DEVICE_TYPE', '').strip().lower()
+            in ARM64_DEVICE_TYPES
+        )
         message = (
-            f'Video codec {display_codec!r} can not be verified for '
-            'playback on this device — the board has not reported a '
-            'known subtype. Check that anthias-host-agent is running; '
-            'if it is, this board has not been profiled yet and you '
-            'can open an issue asking for it.'
+            f'Video codec {display_codec!r} cannot be verified for '
+            'playback on this device — Anthias could not identify '
+            'this board, so it has no measured playback envelope for '
+            'it and cannot certify that any codec plays here.'
+            + (
+                ' On a docker-compose install, check that '
+                'anthias-host-agent and Redis are both running. On '
+                'balena, the generic arm64 fleet (Rock Pi 4) ships no '
+                'host agent and has no other subtype source, so those '
+                'devices always land here; balena fleets built from an '
+                'identified image (pi4-64, pi5) resolve their own key '
+                'and never reach this message. Otherwise this board '
+                'has not been profiled yet — please open an issue '
+                'asking for it.'
+                if is_generic_arm64
+                else ' DEVICE_TYPE is unset or unrecognised on this '
+                'install, so no board profile could be selected at all.'
+            )
         )
     raise UnsupportedVideoCodecError(
         message, recipe=recipe, handbrake=handbrake
