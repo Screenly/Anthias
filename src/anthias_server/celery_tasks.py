@@ -1779,41 +1779,48 @@ def revalidate_asset_url(asset_id: str) -> None:
     """
     from django.utils import timezone
 
+    # The soft-limit guard covers the *whole* body, not just the probe
+    # and the write-back. The signal is delivered asynchronously and
+    # every step here is blocking I/O of its own: the opening row fetch
+    # and the SETNX cooldown gate both talk to SQLite/redis on a board
+    # that may be swapping. Sentry ANTHIAS-5K caught the signal landing
+    # inside ``Asset.objects.get`` — a single SELECT that took ~85s on
+    # a memory-pressured device — where the bare ``except
+    # Asset.DoesNotExist`` could not catch it. It escaped as a task
+    # failure and, worse, left the task running into the 90s hard
+    # limit, which SIGKILLs the pool child: on 2026.8.2 this task was
+    # the single largest contributor to the hard-limit kills behind the
+    # ANTHIAS-A / ANTHIAS-9 / ANTHIAS-B trio.
     try:
-        asset = Asset.objects.get(asset_id=asset_id)
-    except Asset.DoesNotExist:
-        return
+        try:
+            asset = Asset.objects.get(asset_id=asset_id)
+        except Asset.DoesNotExist:
+            return
 
-    if not asset.is_enabled or asset.is_processing:
-        # Mirror the sweep filter. Probing a disabled/in-flight row
-        # would write state that's immediately moot.
-        return
+        if not asset.is_enabled or asset.is_processing:
+            # Mirror the sweep filter. Probing a disabled/in-flight row
+            # would write state that's immediately moot.
+            return
 
-    if asset.skip_asset_check:
-        # Operator opted out of validation; matches sweep behavior of
-        # not touching is_reachable / last_reachability_check.
-        return
+        if asset.skip_asset_check:
+            # Operator opted out of validation; matches sweep behavior
+            # of not touching is_reachable / last_reachability_check.
+            return
 
-    # Atomic cooldown gate. Replaces a previous timestamp-comparison
-    # check that was racy under Celery worker concurrency: multiple
-    # tasks for the same asset_id could all read the same stale
-    # ``last_reachability_check`` and each decide they should probe.
-    # Acquire it after eligibility checks so missing or temporarily
-    # ineligible assets do not suppress a later legitimate recheck.
-    if not r.set(
-        asset_recheck_lock_key(asset_id),
-        '1',
-        nx=True,
-        ex=RECHECK_COOLDOWN_S,
-    ):
-        return
+        # Atomic cooldown gate. Replaces a previous timestamp-comparison
+        # check that was racy under Celery worker concurrency: multiple
+        # tasks for the same asset_id could all read the same stale
+        # ``last_reachability_check`` and each decide they should probe.
+        # Acquire it after eligibility checks so missing or temporarily
+        # ineligible assets do not suppress a later legitimate recheck.
+        if not r.set(
+            asset_recheck_lock_key(asset_id),
+            '1',
+            nx=True,
+            ex=RECHECK_COOLDOWN_S,
+        ):
+            return
 
-    # The soft-limit signal is delivered asynchronously, so the outer
-    # try covers the DB update as well as the probe — a delivery
-    # landing between the probe returning and the UPDATE committing
-    # must not escape as a task failure (that's the SIGKILL-adjacent
-    # noise this task's limits exist to avoid).
-    try:
         try:
             reachable = _check_asset_reachability(asset)
         except SoftTimeLimitExceeded:
@@ -1822,7 +1829,8 @@ def revalidate_asset_url(asset_id: str) -> None:
             # unreachable. Recording the verdict (rather than
             # bailing) keeps the viewer's _asset_is_displayable in
             # sync with reality and the cooldown lock prevents an
-            # immediate re-probe storm.
+            # immediate re-probe storm. Caught here rather than by the
+            # outer handler so the verdict still reaches the DB.
             logger.warning(
                 'revalidate_asset_url: probe for %s exceeded %ss; '
                 'marking unreachable',
@@ -1841,8 +1849,8 @@ def revalidate_asset_url(asset_id: str) -> None:
         )
     except SoftTimeLimitExceeded:
         logger.warning(
-            'revalidate_asset_url: soft time limit hit while '
-            'finalising the probe for %s; giving up this recheck',
+            'revalidate_asset_url: soft time limit hit for %s; '
+            'giving up this recheck',
             asset_id,
         )
 

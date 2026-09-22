@@ -116,6 +116,51 @@ def _exception_chain(exc: BaseException | None) -> Iterator[BaseException]:
         )
 
 
+# Modules whose presence in a traceback proves a task body was on the
+# stack when the soft-limit signal landed: our own code, or celery's
+# task tracer (a task wedged inside a third-party library still traces
+# back through ``celery.app.trace``).
+_IN_TASK_TRACEBACK_MODULES = ('celery.app.trace',)
+_IN_TASK_TRACEBACK_PREFIXES = ('anthias_server', 'anthias_common')
+
+
+def _soft_limit_landed_outside_task(exc: BaseException) -> bool:
+    """True when a soft-time-limit signal arrived with no task running.
+
+    billiard sends SIGUSR1 from the parent when a job passes its
+    ``soft_time_limit``; the parent only learns the job finished once
+    the result reaches it over the pipe. A job that completes just
+    inside its budget therefore leaves a signal in flight, and it lands
+    in whatever the child is doing next — celery's post-task teardown
+    (``celery.fixups.django.on_task_postrun`` closing Django's caches,
+    Sentry ANTHIAS-5Y) or the pool child's idle ``workloop`` waiting on
+    the next job (Sentry ANTHIAS-45). Neither has a task body to catch
+    it, so celery reports it as an unhandled error even though the work
+    it belonged to already succeeded.
+
+    There is nothing to act on and nothing a ``try``/``except`` in a
+    task can do about it, so it is dropped here — the same
+    expected-transient rationale as the other arms of the filter. A
+    signal that interrupts an *actual* task still has an Anthias frame
+    or a ``celery.app.trace`` frame in its traceback and is kept: those
+    point at a task that really did overrun and are the ones worth
+    seeing.
+    """
+    tb = exc.__traceback__
+    if tb is None:
+        # No traceback to reason about — keep the event rather than
+        # guess.
+        return False
+    while tb is not None:
+        module = tb.tb_frame.f_globals.get('__name__') or ''
+        if module in _IN_TASK_TRACEBACK_MODULES or module.startswith(
+            _IN_TASK_TRACEBACK_PREFIXES
+        ):
+            return False
+        tb = tb.tb_next
+    return True
+
+
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     """Drop events that report expected transient states, not bugs.
 
@@ -177,11 +222,21 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         surfaces as a bare ``RuntimeError``, so it's matched by message
         text to avoid swallowing unrelated RuntimeErrors (Sentry
         ANTHIAS-37).
+      * ``SoftTimeLimitExceeded`` that landed outside any task body —
+        billiard's signal for a job that had already finished, arriving
+        while the pool child is in celery's post-task teardown or back
+        in its idle ``workloop``. See
+        ``_soft_limit_landed_outside_task`` (Sentry ANTHIAS-5Y /
+        ANTHIAS-45).
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
-    # settings-module load. ``lib.auth`` only pulls stdlib at import
-    # time, so the cost is a cached module lookup.
+    # settings-module load (``celery.exceptions`` would otherwise pull
+    # celery in while the settings module it reads is still executing).
+    # Both modules are already imported by the time an event fires, so
+    # the cost is a cached module lookup.
+    from celery.exceptions import SoftTimeLimitExceeded
+
     from anthias_server.lib.auth import AuthSettingsError
 
     exc_info = hint.get('exc_info')
@@ -199,6 +254,10 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         if isinstance(exc, AuthSettingsError):
             return None
         if isinstance(exc, socket.gaierror):
+            return None
+        if isinstance(exc, SoftTimeLimitExceeded) and (
+            _soft_limit_landed_outside_task(exc)
+        ):
             return None
         if isinstance(exc, RuntimeError) and (
             'Response content shorter than Content-Length' in str(exc)

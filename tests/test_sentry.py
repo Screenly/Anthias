@@ -378,6 +378,105 @@ class TestGetSentryRelease:
             assert s.get_sentry_release() is None
 
 
+def _soft_limit_raised_in(module_name: str) -> BaseException:
+    """A ``SoftTimeLimitExceeded`` whose traceback runs through a frame
+    belonging to ``module_name``.
+
+    billiard raises the real one from a SIGUSR1 handler, so the module
+    a frame belongs to is the only thing the filter can key off. A
+    frame compiled with a synthetic ``__name__`` reproduces that
+    faithfully without importing celery's pool internals.
+    """
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    namespace: dict[str, object] = {
+        '__name__': module_name,
+        'SoftTimeLimitExceeded': SoftTimeLimitExceeded,
+    }
+    source = 'def frame():\n    raise SoftTimeLimitExceeded()\n'
+    exec(  # noqa: S102 - synthesising a frame's module is the point
+        compile(source, f'{module_name.replace(".", "/")}.py', 'exec'),
+        namespace,
+    )
+    try:
+        namespace['frame']()  # type: ignore[operator]
+    except SoftTimeLimitExceeded as exc:
+        return exc
+    raise AssertionError('frame() did not raise')
+
+
+class TestBeforeSendSoftTimeLimit:
+    """A soft-limit signal that lands with no task running is
+    billiard's late delivery for a job that already finished — drop it.
+    One that interrupts a real task body is a genuine overrun — keep
+    it. Regression coverage for Sentry ANTHIAS-5Y / ANTHIAS-45."""
+
+    @staticmethod
+    def _hint_for(exc: BaseException) -> dict[str, object]:
+        return {'exc_info': (type(exc), exc, exc.__traceback__)}
+
+    def test_drops_signal_landing_in_post_task_teardown(self) -> None:
+        # ANTHIAS-5Y: the signal arrived while celery's Django fixup
+        # was closing caches in on_task_postrun — the task body had
+        # already returned.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(_soft_limit_raised_in('celery.fixups.django'))
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_drops_signal_landing_in_idle_pool_workloop(self) -> None:
+        # ANTHIAS-45: the signal arrived while the pool child was
+        # blocked in workloop/_recv waiting for its next job.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(_soft_limit_raised_in('billiard.pool'))
+        assert _sentry_before_send({'event_id': 'x'}, hint) is None
+
+    def test_keeps_signal_that_interrupted_a_task_body(self) -> None:
+        # ANTHIAS-5K's shape: the signal landed inside the task's own
+        # code. That is a real overrun and must still be reported.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(
+            _soft_limit_raised_in('anthias_server.celery_tasks')
+        )
+        event: Event = {'event_id': 'x'}
+        assert _sentry_before_send(event, hint) == event
+
+    def test_keeps_signal_that_interrupted_a_traced_task(self) -> None:
+        # A task wedged deep inside a third-party library has no
+        # Anthias frame at the raise point, but celery's tracer is
+        # still on the stack — that is a running task, so keep it.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        hint = self._hint_for(_soft_limit_raised_in('celery.app.trace'))
+        event: Event = {'event_id': 'x'}
+        assert _sentry_before_send(event, hint) == event
+
+    def test_keeps_signal_with_no_traceback(self) -> None:
+        # Nothing to reason about — err towards reporting.
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        exc = SoftTimeLimitExceeded()
+        event: Event = {'event_id': 'x'}
+        assert (
+            _sentry_before_send(event, {'exc_info': (type(exc), exc, None)})
+            == event
+        )
+
+
 class TestIsBalenaDeploy:
     """The balena tag's decision logic — must match what
     anthias_common.utils.is_balena_app derives from the BALENA env

@@ -840,6 +840,64 @@ def test_recheck_runs_when_no_lock_held(
     assert Asset.objects.get(asset_id='a1').is_reachable
 
 
+@pytest.mark.django_db
+def test_recheck_survives_soft_limit_in_the_opening_row_fetch(
+    eager_celery_recheck: None,
+) -> None:
+    """Sentry ANTHIAS-5K: on a memory-pressured board the opening
+    ``Asset.objects.get`` has been seen taking ~85s, so the soft-limit
+    signal lands inside the row fetch — where ``except
+    Asset.DoesNotExist`` cannot catch it. It used to escape as a task
+    failure and leave the task running into the 90s hard limit, which
+    SIGKILLs the pool child (ANTHIAS-A / 9 / B)."""
+    _make_recheck_asset()
+    with (
+        mock.patch.object(
+            Asset.objects, 'get', side_effect=SoftTimeLimitExceeded()
+        ),
+        mock.patch('anthias_server.celery_tasks.url_fails') as probe,
+    ):
+        result = revalidate_asset_url.apply(args=('a1',))
+    assert result.successful()
+    probe.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_recheck_survives_soft_limit_in_the_cooldown_gate(
+    eager_celery_recheck: None,
+) -> None:
+    """The SETNX cooldown gate is the other blocking call in the
+    preamble — a soft-limit signal landing on that redis round trip
+    must not escape either."""
+    _make_recheck_asset()
+    with (
+        mock.patch.object(
+            celery_tasks_module.r, 'set', side_effect=SoftTimeLimitExceeded()
+        ),
+        mock.patch('anthias_server.celery_tasks.url_fails') as probe,
+    ):
+        result = revalidate_asset_url.apply(args=('a1',))
+    assert result.successful()
+    probe.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_recheck_soft_limit_during_probe_still_records_unreachable(
+    eager_celery_recheck: None,
+) -> None:
+    """The widened outer guard must not shadow the inner one: a probe
+    that runs out of budget is still recorded as unreachable rather
+    than abandoned."""
+    _make_recheck_asset(is_reachable=True)
+    with mock.patch(
+        'anthias_server.celery_tasks.url_fails',
+        side_effect=SoftTimeLimitExceeded(),
+    ):
+        result = revalidate_asset_url.apply(args=('a1',))
+    assert result.successful()
+    assert not Asset.objects.get(asset_id='a1').is_reachable
+
+
 # ---------------------------------------------------------------------------
 # probe_video_duration — async ffprobe path used by the HTML upload view
 
