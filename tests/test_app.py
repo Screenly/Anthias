@@ -34,6 +34,7 @@ import contextlib
 import json
 import mimetypes
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -207,6 +208,32 @@ def _drop_files_on_page(
             }
         }""",
         {'files': payload, 'selector': selector},
+    )
+
+
+def _dispatch_file_dragenter(page: Page, selector: str) -> None:
+    """Start a file drag over ``selector`` without releasing it.
+
+    The drop-feedback assertions need the page mid-drag, which
+    ``_drop_files_on_page`` runs straight past. No bytes are needed —
+    the handlers read ``dataTransfer.types`` on the way in, and the
+    files only matter once the drop fires.
+    """
+    page.evaluate(
+        """(selector) => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            document.querySelector(selector).dispatchEvent(
+                new DragEvent('dragenter', {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        }""",
+        selector,
     )
 
 
@@ -940,6 +967,44 @@ def test_file_drag_is_claimed_from_the_browser(
     expect(page.locator('.upload-drop-overlay')).to_be_visible()
 
 
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_drag_over_the_add_modals_url_pane_shows_the_drop_target(
+    reset_assets: None, page: Page
+) -> None:
+    """The Add modal open on "From URL" still takes a dropped file, so
+    it has to say so. The dashed dropzone lives on the upload pane and
+    is not on screen here, and the page overlay used to stand down for
+    any open modal — leaving the one pane where a drop works with no
+    sign that it does. It shows in its --layered form instead: the
+    card, without a second veil over a modal that already dimmed the
+    page."""
+    page.goto(BASE_URL)
+    _disable_asset_poll(page)
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+    # openAdd() lands a non-upload open on the URL pane.
+    _wait_alpine(page, 'state.tab', 'uri')
+
+    # Dispatched on the URL box itself: it exists only on this pane,
+    # and it is where the pointer would be when the operator gives up
+    # on typing a URL and drags the file in instead.
+    _dispatch_file_dragenter(page, 'input[name="uri"]')
+
+    overlay = page.locator('.upload-drop-overlay')
+    expect(overlay).to_be_visible()
+    expect(overlay).to_have_class(re.compile(r'upload-drop-overlay--layered'))
+    # The veil is the modal's own, not two stacked.
+    assert (
+        page.evaluate(
+            """() => getComputedStyle(
+                document.querySelector('.upload-drop-overlay')
+            ).backgroundColor"""
+        )
+        == 'rgba(0, 0, 0, 0)'
+    )
+
+
 # ---------------------------------------------------------------------------
 # 4. Edit / preview / delete modals
 # ---------------------------------------------------------------------------
@@ -1275,6 +1340,44 @@ def test_delete_confirm_modal_opens_with_pending_id(
         f'button[title="Delete"]'
     ).click()
     _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_drop_over_a_dialog_says_how_to_retry(
+    reset_assets: None, page: Page
+) -> None:
+    """A dialog that owns the screen refuses the drop — but not in
+    silence. Every dragover on the page is cancelled, so the cursor
+    spends the whole drag telling the operator this is a drop target;
+    releasing into nothing after that reads as a file that vanished.
+    The refusal names the way out instead."""
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Delete"]'
+    ).click()
+    _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
+
+    with _TemporaryCopy(
+        'src/anthias_server/app/static/img/standby.png', 'refused.png'
+    ) as image:
+        _drop_files_on_page(page, [image])
+
+        toast = page.locator('.app-toast--info').first
+        expect(toast).to_be_visible()
+        expect(toast).to_contain_text('Close this dialog first')
+
+    # Refused means refused: no upload started, and the Add modal did
+    # not open on top of the prompt the operator was answering.
+    assert _alpine_state(page, 'state.mode') is None
+    assert Asset.objects.count() == 1
 
 
 @pytest.mark.integration
