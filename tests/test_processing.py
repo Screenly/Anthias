@@ -1103,12 +1103,14 @@ def test_video_unknown_codec_is_rejected(
 def test_video_arm64_catch_all_rejects_everything(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
-    decode map (an unknown aarch64 SBC isn't guaranteed to expose a
-    v4l2-request decoder mpv can address). Without a host_agent
-    subtype publish, every video upload is rejected — the operator
-    sees an explanation of the subtype gap, not a suggestion to
-    re-flash with a board-specific image that doesn't exist."""
+    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the map of
+    codecs a board accepts (``_HW_DECODE_VIDEO_CODECS`` — the name is
+    historical), so nothing is certified to play there: an unidentified
+    aarch64 SBC may have a perfectly good decoder, we just have no
+    model match or measurement saying which codecs. Every video upload
+    is therefore rejected, and the message has to explain why in terms
+    the operator can act on — which differs by deployment, so it names
+    both rather than one."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     src = path.join(asset_dir, 'sample.mp4')
     # Create an empty placeholder file so the FileNotFoundError check
@@ -1140,16 +1142,25 @@ def test_video_arm64_catch_all_rejects_everything(
     ):
         processing._run_video_normalisation(asset)
 
-    msg = str(excinfo.value)
-    # Catch-all branch must explain the board-subtype gap rather
-    # than the misleading "Supported: none." that earlier revisions
-    # surfaced.
-    assert 'subtype' in msg.lower()
-    assert 'host-agent' in msg.lower()
+    msg = str(excinfo.value).lower()
+    # Explain that the board wasn't identified, rather than the
+    # misleading "Supported: none." earlier revisions surfaced, which
+    # reads like the board has no decoder at all.
+    assert 'could not identify this board' in msg
+    # Compose installs: a stopped agent and an unreachable Redis both
+    # land here, so naming only the agent would have operators certify
+    # a running service and conclude the board is unprofiled.
+    assert 'anthias-host-agent' in msg
+    assert 'redis' in msg
+    # balena ships no host agent, and the in-container device-tree read
+    # is masked in the unprivileged server container — there is no
+    # subtype source on that fleet, so the message must not send those
+    # operators after a service their device has never had.
+    assert 'balena' in msg
     # Never advertise a board-specific image — every SBC runs the
     # generic arm64 build, so that advice sent operators re-flashing
     # for an image that was never built.
-    assert 'board-specific image' not in msg.lower()
+    assert 'board-specific image' not in msg
 
 
 @pytest.mark.django_db
@@ -3060,3 +3071,90 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+@pytest.mark.django_db
+def test_unidentified_board_message_scopes_the_balena_advice(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The empty-codec-set message is selected for *any* empty set, not
+    just the generic arm64 keys: an unset or unrecognised DEVICE_TYPE
+    resolves to a key with no entry too. Those installs get no
+    host-agent or balena diagnosis, because neither applies to them —
+    telling an x86 operator with a typo'd DEVICE_TYPE to check balena
+    would send them somewhere with no answer."""
+    monkeypatch.setenv('DEVICE_TYPE', 'not-a-real-board')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-unknown-key', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value).lower()
+    assert 'cannot certify that any codec plays here' in msg
+    assert 'balena' not in msg
+    assert 'device_type' in msg
+
+
+@pytest.mark.django_db
+def test_unidentified_board_message_survives_an_unknown_subtype(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A subtype Redis knows but the codec map doesn't — host_agent
+    ahead of the server during a rollout — is still an arm64 catch-all
+    deployment, and must still get the host-agent/balena diagnosis.
+
+    Branching on the resolved key instead would call it "DEVICE_TYPE
+    unset or unrecognised", which is both wrong and unactionable.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-future-subtype', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        # A board the running server has never heard of.
+        mock.patch(
+            'anthias_common.board.get_board_subtype',
+            return_value='rk9999-from-the-future',
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value).lower()
+    assert 'anthias-host-agent' in msg
+    assert 'unset or unrecognised' not in msg
