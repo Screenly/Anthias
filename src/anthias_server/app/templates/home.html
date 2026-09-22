@@ -97,16 +97,22 @@
     </div>
   </div>
 
-  {% comment %} Page-wide drop feedback. Not shown while the Add/Edit
-     modal is up — the modal's own dropzone highlights instead, and an
-     overlay on top of it would hide the form the operator is filling
-     in. aria-hidden because it is pure feedback for a pointer gesture:
-     it appears only mid-drag, cannot be reached by keyboard, and says
+  {% comment %} Page-wide drop feedback. Stands down in exactly one
+     case — the Add modal open on its upload pane, where the dashed
+     dropzone is already lit and a second signal would only compete
+     with it. On the modal's other panes it shows in its --layered
+     form, because a drag over a "From URL" form still lands as an
+     upload and the operator has no other way to know that.
+     acceptsPageDrop() covers the rest: the overlays that refuse a drop
+     get a toast on release, not a promise mid-drag.
+     aria-hidden because it is pure feedback for a pointer gesture: it
+     appears only mid-drag, cannot be reached by keyboard, and says
      nothing a screen-reader user can act on.
   {% endcomment %}
   <div
     class="modal-overlay upload-drop-overlay"
-    x-show="pageDragActive && !mode && acceptsPageDrop()"
+    :class="mode === 'add' && 'upload-drop-overlay--layered'"
+    x-show="pageDragActive && acceptsPageDrop() && !(mode === 'add' && tab === 'file')"
     x-cloak
     aria-hidden="true"
   >

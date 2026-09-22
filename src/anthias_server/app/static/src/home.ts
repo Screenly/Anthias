@@ -69,6 +69,13 @@ interface ToastStoreLike {
 // back.
 const UPLOAD_ERROR_TOAST_MS = 8000
 
+// Said when a file is dropped on a page that is busy showing something
+// else — an edit form, a preview, a delete prompt. Deliberately names
+// the way forward rather than the refusal: the file is still on the
+// operator's desktop and the gesture works a second later.
+const DROP_BLOCKED_MESSAGE =
+  'Close this dialog first, then drop your file to upload it.'
+
 type SectionKey = 'active' | 'inactive'
 
 interface HomeAppData {
@@ -766,7 +773,17 @@ function homeApp(): HomeAppData {
       event.preventDefault()
       this.pageDragDepth = 0
       this.pageDragActive = false
-      if (!this.acceptsPageDrop()) return
+      if (!this.acceptsPageDrop()) {
+        // Every dragover on the page is cancelled, so the cursor has
+        // been promising the operator a drop target the whole way in.
+        // Refusing in silence after that reads as a file that
+        // evaporated — say which way out of it.
+        const store = window.Alpine?.store('toasts') as
+          | ToastStoreLike
+          | undefined
+        store?.push('info', DROP_BLOCKED_MESSAGE)
+        return
+      }
       // The batch's progress UI lives in the Add modal's upload pane,
       // so open it there: a dropped file reports "File 2 of 5 · 40%"
       // exactly as a picked one does, and uploadFiles() closes the
@@ -775,11 +792,14 @@ function homeApp(): HomeAppData {
       // opening the modal is what explains why — it shows the upload
       // still in flight.
       //
-      // Through openAdd(), so a drop gets the same reset every other
-      // way in does (a stale URL in the From-URL box, the Apps pane
-      // parked on the last config form). Its own tab choice is
-      // overridden after: it sends a non-upload open to 'uri'.
-      this.openAdd()
+      // Through openAdd() only when the modal is not already up, so a
+      // drop gets the same reset every other way in does (a stale URL
+      // in the From-URL box, the Apps pane parked on the last config
+      // form). Reopening one that is already open would wipe what the
+      // operator is part-way through typing into it — the drop moves
+      // them to the upload pane, and the URL they had half-entered is
+      // still there when they come back.
+      if (this.mode !== 'add') this.openAdd()
       this.tab = 'file'
       this.dropFiles(event)
     },
