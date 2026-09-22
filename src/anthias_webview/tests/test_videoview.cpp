@@ -228,13 +228,15 @@ private:
     }
 };
 
-// Combined entry point: this binary hosts two independent QtTest
-// classes — TestVideoView (here) and TestRotation (test_rotation.cpp,
-// run via the runRotationTests factory so its class stays private to
-// its own translation unit). QTEST_MAIN can only host one, so we exec
-// each in turn and OR their exit codes. QApplication (not
-// QCoreApplication) because the VideoView tests need the widgets stack.
+// Combined entry point: this binary hosts three independent QtTest
+// classes: TestVideoView (here), TestRotation (test_rotation.cpp)
+// and TestImageFallback (test_image_fallback.cpp), the latter two run
+// via factories so their classes stay private to their own
+// translation unit. QTEST_MAIN can only host one, so we exec each in
+// turn and OR their exit codes. QApplication (not QCoreApplication)
+// because the VideoView tests need the widgets stack.
 extern int runRotationTests(int argc, char** argv);
+extern int runImageFallbackTests(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
@@ -245,6 +247,7 @@ int main(int argc, char** argv)
         status |= QTest::qExec(&tc, argc, argv);
     }
     status |= runRotationTests(argc, argv);
+    status |= runImageFallbackTests(argc, argv);
     return status;
 }
 #include "test_videoview.moc"
