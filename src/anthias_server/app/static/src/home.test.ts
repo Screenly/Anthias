@@ -944,5 +944,54 @@ describe('page-wide drag and drop', () => {
     expect(event.prevented).toBe(true)
     expect(sends).toBe(0)
     expect(app.tab).toBe('uri')
+    // Refused, but not in silence: every dragover on the page was
+    // cancelled on the way in, so the cursor spent the whole drag
+    // telling the operator this was a drop target. Dropping into
+    // nothing after that reads as a file that evaporated.
+    expect(toasts).toEqual([
+      {
+        kind: 'info',
+        message: 'Close this dialog first, then drop your file to upload it.',
+        ttlMs: undefined,
+      },
+    ])
+  })
+
+  // openAdd() clears the Add pane on every open, which is right when a
+  // drop is what opens it — the last asset's URL should not still be
+  // sitting in the box. It is wrong when the modal is already up: the
+  // operator is mid-sentence in that box, and a dropped file is not a
+  // reason to throw away what they typed. They land on the upload pane
+  // either way and can switch back to find it intact.
+  test('a drop into an open Add modal keeps what is already typed', async () => {
+    mountUploadForm()
+    stubXhr([{ status: 200 }])
+    const app = window.homeApp()
+    app.mode = 'add'
+    app.tab = 'uri'
+    app.addUri = 'https://example.com/half-typed'
+    app.onPageDrop(fileDrag('clip.mp4'))
+    await Bun.sleep(0)
+
+    expect(sends).toBe(1)
+    expect(app.tab).toBe('file')
+    expect(app.addUri).toBe('https://example.com/half-typed')
+  })
+
+  // The other half of the same rule: opened BY the drop, the pane is
+  // fresh. Guards the `mode !== 'add'` test above from being widened
+  // into "never reset".
+  test('a drop that opens the Add modal resets the pane', async () => {
+    mountUploadForm()
+    stubXhr([{ status: 200 }])
+    const app = window.homeApp()
+    app.addUri = 'https://example.com/left-over'
+    app.onPageDrop(fileDrag('clip.mp4'))
+
+    // Read before the batch resolves: a successful upload closes the
+    // modal behind itself, so `mode` is only 'add' while it runs.
+    expect(app.mode).toBe('add')
+    expect(app.addUri).toBe('')
+    await Bun.sleep(0)
   })
 })

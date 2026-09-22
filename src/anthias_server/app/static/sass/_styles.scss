@@ -2576,6 +2576,24 @@ body.auth-body {
     font-weight: 700;
     font-size: 1.125rem;
   }
+
+  // Worn when the Add modal is open behind it. That modal already
+  // dims and blurs the page, so keeping our own veil would stack two
+  // of them — darker than either was designed to be, over a form the
+  // operator can no longer read. The card alone carries the message;
+  // the drop still lands wherever it is released.
+  //
+  // Above --z-modal so the card clears the modal it is reporting on.
+  // Safe to sit on the nested rung: every overlay that uses that rung
+  // (preview, delete, bulk delete) refuses the drop, so this and they
+  // are never on screen together. Ties with .modal-overlay on
+  // specificity and wins on order, as the block above does.
+  &--layered {
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    z-index: var(--z-modal-nested);
+  }
 }
 
 .upload-progress {
