@@ -41,7 +41,7 @@ import logging
 import uuid
 from typing import Any
 
-from celery.exceptions import SoftTimeLimitExceeded
+import redis.exceptions
 
 from anthias_common.errors import ReplyTimeoutError
 from anthias_common.utils import connect_to_redis
@@ -93,23 +93,28 @@ def available() -> bool:
     "the viewer has not reported yet" and is treated as unavailable —
     the controls appear once it has.
     """
+    # Scoped to redis faults rather than a blanket ``except Exception``.
+    # This GET is the *first* thing ``get_display_power`` does, under a
+    # 30s soft limit and a 60s hard one, and celery delivers the soft
+    # signal once — as a plain ``Exception`` subclass. A blanket arm
+    # swallowed it here, so the task's own
+    # ``except SoftTimeLimitExceeded`` never ran, the task carried on
+    # into its next redis call, and the hard limit SIGKILLed the pool
+    # child. That is why #3063's soft limit never actually stopped the
+    # ANTHIAS-A / 9 / B / 1Q quartet: the handler it added could not be
+    # reached. The window is not theoretical — redis-py 8.1's defaults
+    # (socket_timeout=5, Retry(retries=10)) put a blackholed redis at
+    # ~59s for this single GET, measured on the x86 testbed.
+    #
+    # Matched by exception type rather than by re-raising celery's,
+    # because the viewer imports this module and its image ships no
+    # celery (the ``viewer`` dependency group in pyproject.toml).
+    # ``RedisError`` covers every redis-py failure including the
+    # connection/timeout pair, and ``OSError`` covers a socket error
+    # raised before redis-py wraps it.
     try:
         raw = connect_to_redis().get(CEC_AVAILABLE_KEY)
-    except SoftTimeLimitExceeded:
-        # ``SoftTimeLimitExceeded`` is a plain ``Exception`` subclass, so
-        # the blanket arm below would swallow it — and this GET is the
-        # *first* thing ``get_display_power`` does, under a 30s soft
-        # limit and a 60s hard one. Celery delivers the soft signal once;
-        # eating it here means the task's own
-        # ``except SoftTimeLimitExceeded`` never runs, the task carries on
-        # into its next redis call, and the hard limit SIGKILLs the pool
-        # child. That is why #3063's soft limit never actually stopped
-        # the ANTHIAS-A / 9 / B / 1Q quartet: the handler it added could
-        # not be reached. The window is not theoretical — redis-py 8.1's
-        # defaults (socket_timeout=5, Retry(retries=10)) put a blackholed
-        # redis at ~59s for this single GET, measured on the x86 testbed.
-        raise
-    except Exception as exc:
+    except (redis.exceptions.RedisError, OSError) as exc:
         logger.warning('Could not read CEC availability: %s', exc)
         return False
     if raw is None:

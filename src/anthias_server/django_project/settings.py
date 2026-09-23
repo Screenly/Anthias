@@ -24,7 +24,6 @@ from typing import Any
 
 import redis.exceptions
 import sentry_sdk
-from celery.exceptions import SoftTimeLimitExceeded
 from sentry_sdk.integrations.logging import ignore_logger
 from sentry_sdk.types import Event, Hint
 
@@ -206,7 +205,10 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         handler can catch them and nothing was interrupted — the task
         had already returned its result. A soft limit that really did
         cut a task short has our frames in the traceback and still
-        reports (Sentry ANTHIAS-45 / ANTHIAS-5Y).
+        reports (Sentry ANTHIAS-45 / ANTHIAS-5Y). Matched by
+        name+module, like the yt-dlp case above, so this module does not
+        import celery — the viewer imports these settings and its image
+        ships no celery.
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -234,11 +236,13 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
             'Response content shorter than Content-Length' in str(exc)
         ):
             return None
-        if isinstance(exc, SoftTimeLimitExceeded) and (
-            _raised_outside_anthias_code(exc)
+        exc_cls = type(exc)
+        if (
+            exc_cls.__name__ == 'SoftTimeLimitExceeded'
+            and exc_cls.__module__.split('.')[0] in ('billiard', 'celery')
+            and _raised_outside_anthias_code(exc)
         ):
             return None
-        exc_cls = type(exc)
         if exc_cls.__name__ == 'DownloadError' and (
             exc_cls.__module__ == 'yt_dlp'
             or exc_cls.__module__.startswith('yt_dlp.')

@@ -11,6 +11,7 @@ from typing import Any
 from unittest import mock
 
 import pytest
+import redis.exceptions
 from celery.exceptions import SoftTimeLimitExceeded
 
 from anthias_common.errors import ReplyTimeoutError
@@ -69,6 +70,24 @@ def test_available_is_false_when_redis_is_unreachable() -> None:
     with mock.patch.object(
         cec_client, 'connect_to_redis', side_effect=OSError('no redis')
     ):
+        assert cec_client.available() is False
+
+
+@pytest.mark.parametrize(
+    'exc',
+    [
+        redis.exceptions.ConnectionError('refused'),
+        redis.exceptions.TimeoutError('hung'),
+        OSError('no socket'),
+    ],
+)
+def test_available_still_hides_the_controls_on_a_redis_fault(
+    exc: Exception,
+) -> None:
+    """Narrowing the handler off ``except Exception`` must not lose the
+    cases it was there for — a redis fault still degrades to "no CEC"
+    rather than 500ing the settings page."""
+    with mock.patch.object(cec_client, 'connect_to_redis', side_effect=exc):
         assert cec_client.available() is False
 
 
