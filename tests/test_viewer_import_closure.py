@@ -14,7 +14,9 @@ server module that reads as server-only. This walks the closure and
 pins it.
 
 Imports inside a function or method are fine and are ignored: they only
-run on a code path the viewer does not take.
+run on a code path the viewer does not take. Class bodies are *not*
+ignored — they execute during the import, so a class-level import
+crashes startup exactly like a top-level one (Copilot).
 """
 
 import ast
@@ -46,8 +48,11 @@ def _module_level_imports(
 ) -> tuple[list[tuple[str, int]], set[str]]:
     """``(imported_modules, follow_candidates)`` outside any function.
 
-    Module-level ``try``/``if`` blocks still execute on import, so they
-    count; anything inside a def or a class body does not.
+    Everything that runs during the import counts: module-level
+    ``try``/``if`` blocks, and class bodies too — ``class Foo: import
+    celery`` executes at class-creation time and would crash the viewer
+    just the same. Only ``def``/``async def`` bodies are skipped, since
+    those run later or not at all.
 
     ``from pkg import a, b`` names ``pkg`` for the forbidden-root check,
     but ``a``/``b`` may themselves be submodules to descend into — the
@@ -61,10 +66,7 @@ def _module_level_imports(
 
     def visit(node: ast.AST) -> None:
         for child in ast.iter_child_nodes(node):
-            if isinstance(
-                child,
-                ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
-            ):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             if isinstance(child, ast.Import):
                 found.extend(
@@ -112,6 +114,54 @@ def _viewer_import_closure() -> dict[str, list[tuple[str, int]]]:
             if name.startswith(FIRST_PARTY_ROOTS)
         )
     return closure
+
+
+def test_walker_counts_everything_that_runs_at_import() -> None:
+    """The scoping rule is the whole substance of this guard, so pin it
+    directly rather than only through the real tree.
+
+    The class-body case is the one that was wrong first time round
+    (Copilot): a class body executes while the module is imported, so
+    skipping it would let a crash-on-startup import through unseen.
+    """
+    source = """
+import celery.top
+from billiard.a import thing
+
+try:
+    import kombu.guarded
+except ImportError:
+    pass
+
+if True:
+    import celery.conditional
+
+
+class Holder:
+    import celery.in_class_body
+
+
+def later():
+    import celery.in_function
+
+
+async def later_async():
+    import celery.in_async_function
+
+
+class WithMethod:
+    def method(self):
+        import celery.in_method
+"""
+    found, _ = _module_level_imports(ast.parse(source))
+    names = {name for name, _ in found}
+    assert names == {
+        'celery.top',
+        'billiard.a',
+        'kombu.guarded',
+        'celery.conditional',
+        'celery.in_class_body',
+    }
 
 
 def test_the_closure_is_actually_walked() -> None:
