@@ -50,6 +50,23 @@ def _soft_limit_raised_in_anthias_code() -> SoftTimeLimitExceeded:
     raise AssertionError('available() swallowed the soft time limit')
 
 
+def _anthias_error_wrapping_a_late_soft_limit() -> BaseException:
+    """An Anthias error raised *from* a soft limit that landed in
+    third-party frames.
+
+    The wrapper is a real bug and must report. Dropping it because its
+    cause looks like teardown noise is the one failure mode a
+    before_send filter must never have — the report just vanishes.
+    """
+    try:
+        raise SoftTimeLimitExceeded()
+    except SoftTimeLimitExceeded as cause:
+        try:
+            raise RuntimeError('a real failure in a task') from cause
+        except RuntimeError as wrapper:
+            return wrapper
+
+
 def test_sentry_does_not_send_under_pytest() -> None:
     client = sentry_sdk.get_client()
     assert not client.dsn
@@ -339,6 +356,20 @@ class TestBeforeSendTransientNoise:
 
         event: Event = {'event_id': 'x'}
         exc = _soft_limit_raised_in_anthias_code()
+        assert _sentry_before_send(event, self._hint_for(exc)) == event
+
+    def test_keeps_an_anthias_error_wrapping_a_late_soft_limit(
+        self,
+    ) -> None:
+        # The soft-limit rule is applied to the head exception only,
+        # unlike every other rule here. Walking the chain would discard
+        # a genuine Anthias failure on the strength of its cause.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        event: Event = {'event_id': 'x'}
+        exc = _anthias_error_wrapping_a_late_soft_limit()
         assert _sentry_before_send(event, self._hint_for(exc)) == event
 
     def test_keeps_soft_time_limit_without_a_traceback(self) -> None:

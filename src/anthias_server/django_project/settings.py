@@ -134,6 +134,20 @@ def _raised_outside_anthias_code(exc: BaseException) -> bool:
     return True
 
 
+def _is_late_soft_time_limit(exc: BaseException) -> bool:
+    """A celery soft limit that landed after the task body returned.
+
+    Matched by name+module rather than by importing celery: the viewer
+    imports this settings module and its image ships no celery.
+    """
+    cls = type(exc)
+    return (
+        cls.__name__ == 'SoftTimeLimitExceeded'
+        and cls.__module__.split('.')[0] in ('billiard', 'celery')
+        and _raised_outside_anthias_code(exc)
+    )
+
+
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     """Drop events that report expected transient states, not bugs.
 
@@ -208,7 +222,8 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         reports (Sentry ANTHIAS-45 / ANTHIAS-5Y). Matched by
         name+module, like the yt-dlp case above, so this module does not
         import celery — the viewer imports these settings and its image
-        ships no celery.
+        ships no celery. This one rule is applied to the head exception
+        only rather than down the chain; see the comment at the check.
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -223,6 +238,15 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         redis.exceptions.ConnectionError,
         redis.exceptions.TimeoutError,
     )
+    # Checked on the head exception only, deliberately unlike every
+    # rule below it. The late-delivery case is always an *unwrapped*
+    # ``SoftTimeLimitExceeded`` logged by celery or billiard itself. If
+    # Anthias ever catches one and raises its own error from it, that
+    # wrapper is a real bug: walking the chain would discard the report
+    # on the strength of its cause, which is the one failure mode a
+    # before_send filter must never have.
+    if _is_late_soft_time_limit(exc_info[1]):
+        return None
     for exc in _exception_chain(exc_info[1]):
         if isinstance(exc, asyncio.CancelledError):
             return None
@@ -237,12 +261,6 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         ):
             return None
         exc_cls = type(exc)
-        if (
-            exc_cls.__name__ == 'SoftTimeLimitExceeded'
-            and exc_cls.__module__.split('.')[0] in ('billiard', 'celery')
-            and _raised_outside_anthias_code(exc)
-        ):
-            return None
         if exc_cls.__name__ == 'DownloadError' and (
             exc_cls.__module__ == 'yt_dlp'
             or exc_cls.__module__.startswith('yt_dlp.')
