@@ -183,6 +183,33 @@ if [[ -f "$SSL_OVERRIDE" ]]; then
     COMPOSE_FILES+=(-f "$SSL_OVERRIDE")
 fi
 
+# On a memory-tight board, free RAM before pulling. `docker compose pull`
+# extracts the new image layers while the current stack is still resident;
+# on boards under LOW_RAM_THRESHOLD_KB (1.5 GiB — Pi 2, the 1 GB Pi 3s and
+# Rock Pi 4, and the 512 MB Pi 3 A+) the QtWebEngine viewer's footprint
+# plus that extraction exhausts RAM+swap and the board hard-resets
+# mid-pull — reproduced on the 512 MB Pi 3 A+ during the 2026.09.0
+# burn-in, where the same pull only completed once the viewer was stopped.
+# So stop the two heavy services (the Chromium viewer and the celery image
+# workers) first; the `up -d` below restarts them on the freshly pulled
+# images. anthias-server and redis stay up so the admin UI keeps answering
+# and a failed pull doesn't black the screen. install.sh does the same for
+# its host-side upgrade work (issue #3165); capable boards (>= 1.5 GiB)
+# keep pulling with the stack live to minimise downtime.
+#
+# `stop` — not `down` — on purpose: it leaves the containers defined, so
+# their `restart: always` policy still brings them back on the next boot.
+# That matters because the reboot-required branch below exits before the
+# `up -d`, and nothing else runs `docker compose up` at boot; a `down`
+# there would remove the containers and leave the board dark until a
+# manual bring-up.
+LOW_RAM_THRESHOLD_KB=1572864  # 1.5 GiB; mirrors anthias_common.board.LOW_RAM_THRESHOLD_KB
+if [ "$MODE" = "pull" ] && [ "${TOTAL_MEMORY_KB:-0}" -lt "$LOW_RAM_THRESHOLD_KB" ]; then
+    echo "Low-RAM board (${TOTAL_MEMORY_KB} kB total): stopping the viewer and" \
+         "celery before pulling so the image extraction doesn't OOM the board."
+    sudo -E docker compose "${COMPOSE_FILES[@]}" stop anthias-viewer anthias-celery || true
+fi
+
 sudo -E docker compose "${COMPOSE_FILES[@]}" ${MODE}
 
 if [ -f /var/run/reboot-required ]; then
