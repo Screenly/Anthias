@@ -116,6 +116,38 @@ def _exception_chain(exc: BaseException | None) -> Iterator[BaseException]:
         )
 
 
+def _raised_outside_anthias_code(exc: BaseException) -> bool:
+    """Whether ``exc``'s traceback contains no Anthias frame at all.
+
+    Used to tell a soft time limit that interrupted *our* code from one
+    that landed in third-party teardown after the task body had already
+    returned. An exception with no traceback is treated as "unknown" and
+    kept, so a missing traceback can never silence a real event.
+    """
+    tb = exc.__traceback__
+    if tb is None:
+        return False
+    while tb is not None:
+        if tb.tb_frame.f_globals.get('__name__', '').startswith('anthias_'):
+            return False
+        tb = tb.tb_next
+    return True
+
+
+def _is_late_soft_time_limit(exc: BaseException) -> bool:
+    """A celery soft limit that landed after the task body returned.
+
+    Matched by name+module rather than by importing celery: the viewer
+    imports this settings module and its image ships no celery.
+    """
+    cls = type(exc)
+    return (
+        cls.__name__ == 'SoftTimeLimitExceeded'
+        and cls.__module__.split('.')[0] in ('billiard', 'celery')
+        and _raised_outside_anthias_code(exc)
+    )
+
+
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     """Drop events that report expected transient states, not bugs.
 
@@ -177,6 +209,21 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         surfaces as a bare ``RuntimeError``, so it's matched by message
         text to avoid swallowing unrelated RuntimeErrors (Sentry
         ANTHIAS-37).
+      * ``SoftTimeLimitExceeded`` **with no Anthias frame anywhere in
+        its traceback** — celery arms the soft-limit timer for the whole
+        job, not just the task body, so a task that finishes a hair
+        under its budget can still take the signal during teardown. The
+        two observed landing sites are celery's ``on_task_postrun``
+        fixup (``close_cache``) and billiard's idle ``workloop`` waiting
+        for its next job. Neither is inside Anthias code, so no task
+        handler can catch them and nothing was interrupted — the task
+        had already returned its result. A soft limit that really did
+        cut a task short has our frames in the traceback and still
+        reports (Sentry ANTHIAS-45 / ANTHIAS-5Y). Matched by
+        name+module, like the yt-dlp case above, so this module does not
+        import celery — the viewer imports these settings and its image
+        ships no celery. This one rule is applied to the head exception
+        only rather than down the chain; see the comment at the check.
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -191,6 +238,15 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         redis.exceptions.ConnectionError,
         redis.exceptions.TimeoutError,
     )
+    # Checked on the head exception only, deliberately unlike every
+    # rule below it. The late-delivery case is always an *unwrapped*
+    # ``SoftTimeLimitExceeded`` logged by celery or billiard itself. If
+    # Anthias ever catches one and raises its own error from it, that
+    # wrapper is a real bug: walking the chain would discard the report
+    # on the strength of its cause, which is the one failure mode a
+    # before_send filter must never have.
+    if _is_late_soft_time_limit(exc_info[1]):
+        return None
     for exc in _exception_chain(exc_info[1]):
         if isinstance(exc, asyncio.CancelledError):
             return None

@@ -11,6 +11,8 @@ from typing import Any
 from unittest import mock
 
 import pytest
+import redis.exceptions
+from celery.exceptions import SoftTimeLimitExceeded
 
 from anthias_common.errors import ReplyTimeoutError
 from anthias_server.lib import cec, cec_client
@@ -69,6 +71,41 @@ def test_available_is_false_when_redis_is_unreachable() -> None:
         cec_client, 'connect_to_redis', side_effect=OSError('no redis')
     ):
         assert cec_client.available() is False
+
+
+@pytest.mark.parametrize(
+    'exc',
+    [
+        redis.exceptions.ConnectionError('refused'),
+        redis.exceptions.TimeoutError('hung'),
+        OSError('no socket'),
+    ],
+)
+def test_available_still_hides_the_controls_on_a_redis_fault(
+    exc: Exception,
+) -> None:
+    """Narrowing the handler off ``except Exception`` must not lose the
+    cases it was there for — a redis fault still degrades to "no CEC"
+    rather than 500ing the settings page."""
+    with mock.patch.object(cec_client, 'connect_to_redis', side_effect=exc):
+        assert cec_client.available() is False
+
+
+def test_available_lets_a_soft_time_limit_through() -> None:
+    """``SoftTimeLimitExceeded`` is a plain ``Exception`` subclass, and
+    this GET is the first thing ``get_display_power`` does under a 30s
+    soft limit. Swallowing celery's one delivery here left the task's
+    own handler unreachable and the pool child to be SIGKILLed at the
+    60s hard limit (Sentry ANTHIAS-A / 9 / B / 1Q)."""
+    with (
+        mock.patch.object(
+            cec_client,
+            'connect_to_redis',
+            side_effect=SoftTimeLimitExceeded(),
+        ),
+        pytest.raises(SoftTimeLimitExceeded),
+    ):
+        cec_client.available()
 
 
 def test_publish_availability_writes_the_flag() -> None:

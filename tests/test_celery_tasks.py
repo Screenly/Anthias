@@ -2078,6 +2078,37 @@ class TestProbeTimeLimits:
         assert refreshed.last_reachability_check is not None
 
     @pytest.mark.django_db
+    def test_recheck_soft_limit_in_the_prologue_is_caught(
+        self, eager_celery_recheck: None
+    ) -> None:
+        """The prologue is not free — the SELECT can block on a
+        contended SQLite write lock — and a soft signal landing there
+        used to escape as a task failure (Sentry ANTHIAS-5K, whose
+        traceback lands exactly on this query)."""
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        _make_recheck_asset()
+        with mock.patch.object(
+            Asset.objects, 'get', side_effect=SoftTimeLimitExceeded
+        ):
+            result = revalidate_asset_url.apply(args=('a1',))
+        assert result.successful()
+
+    @pytest.mark.django_db
+    def test_recheck_soft_limit_in_the_cooldown_gate_is_caught(
+        self, eager_celery_recheck: None
+    ) -> None:
+        """Same for the cooldown SETNX, which is a redis round trip."""
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        _make_recheck_asset()
+        fake_redis = mock.MagicMock()
+        fake_redis.set.side_effect = SoftTimeLimitExceeded
+        with mock.patch.object(celery_tasks_module, 'r', fake_redis):
+            result = revalidate_asset_url.apply(args=('a1',))
+        assert result.successful()
+
+    @pytest.mark.django_db
     def test_sweep_soft_limit_aborts_and_releases_lock(
         self, eager_celery: None
     ) -> None:
@@ -2134,6 +2165,29 @@ class TestPeriodicPokeTimeLimits:
             result = get_display_power.apply()
         # Caught inside the task — no failure propagates to Sentry.
         assert result.successful()
+        fake_redis.set.assert_not_called()
+
+    def test_display_power_soft_limit_in_the_availability_gate(self) -> None:
+        """``cec_available()`` is the *first* thing the task does, and it
+        wrapped its redis GET in a blanket ``except Exception`` — which
+        swallowed celery's one soft-limit delivery, left this task's
+        handler unreachable, and let the tick run on into the 60s hard
+        limit and a SIGKILLed pool child. That is why #3063's soft limit
+        never actually closed ANTHIAS-A / 9 / B / 1Q."""
+        fake_redis = mock.MagicMock()
+        with (
+            mock.patch.object(celery_tasks_module, 'r', fake_redis),
+            # Raised from the real GET inside cec_client.available(), so
+            # the blanket handler that used to eat it is on the path.
+            mock.patch(
+                'anthias_server.lib.cec_client.connect_to_redis',
+                side_effect=SoftTimeLimitExceeded,
+            ),
+        ):
+            result = get_display_power.apply()
+        assert result.successful()
+        # The tick is skipped whole: no second redis call is attempted
+        # on a connection that has already burned the budget.
         fake_redis.set.assert_not_called()
 
     def test_telemetry_soft_limit_skips_tick(self) -> None:

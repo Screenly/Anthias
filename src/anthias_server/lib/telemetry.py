@@ -5,6 +5,7 @@ import secrets
 import string
 from collections import Counter
 
+from celery.exceptions import SoftTimeLimitExceeded
 from requests import exceptions
 from requests import post as requests_post
 
@@ -58,6 +59,14 @@ def _get_asset_counts() -> dict[str, int]:
             'mimetype', flat=True
         )
         counts = Counter(rows)
+    except SoftTimeLimitExceeded:
+        # Same trap as ``cec_client.available``: the blanket arm below
+        # would swallow celery's one soft-limit delivery, leaving
+        # ``send_telemetry_task``'s handler unreachable and the task to
+        # run on into the 60s hard limit and a SIGKILLed pool child
+        # (ANTHIAS-A / 9 / B). Degrading to zeros is the right answer for
+        # a DB fault, not for "stop what you are doing".
+        raise
     except Exception as exc:
         # Telemetry must never crash the worker — DB unreachable, table
         # missing pre-migrate, etc., all degrade to zeros.
