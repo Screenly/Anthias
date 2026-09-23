@@ -41,6 +41,8 @@ import logging
 import uuid
 from typing import Any
 
+from celery.exceptions import SoftTimeLimitExceeded
+
 from anthias_common.errors import ReplyTimeoutError
 from anthias_common.utils import connect_to_redis
 from anthias_server.lib import cec
@@ -93,6 +95,20 @@ def available() -> bool:
     """
     try:
         raw = connect_to_redis().get(CEC_AVAILABLE_KEY)
+    except SoftTimeLimitExceeded:
+        # ``SoftTimeLimitExceeded`` is a plain ``Exception`` subclass, so
+        # the blanket arm below would swallow it — and this GET is the
+        # *first* thing ``get_display_power`` does, under a 30s soft
+        # limit and a 60s hard one. Celery delivers the soft signal once;
+        # eating it here means the task's own
+        # ``except SoftTimeLimitExceeded`` never runs, the task carries on
+        # into its next redis call, and the hard limit SIGKILLs the pool
+        # child. That is why #3063's soft limit never actually stopped
+        # the ANTHIAS-A / 9 / B / 1Q quartet: the handler it added could
+        # not be reached. The window is not theoretical — redis-py 8.1's
+        # defaults (socket_timeout=5, Retry(retries=10)) put a blackholed
+        # redis at ~59s for this single GET, measured on the x86 testbed.
+        raise
     except Exception as exc:
         logger.warning('Could not read CEC availability: %s', exc)
         return False

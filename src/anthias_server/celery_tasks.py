@@ -1776,7 +1776,28 @@ def revalidate_asset_url(asset_id: str) -> None:
     ``is_processing`` / ``skip_asset_check`` — probing a disabled or
     in-flight youtube_asset row would write misleading state, and
     skip_asset_check rows are explicitly opted out of validation.
+
+    The soft-limit guard wraps the *whole* body rather than just the
+    probe. The prologue is not free — the SELECT below can block on a
+    contended SQLite write lock and the cooldown SETNX is a redis round
+    trip — and a soft signal landing there used to escape as a task
+    failure (Sentry ANTHIAS-5K, whose traceback lands on the SELECT).
+    Nothing has been probed or written at that point, so the right
+    answer is to drop the tick; the viewer re-requests a recheck the
+    next time it fails to display the asset.
     """
+    try:
+        _revalidate_asset_url(asset_id)
+    except SoftTimeLimitExceeded:
+        logger.warning(
+            'revalidate_asset_url: soft time limit hit during the '
+            'recheck for %s; giving up this tick',
+            asset_id,
+        )
+
+
+def _revalidate_asset_url(asset_id: str) -> None:
+    """Body of :func:`revalidate_asset_url`, minus the soft-limit guard."""
     from django.utils import timezone
 
     try:
@@ -1808,43 +1829,35 @@ def revalidate_asset_url(asset_id: str) -> None:
     ):
         return
 
-    # The soft-limit signal is delivered asynchronously, so the outer
-    # try covers the DB update as well as the probe — a delivery
-    # landing between the probe returning and the UPDATE committing
-    # must not escape as a task failure (that's the SIGKILL-adjacent
-    # noise this task's limits exist to avoid).
     try:
-        try:
-            reachable = _check_asset_reachability(asset)
-        except SoftTimeLimitExceeded:
-            # A probe that can't finish inside the soft budget gets
-            # the same verdict url_fails gives an HTTP timeout:
-            # unreachable. Recording the verdict (rather than
-            # bailing) keeps the viewer's _asset_is_displayable in
-            # sync with reality and the cooldown lock prevents an
-            # immediate re-probe storm.
-            logger.warning(
-                'revalidate_asset_url: probe for %s exceeded %ss; '
-                'marking unreachable',
-                asset_id,
-                ASSET_RECHECK_SOFT_TIME_LIMIT_S,
-            )
-            reachable = False
-        except Exception:
-            logger.exception(
-                'revalidate_asset_url: probe crashed for %s', asset_id
-            )
-            return
-        Asset.objects.filter(asset_id=asset_id).update(
-            is_reachable=reachable,
-            last_reachability_check=timezone.now(),
-        )
+        reachable = _check_asset_reachability(asset)
     except SoftTimeLimitExceeded:
+        # A probe that can't finish inside the soft budget gets
+        # the same verdict url_fails gives an HTTP timeout:
+        # unreachable. Recording the verdict (rather than
+        # bailing) keeps the viewer's _asset_is_displayable in
+        # sync with reality and the cooldown lock prevents an
+        # immediate re-probe storm.
         logger.warning(
-            'revalidate_asset_url: soft time limit hit while '
-            'finalising the probe for %s; giving up this recheck',
+            'revalidate_asset_url: probe for %s exceeded %ss; '
+            'marking unreachable',
             asset_id,
+            ASSET_RECHECK_SOFT_TIME_LIMIT_S,
         )
+        reachable = False
+    except Exception:
+        logger.exception(
+            'revalidate_asset_url: probe crashed for %s', asset_id
+        )
+        return
+
+    # A soft signal landing between the probe returning and the UPDATE
+    # committing is caught by the caller's guard, which drops the tick
+    # rather than failing the task.
+    Asset.objects.filter(asset_id=asset_id).update(
+        is_reachable=reachable,
+        last_reachability_check=timezone.now(),
+    )
 
 
 # ---------------------------------------------------------------------------

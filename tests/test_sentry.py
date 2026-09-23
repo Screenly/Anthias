@@ -14,7 +14,40 @@ from unittest import mock
 
 import pytest
 import sentry_sdk
+from celery.exceptions import SoftTimeLimitExceeded
 from sentry_sdk.types import Event
+
+from anthias_server.lib import cec_client
+
+
+def _soft_limit_from_third_party_teardown() -> SoftTimeLimitExceeded:
+    """A soft limit whose traceback holds no Anthias frame.
+
+    Stands in for celery's ``on_task_postrun`` fixup and billiard's idle
+    workloop: this test module is not an ``anthias_*`` package, so the
+    only frame on the traceback is a non-Anthias one.
+    """
+    try:
+        raise SoftTimeLimitExceeded()
+    except SoftTimeLimitExceeded as exc:
+        return exc
+
+
+def _soft_limit_raised_in_anthias_code() -> SoftTimeLimitExceeded:
+    """A soft limit that really did interrupt Anthias code.
+
+    Driven through ``cec_client.available`` — the real call site that
+    used to swallow it — so the traceback carries an ``anthias_server``
+    frame the way a live one would.
+    """
+    with mock.patch.object(
+        cec_client, 'connect_to_redis', side_effect=SoftTimeLimitExceeded()
+    ):
+        try:
+            cec_client.available()
+        except SoftTimeLimitExceeded as exc:
+            return exc
+    raise AssertionError('available() swallowed the soft time limit')
 
 
 def test_sentry_does_not_send_under_pytest() -> None:
@@ -281,6 +314,42 @@ class TestBeforeSendTransientNoise:
 
         event: Event = {'event_id': 'x'}
         assert _sentry_before_send(event, {}) == event
+
+    def test_drops_soft_time_limit_raised_outside_our_code(self) -> None:
+        # Celery arms the soft-limit timer for the whole job, so a task
+        # that finishes a hair under budget can still take the signal
+        # during teardown — inside celery's on_task_postrun fixup or
+        # billiard's idle workloop. No task handler can catch those and
+        # nothing was interrupted (Sentry ANTHIAS-45 / ANTHIAS-5Y).
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        exc = _soft_limit_from_third_party_teardown()
+        assert _sentry_before_send({'event_id': 'x'}, self._hint_for(exc)) is (
+            None
+        )
+
+    def test_keeps_soft_time_limit_that_interrupted_a_task(self) -> None:
+        # A soft limit that really did cut Anthias code short has our
+        # frames in the traceback and stays reportable.
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        event: Event = {'event_id': 'x'}
+        exc = _soft_limit_raised_in_anthias_code()
+        assert _sentry_before_send(event, self._hint_for(exc)) == event
+
+    def test_keeps_soft_time_limit_without_a_traceback(self) -> None:
+        # A missing traceback is "unknown", not "safe to drop".
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+        )
+
+        event: Event = {'event_id': 'x'}
+        hint = self._hint_for(SoftTimeLimitExceeded())
+        assert _sentry_before_send(event, hint) == event
 
     def test_celery_reconnect_logger_is_ignored(self) -> None:
         # celery's consumer retries broker connections on its own but
