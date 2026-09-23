@@ -85,14 +85,18 @@ def _resolve_relative(package: str, level: int, module: str | None) -> str:
     """Absolute name for a ``from .x import y`` inside ``package``.
 
     ``level`` is the number of leading dots: one means "this package",
-    two means "the parent", and so on. Returns '' when the dots climb
-    past the top of the tree, which cannot resolve to anything here.
+    two means "the parent", and so on. Mirrors CPython's
+    ``importlib._bootstrap._resolve_name``, including its boundary:
+    ``level`` may consume at most ``len(parts) - 1`` of them, because
+    one part always has to remain. ``from ..x import y`` inside a
+    top-level package is "attempted relative import beyond top-level
+    package" — an error, not a resolution to ``x`` (Copilot caught this
+    off-by-one). Returns '' for every such case.
     """
     parts = package.split('.') if package else []
-    climb = level - 1
-    if climb > len(parts):
+    if level > len(parts):
         return ''
-    base = parts[: len(parts) - climb] if climb else parts
+    base = parts[: len(parts) - (level - 1)]
     if module:
         base = [*base, *module.split('.')]
     return '.'.join(base)
@@ -288,8 +292,17 @@ def test_module_names_survive_subpackages() -> None:
             'settings',
             'anthias_server.settings',
         ),
-        # Dots that climb past the top resolve to nothing.
+        # Boundary: `level` may consume at most len(parts) - 1, since
+        # one part must remain. `from ..x` inside a top-level package is
+        # an error in CPython, not a resolution to a bare 'x'.
+        ('anthias_server', 1, 'x', 'anthias_server.x'),
+        ('anthias_server', 2, 'x', ''),
+        ('anthias_server.lib', 2, 'x', 'anthias_server.x'),
+        ('anthias_server.lib', 3, 'x', ''),
+        # Dots that climb well past the top resolve to nothing.
         ('anthias_server', 4, 'x', ''),
+        # A module with no package at all cannot import relatively.
+        ('', 1, 'x', ''),
     ],
 )
 def test_relative_imports_resolve_against_their_package(
