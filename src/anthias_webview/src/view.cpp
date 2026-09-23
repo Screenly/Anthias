@@ -32,6 +32,7 @@
 
 #include "view.h"
 #include "image_fallback.h"
+#include "image_transition.h"
 #include "rotation.h"
 
 // Attaches the operator-configured per-asset request headers (#2215) to
@@ -407,6 +408,21 @@ View::View(QWidget* parent) : QWidget(parent)
     pageLoadWatchdog->setInterval(pageLoadTimeoutMs());
     connect(pageLoadWatchdog, &QTimer::timeout,
             this, &View::handlePageLoadTimeout);
+
+    // Image-to-image crossfade. You can see the member comments in view.h.
+    // Resolved once here, like pageLoadTimeoutMs() above, rather than
+    // re-read on every loadImage().
+    fadeDurationMs = image_transition::durationMs(
+        qgetenv("ANTHIAS_IMAGE_TRANSITION_MS"),
+        qEnvironmentVariableIsSet("ANTHIAS_IMAGE_TRANSITION_MS"));
+    fadeActive = false;
+    fadeTimer = new QTimer(this);
+    // ~60fps while a fade is running: only started/stopped in
+    // startImageFade()/stopImageFade() so an idle screen (no fade in
+    // progress) pays nothing extra.
+    fadeTimer->setInterval(16);
+    connect(fadeTimer, &QTimer::timeout, this,
+            [this]() { update(); });
 }
 
 View::~View()
@@ -501,6 +517,22 @@ void View::stopAnimation()
     isAnimatedImage = false;
 }
 
+void View::startImageFade()
+{
+    fadeActive = true;
+    fadeElapsed.start();
+    if (!fadeTimer->isActive()) {
+        fadeTimer->start();
+    }
+}
+
+void View::stopImageFade()
+{
+    fadeActive = false;
+    fadeFromImage = QImage();
+    fadeTimer->stop();
+}
+
 void View::loadPage(const QString &uri, bool skipSslVerify)
 {
     qDebug() << "Type: Webpage";
@@ -524,6 +556,12 @@ void View::loadPage(const QString &uri, bool skipSslVerify)
     currentImage = QImage();
     fallbackToLastImageOnBlank = false;
     stopAnimation();
+    // Not an image -> image transition; a stale fade left running
+    // into a webpage would otherwise still be blended (visually
+    // moot, since currentImage is now null, but it'd keep fadeTimer
+    // ticking update() for no reason and pin fadeFromImage in
+    // memory).
+    stopImageFade();
     // Drop any per-asset reload timer left over from the previous
     // webpage AND the prior asset's pending interval — the viewer
     // calls setReloadInterval right after this with the new asset's
@@ -811,6 +849,12 @@ void View::loadImage(const QString &preUri, bool skipSslVerify)
         // the matching comment in playVideo()).
         fallbackToLastImageOnBlank = false;
         currentImage = QImage();
+        // Same reasoning as the loadPage() blank above: this is a
+        // deliberate non-image blank (the video-onset sentinel), not
+        // an image -> image rotation, so any fade in progress is
+        // cancelled rather than left ticking against a now-null
+        // currentImage.
+        stopImageFade();
         update();
         return;
     }
@@ -941,9 +985,32 @@ void View::loadAsStaticImage(const QByteArray& data)
         nextImage = newImage;
         webView1->setVisible(false);
         webView2->setVisible(false);
+
+        // Crossfade (issue #3351). Capture the outgoing frame
+        // *before* it's overwritten below. This is also how an
+        // interrupted fade restarts cleanly: if a fade from the
+        // previous asset was already running, currentImage still
+        // holds its latest real frame (paintEvent only blends
+        // visually, it never mutates currentImage), so re-capturing
+        // it here and restarting fadeElapsed replaces the
+        // in-progress fade rather than stacking a second one.
+        const bool startFade = image_transition::shouldStartFade(
+            /*hasOutgoingImage=*/!currentImage.isNull(),
+            /*isNewAsset=*/true, fadeDurationMs);
+        if (startFade) {
+            fadeFromImage = currentImage;
+        }
+
         currentImage = nextImage;
         lastRasterImage = nextImage;
         fallbackToLastImageOnBlank = false;
+
+        if (startFade) {
+            startImageFade();
+        } else {
+            stopImageFade();
+        }
+
         update();
     } else {
         qDebug() << "Failed to load image from data:" << reader.errorString();
@@ -957,6 +1024,55 @@ void View::loadAsStaticImage(const QByteArray& data)
         update();
     }
 }
+
+namespace {
+// Draws ``image`` scaled (KeepAspectRatio) into ``box`` and centred,
+// at ``opacity``. ``originAtCentre`` selects which of paintEvent()'s
+// two pre-existing centring formulas to use: false for the
+// imageRotation == 0 path (image centred in the un-translated
+// widget, box == size()), true for the linuxfb-rotation path (the
+// painter has already been translated to the widget centre and
+// rotated, so the image is centred at the new origin). Both formulas
+// are exactly what paintEvent() used before this function existed.
+// They're kept separate rather than unified so neither path's rounding
+// changes. ``opacity`` is only touched when it isn't 1.0, so the
+// non-fading call (opacity == 1.0) leaves the QPainter's opacity
+// state exactly as untouched as it was before crossfade support was
+// added.
+void drawScaledImage(
+    QPainter &painter, const QImage &image, const QSize &box,
+    bool originAtCentre, qreal opacity)
+{
+    if (image.isNull() || opacity <= 0.0) {
+        return;
+    }
+    QSize scaledSize = image.size();
+    scaledSize.scale(box, Qt::KeepAspectRatio);
+    if (opacity < 1.0) {
+        painter.setOpacity(opacity);
+    }
+    if (originAtCentre) {
+        painter.drawImage(
+            QRect(
+                -scaledSize.width() / 2,
+                -scaledSize.height() / 2,
+                scaledSize.width(),
+                scaledSize.height()),
+            image);
+    } else {
+        painter.drawImage(
+            QRect(
+                (box.width() - scaledSize.width()) / 2,
+                (box.height() - scaledSize.height()) / 2,
+                scaledSize.width(),
+                scaledSize.height()),
+            image);
+    }
+    if (opacity < 1.0) {
+        painter.setOpacity(1.0);
+    }
+}
+}  // namespace
 
 void View::paintEvent(QPaintEvent*)
 {
@@ -978,41 +1094,60 @@ void View::paintEvent(QPaintEvent*)
             ? lastRasterImage
             : currentImage;
 
-    if (imageToPaint.isNull()) {
+    if (imageToPaint.isNull() && fadeFromImage.isNull()) {
         return;
     }
+
+    // Crossfade (issue #3351). While fadeActive, blend fadeFromImage
+    // (the previous asset's last frame) out from under imageToPaint
+    // instead of the plain single-image draw. progressFor() is a
+    // pure function (image_transition.cpp, covered by
+    // test_image_transition.cpp) so only the QElapsedTimer read and
+    // the actual drawing happen here.
+    qreal fadeProgress = 1.0;
+    if (fadeActive) {
+        fadeProgress = image_transition::progressFor(
+            static_cast<int>(fadeElapsed.elapsed()), fadeDurationMs);
+    }
+    const bool blending = fadeActive && fadeProgress < 1.0;
 
     if (imageRotation == 0) {
-        QSize scaledSize = imageToPaint.size();
-        scaledSize.scale(size(), Qt::KeepAspectRatio);
-        painter.drawImage(
-            QRect(
-                (width() - scaledSize.width()) / 2,
-                (height() - scaledSize.height()) / 2,
-                scaledSize.width(),
-                scaledSize.height()),
-            imageToPaint);
-        return;
+        if (blending) {
+            drawScaledImage(
+                painter, fadeFromImage, size(),
+                /*originAtCentre=*/false, 1.0 - fadeProgress);
+        }
+        drawScaledImage(
+            painter, imageToPaint, size(), /*originAtCentre=*/false,
+            fadeActive ? fadeProgress : 1.0);
+    } else {
+        // linuxfb-only manual rotation (see linuxfbRotationOverride):
+        // rotate about the widget centre. A 90/270 turn swaps the
+        // drawable box, so the image is fit into the widget's
+        // transposed dimensions and centred. A landscape image on a
+        // portrait-turned screen is pillar-boxed, matching the
+        // GStreamer videoflip path. Both fade frames are drawn
+        // through this same translate+rotate, applied once, so a
+        // rotated screen composites them correctly instead of
+        // blending pre-rotation and rotating the (already blended)
+        // result.
+        const QSize box =
+            (imageRotation % 180 == 0) ? size() : QSize(height(), width());
+        painter.translate(width() / 2.0, height() / 2.0);
+        painter.rotate(imageRotation);
+        if (blending) {
+            drawScaledImage(
+                painter, fadeFromImage, box, /*originAtCentre=*/true,
+                1.0 - fadeProgress);
+        }
+        drawScaledImage(
+            painter, imageToPaint, box, /*originAtCentre=*/true,
+            fadeActive ? fadeProgress : 1.0);
     }
 
-    // linuxfb-only manual rotation (see linuxfbRotationOverride): rotate
-    // about the widget centre. A 90/270 turn swaps the drawable box, so
-    // the image is fit into the widget's transposed dimensions and
-    // centred — a landscape image on a portrait-turned screen is
-    // pillar-boxed, matching the GStreamer videoflip path.
-    const QSize box =
-        (imageRotation % 180 == 0) ? size() : QSize(height(), width());
-    QSize scaledSize = imageToPaint.size();
-    scaledSize.scale(box, Qt::KeepAspectRatio);
-    painter.translate(width() / 2.0, height() / 2.0);
-    painter.rotate(imageRotation);
-    painter.drawImage(
-        QRect(
-            -scaledSize.width() / 2,
-            -scaledSize.height() / 2,
-            scaledSize.width(),
-            scaledSize.height()),
-        imageToPaint);
+    if (fadeActive && fadeProgress >= 1.0) {
+        stopImageFade();
+    }
 }
 
 void View::resizeEvent(QResizeEvent* event)
@@ -1070,6 +1205,10 @@ void View::playVideo(const QString &uri, const QVariantMap &options)
     stopAnimation();
     currentImage = QImage();
     fallbackToLastImageOnBlank = false;
+    // Same reasoning as the blanks in loadPage() /the loadImage()
+    // "null" branch: video is out of scope for the crossfade, so
+    // cancel rather than leave it blending against a null image.
+    stopImageFade();
     update();
 
     if (!videoView) {
@@ -1125,6 +1264,11 @@ void View::setupAnimation()
             return;
         }
 
+        // Deliberately does not touch the fade: this fires on every
+        // frame of an already-playing GIF, not just when the GIF
+        // becomes the current asset (that happens once, below,
+        // before movie->start()). Re-arming here would make a GIF
+        // appear to perpetually fade into itself.
         const QImage newFrame = movie->currentImage();
         if (!newFrame.isNull()) {
             currentImage = newFrame;
@@ -1132,11 +1276,28 @@ void View::setupAnimation()
         }
     });
 
+    // Crossfade (issue #3351). Same capture-before-overwrite /
+    // interruption handling as loadAsStaticImage(). (see the comment
+    // there).
+    const bool startFade = image_transition::shouldStartFade(
+        /*hasOutgoingImage=*/!currentImage.isNull(),
+        /*isNewAsset=*/true, fadeDurationMs);
+    if (startFade) {
+        fadeFromImage = currentImage;
+    }
+
     movie->start();
     movie->jumpToFrame(0);
     currentImage = movie->currentImage();
     lastRasterImage = currentImage;
     fallbackToLastImageOnBlank = false;
+
+    if (startFade) {
+        startImageFade();
+    } else {
+        stopImageFade();
+    }
+
     update();
 }
 
