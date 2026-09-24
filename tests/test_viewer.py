@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import os
+import socket
 from collections.abc import Iterator
 from time import monotonic, sleep
 from typing import Any
@@ -3988,3 +3989,200 @@ def test_wayland_recovery_logs_at_warning_not_error(caplog: Any) -> None:
         f'recovery must be WARNING; got {[r.levelname for r in recovery]} — '
         'at ERROR the Sentry integration files an issue per self-heal'
     )
+
+
+# --- webview launch failure: exit status + dead compositor ------------
+
+
+@pytest.mark.parametrize(
+    'code,expected',
+    [
+        (0, 'exit code 0'),
+        (1, 'exit code 1'),
+        (-9, 'killed by signal 9 (SIGKILL)'),
+        (-11, 'killed by signal 11 (SIGSEGV)'),
+        (-6, 'killed by signal 6 (SIGABRT)'),
+        # Not a signal this platform names — must still render, not raise.
+        (-999, 'killed by signal 999'),
+        # sh has not settled a status (or a test double stands in for
+        # the process): a launch failure must not become a TypeError.
+        (None, 'exit status unknown'),
+        ('nope', 'exit status unknown'),
+        # bool is an int subclass; rendering True as "exit code 1" would
+        # be a lie about what sh reported.
+        (True, 'exit status unknown'),
+    ],
+)
+def test_describe_exit_status(code: Any, expected: str) -> None:
+    """sh reports a signal death as the negated signal number, and that
+    distinction is the entire diagnosis when AnthiasViewer dies during Qt
+    init without printing anything: SIGKILL is the OOM killer, SIGSEGV /
+    SIGABRT a driver or Qt crash, a plain non-zero exit something Qt
+    already explained."""
+    assert viewer._describe_exit_status(code) == expected
+
+
+def test_spawn_webview_once_reports_the_exit_status(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Sentry ANTHIAS-D: a Pi 5 filed 1318 identical reports whose whole
+    payload was Qt's startup boilerplate — the process died in ~0.5s
+    having printed nothing about why, and the message carried no exit
+    status, so the failure was not diagnosable at all. The status must
+    be in the message."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    browser_proc.process.wait.return_value = -11
+
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(viewer_fixtures.u.WebviewLaunchError) as excinfo:
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+    assert 'killed by signal 11 (SIGSEGV)' in str(excinfo.value)
+
+
+def test_spawn_webview_once_drains_the_tail_before_reporting(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Reaping through the OProc wait() joins sh's reader thread, so the
+    dying process's last words are in the sink before the message is
+    composed. is_alive() alone only waitpid(WNOHANG)s and makes no such
+    promise — measured against a child that bursts ~900 KB and dies, the
+    tail was still unread 2 runs in 15 when polled with no delay (0 in 15
+    at the loop's real cadence). Latent, but the tail is the one thing
+    this message exists to carry."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    holder = _capture_out_sink(viewer_fixtures, browser_proc)
+
+    def drain_on_wait() -> int:
+        # Stands in for sh's reader thread handing over the last chunk
+        # only once the process is joined.
+        holder['sink']('QtWebEngine failed to start: no GL context\n')
+        return 1
+
+    browser_proc.process.wait.side_effect = drain_on_wait
+
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(viewer_fixtures.u.WebviewLaunchError) as excinfo:
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+    assert 'no GL context' in str(excinfo.value)
+
+
+def test_reap_webview_exit_never_raises(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """proc.wait() (the RunningCommand wrapper) raises ErrorReturnCode /
+    SignalException for exactly the non-zero statuses this reports, which
+    is why the OProc-level wait is used. Even so, a raising double must
+    degrade to the last known status rather than replace a launch failure
+    with an unrelated exception."""
+    proc = mock.Mock()
+    proc.process.wait.side_effect = RuntimeError('boom')
+    proc.process.exit_code = -6
+    assert (
+        viewer_fixtures.u._reap_webview_exit(proc)
+        == 'killed by signal 6 (SIGABRT)'
+    )
+
+
+class TestWaylandCompositorGone:
+    """Sentry ANTHIAS-1W: cage is the viewer container's PID 1, so once
+    it dies nothing in-process can bring it back and every further spawn
+    dies the same instant on wl_display."""
+
+    def test_refusing_socket_is_gone(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        # The stale inode a dead cage leaves behind: it exists (so the
+        # pre-spawn wait is a no-op) but nothing accepts on it.
+        stale = tmp_path / 'wayland-0'
+        stale.touch()
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-0')
+        assert viewer._wayland_compositor_gone(
+            'AnthiasViewer exited before emitting D-Bus handshake (exit '
+            'code 1); stdout: Failed to create wl_display (Connection '
+            'refused)'
+        )
+
+    def test_live_socket_is_not_gone(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        """The false-positive half, and the one that matters: a fast
+        container restart can rebuild the socket between the failed spawn
+        and this check. cage is back, a retry is exactly right, and the
+        guard must decline."""
+        live = tmp_path / 'wayland-0'
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            server.bind(str(live))
+            server.listen(1)
+            monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+            monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-0')
+            assert not viewer._wayland_compositor_gone(
+                'Failed to create wl_display (Connection refused)'
+            )
+        finally:
+            server.close()
+
+    def test_other_failures_are_not_the_compositor(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        """A genuine Qt init crash on a cage board must keep its retry
+        budget — the flaky-init self-heal is the whole reason the loop
+        exists."""
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-0')
+        assert not viewer._wayland_compositor_gone(
+            'stdout: Failed to create Vulkan instance: -9'
+        )
+
+    def test_non_cage_board_is_inert(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No WAYLAND_DISPLAY means no compositor to be gone. Without
+        this, a linuxfb/eglfs board that somehow printed the message
+        would short-circuit its budget on an unprobeable socket."""
+        monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
+        assert not viewer._wayland_compositor_gone(
+            'Failed to create wl_display (Connection refused)'
+        )
+
+    def test_load_browser_short_circuits_a_dead_compositor(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        """In the loop: one attempt, not thirty. The 30-attempt startup
+        path would otherwise spend ~6.5 min of black screen before
+        raising, and the container restart that relaunches cage is the
+        only thing that can actually recover."""
+        stale = tmp_path / 'wayland-0'
+        stale.touch()
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-0')
+        qt_text = (
+            'AnthiasViewer exited before emitting D-Bus handshake (exit '
+            'code 1); stdout: Failed to create wl_display (Connection '
+            'refused)'
+        )
+        spawn = mock.Mock(side_effect=viewer.WebviewLaunchError(qt_text))
+        with (
+            mock.patch.object(viewer, '_spawn_webview_once', spawn),
+            mock.patch.object(viewer, 'sleep') as slept,
+            pytest.raises(viewer.WebviewLaunchError) as excinfo,
+        ):
+            viewer.load_browser(max_attempts=30, startup_timeout=30)
+        assert spawn.call_count == 1, (
+            f'expected 1 attempt, spent {spawn.call_count} of a 30 budget'
+        )
+        slept.assert_not_called()
+        assert 'the Wayland compositor is gone' in str(excinfo.value)
