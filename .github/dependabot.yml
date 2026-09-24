@@ -13,6 +13,18 @@ updates:
       bun:
         patterns:
           - "*"
+    ignore:
+      # htmx 4 is a rewrite, not a version bump: hx-on:: handlers no
+      # longer fire the way the asset modal relies on, so the modal
+      # never closes after a save and
+      # test_add_asset_url_field_is_empty_on_reopen times out waiting
+      # for Alpine's state.mode to clear. Moving to 4.x means reworking
+      # every hx-on::after-request handler, the swap semantics (morph is
+      # now the default) and the extension registration — a deliberate
+      # migration, not something to ride in on a weekly grouped bump.
+      # 2.x minor and patch updates still come through.
+      - dependency-name: "htmx.org"
+        update-types: ["version-update:semver-major"]
   # "uv", not "pip": the pip ecosystem reads the PEP 621 pins in
   # pyproject.toml but has no concept of uv.lock, so it opened PRs that
   # bumped the pin and left the lockfile on the old version. The uv
