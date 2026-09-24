@@ -1,13 +1,14 @@
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 from collections import deque
 from collections.abc import Callable
 from glob import glob
 from os import getenv, path
-from signal import SIGALRM, signal
+from signal import SIGALRM, Signals, signal
 from threading import Lock
 from time import monotonic, sleep, time
 from typing import Any
@@ -895,6 +896,64 @@ class WebviewBinaryMissingError(WebviewLaunchError):
     """
 
 
+def _describe_exit_status(code: Any) -> str:
+    """Human-readable rendering of an ``sh`` exit code.
+
+    ``sh`` follows the shell convention of reporting a signal death as
+    the negated signal number (``handle_process_exit_code``), so -11 is
+    SIGSEGV and -9 is SIGKILL. That distinction is the whole diagnosis
+    when AnthiasViewer dies during Qt/WebEngine init without printing
+    anything: a SIGKILL is the kernel OOM killer (a board/asset memory
+    problem), a SIGSEGV/SIGABRT is a driver or Qt init crash (a build
+    or GPU-stack problem), and a plain non-zero exit is Qt declining to
+    start for a reason it already printed. Returns a fixed phrase for
+    anything that is not an int so a mocked/absent status can never
+    turn a launch failure into a TypeError.
+    """
+    if not isinstance(code, int) or isinstance(code, bool):
+        return 'exit status unknown'
+    if code < 0:
+        try:
+            name = Signals(-code).name
+        except ValueError:
+            return f'killed by signal {-code}'
+        return f'killed by signal {-code} ({name})'
+    return f'exit code {code}'
+
+
+def _reap_webview_exit(proc: Any) -> str:
+    """Finish reaping a dead AnthiasViewer and describe how it died.
+
+    Called only once ``is_alive()`` has already reported the process
+    gone, so nothing here blocks on the child itself.
+
+    Reaping through the OProc-level ``wait()`` also runs sh's
+    ``_process_exit_cleanup``, which joins the reader thread feeding our
+    ``_out`` sink (bounded by sh's own 2s stop-output timer) — so the
+    tail is guaranteed to have landed before the message is composed.
+    ``is_alive()`` alone only ``waitpid(WNOHANG)``s and makes no such
+    promise: it settles the exit code and leaves the reader running.
+    Latent rather than live at today's poll cadence — measured against a
+    child that bursts ~900 KB and dies, the tail was still unread 2 runs
+    in 15 when polled with no delay, and 0 in 15 at the loop's real
+    ``BROWSER_POLL_INTERVAL_SECONDS`` — but the tail is the one thing
+    this message exists to carry, so take the guarantee.
+
+    Deliberately ``proc.process.wait()`` and not ``proc.wait()``: the
+    RunningCommand wrapper funnels the code through
+    ``handle_command_exit_code`` and would raise ``ErrorReturnCode`` /
+    ``SignalException`` for the non-zero status this function exists to
+    report. Never raises.
+    """
+    code: Any = None
+    try:
+        code = proc.process.wait()
+    except Exception:
+        logger.debug('Could not reap AnthiasViewer', exc_info=True)
+        code = getattr(getattr(proc, 'process', None), 'exit_code', None)
+    return _describe_exit_status(code)
+
+
 def _terminate_webview(proc: Any) -> None:
     """Best-effort: stop an AnthiasViewer process and confirm it's gone.
 
@@ -974,6 +1033,68 @@ def _wait_for_wayland_socket(deadline: float) -> None:
         'will fail and retry if cage is truly down)',
         socket_path,
     )
+
+
+# Qt's own words when it could not reach the Wayland compositor because
+# nothing is listening on the socket. ``Connection refused`` is the
+# load-bearing half: on a unix socket that is ECONNREFUSED, which means
+# the inode is there but no process is accepting on it — a stale socket
+# left behind by a cage that died. A compositor that is merely slow to
+# accept, or busy, fails differently.
+_COMPOSITOR_GONE_SIGNATURE = 'Failed to create wl_display (Connection refused)'
+# How long to wait on the liveness connect below. Purely a guard against
+# a pathological accept queue; a live cage accepts a unix connection
+# immediately and a dead one refuses immediately.
+WAYLAND_PROBE_TIMEOUT_SECONDS = 1.0
+
+
+def _wayland_socket_accepting(socket_path: str) -> bool:
+    """True when something is accepting connections on cage's socket.
+
+    ``os.path.exists`` can't tell a live compositor from the stale
+    socket inode a dead one leaves behind — only a connect can. We
+    connect and immediately close; the Wayland protocol tolerates a
+    client that binds and disconnects without sending anything, so this
+    costs cage one aborted client.
+    """
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(WAYLAND_PROBE_TIMEOUT_SECONDS)
+            probe.connect(socket_path)
+    except OSError:
+        return False
+    return True
+
+
+def _wayland_compositor_gone(failure_text: str) -> bool:
+    """True when a launch failed because cage is no longer listening.
+
+    The cage sibling of ``_display_device_vanished``. cage is launched
+    once per container start by ``bin/lib/viewer/platform_wayland.sh``,
+    as a *parent* of this process — nothing in here can relaunch it, so
+    once it dies every subsequent spawn dies the same instant on
+    ``wl_display``. The only recovery is letting the error out: the
+    viewer exits, ``viewer_wait_and_supervise`` returns, the container
+    stops and ``restart: always`` brings it back with a fresh cage.
+    Spending the attempt budget first only delays that — up to ~6.5 min
+    of black screen on the 30-attempt startup path. Sentry ANTHIAS-1W.
+
+    Conservative in the same way its linuxfb sibling is: it needs BOTH
+    Qt's own connection-refused message AND the socket still refusing
+    when we check. The second half is what keeps the guard honest when
+    cage is *back* — a fast container restart can rebuild the socket
+    between the failed spawn and this check, and in that case a retry is
+    exactly the right thing and must not be short-circuited.
+
+    Inert on a board whose env names no socket: there is no compositor
+    to have died, and "nothing to probe" must not read as "gone".
+    """
+    if _COMPOSITOR_GONE_SIGNATURE not in failure_text:
+        return False
+    socket_path = _wayland_socket_path()
+    if socket_path is None:
+        return False
+    return not _wayland_socket_accepting(socket_path)
 
 
 # Upper bound on the AnthiasViewer output we retain in memory. sh
@@ -1114,9 +1235,14 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
         if BROWSER_HANDSHAKE_LINE in output.text():
             return candidate
         if not candidate.is_alive():
+            # Reap first: this both drains the output sh has not handed
+            # to the sink yet (the crash tail) and settles the exit
+            # status, so the message below carries BOTH halves of the
+            # diagnosis rather than whatever happened to be flushed.
+            status = _reap_webview_exit(candidate)
             raise WebviewLaunchError(
-                'AnthiasViewer exited before emitting D-Bus handshake; '
-                'stdout: ' + output.text()
+                'AnthiasViewer exited before emitting D-Bus handshake '
+                f'({status}); stdout: ' + output.text()
             )
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
 
@@ -1253,6 +1379,20 @@ def load_browser(
                     'container, and Qt reports no usable screen). The '
                     'container needs to restart to re-enumerate /dev; '
                     f'retrying in-process cannot help. Last error: {exc}'
+                ) from exc
+            if _wayland_compositor_gone(str(exc)):
+                # Same contract on the cage boards: nothing in here
+                # can relaunch cage, so every further attempt dies the
+                # same instant and only the container restart recovers
+                # (Sentry ANTHIAS-1W). Distinct message for the same
+                # reason as above — it keeps a dead compositor out of
+                # the Qt-init-crash grouping.
+                raise WebviewLaunchError(
+                    'AnthiasViewer cannot start: the Wayland compositor '
+                    f'is gone ({_wayland_socket_path()} refuses '
+                    'connections). The container needs to restart to '
+                    'relaunch cage; retrying in-process cannot help. '
+                    f'Last error: {exc}'
                 ) from exc
             if attempt == 1:
                 logger.warning(
