@@ -27,10 +27,10 @@
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.3.0",
-    "@tabler/icons-webfont": "^3.46.0",
-    "alpinejs": "^3.17.2",
+    "@tabler/icons-webfont": "^3.47.0",
+    "alpinejs": "^3.17.3",
     "flatpickr": "^4.6.13",
-    "htmx.org": "^2.0.10",
+    "htmx.org": "^4.0.0",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4"
   },
