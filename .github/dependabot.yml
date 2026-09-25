@@ -13,6 +13,19 @@ updates:
       bun:
         patterns:
           - "*"
+    ignore:
+      # htmx 4 is a rewrite, not an upgrade: morphing is the default
+      # swap, extensions moved to registerExtension, hx-config replaced
+      # the old meta config, and <hx-partial> changed how fragments come
+      # back. vendor.ts and the modal templates are written against 2.x
+      # semantics — the grouped bump to 4.0.0 left the Add-asset modal
+      # open after a successful submit, so state.mode never cleared and
+      # tests/test_app.py::test_add_asset_url_field_is_empty_on_reopen
+      # timed out on all three CI attempts. Migrating is a deliberate
+      # piece of work; hold at 2.x so the rest of the group keeps
+      # flowing. 2.x minor and patch updates still come through.
+      - dependency-name: "htmx.org"
+        update-types: ["version-update:semver-major"]
   # "uv", not "pip": the pip ecosystem reads the PEP 621 pins in
   # pyproject.toml but has no concept of uv.lock, so it opened PRs that
   # bumped the pin and left the lockfile on the old version. The uv
