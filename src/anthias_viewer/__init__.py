@@ -1,13 +1,14 @@
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 from collections import deque
 from collections.abc import Callable
 from glob import glob
 from os import getenv, path
-from signal import SIGALRM, signal
+from signal import SIGALRM, Signals, signal
 from threading import Lock
 from time import monotonic, sleep, time
 from typing import Any
@@ -945,33 +946,81 @@ def _wayland_socket_path() -> str | None:
     return os.path.join(runtime_dir, wayland_display)
 
 
+# How long a single readiness probe may spend on ``connect()`` before it
+# counts as "not ready". A live compositor on a local AF_UNIX socket
+# accepts within microseconds, so this only bounds the pathological case
+# (a listener with a full backlog) — and the caller's shared deadline
+# bounds the retries on top of it.
+WAYLAND_SOCKET_PROBE_TIMEOUT_S = 0.25
+
+
+def _wayland_socket_ready(socket_path: str) -> bool:
+    """True when a compositor is actually *listening* on ``socket_path``.
+
+    Existence is not readiness. An AF_UNIX socket's inode outlives its
+    listener: nothing unlinks it when cage dies, so a board whose
+    compositor crashed (or is mid-relaunch) keeps a bound-looking path
+    on disk that refuses every connection. Qt then dies instantly with
+    ``Failed to create wl_display (Connection refused)`` — which is the
+    exact text of Sentry ANTHIAS-1W, where the caller's existence check
+    short-circuited the wait and all three inline attempts burned out
+    inside a few seconds.
+
+    So connect instead of stat. The three outcomes map cleanly:
+
+      * connects — a compositor is accepting clients, the spawn can go;
+      * ``ENOENT`` — cage hasn't created the socket yet (the original
+        ANTHIAS-19 race), keep waiting;
+      * ``ECONNREFUSED`` — stale inode, no listener, keep waiting.
+
+    Every other ``OSError`` (``ENOTSOCK`` on a leftover regular file,
+    ``EACCES`` before the launch wrapper's chown lands, a path too long
+    for ``sockaddr_un``) is also "not ready": in each case a spawn right
+    now cannot reach a compositor, and the caller's deadline stops the
+    wait from outliving the attempt budget either way.
+
+    The probe hangs up without sending a byte. wlroots treats that as an
+    ordinary client disconnect during handshake and logs nothing.
+    """
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(WAYLAND_SOCKET_PROBE_TIMEOUT_S)
+            probe.connect(socket_path)
+    except OSError:
+        return False
+    return True
+
+
 def _wait_for_wayland_socket(deadline: float) -> None:
-    """Block until cage's Wayland socket exists, until ``deadline``
-    (a ``monotonic()`` timestamp).
+    """Block until cage's Wayland socket accepts connections, until
+    ``deadline`` (a ``monotonic()`` timestamp).
 
     No-op on non-cage boards (the env names no socket) and when the
-    socket is already up — the common case, returns at once.
+    compositor is already up — the common case, returns at once.
     ``deadline`` is the *shared* spawn-attempt budget, so this wait
     and the D-Bus handshake wait that follows together can't exceed
     ``startup_timeout``; a compositor that never returns falls through
     and the spawn fails the normal way rather than hanging the
     asset_loop thread.
+
+    Readiness is a connect, not a stat — see ``_wayland_socket_ready``
+    for why a socket that exists is not a socket that answers.
     """
     socket_path = _wayland_socket_path()
-    if socket_path is None or os.path.exists(socket_path):
+    if socket_path is None or _wayland_socket_ready(socket_path):
         return
     logger.warning(
-        'Wayland socket %s not present yet; waiting (within the spawn '
-        'budget) before launching the webview',
+        'Wayland socket %s not accepting connections yet; waiting '
+        '(within the spawn budget) before launching the webview',
         socket_path,
     )
     while monotonic() < deadline:
-        if os.path.exists(socket_path):
+        if _wayland_socket_ready(socket_path):
             return
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
     logger.warning(
-        'Wayland socket %s still absent; launching anyway (the launch '
-        'will fail and retry if cage is truly down)',
+        'Wayland socket %s still not answering; launching anyway (the '
+        'launch will fail and retry if cage is truly down)',
         socket_path,
     )
 
@@ -1053,6 +1102,44 @@ class _BoundedWebviewOutput:
         return joined[-self._maxlen :]
 
 
+def _describe_webview_exit(proc: Any) -> str:
+    """How a dead AnthiasViewer died, for the launch-failure message.
+
+    The captured stdout tail says what the process *printed*, which is
+    not the same as why it stopped. On Sentry ANTHIAS-D the tail ends on
+    Chromium's GPU probe ("Failed to create Vulkan instance: -9",
+    "Unable to detect GPU vendor.") and then simply stops — with no Qt
+    error and no handshake. From the message alone a fatal signal and
+    main()'s own ``return 1`` (which it takes when D-Bus registration
+    fails) are indistinguishable, and they need opposite fixes. The exit
+    status separates them, and it is the one fact we already have.
+
+    ``sh`` reports a signal death as a negative ``exit_code`` (the POSIX
+    ``-N`` convention), so map that back to the signal name. Called only
+    once ``is_alive()`` is False, where the status has been reaped and
+    the read does not block. Best-effort by construction: this runs on
+    the failure path, so it must never replace the launch error with one
+    of its own.
+    """
+    try:
+        raw = proc.exit_code
+        if raw is None:
+            return 'exit status unavailable'
+        code = int(raw)
+    except Exception:
+        # Anything unreadable or non-numeric — a not-yet-reaped status, a
+        # stubbed process object in tests — degrades to "unavailable"
+        # rather than masking the launch error with a TypeError.
+        logger.debug('Could not read AnthiasViewer exit status', exc_info=True)
+        return 'exit status unavailable'
+    if code < 0:
+        try:
+            return f'killed by {Signals(-code).name}'
+        except ValueError:
+            return f'killed by signal {-code}'
+    return f'exit code {code}'
+
+
 def _spawn_webview_once(startup_timeout: float) -> Any:
     """Spawn AnthiasViewer once and block until it registers on D-Bus.
 
@@ -1070,10 +1157,12 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     """
     global _webview_output
     deadline = monotonic() + startup_timeout
-    # On cage boards, don't race the Wayland socket — a spawn before
-    # it exists dies instantly with "Failed to create wl_display" and
-    # wastes a retry attempt (Sentry ANTHIAS-19). No-op elsewhere and
-    # when the socket is already up (the common case).
+    # On cage boards, don't race the Wayland socket — a spawn made
+    # before a compositor is listening on it dies instantly with
+    # "Failed to create wl_display" and wastes a retry attempt, whether
+    # the socket is missing (Sentry ANTHIAS-19) or is a stale inode left
+    # by a dead cage (Sentry ANTHIAS-1W). No-op elsewhere and when the
+    # compositor is already accepting (the common case).
     _wait_for_wayland_socket(deadline)
     # Bounded ``_out`` sink instead of sh's default: sh would otherwise
     # retain the process's entire stdout+stderr in RAM forever, and a
@@ -1115,7 +1204,8 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
             return candidate
         if not candidate.is_alive():
             raise WebviewLaunchError(
-                'AnthiasViewer exited before emitting D-Bus handshake; '
+                'AnthiasViewer exited before emitting D-Bus handshake '
+                f'({_describe_webview_exit(candidate)}); '
                 'stdout: ' + output.text()
             )
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
