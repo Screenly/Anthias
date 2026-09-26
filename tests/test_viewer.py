@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import os
+import socket as socket_module
 from collections.abc import Iterator
 from time import monotonic, sleep
 from typing import Any
@@ -269,6 +270,73 @@ def test_spawn_webview_once_raises_on_early_exit(
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
     browser_proc.terminate.assert_not_called()
+
+
+def test_spawn_webview_once_reports_a_signal_death(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """ANTHIAS-D: the webview dies silently after Chromium's GPU probe,
+    printing no Qt error. The launch failure must therefore name the exit
+    status — a fatal signal and main()'s own ``return 1`` look identical
+    in the stdout tail but need opposite fixes."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    browser_proc.exit_code = -11  # SIGSEGV, sh's POSIX -N convention
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(
+            viewer_fixtures.u.WebviewLaunchError, match='killed by SIGSEGV'
+        ):
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
+def test_spawn_webview_once_reports_a_clean_exit_code(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The other half of the same distinction: main() returning 1 (its
+    D-Bus registration failure path) reads as an exit code, not a
+    signal."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    browser_proc.exit_code = 1
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(
+            viewer_fixtures.u.WebviewLaunchError, match='exit code 1'
+        ):
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
+@pytest.mark.parametrize(
+    'exit_code',
+    [None, 'not-a-number', object()],
+    ids=['unreaped', 'garbage-string', 'opaque-object'],
+)
+def test_describe_webview_exit_degrades_instead_of_raising(
+    exit_code: Any,
+) -> None:
+    """The describer runs on the failure path, so an unreadable status
+    must never replace the real launch error with a TypeError of its
+    own."""
+    proc = mock.Mock()
+    proc.exit_code = exit_code
+    assert viewer._describe_webview_exit(proc) == 'exit status unavailable'
+
+
+def test_describe_webview_exit_handles_an_unnamed_signal() -> None:
+    """A signal number outside the platform's Signals enum still reads as
+    a signal rather than blowing up on the name lookup."""
+    proc = mock.Mock()
+    proc.exit_code = -99
+    assert viewer._describe_webview_exit(proc) == 'killed by signal 99'
 
 
 def test_spawn_webview_once_terminates_on_timeout(
@@ -2892,14 +2960,41 @@ class TestPublishDisplayResolutionOnce:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def wayland_listener() -> Iterator[Any]:
+    """Bind a real listening AF_UNIX socket on demand.
+
+    The readiness probe connects rather than stats, so these tests need
+    an actual listener — a regular file at the path is exactly the stale
+    -inode case the probe must now reject (ANTHIAS-1W).
+    """
+    listeners: list[Any] = []
+
+    def listen(path: Any) -> Any:
+        server = socket_module.socket(
+            socket_module.AF_UNIX, socket_module.SOCK_STREAM
+        )
+        server.bind(str(path))
+        server.listen(1)
+        listeners.append(server)
+        return server
+
+    try:
+        yield listen
+    finally:
+        for server in listeners:
+            server.close()
+
+
 class TestWaitForWaylandSocket:
     """The webview spawn must not race cage's Wayland socket — a spawn
-    before the socket exists dies with 'Failed to create wl_display'
-    and wastes a retry attempt (Sentry ANTHIAS-19). The gate is the
-    WAYLAND_DISPLAY env cage exports, NOT _is_wayland_board(): the wait
-    is needed on any board where cage actually ran, and keying it on the
-    concrete socket env keeps it correct regardless of how the board
-    helper classifies things."""
+    against a compositor that isn't accepting dies with 'Failed to
+    create wl_display' and wastes a retry attempt (Sentry ANTHIAS-19 for
+    the socket-absent race, ANTHIAS-1W for the stale-inode one). The
+    gate is the WAYLAND_DISPLAY env cage exports, NOT _is_wayland_board():
+    the wait is needed on any board where cage actually ran, and keying
+    it on the concrete socket env keeps it correct regardless of how the
+    board helper classifies things."""
 
     def test_no_op_when_no_socket_env(
         self, monkeypatch: pytest.MonkeyPatch
@@ -2912,16 +3007,87 @@ class TestWaitForWaylandSocket:
         viewer._wait_for_wayland_socket(monotonic() + 5)
         slept.assert_not_called()
 
-    def test_returns_immediately_when_socket_present(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    def test_returns_immediately_when_compositor_accepts(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+        wayland_listener: Any,
     ) -> None:
         monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
-        (tmp_path / 'wayland-1').write_text('')
+        wayland_listener(tmp_path / 'wayland-1')
         slept = mock.Mock()
         monkeypatch.setattr(viewer, 'sleep', slept)
         viewer._wait_for_wayland_socket(monotonic() + 5)
         slept.assert_not_called()
+
+    def test_waits_when_socket_exists_but_refuses(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # ANTHIAS-1W: cage died, its socket inode survived. The old
+        # os.path.exists() check saw a socket and let the spawn go, so
+        # every attempt died at once on ECONNREFUSED. Bind-then-close
+        # leaves exactly that: the path is a socket, nothing listens.
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+        stale = socket_module.socket(
+            socket_module.AF_UNIX, socket_module.SOCK_STREAM
+        )
+        stale.bind(str(tmp_path / 'wayland-1'))
+        stale.close()
+        assert (tmp_path / 'wayland-1').exists()
+        monkeypatch.setattr(viewer, 'sleep', lambda _s: None)
+        with caplog.at_level(logging.WARNING):
+            viewer._wait_for_wayland_socket(monotonic() - 1)
+        assert any(
+            'not accepting connections yet' in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_recovers_when_the_compositor_comes_back(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+        wayland_listener: Any,
+    ) -> None:
+        # The stale inode is replaced by a real listener (cage relaunching
+        # mid-playback). The wait must notice and let the spawn proceed
+        # instead of failing the attempt against the dead socket.
+        path = tmp_path / 'wayland-1'
+        stale = socket_module.socket(
+            socket_module.AF_UNIX, socket_module.SOCK_STREAM
+        )
+        stale.bind(str(path))
+        stale.close()
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
+
+        calls = {'n': 0}
+
+        def fake_sleep(_seconds: float) -> None:
+            calls['n'] += 1
+            if calls['n'] == 2:
+                path.unlink()
+                wayland_listener(path)
+
+        monkeypatch.setattr(viewer, 'sleep', fake_sleep)
+        viewer._wait_for_wayland_socket(monotonic() + 100)
+        assert calls['n'] == 2
+
+    def test_probe_rejects_a_non_socket_at_the_path(
+        self, tmp_path: Any
+    ) -> None:
+        # A leftover regular file is ENOTSOCK, not a compositor.
+        (tmp_path / 'wayland-1').write_text('')
+        assert viewer._wayland_socket_ready(str(tmp_path / 'wayland-1')) is (
+            False
+        )
+
+    def test_probe_rejects_a_missing_path(self, tmp_path: Any) -> None:
+        assert viewer._wayland_socket_ready(str(tmp_path / 'nope')) is False
 
     def test_fires_via_env_not_board_helper(
         self,
@@ -2946,27 +3112,33 @@ class TestWaitForWaylandSocket:
             # pre-loop "not present yet" warning still fires iff the wait
             # was entered (i.e. not board-skipped).
             viewer._wait_for_wayland_socket(monotonic() - 1)
-        assert any('not present yet' in r.getMessage() for r in caplog.records)
+        assert any(
+            'not accepting connections yet' in r.getMessage()
+            for r in caplog.records
+        )
 
     def test_waits_then_proceeds_when_socket_appears(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+        wayland_listener: Any,
     ) -> None:
         monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
-        socket = tmp_path / 'wayland-1'
+        path = tmp_path / 'wayland-1'
 
-        # The socket shows up after the second poll.
+        # cage binds and starts listening after the second poll.
         calls = {'n': 0}
 
         def fake_sleep(_seconds: float) -> None:
             calls['n'] += 1
-            if calls['n'] >= 2:
-                socket.write_text('')
+            if calls['n'] == 2:
+                wayland_listener(path)
 
         monkeypatch.setattr(viewer, 'sleep', fake_sleep)
         viewer._wait_for_wayland_socket(monotonic() + 100)
-        assert socket.exists()
-        assert calls['n'] >= 2
+        assert path.exists()
+        assert calls['n'] == 2
 
     def test_bounded_when_socket_never_appears(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
