@@ -877,6 +877,18 @@ BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS = 10
 BROWSER_POLL_INTERVAL_SECONDS = 0.25
 # Grace period to let a SIGTERM'd webview exit before we SIGKILL it.
 BROWSER_TERMINATE_GRACE_SECONDS = 3
+# Cap on the Wayland readiness probe's connect(). A unix-domain connect
+# to a live listener returns immediately, so this only bounds the
+# pathological case (a compositor wedged with a full accept backlog)
+# and keeps the probe well inside one BROWSER_POLL_INTERVAL_SECONDS
+# tick of the spawn budget it shares.
+WAYLAND_SOCKET_PROBE_TIMEOUT_SECONDS = 0.2
+# Bounds on the post-mortem drain of a dead webview's output. sh feeds
+# the ``_out`` sink from its own reader thread, so the tail of a crash
+# can still be in flight at the moment ``is_alive()`` flips — see
+# ``_drain_webview_output``.
+WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS = 1.0
+WEBVIEW_OUTPUT_DRAIN_POLL_SECONDS = 0.05
 
 
 class WebviewLaunchError(RuntimeError):
@@ -1004,9 +1016,48 @@ def _wayland_socket_path() -> str | None:
     return os.path.join(runtime_dir, wayland_display)
 
 
+def _wayland_socket_ready(socket_path: str) -> bool:
+    """True when cage is actually *listening* on ``socket_path``.
+
+    Existence is not readiness. When cage dies or is restarting it
+    leaves its socket inode behind, and a spawn against that stale
+    path dies instantly with ``Failed to create wl_display (Connection
+    refused)`` — ``connect(2)`` finding nothing bound, as opposed to
+    ``No such file or directory`` when the path is genuinely absent.
+    An ``os.path.exists`` probe cannot tell the two apart, so the
+    ANTHIAS-19 wait returned at once and the whole retry budget burned
+    against a compositor that was seconds away from coming back
+    (Sentry ANTHIAS-1W).
+
+    Deliberately conservative — only ``ECONNREFUSED`` and the absent
+    path count as "not ready". Any other error means we cannot tell (a
+    permissions-restricted socket answering ``EACCES``, a path the
+    kernel rejects outright), and blocking the spawn on a probe we do
+    not understand would be worse than the race it guards: those report
+    ready and let the launch proceed exactly as before.
+
+    Note Linux answers ``ECONNREFUSED`` — not ``ENOTSOCK`` — for a
+    regular file at ``socket_path``, so a non-socket there is waited
+    out like a stale one. That is the right call for the real
+    deployment (nothing but cage ever writes this path) and it is why
+    the tests bind actual unix sockets rather than touching files.
+    """
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.settimeout(WAYLAND_SOCKET_PROBE_TIMEOUT_SECONDS)
+        probe.connect(socket_path)
+    except (FileNotFoundError, ConnectionRefusedError):
+        return False
+    except OSError:
+        return True
+    finally:
+        probe.close()
+    return True
+
+
 def _wait_for_wayland_socket(deadline: float) -> None:
-    """Block until cage's Wayland socket exists, until ``deadline``
-    (a ``monotonic()`` timestamp).
+    """Block until cage's Wayland socket accepts a connection, until
+    ``deadline`` (a ``monotonic()`` timestamp).
 
     No-op on non-cage boards (the env names no socket) and when the
     socket is already up — the common case, returns at once.
@@ -1015,22 +1066,26 @@ def _wait_for_wayland_socket(deadline: float) -> None:
     ``startup_timeout``; a compositor that never returns falls through
     and the spawn fails the normal way rather than hanging the
     asset_loop thread.
+
+    Readiness is a ``connect()``, not an ``os.path.exists`` — see
+    ``_wayland_socket_ready`` for why a stale socket left by a dying
+    cage otherwise sails straight through this gate.
     """
     socket_path = _wayland_socket_path()
-    if socket_path is None or os.path.exists(socket_path):
+    if socket_path is None or _wayland_socket_ready(socket_path):
         return
     logger.warning(
-        'Wayland socket %s not present yet; waiting (within the spawn '
-        'budget) before launching the webview',
+        'Wayland socket %s not accepting connections yet; waiting '
+        '(within the spawn budget) before launching the webview',
         socket_path,
     )
     while monotonic() < deadline:
-        if os.path.exists(socket_path):
+        if _wayland_socket_ready(socket_path):
             return
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
     logger.warning(
-        'Wayland socket %s still absent; launching anyway (the launch '
-        'will fail and retry if cage is truly down)',
+        'Wayland socket %s still not accepting connections; launching '
+        'anyway (the launch will fail and retry if cage is truly down)',
         socket_path,
     )
 
@@ -1174,6 +1229,35 @@ class _BoundedWebviewOutput:
         return joined[-self._maxlen :]
 
 
+def _drain_webview_output(output: _BoundedWebviewOutput) -> str:
+    """Return the dead webview's output once sh has finished feeding it.
+
+    ``candidate.is_alive()`` flips as soon as the child is reaped, but
+    sh delivers that child's stdout on a *separate* reader thread. Read
+    the sink at that instant and the last chunks — the ones carrying
+    the actual fatal message — are still in flight, so the
+    ``WebviewLaunchError`` we raise (and ship to Sentry) can carry only
+    the benign warnings Qt printed seconds earlier. That is exactly the
+    shape of Sentry ANTHIAS-D, whose 1318 reports end on locale and
+    Vulkan chatter and never name what killed the process.
+
+    Poll until the sink stops growing, bounded by
+    ``WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS`` so a still-streaming
+    orphan cannot stall the retry loop (or the asset_loop thread the
+    inline respawn runs on). The common case — nothing left to flush —
+    costs a single poll interval.
+    """
+    deadline = monotonic() + WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS
+    text = output.text()
+    while monotonic() < deadline:
+        sleep(WEBVIEW_OUTPUT_DRAIN_POLL_SECONDS)
+        settled = output.text()
+        if settled == text:
+            return settled
+        text = settled
+    return text
+
+
 def _spawn_webview_once(startup_timeout: float) -> Any:
     """Spawn AnthiasViewer once and block until it registers on D-Bus.
 
@@ -1235,14 +1319,16 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
         if BROWSER_HANDSHAKE_LINE in output.text():
             return candidate
         if not candidate.is_alive():
-            # Reap first: this both drains the output sh has not handed
-            # to the sink yet (the crash tail) and settles the exit
-            # status, so the message below carries BOTH halves of the
-            # diagnosis rather than whatever happened to be flushed.
+            # Reap first: the OProc-level wait() joins sh's reader
+            # thread, so the crash tail is guaranteed to have landed —
+            # and it settles the exit status, so the message carries
+            # BOTH halves of the diagnosis (ANTHIAS-D). The drain below
+            # then costs a single settled poll; keep it so the flush is
+            # still guarded if this call site ever stops reaping.
             status = _reap_webview_exit(candidate)
             raise WebviewLaunchError(
                 'AnthiasViewer exited before emitting D-Bus handshake '
-                f'({status}); stdout: ' + output.text()
+                f'({status}); stdout: ' + _drain_webview_output(output)
             )
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
 
