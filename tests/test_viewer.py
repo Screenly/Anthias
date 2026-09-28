@@ -291,6 +291,71 @@ def test_spawn_webview_once_raises_on_early_exit(
     browser_proc.terminate.assert_not_called()
 
 
+def test_spawn_webview_once_reports_a_signal_death(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Sentry ANTHIAS-D: AnthiasViewer dies mid-GPU-probe printing no Qt
+    error, so the launch failure must name the exit status — a fatal
+    signal and main()'s own ``return 1`` are otherwise identical in the
+    message and point at opposite fixes."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    browser_proc.exit_code = -11  # SIGSEGV, sh's POSIX -N convention
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(
+            viewer_fixtures.u.WebviewLaunchError, match='killed by SIGSEGV'
+        ):
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
+def test_spawn_webview_once_reports_a_clean_exit_code(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The other half of the same distinction: a viewer that chose to
+    exit (main()'s D-Bus registration failure path) reads as an exit
+    code, not a signal."""
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    browser_proc.exit_code = 1
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(
+            viewer_fixtures.u.WebviewLaunchError, match='exit code 1'
+        ):
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+
+@pytest.mark.parametrize(
+    'exit_code',
+    [None, 'not-a-number', mock.Mock()],
+)
+def test_describe_webview_exit_degrades_instead_of_raising(
+    exit_code: Any,
+) -> None:
+    """This runs on the failure path — an unreadable status must never
+    replace the launch error with an error of its own."""
+    proc = mock.Mock()
+    proc.exit_code = exit_code
+    assert viewer._describe_webview_exit(proc) == 'exit status unavailable'
+
+
+def test_describe_webview_exit_handles_an_unnamed_signal() -> None:
+    """A signal number outside the platform's Signals enum still reads as
+    a signal rather than blowing up on the name lookup."""
+    proc = mock.Mock()
+    proc.exit_code = -99
+    assert viewer._describe_webview_exit(proc) == 'killed by signal 99'
+
+
 def test_spawn_webview_once_drains_output_before_reporting(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
