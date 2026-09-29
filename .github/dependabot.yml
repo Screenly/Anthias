@@ -13,6 +13,14 @@ updates:
       bun:
         patterns:
           - "*"
+    # htmx 4 renames the event surface the templates are built on.
+    # `hx-on::after-request` and `event.detail.successful` drive the
+    # `asset-saved` / `bulk-done` CustomEvents that reset Alpine state, so
+    # a major bump silently stops the modals from closing. Minor and patch
+    # updates still come through; take 4.x as a deliberate migration.
+    ignore:
+      - dependency-name: "htmx.org"
+        update-types: ["version-update:semver-major"]
   # "uv", not "pip": the pip ecosystem reads the PEP 621 pins in
   # pyproject.toml but has no concept of uv.lock, so it opened PRs that
   # bumped the pin and left the lockfile on the old version. The uv
