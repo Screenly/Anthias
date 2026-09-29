@@ -2157,6 +2157,8 @@ def test_skip_buttons_publish_correct_command(
     silently no-op'd in production despite returning a clean 302."""
     import redis as _redis
 
+    from anthias_common.utils import redis_host
+
     Asset.objects.create(**asset_active)
 
     # Subscribe to the viewer channel BEFORE clicking. Using a
@@ -2167,7 +2169,7 @@ def test_skip_buttons_publish_correct_command(
     # get_message / unsubscribe on the PubSub class (matches the
     # workaround in src/anthias_viewer/messaging.py).
     client: Any = _redis.Redis(
-        host='redis', port=6379, db=0, decode_responses=True
+        host=redis_host(), port=6379, db=0, decode_responses=True
     )
     sub: Any = client.pubsub()
     try:
