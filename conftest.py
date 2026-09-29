@@ -44,7 +44,7 @@ import importlib.util
 import os
 import sys
 import types
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -238,9 +238,16 @@ def _make_fake_redis() -> MagicMock:
 # fake the moment those modules are first imported.
 _SESSION_FAKE_REDIS = _make_fake_redis()
 
+# The real connect_to_redis(), kept before the patch below replaces it, so
+# a test can still check what it passes to ``redis.Redis``.
+_REAL_CONNECT_TO_REDIS: Callable[..., Any] | None = None
+
 
 def _patch_connect_to_redis() -> None:
     import anthias_common.utils as _lib_utils
+
+    global _REAL_CONNECT_TO_REDIS
+    _REAL_CONNECT_TO_REDIS = _lib_utils.connect_to_redis
 
     # Swallows the connection overrides a caller may pass (see
     # ``lib.system_logs._reply_connection``, which widens the socket
@@ -339,6 +346,14 @@ def pytest_collection_modifyitems(
     """
     if any('integration' in item.keywords for item in items):
         os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = '1'
+
+
+@pytest.fixture
+def real_connect_to_redis() -> Callable[..., Any]:
+    """The unpatched ``anthias_common.utils.connect_to_redis``."""
+    if _REAL_CONNECT_TO_REDIS is None:
+        pytest.skip('app stack not importable')
+    return _REAL_CONNECT_TO_REDIS
 
 
 @pytest.fixture(autouse=True)
