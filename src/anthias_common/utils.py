@@ -231,6 +231,8 @@ def get_node_ip() -> str:
       set_ip_addresses`` to trigger a refresh, waits up to ~80s
       (60s ``host_agent_ready`` + 20s ``ip_addresses_ready``) for
       host_agent to populate the cache, then reads ``ip_addresses``.
+      When the host agent is not ready after the first wait, it cannot
+      publish the addresses either, so the second wait is skipped.
     """
 
     if is_balena_app():
@@ -242,6 +244,7 @@ def get_node_ip() -> str:
         r = connect_to_redis()
         max_retries = 60
         retries = 0
+        host_agent_ready = True
 
         while True:
             environment = getenv('ENVIRONMENT', None)
@@ -255,35 +258,45 @@ def get_node_ip() -> str:
 
             if retries >= max_retries:
                 logger.info(
-                    'host_agent_service is not ready after %d retries',
+                    'host_agent_service is not ready after %d retries: '
+                    'the host agent is not running, so the IP addresses '
+                    'cannot be refreshed',
                     max_retries,
                 )
+                host_agent_ready = False
                 break
 
             retries += 1
             sleep(1)
 
-        r.publish('hostcmd', 'set_ip_addresses')
+        # Without host agent, nobody would publish the IP addresses: skip
+        # the second wait and fall back on the last cached addresses.
+        if host_agent_ready:
+            r.publish('hostcmd', 'set_ip_addresses')
 
-        try:
-            for attempt in Retrying(
-                stop=stop_after_attempt(20),
-                wait=wait_fixed(1),
-            ):
-                environment = getenv('ENVIRONMENT', None)
-                if environment in ['development', 'test']:
-                    break
-
-                with attempt:
-                    ip_addresses_ready = r.get('ip_addresses_ready') or 'false'
-                    if json.loads(ip_addresses_ready):
+            try:
+                for attempt in Retrying(
+                    stop=stop_after_attempt(20),
+                    wait=wait_fixed(1),
+                ):
+                    environment = getenv('ENVIRONMENT', None)
+                    if environment in ['development', 'test']:
                         break
-                    else:
-                        raise RuntimeError(
-                            'Internet connection is not available.'
+
+                    with attempt:
+                        ip_addresses_ready = (
+                            r.get('ip_addresses_ready') or 'false'
                         )
-        except RetryError:
-            logger.warning('Internet connection is not available. ')
+                        if json.loads(ip_addresses_ready):
+                            break
+                        else:
+                            raise RuntimeError(
+                                'The host agent did not publish the IP addresses.'
+                            )
+            except RetryError:
+                logger.warning(
+                    'The host agent did not publish the IP addresses.'
+                )
 
         ip_addresses = r.get('ip_addresses')
 
