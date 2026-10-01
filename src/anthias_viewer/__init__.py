@@ -8,7 +8,7 @@ from collections import deque
 from collections.abc import Callable
 from glob import glob
 from os import getenv, path
-from signal import SIGALRM, signal
+from signal import SIGALRM, Signals, signal
 from threading import Lock
 from time import monotonic, sleep, time
 from typing import Any
@@ -1109,6 +1109,44 @@ class _BoundedWebviewOutput:
         return joined[-self._maxlen :]
 
 
+def _describe_webview_exit(proc: Any) -> str:
+    """How a dead AnthiasViewer died, for the launch-failure message.
+
+    The captured stdout tail says what the process *printed*, which is
+    not the same as why it stopped. On Sentry ANTHIAS-D the tail ends on
+    Chromium's GPU probe ("Failed to create Vulkan instance: -9",
+    "Unable to detect GPU vendor.") and then simply stops — with no Qt
+    error and no handshake. From the message alone a fatal signal and
+    main()'s own ``return 1`` (which it takes when D-Bus registration
+    fails) are indistinguishable, and they need opposite fixes. The exit
+    status separates them, and it is the one fact we already have.
+
+    ``sh`` reports a signal death as a negative ``exit_code`` (the POSIX
+    ``-N`` convention), so map that back to the signal name. Called only
+    once ``is_alive()`` is False, where the status has been reaped and
+    the read does not block. Best-effort by construction: this runs on
+    the failure path, so it must never replace the launch error with one
+    of its own.
+    """
+    try:
+        raw = proc.exit_code
+        if raw is None:
+            return 'exit status unavailable'
+        code = int(raw)
+    except Exception:
+        # Anything unreadable or non-numeric — a not-yet-reaped status, a
+        # stubbed process object in tests — degrades to "unavailable"
+        # rather than masking the launch error with a TypeError.
+        logger.debug('Could not read AnthiasViewer exit status', exc_info=True)
+        return 'exit status unavailable'
+    if code < 0:
+        try:
+            return f'killed by {Signals(-code).name}'
+        except ValueError:
+            return f'killed by signal {-code}'
+    return f'exit code {code}'
+
+
 def _drain_webview_output(output: _BoundedWebviewOutput) -> str:
     """Return the dead webview's output once sh has finished feeding it.
 
@@ -1201,9 +1239,11 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
         if not candidate.is_alive():
             # Let sh's reader thread finish flushing before we quote the
             # output — the crash tail is the whole diagnostic value of
-            # this message (ANTHIAS-D).
+            # this message (ANTHIAS-D) — and name the exit status, which
+            # the tail alone cannot give us.
             raise WebviewLaunchError(
-                'AnthiasViewer exited before emitting D-Bus handshake; '
+                'AnthiasViewer exited before emitting D-Bus handshake '
+                f'({_describe_webview_exit(candidate)}); '
                 'stdout: ' + _drain_webview_output(output)
             )
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
