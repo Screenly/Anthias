@@ -3,41 +3,104 @@
 #include <QDebug>
 #include <QtDBus>
 
-#ifdef ANTHIAS_GSTREAMER
 #include <csignal>
-#include <execinfo.h>
+#include <cstddef>
 #include <unistd.h>
+
+// backtrace() / backtrace_symbols_fd() are glibc extensions. Every image
+// we ship is Debian-based, so this is always taken in practice; the
+// guard is here so the file still compiles if the webview is ever built
+// against a libc without <execinfo.h>, with the handler degrading to
+// naming the signal.
+#if defined(__GLIBC__)
+#include <execinfo.h>
+#define ANTHIAS_HAVE_BACKTRACE 1
 #endif
 
 #include "mainwindow.h"
 
 namespace {
-#ifdef ANTHIAS_GSTREAMER
-// Fatal-signal backtrace. Scoped to the pi3-64 build (the only one that
-// links the GStreamer overlay path): VideoView + kmssink on eglfs's DRM
-// fd segfaulted silently while it was being brought up — the kernel
-// killed the process and docker logs showed only the respawn. Dumping a
-// backtrace to stderr (captured by the start_viewer wrapper) pins the
-// crash frame. Re-raises with the default handler so the core dump / exit
-// status are unchanged and the Python supervisor still respawns as
-// before. Other boards keep the default crash behaviour untouched.
+// Fatal-signal backtrace, installed on every board.
+//
+// AnthiasViewer can die before its D-Bus handshake with nothing on
+// stdout but Qt's benign locale/Vulkan startup chatter. The Python
+// supervisor then reports a launch failure that names no cause at all —
+// the shape of Sentry ANTHIAS-D, 1318 reports deep and still
+// unexplained after three passes at the supervisor's own reporting.
+// The supervisor spawns us with stderr merged into the stdout it
+// captures and ships, so a backtrace written here reaches that report
+// and names the frame that killed us.
+//
+// This was previously scoped to the pi3-64 build (the only one that
+// links the GStreamer overlay path), where VideoView + kmssink on
+// eglfs's DRM fd segfaulted silently while it was being brought up and
+// docker logs showed only the respawn. That blind spot is not specific
+// to pi3-64 — it is the same one ANTHIAS-D sits in on pi5 — so the
+// handler is no longer gated on the build. Re-raises with the default
+// handler, so the exit status, core dump and the supervisor's respawn
+// behaviour are all unchanged.
+
+// Signal name as a bare string literal. Formatting a number is not
+// async-signal-safe, so a signal outside this set is simply left
+// unnamed rather than rendered; the re-raise preserves the number in
+// the exit status either way (and the supervisor reports it — #3361).
+const char* fatalSignalName(int sig)
+{
+    switch (sig) {
+    case SIGSEGV:
+        return "SIGSEGV";
+    case SIGABRT:
+        return "SIGABRT";
+    case SIGBUS:
+        return "SIGBUS";
+    case SIGFPE:
+        return "SIGFPE";
+    default:
+        return nullptr;
+    }
+}
+
+// write(2) is async-signal-safe; strlen() is not formally guaranteed to
+// be, so the length is counted inline. Best-effort — losing part of the
+// diagnostic to a short write or a closed stderr is not something a
+// fatal handler can do anything safer about.
+void writeToStderr(const char* text)
+{
+    size_t remaining = 0;
+    while (text[remaining] != '\0') {
+        ++remaining;
+    }
+    while (remaining > 0) {
+        const ssize_t written = write(STDERR_FILENO, text, remaining);
+        if (written <= 0) {
+            return;
+        }
+        text += written;
+        remaining -= static_cast<size_t>(written);
+    }
+}
+
 void anthiasCrashHandler(int sig)
 {
-    // Best-effort, kept as close to async-signal-safe as practical:
-    // write() is AS-safe; backtrace()/backtrace_symbols_fd() are glibc
-    // extensions that avoid malloc/stdio (unlike backtrace_symbols /
-    // fprintf) but are not formally guaranteed AS-safe — acceptable for a
-    // last-gasp diagnostic. The signal number is omitted from the header
-    // (formatting it isn't AS-safe); the re-raise below preserves it in
-    // the exit status / core dump.
+    // Kept as close to async-signal-safe as practical: write() is
+    // AS-safe; backtrace()/backtrace_symbols_fd() are glibc extensions
+    // that avoid malloc/stdio (unlike backtrace_symbols / fprintf) but
+    // are not formally guaranteed AS-safe — acceptable for a last-gasp
+    // diagnostic.
+    writeToStderr("\n=== AnthiasViewer FATAL signal");
+    const char* name = fatalSignalName(sig);
+    if (name != nullptr) {
+        writeToStderr(" ");
+        writeToStderr(name);
+    }
+    writeToStderr(" — backtrace ===\n");
+#ifdef ANTHIAS_HAVE_BACKTRACE
     void* frames[64];
     const int count = backtrace(frames, 64);
-    static const char hdr[] =
-        "\n=== AnthiasViewer FATAL signal — backtrace ===\n";
-    if (write(STDERR_FILENO, hdr, sizeof(hdr) - 1) < 0) {
-        // Nothing safe to do if stderr is gone; fall through to re-raise.
-    }
     backtrace_symbols_fd(frames, count, STDERR_FILENO);
+#else
+    writeToStderr("(backtrace unavailable: no <execinfo.h> in this libc)\n");
+#endif
     // SA_RESETHAND (below) already restored the default disposition, so
     // re-raising re-runs the default handler (core dump / exit) without an
     // async-signal-unsafe signal() call here.
@@ -58,11 +121,6 @@ void installCrashHandler()
     sigaction(SIGBUS, &sa, nullptr);
     sigaction(SIGFPE, &sa, nullptr);
 }
-#else
-// No-op on non-pi3-64 builds — leave the platform default crash handling
-// (core dumps) in place.
-void installCrashHandler() {}
-#endif
 
 // Realise the operator's "Prefer dark mode" setting. The Python viewer
 // plumbs the Django setting in via the ANTHIAS_PREFER_DARK_MODE env var
