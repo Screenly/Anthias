@@ -8,7 +8,7 @@ from collections import deque
 from collections.abc import Callable
 from glob import glob
 from os import getenv, path
-from signal import SIGALRM, signal
+from signal import SIGALRM, SIGKILL, SIGTERM, signal
 from threading import Lock
 from time import monotonic, sleep, time
 from typing import Any
@@ -890,6 +890,15 @@ WAYLAND_SOCKET_PROBE_TIMEOUT_SECONDS = 0.2
 WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS = 1.0
 WEBVIEW_OUTPUT_DRAIN_POLL_SECONDS = 0.05
 
+# The well-known bus name AnthiasViewer registers on the session bus.
+# Must stay in lockstep with registerService("anthias.viewer") in
+# src/anthias_webview/src/main.cpp.
+WEBVIEW_DBUS_NAME = 'anthias.viewer'
+# Bound on clearing a stale owner of that name before a spawn. Covers
+# both signals, and is itself clamped by the attempt's own deadline, so
+# the inline (asset_loop) respawn budget still holds.
+WEBVIEW_NAME_RECLAIM_TIMEOUT_SECONDS = 5.0
+
 
 class WebviewLaunchError(RuntimeError):
     """A single AnthiasViewer launch exited or never handshook.
@@ -908,29 +917,143 @@ class WebviewBinaryMissingError(WebviewLaunchError):
     """
 
 
-def _terminate_webview(proc: Any) -> None:
+def _wait_for_webview_exit(proc: Any) -> bool:
+    """Poll ``proc`` for up to ``BROWSER_TERMINATE_GRACE_SECONDS``.
+
+    True as soon as it is gone, False if it outlived the grace window.
+    """
+    deadline = monotonic() + BROWSER_TERMINATE_GRACE_SECONDS
+    while monotonic() < deadline:
+        if not proc.is_alive():
+            return True
+        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    return False
+
+
+def _terminate_webview(proc: Any) -> bool:
     """Best-effort: stop an AnthiasViewer process and confirm it's gone.
 
     SIGTERM, wait up to ``BROWSER_TERMINATE_GRACE_SECONDS``, then SIGKILL
-    if still alive. Reaping before a retry matters so the old process has
+    and wait again. Reaping before a retry matters so the old process has
     released the framebuffer and the ``anthias.viewer`` D-Bus name before
     the next one starts — otherwise the retry contends with a zombie and
-    times out too. Never raises.
+    times out too. Never raises; returns whether the process is
+    confirmed gone.
+
+    Both waits are load-bearing, and neither used to be complete:
+
+    * A raising ``terminate()`` used to return here, skipping SIGKILL
+      entirely. ``sh`` signals with a bare ``os.kill``, so the usual
+      raise is ``ProcessLookupError`` on an already-reaped process —
+      harmless — but any other failure means the SIGTERM never landed,
+      and returning then leaves a live AnthiasViewer still owning
+      ``anthias.viewer``. Fall through to SIGKILL instead; it costs one
+      extra poll on the already-dead case.
+    * SIGKILL used to be fire-and-forget. The signal is immediate for
+      the kernel, but the name is not released until the process is torn
+      down and sh's background thread reaps it, so confirm rather than
+      assume — the next spawn starts the moment we return.
     """
     try:
         proc.terminate()
     except Exception:
         logger.debug('Could not SIGTERM AnthiasViewer', exc_info=True)
-        return
-    deadline = monotonic() + BROWSER_TERMINATE_GRACE_SECONDS
-    while monotonic() < deadline:
-        if not proc.is_alive():
-            return
-        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    else:
+        if _wait_for_webview_exit(proc):
+            return True
     try:
         proc.kill()
     except Exception:
         logger.debug('Could not SIGKILL AnthiasViewer', exc_info=True)
+    if _wait_for_webview_exit(proc):
+        return True
+    logger.warning(
+        'AnthiasViewer is still alive %gs after SIGKILL; the next spawn '
+        'may collide with it over the %s D-Bus name.',
+        BROWSER_TERMINATE_GRACE_SECONDS,
+        WEBVIEW_DBUS_NAME,
+    )
+    return False
+
+
+def _webview_name_owner_pid() -> int | None:
+    """PID owning ``anthias.viewer`` on our session bus, or ``None``.
+
+    The viewer's bus is private — ``start_viewer.sh`` launches the whole
+    Python process under ``dbus-run-session`` — so the only thing that
+    can ever own this name is an AnthiasViewer *we* spawned.
+
+    ``None`` on any failure, including a bus we cannot reach. That keeps
+    this strictly an optimisation: a viewer that cannot introspect the
+    bus spawns exactly as it did before.
+    """
+    try:
+        dbus = pydbus.SessionBus().get('.DBus')
+        if not dbus.NameHasOwner(WEBVIEW_DBUS_NAME):
+            return None
+        return int(
+            dbus.GetConnectionUnixProcessID(
+                dbus.GetNameOwner(WEBVIEW_DBUS_NAME)
+            )
+        )
+    except Exception:
+        logger.debug(
+            'Could not read the %s D-Bus name owner',
+            WEBVIEW_DBUS_NAME,
+            exc_info=True,
+        )
+        return None
+
+
+def _reclaim_webview_dbus_name(deadline: float) -> bool:
+    """Make sure nothing owns ``anthias.viewer`` before we spawn.
+
+    A leftover owner is not a transient the retry loop can outlast: Qt's
+    ``registerService`` fails the moment the name is taken, main()
+    returns 1, and *every* remaining attempt dies the same way about
+    half a second in. On the startup budget that is 30 identical
+    failures — ~6.5 min of black screen — against a condition one bus
+    call detects. Measured on a Pi 5 (2026-10-02): the colliding spawn
+    dies in 0.509s having printed nothing but Qt's locale/Vulkan
+    boilerplate, which is the undiagnosable shape of Sentry ANTHIAS-D.
+
+    Reclaiming is safe because ``load_browser`` has already dropped its
+    handle (``browser = None``) by the time we get here, so an owner at
+    this point is by definition an orphan nobody is tracking — from an
+    earlier attempt in this same process that outlived its
+    ``_terminate_webview``.
+
+    Returns whether the name is free. Bounded by both
+    ``WEBVIEW_NAME_RECLAIM_TIMEOUT_SECONDS`` and the attempt's own
+    ``deadline``, so the inline respawn can't stall the asset_loop
+    thread.
+    """
+    pid = _webview_name_owner_pid()
+    if pid is None:
+        return True
+    logger.warning(
+        'A previous AnthiasViewer (pid %d) still owns the %s D-Bus name; '
+        'reclaiming it so this spawn is not refused.',
+        pid,
+        WEBVIEW_DBUS_NAME,
+    )
+    budget = min(deadline, monotonic() + WEBVIEW_NAME_RECLAIM_TIMEOUT_SECONDS)
+    signals = (
+        (SIGTERM, min(budget, monotonic() + BROWSER_TERMINATE_GRACE_SECONDS)),
+        (SIGKILL, budget),
+    )
+    for sig, until in signals:
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            # Already gone — but the bus may not have processed the
+            # disconnect yet, so still wait for the name itself.
+            logger.debug('Could not signal pid %d', pid, exc_info=True)
+        while monotonic() < until:
+            if _webview_name_owner_pid() is None:
+                return True
+            sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    return _webview_name_owner_pid() is None
 
 
 def _wayland_socket_path() -> str | None:
@@ -1143,15 +1266,16 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
 
     Returns the live ``sh`` background command on success. Raises
     ``WebviewBinaryMissingError`` (permanent) if the binary is absent, or
-    ``WebviewLaunchError`` (retry-worthy) if the process exits before the
-    handshake or fails to emit it within ``startup_timeout``. The matched
-    string must stay in lockstep with ``qInfo() << "Anthias service
-    start"`` in src/anthias_webview/src/main.cpp.
+    ``WebviewLaunchError`` (retry-worthy) if the ``anthias.viewer`` name
+    cannot be reclaimed, or if the process exits before the handshake or
+    fails to emit it within ``startup_timeout``. The matched string must
+    stay in lockstep with ``qInfo() << "Anthias service start"`` in
+    src/anthias_webview/src/main.cpp.
 
     ``startup_timeout`` is the total budget for the attempt: on a cage
-    board one shared deadline covers both the wait for the Wayland
-    socket and the handshake, so the socket wait can't pile on top of
-    ``startup_timeout``.
+    board one shared deadline covers the wait for the Wayland socket,
+    the D-Bus name reclaim and the handshake, so they can't pile on top
+    of ``startup_timeout``.
     """
     global _webview_output
     deadline = monotonic() + startup_timeout
@@ -1160,6 +1284,21 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     # wastes a retry attempt (Sentry ANTHIAS-19). No-op elsewhere and
     # when the socket is already up (the common case).
     _wait_for_wayland_socket(deadline)
+    # Same shape of guard for the other precondition a spawn silently
+    # needs: an unowned ``anthias.viewer``. Normally free (one bus
+    # call), and when it isn't, clearing it here is the difference
+    # between one recovered attempt and thirty identical failures.
+    if not _reclaim_webview_dbus_name(deadline):
+        # Deliberately retry-worthy rather than fatal: a process that
+        # outlived SIGKILL for this window was most likely uninterruptible
+        # for a moment, and the next attempt reclaims again. The point is
+        # that the failure now says so instead of arriving as Qt
+        # boilerplate with an empty D-Bus error behind it.
+        raise WebviewLaunchError(
+            f'Another AnthiasViewer still owns the {WEBVIEW_DBUS_NAME} '
+            'D-Bus name and did not exit when signalled; a spawn now '
+            'would be refused registration and exit immediately.'
+        )
     # Bounded ``_out`` sink instead of sh's default: sh would otherwise
     # retain the process's entire stdout+stderr in RAM forever, and a
     # chatty decoder then leaks the viewer to death on a low-memory board

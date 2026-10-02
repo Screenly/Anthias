@@ -4,6 +4,7 @@ import logging
 import os
 import socket
 from collections.abc import Iterator
+from signal import SIGKILL, SIGTERM
 from time import monotonic, sleep
 from typing import Any
 from unittest import mock
@@ -67,6 +68,12 @@ def viewer_fixtures(
     # wait is a no-op. The dedicated _wait_for_wayland_socket tests set
     # their own env and don't use this fixture.
     monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
+    # Same hermeticity for the other precondition _spawn_webview_once
+    # checks: whoever owns anthias.viewer on whatever session bus the
+    # test host happens to have is none of these tests' business, and
+    # on a host running a real Anthias it would be a live process.
+    # The dedicated reclaim tests patch this themselves.
+    monkeypatch.setattr(viewer, '_webview_name_owner_pid', lambda: None)
     fixtures = _ViewerFixtures()
     original_splash_delay = viewer.SPLASH_DELAY
     viewer.SPLASH_DELAY = 0
@@ -377,6 +384,169 @@ def test_spawn_webview_once_terminates_on_timeout(
         viewer_fixtures.p_sleep.stop()
         viewer_fixtures.p_cmd.stop()
     browser_proc.terminate.assert_called_once()
+
+
+def test_terminate_webview_sigkills_when_sigterm_raises(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A SIGTERM that does not land must not skip the SIGKILL.
+
+    ``sh`` signals with a bare ``os.kill``, so terminate() raises on
+    anything from an already-reaped pid to a permission failure. The
+    old code returned there, leaving a live AnthiasViewer still owning
+    anthias.viewer for the next spawn to collide with."""
+    proc = mock.Mock()
+    proc.terminate.side_effect = OSError('no such process')
+    proc.is_alive.return_value = False
+
+    with mock.patch.object(viewer, 'sleep'):
+        assert viewer._terminate_webview(proc) is True
+
+    proc.terminate.assert_called_once()
+    proc.kill.assert_called_once()
+
+
+def test_terminate_webview_waits_for_the_reap_after_sigkill(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """SIGKILL is immediate for the kernel but the bus name is not
+    released until the process is torn down and reaped, and the caller
+    spawns the next AnthiasViewer the instant we return — so wait."""
+    proc = mock.Mock()
+    # Ignores SIGTERM for the whole grace window; dies on SIGKILL.
+    proc.is_alive.side_effect = lambda: not proc.kill.called
+
+    with (
+        mock.patch.object(viewer, 'BROWSER_TERMINATE_GRACE_SECONDS', 0.05),
+        mock.patch.object(viewer, 'sleep'),
+    ):
+        assert viewer._terminate_webview(proc) is True
+
+    proc.kill.assert_called_once()
+    # Polled again *after* kill() rather than returning straight away.
+    calls = [call[0] for call in proc.mock_calls]
+    assert 'is_alive' in calls[calls.index('kill') :]
+
+
+def test_terminate_webview_reports_a_survivor(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A process that outlives SIGKILL is reported, not assumed dead."""
+    proc = mock.Mock()
+    proc.is_alive.return_value = True
+
+    with (
+        mock.patch.object(viewer, 'BROWSER_TERMINATE_GRACE_SECONDS', 0.05),
+        mock.patch.object(viewer, 'sleep'),
+    ):
+        assert viewer._terminate_webview(proc) is False
+
+    proc.terminate.assert_called_once()
+    proc.kill.assert_called_once()
+
+
+def test_spawn_reclaims_a_stale_dbus_name_owner(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """An orphaned AnthiasViewer holding anthias.viewer must be cleared
+    before the spawn, not retried past.
+
+    Qt's registerService fails the instant the name is taken, so every
+    one of the 30 startup attempts dies identically ~0.5s in (measured
+    on a Pi 5) — ~6.5min of black screen against a condition one bus
+    call detects."""
+    owner_pids = [4242, 4242, None]
+    killed: list[tuple[int, int]] = []
+
+    def next_owner() -> Any:
+        return owner_pids.pop(0) if owner_pids else None
+
+    with (
+        mock.patch.object(viewer, '_webview_name_owner_pid', next_owner),
+        mock.patch(
+            'anthias_viewer.os.kill',
+            lambda pid, sig: killed.append((pid, sig)),
+        ),
+        mock.patch.object(viewer, 'sleep'),
+    ):
+        assert viewer._reclaim_webview_dbus_name(monotonic() + 30) is True
+
+    # Cleared on the polite signal — no SIGKILL needed.
+    assert killed == [(4242, SIGTERM)]
+
+
+def test_reclaim_escalates_to_sigkill_then_gives_up(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A name owner that ignores SIGTERM gets SIGKILL; one that survives
+    both is reported rather than silently spawned over."""
+    killed: list[tuple[int, int]] = []
+
+    with (
+        mock.patch.object(viewer, '_webview_name_owner_pid', lambda: 4242),
+        mock.patch(
+            'anthias_viewer.os.kill',
+            lambda pid, sig: killed.append((pid, sig)),
+        ),
+        mock.patch.object(viewer, 'sleep'),
+    ):
+        assert viewer._reclaim_webview_dbus_name(monotonic() + 30) is False
+
+    assert killed == [(4242, SIGTERM), (4242, SIGKILL)]
+
+
+def test_reclaim_is_a_noop_when_the_name_is_free(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The common case — one bus call, no signals, no sleeps."""
+    with (
+        mock.patch.object(viewer, '_webview_name_owner_pid', lambda: None),
+        mock.patch('anthias_viewer.os.kill') as m_kill,
+        mock.patch.object(viewer, 'sleep') as m_sleep,
+    ):
+        assert viewer._reclaim_webview_dbus_name(monotonic() + 30) is True
+
+    m_kill.assert_not_called()
+    m_sleep.assert_not_called()
+
+
+def test_reclaim_stays_inside_the_attempt_deadline(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """The inline respawn runs on the asset_loop thread, so an
+    unkillable owner must not stretch the attempt past its budget."""
+    with (
+        mock.patch.object(viewer, '_webview_name_owner_pid', lambda: 4242),
+        mock.patch('anthias_viewer.os.kill'),
+    ):
+        started = monotonic()
+        # Deadline already past: both signal waits collapse immediately.
+        assert viewer._reclaim_webview_dbus_name(monotonic() - 1) is False
+        assert monotonic() - started < 1
+
+
+def test_spawn_webview_once_refuses_an_unreclaimable_name(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """When the name cannot be freed, say so — an empty QDBusError and
+    Qt boilerplate is what made Sentry ANTHIAS-D undiagnosable."""
+    viewer_fixtures.p_cmd.start()
+    try:
+        with (
+            mock.patch.object(
+                viewer_fixtures.u,
+                '_reclaim_webview_dbus_name',
+                return_value=False,
+            ),
+            pytest.raises(viewer_fixtures.u.WebviewLaunchError) as excinfo,
+        ):
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_cmd.stop()
+
+    assert 'anthias.viewer' in str(excinfo.value)
+    # Refused before the spawn: no process was started.
+    viewer_fixtures.m_cmd.return_value.assert_not_called()
 
 
 def test_spawn_webview_once_missing_binary(
