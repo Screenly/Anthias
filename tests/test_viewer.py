@@ -357,6 +357,98 @@ def test_drain_webview_output_is_bounded_when_output_never_settles(
     assert elapsed < 2
 
 
+@pytest.mark.parametrize(
+    ('exit_code', 'expected'),
+    [
+        (-11, 'killed by SIGSEGV (-11)'),
+        (-6, 'killed by SIGABRT (-6)'),
+        (-9, 'killed by SIGKILL (-9)'),
+        (0, 'exit code 0'),
+        (1, 'exit code 1'),
+    ],
+)
+def test_describe_webview_exit_names_how_the_process_died(
+    exit_code: int, expected: str
+) -> None:
+    """Sentry ANTHIAS-D: a signal death is the only evidence there is.
+
+    Verified against the shipped sh 2.4.0 on a Pi 5 — ``process.exit_code``
+    is populated the instant ``is_alive()`` flips, and carries the signal
+    as a negative value.
+    """
+    candidate = mock.Mock()
+    candidate.process.exit_code = exit_code
+    assert viewer._describe_webview_exit(candidate) == expected
+
+
+def test_describe_webview_exit_avoids_shs_raising_exit_code_property() -> None:
+    """Regression guard: read ``.process.exit_code``, never ``.exit_code``.
+
+    sh re-raises the exit as ``SignalException_SIGSEGV`` from the
+    ``candidate.exit_code`` property even under ``_bg_exc=False``
+    (confirmed on sh 2.4.0). Reading that one here would throw a fresh
+    exception out of the path that exists to report the launch failure.
+    """
+
+    class _Candidate:
+        def __init__(self) -> None:
+            self.process = mock.Mock(exit_code=-11)
+
+        @property
+        def exit_code(self) -> int:
+            raise RuntimeError('SignalException_SIGSEGV')
+
+    assert viewer._describe_webview_exit(_Candidate()) == (
+        'killed by SIGSEGV (-11)'
+    )
+
+
+def test_describe_webview_exit_survives_a_missing_status() -> None:
+    """A launch failure must stay reportable even with no status to read."""
+    assert viewer._describe_webview_exit(object()) == 'exit status unavailable'
+    unknown_signal = mock.Mock()
+    unknown_signal.process.exit_code = -250
+    assert viewer._describe_webview_exit(unknown_signal) == (
+        'killed by signal 250 (-250)'
+    )
+
+
+def test_spawn_webview_once_reports_exit_status_on_a_silent_death(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """Sentry ANTHIAS-D's actual shape: no crash tail exists to drain.
+
+    A webview killed by a signal writes nothing on its way out, so the
+    captured stdout just stops after the last benign warning —
+    byte-identical to all 1318 reports. Draining cannot conjure a reason
+    that was never written; the exit status must name it instead.
+    """
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.return_value = False
+    browser_proc.process.exit_code = -11
+    _capture_out_sink(
+        viewer_fixtures,
+        browser_proc,
+        seed='Failed to create Vulkan instance: -9\nUnable to detect GPU '
+        'vendor.\n',
+    )
+
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with pytest.raises(viewer_fixtures.u.WebviewLaunchError) as excinfo:
+            viewer_fixtures.u._spawn_webview_once(30)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+
+    message = str(excinfo.value)
+    assert 'killed by SIGSEGV (-11)' in message
+    # The benign chatter is still quoted — the status is added to it, and
+    # the operator still sees how far Qt got before it died.
+    assert 'Unable to detect GPU vendor.' in message
+
+
 def test_spawn_webview_once_terminates_on_timeout(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
