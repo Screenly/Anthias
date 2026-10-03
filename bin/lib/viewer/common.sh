@@ -426,8 +426,18 @@ monitor_hdmi_resolution "$PID" &
 #
 # Best-effort per process: one can exit between the glob and the
 # write, and a missing /proc entry must not take the container down.
+#
+# `2>/dev/null` has to come BEFORE the output redirection, not after.
+# Bash applies redirections left to right, and a failure to open the
+# target aborts the command at that point — so with the error
+# redirection trailing, it is never reached and bash reports the failed
+# open on the still-attached stderr. That is the
+# "/proc/<pid>/oom_score_adj: No such file or directory" line every
+# viewer start logged: the `|| true` kept the loop going, but the race
+# this comment calls best-effort was being announced anyway, once per
+# process that exited between the glob and the write.
 for proc in /proc/[0-9]*; do
-  echo 1000 > "$proc/oom_score_adj" 2>/dev/null || true
+  echo 1000 2>/dev/null > "$proc/oom_score_adj" || true
 done
 
 # Exit when the viewer stops
