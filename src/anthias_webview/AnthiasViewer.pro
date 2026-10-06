@@ -65,11 +65,28 @@ anthias_gstreamer {
     # — HW scanout, bypassing the GL compositor that caps at ~9 fps.
     QT += gui-private
     DEFINES += ANTHIAS_GSTREAMER
-    # -rdynamic: export symbols so the fatal-signal backtrace in main.cpp
-    # resolves AnthiasViewer's own frames (not just addresses) while the
-    # overlay path is being stabilised.
-    QMAKE_LFLAGS += -rdynamic
 }
+
+# -rdynamic: put AnthiasViewer's own symbols in the dynamic symbol table
+# so the fatal-signal backtrace in main.cpp resolves them to names
+# instead of bare addresses. Was scoped to the pi3-64 overlay build
+# alongside the handler itself; the handler now runs on every board (a
+# silent pre-handshake death is what Sentry ANTHIAS-D has been on pi5),
+# so the symbols have to be there on every board too — a backtrace of
+# unresolved addresses out of a fleet device is not something anyone can
+# act on. Costs a slightly larger dynamic symbol table and nothing at
+# run time; shared-library frames (Qt, Chromium, libc) resolve from
+# their own tables either way.
+QMAKE_LFLAGS += -rdynamic
+
+# -funwind-tables: emit unwind information even though we don't need it
+# for exceptions. aarch64 and x86-64 emit it by default, which is why a
+# Pi 5 backtrace already walks the full Qt/Chromium teardown chain;
+# 32-bit ARM does not, and glibc's backtrace() there gives up two frames
+# in. Measured on a Pi 2 (armv7, glibc 2.41): 2 frames without, 5 with —
+# the difference between "it crashed somewhere" and a stack. No runtime
+# cost; it only adds .ARM.exidx / .eh_frame sections.
+QMAKE_CXXFLAGS += -funwind-tables
 
 # Default rules for deployment.
 include(src/deployment.pri)
