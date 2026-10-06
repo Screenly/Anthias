@@ -2724,6 +2724,7 @@ def test_consume_pending_rotation_bounce_terminates_browser(
     terminate the webview and clear current_browser_url so the next
     view_*() call respawns it via load_browser()."""
     fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = False
     viewer._rotation_bounce_pending = True
     with mock.patch.object(viewer, 'browser', fake_browser):
         viewer._consume_pending_rotation_bounce()
@@ -2731,6 +2732,101 @@ def test_consume_pending_rotation_bounce_terminates_browser(
     assert viewer.current_browser_url is None
     # Flag cleared so a subsequent tick (with no new pending bounce)
     # doesn't terminate the freshly-spawned process.
+    assert viewer._rotation_bounce_pending is False
+
+
+def test_consume_pending_rotation_bounce_waits_for_exit(
+    reset_rotation_state: None,
+) -> None:
+    """The bounce must not return while the webview is still alive.
+
+    The whole handoff rests on the next view_*() seeing
+    ``is_alive() == False``; the gap between the two is under a
+    millisecond, and SIGTERM alone does not close it. Returning early
+    sends the loadImage over D-Bus to a dying peer, which only recovers
+    via _send_to_webview's error path on the short inline budget.
+    """
+    fake_browser = mock.Mock()
+    # Alive for the first few polls, then gone — a webview that takes a
+    # moment to tear QtWebEngine down, as it does on real hardware.
+    fake_browser.is_alive.side_effect = [True, True, False]
+    viewer._rotation_bounce_pending = True
+    with (
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch.object(viewer, 'sleep'),
+    ):
+        viewer._consume_pending_rotation_bounce()
+    fake_browser.terminate.assert_called_once()
+    # Confirmed gone within the grace window, so no SIGKILL needed.
+    fake_browser.kill.assert_not_called()
+    assert fake_browser.is_alive.called
+
+
+def test_consume_pending_rotation_bounce_kills_unresponsive_browser(
+    reset_rotation_state: None,
+) -> None:
+    """A webview that ignores SIGTERM must be SIGKILLed, not left
+    running.
+
+    The pending flag is already cleared by this point, so an orphan that
+    survives here keeps the ``anthias.viewer`` D-Bus name, the setting
+    never applies, and the next spawn is refused registration by the
+    leftover owner.
+    """
+    fake_browser = mock.Mock()
+    fake_browser.is_alive.return_value = True
+    viewer._rotation_bounce_pending = True
+    with (
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch.object(viewer, 'BROWSER_TERMINATE_GRACE_SECONDS', 0),
+    ):
+        viewer._consume_pending_rotation_bounce()
+    fake_browser.terminate.assert_called_once()
+    fake_browser.kill.assert_called_once()
+
+
+def test_consume_pending_rotation_bounce_delegates_to_the_helper(
+    reset_rotation_state: None,
+) -> None:
+    """The bounce stops the webview through ``_terminate_webview`` and
+    nothing else.
+
+    Pinning the delegation rather than re-implementing the teardown is
+    the point: how hard the helper tries — whether it confirms the reap
+    after SIGKILL, and what it reports when a process survives both
+    signals — is the helper's contract, covered by its own tests. This
+    path inherits every improvement to it instead of growing a second
+    copy that could drift.
+    """
+    fake_browser = mock.Mock()
+    viewer._rotation_bounce_pending = True
+    with (
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch.object(viewer, '_terminate_webview') as m_terminate,
+    ):
+        viewer._consume_pending_rotation_bounce()
+    m_terminate.assert_called_once_with(fake_browser)
+    # Teardown goes through the helper, never direct signalling here.
+    fake_browser.terminate.assert_not_called()
+    fake_browser.kill.assert_not_called()
+
+
+def test_consume_pending_rotation_bounce_survives_terminate_failure(
+    reset_rotation_state: None,
+) -> None:
+    """A raising terminate() must not propagate out of the asset_loop
+    tick: _terminate_webview swallows it, and the URL reset behind it
+    still runs so the respawn is not skipped."""
+    fake_browser = mock.Mock()
+    fake_browser.terminate.side_effect = OSError('no such process')
+    fake_browser.is_alive.return_value = True
+    viewer._rotation_bounce_pending = True
+    with (
+        mock.patch.object(viewer, 'browser', fake_browser),
+        mock.patch.object(viewer, 'BROWSER_TERMINATE_GRACE_SECONDS', 0),
+    ):
+        viewer._consume_pending_rotation_bounce()
+    assert viewer.current_browser_url is None
     assert viewer._rotation_bounce_pending is False
 
 
@@ -2744,6 +2840,7 @@ def test_consume_pending_rotation_bounce_no_op_when_flag_clear(
     with mock.patch.object(viewer, 'browser', fake_browser):
         viewer._consume_pending_rotation_bounce()
     fake_browser.terminate.assert_not_called()
+    fake_browser.kill.assert_not_called()
 
 
 def test_asset_loop_consumes_pending_rotation_bounce(

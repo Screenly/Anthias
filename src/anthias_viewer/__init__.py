@@ -2295,6 +2295,28 @@ def _consume_pending_rotation_bounce() -> None:
     updated rotation env. Clearing ``current_browser_url`` defeats
     the value-comparison short-circuit so the fresh webview actually
     gets a loadPage/loadImage on its first asset.
+
+    The wait inside ``_terminate_webview`` is what makes that handoff
+    work, and a bare ``terminate()`` here used to skip it. SIGTERM only
+    *requests* the exit: measured on a Pi 5, AnthiasViewer takes ~16 ms
+    to go, while the gap to the first view_*() is a flag check, a cheap
+    no-op watchdog and one ``stat`` of the asset DB — well under a
+    millisecond. So ``is_alive()`` still answered True, no respawn
+    happened, and the loadImage went out over D-Bus to a process on its
+    way down. It came back as the NoReply that ``_send_to_webview``
+    catches, which does recover — but only after blocking the asset_loop
+    thread, and starving ``watchdog()``, for however long the dying peer
+    takes to drop off the bus. The spawn budget is the same either way
+    (``view_image`` / ``view_webpage`` pass the same inline limits that
+    the error path uses); what waiting buys is skipping the round trip
+    to a doomed peer and the stall behind it. Every operator rotation
+    and dark-mode change took that route.
+
+    Waiting also puts a SIGKILL behind the SIGTERM. A webview wedged
+    badly enough to ignore SIGTERM previously kept the name
+    ``anthias.viewer`` with the flag already cleared — the setting then
+    never applied at all, and the orphan is precisely the stale owner
+    that refuses the next spawn registration.
     """
     global _rotation_bounce_pending, current_browser_url
     if not _rotation_bounce_pending:
@@ -2302,13 +2324,9 @@ def _consume_pending_rotation_bounce() -> None:
     _rotation_bounce_pending = False
     logger.info('Consuming pending rotation bounce on main thread')
     if browser is not None:
-        try:
-            browser.terminate()
-        except Exception as exc:
-            logger.warning(
-                'Could not terminate AnthiasViewer for rotation change: %s',
-                exc,
-            )
+        # Never raises, and bounded by BROWSER_TERMINATE_GRACE_SECONDS —
+        # the same call _send_to_webview already makes on this thread.
+        _terminate_webview(browser)
     current_browser_url = None
 
 
