@@ -10,7 +10,14 @@ from contextlib import contextmanager
 from errno import ENOSYS
 from glob import glob
 from os import getenv, path
-from signal import SIGALRM, SIGKILL, SIGTERM, pidfd_send_signal, signal
+from signal import (
+    SIGALRM,
+    SIGKILL,
+    SIGTERM,
+    Signals,
+    pidfd_send_signal,
+    signal,
+)
 from threading import Lock
 from time import monotonic, sleep, time
 from typing import Any
@@ -1346,11 +1353,17 @@ def _drain_webview_output(output: _BoundedWebviewOutput) -> str:
     ``candidate.is_alive()`` flips as soon as the child is reaped, but
     sh delivers that child's stdout on a *separate* reader thread. Read
     the sink at that instant and the last chunks — the ones carrying
-    the actual fatal message — are still in flight, so the
-    ``WebviewLaunchError`` we raise (and ship to Sentry) can carry only
-    the benign warnings Qt printed seconds earlier. That is exactly the
-    shape of Sentry ANTHIAS-D, whose 1318 reports end on locale and
-    Vulkan chatter and never name what killed the process.
+    the actual fatal message — can still be in flight, so the
+    ``WebviewLaunchError`` we raise (and ship to Sentry) would carry
+    only the benign warnings Qt printed earlier.
+
+    This keeps a crash tail that *exists* from being cut off. It is not
+    on its own enough to explain Sentry ANTHIAS-D: those reports end on
+    a complete line of locale/Vulkan chatter, and the race could not be
+    reproduced on a Pi 5 (40 spawn-and-die trials against the shipped
+    sh 2.4.0, none lost the tail). A webview killed by a signal prints
+    no tail to drain at all, which is why the launch error also names
+    the exit status — see ``_describe_webview_exit``.
 
     Poll until the sink stops growing, bounded by
     ``WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS`` so a still-streaming
@@ -1367,6 +1380,43 @@ def _drain_webview_output(output: _BoundedWebviewOutput) -> str:
             return settled
         text = settled
     return text
+
+
+def _describe_webview_exit(candidate: Any) -> str:
+    """Name *how* the dead webview process ended, for the launch error.
+
+    Draining the output (above) recovers a crash tail when there is one
+    to recover. Often there is not: a webview killed by a signal — Qt or
+    Chromium aborting on a GPU/driver fault is the common one — writes
+    nothing on its way out, so the captured stdout simply stops after
+    whatever benign warning happened to be last and names no cause at
+    all. Every one of Sentry ANTHIAS-D's reports has that shape, ending
+    mid-chatter on the locale/Vulkan warnings; reproducing a
+    signal-killed child on a Pi 5 produces a byte-identical ending. The
+    exit status is then the *only* surviving record of what happened,
+    and sh has it all along — negative values carry the signal number.
+
+    Read it off ``candidate.process``. Not ``candidate.exit_code``:
+    that property re-raises the exit as ``SignalException_SIGSEGV``
+    even under ``_bg_exc=False`` (verified against the shipped sh
+    2.4.0), which would throw a brand-new exception out of the very
+    path trying to report the failure. Everything here is defensive for
+    the same reason — a launch failure must still be reportable even if
+    sh changes shape underneath us.
+    """
+    process = getattr(candidate, 'process', None)
+    code = getattr(process, 'exit_code', None)
+    if not isinstance(code, int):
+        return 'exit status unavailable'
+    if code >= 0:
+        return f'exit code {code}'
+    try:
+        return f'killed by {Signals(-code).name} ({code})'
+    except ValueError:
+        # A signal number this platform's enum doesn't know. The raw
+        # number still identifies it; don't lose the whole diagnostic
+        # to a lookup failure.
+        return f'killed by signal {-code} ({code})'
 
 
 def _spawn_webview_once(startup_timeout: float) -> Any:
@@ -1451,11 +1501,13 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
         if BROWSER_HANDSHAKE_LINE in output.text():
             return candidate
         if not candidate.is_alive():
-            # Let sh's reader thread finish flushing before we quote the
-            # output — the crash tail is the whole diagnostic value of
-            # this message (ANTHIAS-D).
+            # Name the exit status *and* let sh's reader thread finish
+            # flushing before we quote the output: between them they are
+            # the whole diagnostic value of this message (ANTHIAS-D),
+            # and a signal death leaves the status as the only evidence.
             raise WebviewLaunchError(
-                'AnthiasViewer exited before emitting D-Bus handshake; '
+                'AnthiasViewer exited before emitting D-Bus handshake '
+                f'({_describe_webview_exit(candidate)}); '
                 'stdout: ' + _drain_webview_output(output)
             )
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
