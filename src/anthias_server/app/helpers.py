@@ -155,15 +155,18 @@ def delete_asset_with_file(asset: Asset, *, nudge_viewer: bool = True) -> None:
     source of truth, and a file left behind by a failed unlink is
     swept by the periodic ``cleanup()`` orphan pass.
     """
-    uri = asset.uri
-
     asset.delete()
 
-    if uri and uri.startswith(settings['assetdir']):
+    # ``delete()`` clears only the pk; the instance keeps its field
+    # values, so ``asset.uri`` still reads the path we just dropped the
+    # row for.
+    if asset.uri and asset.uri.startswith(settings['assetdir']):
         try:
-            remove(uri)
+            remove(asset.uri)
         except OSError as exc:
-            logger.warning('Failed to remove asset file %s: %s', uri, exc)
+            logger.warning(
+                'Failed to remove asset file %s: %s', asset.uri, exc
+            )
 
     # Wake the viewer so it skips a now-deleted asset that's still on
     # screen instead of finishing its remaining ``duration`` (#2430).
