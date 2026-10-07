@@ -616,6 +616,27 @@ def test_image_missing_file_raises_filenotfound(asset_dir: str) -> None:
 
 
 @pytest.mark.django_db
+def test_image_missing_file_with_deleted_row_is_a_no_op(
+    asset_dir: str,
+) -> None:
+    """Operator deleted the asset while the task was in flight.
+
+    ``delete_asset_with_file`` drops the row before it unlinks, so the
+    task finds no file *and* no row. That is the delete winning the
+    race, not a fault: return quietly instead of raising a
+    FileNotFoundError that pages Sentry (ANTHIAS-1G).
+    """
+    src = path.join(asset_dir, 'gone.tiff')
+    asset = _make_processing_asset('img-deleted', src)
+    Asset.objects.filter(asset_id='img-deleted').delete()
+
+    with mock.patch.object(processing, '_notify') as notify:
+        processing._run_image_normalisation(asset)
+
+    assert notify.call_count == 0
+
+
+@pytest.mark.django_db
 def test_image_jpeg_routes_no_op(asset_dir: str) -> None:
     """A caller that mis-routed a JPEG (or .png, .webp) through this
     task must not re-encode it — the row already plays. Just clear
@@ -751,6 +772,21 @@ def test_video_missing_file_raises_filenotfound(asset_dir: str) -> None:
         pytest.raises(FileNotFoundError),
     ):
         processing._run_video_normalisation(asset)
+
+
+@pytest.mark.django_db
+def test_video_missing_file_with_deleted_row_is_a_no_op(
+    asset_dir: str,
+) -> None:
+    """Video half of ANTHIAS-1G — see the image test above."""
+    src = path.join(asset_dir, 'gone.mp4')
+    asset = _make_processing_asset('vid-deleted', src, mimetype='video')
+    Asset.objects.filter(asset_id='vid-deleted').delete()
+
+    with mock.patch.object(processing, '_notify') as notify:
+        processing._run_video_normalisation(asset)
+
+    assert notify.call_count == 0
 
 
 @pytest_ffmpeg
