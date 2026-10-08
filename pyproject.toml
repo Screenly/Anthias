@@ -24,8 +24,8 @@ dev-host = [
     "celery-types==0.26.0",
     "django-stubs==6.1.1",
     "djangorestframework-stubs==3.18.1",
-    "mypy==2.3.1",
-    "ruff==0.16.9",
+    "mypy==2.4.0",
+    "ruff==0.16.10",
     "tenacity==9.1.4",
     "types-gunicorn==26.2.0.20260827",
     # Direct dev dep: types-psutil used to arrive transitively via
@@ -76,11 +76,11 @@ server = [
     "psutil==7.2.2",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
-    "pytz==2026.4",
+    "pytz==2026.5",
     "PyYAML==6.0.3",
     "redis==8.1.0",
     "requests==2.34.2",
-    "sentry-sdk==2.70.0",
+    "sentry-sdk==2.71.0",
     "tenacity==9.1.4",
     "sh==2.4.0",
     "urllib3==2.8.0",
@@ -94,10 +94,10 @@ viewer = [
     "Jinja2==3.1.6",
     "pydbus==0.6.0",
     "python-dateutil==2.9.0.post0",
-    "pytz==2026.4",
+    "pytz==2026.5",
     "redis==8.1.0",
     "requests==2.34.2",
-    "sentry-sdk==2.70.0",
+    "sentry-sdk==2.71.0",
     "tenacity==9.1.4",
     "sh==2.4.0",
     "urllib3==2.8.0",
@@ -154,8 +154,8 @@ mypy = [
     # tool.mypy.overrides above so its missing-import error is
     # ignored, mirroring the pydbus / sh pattern.
     "Pillow==12.3.0",
-    "pytz==2026.4",
-    "sentry-sdk==2.70.0",
+    "pytz==2026.5",
+    "sentry-sdk==2.71.0",
     "whitenoise==6.12.0",
 ]
 
