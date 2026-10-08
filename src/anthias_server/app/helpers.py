@@ -143,7 +143,23 @@ def delete_asset_with_file(asset: Asset, *, nudge_viewer: bool = True) -> None:
     ``nudge_viewer=False`` skips the per-row viewer reload so a bulk
     delete can fire a single reload after the whole batch instead of
     spamming the pub/sub channel once per asset (#3046).
+
+    **Row first, then the file.** The reverse order leaves a window
+    where the row is still live and ``Asset.uri`` points at nothing,
+    and an in-flight normalisation task landing in that window raises
+    ``FileNotFoundError`` on an asset the operator has already deleted
+    (Sentry ANTHIAS-1G). Dropping the row first means the task's
+    ``processing._row_or_none`` guard — or its missing-source
+    re-check — sees the deletion and no-ops instead. It also matches
+    what this function already documents: the row is the operator's
+    source of truth, and a file left behind by a failed unlink is
+    swept by the periodic ``cleanup()`` orphan pass.
     """
+    asset.delete()
+
+    # ``delete()`` clears only the pk; the instance keeps its field
+    # values, so ``asset.uri`` still reads the path we just dropped the
+    # row for.
     if asset.uri and asset.uri.startswith(settings['assetdir']):
         try:
             remove(asset.uri)
@@ -151,8 +167,6 @@ def delete_asset_with_file(asset: Asset, *, nudge_viewer: bool = True) -> None:
             logger.warning(
                 'Failed to remove asset file %s: %s', asset.uri, exc
             )
-
-    asset.delete()
 
     # Wake the viewer so it skips a now-deleted asset that's still on
     # screen instead of finishing its remaining ``duration`` (#2430).
