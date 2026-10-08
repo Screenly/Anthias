@@ -536,6 +536,74 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
     assert not leftover, f'image staging leftover: {leftover}'
 
 
+def _write_bomb_png(out_path: str, side: int) -> str:
+    """A tiny PNG whose IHDR *declares* ``side``x``side`` pixels.
+
+    Writing a real one would need the memory the cap exists to
+    protect. Pillow reads dimensions from the header, which is the
+    only part of the file either the bomb check or
+    ``_guard_and_fit_for_board`` looks at.
+    """
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(out_path, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+    return out_path
+
+
+@pytest.mark.django_db
+def test_image_over_twice_the_cap_gets_the_same_rejection(
+    asset_dir: str,
+) -> None:
+    """Past 2x the cap the rejection must still be *ours*.
+
+    ``needs_low_ram_image_downscale`` deliberately routes a bomb into
+    this task so the operator gets a real message. That promise held
+    between 1x and 2x the cap, where ``_guard_and_fit_for_board``
+    raises — but not past 2x, where Pillow's own
+    ``DecompressionBombError`` came out of ``Image.open`` first. It
+    derives straight from ``Exception``, so it escaped the task as an
+    unhandled fault and ``on_failure`` wrote an attack accusation
+    citing a pixel limit that is not this project's cap.
+
+    One cap, one message, either side of 2x.
+    """
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'), 20000)
+    # 400 MP: 8x the cap, comfortably past the 2x point at which
+    # Pillow raises instead of warning.
+    assert 20000 * 20000 > 2 * processing._MAX_IMAGE_PIXELS
+    asset = _make_processing_asset('img-bomb-2x', src)
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(processing, 'is_low_ram_device', return_value=True),
+        pytest.raises(ValueError, match='exceed cap') as excinfo,
+    ):
+        processing._run_image_normalisation(asset)
+
+    # The cap named is the one this module enforces, not Pillow's 2x
+    # restatement of it.
+    assert str(processing._MAX_IMAGE_PIXELS) in str(excinfo.value)
+    assert not isinstance(excinfo.value, Image.DecompressionBombError)
+    # The source is left intact and no staging file survives.
+    assert path.exists(src)
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
+
+
 @pytest.mark.django_db
 def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
     """If Pillow writes some bytes to the staging file and *then*
