@@ -251,9 +251,25 @@ def _read_text(path: str) -> str | None:
     ext4 leaves ``last_error_func`` empty on a filesystem that has
     never errored, and an empty string would reach the API as
     ``""`` where every other absent field is ``null``.
+
+    Decoded with ``errors='replace'``, which is load-bearing for one
+    attribute. ``device/name`` is the MMC product name, copied
+    verbatim out of the card's CID register: the kernel exports those
+    bytes as it found them, and a card with a sloppy or corrupted CID
+    puts arbitrary ones there (0x92 -- a cp1252 curly quote -- seen in
+    the field). Strict UTF-8 turned that into a ``UnicodeDecodeError``
+    raised out of a helper whose whole contract is "or ``None``", so
+    it escaped ``probe()`` and took the watcher down with it: the
+    thread was never started and the device lost storage monitoring
+    entirely -- on exactly the kind of card most worth watching.
+
+    Replacing keeps the readable characters instead of dropping the
+    field, which is the same call made for ``manufacturer_id``: a
+    partly-legible product name still lets a support engineer identify
+    the card, and nothing here parses it.
     """
     try:
-        with open(path) as f:
+        with open(path, encoding='utf-8', errors='replace') as f:
             return f.read().strip() or None
     except OSError:
         return None
