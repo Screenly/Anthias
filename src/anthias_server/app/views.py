@@ -1954,6 +1954,9 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 
         settings['show_splash'] = _checkbox(request, 'show_splash')
         settings['shuffle_playlist'] = _checkbox(request, 'shuffle_playlist')
+        settings['skip_deactivated_asset'] = _checkbox(
+            request, 'skip_deactivated_asset'
+        )
         settings['prefer_dark_mode'] = _checkbox(request, 'prefer_dark_mode')
         settings['use_24_hour_clock'] = _checkbox(request, 'use_24_hour_clock')
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
