@@ -20,19 +20,25 @@ CONFIG += c++17 console testcase
 # deliberately QtCore-only (no View / QtWebEngine) so these tests link
 # without the webengine modules. image_fallback.cpp is the same shape:
 # the black-flash fallback's paint/no-paint decision, extracted from
-# View::paintEvent() so it's covered here too.
+# View::paintEvent() so it's covered here too. image_transition.cpp
+# is the same shape again: the image-to-image crossfade's env-var
+# parsing and progress math, extracted from View so they're covered
+# here without pulling in QtWebEngine.
 SOURCES += \
     ../src/videoview.cpp \
     ../src/rotation.cpp \
     ../src/image_fallback.cpp \
+    ../src/image_transition.cpp \
     test_videoview.cpp \
     test_rotation.cpp \
-    test_image_fallback.cpp
+    test_image_fallback.cpp \
+    test_image_transition.cpp
 
 HEADERS += \
     ../src/videoview.h \
     ../src/rotation.h \
-    ../src/image_fallback.h
+    ../src/image_fallback.h \
+    ../src/image_transition.h
 
 RESOURCES += ../src/videoview.qrc
 
