@@ -366,6 +366,37 @@ class TestReadMediaInfo:
         # would then render as good news.
         assert media['wear_pct'] is None
 
+    def test_a_non_utf8_card_name_does_not_raise(self, sysfs: Any) -> None:
+        """``device/name`` is the MMC product name, copied byte for
+        byte out of the card's CID register. The kernel does not
+        sanitise it, so a card with a sloppy or corrupted CID puts
+        arbitrary bytes there.
+
+        A strict decode raised ``UnicodeDecodeError`` out of
+        ``_read_text`` -- a helper whose contract is "contents, or
+        ``None``" and whose callers therefore catch nothing. It
+        escaped ``probe()``, so ``storage_watcher.start()`` raised and
+        the watcher thread was never created: one odd card cost the
+        device its storage monitoring altogether.
+        """
+        sysfs(mmc={'type': 'SD', 'manfid': '0x000003'})
+        # 0x92 is a cp1252 curly quote and not valid UTF-8 -- the byte
+        # the fleet reported, at the offset a 6-byte PNM field puts it.
+        name_path = os.path.join(
+            storage_health.SYS_BLOCK, 'mmcblk0', 'device', 'name'
+        )
+        with open(name_path, 'wb') as handle:
+            handle.write(b'SC32G\x92\n')
+
+        media = storage_health.read_media_info('mmcblk0')
+
+        # The readable characters survive; only the bad byte is
+        # replaced. The rest of the record is unaffected.
+        assert media['name'] is not None
+        assert media['name'].startswith('SC32G')
+        assert media['kind'] == 'sd'
+        assert media['manufacturer'] == 'SanDisk'
+
     def test_unknown_manufacturer_falls_back_to_hex(self, sysfs: Any) -> None:
         sysfs(mmc={'type': 'SD', 'manfid': '0x0000ee'})
 
