@@ -536,6 +536,79 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
     assert not leftover, f'image staging leftover: {leftover}'
 
 
+def _write_bomb_png(out_path: str, side: int) -> str:
+    """A tiny PNG whose IHDR *declares* ``side``x``side`` pixels.
+
+    Writing a real one would need the memory the cap exists to
+    protect. Pillow reads dimensions from the header, which is the
+    only part of the file either the bomb check or
+    ``_guard_and_fit_for_board`` looks at.
+    """
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(out_path, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+    return out_path
+
+
+@pytest.mark.django_db
+def test_image_over_twice_the_cap_gets_the_same_rejection(
+    asset_dir: str,
+) -> None:
+    """Past 2x the cap the rejection must still be *ours*.
+
+    ``needs_low_ram_image_downscale`` deliberately routes a bomb into
+    this task so the operator gets a real message. That promise held
+    between 1x and 2x the cap, where ``_guard_and_fit_for_board``
+    raises — but not past 2x, where Pillow's own
+    ``DecompressionBombError`` came out of ``Image.open`` first. It
+    derives straight from ``Exception``, so it escaped the task as an
+    unhandled fault and ``on_failure`` wrote an attack accusation
+    citing a pixel limit that is not this project's cap.
+
+    One cap, one message, either side of 2x.
+    """
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'), 20000)
+    # 400 MP: 8x the cap, comfortably past the 2x point at which
+    # Pillow raises instead of warning.
+    assert 20000 * 20000 > 2 * processing._MAX_IMAGE_PIXELS
+    asset = _make_processing_asset('img-bomb-2x', src)
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(processing, 'is_low_ram_device', return_value=True),
+        pytest.raises(ValueError, match='exceed cap') as excinfo,
+    ):
+        processing._run_image_normalisation(asset)
+
+    # The cap named is the one this module enforces, not Pillow's 2x
+    # restatement of it.
+    assert str(processing._MAX_IMAGE_PIXELS) in str(excinfo.value)
+    assert not isinstance(excinfo.value, Image.DecompressionBombError)
+    # Specifically ``ImageTooLargeError``, which is what
+    # normalize_image_asset lists in ``throws`` — a bare ValueError here
+    # would keep the Failed pill correct but put the rejection back into
+    # Sentry under a new exception type.
+    assert isinstance(excinfo.value, processing.ImageTooLargeError)
+    # The source is left intact and no staging file survives.
+    assert path.exists(src)
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
+
+
 @pytest.mark.django_db
 def test_image_partial_write_cleans_staging(asset_dir: str) -> None:
     """If Pillow writes some bytes to the staging file and *then*
@@ -2172,6 +2245,37 @@ def test_video_task_declares_codec_rejection_as_expected() -> None:
     )
 
 
+def test_image_task_declares_over_cap_rejection_as_expected() -> None:
+    """The image side of the same contract.
+
+    ``ImageTooLargeError`` is the pixel cap's deliberate rejection, so
+    ``normalize_image_asset`` must list it in ``throws`` — otherwise
+    every over-cap upload is reported to Sentry as a task fault, which
+    is what ANTHIAS-6G / ANTHIAS-6H were. Translating Pillow's
+    ``DecompressionBombError`` into our own message fixes the operator's
+    Failed pill but would, on its own, just recreate those issues under
+    a new exception type.
+
+    The video task never raises it, so it must not be swept into the
+    video task's ``throws``.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    assert processing.ImageTooLargeError in tuple(
+        getattr(normalize_image_asset, 'throws', ())
+    ), (
+        'normalize_image_asset expected throws to include '
+        'ImageTooLargeError so the by-design pixel-cap rejection '
+        'is not reported to Sentry'
+    )
+    assert processing.ImageTooLargeError not in tuple(
+        getattr(normalize_video_asset, 'throws', ())
+    )
+
+
 @pytest.mark.django_db
 def test_normalize_on_failure_writes_error_metadata(
     asset_dir: str,
@@ -2440,27 +2544,12 @@ def test_needs_low_ram_downscale_routes_bomb_instead_of_raising(
     It returns ``True`` — routing the bomb into the Celery task, which
     rejects it deterministically and surfaces a "Failed" pill with the
     dimensions, the same way an over-cap HEIC/TIFF already does."""
-    src = path.join(asset_dir, 'bomb.png')
     # A ~24 KB PNG whose IHDR declares 400 MP — 8x the 50 MP cap, and
     # over the 2x threshold at which Pillow raises rather than warns.
-    side = 20000
-    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
-
-    def _chunk(kind: bytes, payload: bytes) -> bytes:
-        return (
-            struct.pack('>I', len(payload))
-            + kind
-            + payload
-            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
-        )
-
-    with open(src, 'wb') as handle:
-        handle.write(
-            b'\x89PNG\r\n\x1a\n'
-            + _chunk(b'IHDR', ihdr)
-            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
-            + _chunk(b'IEND', b'')
-        )
+    # Shared with test_image_over_twice_the_cap_gets_the_same_rejection
+    # so the crafted header cannot drift between the predicate that
+    # routes a bomb into the task and the task that rejects it.
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'), 20000)
 
     with mock.patch(
         'anthias_server.processing.is_low_ram_device', return_value=True

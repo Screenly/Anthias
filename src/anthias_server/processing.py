@@ -631,6 +631,71 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
             )
 
 
+class ImageTooLargeError(ValueError):
+    """An image upload is over ``_MAX_IMAGE_PIXELS``.
+
+    The image counterpart of ``UnsupportedVideoCodecError``: a
+    deliberate, operator-facing rejection, not a fault. Both routes to
+    it — Pillow's bomb refusal inside ``Image.open`` past 2x the cap,
+    and ``_guard_and_fit_for_board`` reading ``image.size`` below it —
+    end here, so ``normalize_image_asset`` can name one exception in
+    ``throws``.
+
+    That listing is what keeps the gate out of Sentry: sentry-sdk's
+    CeleryIntegration returns early on ``isinstance(exc, task.throws)``,
+    and Celery logs it at INFO without a traceback.
+    ``_NormalizeAssetTask.on_failure`` still runs, so the operator
+    still gets the "Failed" pill with the dimensions and the real cap.
+
+    Subclasses ``ValueError`` because every caller on the pipeline
+    already catches that — ``needs_low_ram_image_downscale`` and the
+    dimension probe in ``_run_image_normalisation`` both list it — and
+    narrowing those to the new type would change which failures they
+    swallow.
+    """
+
+
+def _open_image(input_path: str) -> Image.Image:
+    """``Image.open``, with Pillow's bomb refusal restated as ours.
+
+    This module tightens ``Image.MAX_IMAGE_PIXELS`` to
+    ``_MAX_IMAGE_PIXELS``, and Pillow raises ``DecompressionBombError``
+    from inside ``Image.open`` at *twice* that value. So an upload
+    between 1x and 2x the cap reaches ``_guard_and_fit_for_board`` and
+    is rejected with the dimensions and the real cap, while one past 2x
+    never gets that far: ``Image.open`` raises first, out of a path
+    whose callers only catch ``OSError``/``ValueError``.
+
+    That split is the whole defect. Past 2x the cap the operator's
+    "Failed" pill read ``DecompressionBombError: Image size (…)
+    exceeds limit of 100000000 pixels, could be decompression bomb DOS
+    attack.`` — a number that is not this project's cap, phrased as an
+    attack accusation, for what is usually a large legitimate scan.
+    The same upload one pixel under 2x got a calm, accurate message.
+    It also surfaced as an unhandled task fault rather than a handled
+    rejection.
+
+    Translating to the ``ValueError`` ``_guard_and_fit_for_board``
+    already raises gives every over-cap image one rejection with one
+    message, whichever side of 2x it falls on. ``Image.open`` reads
+    only the header, so nothing is decoded on either route and the
+    protection is unchanged — this is about what the operator is told,
+    not about what is allowed through.
+
+    ``DecompressionBombWarning`` is listed for the same reason
+    ``needs_low_ram_image_downscale`` lists it: a warnings filter of
+    ``error`` promotes it, and as a ``RuntimeWarning`` it would
+    otherwise be missed.
+    """
+    try:
+        return Image.open(input_path)
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as e:
+        raise ImageTooLargeError(
+            f'image dimensions exceed cap {_MAX_IMAGE_PIXELS} pixels '
+            '— refusing to decode'
+        ) from e
+
+
 def _convert_image_to_webp(input_path: str, output_path: str) -> None:
     """Open ``input_path`` with Pillow, save lossless WebP to
     ``output_path``.
@@ -655,7 +720,7 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
     ``_guard_and_fit_for_board``, shared with the in-place JPEG/PNG
     downscale path.
     """
-    with Image.open(input_path) as image:
+    with _open_image(input_path) as image:
         _guard_and_fit_for_board(image)
         # Bake the EXIF Orientation into the pixels before we drop the
         # metadata. WebP output carries no Orientation tag, so a
@@ -707,7 +772,7 @@ def _guard_and_fit_for_board(image: Image.Image) -> None:
     """
     width, height = image.size
     if width * height > _MAX_IMAGE_PIXELS:
-        raise ValueError(
+        raise ImageTooLargeError(
             f'image dimensions {width}x{height} exceed cap '
             f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
         )
@@ -851,7 +916,7 @@ def _downscale_image_in_place(input_path: str, output_path: str) -> None:
         source_bytes = os.path.getsize(input_path)
     except OSError:
         pass
-    with Image.open(input_path) as image:
+    with _open_image(input_path) as image:
         source_format = (image.format or '').upper()
         _guard_and_fit_for_board(image)
         _bake_exif_orientation(image)
@@ -946,7 +1011,7 @@ def _run_image_normalisation(asset: Asset) -> None:
         # will raise a real decode error a moment later if the file is
         # genuinely broken.
         try:
-            with Image.open(src_uri) as probe:
+            with _open_image(src_uri) as probe:
                 src_width, src_height = _display_size(probe)
         except (OSError, UnidentifiedImageError, ValueError):
             logger.warning(

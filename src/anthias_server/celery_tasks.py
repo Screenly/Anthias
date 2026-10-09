@@ -1888,6 +1888,16 @@ from anthias_server import processing
     #     autoretry_for filter would otherwise sweep it up; listing
     #     it explicitly here makes the failure surface immediately.
     dont_autoretry_for=(FileNotFoundError, UnidentifiedImageError),
+    # ``ImageTooLargeError`` is the pixel cap's deliberate,
+    # operator-facing rejection (Failed pill naming the dimensions and
+    # the real cap, via _NormalizeAssetTask.on_failure) — an expected
+    # outcome, not a fault. Same rationale as
+    # ``UnsupportedVideoCodecError`` on normalize_video_asset below:
+    # listing it in ``throws`` keeps Celery from logging it at ERROR
+    # with a traceback, and sentry-sdk's CeleryIntegration skips
+    # ``task.throws`` exceptions, so an over-cap upload stops reaching
+    # Sentry (ANTHIAS-6G, ANTHIAS-6H). on_failure still runs.
+    throws=(processing.ImageTooLargeError,),
     retry_backoff=10,
     retry_backoff_max=300,
     retry_jitter=True,
