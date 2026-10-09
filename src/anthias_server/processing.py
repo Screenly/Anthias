@@ -631,6 +631,30 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
             )
 
 
+class ImageTooLargeError(ValueError):
+    """An image upload is over ``_MAX_IMAGE_PIXELS``.
+
+    The image counterpart of ``UnsupportedVideoCodecError``: a
+    deliberate, operator-facing rejection, not a fault. Both routes to
+    it — Pillow's bomb refusal inside ``Image.open`` past 2x the cap,
+    and ``_guard_and_fit_for_board`` reading ``image.size`` below it —
+    end here, so ``normalize_image_asset`` can name one exception in
+    ``throws``.
+
+    That listing is what keeps the gate out of Sentry: sentry-sdk's
+    CeleryIntegration returns early on ``isinstance(exc, task.throws)``,
+    and Celery logs it at INFO without a traceback.
+    ``_NormalizeAssetTask.on_failure`` still runs, so the operator
+    still gets the "Failed" pill with the dimensions and the real cap.
+
+    Subclasses ``ValueError`` because every caller on the pipeline
+    already catches that — ``needs_low_ram_image_downscale`` and the
+    dimension probe in ``_run_image_normalisation`` both list it — and
+    narrowing those to the new type would change which failures they
+    swallow.
+    """
+
+
 def _open_image(input_path: str) -> Image.Image:
     """``Image.open``, with Pillow's bomb refusal restated as ours.
 
@@ -666,7 +690,7 @@ def _open_image(input_path: str) -> Image.Image:
     try:
         return Image.open(input_path)
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as e:
-        raise ValueError(
+        raise ImageTooLargeError(
             f'image dimensions exceed cap {_MAX_IMAGE_PIXELS} pixels '
             '— refusing to decode'
         ) from e
@@ -748,7 +772,7 @@ def _guard_and_fit_for_board(image: Image.Image) -> None:
     """
     width, height = image.size
     if width * height > _MAX_IMAGE_PIXELS:
-        raise ValueError(
+        raise ImageTooLargeError(
             f'image dimensions {width}x{height} exceed cap '
             f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
         )
