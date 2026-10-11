@@ -149,8 +149,9 @@ def delete_asset_with_file(asset: Asset, *, nudge_viewer: bool = True) -> None:
     and an in-flight normalisation task landing in that window raises
     ``FileNotFoundError`` on an asset the operator has already deleted
     (Sentry ANTHIAS-1G). Dropping the row first means the task's
-    ``processing._row_or_none`` guard — or its missing-source
-    re-check — sees the deletion and no-ops instead. It also matches
+    ``processing._row_or_none`` guard — or, once the task is past it,
+    ``processing._run_unless_deleted`` — sees the deletion and no-ops
+    instead. It also matches
     what this function already documents: the row is the operator's
     source of truth, and a file left behind by a failed unlink is
     swept by the periodic ``cleanup()`` orphan pass.

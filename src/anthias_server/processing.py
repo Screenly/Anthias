@@ -61,6 +61,7 @@ import logging
 import os
 import shlex
 import struct
+from collections.abc import Callable
 from os import path
 from typing import Any
 
@@ -376,30 +377,35 @@ def _row_or_none(asset_id: str) -> Asset | None:
     return asset
 
 
-def _asset_was_deleted(asset_id: str) -> bool:
-    """True when the row has gone since this task picked it up.
+def _run_unless_deleted(run: Callable[[Asset], None], asset: Asset) -> None:
+    """Run a normalisation body, treating a mid-flight delete as a no-op.
 
-    Only consulted on the "source file is missing" path, to tell two
-    very different situations apart:
+    ``_row_or_none`` rejects a deleted row at task entry, but the
+    operator can delete the asset at any point after that, and
+    ``helpers.delete_asset_with_file`` takes the file with it. The body
+    then fails wherever it next touches the source: the ``isfile``
+    check, Pillow's ``open``, ffprobe, the final ``replace``. Asking at
+    each of those would still leave gaps between them, so the question
+    is asked once, here, after whatever the body raised:
 
-    * **The operator deleted the asset mid-flight.** ``helpers.
-      delete_asset_with_file`` drops the row and then unlinks the
-      file, so a missing file *under a missing row* is exactly that
-      race. Nothing is left to normalise, nothing to record (the row
-      that would carry ``metadata.error_message`` is gone), and
-      nobody to tell — so the task returns quietly rather than
-      raising a ``FileNotFoundError`` that reaches Sentry as a fault
-      (ANTHIAS-1G).
-    * **The file genuinely vanished under a live row** — disk
-      pressure, a stray sweep, a half-finished restore. That one
-      still raises: the row is there to carry the Failed pill, and
-      an asset whose bytes evaporated is worth a report.
-
-    ``_row_or_none`` already rejects a deleted row at task entry; this
-    is the same question asked again at the point the absence
-    actually shows up, because the delete can land in between.
+    * **No row** — the operator deleted the asset mid-flight. There is
+      nothing to normalise and no row to carry ``metadata.error_message``,
+      so log and return rather than raise a failure that reaches Sentry
+      as a fault (ANTHIAS-1G). Any output the body already wrote is an
+      orphan that the periodic ``cleanup()`` sweep removes.
+    * **Live row** — a genuine failure (corrupt upload, disk pressure,
+      a file that vanished under a row nobody deleted). Re-raise so
+      ``on_failure`` writes the Failed pill and the fault is reported.
     """
-    return not Asset.objects.filter(asset_id=asset_id).exists()
+    try:
+        run(asset)
+    except Exception:
+        if Asset.objects.filter(asset_id=asset.asset_id).exists():
+            raise
+        logger.info(
+            'normalisation: asset %s was deleted mid-flight; skipping',
+            asset.asset_id,
+        )
 
 
 def _ext(filename: str) -> str:
@@ -934,16 +940,7 @@ def _run_image_normalisation(asset: Asset) -> None:
     src_uri = asset.uri or ''
     if not src_uri or not path.isfile(src_uri):
         # Upload bytes never landed (cleanup() raced the operator,
-        # disk pressure, ...). Fail clean — unless the operator
-        # deleted the asset out from under us, which takes the file
-        # with it and leaves nothing to fail about.
-        if _asset_was_deleted(asset_id):
-            logger.info(
-                'normalize_image_asset: asset %s was deleted mid-flight; '
-                'skipping',
-                asset_id,
-            )
-            return
+        # disk pressure, ...). Fail clean.
         raise FileNotFoundError(f'image source missing: {src_uri!r}')
 
     src_ext = _ext(src_uri)
@@ -1728,16 +1725,6 @@ def _run_video_normalisation(asset: Asset) -> None:
     asset_id = asset.asset_id
     src_uri = asset.uri or ''
     if not src_uri or not path.isfile(src_uri):
-        # Same split as the image path: a vanished file under a
-        # vanished row is an operator delete that raced this task, not
-        # a fault to report (ANTHIAS-1G).
-        if _asset_was_deleted(asset_id):
-            logger.info(
-                'normalize_video_asset: asset %s was deleted mid-flight; '
-                'skipping',
-                asset_id,
-            )
-            return
         raise FileNotFoundError(f'video source missing: {src_uri!r}')
 
     summary = _ffprobe_summary(src_uri)
