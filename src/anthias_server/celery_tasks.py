@@ -816,6 +816,28 @@ class _DownloadAssetTask(Task):  # type: ignore[type-arg]
             )
 
 
+class YoutubeDownloadError(Exception):
+    """Raised by ``download_youtube_asset`` when yt-dlp cannot deliver
+    the video.
+
+    The YouTube counterpart of ``RemoteVideoDownloadError``: the causes
+    yt-dlp reports (403, 404, age-gate, geo-block, deleted video, an
+    origin read timing out) are properties of the *URL the operator
+    pasted*, not faults in Anthias. They already land on
+    ``_DownloadAssetTask.on_failure``, which clears the Processing pill
+    and writes the message onto the row — the operator's answer is the
+    row, not an alert.
+
+    Having our own type is what lets the task list it in ``throws``:
+    sentry-sdk's CeleryIntegration skips ``task.throws`` exceptions and
+    Celery stops logging them at ERROR with a traceback, so a routine
+    YouTube rejection stops being reported as a crash. Wrapping is
+    needed because ``yt_dlp.utils.DownloadError`` can only be imported
+    by pulling in the whole yt-dlp package (hundreds of extractors),
+    which the task body deliberately defers to call time.
+    """
+
+
 class _DownloadYoutubeTask(_DownloadAssetTask):
     """YouTube-specific download task. See ``_DownloadAssetTask`` for
     the failure contract.
@@ -823,8 +845,9 @@ class _DownloadYoutubeTask(_DownloadAssetTask):
     The previous in-process daemon thread swallowed yt-dlp's exit
     code, so a failed download silently left the row stuck at
     "Processing" with an empty .mp4. Now any uncaught exception
-    (DownloadError, ExtractorError, ...) bubbles to celery and lands
-    on the inherited ``on_failure`` once retries are exhausted.
+    (``YoutubeDownloadError``, and anything yt-dlp raises outside its
+    own error handling) bubbles to celery and lands on the inherited
+    ``on_failure`` once retries are exhausted.
     """
 
     _failure_log_prefix = 'download_youtube_asset'
@@ -851,6 +874,11 @@ YOUTUBE_DOWNLOAD_SOFT_TIME_LIMIT_S = (
     # signature extraction breakage) are permanent and re-running
     # just burns the worker. Let on_failure clean up.
     autoretry_for=(OSError,),
+    # The operator-facing rejection — see ``YoutubeDownloadError``.
+    # ``on_failure`` still runs, so the row still shows the Failed pill
+    # with yt-dlp's message; this only stops a 403 on someone's
+    # pasted URL being reported as an Anthias crash.
+    throws=(YoutubeDownloadError,),
     retry_backoff=15,
     retry_backoff_max=300,
     retry_jitter=True,
@@ -953,10 +981,16 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
     }
 
     # DownloadError is a permanent failure that bubbles to on_failure;
-    # autoretry_for excludes it specifically, so there is no
-    # wrap-and-reraise here.
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(uri, download=True)
+    # autoretry_for excludes it specifically, so it is never retried.
+    # It is re-raised as YoutubeDownloadError purely so the task's
+    # ``throws`` can name it without importing yt-dlp at module scope —
+    # the message (and therefore the operator's Failed pill) is
+    # unchanged.
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(uri, download=True)
+    except DownloadError as exc:
+        raise YoutubeDownloadError(str(exc)) from exc
 
     if info is None:
         # Should not happen with a successful extract_info, but
@@ -964,7 +998,7 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
         # row with a stale name and stale duration. on_failure path
         # via the explicit raise gives the operator the same
         # clear-flag-and-stop signal as a download error.
-        raise DownloadError(f'yt-dlp returned no info for {uri!r}')
+        raise YoutubeDownloadError(f'yt-dlp returned no info for {uri!r}')
 
     # ``noplaylist=True`` collapses single-video extractions; for
     # the playlist edge cases yt-dlp falls through to, the first
@@ -1886,15 +1920,20 @@ from anthias_server import processing
     #     autoretry_for filter would otherwise sweep it up; listing
     #     it explicitly here makes the failure surface immediately.
     dont_autoretry_for=(FileNotFoundError, UnidentifiedImageError),
-    # A source file that is gone is an outcome, not a fault — the row
-    # was deleted, or cleanup() swept the upload, between dispatch and
-    # pickup. ``on_failure`` still records it on the row, so the
-    # operator gets the Failed pill and the reason; ``throws`` only
-    # stops celery logging it at ERROR with a traceback and stops
-    # sentry-sdk's CeleryIntegration filing it as a crash. Same
-    # reasoning as ``throws=(UnsupportedVideoCodecError,)`` on
-    # normalize_video_asset below (ANTHIAS-1J / ANTHIAS-20).
-    throws=(FileNotFoundError,),
+    # Both of these are outcomes rather than faults, so neither should
+    # reach the error tracker as a crash. ``throws`` only stops celery
+    # logging at ERROR with a traceback and makes sentry-sdk's
+    # CeleryIntegration skip the event; ``on_failure`` still runs, so
+    # the row still shows the Failed pill and the reason.
+    #
+    #   * ``ImageTooLargeError`` — the pixel cap's deliberate,
+    #     operator-facing rejection, the image counterpart of
+    #     ``UnsupportedVideoCodecError`` below. A 144 MP scan is a
+    #     large upload, not a crash.
+    #   * ``FileNotFoundError`` — the source is gone because the row
+    #     was deleted, or ``cleanup()`` swept the upload, between
+    #     dispatch and pickup (ANTHIAS-1J / ANTHIAS-20).
+    throws=(processing.ImageTooLargeError, FileNotFoundError),
     retry_backoff=10,
     retry_backoff_max=300,
     retry_jitter=True,
