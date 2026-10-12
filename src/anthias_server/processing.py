@@ -59,6 +59,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import struct
 from collections.abc import Callable
@@ -648,6 +649,11 @@ class ImageTooLargeError(ValueError):
     """
 
 
+# Pillow's bomb guard words both its error and its warning as
+# "Image size (N pixels) exceeds limit of M pixels, ...".
+_PILLOW_BOMB_PIXELS_RE = re.compile(r'Image size \((\d+) pixels\)')
+
+
 def _open_image(input_path: str) -> Image.Image:
     """``Image.open`` with the bomb cap reported in our own words.
 
@@ -680,9 +686,16 @@ def _open_image(input_path: str) -> Image.Image:
         # ``needs_low_ram_image_downscale``.
         Image.DecompressionBombWarning,
     ) as exc:
+        # Pillow discards the image object before raising, so the
+        # width and height are gone; its message does carry the
+        # declared pixel count, which is the number the operator needs
+        # to judge how far to resize. Fall back to the bare cap if a
+        # future Pillow rewords it.
+        match = _PILLOW_BOMB_PIXELS_RE.search(str(exc))
+        size = f' is {int(match.group(1))} pixels, which' if match else ''
         raise ImageTooLargeError(
-            f'image exceeds the {_MAX_IMAGE_PIXELS} pixel decode cap — '
-            'resize it and upload again'
+            f'image{size} exceeds the {_MAX_IMAGE_PIXELS} pixel decode '
+            'cap — resize it and upload again'
         ) from exc
 
 

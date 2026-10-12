@@ -2286,6 +2286,26 @@ def test_a_missing_source_is_declared_as_expected() -> None:
         ), task.name
 
 
+def test_image_task_declares_too_large_rejection_as_expected() -> None:
+    """The pixel cap's ``ImageTooLargeError`` is the image counterpart
+    of the video codec gate: an operator-facing rejection, not a fault.
+    ``normalize_image_asset`` must list it in ``throws`` so an over-cap
+    upload is not logged with a traceback or reported to Sentry, and
+    the video task, which never raises it, must not.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    assert processing.ImageTooLargeError in tuple(
+        getattr(normalize_image_asset, 'throws', ())
+    )
+    assert processing.ImageTooLargeError not in tuple(
+        getattr(normalize_video_asset, 'throws', ())
+    )
+
+
 @pytest.mark.django_db
 def test_normalize_on_failure_writes_error_metadata(
     asset_dir: str,
@@ -2630,8 +2650,13 @@ def test_open_image_translates_pillow_bomb_error(asset_dir: str) -> None:
     the same ``ImageTooLargeError`` the in-range band raises."""
     src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
 
-    with pytest.raises(processing.ImageTooLargeError, match='decode cap'):
+    with pytest.raises(
+        processing.ImageTooLargeError, match='is 400000000 pixels'
+    ) as excinfo:
         processing._open_image(src)
+    # Pillow's alarming wording stays out of the operator's message.
+    assert 'DOS attack' not in str(excinfo.value)
+    assert 'decode cap' in str(excinfo.value)
 
     # The band between the cap and 2x the cap still goes through the
     # explicit size check, and reports the dimensions it read.
