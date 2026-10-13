@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import sqlite3
 import sys
 import tarfile
 import threading
@@ -36,27 +37,130 @@ legacy_directories = ['.screenly', 'screenly_assets']
 _CONFIG_DIRS = ('.anthias', '.screenly')
 _ASSET_DIRS = ('anthias_assets', 'screenly_assets')
 
+# The database files under the config dir, current and legacy names.
+_DB_FILES = ('anthias.db', 'screenly.db')
+
+# SQLite's per-database sidecars. These are NOT runtime state: they are
+# the tail of the write-ahead log and its shared-memory index, both only
+# meaningful alongside the exact main database file they were written
+# against.
+#
+# Shipping them was a corruption route in both directions. A backup tars
+# ``anthias.db`` and ``anthias.db-wal`` at two different instants while
+# the fleet keeps writing, so the pair in the archive need not be
+# consistent; and ``recover()`` extracts over a live config dir, so an
+# archive that carries no ``-wal`` (its source device was on the
+# rollback journal) leaves *this* device's old ``-wal`` next to a
+# brand-new ``anthias.db`` — SQLite then replays one database's log into
+# another and the first read says ``database disk image is malformed``
+# (Sentry ANTHIAS-67/68, raised out of the post-restore migrate).
+#
+# So the archive carries the main database alone, checkpointed before it
+# is read (see ``_checkpoint_databases``), and a restore clears the
+# sidecars it lands on.
+_DB_SIDECAR_SUFFIXES = ('-wal', '-shm', '-journal')
+
 # The files the runtime keeps directly under the config dir: the
-# settings file, the metadata database (plus its SQLite sidecars), and
-# the default-asset manifest, under both the current and legacy names.
+# settings file, the metadata database, and the default-asset manifest,
+# under both the current and legacy names.
 _CONFIG_FILES = frozenset(
     {
         'anthias.conf',
-        'anthias.db',
-        'anthias.db-wal',
-        'anthias.db-shm',
-        'anthias.db-journal',
         'default_assets.yml',
         'screenly.conf',
-        'screenly.db',
-        'screenly.db-wal',
-        'screenly.db-shm',
-        'screenly.db-journal',
+        *_DB_FILES,
     }
 )
 # Sub-directories of the config dir that are part of the runtime — the
 # django-dbbackup dumps (and their metadata sidecars) live here.
 _CONFIG_SUBTREES = ('backups',)
+
+
+# Busy-wait budget for the pre-backup checkpoint. A checkpoint needs no
+# exclusive lock and the metadata database is small, so this only has to
+# cover a writer mid-transaction; past that the archive simply ships the
+# main file without the tail, which is the behaviour a device on the
+# rollback journal has always had.
+_CHECKPOINT_TIMEOUT_S = 10.0
+
+
+def _db_paths(home: str) -> list[str]:
+    """Every database file a backup or restore has to reason about."""
+    return [
+        path.join(home, config_dir, db_file)
+        for config_dir in _CONFIG_DIRS
+        for db_file in _DB_FILES
+    ]
+
+
+def _is_db_sidecar(name: str) -> bool:
+    """True for a ``-wal`` / ``-shm`` / ``-journal`` tar member."""
+    leaf = name.replace('\\', '/').rsplit('/', 1)[-1]
+    return any(
+        leaf == db_file + suffix
+        for db_file in _DB_FILES
+        for suffix in _DB_SIDECAR_SUFFIXES
+    )
+
+
+def _checkpoint_databases(home: str) -> None:
+    """Fold each WAL tail back into its main database before taring.
+
+    The archive ships the main file alone, so anything still sitting in
+    the write-ahead log would be lost on restore. A checkpoint moves it
+    across first. Best effort by design: a checkpoint that cannot
+    complete (a writer holding the file, an unreadable database) costs
+    the backup the most recent commits, which is strictly better than
+    failing the operator's download — and far better than shipping a
+    log that does not match the file beside it.
+    """
+    for db_path in _db_paths(home):
+        if not path.isfile(db_path):
+            continue
+        try:
+            conn = sqlite3.connect(db_path, timeout=_CHECKPOINT_TIMEOUT_S)
+        except sqlite3.Error:
+            logger.warning(
+                'Could not open %s to checkpoint it before backup',
+                db_path,
+                exc_info=True,
+            )
+            continue
+        try:
+            conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except sqlite3.Error:
+            logger.warning(
+                'Could not checkpoint %s before backup; the archive may '
+                'be missing its most recent writes',
+                db_path,
+                exc_info=True,
+            )
+        finally:
+            conn.close()
+
+
+def _clear_db_sidecars(home: str) -> None:
+    """Delete the SQLite sidecars a restore has just orphaned.
+
+    ``recover()`` overwrites the main database file in place. Any
+    ``-wal`` / ``-shm`` left beside it belongs to the database that was
+    there a moment ago, and SQLite would replay it into the restored one
+    on the next open. Removing them is what makes the restored file the
+    whole truth.
+    """
+    for db_path in _db_paths(home):
+        for suffix in _DB_SIDECAR_SUFFIXES:
+            sidecar = db_path + suffix
+            try:
+                remove(sidecar)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                logger.warning(
+                    'Could not remove stale SQLite sidecar %s after restore',
+                    sidecar,
+                    exc_info=True,
+                )
 
 
 def _is_runtime_member(name: str) -> bool:
@@ -356,6 +460,9 @@ def stream_backup() -> Generator[bytes]:
     completing 200 with a silently truncated archive.
     """
     home = getenv('HOME') or ''
+    # Before anything reads the database file: move the WAL tail into
+    # it, because the archive carries the main file alone.
+    _checkpoint_databases(home)
     read_fd, write_fd = os.pipe()
     produce_error: list[BaseException] = []
 
@@ -467,6 +574,10 @@ def create_backup(name: str = default_archive_name) -> str:
     if path.isfile(file_path):
         remove(file_path)
 
+    # See stream_backup(): the archive ships the main database file
+    # alone, so its WAL tail has to be folded in first.
+    _checkpoint_databases(home)
+
     try:
         with tarfile.open(
             file_path, 'w:gz', compresslevel=BACKUP_COMPRESSLEVEL
@@ -521,6 +632,16 @@ def recover(file_path: str) -> None:
             # never write it to disk.
             if member.name == BACKUP_MANIFEST_NAME:
                 continue
+            # Archives written before the sidecars were dropped still
+            # carry them. They are not unsafe in the path-traversal
+            # sense this loop's warning is about, just never writable —
+            # see _DB_SIDECAR_SUFFIXES.
+            if _is_db_sidecar(member.name):
+                logger.info(
+                    'Skipping SQLite sidecar carried by an older archive: %r',
+                    member.name,
+                )
+                continue
             if not _safe_tar_member(member, home):
                 logger.warning(
                     'Skipping unsafe tar member during recover: %r',
@@ -528,6 +649,11 @@ def recover(file_path: str) -> None:
                 )
                 continue
             tar.extract(member, **extract_kwargs)
+
+    # The main database file has just been replaced; anything left of
+    # the old one's write-ahead log would be replayed into it on the
+    # next open. Clear the sidecars before that open happens.
+    _clear_db_sidecars(home)
 
     # The archive may hold an older schema; migrate the restored
     # database up to what this system expects.

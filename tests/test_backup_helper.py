@@ -3,6 +3,7 @@ import io
 import json
 import os
 import shutil
+import sqlite3
 import tarfile
 import tempfile
 import threading
@@ -21,6 +22,7 @@ from anthias_server.lib.backup_helper import (
     BackupRecoverError,
     IncompatibleBackupError,
     _current_schema_version,
+    _is_db_sidecar,
     astream_backup,
     backup_archive_name,
     create_backup,
@@ -492,20 +494,23 @@ def test_recover_writes_only_runtime_files(backup_home: str) -> None:
 
 def test_backup_ships_only_runtime_files(backup_home: str) -> None:
     """A backup captures the runtime whitelist and nothing else. Config,
-    DB (+ sidecars), default-asset manifest, db backups and assets are
-    kept; an SSL private key, the playback-stats log, an SSH key an
-    operator tucked under ~/.anthias, and a stray file are all dropped."""
+    DB, default-asset manifest, db backups and assets are kept; the
+    SQLite sidecars, an SSL private key, the playback-stats log, an SSH
+    key an operator tucked under ~/.anthias, and a stray file are all
+    dropped."""
     a = path.join(backup_home, '.anthias')
     kept = {
         path.join(a, 'anthias.conf'): b'[main]\n',
         path.join(a, 'anthias.db'): b'DB',
-        path.join(a, 'anthias.db-wal'): b'WAL',
         path.join(a, 'default_assets.yml'): b'assets: []\n',
         path.join(a, 'backups', 'dump.sqlite3'): b'DUMP',
         path.join(a, 'backups', 'dump.sqlite3.metadata'): b'{}',
         path.join(backup_home, 'anthias_assets', 'clip.mp4'): b'VIDEO',
     }
     dropped = {
+        path.join(a, 'anthias.db-wal'): b'WAL',
+        path.join(a, 'anthias.db-shm'): b'SHM',
+        path.join(a, 'anthias.db-journal'): b'JOURNAL',
         path.join(a, 'ssl', 'key.pem'): b'PRIVKEY',
         path.join(a, 'playback-stats.log'): b'log',
         path.join(a, 'id_ed25519'): b'PRIVKEY',
@@ -752,3 +757,143 @@ def test_manifest_carries_no_deployment_identifier(backup_home: str) -> None:
         'schema_version',
         'created_at',
     }
+
+
+# SQLite file-set consistency. The database is three files on disk —
+# ``anthias.db`` plus a ``-wal`` tail and its ``-shm`` index — and only
+# the main file is runtime state. Shipping or landing the sidecars
+# alongside a *different* main file is how a restore ended as
+# ``DatabaseError: database disk image is malformed`` on the first read
+# after it (Sentry ANTHIAS-67/68).
+
+
+def _write_wal_database(db_path: str, marker: str) -> None:
+    """Create a WAL-mode SQLite database holding one marker row."""
+    os.makedirs(path.dirname(db_path), exist_ok=True)
+    for suffix in ('', '-wal', '-shm', '-journal'):
+        if path.exists(db_path + suffix):
+            os.remove(db_path + suffix)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('CREATE TABLE marker (value TEXT)')
+        conn.execute('INSERT INTO marker VALUES (?)', (marker,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _read_marker(db_path: str) -> str:
+    conn = sqlite3.connect(db_path)
+    try:
+        return str(conn.execute('SELECT value FROM marker').fetchone()[0])
+    finally:
+        conn.close()
+
+
+def _write_into_the_wal(db_path: str, marker: str) -> sqlite3.Connection:
+    """Commit ``marker`` so it lands in the ``-wal`` and stays there.
+
+    SQLite checkpoints and deletes the sidecars when the *last*
+    connection closes, so reproducing a live write-ahead log needs a
+    connection that outlives the write — exactly like the three
+    processes that hold this file open on a device. The caller closes
+    the returned connection.
+    """
+    holder = sqlite3.connect(db_path)
+    holder.execute('SELECT * FROM marker').fetchall()
+    writer = sqlite3.connect(db_path)
+    try:
+        writer.execute('UPDATE marker SET value = ?', (marker,))
+        writer.commit()
+    finally:
+        writer.close()
+    assert path.getsize(db_path + '-wal') > 0
+    return holder
+
+
+def test_backup_checkpoints_the_wal_into_the_shipped_database(
+    backup_home: str, tmp_path: Path
+) -> None:
+    """The archive carries the main database alone, and it carries the
+    writes that were still in the WAL when the backup was taken.
+
+    Shipping the ``-wal`` instead would make the archive a pair of
+    files captured at two different instants — the inconsistency a
+    restore then has to resolve, and cannot.
+    """
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'before')
+    holder = _write_into_the_wal(db_path, 'in-the-wal')
+    try:
+        archive = create_backup(name='wal-checkpoint')
+    finally:
+        holder.close()
+
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = set(tar.getnames())
+        assert '.anthias/anthias.db' in names
+        assert not [n for n in names if _is_db_sidecar(n)]
+        member = tar.extractfile('.anthias/anthias.db')
+        assert member is not None
+        shipped = tmp_path / 'shipped.db'
+        shipped.write_bytes(member.read())
+
+    assert _read_marker(str(shipped)) == 'in-the-wal'
+
+
+def test_recover_clears_the_previous_databases_wal(backup_home: str) -> None:
+    """A restore leaves no sidecar from the database it replaced.
+
+    Without this the device's own ``-wal`` — frames belonging to the
+    database that was there a second ago — sits next to the restored
+    file and SQLite replays it on the next open.
+    """
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+
+    # The database the device is running, with a live (uncheckpointed)
+    # write-ahead log.
+    _write_wal_database(db_path, 'device')
+    holder = _write_into_the_wal(db_path, 'device-uncommitted-to-main')
+    try:
+        with open(db_path + '-wal', 'rb') as f:
+            stale_wal = f.read()
+    finally:
+        holder.close()
+
+    # An archive built from a different database.
+    _write_wal_database(db_path, 'from-the-archive')
+    archive_name = create_backup(name='sidecar-clearing')
+    archive = path.join(backup_home, static_dir, archive_name)
+
+    # Put the device's stale log back where recover() will land on it.
+    with open(db_path + '-wal', 'wb') as f:
+        f.write(stale_wal)
+
+    recover(archive)
+
+    for suffix in ('-wal', '-shm', '-journal'):
+        assert not path.exists(db_path + suffix), (
+            f'{suffix} from the replaced database survived the restore'
+        )
+    assert _read_marker(db_path) == 'from-the-archive'
+
+
+def test_recover_skips_a_sidecar_carried_by_an_older_archive(
+    backup_home: str,
+) -> None:
+    """Archives written before the sidecars were dropped still carry
+    them; a restore must not lay them down."""
+    archive = path.join(backup_home, 'legacy-sidecars.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, '.anthias/anthias.db', b'DBDATA')
+        _add_file_member(tar, '.anthias/anthias.db-wal', b'WALDATA')
+        _add_file_member(tar, '.anthias/anthias.db-shm', b'SHMDATA')
+
+    recover(archive)
+
+    a = path.join(backup_home, '.anthias')
+    assert path.isfile(path.join(a, 'anthias.db'))
+    assert not path.exists(path.join(a, 'anthias.db-wal'))
+    assert not path.exists(path.join(a, 'anthias.db-shm'))
