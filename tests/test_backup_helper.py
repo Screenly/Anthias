@@ -21,6 +21,7 @@ from anthias_server.lib import backup_helper
 from anthias_server.lib.backup_helper import (
     BACKUP_MANIFEST_NAME,
     BackupRecoverError,
+    BackupSnapshotError,
     IncompatibleBackupError,
     _current_schema_version,
     _is_db_file,
@@ -967,6 +968,59 @@ def test_backup_ships_a_database_it_cannot_snapshot_as_is(
     assert 'Could not snapshot' in caplog.text
 
 
+def test_backup_fails_rather_than_drop_the_wal_it_cannot_snapshot(
+    backup_home: str,
+) -> None:
+    """The on-disk fallback is not a backup for a WAL database whose log
+    still holds commits: the archive never carries the ``-wal``, so the
+    main file alone would silently lose them. The backup fails instead,
+    and leaves no half-written archive behind."""
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'checkpointed')
+    holder = _write_into_the_wal(db_path, 'only-in-the-wal')
+    try:
+        with (
+            mock.patch(
+                'anthias_server.lib.backup_helper.sqlite3.connect',
+                side_effect=sqlite3.OperationalError('database is locked'),
+            ),
+            pytest.raises(BackupSnapshotError),
+        ):
+            create_backup(name='wal-unsnapshottable')
+    finally:
+        holder.close()
+
+    assert not path.exists(
+        path.join(
+            backup_home,
+            static_dir,
+            backup_archive_name('wal-unsnapshottable'),
+        )
+    )
+
+
+def test_backup_falls_back_for_a_wal_database_with_an_empty_log(
+    backup_home: str, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    """With nothing in the ``-wal`` the main file is the whole database,
+    so the on-disk fallback still applies to a WAL-mode file."""
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'checkpointed')
+    assert not path.exists(db_path + '-wal')
+
+    with (
+        mock.patch(
+            'anthias_server.lib.backup_helper.sqlite3.connect',
+            side_effect=sqlite3.OperationalError('database is locked'),
+        ),
+        caplog.at_level('WARNING', 'anthias_server.lib.backup_helper'),
+    ):
+        archive = create_backup(name='wal-empty-fallback')
+
+    assert 'Could not snapshot' in caplog.text
+    assert _shipped_marker(backup_home, archive, tmp_path) == 'checkpointed'
+
+
 def test_recover_clears_the_previous_databases_wal(backup_home: str) -> None:
     """A restore leaves no sidecar from the database it replaced.
 
@@ -1102,6 +1156,57 @@ def test_recover_fails_when_a_stale_sidecar_cannot_be_removed(
 
     upgrade.assert_not_called()
     assert path.isfile(archive)
+
+
+def test_recover_clears_the_stale_wal_when_a_later_member_fails(
+    backup_home: str, tmp_path: Path
+) -> None:
+    """Extraction that fails after the database has been replaced still
+    clears the replaced database's WAL before the error propagates;
+    otherwise the next open replays it into the restored file."""
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    archived_db = str(tmp_path / 'archived.db')
+    _write_wal_database(archived_db, 'from-the-archive')
+
+    _write_wal_database(db_path, 'device')
+    holder = _write_into_the_wal(db_path, 'device-wal')
+    try:
+        stale_wal = Path(db_path + '-wal').read_bytes()
+    finally:
+        holder.close()
+    # Closing the last connection checkpoints the log away; put it back.
+    Path(db_path + '-wal').write_bytes(stale_wal)
+
+    archive = path.join(backup_home, 'fails-midway.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        tar.add(archived_db, arcname='.anthias/anthias.db')
+        _add_file_member(tar, 'anthias_assets/after-the-db.bin', b'x')
+
+    real_extract = tarfile.TarFile.extract
+
+    def extract(
+        self: tarfile.TarFile, member: tarfile.TarInfo, **kwargs: object
+    ) -> None:
+        if member.name == 'anthias_assets/after-the-db.bin':
+            raise OSError('disk full')
+        real_extract(self, member, **kwargs)  # type: ignore[arg-type]
+
+    with (
+        mock.patch.object(tarfile.TarFile, 'extract', extract),
+        mock.patch(
+            'anthias_server.lib.backup_helper._upgrade_restored_database'
+        ) as upgrade,
+        pytest.raises(OSError, match='disk full'),
+    ):
+        recover(archive)
+
+    upgrade.assert_not_called()
+    for suffix in ('-wal', '-shm', '-journal'):
+        assert not path.exists(db_path + suffix), (
+            f'{suffix} from the replaced database survived a failed restore'
+        )
+    assert _read_marker(db_path) == 'from-the-archive'
 
 
 def test_is_db_file_only_matches_the_config_dir_root() -> None:

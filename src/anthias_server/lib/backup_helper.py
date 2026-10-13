@@ -120,6 +120,29 @@ def _is_db_sidecar(name: str) -> bool:
     )
 
 
+class BackupSnapshotError(Exception):
+    """A database could not be captured whole for a backup archive."""
+
+
+def _has_wal_tail(db_path: str) -> bool:
+    """True if ``db_path`` is a WAL-mode database with a non-empty log.
+
+    Bytes 18 and 19 of the SQLite header are the read/write format
+    versions, both 2 in WAL mode. A non-empty ``-wal`` beside such a
+    file may hold commits that have not been checkpointed into it yet.
+    """
+    try:
+        with open(db_path, 'rb') as f:
+            header = f.read(20)
+        return (
+            header[:16] == b'SQLite format 3\x00'
+            and header[18:20] == b'\x02\x02'
+            and path.getsize(db_path + '-wal') > 0
+        )
+    except OSError:
+        return False
+
+
 def _snapshot_databases(home: str, dest_dir: str) -> dict[str, str]:
     """Copy each backed-up database into ``dest_dir`` through SQLite.
 
@@ -136,7 +159,10 @@ def _snapshot_databases(home: str, dest_dir: str) -> dict[str, str]:
     locked past the timeout, not actually SQLite) is left out of the
     result and the archive ships the file as it is on disk, which is
     what a backup always did — strictly better than failing the
-    operator's download.
+    operator's download. Except in WAL mode with a non-empty ``-wal``:
+    the archive never carries sidecars, so the main file alone would be
+    missing every commit still in the log, and that fails the backup
+    with ``BackupSnapshotError`` instead of passing for a good one.
     """
     snapshots: dict[str, str] = {}
     for db_path in _db_paths(home):
@@ -180,7 +206,13 @@ def _snapshot_databases(home: str, dest_dir: str) -> dict[str, str]:
                     dst.close()
             finally:
                 src.close()
-        except sqlite3.Error:
+        except sqlite3.Error as exc:
+            if _has_wal_tail(db_path):
+                raise BackupSnapshotError(
+                    f'Could not snapshot {db_path} for backup, and its '
+                    'write-ahead log holds commits the file on disk does '
+                    'not; refusing to ship an archive without them'
+                ) from exc
             logger.warning(
                 'Could not snapshot %s for backup; shipping the file as '
                 'it is on disk',
@@ -646,7 +678,7 @@ def create_backup(name: str = default_archive_name) -> str:
         ) as tar:
             _add_manifest(tar)
             _add_runtime_tree(tar, home)
-    except OSError:
+    except (OSError, BackupSnapshotError):
         remove(file_path)
         raise
 
@@ -684,45 +716,48 @@ def recover(file_path: str) -> None:
         if hasattr(tarfile, 'data_filter'):
             extract_kwargs['filter'] = 'data'
         restored_dbs: set[str] = set()
-        for member in tar.getmembers():
-            # The manifest is metadata read above, not runtime state;
-            # never write it to disk.
-            if member.name == BACKUP_MANIFEST_NAME:
-                continue
-            # Archives written before the sidecars were dropped still
-            # carry them. They are not unsafe in the path-traversal
-            # sense this loop's warning is about, just never writable —
-            # see _DB_SIDECAR_SUFFIXES.
-            if _is_db_sidecar(member.name):
-                logger.info(
-                    'Skipping SQLite sidecar carried by an older archive: %r',
-                    member.name,
-                )
-                continue
-            if not _safe_tar_member(member, home):
-                logger.warning(
-                    'Skipping unsafe tar member during recover: %r',
-                    member.name,
-                )
-                continue
-            tar.extract(member, **extract_kwargs)
-            if member.isfile() and _is_db_file(member.name):
-                # On an upgraded device ``.screenly`` and
-                # ``screenly.db`` are back-compat symlinks to
-                # ``.anthias/anthias.db`` (bin/migrate_legacy_paths.sh),
-                # so a pre-rebrand archive's database is extracted
-                # through them into the canonical file. SQLite keeps the
-                # WAL beside the file it resolves to, so clear the
-                # sidecars of both the name as written and the file it
-                # landed in.
-                db_path = path.join(home, member.name)
-                restored_dbs.add(db_path)
-                restored_dbs.add(path.realpath(db_path))
-
-    # The main database file has just been replaced; anything left of
-    # the old one's write-ahead log would be replayed into it on the
-    # next open. Clear the sidecars before that open happens.
-    _clear_db_sidecars(restored_dbs)
+        try:
+            for member in tar.getmembers():
+                # The manifest is metadata read above, not runtime state;
+                # never write it to disk.
+                if member.name == BACKUP_MANIFEST_NAME:
+                    continue
+                # Archives written before the sidecars were dropped still
+                # carry them. They are not unsafe in the path-traversal
+                # sense this loop's warning is about, just never writable —
+                # see _DB_SIDECAR_SUFFIXES.
+                if _is_db_sidecar(member.name):
+                    logger.info(
+                        'Skipping SQLite sidecar carried by an older archive: %r',
+                        member.name,
+                    )
+                    continue
+                if not _safe_tar_member(member, home):
+                    logger.warning(
+                        'Skipping unsafe tar member during recover: %r',
+                        member.name,
+                    )
+                    continue
+                tar.extract(member, **extract_kwargs)
+                if member.isfile() and _is_db_file(member.name):
+                    # On an upgraded device ``.screenly`` and
+                    # ``screenly.db`` are back-compat symlinks to
+                    # ``.anthias/anthias.db`` (bin/migrate_legacy_paths.sh),
+                    # so a pre-rebrand archive's database is extracted
+                    # through them into the canonical file. SQLite keeps the
+                    # WAL beside the file it resolves to, so clear the
+                    # sidecars of both the name as written and the file it
+                    # landed in.
+                    db_path = path.join(home, member.name)
+                    restored_dbs.add(db_path)
+                    restored_dbs.add(path.realpath(db_path))
+        finally:
+            # The main database file has just been replaced; anything
+            # left of the old one's write-ahead log would be replayed
+            # into it on the next open. Clear the sidecars before that
+            # open happens, also when a later member failed to extract
+            # and the restore is about to fail half done.
+            _clear_db_sidecars(restored_dbs)
 
     # The archive may hold an older schema; migrate the restored
     # database up to what this system expects.
