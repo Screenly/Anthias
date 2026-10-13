@@ -17,11 +17,13 @@ import pytest
 from django.http import StreamingHttpResponse
 
 from anthias_common.utils import STAGED_UPLOAD_DIR
+from anthias_server.lib import backup_helper
 from anthias_server.lib.backup_helper import (
     BACKUP_MANIFEST_NAME,
     BackupRecoverError,
     IncompatibleBackupError,
     _current_schema_version,
+    _is_db_file,
     _is_db_sidecar,
     astream_backup,
     backup_archive_name,
@@ -812,7 +814,20 @@ def _write_into_the_wal(db_path: str, marker: str) -> sqlite3.Connection:
     return holder
 
 
-def test_backup_checkpoints_the_wal_into_the_shipped_database(
+def _shipped_marker(backup_home: str, archive: str, tmp_path: Path) -> str:
+    """Read the marker out of the database an archive carries."""
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = set(tar.getnames())
+        assert '.anthias/anthias.db' in names
+        assert not [n for n in names if _is_db_sidecar(n)]
+        member = tar.extractfile('.anthias/anthias.db')
+        assert member is not None
+        shipped = tmp_path / 'shipped.db'
+        shipped.write_bytes(member.read())
+    return _read_marker(str(shipped))
+
+
+def test_backup_ships_the_writes_still_in_the_wal(
     backup_home: str, tmp_path: Path
 ) -> None:
     """The archive carries the main database alone, and it carries the
@@ -826,32 +841,18 @@ def test_backup_checkpoints_the_wal_into_the_shipped_database(
     _write_wal_database(db_path, 'before')
     holder = _write_into_the_wal(db_path, 'in-the-wal')
     try:
-        archive = create_backup(name='wal-checkpoint')
+        archive = create_backup(name='wal-snapshot')
     finally:
         holder.close()
 
-    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
-        names = set(tar.getnames())
-        assert '.anthias/anthias.db' in names
-        assert not [n for n in names if _is_db_sidecar(n)]
-        member = tar.extractfile('.anthias/anthias.db')
-        assert member is not None
-        shipped = tmp_path / 'shipped.db'
-        shipped.write_bytes(member.read())
-
-    assert _read_marker(str(shipped)) == 'in-the-wal'
+    assert _shipped_marker(backup_home, archive, tmp_path) == 'in-the-wal'
 
 
-def test_backup_warns_when_the_checkpoint_is_blocked(
-    backup_home: str,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+def test_backup_ships_the_wal_writes_past_a_pinned_reader(
+    backup_home: str, tmp_path: Path
 ) -> None:
-    """A checkpoint a reader holds back reports busy rather than
-    raising. The backup still ships, but not silently."""
-    monkeypatch.setattr(
-        'anthias_server.lib.backup_helper._CHECKPOINT_TIMEOUT_S', 0.1
-    )
+    """A reader pinned to an older snapshot is what blocks a checkpoint.
+    The snapshot reads through the WAL instead, so it does not care."""
     db_path = path.join(backup_home, '.anthias', 'anthias.db')
     _write_wal_database(db_path, 'before')
     reader = sqlite3.connect(db_path, isolation_level=None)
@@ -859,15 +860,83 @@ def test_backup_warns_when_the_checkpoint_is_blocked(
     reader.execute('SELECT * FROM marker').fetchall()
     holder = _write_into_the_wal(db_path, 'after-the-reader')
     try:
-        with caplog.at_level('WARNING', 'anthias_server.lib.backup_helper'):
-            archive = create_backup(name='blocked-checkpoint')
+        archive = create_backup(name='pinned-reader')
     finally:
         reader.rollback()
         reader.close()
         holder.close()
 
-    assert path.isfile(path.join(backup_home, static_dir, archive))
-    assert 'was blocked' in caplog.text
+    assert (
+        _shipped_marker(backup_home, archive, tmp_path) == 'after-the-reader'
+    )
+
+
+def test_backup_ships_a_snapshot_not_the_live_file(
+    backup_home: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once the snapshot is taken, nothing that happens to the live file
+    while the archive is built can reach the archive.
+
+    Stands in for a checkpoint rewriting pages of ``anthias.db`` while
+    ``tar`` is half way through reading it: the live file is clobbered
+    right after the snapshot, and the archive must not notice.
+    """
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'snapshotted')
+    real_snapshot = backup_helper._snapshot_databases
+
+    def snapshot_then_clobber(home: str, dest_dir: str) -> dict[str, str]:
+        snapshots = real_snapshot(home, dest_dir)
+        with open(db_path, 'wb') as f:
+            f.write(b'torn' * 1024)
+        return snapshots
+
+    monkeypatch.setattr(
+        backup_helper, '_snapshot_databases', snapshot_then_clobber
+    )
+    archive = create_backup(name='snapshot-isolation')
+
+    assert _shipped_marker(backup_home, archive, tmp_path) == 'snapshotted'
+
+
+def test_streamed_backup_ships_a_database_snapshot(
+    backup_home: str, tmp_path: Path
+) -> None:
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'before')
+    holder = _write_into_the_wal(db_path, 'streamed')
+    try:
+        data = b''.join(stream_backup())
+    finally:
+        holder.close()
+
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tar:
+        names = tar.getnames()
+        assert names.count('.anthias/anthias.db') == 1
+        member = tar.extractfile('.anthias/anthias.db')
+        assert member is not None
+        shipped = tmp_path / 'streamed.db'
+        shipped.write_bytes(member.read())
+    assert _read_marker(str(shipped)) == 'streamed'
+
+
+def test_backup_ships_a_database_it_cannot_snapshot_as_is(
+    backup_home: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A file SQLite refuses to read is still shipped, not dropped, and
+    the fallback is logged."""
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    with open(db_path, 'wb') as f:
+        f.write(b'not a database' * 16)
+
+    with caplog.at_level('WARNING', 'anthias_server.lib.backup_helper'):
+        archive = create_backup(name='unsnapshottable')
+
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        member = tar.extractfile('.anthias/anthias.db')
+        assert member is not None
+        assert member.read() == b'not a database' * 16
+    assert 'Could not snapshot' in caplog.text
 
 
 def test_recover_clears_the_previous_databases_wal(backup_home: str) -> None:
@@ -949,3 +1018,66 @@ def test_is_db_sidecar_only_matches_the_config_dir_root() -> None:
     assert _is_db_sidecar('.screenly/screenly.db-shm')
     assert not _is_db_sidecar('anthias_assets/anthias.db-wal')
     assert not _is_db_sidecar('.anthias/backups/anthias.db-journal')
+
+
+def test_recover_keeps_the_live_wal_when_the_archive_has_no_database(
+    backup_home: str,
+) -> None:
+    """A restore only clears the sidecars of a database it replaced.
+
+    An archive with no database member leaves the live one in place, and
+    its WAL may hold the only copy of committed rows.
+    """
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'before')
+    holder = _write_into_the_wal(db_path, 'only-in-the-wal')
+    try:
+        archive = path.join(backup_home, 'no-database.tar.gz')
+        with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+            _stage_legit_layout(tar)
+            _add_file_member(tar, 'anthias_assets/clip.mp4', b'VIDEO')
+
+        recover(archive)
+
+        assert path.getsize(db_path + '-wal') > 0
+        assert _read_marker(db_path) == 'only-in-the-wal'
+    finally:
+        holder.close()
+
+
+def test_recover_fails_when_a_stale_sidecar_cannot_be_removed(
+    backup_home: str,
+) -> None:
+    """A stale WAL that survives the restore will be replayed into the
+    restored database, so the restore must not report success.
+
+    The archive is left in place (``recover()`` removes it only on
+    success) and the post-restore migrate never runs against the
+    poisoned file.
+    """
+    a = path.join(backup_home, '.anthias')
+    # A directory where the sidecar should be: remove() raises an
+    # OSError other than FileNotFoundError.
+    os.makedirs(path.join(a, 'anthias.db-wal', 'pinned'))
+    archive = path.join(backup_home, 'stuck-sidecar.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, '.anthias/anthias.db', b'DBDATA')
+
+    with (
+        mock.patch(
+            'anthias_server.lib.backup_helper._upgrade_restored_database'
+        ) as upgrade,
+        pytest.raises(OSError),
+    ):
+        recover(archive)
+
+    upgrade.assert_not_called()
+    assert path.isfile(archive)
+
+
+def test_is_db_file_only_matches_the_config_dir_root() -> None:
+    assert _is_db_file('.anthias/anthias.db')
+    assert _is_db_file('.screenly/screenly.db')
+    assert not _is_db_file('anthias_assets/anthias.db')
+    assert not _is_db_file('.anthias/backups/anthias.db')
