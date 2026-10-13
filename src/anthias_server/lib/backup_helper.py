@@ -143,6 +143,16 @@ def _snapshot_databases(home: str, dest_dir: str) -> dict[str, str]:
         arcname = path.relpath(db_path, home).replace(os.sep, '/')
         if arcname.split('/', 1)[0] not in directories:
             continue  # not part of the archive at all
+        if path.islink(db_path):
+            # An upgraded device keeps ``.anthias/screenly.db`` as a
+            # back-compat symlink to ``anthias.db``
+            # (bin/migrate_legacy_paths.sh). Snapshotting it would ship
+            # a second, independent copy of the same database under the
+            # legacy name, and a restore would land that copy as a
+            # regular file which then diverges from the real one. Leave
+            # it to ``tar``, which records it as the symlink it is; the
+            # file it points at is snapshotted under its own name.
+            continue
         if not path.isfile(db_path):
             continue
         snapshot = path.join(dest_dir, arcname.replace('/', '_'))

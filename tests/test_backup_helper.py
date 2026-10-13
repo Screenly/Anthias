@@ -920,6 +920,34 @@ def test_streamed_backup_ships_a_database_snapshot(
     assert _read_marker(str(shipped)) == 'streamed'
 
 
+def test_backup_ships_the_legacy_db_alias_as_a_symlink(
+    backup_home: str, tmp_path: Path
+) -> None:
+    """On an upgraded device ``.anthias/screenly.db`` is a symlink to
+    ``anthias.db`` (bin/migrate_legacy_paths.sh). The archive carries
+    the database once, as a snapshot under its canonical name, and the
+    alias as the symlink it is, not as a second independent copy that
+    a restore would land as a regular file and let diverge.
+    """
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'before')
+    os.symlink('anthias.db', path.join(backup_home, '.anthias', 'screenly.db'))
+    holder = _write_into_the_wal(db_path, 'canonical')
+    try:
+        archive = create_backup(name='legacy-alias')
+    finally:
+        holder.close()
+
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = tar.getnames()
+        assert names.count('.anthias/anthias.db') == 1
+        assert names.count('.anthias/screenly.db') == 1
+        alias = tar.getmember('.anthias/screenly.db')
+        assert alias.issym()
+        assert alias.linkname == 'anthias.db'
+    assert _shipped_marker(backup_home, archive, tmp_path) == 'canonical'
+
+
 def test_backup_ships_a_database_it_cannot_snapshot_as_is(
     backup_home: str, caplog: pytest.LogCaptureFixture
 ) -> None:
