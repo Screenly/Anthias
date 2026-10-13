@@ -94,12 +94,21 @@ def _db_paths(home: str) -> list[str]:
 
 
 def _is_db_sidecar(name: str) -> bool:
-    """True for a ``-wal`` / ``-shm`` / ``-journal`` tar member."""
-    leaf = name.replace('\\', '/').rsplit('/', 1)[-1]
-    return any(
-        leaf == db_file + suffix
-        for db_file in _DB_FILES
-        for suffix in _DB_SIDECAR_SUFFIXES
+    """True for a ``-wal`` / ``-shm`` / ``-journal`` tar member.
+
+    Only the sidecars of the database itself, i.e. directly under a
+    config dir. A media-store file that merely shares the name is user
+    content and must still be restored.
+    """
+    parts = name.replace('\\', '/').strip('/').split('/')
+    return (
+        len(parts) == 2
+        and parts[0] in _CONFIG_DIRS
+        and any(
+            parts[1] == db_file + suffix
+            for db_file in _DB_FILES
+            for suffix in _DB_SIDECAR_SUFFIXES
+        )
     )
 
 

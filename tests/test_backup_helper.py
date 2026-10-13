@@ -925,3 +925,27 @@ def test_recover_skips_a_sidecar_carried_by_an_older_archive(
     assert path.isfile(path.join(a, 'anthias.db'))
     assert not path.exists(path.join(a, 'anthias.db-wal'))
     assert not path.exists(path.join(a, 'anthias.db-shm'))
+
+
+def test_recover_keeps_a_media_file_named_like_a_sidecar(
+    backup_home: str,
+) -> None:
+    """Only the database's own sidecars are skipped; a user asset that
+    happens to share the name is content and is restored."""
+    archive = path.join(backup_home, 'sidecar-named-asset.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, 'anthias_assets/anthias.db-wal', b'ASSET')
+
+    recover(archive)
+
+    assert path.isfile(
+        path.join(backup_home, 'anthias_assets', 'anthias.db-wal')
+    )
+
+
+def test_is_db_sidecar_only_matches_the_config_dir_root() -> None:
+    assert _is_db_sidecar('.anthias/anthias.db-wal')
+    assert _is_db_sidecar('.screenly/screenly.db-shm')
+    assert not _is_db_sidecar('anthias_assets/anthias.db-wal')
+    assert not _is_db_sidecar('.anthias/backups/anthias.db-journal')
