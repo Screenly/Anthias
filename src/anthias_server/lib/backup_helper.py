@@ -147,8 +147,22 @@ def _snapshot_databases(home: str, dest_dir: str) -> dict[str, str]:
             continue
         snapshot = path.join(dest_dir, arcname.replace('/', '_'))
         try:
-            src = sqlite3.connect(db_path, timeout=_SNAPSHOT_TIMEOUT_S)
+            src = sqlite3.connect(
+                db_path, timeout=_SNAPSHOT_TIMEOUT_S, isolation_level=None
+            )
             try:
+                # Take the read lock *before* backup(), so it is bounded.
+                # ``Connection.backup()`` retries SQLITE_BUSY / LOCKED
+                # in a sleep loop with no limit, so against a writer
+                # holding the rollback journal's exclusive lock it would
+                # block create_backup() (and the streamed download)
+                # forever, whatever ``timeout`` says. An explicit read
+                # transaction acquires the shared lock through the busy
+                # handler instead, raising "database is locked" once
+                # the timeout runs out; holding it, backup() never has
+                # to wait for the source again.
+                src.execute('BEGIN')
+                src.execute('SELECT count(*) FROM sqlite_master').fetchone()
                 dst = sqlite3.connect(snapshot)
                 try:
                     src.backup(dst)
@@ -683,7 +697,17 @@ def recover(file_path: str) -> None:
                 continue
             tar.extract(member, **extract_kwargs)
             if member.isfile() and _is_db_file(member.name):
-                restored_dbs.add(path.join(home, member.name))
+                # On an upgraded device ``.screenly`` and
+                # ``screenly.db`` are back-compat symlinks to
+                # ``.anthias/anthias.db`` (bin/migrate_legacy_paths.sh),
+                # so a pre-rebrand archive's database is extracted
+                # through them into the canonical file. SQLite keeps the
+                # WAL beside the file it resolves to, so clear the
+                # sidecars of both the name as written and the file it
+                # landed in.
+                db_path = path.join(home, member.name)
+                restored_dbs.add(db_path)
+                restored_dbs.add(path.realpath(db_path))
 
     # The main database file has just been replaced; anything left of
     # the old one's write-ahead log would be replayed into it on the

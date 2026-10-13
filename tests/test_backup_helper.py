@@ -1081,3 +1081,91 @@ def test_is_db_file_only_matches_the_config_dir_root() -> None:
     assert _is_db_file('.screenly/screenly.db')
     assert not _is_db_file('anthias_assets/anthias.db')
     assert not _is_db_file('.anthias/backups/anthias.db')
+
+
+def test_recover_clears_the_canonical_wal_for_a_legacy_archive(
+    backup_home: str, tmp_path: Path
+) -> None:
+    """A pre-rebrand archive lands ``.screenly/screenly.db`` on a device
+    where that is a back-compat symlink to ``.anthias/anthias.db``
+    (``bin/migrate_legacy_paths.sh``). Extraction writes through the
+    links into the canonical file, so the stale WAL to clear is the
+    canonical one, not one beside the alias.
+    """
+    a = path.join(backup_home, '.anthias')
+    db_path = path.join(a, 'anthias.db')
+    os.symlink('anthias.db', path.join(a, 'screenly.db'))
+    os.symlink('.anthias', path.join(backup_home, '.screenly'))
+    os.symlink('anthias_assets', path.join(backup_home, 'screenly_assets'))
+
+    # The legacy archive's database, built off to the side.
+    legacy_db = str(tmp_path / 'screenly.db')
+    _write_wal_database(legacy_db, 'from-the-legacy-archive')
+
+    # The device's database, with a live WAL that belongs to it alone.
+    _write_wal_database(db_path, 'device')
+    holder = _write_into_the_wal(db_path, 'device-wal')
+    try:
+        with open(db_path + '-wal', 'rb') as f:
+            stale_wal = f.read()
+    finally:
+        holder.close()
+    with open(db_path + '-wal', 'wb') as f:
+        f.write(stale_wal)
+
+    archive = path.join(backup_home, 'legacy-db.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        for directory in ('.screenly', 'screenly_assets'):
+            info = tarfile.TarInfo(directory)
+            info.type = tarfile.DIRTYPE
+            info.mode = 0o755
+            tar.addfile(info)
+        tar.add(legacy_db, arcname='.screenly/screenly.db')
+
+    recover(archive)
+
+    assert path.isfile(db_path) and not path.islink(db_path)
+    for suffix in ('-wal', '-shm', '-journal'):
+        assert not path.exists(db_path + suffix), (
+            f'canonical {suffix} survived a legacy-archive restore'
+        )
+    assert _read_marker(db_path) == 'from-the-legacy-archive'
+
+
+def test_backup_falls_back_when_the_database_stays_locked(
+    backup_home: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A writer holding the rollback journal's exclusive lock must cost
+    the snapshot its timeout, not hang the backup.
+
+    ``Connection.backup()`` alone retries SQLITE_BUSY indefinitely and
+    ignores the connect ``timeout``; the archive has to fall back to the
+    on-disk file once the timeout runs out.
+    """
+    monkeypatch.setattr(backup_helper, '_SNAPSHOT_TIMEOUT_S', 0.1)
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    conn = sqlite3.connect(db_path)
+    conn.execute('CREATE TABLE marker (value TEXT)')
+    conn.execute("INSERT INTO marker VALUES ('on-disk')")
+    conn.commit()
+    conn.close()
+
+    writer = sqlite3.connect(db_path, isolation_level=None)
+    writer.execute('BEGIN EXCLUSIVE')
+    result: dict[str, str] = {}
+
+    def run() -> None:
+        result['archive'] = create_backup(name='locked-database')
+
+    try:
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        assert not worker.is_alive(), 'backup blocked on a locked database'
+    finally:
+        writer.rollback()
+        writer.close()
+
+    archive = path.join(backup_home, static_dir, result['archive'])
+    with tarfile.open(archive) as tar:
+        assert tar.getnames().count('.anthias/anthias.db') == 1
