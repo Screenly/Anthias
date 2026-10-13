@@ -127,7 +127,16 @@ def _checkpoint_databases(home: str) -> None:
             )
             continue
         try:
-            conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            # A checkpoint that cannot finish (a reader still pinned to
+            # an older snapshot) does not raise: it reports busy in the
+            # first column and leaves frames in the WAL.
+            row = conn.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()
+            if row and row[0]:
+                logger.warning(
+                    'Checkpoint of %s before backup was blocked; the '
+                    'archive may be missing its most recent writes',
+                    db_path,
+                )
         except sqlite3.Error:
             logger.warning(
                 'Could not checkpoint %s before backup; the archive may '

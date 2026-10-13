@@ -28,6 +28,7 @@ against serving errors.
 """
 
 import logging
+import os
 import sqlite3
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,12 @@ def ensure_wal_journal_mode(db_path: str | None) -> str | None:
     mode, so a healthy fleet never takes the exclusive lock at all.
     """
     if not db_path or db_path == ':memory:' or 'mode=memory' in db_path:
+        return None
+    # ``sqlite3.connect`` creates a missing file. Before the first
+    # migrate that would hand ``start_server.sh`` an empty database and
+    # send it down the existing-database branch; a fresh install's
+    # first service start converts it instead.
+    if not os.path.isfile(db_path):
         return None
 
     try:

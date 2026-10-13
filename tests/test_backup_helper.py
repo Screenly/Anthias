@@ -842,6 +842,34 @@ def test_backup_checkpoints_the_wal_into_the_shipped_database(
     assert _read_marker(str(shipped)) == 'in-the-wal'
 
 
+def test_backup_warns_when_the_checkpoint_is_blocked(
+    backup_home: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A checkpoint a reader holds back reports busy rather than
+    raising. The backup still ships, but not silently."""
+    monkeypatch.setattr(
+        'anthias_server.lib.backup_helper._CHECKPOINT_TIMEOUT_S', 0.1
+    )
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'before')
+    reader = sqlite3.connect(db_path, isolation_level=None)
+    reader.execute('BEGIN')
+    reader.execute('SELECT * FROM marker').fetchall()
+    holder = _write_into_the_wal(db_path, 'after-the-reader')
+    try:
+        with caplog.at_level('WARNING', 'anthias_server.lib.backup_helper'):
+            archive = create_backup(name='blocked-checkpoint')
+    finally:
+        reader.rollback()
+        reader.close()
+        holder.close()
+
+    assert path.isfile(path.join(backup_home, static_dir, archive))
+    assert 'was blocked' in caplog.text
+
+
 def test_recover_clears_the_previous_databases_wal(backup_home: str) -> None:
     """A restore leaves no sidecar from the database it replaced.
 

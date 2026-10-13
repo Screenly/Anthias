@@ -160,6 +160,14 @@ class TestEnsureWalJournalMode:
 
         assert ensure_wal_journal_mode(str(db_path)) is None
 
+    def test_does_not_create_a_missing_database(self, tmp_path: Path) -> None:
+        """Before the first migrate the file must stay absent, or
+        ``start_server.sh`` takes the existing-database branch."""
+        db_path = tmp_path / 'not-yet.db'
+
+        assert ensure_wal_journal_mode(str(db_path)) is None
+        assert not db_path.exists()
+
     @pytest.mark.parametrize('db_name', ['', ':memory:', None])
     def test_skips_databases_with_no_file(self, db_name: str | None) -> None:
         assert ensure_wal_journal_mode(db_name) is None
