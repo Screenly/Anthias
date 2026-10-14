@@ -2172,6 +2172,33 @@ def test_video_task_declares_codec_rejection_as_expected() -> None:
     )
 
 
+def test_a_missing_source_is_declared_as_expected() -> None:
+    """A source file that is gone is an outcome, not a fault.
+
+    The row was deleted, or ``cleanup()`` swept the upload, between
+    dispatch and pickup — which is why both tasks already list
+    ``FileNotFoundError`` in ``dont_autoretry_for``. Reporting the same
+    condition to Sentry as an unhandled crash says a bug happened
+    (ANTHIAS-1G). ``on_failure`` still runs, so the operator still gets
+    the Failed pill and the reason on the row; only the crash report
+    goes away.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    for task in (normalize_video_asset, normalize_image_asset):
+        assert FileNotFoundError in tuple(getattr(task, 'throws', ())), (
+            f'{task.name} expected throws to include FileNotFoundError'
+        )
+        # The two lists have to agree: a condition that is expected
+        # enough to skip the retry is expected enough not to page.
+        assert FileNotFoundError in tuple(
+            getattr(task, 'dont_autoretry_for', ())
+        ), task.name
+
+
 @pytest.mark.django_db
 def test_normalize_on_failure_writes_error_metadata(
     asset_dir: str,

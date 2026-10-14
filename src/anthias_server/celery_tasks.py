@@ -1888,6 +1888,15 @@ from anthias_server import processing
     #     autoretry_for filter would otherwise sweep it up; listing
     #     it explicitly here makes the failure surface immediately.
     dont_autoretry_for=(FileNotFoundError, UnidentifiedImageError),
+    # A source file that is gone is an outcome, not a fault — the row
+    # was deleted, or cleanup() swept the upload, between dispatch and
+    # pickup. ``on_failure`` still records it on the row, so the
+    # operator gets the Failed pill and the reason; ``throws`` only
+    # stops celery logging it at ERROR with a traceback and stops
+    # sentry-sdk's CeleryIntegration filing it as a crash. Same
+    # reasoning as ``throws=(UnsupportedVideoCodecError,)`` on
+    # normalize_video_asset below (ANTHIAS-1J / ANTHIAS-20).
+    throws=(FileNotFoundError,),
     retry_backoff=10,
     retry_backoff_max=300,
     retry_jitter=True,
@@ -1930,7 +1939,12 @@ def normalize_image_asset(asset_id: str) -> None:
     # at ERROR with a traceback, and sentry-sdk's CeleryIntegration
     # skips ``task.throws`` exceptions, so the gate stops flooding
     # Sentry (ANTHIAS-1J, ANTHIAS-20). on_failure still runs.
-    throws=(processing.UnsupportedVideoCodecError,),
+    #
+    # ``FileNotFoundError`` joins it for the reason given on
+    # normalize_image_asset above: the source going missing between
+    # dispatch and pickup is an expected outcome that the row already
+    # reports (Sentry ANTHIAS-1G).
+    throws=(processing.UnsupportedVideoCodecError, FileNotFoundError),
     retry_backoff=15,
     retry_backoff_max=300,
     retry_jitter=True,
