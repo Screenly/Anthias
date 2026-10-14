@@ -66,6 +66,7 @@ from typing import Any
 
 import sh
 from celery import Task
+from celery.exceptions import SoftTimeLimitExceeded
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import (
@@ -582,6 +583,28 @@ _MAX_IMAGE_PIXELS = 50_000_000
 Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
 
 
+def describe_task_failure(exc: BaseException) -> str:
+    """Render a failed media task's cause for the asset table.
+
+    The message lands in ``metadata.error_message``, which the table
+    shows on the Failed pill's tooltip, so it is read by an operator
+    rather than by a developer. The default rendering is good enough
+    for the library errors the pipeline raises ("DownloadError: HTTP
+    Error 404", "UnidentifiedImageError: cannot identify image file")
+    but not for a time limit: celery's ``SoftTimeLimitExceeded``
+    stringifies as its own budget tuple, so it would reach the
+    operator as "SoftTimeLimitExceeded: SoftTimeLimitExceeded(870,)".
+    """
+    if isinstance(exc, SoftTimeLimitExceeded):
+        seconds = exc.args[0] if exc.args else None
+        if isinstance(seconds, int | float):
+            return (
+                f'Timed out: processing did not finish within {int(seconds)}s.'
+            )
+        return 'Timed out: processing did not finish in time.'
+    return f'{type(exc).__name__}: {exc}'
+
+
 class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
     """Common ``on_failure`` for both normalisation tasks.
 
@@ -623,7 +646,7 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
                     handbrake=exc.handbrake,
                 )
             else:
-                _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+                _set_processing_error(asset_id, describe_task_failure(exc))
             _notify(asset_id)
         except Exception:
             logger.exception(
