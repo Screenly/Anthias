@@ -985,3 +985,25 @@ def test_a_restored_database_opens_clean(backup_home: str) -> None:
         recover(archive)
 
     assert _rows(source_path) == [('a1', 'clip')]
+
+
+def test_backup_survives_an_unreadable_database_setting(
+    backup_home: str,
+) -> None:
+    """A snapshot that cannot even be attempted must not fail the backup.
+
+    ``_database_snapshot`` is a context manager, so a branch that
+    returns without yielding raises ``RuntimeError`` out of the
+    ``with`` — turning "could not read a setting" into no backup at
+    all. Pinned because that failure mode is invisible until the one
+    day the setting is unreadable.
+    """
+    with open(path.join(backup_home, '.anthias', 'anthias.conf'), 'w') as f:
+        f.write('[main]\n')
+
+    with mock.patch.dict(
+        django_settings.DATABASES, {'default': {}}, clear=False
+    ):
+        archive = create_backup(name='no-db-setting')
+
+    assert path.isfile(path.join(backup_home, static_dir, archive))

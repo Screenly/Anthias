@@ -170,6 +170,10 @@ def _database_snapshot() -> Iterator[tuple[str, str] | None]:
         db_path = str(django_settings.DATABASES['default']['NAME'] or '')
     except Exception:
         logger.exception('Could not resolve the database path for backup')
+        # Must still yield: a @contextmanager that returns without
+        # yielding raises RuntimeError out of ``with``, which would
+        # turn "could not read a setting" into a failed backup.
+        yield None
         return
 
     home = getenv('HOME') or ''
@@ -180,7 +184,7 @@ def _database_snapshot() -> Iterator[tuple[str, str] | None]:
     # The snapshot has to land in the archive under the same name the
     # live file has, or a restore would not find it.
     arcname = path.relpath(db_path, home)
-    if arcname.startswith('..') or path.isabs(arcname):
+    if path.isabs(arcname) or arcname.split(os.sep)[0] == os.pardir:
         # Database outside the backed-up tree (the test layout, mostly).
         # The directory walk would not have shipped it either.
         yield None
