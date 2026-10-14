@@ -10,10 +10,12 @@ from typing import Any
 from unittest import mock
 
 import pytest
+import requests
 
 import anthias_viewer as viewer
 from anthias_server.app.models import DURATION_S_MAX
 from anthias_server.settings import settings
+from anthias_viewer import utils as viewer_utils
 from anthias_viewer.scheduling import Scheduler
 from anthias_viewer.utils import get_skip_event
 
@@ -4945,3 +4947,125 @@ def test_wayland_recovery_logs_at_warning_not_error(caplog: Any) -> None:
         f'recovery must be WARNING; got {[r.levelname for r in recovery]} — '
         'at ERROR the Sentry integration files an issue per self-heal'
     )
+
+
+# ---------------------------------------------------------------------------
+# Startup schema gate (Sentry ANTHIAS-C)
+# ---------------------------------------------------------------------------
+
+
+class TestWaitForDbSchema:
+    """The viewer must not query the asset table before it exists.
+
+    ``Scheduler()`` reads the playlist on construction, ``__main__``
+    re-raises whatever that throws, and the container restarts — so a
+    single unguarded query turns a slow first-boot migrate into a crash
+    loop that re-reports once per restart.
+    """
+
+    def test_returns_immediately_when_the_schema_is_ready(self) -> None:
+        with (
+            mock.patch(
+                'anthias_server.lib.db_readiness.migrations_ready',
+                return_value=True,
+            ),
+            mock.patch('anthias_server.lib.db_readiness.time.sleep') as sleep,
+        ):
+            viewer_utils.wait_for_db_schema()
+        sleep.assert_not_called()
+
+    def test_blocks_until_the_schema_is_ready(self) -> None:
+        with (
+            mock.patch(
+                'anthias_server.lib.db_readiness.migrations_ready',
+                side_effect=[False, False, True],
+            ),
+            mock.patch('anthias_server.lib.db_readiness.time.sleep') as sleep,
+        ):
+            viewer_utils.wait_for_db_schema()
+        assert sleep.call_count == 2
+
+    def test_pokes_the_watchdog_while_waiting(self) -> None:
+        """A long migrate must not read as a wedged viewer.
+
+        The host watchdog only sees the mtime of the watchdog file, so
+        a gate that blocks without touching it trades a crash loop for
+        a watchdog reboot loop.
+        """
+        with (
+            mock.patch(
+                'anthias_server.lib.db_readiness.migrations_ready',
+                side_effect=[False, False, True],
+            ),
+            mock.patch('anthias_server.lib.db_readiness.time.sleep'),
+            mock.patch.object(viewer_utils, 'watchdog') as poke,
+        ):
+            viewer_utils.wait_for_db_schema()
+        assert poke.call_count == 2
+
+    def test_main_gates_the_scheduler_on_the_schema(self) -> None:
+        """The gate has to sit before ``Scheduler()``, not merely exist.
+
+        Asserting on call order is the point: a correct
+        ``wait_for_db_schema`` placed after the construction it is meant
+        to protect leaves ANTHIAS-C exactly as it was.
+        """
+        calls: list[str] = []
+
+        def _record(name: str) -> Any:
+            def record(*_args: Any, **_kwargs: Any) -> mock.Mock:
+                calls.append(name)
+                return mock.Mock()
+
+            return record
+
+        with (
+            mock.patch.object(viewer, 'setup'),
+            mock.patch.object(viewer, 'ViewerSubscriber'),
+            mock.patch.object(viewer, '_publish_cec_availability'),
+            mock.patch.object(viewer, '_publish_display_resolution_loop'),
+            mock.patch.object(viewer, '_publish_smart_loop'),
+            mock.patch.object(viewer, 'view_image'),
+            mock.patch.object(viewer, 'view_webpage'),
+            mock.patch.object(viewer, 'sleep'),
+            mock.patch.object(viewer, 'start_loop'),
+            mock.patch.object(
+                viewer,
+                'wait_for_server',
+                side_effect=_record('wait_for_server'),
+            ),
+            mock.patch.object(
+                viewer,
+                'wait_for_db_schema',
+                side_effect=_record('wait_for_db_schema'),
+            ),
+            mock.patch.object(
+                viewer, 'Scheduler', side_effect=_record('Scheduler')
+            ),
+        ):
+            viewer.main()
+        assert calls.index('wait_for_db_schema') < calls.index('Scheduler')
+
+
+def test_wait_for_server_logs_when_it_gives_up(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Falling through the budget is allowed; doing it silently is not.
+
+    Every later failure on a device whose server never started reads
+    differently once this line is in the log.
+    """
+    with (
+        mock.patch(
+            'anthias_viewer.utils.requests.get',
+            side_effect=requests.exceptions.ConnectionError(),
+        ),
+        mock.patch('anthias_viewer.utils.sleep'),
+        caplog.at_level(logging.WARNING, logger=viewer_utils.logger.name),
+    ):
+        logging.disable(logging.NOTSET)
+        try:
+            viewer_utils.wait_for_server(3)
+        finally:
+            logging.disable(logging.CRITICAL)
+    assert any('did not answer' in r.getMessage() for r in caplog.records)
