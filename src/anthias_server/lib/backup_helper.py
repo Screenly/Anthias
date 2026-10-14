@@ -3,11 +3,14 @@ import io
 import json
 import logging
 import os
+import sqlite3
 import sys
 import tarfile
+import tempfile
 import threading
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from os import getenv, makedirs, path, remove
 from typing import Any
@@ -37,23 +40,45 @@ _CONFIG_DIRS = ('.anthias', '.screenly')
 _ASSET_DIRS = ('anthias_assets', 'screenly_assets')
 
 # The files the runtime keeps directly under the config dir: the
-# settings file, the metadata database (plus its SQLite sidecars), and
-# the default-asset manifest, under both the current and legacy names.
+# settings file, the metadata database, and the default-asset
+# manifest, under both the current and legacy names.
+#
+# The database's SQLite sidecars are deliberately absent, in both
+# directions. See ``_DB_SIDECAR_SUFFIXES``.
 _CONFIG_FILES = frozenset(
     {
         'anthias.conf',
         'anthias.db',
-        'anthias.db-wal',
-        'anthias.db-shm',
-        'anthias.db-journal',
         'default_assets.yml',
         'screenly.conf',
         'screenly.db',
-        'screenly.db-wal',
-        'screenly.db-shm',
-        'screenly.db-journal',
     }
 )
+
+# The database filenames the runtime has used, and the sidecars SQLite
+# keeps beside whichever one is live.
+_DB_FILES = frozenset({'anthias.db', 'screenly.db'})
+
+# ``-wal`` / ``-shm`` / ``-journal`` are not backup material, and a
+# backup that carried them is what corrupted restores.
+#
+# Since #3015 the database runs in WAL mode, so a live install always
+# has a ``-wal`` and a ``-shm``. ``tar`` reads the main file and the
+# sidecars at different instants while three containers keep writing,
+# so the pair it captures does not belong together. Restore that pair
+# and SQLite replays WAL frames onto a database snapshot they were
+# never written against: "database disk image is malformed" (Sentry
+# ANTHIAS-67 / 68, both landing within a second of ``/settings/recover/``).
+#
+# ``-shm`` is worse than merely stale — it is a volatile index of the
+# WAL's contents, which SQLite requires be absent when a database is
+# moved or copied. There is no circumstance in which restoring one is
+# correct.
+#
+# Dropping them from the whitelist settles both directions at once:
+# ``_exclude_from_backup`` stops shipping them and ``_safe_tar_member``
+# stops writing them, including from archives older releases built.
+_DB_SIDECAR_SUFFIXES = ('-wal', '-shm', '-journal')
 # Sub-directories of the config dir that are part of the runtime — the
 # django-dbbackup dumps (and their metadata sidecars) live here.
 _CONFIG_SUBTREES = ('backups',)
@@ -114,6 +139,92 @@ def _exclude_from_backup(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
         if leaf.endswith(('.tmp', '.part')) or leaf.startswith('.import-'):
             return None
     return member
+
+
+@contextmanager
+def _database_snapshot() -> Iterator[tuple[str, str] | None]:
+    """Yield ``(path, arcname)`` for a consistent copy of the database.
+
+    Dropping the WAL sidecars from the archive is only half the fix.
+    The main file on its own is not a backup either: under WAL the
+    recent commits live in ``-wal`` until a checkpoint folds them back,
+    so taring ``anthias.db`` alone ships a database missing whatever
+    was committed since the last checkpoint -- and ``tar`` can read it
+    while a checkpoint is halfway through writing pages into it.
+
+    ``sqlite3.Connection.backup`` is the operation that answers both.
+    It copies through SQLite rather than through the filesystem, so the
+    result is a single complete file with the WAL already folded in,
+    and SQLite itself restarts the copy if a writer changes a page
+    mid-pass. Writers are never blocked while it runs.
+
+    Yields ``None`` when there is nothing to snapshot (no configured
+    database, no file yet on a first boot, a path outside the backed-up
+    tree) or when SQLite refuses the file. The caller then falls back
+    to taring whatever is on disk, which is what every release up to
+    now did unconditionally.
+    """
+    try:
+        from django.conf import settings as django_settings
+
+        db_path = str(django_settings.DATABASES['default']['NAME'] or '')
+    except Exception:
+        logger.exception('Could not resolve the database path for backup')
+        return
+
+    home = getenv('HOME') or ''
+    if not db_path or not path.isfile(db_path) or not home:
+        yield None
+        return
+
+    # The snapshot has to land in the archive under the same name the
+    # live file has, or a restore would not find it.
+    arcname = path.relpath(db_path, home)
+    if arcname.startswith('..') or path.isabs(arcname):
+        # Database outside the backed-up tree (the test layout, mostly).
+        # The directory walk would not have shipped it either.
+        yield None
+        return
+
+    with tempfile.TemporaryDirectory(prefix='anthias-db-snapshot-') as tmp:
+        snapshot_path = path.join(tmp, path.basename(db_path))
+        try:
+            source = sqlite3.connect(db_path)
+            try:
+                destination = sqlite3.connect(snapshot_path)
+                try:
+                    source.backup(destination)
+                finally:
+                    destination.close()
+            finally:
+                source.close()
+        except sqlite3.Error:
+            # Not a SQLite file, or unreadable. Ship what is on disk
+            # rather than shipping no database at all.
+            logger.exception(
+                'Could not snapshot %s; backing up the file as-is', db_path
+            )
+            yield None
+            return
+        yield snapshot_path, arcname
+
+
+def _backup_filter(
+    skip: frozenset[str] = frozenset(),
+) -> Callable[[tarfile.TarInfo], tarfile.TarInfo | None]:
+    """``_exclude_from_backup``, plus an explicit skip list.
+
+    ``skip`` holds the live database when a snapshot of it is being
+    added separately, so the archive carries one copy of it and that
+    copy is the consistent one.
+    """
+
+    def _filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        if member.name in skip:
+            return None
+        return _exclude_from_backup(member)
+
+    return _filter
 
 
 default_archive_name = 'anthias-backup'
@@ -285,6 +396,51 @@ def _check_backup_compatibility(manifest: dict[str, Any] | None) -> None:
         )
 
 
+def _drop_stale_db_sidecars(home: str) -> None:
+    """Delete any ``-wal`` / ``-shm`` / ``-journal`` left beside the
+    restored database.
+
+    The restore has just overwritten the database file. Whatever
+    sidecars are sitting next to it belong to the database that was
+    there a moment ago, and SQLite does not know that: on the next
+    connect it sees a WAL next to a database and replays its frames
+    into it. Those frames describe pages of a file that no longer
+    exists, which is how a restore ends in "database disk image is
+    malformed" rather than in the restored data.
+
+    The archive no longer carries sidecars (see
+    ``_DB_SIDECAR_SUFFIXES``), so this is about the ones already on the
+    device -- including on a device restoring an archive that an older
+    release built, where both halves of the problem are present at once.
+
+    Connections are closed first so a handle this process still holds
+    cannot write one straight back.
+    """
+    try:
+        from django.db import connections
+
+        connections.close_all()
+    except Exception:
+        logger.exception('Could not close database connections before restore')
+
+    for config_dir in _CONFIG_DIRS:
+        for db_name in _DB_FILES:
+            for suffix in _DB_SIDECAR_SUFFIXES:
+                sidecar = path.join(home, config_dir, db_name + suffix)
+                try:
+                    os.remove(sidecar)
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    # Best effort: a sidecar we cannot remove is a
+                    # problem for the next connect, not a reason to
+                    # abandon a restore that has already written the
+                    # data.
+                    logger.exception('Could not remove %s', sidecar)
+                else:
+                    logger.info('Removed stale SQLite sidecar %s', sidecar)
+
+
 def _upgrade_restored_database() -> None:
     """Bring a just-restored database up to the current schema.
 
@@ -362,6 +518,7 @@ def stream_backup() -> Generator[bytes]:
     def produce() -> None:
         try:
             with (
+                _database_snapshot() as snapshot,
                 os.fdopen(write_fd, 'wb') as write_file,
                 tarfile.open(
                     fileobj=write_file,
@@ -370,12 +527,17 @@ def stream_backup() -> Generator[bytes]:
                 ) as tar,
             ):
                 _add_manifest(tar)
+                tar_filter = _backup_filter(
+                    frozenset({snapshot[1]}) if snapshot else frozenset()
+                )
                 for directory in directories:
                     tar.add(
                         path.join(home, directory),
                         arcname=directory,
-                        filter=_exclude_from_backup,
+                        filter=tar_filter,
                     )
+                if snapshot is not None:
+                    tar.add(snapshot[0], arcname=snapshot[1])
         except BrokenPipeError:
             logger.info('backup download cancelled by the client')
         except Exception as exc:
@@ -468,17 +630,25 @@ def create_backup(name: str = default_archive_name) -> str:
         remove(file_path)
 
     try:
-        with tarfile.open(
-            file_path, 'w:gz', compresslevel=BACKUP_COMPRESSLEVEL
-        ) as tar:
+        with (
+            _database_snapshot() as snapshot,
+            tarfile.open(
+                file_path, 'w:gz', compresslevel=BACKUP_COMPRESSLEVEL
+            ) as tar,
+        ):
             _add_manifest(tar)
+            tar_filter = _backup_filter(
+                frozenset({snapshot[1]}) if snapshot else frozenset()
+            )
             for directory in directories:
                 path_to_dir = path.join(home, directory)
                 tar.add(
                     path_to_dir,
                     arcname=directory,
-                    filter=_exclude_from_backup,
+                    filter=tar_filter,
                 )
+            if snapshot is not None:
+                tar.add(snapshot[0], arcname=snapshot[1])
     except OSError:
         remove(file_path)
         raise
@@ -528,6 +698,10 @@ def recover(file_path: str) -> None:
                 )
                 continue
             tar.extract(member, **extract_kwargs)
+
+    # The extraction above replaced the database file. Anything the
+    # *previous* database left beside it is now stale.
+    _drop_stale_db_sidecars(home)
 
     # The archive may hold an older schema; migrate the restored
     # database up to what this system expects.

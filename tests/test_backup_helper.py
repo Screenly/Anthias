@@ -3,6 +3,7 @@ import io
 import json
 import os
 import shutil
+import sqlite3
 import tarfile
 import tempfile
 import threading
@@ -13,6 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from django.conf import settings as django_settings
 from django.http import StreamingHttpResponse
 
 from anthias_common.utils import STAGED_UPLOAD_DIR
@@ -492,20 +494,25 @@ def test_recover_writes_only_runtime_files(backup_home: str) -> None:
 
 def test_backup_ships_only_runtime_files(backup_home: str) -> None:
     """A backup captures the runtime whitelist and nothing else. Config,
-    DB (+ sidecars), default-asset manifest, db backups and assets are
-    kept; an SSL private key, the playback-stats log, an SSH key an
-    operator tucked under ~/.anthias, and a stray file are all dropped."""
+    DB, default-asset manifest, db backups and assets are kept; the
+    database's SQLite sidecars, an SSL private key, the playback-stats
+    log, an SSH key an operator tucked under ~/.anthias, and a stray
+    file are all dropped."""
     a = path.join(backup_home, '.anthias')
     kept = {
         path.join(a, 'anthias.conf'): b'[main]\n',
         path.join(a, 'anthias.db'): b'DB',
-        path.join(a, 'anthias.db-wal'): b'WAL',
         path.join(a, 'default_assets.yml'): b'assets: []\n',
         path.join(a, 'backups', 'dump.sqlite3'): b'DUMP',
         path.join(a, 'backups', 'dump.sqlite3.metadata'): b'{}',
         path.join(backup_home, 'anthias_assets', 'clip.mp4'): b'VIDEO',
     }
     dropped = {
+        # A ``-wal`` captured at a different instant from the database
+        # it belongs to is not a backup of anything, and a ``-shm`` is
+        # never valid beside a copied database at all.
+        path.join(a, 'anthias.db-wal'): b'WAL',
+        path.join(a, 'anthias.db-shm'): b'SHM',
         path.join(a, 'ssl', 'key.pem'): b'PRIVKEY',
         path.join(a, 'playback-stats.log'): b'log',
         path.join(a, 'id_ed25519'): b'PRIVKEY',
@@ -752,3 +759,229 @@ def test_manifest_carries_no_deployment_identifier(backup_home: str) -> None:
         'schema_version',
         'created_at',
     }
+
+
+# ---------------------------------------------------------------------------
+# SQLite consistency across backup/restore (Sentry ANTHIAS-67 / 68 / 6D)
+# ---------------------------------------------------------------------------
+#
+# The database runs in WAL mode, so a live install always has an
+# ``anthias.db-wal`` and an ``anthias.db-shm`` beside it. Backups used
+# to tar all three, read at different instants while three containers
+# kept writing, and restores used to write all three back. SQLite then
+# replayed WAL frames onto a database snapshot they were never written
+# against, and the restore ended in "database disk image is malformed"
+# instead of in the restored data.
+
+
+def _open_wal_database(
+    directory: str, rows: list[tuple[str, str]], name: str = 'anthias.db'
+) -> tuple[str, sqlite3.Connection]:
+    """A WAL-mode database with its commits still in the ``-wal``.
+
+    The returned connection is deliberately left open. SQLite
+    checkpoints and deletes the WAL when the last connection to a
+    database closes, so a fixture that closes everything leaves a
+    tidy single file and reproduces nothing. A real device always has
+    three containers holding this database open, which is why its
+    ``-wal`` and ``-shm`` are always there and always mid-flight.
+    """
+    db_path = path.join(directory, name)
+    connection = sqlite3.connect(db_path)
+    connection.execute('PRAGMA journal_mode=WAL')
+    connection.execute('CREATE TABLE assets (asset_id TEXT, name TEXT)')
+    connection.executemany('INSERT INTO assets VALUES (?, ?)', rows)
+    connection.commit()
+    assert path.isfile(db_path + '-wal'), 'fixture left no WAL to capture'
+    return db_path, connection
+
+
+def _rows(db_path: str) -> list[tuple[str, str]]:
+    connection = sqlite3.connect(db_path)
+    try:
+        return list(connection.execute('SELECT asset_id, name FROM assets'))
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def live_database(backup_home: str) -> Iterator[str]:
+    """Point Django's configured database at a real, live file."""
+    db_path, connection = _open_wal_database(
+        path.join(backup_home, '.anthias'), [('a1', 'clip')]
+    )
+    try:
+        with mock.patch.dict(
+            django_settings.DATABASES['default'], {'NAME': db_path}
+        ):
+            yield db_path
+    finally:
+        connection.close()
+
+
+def test_backup_ships_a_complete_database_without_sidecars(
+    backup_home: str, live_database: str
+) -> None:
+    """The archive carries one database file, and it has the data.
+
+    Taring the main file as it sits on disk would ship whatever was
+    last checkpointed and silently drop the rest, so asserting the
+    sidecars are gone is not enough on its own — the row has to
+    survive.
+    """
+    archive = create_backup(name='consistent-db')
+    extracted = path.join(backup_home, 'extracted')
+    os.makedirs(extracted)
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = tar.getnames()
+        tar.extract('.anthias/anthias.db', path=extracted, filter='data')
+
+    assert '.anthias/anthias.db' in names
+    assert [n for n in names if n.endswith(('-wal', '-shm', '-journal'))] == []
+    assert _rows(path.join(extracted, '.anthias', 'anthias.db')) == [
+        ('a1', 'clip')
+    ]
+
+
+def test_the_database_is_shipped_once(
+    backup_home: str, live_database: str
+) -> None:
+    """The snapshot replaces the live file rather than joining it."""
+    archive = create_backup(name='single-db-member')
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        names = tar.getnames()
+    assert names.count('.anthias/anthias.db') == 1
+
+
+def test_streamed_backup_ships_a_complete_database(
+    backup_home: str, live_database: str
+) -> None:
+    """The download path builds its archive separately — same contract."""
+    payload = b''.join(stream_backup())
+    extracted = path.join(backup_home, 'extracted-stream')
+    os.makedirs(extracted)
+    with tarfile.open(fileobj=io.BytesIO(payload)) as tar:
+        names = tar.getnames()
+        tar.extract('.anthias/anthias.db', path=extracted, filter='data')
+
+    assert names.count('.anthias/anthias.db') == 1
+    assert [n for n in names if n.endswith(('-wal', '-shm', '-journal'))] == []
+    assert _rows(path.join(extracted, '.anthias', 'anthias.db')) == [
+        ('a1', 'clip')
+    ]
+
+
+def test_backup_falls_back_when_the_database_cannot_be_snapshotted(
+    backup_home: str,
+) -> None:
+    """A file SQLite refuses is still shipped, just not snapshotted.
+
+    Shipping no database at all would be a far worse failure than
+    shipping the bytes that are there.
+    """
+    a = path.join(backup_home, '.anthias')
+    db_path = path.join(a, 'anthias.db')
+    with open(db_path, 'wb') as f:
+        f.write(b'not a sqlite file')
+
+    with mock.patch.dict(
+        django_settings.DATABASES['default'], {'NAME': db_path}
+    ):
+        archive = create_backup(name='fallback-db')
+
+    with tarfile.open(path.join(backup_home, static_dir, archive)) as tar:
+        assert '.anthias/anthias.db' in tar.getnames()
+        member = tar.extractfile('.anthias/anthias.db')
+        assert member is not None
+        assert member.read() == b'not a sqlite file'
+
+
+def test_restore_never_writes_sidecars_from_an_archive(
+    backup_home: str,
+) -> None:
+    """Archives built by older releases carry them. Skip them anyway."""
+    archive = path.join(backup_home, 'legacy.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, '.anthias/anthias.db', b'DBDATA')
+        _add_file_member(tar, '.anthias/anthias.db-wal', b'STALEWAL')
+        _add_file_member(tar, '.anthias/anthias.db-shm', b'STALESHM')
+
+    with mock.patch(_MIGRATE):
+        recover(archive)
+
+    a = path.join(backup_home, '.anthias')
+    assert path.isfile(path.join(a, 'anthias.db'))
+    assert not path.exists(path.join(a, 'anthias.db-wal'))
+    assert not path.exists(path.join(a, 'anthias.db-shm'))
+
+
+def test_restore_removes_the_previous_databases_sidecars(
+    backup_home: str,
+) -> None:
+    """The ones already on the device are the other half of the bug.
+
+    They describe pages of the database the restore has just replaced,
+    so leaving them is what gets them replayed into the restored file.
+    """
+    a = path.join(backup_home, '.anthias')
+    for suffix in ('-wal', '-shm', '-journal'):
+        with open(path.join(a, 'anthias.db' + suffix), 'wb') as f:
+            f.write(b'from the database that was here before')
+
+    archive = path.join(backup_home, 'incoming.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, '.anthias/anthias.db', b'DBDATA')
+
+    with mock.patch(_MIGRATE):
+        recover(archive)
+
+    assert path.isfile(path.join(a, 'anthias.db'))
+    for suffix in ('-wal', '-shm', '-journal'):
+        assert not path.exists(path.join(a, 'anthias.db' + suffix)), suffix
+
+
+def test_a_restored_database_opens_clean(backup_home: str) -> None:
+    """End to end, with real SQLite on both sides.
+
+    Back up a live WAL-mode database, then restore it onto a device
+    that has a *different* database's ``-wal``/``-shm`` lying beside
+    the path being restored. Orphaned sidecars are ordinary on a
+    device: a container killed mid-write (the OOM killer, a power cut,
+    an upgrade bounce) leaves them with nobody to checkpoint them.
+
+    They describe pages of a file the restore has just replaced, so
+    anything that leaves them there hands SQLite a WAL to replay into
+    a database it was never written against.
+    """
+    a = path.join(backup_home, '.anthias')
+    source_path, source = _open_wal_database(a, [('a1', 'clip')])
+    try:
+        with mock.patch.dict(
+            django_settings.DATABASES['default'], {'NAME': source_path}
+        ):
+            archive_name = create_backup(name='round-trip')
+    finally:
+        source.close()
+
+    # Build a second, unrelated database at the same path and keep its
+    # sidecars after it is gone — closing the connection checkpoints
+    # and removes them, so they are copied aside first.
+    for suffix in ('', '-wal', '-shm'):
+        if path.exists(source_path + suffix):
+            os.remove(source_path + suffix)
+    _, resident = _open_wal_database(a, [('other', 'not restored')])
+    orphans = {
+        suffix: Path(source_path + suffix).read_bytes()
+        for suffix in ('-wal', '-shm')
+    }
+    resident.close()
+    for suffix, payload in orphans.items():
+        Path(source_path + suffix).write_bytes(payload)
+
+    archive = path.join(backup_home, static_dir, archive_name)
+    with mock.patch(_MIGRATE):
+        recover(archive)
+
+    assert _rows(source_path) == [('a1', 'clip')]
