@@ -265,7 +265,7 @@ def _parse_local_datetime(value: str) -> datetime:
     for fmt in candidates:
         try:
             # Naive strptime is deliberate — make_aware attaches the tz.
-            return timezone.make_aware(datetime.strptime(value, fmt))  # noqa: DTZ007
+            return timezone.make_aware(datetime.strptime(value, fmt))
         except ValueError:
             continue
     return timezone.make_aware(datetime.fromisoformat(value))
@@ -287,7 +287,7 @@ def _parse_local_time(value: str) -> time:
     for fmt in ('%H:%M', '%I:%M %p'):
         try:
             # Time-of-day only, no date or tz involved.
-            return datetime.strptime(value, fmt).time()  # noqa: DTZ007
+            return datetime.strptime(value, fmt).time()
         except ValueError:
             continue
     return time.fromisoformat(value)

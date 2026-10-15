@@ -107,7 +107,7 @@ dev-host = [
     { name = "ansible-lint" },
     { name = "celery-types" },
     { name = "django-stubs" },
-    { name = "djangorestframework" },
+    { name = "djangorestframework-stubs" },
     { name = "mypy" },
     { name = "ruff" },
     { name = "tenacity" },
@@ -146,6 +146,7 @@ mypy = [
     { name = "django-stubs" },
     { name = "django-stubs-ext" },
     { name = "djangorestframework" },
+    { name = "djangorestframework-stubs" },
     { name = "drf-spectacular" },
     { name = "jinja2" },
     { name = "mypy" },
@@ -266,7 +267,7 @@ dev-host = [
     { name = "ansible-lint", specifier = "==26.9.0" },
     { name = "celery-types", specifier = "==0.26.0" },
     { name = "django-stubs", specifier = "==6.1.2" },
-    { name = "djangorestframework", specifier = "==3.18.3" },
+    { name = "djangorestframework-stubs", specifier = "==3.18.1" },
     { name = "mypy", specifier = "==2.4.0" },
     { name = "ruff", specifier = "==0.17.0" },
     { name = "tenacity", specifier = "==9.2.1" },
@@ -305,6 +306,7 @@ mypy = [
     { name = "django-stubs", specifier = "==6.1.2" },
     { name = "django-stubs-ext", specifier = "==6.1.2" },
     { name = "djangorestframework", specifier = "==3.18.3" },
+    { name = "djangorestframework-stubs", specifier = "==3.18.1" },
     { name = "drf-spectacular", specifier = "==0.30.0" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mypy", specifier = "==2.4.0" },
@@ -949,6 +951,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8d/b2/1cee76b188301f7d03169ca77fab2b3d3ec5d01b3469189f944af2d7f11a/djangorestframework-3.18.3.tar.gz", hash = "sha256:446a9b352e7eff630421ab3f2328bd2401b109a9470afa4a31189994911ed030", size = 923563, upload-time = "2026-10-06T21:33:51.521Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c4/dd/de5f4543765bec94e036a5e9593a42f8fa7efec8de78eb56b9ca834385f3/djangorestframework-3.18.3-py3-none-any.whl", hash = "sha256:8544bb674846731b1e3c9b309236ee1dc412905a0aa725be2ec193ca950a7d12", size = 903986, upload-time = "2026-10-06T21:33:49.917Z" },
+]
+
+[[package]]
+name = "djangorestframework-stubs"
+version = "3.18.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django-stubs" },
+    { name = "types-pyyaml" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/71/a7727b07e0433da02fb1ea22994f492ecb437a1fe7be5bf952dbb545a0f5/djangorestframework_stubs-3.18.1.tar.gz", hash = "sha256:65ed4a9ea094616759a2cba4fe0ad85efe25b471b28281b790bfefb46704c64a", size = 32439, upload-time = "2026-08-25T22:49:27.506Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f7/1c/e266828fe2b78484651667976f8539e47b4e511a266424b890f613c6b7ad/djangorestframework_stubs-3.18.1-py3-none-any.whl", hash = "sha256:a2021f45f7759b493504c2a721f112ec4fd677753590c1ba346f4ebfb49a7f03", size = 55685, upload-time = "2026-08-25T22:49:26.178Z" },
 ]
 
 [[package]]
