@@ -705,7 +705,7 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
     Mirrors the YouTube task's failure handling: clears
     ``is_processing`` and writes ``metadata.error_message`` so the
     operator's table row never stays stuck on "Processing" after a
-    crash. Two message shapes:
+    crash. Three message shapes:
 
     * ``UnsupportedVideoCodecError`` — the gate's user-facing
       exception. The message body is already operator-readable
@@ -713,11 +713,16 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
       ``metadata.error_recipe`` so the modal can render it in a
       copyable ``<code>`` block, and the equivalent HandBrake steps
       land in ``metadata.error_handbrake``.
+    * ``ImageTooLargeError`` — the pixel cap's rejection, likewise
+      already phrased for the operator and likewise written without
+      a class-name prefix.
     * Anything else (corrupt HEIC, ffmpeg subprocess error, ...) —
-      prefix with the exception class so the operator sees a
-      concrete signal (``UnidentifiedImageError: cannot identify
-      image file '/data/.../abc.heic'``) without leaking the full
-      traceback.
+      rendered by ``describe_task_failure``, which prefixes the
+      exception class so the operator sees a concrete signal
+      (``UnidentifiedImageError: cannot identify image file
+      '/data/.../abc.heic'``) without leaking the full traceback,
+      and special-cases a soft time limit, whose own ``str()`` is an
+      unreadable budget tuple.
     """
 
     def on_failure(
