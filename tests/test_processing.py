@@ -46,6 +46,7 @@ from unittest import mock
 
 import pytest
 import sh
+from celery.exceptions import SoftTimeLimitExceeded
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import resolve_device_key
@@ -3158,3 +3159,31 @@ def test_unidentified_board_message_survives_an_unknown_subtype(
     msg = str(excinfo.value).lower()
     assert 'anthias-host-agent' in msg
     assert 'unset or unrecognised' not in msg
+
+
+class TestDescribeTaskFailure:
+    """``metadata.error_message`` is read by an operator, on a tooltip.
+
+    Celery's ``SoftTimeLimitExceeded`` stringifies as its own budget
+    tuple, so the default rendering would reach them as
+    "SoftTimeLimitExceeded: SoftTimeLimitExceeded(870,)".
+    """
+
+    def test_a_time_limit_reads_as_a_timeout(self) -> None:
+        message = processing.describe_task_failure(SoftTimeLimitExceeded(870))
+        assert 'Timed out' in message
+        assert '870' in message
+        assert 'SoftTimeLimitExceeded' not in message
+
+    def test_a_time_limit_without_a_budget_still_reads(self) -> None:
+        message = processing.describe_task_failure(SoftTimeLimitExceeded())
+        assert 'Timed out' in message
+        assert 'SoftTimeLimitExceeded' not in message
+
+    def test_other_failures_keep_the_type_and_message(self) -> None:
+        # The library errors the pipeline raises are already
+        # operator-readable this way.
+        message = processing.describe_task_failure(
+            FileNotFoundError('no such file')
+        )
+        assert message == 'FileNotFoundError: no such file'

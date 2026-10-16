@@ -182,6 +182,35 @@ ASSET_REVALIDATION_SOFT_TIME_LIMIT_S = ASSET_REVALIDATION_TIME_LIMIT_S - 60
 PERIODIC_POKE_SOFT_TIME_LIMIT_S = 30
 PERIODIC_POKE_TIME_LIMIT_S = 60
 
+# Headroom between a media task's soft and hard time limit.
+#
+# Only the soft limit is survivable. It arrives as an exception inside
+# the task, so celery runs the task's ``on_failure`` — which is where
+# every media task clears ``is_processing`` and writes the row's error
+# message. The hard limit arrives as SIGKILL to the pool child: no
+# handler runs, the row is left at "Processing" with nothing to say
+# why, and the worker files three Sentry reports for the one event
+# (the hard-limit line, billiard's ``TimeLimitExceeded``, and the
+# ``signal 9 (SIGKILL)`` exit) before forking a replacement.
+#
+# So every bounded task wants both, with enough room between them for
+# the handler to finish one small SQLite write and a WebSocket nudge.
+# 30s is what #3180 used for the same purpose and is generous for that
+# work even on a Pi 1 under load.
+MEDIA_TASK_TIMEOUT_HEADROOM_S = 30
+
+# Normalisation ceilings. The image pass is Pillow work on one file;
+# the video pass is an ffprobe plus, at worst, a transcode handed off
+# to its own bounded helper.
+NORMALIZE_IMAGE_TIME_LIMIT_S = 300
+NORMALIZE_IMAGE_SOFT_TIME_LIMIT_S = (
+    NORMALIZE_IMAGE_TIME_LIMIT_S - MEDIA_TASK_TIMEOUT_HEADROOM_S
+)
+NORMALIZE_VIDEO_TIME_LIMIT_S = 120
+NORMALIZE_VIDEO_SOFT_TIME_LIMIT_S = (
+    NORMALIZE_VIDEO_TIME_LIMIT_S - MEDIA_TASK_TIMEOUT_HEADROOM_S
+)
+
 # How often the scheduled display-power tick runs. One minute is the
 # resolution of the schedule itself (times are HH:MM), so a coarser
 # interval would make the display switch late by up to that interval.
@@ -651,9 +680,18 @@ class _ProbeVideoTask(Task):  # type: ignore[type-arg]
             )
 
 
+# ffprobe bounds itself (``_FFPROBE_TIMEOUT_S``); this is the wrapper's
+# own ceiling, covering the row lookup and write around it.
+PROBE_VIDEO_TIME_LIMIT_S = 120
+PROBE_VIDEO_SOFT_TIME_LIMIT_S = (
+    PROBE_VIDEO_TIME_LIMIT_S - MEDIA_TASK_TIMEOUT_HEADROOM_S
+)
+
+
 @celery.task(
     base=_ProbeVideoTask,
-    time_limit=120,
+    time_limit=PROBE_VIDEO_TIME_LIMIT_S,
+    soft_time_limit=PROBE_VIDEO_SOFT_TIME_LIMIT_S,
     autoretry_for=(sh.TimeoutException, sh.ErrorReturnCode, OSError),
     retry_backoff=10,
     retry_backoff_max=300,
@@ -765,9 +803,10 @@ class _DownloadAssetTask(Task):  # type: ignore[type-arg]
             from anthias_server.processing import (
                 _notify,
                 _set_processing_error,
+                describe_task_failure,
             )
 
-            _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+            _set_processing_error(asset_id, describe_task_failure(exc))
             _notify(asset_id)
         except Exception:
             logger.exception(
@@ -796,11 +835,15 @@ class _DownloadYoutubeTask(_DownloadAssetTask):
 # generous ceiling that still fails fast enough for the operator to
 # notice via the "Processing" pill not clearing.
 YOUTUBE_DOWNLOAD_TIME_LIMIT_S = 60 * 15
+YOUTUBE_DOWNLOAD_SOFT_TIME_LIMIT_S = (
+    YOUTUBE_DOWNLOAD_TIME_LIMIT_S - MEDIA_TASK_TIMEOUT_HEADROOM_S
+)
 
 
 @celery.task(
     base=_DownloadYoutubeTask,
     time_limit=YOUTUBE_DOWNLOAD_TIME_LIMIT_S,
+    soft_time_limit=YOUTUBE_DOWNLOAD_SOFT_TIME_LIMIT_S,
     # Transient OSError covers IO-level hiccups (disk pressure,
     # connection reset surfacing as ConnectionResetError which is an
     # OSError). yt-dlp's own DownloadError is *not* retried: its
@@ -1029,6 +1072,9 @@ def download_youtube_asset(asset_id: str, uri: str) -> None:
 # YOUTUBE_DOWNLOAD_TIME_LIMIT_S so an operator who pastes a 1080p
 # clip URL gets the same patience as a YouTube link.
 REMOTE_VIDEO_DOWNLOAD_TIME_LIMIT_S = 60 * 15
+REMOTE_VIDEO_DOWNLOAD_SOFT_TIME_LIMIT_S = (
+    REMOTE_VIDEO_DOWNLOAD_TIME_LIMIT_S - MEDIA_TASK_TIMEOUT_HEADROOM_S
+)
 
 # Hard ceiling on the downloaded file size. 5 GiB covers >99% of
 # legitimate signage content (a 2-hour 4K H.264 at 5 Mbps is ~4.5 GB;
@@ -1187,6 +1233,7 @@ class _DownloadRemoteVideoTask(_DownloadAssetTask):
 @celery.task(
     base=_DownloadRemoteVideoTask,
     time_limit=REMOTE_VIDEO_DOWNLOAD_TIME_LIMIT_S,
+    soft_time_limit=REMOTE_VIDEO_DOWNLOAD_SOFT_TIME_LIMIT_S,
     # Transient network / IO hiccups retry; permanent classes
     # (RemoteVideoDownloadError covers HTTP 4xx, content-type
     # mismatch, size cap) bubble straight to on_failure.
@@ -1825,7 +1872,8 @@ from anthias_server import processing
 
 @celery.task(
     base=processing._NormalizeAssetTask,
-    time_limit=300,
+    time_limit=NORMALIZE_IMAGE_TIME_LIMIT_S,
+    soft_time_limit=NORMALIZE_IMAGE_SOFT_TIME_LIMIT_S,
     autoretry_for=(OSError,),
     # Two OSError subclasses are permanent and must NOT trigger a
     # retry — they'd just keep the row in ``is_processing=True``
@@ -1868,7 +1916,8 @@ def normalize_image_asset(asset_id: str) -> None:
 
 @celery.task(
     base=processing._NormalizeAssetTask,
-    time_limit=120,
+    time_limit=NORMALIZE_VIDEO_TIME_LIMIT_S,
+    soft_time_limit=NORMALIZE_VIDEO_SOFT_TIME_LIMIT_S,
     autoretry_for=(OSError,),
     # Same rationale as normalize_image_asset above: a missing source
     # file is permanent and should land on on_failure right away.

@@ -2420,3 +2420,97 @@ def test_schedule_survives_a_soft_time_limit() -> None:
     ):
         apply_display_power_schedule.apply()
     fake_redis.set.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Time limits (Sentry ANTHIAS-A / 9 / B / 1Q)
+# ---------------------------------------------------------------------------
+
+
+class TestTaskTimeLimits:
+    """A hard limit without a soft one is a SIGKILL waiting to happen.
+
+    The soft limit arrives as an exception inside the task, so celery
+    runs ``on_failure`` — where every media task clears
+    ``is_processing`` and writes the row's error message. The hard
+    limit arrives as SIGKILL to the pool child: no handler runs, the
+    row is stranded at "Processing", and one overrun files three
+    reports (the hard-limit line, billiard's ``TimeLimitExceeded``,
+    and the ``signal 9 (SIGKILL)`` exit) plus a worker respawn.
+    """
+
+    def _anthias_tasks(self) -> dict[str, Any]:
+        return {
+            name: task
+            for name, task in celery_tasks_module.celery.tasks.items()
+            if name.startswith('anthias_server.')
+        }
+
+    def test_every_time_limited_task_has_a_soft_limit(self) -> None:
+        """Pinned over the whole registry, not task by task.
+
+        This has now been fixed four times for four different tasks,
+        each time by someone reading a Sentry report, because nothing
+        stopped the next task from being written the same way. A new
+        task with a bare ``time_limit`` fails here instead.
+        """
+        offenders = sorted(
+            name
+            for name, task in self._anthias_tasks().items()
+            if task.time_limit is not None and task.soft_time_limit is None
+        )
+        assert offenders == [], (
+            'these tasks will be SIGKILLed on overrun instead of raising '
+            f'inside the task: {offenders}'
+        )
+
+    def test_soft_limits_leave_room_for_the_failure_handler(self) -> None:
+        """A soft limit at or above the hard one never fires."""
+        for name, task in self._anthias_tasks().items():
+            if task.soft_time_limit is None or task.time_limit is None:
+                continue
+            assert task.soft_time_limit < task.time_limit, name
+
+    @pytest.mark.parametrize(
+        'name',
+        [
+            'probe_video_duration',
+            'normalize_image_asset',
+            'normalize_video_asset',
+            'download_youtube_asset',
+            'download_remote_video_asset',
+        ],
+    )
+    def test_media_tasks_use_the_shared_headroom(self, name: str) -> None:
+        task = celery_tasks_module.celery.tasks[
+            f'anthias_server.celery_tasks.{name}'
+        ]
+        hard, soft = task.time_limit, task.soft_time_limit
+        assert hard is not None and soft is not None, name
+        assert hard - soft == celery_tasks_module.MEDIA_TASK_TIMEOUT_HEADROOM_S
+
+    def test_a_soft_limit_lands_on_the_download_failure_handler(self) -> None:
+        """The point of the soft limit: ``on_failure`` actually runs.
+
+        Under the hard limit the child is killed outright, so none of
+        this happens and the row keeps its Processing pill forever.
+        """
+        with (
+            mock.patch(
+                'anthias_server.processing._set_processing_error'
+            ) as set_error,
+            mock.patch('anthias_server.processing._notify') as notify,
+        ):
+            celery_tasks_module._DownloadAssetTask().on_failure(
+                SoftTimeLimitExceeded(870),
+                'task-id',
+                ('asset-1',),
+                {},
+                None,
+            )
+        notify.assert_called_once_with('asset-1')
+        message = set_error.call_args.args[1]
+        assert 'Timed out' in message
+        assert '870' in message
+        # The raw celery repr must not reach the operator's tooltip.
+        assert 'SoftTimeLimitExceeded' not in message
