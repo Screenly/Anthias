@@ -140,10 +140,26 @@ Flipping to published (`release: published`, `startsWith(tag,'v')`) triggers
 ## 7. Verify / recover
 
 - Watch the run: `gh run list --workflow=build-balena-disk-image.yaml`.
-- **Transient disk-image failures → rerun, don't debug.** `balena os download
-  --version latest` intermittently dies with `ERR_STREAM_PREMATURE_CLOSE` (a CDN
-  blip); `gh run rerun <run-id> --failed` fixes it (also re-runs the skipped
-  `upload-release-assets` + `build-rpi-imager-json`).
+- **Disk-image flake is retried in-workflow now — a red run is a real failure.**
+  Both flaky steps retry 3x internally, so `gh run rerun --failed` should no
+  longer be the reflex. Check the step annotations first: repeated
+  `::warning title=balena preload retry::` lines mean the race below is getting
+  worse, not that the run is fine.
+  * **`balena preload` → `umount: target is busy` (exit 32)** was the dominant
+    cause, not the CDN. preload's `get_image_info` → `free_space()` mounts a
+    partition through a loop device and unmounts it from a context manager; udev
+    is still probing (or holding an inotify watch on) that device when the
+    unmount fires, and the exception aborts the whole preload. It cost
+    v2026.07.1, v2026.07.2, v2026.07.4, v2026.09.0 and v2026.10.0 an extra
+    attempt each — always `x86` or `rockpi4`. Mitigated with a `nowatch` udev
+    rule plus a retry that restores a pristine copy of the image (preload edits
+    the `.img` in place, so a naive retry stacks a half-written image).
+  * **`balena os download --version latest` → `ERR_STREAM_PREMATURE_CLOSE`** is
+    the real CDN blip, and it is rarer (v2026.07.0). The retry deletes the
+    partial file before re-fetching so a truncated image can never reach preload.
+  * **`Set up job` → HTTP 429 from codeload.github.com** (v2026.08.2) is GitHub
+    rate-limiting the action-tarball fetch, outside our control; the runner
+    already retries 3x on its own. This one genuinely is "rerun it".
 - If preflight failed because you published too early, re-trigger after the
   master build is green: `gh workflow run build-balena-disk-image.yaml -f
   tag=v2026.06.0`.
