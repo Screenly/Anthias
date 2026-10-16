@@ -59,6 +59,7 @@ thread, which is also the only thread CPython delivers signals on.
 from __future__ import annotations
 
 import logging
+from time import monotonic
 from types import FrameType
 from typing import Any
 
@@ -95,15 +96,76 @@ logger = logging.getLogger(__name__)
 # raises without a dedicated signal.
 _task_running = False
 
+# ``monotonic()`` at which the running body's *own* soft limit falls
+# due, or ``None`` when it could not be determined.
+#
+# A signal carries no job identity -- billiard sends a bare
+# ``SIGUSR1`` -- so "a task is running" does not mean the signal was
+# armed for *that* task. A child can finish job A, leave its result on
+# the outqueue, and pick job B off the inq before the parent has
+# drained A from ``Pool._cache``; A's late timer then fires at a child
+# that is busy with B, and interrupting B would abort a task whose own
+# limit has not expired.
+#
+# The one job-correlated fact the child does hold is how long the
+# current body has been running against the limit that body was
+# dispatched with. A soft limit is armed when the parent hands the job
+# over, so a legitimate signal cannot arrive before the running body
+# has reached its own limit; one that does belongs to an earlier job
+# and is dropped.
+#
+# Fail open: when the limit cannot be resolved the deadline is
+# ``None`` and the signal is honoured, because suppressing a real soft
+# limit would hand the task to the hard limit instead -- a SIGKILL
+# with no ``on_failure``, which is the failure mode #3385 exists to
+# remove.
+_task_deadline: float | None = None
 
-def _on_task_prerun(**_kwargs: Any) -> None:
-    global _task_running
+# Covers the skew between the parent arming the timer and this child
+# reaching ``task_prerun`` (pickling, inq transit, the tracer's
+# preamble). Only has to outlast that handover, so it is small next to
+# any real limit -- the shortest in this project is 90s. Erring high
+# costs only that a stale signal landing within five seconds of the
+# running body's own deadline is still honoured; erring low would risk
+# dropping a real limit.
+_SOFT_LIMIT_SKEW_S = 5.0
+
+
+def _soft_limit_deadline(task: Any) -> float | None:
+    """When the body now starting would reach its own soft limit.
+
+    Resolved the way celery resolves the limit it arms the timer with:
+    the per-call ``timelimit`` on the request, then the task's own
+    ``soft_time_limit``, then the worker-wide default. Anything
+    unexpected here must not stop the task from running, so every
+    failure resolves to "unknown" and the guard falls open.
+    """
+    try:
+        request_limits = getattr(task.request, 'timelimit', None)
+        soft = (request_limits or (None, None))[1]
+        soft = (
+            soft or task.soft_time_limit or task.app.conf.task_soft_time_limit
+        )
+        return monotonic() + float(soft) if soft else None
+    except Exception:
+        logger.debug(
+            'Could not resolve a soft time limit for the running task; '
+            'the guard will honour any soft timeout signal it gets.',
+            exc_info=True,
+        )
+        return None
+
+
+def _on_task_prerun(task: Any = None, **_kwargs: Any) -> None:
+    global _task_running, _task_deadline
+    _task_deadline = _soft_limit_deadline(task)
     _task_running = True
 
 
 def _on_task_finished(**_kwargs: Any) -> None:
-    global _task_running
+    global _task_running, _task_deadline
     _task_running = False
+    _task_deadline = None
 
 
 def guarded_soft_timeout_sighandler(
@@ -118,6 +180,21 @@ def guarded_soft_timeout_sighandler(
     del signum, frame  # a signal handler's arguments, unused here
 
     if _task_running:
+        if (
+            _task_deadline is not None
+            and monotonic() < _task_deadline - _SOFT_LIMIT_SKEW_S
+        ):
+            # Armed for a job this child has already finished and the
+            # parent has not yet drained. Interrupting the body that
+            # happens to be running now would abort the wrong task.
+            logger.warning(
+                'Discarded a soft time limit signal that arrived while a '
+                'task was running but well inside its own limit; it was '
+                'armed for an earlier job. This would otherwise have '
+                'interrupted the wrong task.'
+            )
+            return
+
         raise SoftTimeLimitExceeded()
 
     # Warning, not exception: this is a diagnosable condition rather

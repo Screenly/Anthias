@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import signal
 from collections.abc import Iterator
+from time import monotonic
 from typing import Any, cast
 from unittest import mock
 
@@ -24,6 +25,20 @@ from celery.signals import (
 )
 
 from anthias_server.lib import soft_timeout_guard
+
+
+class _FakeTask:
+    """Just the attributes the limit resolution reads off a task."""
+
+    def __init__(
+        self,
+        request_limits: tuple[Any, Any] | None = None,
+        soft_time_limit: float | None = None,
+        conf_default: float | None = None,
+    ) -> None:
+        self.request = mock.Mock(timelimit=request_limits)
+        self.soft_time_limit = soft_time_limit
+        self.app = mock.Mock(conf=mock.Mock(task_soft_time_limit=conf_default))
 
 
 @pytest.fixture(autouse=True)
@@ -146,6 +161,111 @@ def test_a_signal_arriving_during_teardown_is_discarded(
     task_postrun.send(sender=None)
 
     assert 'already finished' in caplog.text
+
+
+def test_a_late_signal_does_not_interrupt_the_next_job() -> None:
+    """A prefork child can be running B when A's timer finally fires.
+
+    The child picks the next job off the inq as soon as it has put the
+    previous result on the outqueue, which is a separate step from the
+    parent draining that result out of ``Pool._cache``. Until it does,
+    ``_on_soft_timeout`` still finds job A there and signals a child
+    that has already moved on to B.
+
+    The signal carries no job identity, so the only thing separating
+    the two is that B is nowhere near its own limit.
+    """
+    soft_timeout_guard._on_task_prerun(task=_FakeTask(soft_time_limit=90))
+
+    # Raising here would abort B on A's timer.
+    soft_timeout_guard.guarded_soft_timeout_sighandler(signal.SIGUSR1, None)
+
+
+def test_a_signal_at_the_bodys_own_deadline_still_raises() -> None:
+    """The case the whole soft limit exists for must survive the guard.
+
+    Suppressing this would hand the task to the hard limit instead --
+    SIGKILL with no ``on_failure`` to clear the Processing pill.
+    """
+    soft_timeout_guard._on_task_prerun(task=_FakeTask(soft_time_limit=90))
+    soft_timeout_guard._task_deadline = monotonic() - 1
+
+    with pytest.raises(SoftTimeLimitExceeded):
+        soft_timeout_guard.guarded_soft_timeout_sighandler(
+            signal.SIGUSR1, None
+        )
+
+
+def test_a_signal_inside_the_handover_skew_still_raises() -> None:
+    """The parent arms the timer before this child reaches prerun.
+
+    So a real signal can land fractionally early. The guard must not
+    read that as a stale one.
+    """
+    soft_timeout_guard._on_task_prerun(task=_FakeTask(soft_time_limit=90))
+    soft_timeout_guard._task_deadline = (
+        monotonic() + soft_timeout_guard._SOFT_LIMIT_SKEW_S / 2
+    )
+
+    with pytest.raises(SoftTimeLimitExceeded):
+        soft_timeout_guard.guarded_soft_timeout_sighandler(
+            signal.SIGUSR1, None
+        )
+
+
+@pytest.mark.parametrize(
+    'task',
+    [
+        _FakeTask(),
+        _FakeTask(request_limits=(300, None)),
+        mock.Mock(request=mock.Mock(timelimit=(None, 'not a number'))),
+        None,
+    ],
+    ids=['no limit anywhere', 'hard limit only', 'junk limit', 'no task'],
+)
+def test_an_unresolvable_limit_falls_open(task: Any) -> None:
+    """Never suppress a soft limit the guard could not reason about."""
+    soft_timeout_guard._on_task_prerun(task=task)
+
+    assert soft_timeout_guard._task_deadline is None
+    with pytest.raises(SoftTimeLimitExceeded):
+        soft_timeout_guard.guarded_soft_timeout_sighandler(
+            signal.SIGUSR1, None
+        )
+
+
+@pytest.mark.parametrize(
+    ('task', 'expected'),
+    [
+        (_FakeTask(request_limits=(300, 120), soft_time_limit=90), 120),
+        (_FakeTask(soft_time_limit=90), 90),
+        (_FakeTask(conf_default=60), 60),
+    ],
+    ids=['per-call request limit', "task's own", 'worker-wide default'],
+)
+def test_the_limit_is_resolved_the_way_celery_resolves_it(
+    task: Any, expected: float
+) -> None:
+    """``execute_using_pool`` arms the timer off this same precedence.
+
+    A guard reading a different limit than the one the timer was armed
+    with would compare against the wrong deadline.
+    """
+    before = monotonic()
+    soft_timeout_guard._on_task_prerun(task=task)
+
+    assert soft_timeout_guard._task_deadline is not None
+    assert (
+        expected <= soft_timeout_guard._task_deadline - before < expected + 1
+    )
+
+
+def test_finishing_a_task_clears_the_deadline() -> None:
+    """A stale deadline must not be read against the next body."""
+    soft_timeout_guard._on_task_prerun(task=_FakeTask(soft_time_limit=90))
+    soft_timeout_guard._on_task_finished()
+
+    assert soft_timeout_guard._task_deadline is None
 
 
 def test_install_replaces_the_billiard_handler() -> None:
