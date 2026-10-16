@@ -262,9 +262,12 @@ def _read_text(path: str) -> str | None:
     killed the storage-health watcher at startup: one odd byte in a
     product name cost the device all of its storage monitoring.
     Replacing the byte degrades a single display string instead.
+    The encoding is pinned to UTF-8 rather than left to the container
+    locale, so a valid multi-byte name still decodes correctly when
+    ``LANG``/``LC_ALL`` is unset or not UTF-8.
     """
     try:
-        with open(path, errors='replace') as f:
+        with open(path, encoding='utf-8', errors='replace') as f:
             return f.read().strip() or None
     except OSError:
         return None
