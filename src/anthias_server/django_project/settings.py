@@ -621,9 +621,6 @@ else:
 #     instead of failing on the spot. Longer than any transaction
 #     Anthias runs (the writes are single-row UPDATEs; the longest
 #     holder is the startup ``migrate``/``dbbackup`` pass).
-#   * ``journal_mode=WAL`` — readers no longer block the writer and
-#     vice versa; persists in the DB file but is re-asserted each
-#     connect so restored backups / legacy DBs get upgraded too.
 #   * ``synchronous=NORMAL`` — the recommended pairing with WAL;
 #     FULL's per-commit fsync cost buys nothing extra under WAL on
 #     a power-loss-prone SD card (WAL commits are crash-safe at
@@ -633,15 +630,27 @@ else:
 #     instead of deadlocking mid-transaction on the read→write lock
 #     upgrade (those fail instantly, ignoring the busy timeout).
 #
+# ``journal_mode=WAL`` is deliberately NOT here. It is a property of
+# the database file rather than of a connection, and asserting it per
+# connect made the *un*converted case fatal: the switch takes an
+# exclusive lock, so with three processes on the file it blocked for
+# the whole busy timeout and then raised ``OperationalError: database
+# is locked`` out of ``get_new_connection`` — before Django owns the
+# connection, so the request 500s and the half-built sqlite handle
+# leaks an fd (Sentry ANTHIAS-38, and the ANTHIAS-62/63 EMFILE that
+# followed it on the same device). ``lib.sqlite_journal`` performs the
+# conversion once per process at startup instead, where a refusal is
+# survivable; the busy timeout above is what keeps a database that is
+# still on the rollback journal usable meanwhile.
+#
 # Unit runs (pytest-django's per-worker ``:memory:`` DBs) accept the
-# same pragmas harmlessly: ``journal_mode=WAL`` is a no-op that
-# reports ``memory`` on in-memory databases.
+# remaining pragma harmlessly.
 _db_default: dict[str, Any] = {
     'ENGINE': 'django.db.backends.sqlite3',
     'NAME': db_path,
     'OPTIONS': {
         'timeout': 20,
-        'init_command': ('PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;'),
+        'init_command': 'PRAGMA synchronous=NORMAL;',
         'transaction_mode': 'IMMEDIATE',
     },
 }
