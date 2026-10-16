@@ -10,6 +10,7 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import time, timedelta
 from types import SimpleNamespace
@@ -790,6 +791,73 @@ def test_assets_delete_removes_local_file(
     assert not asset_path.exists(), (
         f'asset file {asset_path} survived UI delete'
     )
+
+
+@pytest.mark.django_db
+def test_assets_delete_drops_row_before_unlinking(
+    client: Client, tmp_path: Any
+) -> None:
+    """The row must be gone by the time the file is unlinked.
+
+    The reverse order leaves a window where ``Asset.uri`` points at a
+    file that no longer exists, and a normalisation task picking the
+    row up in that window raised ``FileNotFoundError`` on an asset the
+    operator had already deleted (Sentry ANTHIAS-1G). Asserted on the
+    ordering rather than on the window, because the window itself is
+    a race no test can reliably hit.
+    """
+    from anthias_server.settings import settings as anthias_settings
+
+    asset_path = (
+        tmp_path / anthias_settings['assetdir'].lstrip('/') / 'clip.mp4'
+    )
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    asset_path.write_bytes(b'\x00payload')
+
+    now = timezone.now()
+    asset = Asset.objects.create(
+        name='Processing clip',
+        uri=str(asset_path),
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+
+    row_alive_at_unlink: list[bool] = []
+    real_remove = os.remove
+
+    def _spy_remove(target: str) -> None:
+        row_alive_at_unlink.append(
+            Asset.objects.filter(asset_id=asset.asset_id).exists()
+        )
+        real_remove(target)
+
+    with (
+        mock.patch.dict(
+            anthias_settings,
+            {'assetdir': str(asset_path.parent)},
+        ),
+        mock.patch(
+            'anthias_server.app.helpers.remove',
+            side_effect=_spy_remove,
+        ),
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_delete', args=[asset.asset_id])
+        )
+
+    assert row_alive_at_unlink == [False], (
+        'asset row was still live when its file was unlinked'
+    )
+    assert not asset_path.exists()
 
 
 @pytest.mark.django_db

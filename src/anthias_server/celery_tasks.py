@@ -1911,7 +1911,7 @@ def normalize_image_asset(asset_id: str) -> None:
     asset = processing._row_or_none(asset_id)
     if asset is None:
         return
-    processing._run_image_normalisation(asset)
+    processing._run_unless_deleted(processing._run_image_normalisation, asset)
 
 
 @celery.task(
@@ -1949,4 +1949,4 @@ def normalize_video_asset(asset_id: str) -> None:
     asset = processing._row_or_none(asset_id)
     if asset is None:
         return
-    processing._run_video_normalisation(asset)
+    processing._run_unless_deleted(processing._run_video_normalisation, asset)

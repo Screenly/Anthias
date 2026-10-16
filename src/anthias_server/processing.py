@@ -61,6 +61,7 @@ import logging
 import os
 import shlex
 import struct
+from collections.abc import Callable
 from os import path
 from typing import Any
 
@@ -375,6 +376,37 @@ def _row_or_none(asset_id: str) -> Asset | None:
     if not asset.is_processing:
         return None
     return asset
+
+
+def _run_unless_deleted(run: Callable[[Asset], None], asset: Asset) -> None:
+    """Run a normalisation body, treating a mid-flight delete as a no-op.
+
+    ``_row_or_none`` rejects a deleted row at task entry, but the
+    operator can delete the asset at any point after that, and
+    ``helpers.delete_asset_with_file`` takes the file with it. The body
+    then fails wherever it next touches the source: the ``isfile``
+    check, Pillow's ``open``, ffprobe, the final ``replace``. Asking at
+    each of those would still leave gaps between them, so the question
+    is asked once, here, after whatever the body raised:
+
+    * **No row** — the operator deleted the asset mid-flight. There is
+      nothing to normalise and no row to carry ``metadata.error_message``,
+      so log and return rather than raise a failure that reaches Sentry
+      as a fault (ANTHIAS-1G). Any output the body already wrote is an
+      orphan that the periodic ``cleanup()`` sweep removes.
+    * **Live row** — a genuine failure (corrupt upload, disk pressure,
+      a file that vanished under a row nobody deleted). Re-raise so
+      ``on_failure`` writes the Failed pill and the fault is reported.
+    """
+    try:
+        run(asset)
+    except Exception:
+        if Asset.objects.filter(asset_id=asset.asset_id).exists():
+            raise
+        logger.info(
+            'normalisation: asset %s was deleted mid-flight; skipping',
+            asset.asset_id,
+        )
 
 
 def _ext(filename: str) -> str:

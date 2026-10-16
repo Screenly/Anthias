@@ -2098,6 +2098,92 @@ def test_normalize_image_asset_celery_no_op_when_row_missing() -> None:
     run.assert_not_called()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize('kind', ['image', 'video'])
+def test_normalize_task_no_op_when_row_deleted_mid_flight(
+    asset_dir: str, kind: str
+) -> None:
+    """The operator deleted the asset after the entry guard passed.
+
+    ``delete_asset_with_file`` drops the row and then unlinks the file,
+    so the body fails wherever it next touches the source. With the row
+    gone that is the delete winning the race, not a fault: the task
+    returns instead of raising into Sentry (ANTHIAS-1G).
+    """
+    from anthias_server import celery_tasks
+
+    asset_id = f'{kind}-deleted'
+    _make_processing_asset(
+        asset_id, path.join(asset_dir, f'gone.{kind}'), mimetype=kind
+    )
+
+    def _deleted_then_fail(_asset: Asset) -> None:
+        Asset.objects.filter(asset_id=asset_id).delete()
+        raise FileNotFoundError('source vanished')
+
+    with mock.patch.object(
+        processing,
+        f'_run_{kind}_normalisation',
+        side_effect=_deleted_then_fail,
+    ):
+        getattr(celery_tasks, f'normalize_{kind}_asset')(asset_id)
+
+
+@pytest.mark.django_db
+def test_image_task_no_op_when_source_deleted_after_isfile(
+    asset_dir: str,
+) -> None:
+    """The window ``isfile`` cannot close: the delete lands after the
+    check passes and before Pillow opens the source."""
+    from anthias_server.celery_tasks import normalize_image_asset
+
+    src = path.join(asset_dir, 'racing.tiff')
+    Image.new('RGB', (4, 4)).save(src)
+    _make_processing_asset('img-racing', src)
+
+    def _delete_then_open(source: str, _staging: str) -> None:
+        Asset.objects.filter(asset_id='img-racing').delete()
+        os.remove(source)
+        Image.open(source)
+
+    with (
+        mock.patch.object(
+            processing,
+            '_convert_image_to_webp',
+            side_effect=_delete_then_open,
+        ),
+        mock.patch.object(processing, '_notify') as notify,
+    ):
+        normalize_image_asset('img-racing')
+
+    assert notify.call_count == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('kind', ['image', 'video'])
+def test_normalize_task_raises_when_row_still_live(
+    asset_dir: str, kind: str
+) -> None:
+    """A source that vanished under a row nobody deleted is a genuine
+    fault and must still raise."""
+    from anthias_server import celery_tasks
+
+    asset_id = f'{kind}-live'
+    _make_processing_asset(
+        asset_id, path.join(asset_dir, f'gone.{kind}'), mimetype=kind
+    )
+
+    with (
+        mock.patch.object(
+            processing,
+            f'_run_{kind}_normalisation',
+            side_effect=FileNotFoundError('source vanished'),
+        ),
+        pytest.raises(FileNotFoundError),
+    ):
+        getattr(celery_tasks, f'normalize_{kind}_asset')(asset_id)
+
+
 def test_normalize_tasks_exclude_permanent_oserrors_from_autoretry() -> None:
     """Both normalisation tasks have ``autoretry_for=(OSError,)`` so a
     transient disk hiccup is retried automatically. Several OSError
