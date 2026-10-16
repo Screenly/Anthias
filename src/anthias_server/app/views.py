@@ -1920,7 +1920,7 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 
     try:
         prev_auth_backend = settings['auth_backend']
-        auth_changed = apply_auth_settings(
+        auth_change = apply_auth_settings(
             request,
             new_auth_backend=auth_backend,
             current_pwd=current_password,
@@ -1972,14 +1972,34 @@ def settings_save(request: HttpRequest) -> HttpResponse:
 
         _apply_display_power_schedule_settings(request)
 
-        settings.save()
-        ViewerPublisher.get_instance().send_to_viewer('reload')
-        # After save(), so a socket that reconnects immediately is
-        # judged against the new auth_backend rather than the old one.
-        if auth_changed:
-            from anthias_server.app.consumers import disconnect_all
+        # Narrow on purpose: it guards the conf write, which is the
+        # only thing here that can fail *after* apply_auth_settings()
+        # has already committed its half. A toggle is live in the
+        # in-process settings dict from the assignment above — that is
+        # what _is_authorized() reads — so reaping is owed whether or
+        # not the write lands.
+        #
+        # backend_changed, not "anything changed": a credential
+        # rotation is already reaped by the User post_save receiver in
+        # app/signals.py, and firing here too would fan a second
+        # force_disconnect out over Redis for every password change. A
+        # backend toggle writes no User row, so nothing but this sees
+        # it — but one save can do both (enable auth *and* set the
+        # username/password), and checking only backend_changed
+        # double-reaps exactly that case: the receiver fires on the User
+        # write, then this fires again, bumping the generation twice for
+        # one operator action.
+        try:
+            settings.save()
+        finally:
+            if (
+                auth_change.backend_changed
+                and not auth_change.credentials_rotated
+            ):
+                from anthias_server.app.consumers import disconnect_all
 
-            disconnect_all()
+                disconnect_all()
+        ViewerPublisher.get_instance().send_to_viewer('reload')
 
         messages.success(request, 'Settings were successfully saved.')
     except AuthSettingsError as exc:

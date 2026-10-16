@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import threading
 from typing import Any
 from unittest import mock
 
@@ -6,13 +8,27 @@ import pytest
 from asgiref.sync import async_to_sync, sync_to_async
 from asgiref.testing import ApplicationCommunicator
 from django.contrib.auth.models import AnonymousUser, User
+from django.db import transaction
 from django.test import Client, override_settings
+from django.utils import timezone
 
+from anthias_server.app import consumers as consumers_module
 from anthias_server.app.consumers import (
     AssetConsumer,
     disconnect_all,
     notify_asset_update,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_auth_generation() -> Any:
+    """``consumers._auth_generation`` is process-global by design — a
+    real device's counter only ever climbs. Restore it between tests so
+    a test that rotates credentials can't leave every socket built by a
+    later test looking stale."""
+    original = consumers_module._auth_generation
+    yield
+    consumers_module._auth_generation = original
 
 
 def test_asset_update_sends_asset_id() -> None:
@@ -463,3 +479,466 @@ def test_an_authorized_socket_survives_until_auth_settings_change() -> None:
 
     with _auth_backend('auth_basic'):
         async_to_sync(body)()
+
+
+# ---------------------------------------------------------------------------
+# Credential rotation fails closed even when the close is lost
+# (follow-up Copilot review on PR 3324).
+#
+# disconnect_all() rides the same best-effort channel layer _broadcast
+# swallows errors from, so the close frame can simply never arrive — a
+# Redis blip during the settings save is enough. The per-frame re-check
+# alone doesn't cover that case for a *rotation*: scope['user'] was
+# resolved at handshake and its is_authenticated stays True however the
+# password changes underneath it. The auth generation is what closes
+# that, in-process and with no DB hit per frame.
+# ---------------------------------------------------------------------------
+
+
+def _lost_fan_out() -> Any:
+    """Make the force_disconnect fan-out vanish, the way a channel-layer
+    outage does — _broadcast() logs and swallows, so the caller can't
+    tell. Everything disconnect_all() does *outside* the broadcast must
+    still be enough on its own."""
+    return mock.patch('anthias_server.app.consumers._broadcast')
+
+
+def test_asset_update_is_suppressed_after_a_rotation_loses_the_close() -> None:
+    """The gap Copilot found: an operator socket whose credentials were
+    rotated, whose close never arrived, and whose user object still
+    reports is_authenticated. It must go silent anyway."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    send = mock.AsyncMock()
+    close = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        disconnect_all()
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_not_awaited()
+    # Silent, not closed — same reasoning as the auth-toggle path: a
+    # close lands exactly on the write we're declining to disclose.
+    close.assert_not_awaited()
+
+
+def test_a_socket_opened_after_the_rotation_still_receives_updates() -> None:
+    """Mutation check: the generation must gate *stale* sockets, not
+    become a permanent kill switch on every socket after the first
+    credential change of the process's life."""
+    with _lost_fan_out():
+        disconnect_all()
+
+    # Built after the bump, so it carries the current generation.
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_awaited_once_with(text_data='abc123')
+
+
+def test_a_stale_socket_keeps_working_while_auth_is_disabled() -> None:
+    """Turning auth *off* also bumps the generation, but there are no
+    credentials left to revoke — the documented contract is that the
+    device is open. A socket that missed its close must not be
+    stranded on the 5s poll for the rest of its life."""
+    consumer, _ = _consumer_with_scope(AnonymousUser())
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend(''),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        disconnect_all()
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_awaited_once_with(text_data='abc123')
+
+
+def _stamped_scope() -> dict[str, Any]:
+    """The scope as the ASGI stack hands it down: stamped on the way
+    in, before AuthMiddlewareStack resolves the user."""
+    captured: dict[str, Any] = {}
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        captured.update(scope)
+
+    app = consumers_module.stamp_auth_generation(inner)
+    asyncio.run(app({'type': 'websocket'}, mock.AsyncMock(), mock.AsyncMock()))
+    return captured
+
+
+def test_a_handshake_that_straddles_a_rotation_is_refused() -> None:
+    """AuthMiddlewareStack resolves the user and only then builds the
+    consumer. A rotation committing inside that window would leave the
+    consumer reading the already-bumped counter — current — while its
+    user came from a session that stopped being valid mid-handshake,
+    and the socket would stay authorized for good.
+
+    The stamp is taken before the lookup, so the handshake carries the
+    pre-rotation generation and is refused. The consumer here is built
+    *after* the bump on purpose: without the stamp it would be accepted.
+    """
+    scope = _stamped_scope()
+    with _lost_fan_out():
+        disconnect_all()
+
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = scope['auth_generation']
+    accept, close = mock.AsyncMock(), mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'accept', accept),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        asyncio.run(consumer.connect())
+
+    close.assert_awaited_once()
+    accept.assert_not_awaited()
+
+
+def test_a_handshake_with_no_rotation_in_flight_is_accepted() -> None:
+    """Mutation check: the stamp must refuse only the straddling
+    handshake, not every stamped one."""
+    scope = _stamped_scope()
+
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = scope['auth_generation']
+    accept, close = mock.AsyncMock(), mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'accept', accept),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        asyncio.run(consumer.connect())
+
+    accept.assert_awaited_once()
+    close.assert_not_awaited()
+
+
+def test_the_stamp_does_not_mutate_the_servers_scope() -> None:
+    """The ASGI server owns the scope it passes in; stamping a copy
+    keeps a second connection from inheriting this one's generation."""
+    original: dict[str, Any] = {'type': 'websocket'}
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        assert scope['auth_generation'] == consumers_module._auth_generation
+
+    app = consumers_module.stamp_auth_generation(inner)
+    asyncio.run(app(original, mock.AsyncMock(), mock.AsyncMock()))
+
+    assert original == {'type': 'websocket'}
+
+
+def _bump_many(rounds: int) -> None:
+    for _ in range(rounds):
+        disconnect_all()
+
+
+def test_concurrent_revocations_all_count() -> None:
+    """Every concurrent revocation must count.
+
+    A lost update would leave a socket stamped between two changes
+    matching the final generation — still authorized after a
+    revocation. Honest about what this proves: CPython's GIL makes the
+    losing interleaving unobservable, so this passes with or without
+    the lock on a GIL build. It pins the invariant (and would catch a
+    regression on a free-threaded one), it does not demonstrate the
+    race."""
+    start = consumers_module._auth_generation
+    rounds = 200
+    threads = [
+        threading.Thread(target=_bump_many, args=(rounds,)) for _ in range(4)
+    ]
+    with _lost_fan_out():
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert consumers_module._auth_generation == start + 4 * rounds
+
+
+def test_force_disconnect_spares_a_socket_newer_than_the_revocation() -> None:
+    """A handshake completing between the generation bump and the
+    publish joins the group already stamped with the new generation —
+    it was accepted under the new credentials. Closing it would drop
+    the operator's reconnect for a revocation that never applied."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = consumers_module._auth_generation
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(
+            consumer.force_disconnect(
+                {
+                    'type': 'force_disconnect',
+                    'origin': consumers_module._PROCESS_ID,
+                    'generation': consumers_module._auth_generation,
+                }
+            )
+        )
+
+    close.assert_not_awaited()
+
+
+def test_force_disconnect_still_closes_a_socket_older_than_it() -> None:
+    """Mutation check: the window above must not become a way to
+    survive a revocation that does apply."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = consumers_module._auth_generation
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(
+            consumer.force_disconnect(
+                {
+                    'type': 'force_disconnect',
+                    'origin': consumers_module._PROCESS_ID,
+                    'generation': consumers_module._auth_generation + 1,
+                }
+            )
+        )
+
+    close.assert_awaited_once()
+
+
+def test_force_disconnect_closes_for_another_processs_event() -> None:
+    """Another process's counter says nothing about ours — a
+    manage.py changepassword on the device must still close every
+    socket here, however this process's generations compare."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    consumer.scope['auth_generation'] = consumers_module._auth_generation
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(
+            consumer.force_disconnect(
+                {
+                    'type': 'force_disconnect',
+                    'origin': 'some-other-process',
+                    'generation': consumers_module._auth_generation,
+                }
+            )
+        )
+
+    close.assert_awaited_once()
+
+
+def test_force_disconnect_closes_for_a_payloadless_event() -> None:
+    """An event published by an older build carries neither field and
+    must keep its original meaning: close."""
+    consumer, _ = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    close = mock.AsyncMock()
+
+    with mock.patch.object(consumer, 'close', close):
+        asyncio.run(consumer.force_disconnect({'type': 'force_disconnect'}))
+
+    close.assert_awaited_once()
+
+
+def test_connect_is_unaffected_by_earlier_generations() -> None:
+    """A fresh handshake after any number of rotations must still be
+    decided on the session alone."""
+    with _lost_fan_out():
+        disconnect_all()
+        disconnect_all()
+
+    consumer, layer = _consumer_with_scope(mock.Mock(is_authenticated=True))
+    accept, close = mock.AsyncMock(), mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        mock.patch.object(consumer, 'accept', accept),
+        mock.patch.object(consumer, 'close', close),
+    ):
+        asyncio.run(consumer.connect())
+
+    layer.group_add.assert_awaited_once_with('ws_server', 'specific.abcdef!')
+    accept.assert_awaited_once()
+    close.assert_not_awaited()
+
+
+@pytest.mark.django_db
+@override_settings(CHANNEL_LAYERS=_IN_MEMORY_LAYER)
+def test_rotation_silences_a_live_socket_end_to_end() -> None:
+    """The same thing through the real ASGI stack with a genuine
+    session cookie: a socket that is receiving frames, a rotation whose
+    close is dropped, and no further frame after it."""
+    User.objects.create_user(username='alice', password='s3cret-pa55phrase')
+    headers = _session_cookie_header('alice', 's3cret-pa55phrase')
+
+    async def body() -> None:
+        communicator = _communicator(headers)
+        assert (await _handshake(communicator))['type'] == 'websocket.accept'
+        await sync_to_async(notify_asset_update, thread_sensitive=True)('*')
+        assert (await communicator.receive_output(timeout=5)) == {
+            'type': 'websocket.send',
+            'text': '*',
+        }
+
+        with _lost_fan_out():
+            await sync_to_async(disconnect_all, thread_sensitive=True)()
+        # The close never arrived...
+        assert await communicator.receive_nothing(timeout=1)
+        # ...and the socket is still silent on the next real write.
+        await sync_to_async(notify_asset_update, thread_sensitive=True)('*')
+        assert await communicator.receive_nothing(timeout=1)
+
+    with _auth_backend('auth_basic'):
+        async_to_sync(body)()
+
+
+# ---------------------------------------------------------------------------
+# Revocation is hooked to the User row, not to the settings page
+# (second Copilot review on PR 3336).
+#
+# disconnect_all() being called from the two settings-save views left
+# two holes: /admin is a routed URL whose stock UserAdmin ships a
+# change-password form, and a settings save can fail *after*
+# apply_auth_settings() has already persisted the rotated row. Hooking
+# post_save/post_delete on User closes both — a rotation revokes
+# wherever it comes from, and it does so atomically with the DB write.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_bare_user_save_revokes_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    """The /admin change-password form, `manage.py changepassword` and a
+    shell all end at ``User.save()`` — so that is where the revocation
+    hangs, rather than on the settings views none of them go through."""
+    user = User.objects.create_user(username='alice', password='s3cret-pa55')
+    consumer, _ = _consumer_with_scope(user)
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        with django_capture_on_commit_callbacks(execute=True):
+            user.set_password('a-rotated-pa55phrase')
+            user.save(update_fields=['password'])
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_not_awaited()
+
+
+@pytest.mark.django_db
+def test_deleting_the_operator_revokes_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    """``scope['user']`` outlives the row it was resolved from, so a
+    deleted account would otherwise keep its socket streaming."""
+    user = User.objects.create_user(username='alice', password='s3cret-pa55')
+    consumer, _ = _consumer_with_scope(user)
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        with django_capture_on_commit_callbacks(execute=True):
+            user.delete()
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_not_awaited()
+
+
+@pytest.mark.django_db
+def test_recording_a_login_does_not_revoke_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    """Django writes ``last_login`` through save(update_fields=[...]) on
+    every successful login. Revoking on that would drop the operator's
+    dashboard socket at the exact moment they sign in — the one User
+    write that must stay neutral."""
+    user = User.objects.create_user(username='alice', password='s3cret-pa55')
+    consumer, _ = _consumer_with_scope(user)
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        with django_capture_on_commit_callbacks(execute=True):
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_awaited_once_with(text_data='abc123')
+
+
+@pytest.mark.django_db
+def test_deactivating_the_operator_revokes_authorization(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    """Fail closed on update_fields we haven't explicitly cleared:
+    is_active decides who may hold a session just as much as the
+    password does."""
+    user = User.objects.create_user(username='alice', password='s3cret-pa55')
+    consumer, _ = _consumer_with_scope(user)
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        with django_capture_on_commit_callbacks(execute=True):
+            user.is_active = False
+            user.save(update_fields=['is_active'])
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    send.assert_not_awaited()
+
+
+@pytest.mark.django_db
+def test_a_rolled_back_credential_change_does_not_revoke(
+    django_capture_on_commit_callbacks: Any,
+) -> None:
+    """The receiver fires inside the caller's transaction, and Django's
+    admin wraps its change form in one — so the write it reacts to can
+    still roll back. A generation bump can't roll back with it, and a
+    socket that also missed the close would then be silent for good
+    over a credential change that never happened. Deferring to
+    transaction.on_commit is what ties the revocation to durability."""
+    user = User.objects.create_user(username='alice', password='s3cret-pa55')
+    consumer, _ = _consumer_with_scope(user)
+    send = mock.AsyncMock()
+
+    with (
+        _auth_backend('auth_basic'),
+        _lost_fan_out(),
+        mock.patch.object(consumer, 'send', send),
+    ):
+        # atomic() exits first and rolls back, then suppress() swallows
+        # the error the way the admin's own error handling would.
+        with (
+            django_capture_on_commit_callbacks(execute=True) as callbacks,
+            contextlib.suppress(RuntimeError),
+            transaction.atomic(),
+        ):
+            user.set_password('a-rotated-pa55phrase')
+            user.save(update_fields=['password'])
+            raise RuntimeError('the admin view blew up')
+        asyncio.run(consumer.asset_update({'asset_id': 'abc123'}))
+
+    assert callbacks == []
+    send.assert_awaited_once_with(text_data='abc123')

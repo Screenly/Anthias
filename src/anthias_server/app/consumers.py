@@ -1,5 +1,7 @@
 import logging
+import threading
 from typing import Any
+from uuid import uuid4
 
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -8,6 +10,38 @@ from channels.layers import get_channel_layer
 logger = logging.getLogger(__name__)
 
 WS_GROUP = 'ws_server'
+
+# Bumped whenever a settings save invalidates credentials that are
+# already in use. Each socket records the value it was accepted under
+# and is refused from the next frame onwards once the two disagree, so
+# a revocation fails closed inside this process rather than depending
+# on the force_disconnect fan-out actually arriving. See
+# disconnect_all(), which is the only thing that bumps it.
+#
+# In-process is enough for every surface that serves HTTP, for the
+# same reason ``settings`` being an in-process UserDict is: uvicorn
+# serves this app single-worker (see bin/start_server.sh), so the
+# process that handles a settings save — or an /admin password change
+# — is the one holding every open socket.
+#
+# It is therefore *only* those surfaces that fail closed. A credential
+# change made from another process (``manage.py changepassword``, a
+# shell on the device) bumps that process's copy of this counter,
+# which reaches nobody; all it has is the best-effort Redis fan-out in
+# disconnect_all(). Closing that gap would mean re-reading credential
+# state from the DB on a timer or per frame in the serving process,
+# which is exactly the SQLite/SBC cost this counter exists to avoid.
+_auth_generation = 0
+
+# Identifies this process in the events it publishes, so a consumer
+# can tell "my process bumped the counter" (where comparing
+# generations is meaningful) from "some other process did" (where it
+# is not). Regenerated per process, deliberately: two workers must not
+# share one.
+_PROCESS_ID = uuid4().hex
+
+# Guards the increment only. See disconnect_all().
+_auth_generation_lock = threading.Lock()
 
 
 def _is_after_close_race(message: str, asgi_message: str) -> bool:
@@ -35,7 +69,59 @@ def _is_after_close_race(message: str, asgi_message: str) -> bool:
     )
 
 
+def stamp_auth_generation(app: Any) -> Any:
+    """ASGI middleware that records the revocation generation *before*
+    the session lookup.
+
+    ``AuthMiddlewareStack`` resolves ``scope['user']`` and only then
+    dispatches to the consumer, so a rotation committing inside that
+    window would be missed: the user came from a session that was
+    still valid when it was read, while the consumer — constructed
+    afterwards — would read the already-bumped counter, find it
+    current, and keep the socket for good. Stamping on the way in
+    means such a handshake carries the pre-rotation generation and is
+    refused, which is the fail-closed direction.
+
+    Installed outside ``AuthMiddlewareStack`` in ``asgi.py``; the
+    consumer falls back to the module counter when the stamp is
+    absent, so a directly-constructed consumer (unit tests) still
+    starts out current.
+    """
+
+    async def middleware(scope: Any, receive: Any, send: Any) -> Any:
+        scope = dict(scope)
+        scope['auth_generation'] = _auth_generation
+        return await app(scope, receive, send)
+
+    return middleware
+
+
 class AssetConsumer(AsyncWebsocketConsumer):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Channels builds one consumer per connection, so this is
+        # effectively the handshake instant. Recorded in __init__
+        # rather than in connect() so a consumer constructed directly
+        # (unit tests, and any future non-handshake use) starts out
+        # current instead of inheriting a stale class-level default and
+        # going silent for reasons that have nothing to do with it.
+        self._auth_generation = _auth_generation
+
+    def _accepted_generation(self) -> int:
+        """The generation this socket was accepted under.
+
+        The scope stamp when there is one — it was taken before the
+        session lookup, so it cannot miss a rotation that landed
+        during it — and the value captured at construction otherwise.
+        """
+        scope = getattr(self, 'scope', None)
+        stamped = (
+            scope.get('auth_generation') if isinstance(scope, dict) else None
+        )
+        if isinstance(stamped, int):
+            return stamped
+        return self._auth_generation
+
     def _is_authorized(self) -> bool:
         """WebSocket counterpart of :func:`anthias_server.lib.auth.authorized`.
 
@@ -45,7 +131,28 @@ class AssetConsumer(AsyncWebsocketConsumer):
         * ``settings['auth_backend'] == ''`` — the operator has auth
           turned off and the documented contract is that the device is
           fully open. /ws follows the HTTP views rather than inventing
-          a stricter rule of its own.
+          a stricter rule of its own. The generation check is skipped
+          in this mode deliberately: with no credentials to revoke, a
+          socket that missed its ``force_disconnect`` should keep
+          working rather than be stranded on the 5s poll for the rest
+          of its life.
+        * The socket's auth generation must still be current. A
+          credential rotation does not change the already-resolved
+          ``scope['user']`` — ``is_authenticated`` is True for any real
+          User row, whatever its password now is — so on its own the
+          session check below would keep passing for a socket accepted
+          under the old password. The generation compared is the one
+          stamped on the scope before the session was resolved (see
+          ``stamp_auth_generation``), so a handshake that straddles a
+          rotation is refused rather than accepted under credentials
+          that stopped being current while it was in flight.
+          ``disconnect_all()`` closes those,
+          but that fan-out is best-effort (``_broadcast`` swallows
+          channel-layer failures, and a transient Redis blip during the
+          save would drop it while later asset writes still get
+          through). Comparing generations is what makes revocation fail
+          closed: no DB hit per frame, and no dependence on the channel
+          layer being healthy at the moment the operator saves.
         * Otherwise the handshake must carry a logged-in session.
           ``AuthMiddlewareStack`` in ``django_project/asgi.py`` has
           already resolved ``scope['user']`` from the session cookie by
@@ -72,6 +179,8 @@ class AssetConsumer(AsyncWebsocketConsumer):
 
         if not settings['auth_backend']:
             return True
+        if self._accepted_generation() != _auth_generation:
+            return False
         user = self.scope.get('user')
         return bool(user is not None and user.is_authenticated)
 
@@ -117,7 +226,25 @@ class AssetConsumer(AsyncWebsocketConsumer):
         re-authorized from scratch — the operator's tab picks its
         socket straight back up, an unauthenticated listener gets a
         403.
+
+        A socket accepted *after* the bump this event belongs to is
+        left alone: it joined the group in the window between the bump
+        and the publish, already stamped with the new generation, so
+        the revocation never applied to it and closing it would drop
+        an operator reconnect for nothing. Only this process's events
+        can be compared that way — another process's counter is
+        unrelated to ours, so those still close everything.
         """
+        generation = event.get('generation')
+        if (
+            event.get('origin') == _PROCESS_ID
+            and isinstance(generation, int)
+            and self._accepted_generation() >= generation
+        ):
+            logger.debug(
+                'force_disconnect: socket is newer than the revocation'
+            )
+            return
         try:
             await self.close()
         except RuntimeError as exc:
@@ -138,6 +265,11 @@ class AssetConsumer(AsyncWebsocketConsumer):
             # errors from), so this is what actually guarantees the
             # invariant — while auth is on, no frame reaches a socket
             # that isn't authorized, however it came to still be open.
+            # That covers both ways a socket can outlive its
+            # authorization: the operator turning auth on (caught by
+            # re-reading the flag) and a credential rotation (caught by
+            # the auth generation), neither of which needs the close to
+            # have been delivered.
             #
             # Stay silent rather than closing. A close is itself an
             # event the listener can time, and it would land exactly on
@@ -214,8 +346,61 @@ def disconnect_all() -> None:
     being frozen at whatever it was when each socket was opened. See
     :meth:`AssetConsumer.force_disconnect` for why closing (rather than
     going quiet) is the right move at this particular moment.
+
+    The generation bump comes first and is the part that cannot fail:
+    the close below rides the channel layer and is swallowed if that is
+    down, whereas bumping the counter takes effect immediately. The
+    close is the courteous half (the operator's browser re-handshakes
+    at once and keeps its live refresh); the bump is the half that
+    holds the security property.
+
+    What the bump silences is every already-open socket *while
+    authentication is enabled* — a save that turns auth off bumps the
+    counter too, but ``_is_authorized`` returns True before it looks at
+    the generation in that mode, so a socket that misses the close on
+    an auth-off save keeps working rather than being stranded on the 5s
+    poll. That is the open-device contract, not an oversight.
+
+    Called from the settings-save paths for an ``auth_backend`` toggle,
+    and from the User post_save/post_delete receiver in ``signals.py``
+    for a credential change — the latter so a rotation is revoked
+    wherever it comes from, and atomically with the DB write rather
+    than after it. In-process callers (the settings page, the v2 API,
+    ``/admin``) get the generation bump as well as the close, so they
+    fail closed; an out-of-process caller has only the close. See the
+    note on ``_auth_generation``.
     """
+    global _auth_generation
+    # Under the lock: uvicorn runs sync views in a threadpool, so two
+    # credential changes can land on two threads at once, and `+= 1`
+    # is load-add-store rather than one bytecode. A lost update would
+    # leave a socket stamped between the two changes matching the
+    # final value — still receiving frames after a revocation.
+    #
+    # CPython's GIL makes that interleaving unobservable in practice
+    # today (measured: no lost update in 480k racing increments with
+    # the switch interval at 1 us), so this is not a fix for a bug
+    # anyone has seen. It is here because the language does not
+    # promise it and a free-threaded build does not have the GIL to
+    # lean on — and an uncontended lock costs nothing on a path that
+    # runs once per credential change. Reads stay lock-free; a single
+    # attribute load can't tear.
+    with _auth_generation_lock:
+        _auth_generation += 1
+        generation = _auth_generation
+    # The event carries which bump it belongs to, and which process
+    # made it. A handshake completing between the bump above and this
+    # publish joins the group already stamped with the new generation
+    # — it was accepted *under* the new credentials — and closing it
+    # would drop the operator's reconnect for a revocation that never
+    # applied to it. force_disconnect() uses the two fields to tell
+    # those apart, and closes unconditionally for any other process,
+    # whose counter means nothing here.
     _broadcast(
-        {'type': 'force_disconnect'},
+        {
+            'type': 'force_disconnect',
+            'origin': _PROCESS_ID,
+            'generation': generation,
+        },
         description='disconnect_all',
     )
