@@ -29,7 +29,7 @@ import redis.exceptions
 import requests
 import sh as sh
 
-from anthias_common import smart, storage_health
+from anthias_common import migration_wait, smart, storage_health
 from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.lib import cec, cec_client
@@ -3150,6 +3150,19 @@ def main() -> None:
     view_image(STANDBY_SCREEN)
 
     wait_for_server(SERVER_WAIT_TIMEOUT)
+
+    # Scheduler() reads the assets table on construction, and the
+    # wait above does not establish that the table exists: it polls
+    # /splash-page, which the server answers while its startup
+    # dbbackup → migrate pass (or the dbrestore fallback, which drops
+    # and re-creates every table) is still running, and which it gives
+    # up on entirely after SERVER_WAIT_TIMEOUT. Querying into that
+    # window kills the viewer on the way up with ``OperationalError:
+    # no such table: assets`` (Sentry ANTHIAS-C, "Viewer crashed.") --
+    # a crash loop for as long as the restore takes, since the
+    # container just comes back and races again. Same guard the celery
+    # worker has had since Sentry ANTHIAS-1.
+    migration_wait.wait_for_migrations('viewer')
 
     scheduler = Scheduler()
 

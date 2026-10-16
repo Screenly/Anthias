@@ -39,6 +39,7 @@ if not _django_apps.apps_ready:
 
 # Place imports that uses Django in this block.
 
+from anthias_common import migration_wait
 from anthias_common.utils import (
     STAGED_UPLOAD_DIR,
     STAGED_UPLOAD_MAX_AGE_MIN,
@@ -263,48 +264,6 @@ def asset_recheck_lock_key(asset_id: str) -> str:
     return f'recheck:{asset_id}:lock'
 
 
-# Poll cadence while the worker waits for the server's startup
-# ``migrate`` pass to finish, and how often a waiting worker repeats
-# its log line (see ``wait_for_migrations`` below).
-MIGRATION_WAIT_POLL_S = 5
-MIGRATION_WAIT_LOG_EVERY_S = 30
-
-
-def _migrations_ready() -> bool:
-    """True when the shared SQLite schema is fully migrated.
-
-    Computes the same unapplied-migration plan ``manage.py migrate
-    --check`` does. A database-side error getting there
-    (``OperationalError: database is locked`` while the server's
-    dbbackup/dbrestore holds the file, a missing
-    ``django_migrations`` table on a first-boot/empty DB) means the
-    schema is not ready either, so report not-ready rather than
-    raising; the underlying error is kept visible at DEBUG for runs
-    with ``--loglevel=debug``. Anything that is NOT a database error
-    (a programming bug in the probe itself) propagates so the worker
-    fails fast instead of waiting forever.
-    """
-    from django.db import connections
-    from django.db.migrations.executor import MigrationExecutor
-    from django.db.utils import DatabaseError
-
-    connection = connections['default']
-    try:
-        executor = MigrationExecutor(connection)
-        plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
-    except DatabaseError:
-        logger.debug(
-            'Migration-readiness probe failed; treating as not ready',
-            exc_info=True,
-        )
-        return False
-    finally:
-        # Don't leak the probe connection into the prefork children —
-        # SQLite handles must not be shared across fork().
-        connection.close()
-    return not plan
-
-
 @worker_init.connect
 def wait_for_migrations(**kwargs: Any) -> None:
     """Block worker startup until the server has applied migrations.
@@ -316,28 +275,14 @@ def wait_for_migrations(**kwargs: Any) -> None:
     ``OperationalError: no such table: assets`` (Sentry ANTHIAS-1 —
     one burst per device on every upgrade/first boot). Tasks stay
     queued in the broker while we wait, so nothing is lost — they run
-    as soon as the schema is in place. Deliberately unbounded: a
-    worker without a database can do no useful work, and the log line
-    below keeps the wait observable.
+    as soon as the schema is in place.
+
+    The probe and the polling loop live in
+    ``anthias_common.migration_wait`` because the viewer needs the
+    same guard for the same reason (Sentry ANTHIAS-C) and its image
+    ships no celery.
     """
-    waited = 0
-    next_log_at = 0
-    while not _migrations_ready():
-        # First miss logs immediately, then repeat every
-        # MIGRATION_WAIT_LOG_EVERY_S — a multi-minute migrate/restore
-        # on a slow SD card shouldn't drown the device log in a
-        # warning per poll. Tracked as an explicit next-log threshold
-        # so the cadence holds whatever the two constants are set to.
-        if waited >= next_log_at:
-            logger.warning(
-                'Database is not migrated yet; delaying celery worker '
-                'startup (%ss elapsed; probe errors are logged at '
-                'DEBUG)',
-                waited,
-            )
-            next_log_at = waited + MIGRATION_WAIT_LOG_EVERY_S
-        time.sleep(MIGRATION_WAIT_POLL_S)
-        waited += MIGRATION_WAIT_POLL_S
+    migration_wait.wait_for_migrations('celery worker')
 
 
 @celery.on_after_configure.connect

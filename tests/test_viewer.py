@@ -4945,3 +4945,39 @@ def test_wayland_recovery_logs_at_warning_not_error(caplog: Any) -> None:
         f'recovery must be WARNING; got {[r.levelname for r in recovery]} — '
         'at ERROR the Sentry integration files an issue per self-heal'
     )
+
+
+class TestMainWaitsForTheSchema:
+    """Sentry ANTHIAS-C — the viewer must not read ``assets`` while
+    the server's migrate/dbrestore pass is still rewriting it."""
+
+    def test_schema_wait_precedes_the_scheduler(self) -> None:
+        """Ordering is the whole point: ``Scheduler()`` queries on
+        construction, so a wait placed after it would be useless."""
+        order = []
+
+        with (
+            mock.patch.object(viewer, 'setup'),
+            mock.patch.object(viewer, 'ViewerSubscriber'),
+            mock.patch.object(viewer, '_publish_cec_availability'),
+            mock.patch.object(viewer, '_publish_display_resolution_loop'),
+            mock.patch.object(viewer, '_publish_smart_loop'),
+            mock.patch.object(viewer, 'view_image'),
+            mock.patch.object(viewer, 'view_webpage'),
+            mock.patch.object(viewer, 'wait_for_server'),
+            mock.patch.object(viewer, 'sleep'),
+            mock.patch.object(viewer, 'start_loop'),
+            mock.patch(
+                'anthias_common.migration_wait.wait_for_migrations',
+                side_effect=lambda _what: order.append('wait'),
+            ),
+            mock.patch.object(
+                viewer,
+                'Scheduler',
+                side_effect=lambda: order.append('scheduler'),
+            ),
+            mock.patch.dict(settings, {'show_splash': False}, clear=False),
+        ):
+            viewer.main()
+
+        assert order == ['wait', 'scheduler']
