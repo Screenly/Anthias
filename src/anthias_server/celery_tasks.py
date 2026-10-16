@@ -54,6 +54,7 @@ from anthias_server.app.models import Asset
 from anthias_server.lib import (
     diagnostics,
     display_power,
+    soft_timeout_guard,
     storage_watcher,
     undervoltage_watcher,
 )
@@ -74,6 +75,13 @@ CELERY_BROKER_URL = getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_TASK_RESULT_EXPIRES = timedelta(hours=6)
 
 r = connect_to_redis()
+
+# Must run before the worker forks its pool, which is why it sits at
+# import time next to the app rather than in a startup signal: the
+# children inherit the guard from this process. See the module
+# docstring for the race it closes.
+soft_timeout_guard.install()
+
 celery = Celery(
     'Anthias Celery Worker',
     backend=CELERY_RESULT_BACKEND,
