@@ -52,6 +52,7 @@ from anthias_viewer.utils import (
     command_not_found,
     get_skip_event,
     sigalrm,
+    wait_for_db_schema,
     wait_for_server,
     watchdog,
 )
@@ -3150,6 +3151,11 @@ def main() -> None:
     view_image(STANDBY_SCREEN)
 
     wait_for_server(SERVER_WAIT_TIMEOUT)
+
+    # Scheduler() queries the asset table on construction, so the table
+    # has to exist by now. wait_for_server() above does not establish
+    # that — see wait_for_db_schema().
+    wait_for_db_schema()
 
     scheduler = Scheduler()
 
