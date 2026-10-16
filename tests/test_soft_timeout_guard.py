@@ -216,22 +216,48 @@ def test_a_signal_inside_the_handover_skew_still_raises() -> None:
 @pytest.mark.parametrize(
     'task',
     [
-        _FakeTask(),
-        _FakeTask(request_limits=(300, None)),
         mock.Mock(request=mock.Mock(timelimit=(None, 'not a number'))),
         None,
     ],
-    ids=['no limit anywhere', 'hard limit only', 'junk limit', 'no task'],
+    ids=['junk limit', 'no task'],
 )
 def test_an_unresolvable_limit_falls_open(task: Any) -> None:
-    """Never suppress a soft limit the guard could not reason about."""
+    """Never suppress a soft limit the guard could not reason about.
+
+    Dropping a real one would hand the task to the hard limit: a
+    SIGKILL with no ``on_failure`` to clear the Processing pill.
+    """
     soft_timeout_guard._on_task_prerun(task=task)
 
-    assert soft_timeout_guard._task_deadline is None
+    assert soft_timeout_guard._task_limit_resolved is False
     with pytest.raises(SoftTimeLimitExceeded):
         soft_timeout_guard.guarded_soft_timeout_sighandler(
             signal.SIGUSR1, None
         )
+
+
+@pytest.mark.parametrize(
+    'task',
+    [_FakeTask(), _FakeTask(request_limits=(300, None))],
+    ids=['no limit anywhere', 'hard limit only'],
+)
+def test_a_task_with_no_soft_limit_cannot_be_the_target(task: Any) -> None:
+    """A hard-only task is never the job a soft timer was armed for.
+
+    Celery passes ``soft_timeout=None`` for it, so the parent arms no
+    timer; a soft timeout signal arriving while it runs can only have
+    come from an earlier job. This is not the same state as a limit
+    that could not be read, and collapsing the two would leave the
+    cross-job race open for every hard-only task -- which, until
+    #3385, is ``probe_video_duration``, ``download_youtube_asset`` and
+    the normalisation tasks.
+    """
+    soft_timeout_guard._on_task_prerun(task=task)
+
+    assert soft_timeout_guard._task_limit_resolved is True
+    assert soft_timeout_guard._task_deadline is None
+    # Raising here would abort a task no timer was ever armed for.
+    soft_timeout_guard.guarded_soft_timeout_sighandler(signal.SIGUSR1, None)
 
 
 @pytest.mark.parametrize(
@@ -266,6 +292,7 @@ def test_finishing_a_task_clears_the_deadline() -> None:
     soft_timeout_guard._on_task_finished()
 
     assert soft_timeout_guard._task_deadline is None
+    assert soft_timeout_guard._task_limit_resolved is False
 
 
 def test_install_replaces_the_billiard_handler() -> None:

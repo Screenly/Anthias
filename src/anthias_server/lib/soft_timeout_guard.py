@@ -96,8 +96,9 @@ logger = logging.getLogger(__name__)
 # raises without a dedicated signal.
 _task_running = False
 
-# ``monotonic()`` at which the running body's *own* soft limit falls
-# due, or ``None`` when it could not be determined.
+# What the running body's own soft limit implies for an arriving
+# signal, as a pair: the ``monotonic()`` deadline it falls due at, and
+# whether the limit was resolved at all.
 #
 # A signal carries no job identity -- billiard sends a bare
 # ``SIGUSR1`` -- so "a task is running" does not mean the signal was
@@ -109,17 +110,23 @@ _task_running = False
 #
 # The one job-correlated fact the child does hold is how long the
 # current body has been running against the limit that body was
-# dispatched with. A soft limit is armed when the parent hands the job
-# over, so a legitimate signal cannot arrive before the running body
-# has reached its own limit; one that does belongs to an earlier job
-# and is dropped.
+# dispatched with. The parent arms the timer at handover, so a
+# legitimate signal cannot arrive before the running body has reached
+# its own limit; one that does belongs to an earlier job.
 #
-# Fail open: when the limit cannot be resolved the deadline is
-# ``None`` and the signal is honoured, because suppressing a real soft
-# limit would hand the task to the hard limit instead -- a SIGKILL
-# with no ``on_failure``, which is the failure mode #3385 exists to
-# remove.
+# The three states are distinct and must not be collapsed:
+#
+# * a deadline -- honour the signal once it is reached, drop it before;
+# * resolved to *no* soft limit -- celery passed ``soft_timeout=None``
+#   for this job, so no timer was ever armed for it and any soft
+#   timeout signal arriving now belongs to an earlier one. Several
+#   tasks are in this state until #3385 gives them soft limits;
+# * unresolved -- fall open and honour the signal. Suppressing a real
+#   soft limit would hand the task to the hard limit instead: a
+#   SIGKILL with no ``on_failure``, which is the failure mode #3385
+#   exists to remove.
 _task_deadline: float | None = None
+_task_limit_resolved = False
 
 # Covers the skew between the parent arming the timer and this child
 # reaching ``task_prerun`` (pickling, inq transit, the tracer's
@@ -131,14 +138,18 @@ _task_deadline: float | None = None
 _SOFT_LIMIT_SKEW_S = 5.0
 
 
-def _soft_limit_deadline(task: Any) -> float | None:
-    """When the body now starting would reach its own soft limit.
+def _soft_limit_deadline(task: Any) -> tuple[float | None, bool]:
+    """When the body now starting reaches its own soft limit.
 
-    Resolved the way celery resolves the limit it arms the timer with:
-    the per-call ``timelimit`` on the request, then the task's own
-    ``soft_time_limit``, then the worker-wide default. Anything
-    unexpected here must not stop the task from running, so every
-    failure resolves to "unknown" and the guard falls open.
+    Returns the deadline and whether the limit was resolved, so the
+    caller can tell "this task has no soft limit" from "the limit
+    could not be read" -- the first is grounds for dropping a signal,
+    the second is grounds for honouring it.
+
+    Resolved the way celery resolves the limit it arms the timer with
+    (``worker/request.py``, ``execute_using_pool``): the per-call
+    ``timelimit`` on the request, then the task's own
+    ``soft_time_limit``, then the worker-wide default.
     """
     try:
         request_limits = getattr(task.request, 'timelimit', None)
@@ -146,26 +157,38 @@ def _soft_limit_deadline(task: Any) -> float | None:
         soft = (
             soft or task.soft_time_limit or task.app.conf.task_soft_time_limit
         )
-        return monotonic() + float(soft) if soft else None
+        return (monotonic() + float(soft) if soft else None), True
     except Exception:
         logger.debug(
             'Could not resolve a soft time limit for the running task; '
             'the guard will honour any soft timeout signal it gets.',
             exc_info=True,
         )
-        return None
+        return None, False
 
 
 def _on_task_prerun(task: Any = None, **_kwargs: Any) -> None:
-    global _task_running, _task_deadline
-    _task_deadline = _soft_limit_deadline(task)
+    global _task_running, _task_deadline, _task_limit_resolved
+    _task_deadline, _task_limit_resolved = _soft_limit_deadline(task)
     _task_running = True
 
 
 def _on_task_finished(**_kwargs: Any) -> None:
-    global _task_running, _task_deadline
+    global _task_running, _task_deadline, _task_limit_resolved
     _task_running = False
     _task_deadline = None
+    _task_limit_resolved = False
+
+
+def _is_for_an_earlier_job() -> bool:
+    """Whether a signal arriving now cannot be for the running body."""
+    if not _task_limit_resolved:
+        return False
+    if _task_deadline is None:
+        # No soft limit on this job, so the parent never armed a timer
+        # for it. Whatever this signal is, it is not this task's.
+        return True
+    return monotonic() < _task_deadline - _SOFT_LIMIT_SKEW_S
 
 
 def guarded_soft_timeout_sighandler(
@@ -180,17 +203,14 @@ def guarded_soft_timeout_sighandler(
     del signum, frame  # a signal handler's arguments, unused here
 
     if _task_running:
-        if (
-            _task_deadline is not None
-            and monotonic() < _task_deadline - _SOFT_LIMIT_SKEW_S
-        ):
+        if _is_for_an_earlier_job():
             # Armed for a job this child has already finished and the
             # parent has not yet drained. Interrupting the body that
             # happens to be running now would abort the wrong task.
             logger.warning(
                 'Discarded a soft time limit signal that arrived while a '
-                'task was running but well inside its own limit; it was '
-                'armed for an earlier job. This would otherwise have '
+                'task was running that the signal cannot belong to; it '
+                'was armed for an earlier job. This would otherwise have '
                 'interrupted the wrong task.'
             )
             return
