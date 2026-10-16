@@ -366,6 +366,33 @@ class TestReadMediaInfo:
         # would then render as good news.
         assert media['wear_pct'] is None
 
+    def test_a_non_utf8_product_name_does_not_kill_the_probe(
+        self, sysfs: Any
+    ) -> None:
+        """``device/name`` is the card's CID product name, copied out
+        of the register verbatim — six bytes the vendor can fill with
+        anything. A card carrying a non-UTF-8 byte there made
+        ``read()`` raise ``UnicodeDecodeError``, which is a
+        ``ValueError`` and so escaped ``_read_text``'s ``except
+        OSError``, propagated out of ``probe`` and left the device with
+        no storage monitoring at all. One unreadable byte must cost the
+        product name, not the whole watcher."""
+        sysfs(mmc={'type': 'SD', 'name': 'placeholder', 'manfid': '0x000003'})
+        name_path = os.path.join(
+            storage_health.SYS_BLOCK, 'mmcblk0', 'device', 'name'
+        )
+        with open(name_path, 'wb') as handle:
+            handle.write(b'APPSD\x92\n')
+
+        media = storage_health.read_media_info('mmcblk0')
+
+        assert media['kind'] == 'sd'
+        # The readable characters survive; the bad byte becomes U+FFFD
+        # rather than taking the rest of the probe down with it.
+        assert media['name'] is not None
+        assert media['name'].startswith('APPSD')
+        assert media['manufacturer'] == 'SanDisk'
+
     def test_unknown_manufacturer_falls_back_to_hex(self, sysfs: Any) -> None:
         sysfs(mmc={'type': 'SD', 'manfid': '0x0000ee'})
 

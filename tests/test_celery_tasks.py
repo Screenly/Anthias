@@ -17,6 +17,7 @@ from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     DISPLAY_POWER_STATE_KEY,
     DISPLAY_POWER_STATE_TTL_S,
+    YoutubeDownloadError,
     apply_display_power_schedule,
     asset_recheck_lock_key,
     cleanup,
@@ -1171,12 +1172,21 @@ def test_download_youtube_asset_failure_propagates_for_on_failure(
     fake_youtube_dl: mock.MagicMock,
 ) -> None:
     """yt-dlp DownloadError is permanent — the task re-raises so
-    Celery's on_failure path runs (which clears is_processing)."""
+    Celery's on_failure path runs (which clears is_processing).
+
+    It is re-raised as ``YoutubeDownloadError`` and that type is in
+    the task's ``throws``: the causes yt-dlp reports (403, 404,
+    age-gate, geo-block, an origin read timing out) are properties of
+    the pasted URL, and the operator's answer is the Failed pill on
+    the row rather than a crash report. The message is carried through
+    unchanged so the pill still says what yt-dlp said."""
     _make_youtube_asset()
     DownloadError = fake_youtube_dl._download_error
     fake_youtube_dl.extract_info.side_effect = DownloadError('404')
-    with pytest.raises(DownloadError):
+    with pytest.raises(YoutubeDownloadError, match='404'):
         download_youtube_asset('yt-1', 'https://youtu.be/dead')
+
+    assert YoutubeDownloadError in download_youtube_asset.throws
 
 
 @pytest.mark.django_db

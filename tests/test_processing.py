@@ -528,7 +528,7 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
             'anthias_server.processing.Image.open',
             return_value=_FakeImage(),
         ),
-        pytest.raises(ValueError, match='exceed cap'),
+        pytest.raises(processing.ImageTooLargeError, match='decode cap'),
     ):
         processing._run_image_normalisation(asset)
 
@@ -2286,6 +2286,26 @@ def test_a_missing_source_is_declared_as_expected() -> None:
         ), task.name
 
 
+def test_image_task_declares_too_large_rejection_as_expected() -> None:
+    """The pixel cap's ``ImageTooLargeError`` is the image counterpart
+    of the video codec gate: an operator-facing rejection, not a fault.
+    ``normalize_image_asset`` must list it in ``throws`` so an over-cap
+    upload is not logged with a traceback or reported to Sentry, and
+    the video task, which never raises it, must not.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    assert processing.ImageTooLargeError in tuple(
+        getattr(normalize_image_asset, 'throws', ())
+    )
+    assert processing.ImageTooLargeError not in tuple(
+        getattr(normalize_video_asset, 'throws', ())
+    )
+
+
 @pytest.mark.django_db
 def test_normalize_on_failure_writes_error_metadata(
     asset_dir: str,
@@ -2583,6 +2603,110 @@ def test_needs_low_ram_downscale_routes_bomb_instead_of_raising(
         # what gets the operator a real error message.
         assert processing.needs_low_ram_image_downscale(src) is True
         assert processing.needs_image_processing(src) is True
+
+
+def _write_bomb_png(out_path: str, side: int = 20000) -> str:
+    """A ~24 KB PNG whose IHDR declares ``side``x``side`` pixels.
+
+    At the default 20000 that is 400 MP: 8x the 50 MP cap and well
+    over the 2x threshold at which Pillow raises rather than warns.
+    Written by hand because a real fixture of that size would need
+    hundreds of MB to create.
+    """
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(out_path, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+    return out_path
+
+
+# The 9000x9000 fixture below is over the cap but under Pillow's 2x
+# raise threshold, so Pillow warns on the way past; that is the band
+# this test is deliberately exercising.
+@pytest.mark.filterwarnings('ignore::PIL.Image.DecompressionBombWarning')
+@pytest.mark.django_db
+def test_open_image_translates_pillow_bomb_error(asset_dir: str) -> None:
+    """Over twice the cap, Pillow raises from inside ``Image.open``
+    before ``_guard_and_fit_for_board`` ever sees ``image.size``.
+
+    ``DecompressionBombError`` derives straight from ``Exception``, so
+    it slipped past every ``except (OSError, ..., ValueError)`` in the
+    pipeline and surfaced as a crash carrying Pillow's "could be
+    decompression bomb DOS attack" wording — on what is usually a
+    scanner output or a poster export. ``_open_image`` turns it into
+    the same ``ImageTooLargeError`` the in-range band raises."""
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
+
+    with pytest.raises(
+        processing.ImageTooLargeError, match='is 400000000 pixels'
+    ) as excinfo:
+        processing._open_image(src)
+    # Pillow's alarming wording stays out of the operator's message.
+    assert 'DOS attack' not in str(excinfo.value)
+    assert 'decode cap' in str(excinfo.value)
+
+    # The band between the cap and 2x the cap still goes through the
+    # explicit size check, and reports the dimensions it read.
+    under_2x = _write_bomb_png(path.join(asset_dir, 'big.png'), side=9000)
+    with (
+        pytest.raises(processing.ImageTooLargeError, match='9000x9000'),
+        processing._open_image(under_2x) as image,
+    ):
+        processing._guard_and_fit_for_board(image)
+
+
+@pytest.mark.django_db
+def test_over_cap_image_fails_with_operator_message(asset_dir: str) -> None:
+    """End to end: an over-2x-cap upload reaches the task (that is what
+    ``needs_low_ram_image_downscale`` returning True is for) and must
+    fail as a handled rejection, not as a Pillow bomb error.
+
+    Guards the contract the two halves have asserted separately but
+    never together: the predicate routes the bomb into the task, and
+    the task is the thing that owes the operator an answer."""
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
+    asset = _make_processing_asset('img-over-cap', src)
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.ImageTooLargeError, match='decode cap'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    # Staging cleanup contract holds on this path too.
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
+
+    # The message the operator sees carries no class-name prefix and
+    # none of Pillow's "DOS attack" wording.
+    task = processing._NormalizeAssetTask()
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(
+            processing.ImageTooLargeError('image exceeds the cap'),
+            'task-id',
+            (asset.asset_id,),
+            {},
+            None,
+        )
+    asset.refresh_from_db()
+    assert asset.metadata['error_message'] == 'image exceeds the cap'
+    assert asset.is_processing is False
 
 
 @pytest.mark.django_db
