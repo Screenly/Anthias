@@ -63,13 +63,36 @@ from types import FrameType
 from typing import Any
 
 from celery.exceptions import SoftTimeLimitExceeded
-from celery.signals import task_postrun, task_prerun
+from celery.signals import (
+    task_failure,
+    task_postrun,
+    task_prerun,
+    task_retry,
+    task_success,
+)
 
 logger = logging.getLogger(__name__)
 
-# True only between ``task_prerun`` and ``task_postrun`` in this
-# process. Celery sends ``task_postrun`` from the tracer's ``finally``,
-# so a task that raised clears the flag just like one that returned.
+# True only while a task body is on the stack in this process.
+#
+# Cleared on the earliest signal each outcome reaches, not on
+# ``task_postrun``. The tracer runs, in order: the body, then
+# ``task_success`` or ``task_failure``/``task_retry``, then
+# ``Task.after_return``, then ``task_postrun``
+# (``celery/app/trace.py``, the ``-* POST *-`` block). Clearing at
+# ``task_postrun`` alone would leave the flag set across
+# ``after_return`` and every postrun receiver connected ahead of this
+# one -- a body-less window in which the handler would still raise.
+#
+# That raise could not kill the child: ``send_postrun`` sits inside the
+# tracer's ``try``, whose ``except Exception`` turns anything escaping
+# teardown into ``report_internal_error``. But it would convert a task
+# that had already succeeded into a reported internal error, so the
+# window is worth closing rather than reasoning around.
+#
+# ``task_postrun`` stays connected as the backstop: it is the one
+# signal every outcome reaches, including ``Ignore``, which celery
+# raises without a dedicated signal.
 _task_running = False
 
 
@@ -78,7 +101,7 @@ def _on_task_prerun(**_kwargs: Any) -> None:
     _task_running = True
 
 
-def _on_task_postrun(**_kwargs: Any) -> None:
+def _on_task_finished(**_kwargs: Any) -> None:
     global _task_running
     _task_running = False
 
@@ -124,7 +147,11 @@ def install() -> None:
         return
 
     # ``weak=False`` so the receivers survive regardless of what else
-    # holds a reference to this module.
+    # holds a reference to this module. ``task_success`` is only
+    # dispatched when it has receivers at tracer-build time, which
+    # connecting here -- before the worker builds any tracer --
+    # guarantees.
     task_prerun.connect(_on_task_prerun, weak=False)
-    task_postrun.connect(_on_task_postrun, weak=False)
+    for finished in (task_success, task_failure, task_retry, task_postrun):
+        finished.connect(_on_task_finished, weak=False)
     billiard.pool.soft_timeout_sighandler = guarded_soft_timeout_sighandler
