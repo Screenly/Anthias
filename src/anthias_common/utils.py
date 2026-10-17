@@ -746,8 +746,17 @@ def generate_perfect_paper_password(
     )
 
 
+def redis_host() -> str:
+    """Host name of Redis: ``REDIS_HOST``, as read by the channel layer in
+    ``django_project/settings.py``, or ``redis``, its name on the compose
+    network."""
+    return getenv('REDIS_HOST', 'redis')
+
+
 def connect_to_redis() -> 'redis.Redis':
-    return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+    return redis.Redis(
+        host=redis_host(), decode_responses=True, port=6379, db=0
+    )
 
 
 def is_docker() -> bool:
