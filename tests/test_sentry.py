@@ -511,3 +511,56 @@ class TestIsBalenaDeploy:
             else:
                 monkeypatch.setenv('BALENA', value)
             assert s.is_balena_deploy() == is_balena_app()
+
+
+class TestDefaultDsnByEnvironment:
+    """Which environments fall back to the production project.
+
+    An event only reaches the project by consuming a slot in the
+    organisation's error quota, so a stack that nobody triages must not
+    default into it — the `environment` tag sorts events after they
+    have already been counted.
+    """
+
+    @staticmethod
+    def _default_dsn_for(environment: str, under_pytest: bool) -> str:
+        """Re-resolve settings.py's DSN default for one environment.
+
+        settings.py computes this once at import, and the suite runs
+        under pytest, so the live value cannot answer the question for
+        any other environment.
+        """
+        is_test = environment == 'test' or under_pytest
+        return (
+            ''
+            if is_test or environment == 'development'
+            else (
+                'https://da18c7bdab65c9adc4afcd311f5b6f09'
+                '@o4511522371534848.ingest.us.sentry.io/4511522375794688'
+            )
+        )
+
+    @pytest.mark.parametrize('environment', ['test', 'development'])
+    def test_unattended_environments_do_not_default_to_production(
+        self, environment: str
+    ) -> None:
+        assert self._default_dsn_for(environment, under_pytest=False) == ''
+
+    def test_production_still_reports(self) -> None:
+        assert self._default_dsn_for('production', under_pytest=False)
+
+    def test_pytest_overrides_any_environment(self) -> None:
+        assert self._default_dsn_for('production', under_pytest=True) == ''
+
+    def test_settings_module_agrees(self) -> None:
+        """Pin the helper above to the real expression.
+
+        The helper mirrors settings.py rather than importing it, so it
+        would keep passing if the real branch were reverted.
+        """
+        source = (
+            Path(__file__).resolve().parents[1]
+            / 'src/anthias_server/django_project/settings.py'
+        ).read_text()
+
+        assert "if IS_TEST or ENVIRONMENT == 'development'" in source

@@ -79,15 +79,26 @@ IS_TEST = ENVIRONMENT == 'test' or _running_under_pytest
 # setting SENTRY_DSN, or disable it entirely by setting it to an
 # empty string (sentry_sdk treats a falsy DSN as "don't send").
 #
-# Test runs default to the empty DSN: the unit suite is built to run
-# with no external network dependencies (conftest.py force-mocks
-# Redis for the same reason), and exceptions raised on purpose by
-# failing tests must not land in the production Sentry project. An
-# explicit SENTRY_DSN still wins so the integration stack can opt in
-# deliberately.
+# Test AND development runs default to the empty DSN. The unit suite
+# is built to run with no external network dependencies (conftest.py
+# force-mocks Redis for the same reason), and exceptions raised on
+# purpose — by a failing test, or by a developer halfway through a
+# feature — must not land in the production Sentry project.
+#
+# Tagging the event `environment=development` is not sufficient on its
+# own. The tag sorts events once they have arrived, but they are
+# counted against the organisation's error quota on the way in, where
+# they compete with the fleet reports the project exists to collect.
+# A half-written branch can be far noisier than any real device, and
+# the events are not actionable for anyone but their author, who has
+# the traceback in their own terminal already.
+#
+# An explicit SENTRY_DSN still wins, so the integration stack — and a
+# developer who genuinely wants to exercise the reporting path — can
+# opt in deliberately.
 _default_sentry_dsn = (
     ''
-    if IS_TEST
+    if IS_TEST or ENVIRONMENT == 'development'
     else (
         'https://da18c7bdab65c9adc4afcd311f5b6f09'
         '@o4511522371534848.ingest.us.sentry.io/4511522375794688'
