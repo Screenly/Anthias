@@ -33,6 +33,41 @@ fi
 UVICORN_BIND_HOST="${LISTEN:-0.0.0.0}"
 UVICORN_BIND_PORT="${PORT:-8080}"
 
+# Nothing upstream of uvicorn bounds how many connections a single
+# client may open at once, and an Anthias box is routinely reachable
+# from the whole office LAN. A vulnerability scanner opening a few
+# hundred sockets in one second is enough to walk the container's file
+# descriptor table to its ceiling, and the failure is not a tidy one:
+# SQLite cannot open the database, every request 500s, and the 500
+# handler then cannot open 500.html either. Measured on the testbed
+# against a Pi 2, where the ceiling is reached at ~1005 concurrent
+# connections, the server container dies outright and is restarted by
+# the `restart: always` policy.
+#
+# Two independent guards, because neither is sufficient alone.
+#
+#   * Raise the soft descriptor limit. The container ships the stock
+#     1024/524288 soft/hard pair, and a process may raise its own soft
+#     limit up to the hard one without any privilege — so this needs no
+#     `ulimits:` key in compose, and works the same under balena, whose
+#     supervisor renders its own compose file. 8192 is comfortably
+#     above the worst burst measured (~780 descriptors in flight on a
+#     Pi 5) while staying far below the hard limit.
+#   * Bound concurrency. The descriptor raise alone would only move the
+#     ceiling: the real problem is that every accepted connection runs
+#     the full Django request path, including a database connect.
+#     `--limit-concurrency` makes uvicorn answer 503 immediately once
+#     the in-flight count is reached, which costs no database handle
+#     and no template render, so a burst sheds cheaply instead of
+#     taking the box down.
+#
+# The default of 256 is roughly six times the ~39 sockets a device
+# holds while idle with the viewer polling, so ordinary operator
+# traffic cannot reach it. It is overridable for anyone fronting a
+# device with something that legitimately fans out harder.
+ulimit -n 8192 2>/dev/null || true
+UVICORN_LIMIT_CONCURRENCY="${ANTHIAS_LIMIT_CONCURRENCY:-256}"
+
 # Trust X-Forwarded-* only from explicitly listed proxies. We deliberately
 # do NOT default this to '*' — the IP allowlists in views_files.py rely on
 # the TCP peer address, and a wildcard would let any client spoof
@@ -58,6 +93,7 @@ if [[ "$ENVIRONMENT" == "development" ]]; then
         --host "$UVICORN_BIND_HOST" \
         --port "$UVICORN_BIND_PORT" \
         --timeout-keep-alive 30 \
+        --limit-concurrency "$UVICORN_LIMIT_CONCURRENCY" \
         --reload \
         --reload-dir /usr/src/app \
         --reload-include "*.html" \
@@ -72,5 +108,6 @@ else
         --host "$UVICORN_BIND_HOST" \
         --port "$UVICORN_BIND_PORT" \
         --timeout-keep-alive 30 \
+        --limit-concurrency "$UVICORN_LIMIT_CONCURRENCY" \
         "${UVICORN_PROXY_ARGS[@]}"
 fi
