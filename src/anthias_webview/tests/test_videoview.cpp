@@ -237,6 +237,7 @@ private:
 // because the VideoView tests need the widgets stack.
 extern int runRotationTests(int argc, char** argv);
 extern int runImageFallbackTests(int argc, char** argv);
+extern int runImageTransitionTests(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
@@ -248,6 +249,7 @@ int main(int argc, char** argv)
     }
     status |= runRotationTests(argc, argv);
     status |= runImageFallbackTests(argc, argv);
+    status |= runImageTransitionTests(argc, argv);
     return status;
 }
 #include "test_videoview.moc"
