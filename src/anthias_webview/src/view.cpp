@@ -1116,10 +1116,20 @@ void View::paintEvent(QPaintEvent*)
             drawScaledImage(
                 painter, fadeFromImage, size(),
                 /*originAtCentre=*/false, 1.0 - fadeProgress);
+            // Two source-over draws don't sum to 1 (the second one
+            // re-attenuates whatever the first left behind, so the
+            // combined weight dips to 0.75 at the midpoint, a
+            // visible pulse toward black).Drawing the incoming
+            // frame additively instead makes the two weights sum to
+            // exactly 1 for every progress value: A*(1-p)+B*p.
+            painter.setCompositionMode(QPainter::CompositionMode_Plus);
         }
         drawScaledImage(
             painter, imageToPaint, size(), /*originAtCentre=*/false,
             fadeActive ? fadeProgress : 1.0);
+        if (blending) {
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        }
     } else {
         // linuxfb-only manual rotation (see linuxfbRotationOverride):
         // rotate about the widget centre. A 90/270 turn swaps the
@@ -1139,10 +1149,15 @@ void View::paintEvent(QPaintEvent*)
             drawScaledImage(
                 painter, fadeFromImage, box, /*originAtCentre=*/true,
                 1.0 - fadeProgress);
+            // Same reasoning as the imageRotation == 0 branch above.
+            painter.setCompositionMode(QPainter::CompositionMode_Plus);
         }
         drawScaledImage(
             painter, imageToPaint, box, /*originAtCentre=*/true,
             fadeActive ? fadeProgress : 1.0);
+        if (blending) {
+            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        }
     }
 
     if (fadeActive && fadeProgress >= 1.0) {
