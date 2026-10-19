@@ -15,7 +15,7 @@ BLACK_SCREEN = f'http://{LISTEN}:{PORT}/static/img/black.png'  # NOSONAR
 SPLASH_PAGE_URL = f'http://{LISTEN}:{PORT}/splash-page'
 # The WiFi setup screen, shown for as long as the wifi-connect setup
 # portal is broadcasting. Same reasoning on plain http as the URLs
-# above. NOSONAR (S5332).
+# above (python:S5332 false positive).
 HOTSPOT_PAGE_URL = f'http://{LISTEN}:{PORT}/hotspot/'  # NOSONAR
 WIFI_SETUP_STATUS_URL = (
     f'http://{LISTEN}:{PORT}/api/v2/network/wifi-setup'  # NOSONAR

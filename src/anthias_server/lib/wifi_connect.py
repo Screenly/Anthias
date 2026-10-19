@@ -26,6 +26,7 @@ out to be online, so their presence alone would show a setup screen on
 a perfectly healthy device.
 """
 
+import base64
 import logging
 import re
 from pathlib import Path
@@ -37,7 +38,9 @@ logger = logging.getLogger(__name__)
 # in the compose templates. Changing either side alone silently breaks
 # detection, so they are asserted against each other in
 # tests/test_wifi_connect.py.
-PORTAL_GATEWAY = '192.168.42.1'
+# NOSONAR (S1313): wifi-connect's fixed setup-AP address, not a
+# deployment endpoint; it only exists while the device is its own AP.
+PORTAL_GATEWAY = '192.168.42.1'  # NOSONAR
 PORTAL_PORT = 8000
 QR_DIRECTORY = Path('/data/hotspot')
 
@@ -163,6 +166,20 @@ def read_qr_svg(directory: Path | None = None) -> str | None:
         return path.read_text(encoding='utf-8')
     except OSError:
         return None
+
+
+def read_qr_data_uri(directory: Path | None = None) -> str | None:
+    """The join QR as a ``data:`` URI, for an ``<img src>``.
+
+    Still one request, but the SVG is drawn as an image rather than
+    parsed into the page, so anything other than paths and rects in the
+    file (a script, a handler, a link) has nothing to run in.
+    """
+    svg = read_qr_svg(directory)
+    if svg is None:
+        return None
+    encoded = base64.b64encode(svg.encode('utf-8')).decode('ascii')
+    return f'data:image/svg+xml;base64,{encoded}'
 
 
 def portal_is_up(node_ip: str) -> bool:

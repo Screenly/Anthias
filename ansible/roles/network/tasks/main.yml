@@ -137,7 +137,7 @@
   ansible.builtin.template:
     src: anthias-wifi-connect.service
     dest: /etc/systemd/system/anthias-wifi-connect.service
-    mode: "0644"
+    mode: "0644"  # NOSONAR - systemd units are world-readable
     owner: root
     group: root
   when: manage_network|bool

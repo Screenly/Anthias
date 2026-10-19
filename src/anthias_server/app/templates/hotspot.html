@@ -79,21 +79,16 @@
       {% endif %}
     </div>
 
-    {% if active and qr_svg %}
+    {% if active and qr_src %}
       <aside class="splash-card__qr">
         {% comment %}
-          Inlined, not an <img src>. The SVG comes from wifi-connect's
-          own renderer on the shared volume, and inlining keeps the page
-          to a single request on a device whose network is, by
-          definition, not working.
-
-          `safe` is load-bearing and deliberate: the content is a
-          machine-generated QR symbol (paths and rects) written by a
-          root-owned process into a directory no other service writes
-          to, and escaping it would render the markup as text. The
-          reader for it refuses anything over 256 KB.
+          A data: URI rather than a link to the file, so the page stays
+          a single request on a device whose network is, by definition,
+          not working. Drawn as an image rather than inlined into the
+          markup: the SVG comes from another container's shared volume,
+          and as an image nothing in it can run.
         {% endcomment %}
-        <div class="splash-qr">{{ qr_svg|safe }}</div>
+        <div class="splash-qr"><img src="{{ qr_src }}" alt="QR code to join the {{ ssid }} setup network"/></div>
         <p class="splash-qr__caption">Scan to join</p>
       </aside>
     {% endif %}

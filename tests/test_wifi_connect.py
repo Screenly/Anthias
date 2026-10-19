@@ -18,6 +18,7 @@ opt-in Caddy sidecar). NOSONAR markers suppress S1313 / S5332 at the
 constants; assertions inherit it by referencing them.
 """
 
+import base64
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -164,6 +165,22 @@ def test_reads_the_qr_svg(tmp_path: Path) -> None:
     (tmp_path / wifi_connect.QR_SVG_FILENAME).write_text('<svg>qr</svg>')
 
     assert wifi_connect.read_qr_svg(tmp_path) == '<svg>qr</svg>'
+
+
+def test_qr_data_uri_carries_the_svg_as_an_image(tmp_path: Path) -> None:
+    svg = '<svg><script>alert(1)</script></svg>'
+    (tmp_path / wifi_connect.QR_SVG_FILENAME).write_text(svg)
+
+    uri = wifi_connect.read_qr_data_uri(tmp_path)
+
+    assert uri is not None
+    prefix = 'data:image/svg+xml;base64,'
+    assert uri.startswith(prefix)
+    assert base64.b64decode(uri.removeprefix(prefix)).decode() == svg
+
+
+def test_missing_qr_gives_no_data_uri(tmp_path: Path) -> None:
+    assert wifi_connect.read_qr_data_uri(tmp_path) is None
 
 
 def test_missing_qr_svg_is_not_an_error(tmp_path: Path) -> None:
@@ -378,8 +395,8 @@ def test_hotspot_page_shows_the_credentials_while_setup_runs(
         },
     )
     monkeypatch.setattr(
-        'anthias_server.app.views.read_qr_svg',
-        lambda: '<svg id="join-qr"></svg>',
+        'anthias_server.app.views.read_qr_data_uri',
+        lambda: 'data:image/svg+xml;base64,PHN2Zy8+',
     )
 
     response = client.get('/hotspot/')
@@ -389,9 +406,11 @@ def test_hotspot_page_shows_the_credentials_while_setup_runs(
     assert 'Anthias Setup' in body
     assert 'hunter2hunter2' in body
     assert wifi_connect.PORTAL_URL in body
-    # Inlined, not linked: the page has to render on a device with no
-    # working network, so it gets one request.
-    assert '<svg id="join-qr"></svg>' in body
+    # A data: URI, not a link: the page has to render on a device with
+    # no working network, so it gets one request. An <img>, not inline
+    # markup, so nothing in the SVG can run.
+    assert 'src="data:image/svg+xml;base64,PHN2Zy8+"' in body
+    assert '<svg' not in body
 
 
 @pytest.mark.django_db
@@ -410,7 +429,7 @@ def test_hotspot_page_withholds_the_passphrase_when_idle(
         },
     )
     monkeypatch.setattr(
-        'anthias_server.app.views.read_qr_svg',
+        'anthias_server.app.views.read_qr_data_uri',
         lambda: (_ for _ in ()).throw(
             AssertionError('must not read the QR when setup is not running')
         ),

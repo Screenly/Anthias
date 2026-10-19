@@ -55,7 +55,7 @@ from anthias_server.lib.auth import (
     apply_auth_settings,
     authorized,
 )
-from anthias_server.lib.wifi_connect import read_qr_svg
+from anthias_server.lib.wifi_connect import read_qr_data_uri
 from anthias_server.settings import ViewerPublisher, settings
 
 from .helpers import (
@@ -2205,7 +2205,7 @@ def hotspot(request: HttpRequest) -> HttpResponse:
             'ssid': state['ssid'],
             'passphrase': state['passphrase'],
             'portal_url': state['portal_url'],
-            'qr_svg': read_qr_svg() if state['active'] else None,
+            'qr_src': read_qr_data_uri() if state['active'] else None,
         },
     )
 
