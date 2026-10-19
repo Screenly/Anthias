@@ -66,4 +66,6 @@ Needs a board with a WiFi adapter, installed with the "manage the network" promp
 5. Repeat step 4 with a **wrong** password. The portal should come back and say the password was wrong, the phone should rejoin the setup network by itself, and a second attempt with the right password should work.
 6. While the setup page is up, confirm the splash page's address list does **not** offer `192.168.42.1` as a way to manage the device.
 7. On an Ethernet-only x86 box, reboot and confirm `systemctl status anthias-wifi-connect.service` is not in a failed state — no WiFi adapter is an expected outcome, not an error.
-8. Leave the setup page up for 15 minutes without completing setup. The setup network should come down by itself and the device should return to normal.
+8. Leave the setup page up for 15 minutes without completing setup. The setup network should come down by itself and the device should return to normal — and then come back a few minutes later, because the check repeats. `systemctl list-timers anthias-wifi-connect.timer` shows when the next one is due.
+9. On a device whose WiFi *is* connected, run `sudo systemctl start anthias-wifi-connect.service` by hand. It must skip with `Skipped due to 'exec-condition'` and log *"WiFi is already configured and associated"* — raising an access point here would tear down the working WiFi.
+10. Same again on a device with only a wired connection: it must skip with *"a wired network is connected"*.

@@ -350,9 +350,79 @@ def test_a_wired_device_is_not_a_failed_unit() -> None:
 
 
 def test_the_unit_does_not_restart_the_portal() -> None:
+    """The timer owns the cadence; a Restart= here would be immediate."""
     unit = (REPO_ROOT / UNIT_PATH).read_text()
 
     assert re.search(r'^Restart=no$', unit, re.MULTILINE)
+
+
+TIMER_PATH = 'ansible/roles/network/templates/anthias-wifi-connect.timer'
+
+
+def test_the_check_repeats_rather_than_running_once_per_boot() -> None:
+    """Both predecessors re-checked; a single shot strands a screen.
+
+    Anthias's own pre-2026.04 implementation looped on
+    CHECK_CONN_FREQ until the device came online. Without a repeat, a
+    screen that nobody sets up inside one portal window — or whose
+    router is replaced later — has no way back short of a reboot.
+    """
+    timer = (REPO_ROOT / TIMER_PATH).read_text()
+
+    assert re.search(r'^OnBootSec=', timer, re.MULTILINE)
+    assert re.search(r'^OnUnitInactiveSec=', timer, re.MULTILINE)
+
+
+def test_the_repeat_measures_from_the_end_of_the_last_check() -> None:
+    """OnCalendar/OnActiveSec would fire mid-portal-session."""
+    timer = (REPO_ROOT / TIMER_PATH).read_text()
+
+    assert not re.search(r'^OnCalendar=', timer, re.MULTILINE)
+
+
+def test_the_service_cannot_be_enabled_without_the_timer() -> None:
+    """No [Install] on the service: the timer is the only entry point.
+
+    Enabling both would start the service at boot independently of
+    the timer, so a skipped check would never be retried.
+    """
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    # Anchored: the comment above the [Service] block explains why the
+    # section is absent, and a substring check would match that.
+    assert not re.search(r'^\[Install\]$', unit, re.MULTILINE)
+    assert re.search(
+        r'^\[Install\]$', (REPO_ROOT / TIMER_PATH).read_text(), re.MULTILINE
+    )
+
+
+def test_ansible_enables_the_timer_not_the_service() -> None:
+    tasks = (REPO_ROOT / 'ansible/roles/network/tasks/main.yml').read_text()
+
+    assert 'name: anthias-wifi-connect.timer\n    enabled: true' in tasks
+    assert 'name: anthias-wifi-connect.service\n    enabled: true' not in tasks
+
+
+def test_the_gate_checks_what_both_predecessors_checked() -> None:
+    """Union of balena's condition and Anthias's own.
+
+    balena gates on an active WiFi association (`iwgetid -r`);
+    Anthias's pre-2026.04 script gated on an internet probe. Either
+    alone is wrong here — see the script's own header — so the gate
+    has to cover WiFi association, a working wired link, and internet.
+    """
+    body = (REPO_ROOT / GATE_PATH).read_text()
+
+    assert 'wifi_is_associated' in body
+    assert 'wired_is_connected' in body
+    assert 'internet_is_reachable' in body
+
+
+def test_the_gate_ignores_the_portals_own_access_point() -> None:
+    """Otherwise a running portal reads as "WiFi is configured"."""
+    body = (REPO_ROOT / GATE_PATH).read_text()
+
+    assert 'wifi-connect-portal' in body
 
 
 def test_upgrade_script_no_longer_reaps_the_live_container() -> None:

@@ -39,29 +39,30 @@ goes back to playing your content.
 
 ## When it appears
 
-The setup network only comes up when the screen genuinely can't get online,
-and only once per boot:
+Anthias checks, shortly after boot and then every few minutes, whether the
+screen needs setting up at all. It skips the whole thing — no setup network,
+nothing on the display — if **any** of these is true:
 
-1. On boot, Anthias lets NetworkManager try the networks the screen already
-   knows. Associating, getting an address and checking the connection takes
-   15–30 seconds from cold, so it waits up to a minute for that to finish.
-2. If a known network comes up, nothing else happens — no setup network, no
-   setup page.
-3. If nothing comes up (or the screen has never been on WiFi at all), the
-   setup network appears and the display switches to the setup page.
-4. After 15 minutes with nobody completing setup, the setup network comes down
-   and the screen goes back to what it was doing. Reboot it to try again.
+* the screen's WiFi is already connected to a network,
+* it has a working wired connection,
+* it can reach the internet by any route.
 
-Anthias checks for itself whether the screen can reach the internet before it
-raises anything, and skips the whole thing when it can. That check is Anthias's
-own rather than NetworkManager's on purpose: NetworkManager ships on Raspberry
-Pi OS and Debian without its connectivity test compiled in, so asking it always
-returns "don't know" — and "don't know" would mean a setup network on every
-boot of every screen, including ones that are perfectly online.
+Only a screen with none of those gets a setup network. That is the first-boot
+case the portal exists for, and every one of those conditions errs towards
+leaving a working screen alone.
 
-The 15-minute limit is the backstop for the same concern. If the check is ever
-wrong — a restricted network that blocks the probe, say — a wrong answer costs
-you one window rather than taking the screen off the air indefinitely.
+The check is Anthias's own rather than NetworkManager's on purpose.
+NetworkManager ships on Raspberry Pi OS and Debian without its connectivity
+test compiled in, so asking it always returns "don't know" — and "don't know"
+would mean a setup network on every boot of every screen, including ones that
+are perfectly online.
+
+Because it repeats, a screen that nobody gets to within one setup window is
+offered another one, and a screen whose router is replaced months later gets
+the setup network back on its own. You don't have to reboot it.
+
+If nobody completes setup within 15 minutes, the setup network comes down and
+the screen goes back to what it was doing until the next check.
 
 ## Requirements
 
@@ -82,10 +83,10 @@ Everything here is optional. You can still configure WiFi over SSH with
 that way never shows the setup page.
 
 To turn the captive portal off on a screen that already has it, SSH in and
-run:
+disable the timer — that's what schedules the checks:
 
 ```bash
-sudo systemctl disable --now anthias-wifi-connect.service
+sudo systemctl disable --now anthias-wifi-connect.timer
 ```
 
 Re-running the Anthias installer with the "manage the network" prompt
@@ -111,13 +112,16 @@ that; it isn't a wall between two devices on the same setup network.
 decided:
 
 ```bash
+systemctl list-timers anthias-wifi-connect.timer
 journalctl -u anthias-wifi-connect.service -b
 docker logs anthias-wifi-connect
 ```
 
-Common outcomes, all of them logged in plain language: no WiFi adapter found,
-the adapter can't do access-point mode, NetworkManager isn't managing the
-interface, or the screen was already online.
+Each check says in plain language what it decided — *"WiFi is already
+configured and associated"*, *"a wired network is connected"*, *"the device
+can reach the internet"* — or, if it did run, what wifi-connect found: no WiFi
+adapter, an adapter that can't do access-point mode, or an interface
+NetworkManager isn't managing.
 
 **I joined the setup network but the page doesn't open by itself.** Open
 <http://192.168.42.1:8000> manually. Phones running iOS 14+, Android 11+,
@@ -126,14 +130,15 @@ address and will open it for you; older devices won't, because the port a
 captive portal is normally found on (80) is already serving the Anthias web
 interface on this device.
 
-**The screen keeps dropping into setup mode.** That means Anthias's internet
-check is failing — on a network that blocks outbound requests this can happen
-even when everything else works. Check what it decided:
+**The screen keeps dropping into setup mode.** All three checks are failing.
+On a screen with no WiFi and no wired link, that is the internet probe on a
+network that blocks outbound requests. The symptom is this line, on a screen
+you believe is fine:
 
-```bash
-journalctl -u anthias-wifi-connect.service -b | head
+```
+no WiFi association, no wired network and no internet after 6 checks;
+the WiFi setup portal is needed
 ```
 
-A line reading *"no internet after 6 attempts"* on a screen you believe is
-online is the symptom. Configure WiFi over SSH as above and disable the
-service.
+Configure WiFi over SSH as above — once the screen is associated, the first
+check short-circuits and the portal stops being offered — or disable the timer.

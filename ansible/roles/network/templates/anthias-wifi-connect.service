@@ -12,16 +12,18 @@ After=docker.service
 After=NetworkManager.service NetworkManager-wait-online.service
 
 [Service]
-# One run per boot. The container itself is created by `docker compose
-# up` (see the anthias-wifi-connect service, which carries
-# `restart: "no"`); this unit is only what starts that container again
-# on each subsequent boot.
+# Started by anthias-wifi-connect.timer, not at boot directly, and
+# deliberately has no [Install] section so it cannot be enabled on its
+# own. The container itself is created by `docker compose up` (see the
+# anthias-wifi-connect service, which carries `restart: "no"`); this
+# unit starts that container when the timer says it is time to look.
 #
-# It is deliberately NOT a restart loop. wifi-connect exits 0 the
-# moment it finds the device online, so a loop would re-raise the
-# access point every ACTIVITY_TIMEOUT on any device whose
-# NetworkManager connectivity check is blocked — an outage that never
-# ends. Once per boot bounds that to a single window.
+# The timer provides the retry cadence the pre-2026.04 implementation
+# got from its own `while true; ... sleep $CHECK_CONN_FREQ` loop. A
+# `Restart=` policy here would be wrong for it: wifi-connect exits 0
+# as soon as it has nothing to do, so the restart would be immediate
+# and unconditional, where what is wanted is "wait, then re-evaluate
+# the condition".
 # Type=exec, NOT oneshot. A portal session legitimately lasts up to
 # ACTIVITY_TIMEOUT (15 minutes), and a oneshot unit is killed at
 # DefaultTimeoutStartSec — 90 seconds on Debian — which would tear the
@@ -102,6 +104,3 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 UMask=0027
-
-[Install]
-WantedBy=multi-user.target
