@@ -221,6 +221,7 @@ _IN_MEMORY_LAYER = {
 
 def _communicator(
     headers: list[tuple[bytes, bytes]] | None = None,
+    path: str = '/ws',
 ) -> ApplicationCommunicator:
     """Drive the real ASGI app over a websocket scope shaped the way
     uvicorn shapes one."""
@@ -232,8 +233,8 @@ def _communicator(
         application,
         {
             'type': 'websocket',
-            'path': '/ws',
-            'raw_path': b'/ws',
+            'path': path,
+            'raw_path': path.encode(),
             'query_string': b'',
             'headers': headers or [],
             'subprotocols': [],
@@ -462,4 +463,86 @@ def test_an_authorized_socket_survives_until_auth_settings_change() -> None:
         assert closed['type'] == 'websocket.close'
 
     with _auth_backend('auth_basic'):
+        async_to_sync(body)()
+
+
+# ---------------------------------------------------------------------------
+# A handshake for a path no route serves (ANTHIAS-2D).
+#
+# Channels' outermost URLRouter raises ValueError for an unmatched
+# path. Nothing catches it, so uvicorn logs it at ERROR and the Sentry
+# logging integration files an event — one per probe, from scanners
+# the device cannot control. The router now ends in a WebsocketDenier
+# catch-all, which refuses the handshake instead.
+#
+# These drive the real ASGI application so they fail if the catch-all
+# is dropped, reordered ahead of /ws, or swapped for something that
+# accepts first.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@override_settings(CHANNEL_LAYERS=_IN_MEMORY_LAYER)
+@pytest.mark.parametrize(
+    'path',
+    [
+        # The Shelly Gen2 RPC endpoint — a home-automation scanner on
+        # the same LAN, and the single highest-volume path in the
+        # fleet's error stream.
+        '/rpc/Ws.GetStatus',
+        # A client that sent the whole URL as the request target.
+        '/ws://10.0.0.1/ws',
+        # Bare root, which is what an empty path arrives as.
+        '/',
+        # The real route is anchored (^ws$) — a longer path that
+        # merely starts with it must not reach the consumer either.
+        '/ws/extra',
+    ],
+)
+def test_ws_handshake_for_an_unrouted_path_is_refused(path: str) -> None:
+    """Refused, and refused *quietly* — the point of the fix is that no
+    exception escapes to the server's error log."""
+
+    async def body() -> None:
+        communicator = _communicator(path=path)
+        assert (await _handshake(communicator))['type'] == 'websocket.close'
+
+    # Auth off is the default device config and the weaker precondition:
+    # the refusal has to come from routing, not from the auth gate.
+    with _auth_backend(''):
+        async_to_sync(body)()
+
+
+@pytest.mark.django_db
+@override_settings(CHANNEL_LAYERS=_IN_MEMORY_LAYER)
+def test_unrouted_path_is_denied_before_the_socket_is_accepted() -> None:
+    """The denial must be the *first* message out. A consumer that
+    accepted and then closed would leave uvicorn completing the
+    handshake with a 101, and a scanner would hold an open socket per
+    probe on a device whose descriptor budget is already the thing that
+    broke (ANTHIAS-62)."""
+
+    async def body() -> None:
+        communicator = _communicator(path='/rpc/Ws.GetStatus')
+        await communicator.send_input({'type': 'websocket.connect'})
+        first = await communicator.receive_output(timeout=5)
+        assert first['type'] == 'websocket.close'
+        assert await communicator.receive_nothing(timeout=1)
+
+    with _auth_backend(''):
+        async_to_sync(body)()
+
+
+@pytest.mark.django_db
+@override_settings(CHANNEL_LAYERS=_IN_MEMORY_LAYER)
+def test_the_real_ws_route_still_wins_over_the_catch_all() -> None:
+    """Mutation check: put the catch-all first and this is the test
+    that notices. /ws must still reach AssetConsumer and get a real
+    accept."""
+
+    async def body() -> None:
+        communicator = _communicator()
+        assert (await _handshake(communicator))['type'] == 'websocket.accept'
+
+    with _auth_backend(''):
         async_to_sync(body)()
