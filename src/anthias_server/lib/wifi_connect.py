@@ -14,16 +14,24 @@ two artefacts it leaves behind:
 * **The access-point address.** The portal runs with
   ``ipv4.method=manual``, so while it is up NetworkManager holds
   ``PORTAL_GATEWAY`` on the WiFi interface and drops it the moment the
-  access point comes down. That makes "is this address on the host"
-  the one liveness signal that cannot go stale, and the server already
-  resolves the host's addresses for the splash page (via host_agent on
-  bare metal, via the supervisor on balena) — so no new plumbing is
-  needed to see it.
+  access point comes down. The server already resolves the host's
+  addresses for the splash page (via host_agent on bare metal, via the
+  supervisor on balena), so seeing that costs no new plumbing.
 
-Both are needed. The QR files are written at the *start* of every run,
-including the runs that exit a second later because the device turned
-out to be online, so their presence alone would show a setup screen on
-a perfectly healthy device.
+Neither is sufficient alone, which is why ``wifi_setup_state`` uses
+both plus a probe:
+
+* The QR files are written at the *start* of every run, including the
+  runs that exit a second later because the device turned out to be
+  online — so their presence would show a setup screen on a healthy
+  device.
+
+* The address list is a *cache*. It is only as current as whatever
+  last refreshed it, and on the Pi 5 testbed a host_agent that had
+  stopped froze it with the access point's address still in it: the
+  setup screen stayed on the display for a portal that had been down
+  for minutes. ``portal_is_serving`` is the liveness check that
+  closes that hole.
 """
 
 import base64
@@ -31,6 +39,8 @@ import logging
 import re
 from pathlib import Path
 from typing import NamedTuple
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +58,14 @@ QR_SVG_FILENAME = 'wifi-connect-qr.svg'
 QR_PAYLOAD_FILENAME = 'wifi-connect-qr.txt'
 
 PORTAL_URL = f'http://{PORTAL_GATEWAY}:{PORTAL_PORT}/'  # NOSONAR (S5332)
+
+# wifi-connect's RFC 8908 captive-portal API, which only answers while
+# the portal is actually serving. Used as the liveness confirmation
+# below. Short timeout: when the access point is down this address is
+# not on the host at all, so the request has nowhere to go and we must
+# not hold a request worker waiting to find that out.
+PORTAL_PROBE_URL = f'{PORTAL_URL}api/captive-portal'
+PORTAL_PROBE_TIMEOUT_S = 2
 
 # Cap on the SVG we will inline into the page. The real file is ~4 KB;
 # this only exists so a truncated or substituted file can't be read
@@ -192,6 +210,35 @@ def portal_is_up(node_ip: str) -> bool:
     follows the portal exactly with no timeout to tune.
     """
     return PORTAL_GATEWAY in node_ip.split()
+
+
+def portal_is_serving() -> bool:
+    """Is the portal answering on the gateway right now?
+
+    ``portal_is_up`` reads a *cached* address list — host_agent writes
+    it on request, the balena supervisor answers from its own state —
+    and a cache has no obligation to be current. On the Pi 5 testbed a
+    stopped host_agent froze that list with the access point's address
+    still in it, and the setup screen stayed on the display
+    indefinitely for a portal that had been down for minutes. Anything
+    that stops the list being refreshed does the same.
+
+    So the address list is the cheap gate and this is the authority.
+    Asking the portal itself cannot go stale: the endpoint exists only
+    while it is serving, and the address it lives on exists only while
+    the access point is up.
+    """
+    try:
+        response = requests.get(
+            PORTAL_PROBE_URL, timeout=PORTAL_PROBE_TIMEOUT_S
+        )
+    except requests.RequestException:
+        # The ordinary "no portal" path, not an error worth logging on
+        # every poll: with the access point down, nothing holds the
+        # gateway address and the connection simply fails.
+        return False
+
+    return response.ok
 
 
 def strip_portal_gateway(node_ip: str) -> str:

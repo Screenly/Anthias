@@ -99,3 +99,6 @@ website/.hugo_build.lock
 
 # mypy
 .mypy_cache/
+
+# QA overlay tarballs built by bin/ scripts for testbed runs
+wc-overlay.tgz

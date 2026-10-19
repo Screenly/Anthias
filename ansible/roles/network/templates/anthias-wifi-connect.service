@@ -30,6 +30,25 @@ After=NetworkManager.service NetworkManager-wait-online.service
 # then runs.
 Type=exec
 User={{ anthias_user }}
+WorkingDirectory=/home/{{ anthias_user }}/anthias
+
+# The gate that keeps a working device working.
+#
+# wifi-connect's own connectivity gate asks NetworkManager, and on
+# every platform Anthias supports NM is built WITHOUT connectivity-check
+# support — so it answers "unknown", which upstream (reasonably, for a
+# tool that assumes NM can answer) treats as a reason to show the
+# portal. The effect here would be an access point raised on every boot
+# of every device, online or not. See the script for the measurements.
+#
+# ExecCondition, not ExecStartPre: a clean non-zero exit from a
+# condition marks the unit skipped rather than failed, so an online
+# device reports `inactive (dead)` instead of a red unit every boot.
+ExecCondition=/home/{{ anthias_user }}/anthias/bin/wifi_connect_needed.sh
+
+# The probe honours a configured proxy, same as anthias-host-agent's.
+# The leading '-' makes a missing file (no proxy) non-fatal.
+EnvironmentFile=-/etc/anthias/proxy.env
 # --attach so the unit's lifetime matches the portal's: systemd sees
 # the run finish and journald gets the portal's own log lines.
 ExecStart=/usr/bin/docker start --attach anthias-wifi-connect

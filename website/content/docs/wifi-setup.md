@@ -52,11 +52,16 @@ and only once per boot:
 4. After 15 minutes with nobody completing setup, the setup network comes down
    and the screen goes back to what it was doing. Reboot it to try again.
 
-That last point is deliberate. The screen decides it is offline by asking
-NetworkManager, and on a restricted network (one that blocks NetworkManager's
-connectivity check) a perfectly working screen can look offline. Bringing the
-setup network down after 15 minutes means a wrong answer costs you one window
-rather than taking the screen off the air indefinitely.
+Anthias checks for itself whether the screen can reach the internet before it
+raises anything, and skips the whole thing when it can. That check is Anthias's
+own rather than NetworkManager's on purpose: NetworkManager ships on Raspberry
+Pi OS and Debian without its connectivity test compiled in, so asking it always
+returns "don't know" — and "don't know" would mean a setup network on every
+boot of every screen, including ones that are perfectly online.
+
+The 15-minute limit is the backstop for the same concern. If the check is ever
+wrong — a restricted network that blocks the probe, say — a wrong answer costs
+you one window rather than taking the screen off the air indefinitely.
 
 ## Requirements
 
@@ -121,7 +126,14 @@ address and will open it for you; older devices won't, because the port a
 captive portal is normally found on (80) is already serving the Anthias web
 interface on this device.
 
-**The screen keeps dropping into setup mode.** That means NetworkManager
-believes the screen is offline. On a network that blocks outbound connectivity
-checks this can happen even when everything works. Configure WiFi over SSH as
-above and disable the service.
+**The screen keeps dropping into setup mode.** That means Anthias's internet
+check is failing — on a network that blocks outbound requests this can happen
+even when everything else works. Check what it decided:
+
+```bash
+journalctl -u anthias-wifi-connect.service -b | head
+```
+
+A line reading *"no internet after 6 attempts"* on a screen you believe is
+online is the symptom. Configure WiFi over SSH as above and disable the
+service.

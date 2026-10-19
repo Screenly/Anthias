@@ -353,8 +353,17 @@ def wifi_setup_state() -> dict[str, Any]:
     resolving the host's addresses — the signal the whole thing turns
     on — is this module's job already.
     """
-    active = wifi_connect.portal_is_up(
-        _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
+    # Two-stage on purpose. The address list is cheap but cached, so
+    # it can say "up" for a portal that has already gone; the probe is
+    # authoritative but should not run on every poll of a device that
+    # is plainly online. Gating the probe behind a positive address
+    # match gives the cheap answer in the common case and the correct
+    # one whenever it matters.
+    active = (
+        wifi_connect.portal_is_up(
+            _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
+        )
+        and wifi_connect.portal_is_serving()
     )
     credentials = wifi_connect.read_portal_credentials() if active else None
 

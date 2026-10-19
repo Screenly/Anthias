@@ -697,3 +697,172 @@ def test_the_fast_host_refresh_is_reachable_as_a_host_command() -> None:
     from anthias_host_agent import __main__ as host_agent
 
     assert 'set_ip_addresses_fast' in host_agent.CMD_TO_ARGV
+
+
+# ---------------------------------------------------------------------------
+# Liveness: the address list is a cache, so it needs confirming
+# ---------------------------------------------------------------------------
+#
+# Found on the Pi 5 testbed. host_agent stopped, the cached address
+# list froze with the access point's address still in it, and
+# /hotspot stayed full-screen on the display for a portal that had
+# been down for minutes. Any interruption to the refresh does this.
+
+
+def test_portal_is_serving_when_the_api_answers() -> None:
+    with mock.patch(
+        'anthias_server.lib.wifi_connect.requests.get',
+        return_value=mock.Mock(ok=True),
+    ):
+        assert wifi_connect.portal_is_serving()
+
+
+def test_portal_is_not_serving_when_the_gateway_is_unreachable() -> None:
+    """The ordinary "no portal" path: nothing holds that address."""
+    with mock.patch(
+        'anthias_server.lib.wifi_connect.requests.get',
+        side_effect=requests.exceptions.ConnectionError(),
+    ):
+        assert not wifi_connect.portal_is_serving()
+
+
+def test_portal_is_not_serving_when_the_probe_times_out() -> None:
+    with mock.patch(
+        'anthias_server.lib.wifi_connect.requests.get',
+        side_effect=requests.exceptions.Timeout(),
+    ):
+        assert not wifi_connect.portal_is_serving()
+
+
+def test_the_probe_is_bounded() -> None:
+    """An unbounded probe would pin a request worker on every poll."""
+    with mock.patch(
+        'anthias_server.lib.wifi_connect.requests.get',
+        return_value=mock.Mock(ok=True),
+    ) as get:
+        wifi_connect.portal_is_serving()
+
+    assert get.call_args.kwargs['timeout'] == (
+        wifi_connect.PORTAL_PROBE_TIMEOUT_S
+    )
+
+
+def test_a_stale_address_cache_does_not_report_setup_mode() -> None:
+    """The regression this exists for, end to end through the view."""
+    from anthias_server.api.views import v2 as v2_views
+
+    with (
+        mock.patch.object(
+            v2_views,
+            '_resolve_node_ip',
+            return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
+        ),
+        mock.patch(
+            'anthias_server.lib.wifi_connect.portal_is_serving',
+            return_value=False,
+        ),
+    ):
+        state = v2_views.wifi_setup_state()
+
+    assert state['active'] is False
+    assert state['passphrase'] is None
+
+
+def test_a_live_portal_still_reports_setup_mode() -> None:
+    from anthias_server.api.views import v2 as v2_views
+
+    with (
+        mock.patch.object(
+            v2_views,
+            '_resolve_node_ip',
+            return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
+        ),
+        mock.patch(
+            'anthias_server.lib.wifi_connect.portal_is_serving',
+            return_value=True,
+        ),
+        mock.patch(
+            'anthias_server.lib.wifi_connect.read_portal_credentials',
+            return_value=wifi_connect.PortalCredentials('Anthias Setup', 'p'),
+        ),
+    ):
+        state = v2_views.wifi_setup_state()
+
+    assert state['active'] is True
+    assert state['ssid'] == 'Anthias Setup'
+
+
+def test_an_online_device_never_probes_the_portal() -> None:
+    """No stray packets toward 192.168.42.1 on a healthy device."""
+    from anthias_server.api.views import v2 as v2_views
+
+    with (
+        mock.patch.object(
+            v2_views, '_resolve_node_ip', return_value=_FIXTURE_IPV4
+        ),
+        mock.patch(
+            'anthias_server.lib.wifi_connect.portal_is_serving',
+            side_effect=AssertionError('must not probe when not in setup'),
+        ),
+    ):
+        assert v2_views.wifi_setup_state()['active'] is False
+
+
+# ---------------------------------------------------------------------------
+# The host-side connectivity gate
+# ---------------------------------------------------------------------------
+#
+# NetworkManager on every Anthias platform is built without
+# connectivity-check support, so wifi-connect's own gate always sees
+# "unknown" and raises the portal. Measured on the whole QA fleet.
+# Anthias has to decide instead, or every device raises an access
+# point on every boot.
+
+GATE_PATH = 'bin/wifi_connect_needed.sh'
+
+
+def test_the_unit_gates_on_connectivity_before_running() -> None:
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert 'ExecCondition=' in unit
+    assert 'wifi_connect_needed.sh' in unit
+
+
+def test_the_gate_uses_exec_condition_not_exec_start_pre() -> None:
+    """A failed ExecStartPre marks the unit FAILED on every online boot.
+
+    ExecCondition's clean non-zero means "skip", which is what an
+    online device should look like.
+    """
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert not re.search(
+        r'^ExecStartPre=.*wifi_connect_needed', unit, re.MULTILINE
+    )
+    assert re.search(
+        r'^ExecCondition=.*wifi_connect_needed', unit, re.MULTILINE
+    )
+
+
+def test_the_gate_script_is_executable_and_shipped() -> None:
+    gate = REPO_ROOT / GATE_PATH
+
+    assert gate.exists()
+    assert gate.stat().st_mode & 0o111, 'gate script is not executable'
+
+
+def test_the_gate_honours_a_proxy() -> None:
+    """A proxied device must not be judged offline by a blocked probe."""
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert 'EnvironmentFile=-/etc/anthias/proxy.env' in unit
+
+
+def test_the_gate_retries_before_declaring_a_device_offline() -> None:
+    """A boot can outrun DHCP; one failed probe must not raise an AP."""
+    body = (REPO_ROOT / GATE_PATH).read_text()
+
+    attempts = re.search(r'^ATTEMPTS=(\d+)$', body, re.MULTILINE)
+
+    assert attempts is not None
+    assert int(attempts.group(1)) > 1
