@@ -40,6 +40,7 @@ from anthias_common.utils import (
     connect_to_redis,
     is_disk_full,
 )
+from anthias_server.api.views.v2 import wifi_setup_state
 from anthias_server.app import page_context
 from anthias_server.app.models import (
     clamp_duration,
@@ -54,6 +55,7 @@ from anthias_server.lib.auth import (
     apply_auth_settings,
     authorized,
 )
+from anthias_server.lib.wifi_connect import read_qr_svg
 from anthias_server.settings import ViewerPublisher, settings
 
 from .helpers import (
@@ -2174,6 +2176,38 @@ def login(request: HttpRequest) -> HttpResponse:
             return template(request, 'login.html', {'next': next_url})
 
     return template(request, 'login.html', {'next': next_url})
+
+
+@require_http_methods(['GET'])
+def hotspot(request: HttpRequest) -> HttpResponse:
+    """The WiFi setup screen, shown while the setup portal is live.
+
+    Rendered on the device's own display by the viewer (see
+    ``_wifi_setup_watch_loop``), which is the only place the access
+    point's passphrase can reach a user: it is generated per run and
+    the network it unlocks is the one they need in order to read
+    anything served over it.
+
+    Unauth'd, like /splash-page, because the viewer has no credentials
+    to present. The passphrase is only included while the portal is
+    actually broadcasting — ``wifi_setup_state()`` returns nothing
+    otherwise — and at that point it is already on the screen in 2cm
+    type.
+    """
+    state = wifi_setup_state()
+
+    return template(
+        request,
+        'hotspot.html',
+        {
+            'splash_logo_url': settings['splash_logo_url'],
+            'active': state['active'],
+            'ssid': state['ssid'],
+            'passphrase': state['passphrase'],
+            'portal_url': state['portal_url'],
+            'qr_svg': read_qr_svg() if state['active'] else None,
+        },
+    )
 
 
 @require_http_methods(['GET'])

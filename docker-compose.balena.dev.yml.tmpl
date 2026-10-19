@@ -95,6 +95,42 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
+  # Captive-portal WiFi provisioning — Screenly-Labs/wifi-connect.
+  # Upstream ships the multi-arch image, so nothing is built here; the
+  # tag is an exact CalVer release so an upstream patch cannot reach a
+  # fleet without a deliberate bump. See docker-compose.yml.tmpl for the
+  # full reasoning behind each setting.
+  anthias-wifi-connect:
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.0
+    # Required: DHCP is an L2 broadcast protocol and does not survive
+    # the supervisor's bridge NAT.
+    network_mode: host
+    environment:
+      # io.balena.features.dbus below mounts the host system bus here.
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
+      - PORTAL_SSID=Anthias Setup
+      - WIFI_CONNECT_BRAND_NAME=Anthias
+      # anthias-server holds host port 80, so the portal takes 8000 and
+      # is reached via DHCP option 114 (RFC 8910) or the address on the
+      # setup screen.
+      - PORTAL_LISTENING_PORT=8000
+      - WIFI_CONNECT_QR_OUTPUT=/data/hotspot
+      - WIFI_CONNECT_NO_QR_STDOUT=true
+      # Safety valve: bring the portal down after 15 minutes with no
+      # join, so a misreported connectivity state costs one window
+      # rather than the device's whole uptime.
+      - ACTIVITY_TIMEOUT=900
+    # One shot, not a loop: wifi-connect exits 0 as soon as it finds the
+    # device online, and a restart policy would re-raise the portal
+    # every 15 minutes on a device whose NetworkManager connectivity
+    # check is blocked. The supervisor starts it when the release is
+    # applied and on device boot.
+    restart: "no"
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.dbus: '1'
+
   redis:
     image: ghcr.io/screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
     build:

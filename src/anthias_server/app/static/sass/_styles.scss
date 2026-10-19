@@ -2367,6 +2367,40 @@ label { text-align: left; }
   color: var(--color-fg);
 }
 
+// The WiFi-setup variant of the splash (templates/hotspot.html). Same
+// shell, same card, same QR slot — the only new thing is a labelled
+// credential list, because an SSID and a passphrase have to be
+// readable off a screen from across a room, which the IP pills'
+// single-line treatment doesn't do.
+.splash-cred-list {
+  display: grid;
+  gap: calc(var(--spacing) * 3);
+  margin: 0;
+}
+
+.splash-cred {
+  display: grid;
+  gap: calc(var(--spacing) * 1);
+
+  &__label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-on-canvas-muted);
+  }
+
+  &__value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    // Deliberately large: this is read off a display, not a laptop.
+    font-size: clamp(1.1rem, 1.4vw + 0.8rem, 1.75rem);
+    font-weight: 700;
+    // An SSID or passphrase can be long and has no spaces to break on.
+    overflow-wrap: anywhere;
+    color: var(--color-on-canvas);
+  }
+}
+
 // -----------------------------------------------------------------------------
 // 17a. Login / pre-auth — same gradient background as the splash so the
 //      pre-dashboard surface feels like one product, then a light card

@@ -1,0 +1,103 @@
+{# vim: ft=htmldjango #}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    {% comment %}
+      Server-rendered and refreshed by the browser rather than polled by
+      a JS bundle. The page exists for a device with no network, shown
+      on a screen nobody is clicking: there is no interaction to drive,
+      and adding an entry point to the bun build to re-fetch two strings
+      would be more moving parts than the problem has.
+
+      The refresh matters only across portal runs — each run of
+      wifi-connect generates a fresh passphrase, so a page left up from
+      a previous run would show credentials that no longer open
+      anything. Within a run nothing on it changes. The viewer is what
+      navigates away once the portal is down (see
+      _wifi_setup_watch_loop).
+    {% endcomment %}
+    <meta http-equiv="refresh" content="30"/>
+    <title>Set up WiFi &mdash; Anthias</title>
+    <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
+    <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
+    <link rel="icon" href="/static/favicons/favicon.ico"/>
+</head>
+<body class="splash-page">
+<main class="splash-shell">
+  <div class="splash-card">
+    <div class="splash-card__brand">
+      <img src="{{ splash_logo_url }}" alt="Anthias" class="splash-logo"/>
+    </div>
+
+    <div class="splash-card__body">
+      {% if active %}
+        <p class="splash-status">
+          <span class="splash-status__dot splash-status__dot--pulse" aria-hidden="true"></span>
+          <span>No network &mdash; setup mode</span>
+        </p>
+
+        <h1 class="splash-headline">Connect this screen to WiFi</h1>
+        <p class="splash-subhead">
+          Join the WiFi network below from a phone or laptop &mdash; scan
+          the QR code to join without typing the password &mdash; then open
+          <strong>{{ portal_url }}</strong> and pick the network this
+          screen should use.
+        </p>
+
+        <div class="splash-cred-list">
+          <div class="splash-cred">
+            <span class="splash-cred__label">Network</span>
+            <span class="splash-cred__value">{{ ssid }}</span>
+          </div>
+          {% if passphrase %}
+            <div class="splash-cred">
+              <span class="splash-cred__label">Password</span>
+              <span class="splash-cred__value">{{ passphrase }}</span>
+            </div>
+          {% endif %}
+        </div>
+      {% else %}
+        {% comment %}
+          Reachable when the viewer navigates here just as the portal
+          comes down, and when an operator opens /hotspot/ out of
+          curiosity on a device that is perfectly online. Say so plainly
+          rather than rendering an empty card.
+        {% endcomment %}
+        <p class="splash-status">
+          <span class="splash-status__dot splash-status__dot--ok" aria-hidden="true"></span>
+          <span>WiFi setup is not running</span>
+        </p>
+        <h1 class="splash-headline">Nothing to set up</h1>
+        <p class="splash-subhead">
+          This screen is not in WiFi setup mode. The setup network only
+          appears when the device cannot reach a network of its own.
+        </p>
+      {% endif %}
+    </div>
+
+    {% if active and qr_svg %}
+      <aside class="splash-card__qr">
+        {% comment %}
+          Inlined, not an <img src>. The SVG comes from wifi-connect's
+          own renderer on the shared volume, and inlining keeps the page
+          to a single request on a device whose network is, by
+          definition, not working.
+
+          `safe` is load-bearing and deliberate: the content is a
+          machine-generated QR symbol (paths and rects) written by a
+          root-owned process into a directory no other service writes
+          to, and escaping it would render the markup as text. The
+          reader for it refuses anything over 256 KB.
+        {% endcomment %}
+        <div class="splash-qr">{{ qr_svg|safe }}</div>
+        <p class="splash-qr__caption">Scan to join</p>
+      </aside>
+    {% endif %}
+  </div>
+</main>
+</body>
+</html>

@@ -37,10 +37,17 @@ from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
+from anthias_viewer.constants import HOTSPOT_PAGE_URL as HOTSPOT_PAGE_URL
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
+from anthias_viewer.constants import (
+    WIFI_SETUP_POLL_INTERVAL_S as WIFI_SETUP_POLL_INTERVAL_S,
+)
+from anthias_viewer.constants import (
+    WIFI_SETUP_STATUS_URL as WIFI_SETUP_STATUS_URL,
+)
 from anthias_viewer.media_player import MediaPlayerProxy
 from anthias_viewer.playback import (
     navigate_to_asset,
@@ -209,6 +216,18 @@ _empty_playlist_logged: bool = False
 # logs once per offender instead of ~2 lines/second. Holds
 # "<asset_id>:<uri>" so a changed URI on the same row still reports.
 _unavailable_asset_logged: str | None = None
+
+# Set by the wifi-setup reporter thread, read by asset_loop. A plain
+# bool rather than a lock-guarded structure: CPython writes it
+# atomically, a tick that reads the previous value simply shows the
+# right screen one tick later, and the alternative -- the display
+# thread blocking on a lock held across an HTTP call -- is worse than
+# anything it would prevent.
+_wifi_setup_active: bool = False
+
+# Edge latch for the log line, so a portal left up for its full
+# 15-minute window writes two lines instead of ~180.
+_wifi_setup_logged: bool = False
 
 
 def _rotation_value() -> int:
@@ -2809,6 +2828,18 @@ def asset_loop(scheduler: Any) -> None:
     # boards. See _wayland_output_watchdog().
     _wayland_output_watchdog()
 
+    # The WiFi setup portal outranks the playlist. A device showing
+    # this screen has no network, so whatever it would otherwise play
+    # is either a local file nobody can change or a URL that will not
+    # load -- and the passphrase for the setup access point exists
+    # nowhere else a user can reach. Checked here rather than handled
+    # as a viewer command because the trigger is on the host, outside
+    # any container that can publish to Redis.
+    if _wifi_setup_active:
+        _show_wifi_setup_screen()
+        sleep(EMPTY_PL_DELAY)
+        return
+
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -3132,6 +3163,81 @@ def _publish_smart_loop() -> None:
     t.start()
 
 
+def _show_wifi_setup_screen() -> None:
+    """Put the WiFi setup page on the display.
+
+    ``view_webpage`` short-circuits on an unchanged URL, so calling
+    this on every tick of the setup loop costs nothing after the first
+    one -- which is what lets asset_loop stay a plain top-of-tick
+    check with no state of its own to get out of step.
+    """
+    global _wifi_setup_logged
+
+    if not _wifi_setup_logged:
+        logger.info(
+            'WiFi setup portal is up; showing the setup screen until it '
+            'comes down.'
+        )
+        _wifi_setup_logged = True
+
+    view_webpage(HOTSPOT_PAGE_URL)
+
+
+def _poll_wifi_setup_once() -> None:
+    """One tick of the wifi-setup reporter. Never raises."""
+    global _wifi_setup_active, _wifi_setup_logged
+
+    try:
+        response = requests.get(WIFI_SETUP_STATUS_URL, timeout=5)
+        response.raise_for_status()
+        active = bool(response.json().get('active'))
+    except (requests.exceptions.RequestException, ValueError):
+        # A server that is restarting, or a body that isn't JSON,
+        # must not strand the display on a setup screen for a portal
+        # that is long gone. Treating an unanswered question as "no
+        # portal" fails towards playing content, which is the job.
+        active = False
+
+    if _wifi_setup_active and not active:
+        logger.info('WiFi setup portal is down; resuming normal playback.')
+        _wifi_setup_logged = False
+
+    _wifi_setup_active = active
+
+
+def _wifi_setup_watch_loop() -> None:
+    """Background reporter -- track whether the WiFi setup portal is up.
+
+    The portal is Screenly-Labs/wifi-connect running in its own
+    host-networked container (see the compose templates). Nothing about
+    it is visible from in here: it has no API this process could call,
+    it writes its QR to a volume whose contents say nothing about
+    whether the access point is currently broadcasting, and the address
+    that does say so is on a host interface this container cannot see.
+    anthias-server can answer the question -- it already resolves the
+    host's addresses for the splash page -- so this asks it.
+
+    Polled rather than pushed because both ends of a push would have to
+    be invented: wifi-connect has no hook to fire and the host has no
+    Anthias process in the path on balena.
+    """
+    import threading
+
+    def tick() -> None:
+        while True:
+            try:
+                _poll_wifi_setup_once()
+            except Exception:
+                # A reporter must never take the viewer down.
+                logger.warning(
+                    'Could not read WiFi setup status', exc_info=True
+                )
+            sleep(WIFI_SETUP_POLL_INTERVAL_S)
+
+    t = threading.Thread(target=tick, name='wifi-setup-reporter', daemon=True)
+    t.start()
+
+
 def _publish_cec_availability() -> None:
     """Tell anthias-server whether this device has a CEC adapter.
 
@@ -3170,6 +3276,8 @@ def main() -> None:
     _publish_display_resolution_loop()
 
     _publish_smart_loop()
+
+    _wifi_setup_watch_loop()
 
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.

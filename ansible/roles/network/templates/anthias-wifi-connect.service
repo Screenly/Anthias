@@ -1,0 +1,88 @@
+[Unit]
+Description=Anthias WiFi Connect (captive-portal provisioning)
+Documentation=https://github.com/Screenly-Labs/wifi-connect
+Requires=docker.service
+After=docker.service
+# Do not race NetworkManager's own startup attempts. wifi-connect's
+# connectivity gate exits 0 when a saved network comes up by itself,
+# which is the behaviour you want; starting before NM has had a chance
+# to try just burns the 60s autoconnect budget on every boot. `After=`
+# a unit that is absent or disabled is a no-op, so this is safe on the
+# boards where NetworkManager-wait-online is not enabled.
+After=NetworkManager.service NetworkManager-wait-online.service
+
+[Service]
+# One run per boot. The container itself is created by `docker compose
+# up` (see the anthias-wifi-connect service, which carries
+# `restart: "no"`); this unit is only what starts that container again
+# on each subsequent boot.
+#
+# It is deliberately NOT a restart loop. wifi-connect exits 0 the
+# moment it finds the device online, so a loop would re-raise the
+# access point every ACTIVITY_TIMEOUT on any device whose
+# NetworkManager connectivity check is blocked — an outage that never
+# ends. Once per boot bounds that to a single window.
+# Type=exec, NOT oneshot. A portal session legitimately lasts up to
+# ACTIVITY_TIMEOUT (15 minutes), and a oneshot unit is killed at
+# DefaultTimeoutStartSec — 90 seconds on Debian — which would tear the
+# access point down mid-setup every time. Type=exec considers the unit
+# started once the process execs and imposes no limit on how long it
+# then runs.
+Type=exec
+User={{ anthias_user }}
+# --attach so the unit's lifetime matches the portal's: systemd sees
+# the run finish and journald gets the portal's own log lines.
+ExecStart=/usr/bin/docker start --attach anthias-wifi-connect
+# SIGTERM to `docker start --attach` detaches the CLI; it does not stop
+# the container, so without this a `systemctl stop` would leave the
+# access point broadcasting with nothing supervising it. The leading
+# `-` keeps a stop from failing when the container is already gone.
+ExecStop=-/usr/bin/docker stop --timeout 20 anthias-wifi-connect
+# Long enough for the ExecStop above: wifi-connect handles SIGTERM to
+# bring the access point down (balena sends one on every update, and
+# leaving the radio in AP mode would strand the device), and that
+# teardown is a NetworkManager round trip.
+TimeoutStopSec=30s
+# Exit codes that mean "nothing for this tool to do here", not failure:
+#   3 — no WiFi device (every ethernet-only x86 box)
+#   4 — the adapter cannot do AP mode, is unmanaged, or is rfkilled
+# Without these a wired device shows a failed unit on every boot.
+SuccessExitStatus=0 3 4
+Restart=no
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=anthias-wifi-connect
+
+# Sandboxing. All the privileged work happens inside the container;
+# this process only talks to /run/docker.sock, so it can be locked
+# down hard. ProtectSystem=strict still allows connect() on the
+# socket — that is an inode lookup, not a filesystem write.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

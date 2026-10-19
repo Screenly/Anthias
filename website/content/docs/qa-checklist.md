@@ -54,3 +54,16 @@ Running unit tests is a good way to make sure that the code is working as expect
 16. Go to the **System Info** page and make sure that all information are correct.
 17. Make sure that all the footer links are being displayed correctly.
 18. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.
+
+## WiFi setup (captive portal)
+
+Needs a board with a WiFi adapter, installed with the "manage the network" prompt enabled. See [WiFi Setup](/docs/wifi-setup/).
+
+1. On a device that is already online, reboot and confirm that **no** setup network appears and the display goes straight to the splash page. `journalctl -u anthias-wifi-connect.service -b` should show the run exiting because the device is online.
+2. Forget the device's saved WiFi (`nmcli connection delete <name>`), unplug Ethernet, and reboot. Within about a minute the display should switch to the WiFi setup page showing a network name, a password, and a QR code.
+3. Scan the QR code with a phone. It should join **Anthias Setup** without you typing the password.
+4. Open `http://192.168.42.1:8000` on the phone, pick a network, and enter its password. The device should join it, the setup network should disappear, and the display should go back to the playlist (or standby) on its own, with no reboot.
+5. Repeat step 4 with a **wrong** password. The portal should come back and say the password was wrong, the phone should rejoin the setup network by itself, and a second attempt with the right password should work.
+6. While the setup page is up, confirm the splash page's address list does **not** offer `192.168.42.1` as a way to manage the device.
+7. On an Ethernet-only x86 box, reboot and confirm `systemctl status anthias-wifi-connect.service` is not in a failed state — no WiFi adapter is an expected outcome, not an error.
+8. Leave the setup page up for 15 minutes without completing setup. The setup network should come down by itself and the device should return to normal.

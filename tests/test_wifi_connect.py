@@ -1,0 +1,680 @@
+"""Tests for the wifi-connect setup-portal integration.
+
+The portal itself is a separate upstream binary running in its own
+container, so what is testable here is the seam: how Anthias decides
+the portal is live, how it reads the credentials out of the artefacts
+the portal leaves on the shared volume, and what the /hotspot page
+renders in each state.
+
+The most valuable tests in here are the ones that pin the Python
+constants to the compose templates. Those two sides have no compiler
+between them: change ``PORTAL_LISTENING_PORT`` in a compose file and
+nothing anywhere fails — the setup screen just quietly tells users to
+open a port nothing is listening on.
+
+The IP literals below are deliberate fixtures, and ``http://`` matches
+how Anthias actually serves (plain HTTP per CLAUDE.md, TLS is the
+opt-in Caddy sidecar). NOSONAR markers suppress S1313 / S5332 at the
+constants; assertions inherit it by referencing them.
+"""
+
+import re
+from collections.abc import Iterator
+from pathlib import Path
+from unittest import mock
+
+import pytest
+import requests
+from django.test import Client
+
+from anthias_server.lib import wifi_connect
+
+_FIXTURE_IPV4 = '192.168.1.42'  # NOSONAR
+# One octet longer than the gateway, to catch a substring match.
+_GATEWAY_PREFIX_TRAP = '192.168.42.10'  # NOSONAR
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+COMPOSE_TEMPLATES = (
+    'docker-compose.yml.tmpl',
+    'docker-compose.balena.yml.tmpl',
+    'docker-compose.balena.dev.yml.tmpl',
+)
+
+
+# ---------------------------------------------------------------------------
+# parse_qr_payload (pure parser, no I/O)
+# ---------------------------------------------------------------------------
+
+
+def test_parses_the_payload_wifi_connect_writes() -> None:
+    credentials = wifi_connect.parse_qr_payload(
+        'WIFI:T:WPA;S:Anthias Setup;P:hunter2hunter2;H:false;;'
+    )
+
+    assert credentials is not None
+    assert credentials.ssid == 'Anthias Setup'
+    assert credentials.passphrase == 'hunter2hunter2'
+
+
+def test_field_order_is_not_relied_on() -> None:
+    """The WIFI: format fixes no field order, so neither do we."""
+    credentials = wifi_connect.parse_qr_payload(
+        'WIFI:P:hunter2hunter2;S:Anthias Setup;T:WPA;;'
+    )
+
+    assert credentials is not None
+    assert credentials.ssid == 'Anthias Setup'
+    assert credentials.passphrase == 'hunter2hunter2'
+
+
+def test_escaped_separators_round_trip() -> None:
+    r"""``\;`` inside an SSID is one SSID, not two fields."""
+    credentials = wifi_connect.parse_qr_payload(
+        r'WIFI:T:WPA;S:Lab\;Floor\:2;P:pass\\word;H:false;;'
+    )
+
+    assert credentials is not None
+    assert credentials.ssid == 'Lab;Floor:2'
+    assert credentials.passphrase == 'pass\\word'
+
+
+def test_trailing_whitespace_is_tolerated() -> None:
+    credentials = wifi_connect.parse_qr_payload(
+        'WIFI:T:WPA;S:Anthias Setup;P:secret;;\n'
+    )
+
+    assert credentials is not None
+    assert credentials.ssid == 'Anthias Setup'
+
+
+@pytest.mark.parametrize(
+    'payload',
+    [
+        '',
+        'not a wifi payload',
+        # A non-WiFi QR that happens to be on the volume.
+        'https://anthias.screenly.io',
+        # Well-formed but no SSID: nothing to tell the user to join.
+        'WIFI:T:WPA;P:secret;;',
+    ],
+)
+def test_unusable_payloads_return_none(payload: str) -> None:
+    assert wifi_connect.parse_qr_payload(payload) is None
+
+
+# ---------------------------------------------------------------------------
+# portal_is_up / strip_portal_gateway
+# ---------------------------------------------------------------------------
+
+
+def test_portal_is_up_when_the_gateway_is_held() -> None:
+    assert wifi_connect.portal_is_up(
+        f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}'
+    )
+
+
+def test_portal_is_down_without_the_gateway() -> None:
+    assert not wifi_connect.portal_is_up(_FIXTURE_IPV4)
+
+
+def test_portal_is_down_for_an_empty_address_list() -> None:
+    """A device whose addresses could not be resolved is not in setup."""
+    assert not wifi_connect.portal_is_up('')
+
+
+def test_an_address_that_merely_starts_with_the_gateway_is_not_it() -> None:
+    """Substring matching here would put a LAN device into setup mode."""
+    assert not wifi_connect.portal_is_up(_GATEWAY_PREFIX_TRAP)
+
+
+def test_strip_portal_gateway_removes_only_the_gateway() -> None:
+    stripped = wifi_connect.strip_portal_gateway(
+        f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY} {_GATEWAY_PREFIX_TRAP}'
+    )
+
+    assert stripped == f'{_FIXTURE_IPV4} {_GATEWAY_PREFIX_TRAP}'
+
+
+def test_strip_portal_gateway_is_a_no_op_when_absent() -> None:
+    assert wifi_connect.strip_portal_gateway(_FIXTURE_IPV4) == _FIXTURE_IPV4
+
+
+# ---------------------------------------------------------------------------
+# Reading the artefacts off the shared volume
+# ---------------------------------------------------------------------------
+
+
+def test_reads_credentials_from_the_payload_file(tmp_path: Path) -> None:
+    (tmp_path / wifi_connect.QR_PAYLOAD_FILENAME).write_text(
+        'WIFI:T:WPA;S:Anthias Setup;P:secret;H:false;;'
+    )
+
+    credentials = wifi_connect.read_portal_credentials(tmp_path)
+
+    assert credentials is not None
+    assert credentials.ssid == 'Anthias Setup'
+
+
+def test_missing_payload_file_is_not_an_error(tmp_path: Path) -> None:
+    """A device that has never been offline has no QR on its volume."""
+    assert wifi_connect.read_portal_credentials(tmp_path) is None
+
+
+def test_reads_the_qr_svg(tmp_path: Path) -> None:
+    (tmp_path / wifi_connect.QR_SVG_FILENAME).write_text('<svg>qr</svg>')
+
+    assert wifi_connect.read_qr_svg(tmp_path) == '<svg>qr</svg>'
+
+
+def test_missing_qr_svg_is_not_an_error(tmp_path: Path) -> None:
+    assert wifi_connect.read_qr_svg(tmp_path) is None
+
+
+def test_an_implausibly_large_svg_is_refused(tmp_path: Path) -> None:
+    """The real file is ~4 KB; the page inlines whatever this returns."""
+    (tmp_path / wifi_connect.QR_SVG_FILENAME).write_text(
+        'x' * (wifi_connect._MAX_SVG_BYTES + 1)
+    )
+
+    assert wifi_connect.read_qr_svg(tmp_path) is None
+
+
+# ---------------------------------------------------------------------------
+# The compose templates and this module must agree
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize('template_name', COMPOSE_TEMPLATES)
+def test_compose_pins_an_exact_wifi_connect_version(
+    template_name: str,
+) -> None:
+    """Never ``latest`` or a floating month tag.
+
+    An upstream patch reaching a fleet has to be a commit in this repo,
+    not a push to a registry.
+    """
+    body = (REPO_ROOT / template_name).read_text()
+    tags = re.findall(
+        r'ghcr\.io/screenly-labs/wifi-connect:(\S+)',
+        body,
+    )
+
+    assert tags, f'{template_name} does not run wifi-connect'
+    for tag in tags:
+        assert re.fullmatch(r'\d{4}\.\d{2}\.\d+', tag), (
+            f'{template_name} pins wifi-connect to {tag!r}; it must be an '
+            f'exact CalVer release'
+        )
+
+
+@pytest.mark.parametrize('template_name', COMPOSE_TEMPLATES)
+def test_compose_portal_port_matches_this_module(template_name: str) -> None:
+    body = (REPO_ROOT / template_name).read_text()
+
+    assert f'PORTAL_LISTENING_PORT={wifi_connect.PORTAL_PORT}' in body, (
+        f'{template_name} and wifi_connect.PORTAL_PORT disagree about the '
+        f'portal port; the setup screen would tell users to open the wrong '
+        f'one'
+    )
+
+
+@pytest.mark.parametrize('template_name', COMPOSE_TEMPLATES)
+def test_compose_qr_directory_matches_this_module(
+    template_name: str,
+) -> None:
+    body = (REPO_ROOT / template_name).read_text()
+
+    assert f'WIFI_CONNECT_QR_OUTPUT={wifi_connect.QR_DIRECTORY}' in body, (
+        f'{template_name} writes the join QR somewhere this container does '
+        f'not read it from'
+    )
+
+
+@pytest.mark.parametrize('template_name', COMPOSE_TEMPLATES)
+def test_compose_does_not_override_the_portal_gateway(
+    template_name: str,
+) -> None:
+    """``PORTAL_GATEWAY`` is the liveness signal, so it stays default.
+
+    Overriding it in a template without updating ``PORTAL_GATEWAY``
+    here would leave the device unable to tell that its own portal is
+    running.
+    """
+    body = (REPO_ROOT / template_name).read_text()
+
+    assert 'PORTAL_GATEWAY=' not in body
+
+
+@pytest.mark.parametrize('template_name', COMPOSE_TEMPLATES)
+def test_compose_bounds_the_portal_with_an_activity_timeout(
+    template_name: str,
+) -> None:
+    """The safety valve against a misreported connectivity state.
+
+    ``ACTIVITY_TIMEOUT=0`` means "never give up", which on a device
+    whose NetworkManager connectivity check is blocked turns a false
+    offline reading into a permanent outage.
+    """
+    body = (REPO_ROOT / template_name).read_text()
+    timeouts = re.findall(r'ACTIVITY_TIMEOUT=(\d+)', body)
+
+    assert timeouts, f'{template_name} does not bound the portal'
+    for timeout in timeouts:
+        assert int(timeout) > 0
+
+
+@pytest.mark.parametrize('template_name', COMPOSE_TEMPLATES)
+def test_compose_does_not_restart_wifi_connect(template_name: str) -> None:
+    """One run per boot, never a loop.
+
+    wifi-connect exits 0 as soon as it finds the device online, so a
+    restart policy re-runs it forever — and re-raises the access point
+    every ACTIVITY_TIMEOUT on a device whose connectivity check is
+    blocked. ansible's anthias-wifi-connect.service is what starts the
+    one run each boot gets.
+    """
+    body = (REPO_ROOT / template_name).read_text()
+    service = body.split('anthias-wifi-connect:', 1)[1]
+    # Up to the start of the next service / top-level key.
+    service = re.split(r'\n(?=\S|  \S+:\n)', service)[0]
+
+    assert re.search(r'restart:\s*"no"', service), (
+        f'{template_name} gives anthias-wifi-connect a restart policy'
+    )
+
+
+UNIT_PATH = 'ansible/roles/network/templates/anthias-wifi-connect.service'
+
+
+def test_the_systemd_unit_starts_the_compose_container() -> None:
+    """The unit and the compose service must name the same container."""
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert 'docker start --attach anthias-wifi-connect' in unit
+    assert (
+        'anthias-wifi-connect:'
+        in (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    )
+
+
+def test_the_systemd_unit_does_not_time_out_a_portal_session() -> None:
+    """``Type=oneshot`` here would kill the portal after 90 seconds.
+
+    A session legitimately runs to ACTIVITY_TIMEOUT, which is far
+    longer than DefaultTimeoutStartSec — and a oneshot unit is killed
+    at that bound, mid-setup, every time.
+    """
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert re.search(r'^Type=exec$', unit, re.MULTILINE)
+    assert not re.search(r'^Type=oneshot$', unit, re.MULTILINE)
+
+
+def test_stopping_the_unit_brings_the_access_point_down() -> None:
+    """SIGTERM to ``docker start --attach`` only detaches the CLI.
+
+    Without an explicit stop, ``systemctl stop`` would leave the
+    access point broadcasting with nothing supervising it.
+    """
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert 'docker stop' in unit
+    assert re.search(r'^ExecStop=', unit, re.MULTILINE)
+
+
+def test_a_wired_device_is_not_a_failed_unit() -> None:
+    """Exit 3 is "no WiFi adapter" — every ethernet-only x86 box."""
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    statuses = re.search(r'^SuccessExitStatus=(.+)$', unit, re.MULTILINE)
+
+    assert statuses is not None
+    assert '3' in statuses.group(1).split()
+
+
+def test_the_unit_does_not_restart_the_portal() -> None:
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    assert re.search(r'^Restart=no$', unit, re.MULTILINE)
+
+
+def test_upgrade_script_no_longer_reaps_the_live_container() -> None:
+    """``docker rm -f`` on the running portal would tear it down.
+
+    anthias-wifi-connect is a current compose service again; only the
+    pre-rebrand name belongs in the legacy sweep.
+    """
+    body = (REPO_ROOT / 'bin/upgrade_containers.sh').read_text()
+    rm_command = body.split('docker rm -f', 1)[1].split('>/dev/null', 1)[0]
+
+    assert 'srly-ose-wifi-connect' in rm_command
+    assert 'anthias-wifi-connect' not in rm_command.replace(
+        'srly-ose-wifi-connect', ''
+    )
+
+
+# ---------------------------------------------------------------------------
+# The /hotspot page
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def client() -> Client:
+    return Client()
+
+
+@pytest.mark.django_db
+def test_hotspot_page_shows_the_credentials_while_setup_runs(
+    client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        'anthias_server.app.views.wifi_setup_state',
+        lambda: {
+            'active': True,
+            'ssid': 'Anthias Setup',
+            'passphrase': 'hunter2hunter2',
+            'portal_url': wifi_connect.PORTAL_URL,
+        },
+    )
+    monkeypatch.setattr(
+        'anthias_server.app.views.read_qr_svg',
+        lambda: '<svg id="join-qr"></svg>',
+    )
+
+    response = client.get('/hotspot/')
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'Anthias Setup' in body
+    assert 'hunter2hunter2' in body
+    assert wifi_connect.PORTAL_URL in body
+    # Inlined, not linked: the page has to render on a device with no
+    # working network, so it gets one request.
+    assert '<svg id="join-qr"></svg>' in body
+
+
+@pytest.mark.django_db
+def test_hotspot_page_withholds_the_passphrase_when_idle(
+    client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An online device must not serve a setup passphrase unauth'd."""
+    monkeypatch.setattr(
+        'anthias_server.app.views.wifi_setup_state',
+        lambda: {
+            'active': False,
+            'ssid': None,
+            'passphrase': None,
+            'portal_url': wifi_connect.PORTAL_URL,
+        },
+    )
+    monkeypatch.setattr(
+        'anthias_server.app.views.read_qr_svg',
+        lambda: (_ for _ in ()).throw(
+            AssertionError('must not read the QR when setup is not running')
+        ),
+    )
+
+    response = client.get('/hotspot/')
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'Nothing to set up' in body
+
+
+@pytest.mark.django_db
+def test_hotspot_page_needs_no_credentials(
+    client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The viewer has no session, and this is the screen it must show."""
+    monkeypatch.setattr(
+        'anthias_server.app.views.wifi_setup_state',
+        lambda: {
+            'active': False,
+            'ssid': None,
+            'passphrase': None,
+            'portal_url': wifi_connect.PORTAL_URL,
+        },
+    )
+
+    response = client.get('/hotspot/')
+
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# The viewer side: deciding when to put the setup screen on the display
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def viewer_wifi_state() -> Iterator[None]:
+    """Reset the viewer's wifi-setup globals around each test."""
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = False
+    viewer._wifi_setup_logged = False
+    yield
+    viewer._wifi_setup_active = False
+    viewer._wifi_setup_logged = False
+
+
+def test_viewer_goes_active_when_the_server_says_so(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        return_value=mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={'active': True}),
+        ),
+    ):
+        viewer._poll_wifi_setup_once()
+
+    assert viewer._wifi_setup_active
+
+
+def test_viewer_leaves_setup_when_the_portal_comes_down(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+    viewer._wifi_setup_logged = True
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        return_value=mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={'active': False}),
+        ),
+    ):
+        viewer._poll_wifi_setup_once()
+
+    assert not viewer._wifi_setup_active
+    # Re-armed, so a later portal logs its own edge.
+    assert not viewer._wifi_setup_logged
+
+
+def test_an_unreachable_server_does_not_strand_the_setup_screen(
+    viewer_wifi_state: None,
+) -> None:
+    """Failing towards playback is the safe direction.
+
+    A restarting anthias-server must not leave a device showing setup
+    instructions for an access point that stopped broadcasting ten
+    minutes ago.
+    """
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        side_effect=requests.exceptions.ConnectionError(),
+    ):
+        viewer._poll_wifi_setup_once()
+
+    assert not viewer._wifi_setup_active
+
+
+def test_a_non_json_response_does_not_strand_the_setup_screen(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        return_value=mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(side_effect=ValueError('not json')),
+        ),
+    ):
+        viewer._poll_wifi_setup_once()
+
+    assert not viewer._wifi_setup_active
+
+
+def test_setup_screen_preempts_the_playlist(
+    viewer_wifi_state: None,
+) -> None:
+    """The scheduler must not even be asked while setup is running.
+
+    A device in setup has no network, so anything it would play is
+    either stale or unreachable — and the passphrase on this screen is
+    the only way out of that state.
+    """
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.side_effect = AssertionError(
+        'the playlist must not be consulted during WiFi setup'
+    )
+
+    with (
+        mock.patch.object(viewer, 'view_webpage') as view_webpage,
+        mock.patch.object(viewer, 'sleep'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+    ):
+        viewer.asset_loop(scheduler)
+
+    view_webpage.assert_called_once_with(viewer.HOTSPOT_PAGE_URL)
+
+
+def test_playlist_runs_normally_when_setup_is_not_active(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = None
+
+    with (
+        mock.patch.object(viewer, 'view_webpage') as view_webpage,
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch.object(viewer, 'get_skip_event'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+    ):
+        viewer.asset_loop(scheduler)
+
+    scheduler.get_next_asset.assert_called_once()
+    view_webpage.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# The refresh the WiFi-setup poll drives on the host
+# ---------------------------------------------------------------------------
+#
+# This poll runs for the whole life of an offline device, unlike the
+# splash's, which runs for 60 seconds at boot. Reusing the splash's
+# refresh would put host_agent inside a retrying outbound HTTP call for
+# ~10 of every 15 seconds -- and host_agent handles reboot/shutdown on
+# that same single thread.
+
+
+def test_wifi_setup_poll_asks_for_the_probe_free_refresh() -> None:
+    from anthias_server.api.views import v2 as v2_views
+
+    v2_views.r.delete(v2_views._WIFI_SETUP_REFRESH_PENDING_KEY)
+
+    with (
+        mock.patch(
+            'anthias_server.api.views.v2.is_balena_app', return_value=False
+        ),
+        mock.patch.object(v2_views.r, 'get', return_value=None),
+        mock.patch.object(v2_views.r, 'publish') as publish,
+    ):
+        v2_views.wifi_setup_state()
+
+    publish.assert_called_once_with('hostcmd', 'set_ip_addresses_fast')
+
+
+def test_splash_poll_still_asks_for_the_probing_refresh() -> None:
+    """The splash's own behaviour must be untouched by the above."""
+    from anthias_server.api.views import v2 as v2_views
+
+    v2_views.r.delete(v2_views._IP_REFRESH_PENDING_KEY)
+
+    with (
+        mock.patch(
+            'anthias_server.api.views.v2.is_balena_app', return_value=False
+        ),
+        mock.patch.object(v2_views.r, 'get', return_value=None),
+        mock.patch.object(v2_views.r, 'publish') as publish,
+    ):
+        v2_views._resolve_node_ip()
+
+    publish.assert_called_once_with('hostcmd', 'set_ip_addresses')
+
+
+def test_the_two_refreshes_do_not_share_a_debounce() -> None:
+    """One poll must not be able to starve the other."""
+    from anthias_server.api.views import v2 as v2_views
+
+    assert (
+        v2_views._WIFI_SETUP_REFRESH_PENDING_KEY
+        != v2_views._IP_REFRESH_PENDING_KEY
+    )
+
+
+def test_the_fast_host_refresh_does_no_internet_probe() -> None:
+    """host_agent's single thread must not sit in an HTTP retry loop."""
+    from anthias_host_agent import __main__ as host_agent
+
+    with (
+        mock.patch.object(host_agent, 'redis') as fake_redis,
+        mock.patch.object(
+            host_agent,
+            'get_ip_addresses',
+            return_value=[wifi_connect.PORTAL_GATEWAY],
+        ),
+        mock.patch(
+            'anthias_host_agent.__main__.requests.get',
+            side_effect=AssertionError('must not probe the internet'),
+        ),
+    ):
+        host_agent.set_ip_addresses(probe_internet=False)
+
+    rdb = fake_redis.Redis.return_value
+    rdb.set.assert_any_call('ip_addresses_ready', 'true')
+    rdb.set.assert_any_call(
+        'ip_addresses', f'["{wifi_connect.PORTAL_GATEWAY}"]'
+    )
+
+
+def test_the_fast_host_refresh_is_reachable_as_a_host_command() -> None:
+    """The server publishes this name; host_agent must recognise it."""
+    from anthias_host_agent import __main__ as host_agent
+
+    assert 'set_ip_addresses_fast' in host_agent.CMD_TO_ARGV

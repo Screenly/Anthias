@@ -201,6 +201,87 @@ services:
       options:
         tag: anthias-celery
 
+  # Captive-portal WiFi provisioning — Screenly-Labs/wifi-connect, a
+  # ground-up replacement for the balena-os tool Anthias shipped until
+  # 2026.04 (that one had no ARMv6 binary and a `set -e` bug that made
+  # its captive-portal branch unreachable; see "chore: drop wifi-connect
+  # service end-to-end"). Upstream publishes a multi-arch image, so
+  # there is nothing for Anthias to build: the tag is pinned to an exact
+  # CalVer release rather than `2026.10` or `latest` so an upstream patch
+  # can never land on a fleet without a deliberate bump here.
+  anthias-wifi-connect:
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.0
+    # The documented exception to "never network_mode: host" in
+    # CLAUDE.md, and the only one. That rule exists so host-only facts
+    # (IPs, MACs, interfaces) are routed through host_agent -> Redis
+    # instead of punching a hole in bridge isolation to read them, and
+    # every Anthias service still obeys it. This service is not reading
+    # a host fact: it is *serving DHCP*, an L2 broadcast protocol that
+    # does not survive Docker's DNAT, and pinning that server to the
+    # WiFi interface — so it cannot answer a lease request from the
+    # customer's ethernet LAN — needs an interface that exists in the
+    # namespace. There is no bridge-side equivalent to route through.
+    #
+    # The exception is bounded: nothing Anthias wrote runs in this
+    # namespace. The image is upstream's, built FROM scratch, and
+    # Anthias's own detection of it goes the ordinary way — through
+    # the address resolver the splash page already uses.
+    network_mode: host
+    # The whole flow is NetworkManager calls over the system bus. Root
+    # inside the container is what makes them pass NM's authorization
+    # (NM short-circuits uid 0 before polkit), so no `privileged: true`
+    # is needed — the default capability set already carries
+    # CAP_NET_BIND_SERVICE for udp/53 and udp/67.
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+      - PORTAL_SSID=Anthias Setup
+      - WIFI_CONNECT_BRAND_NAME=Anthias
+      # NOT port 80: anthias-server publishes 80:8080 on the host, so
+      # binding the portal there fails outright (upstream reports it as
+      # PortalUnavailable). 8000 matches the port the previous Anthias
+      # integration used. The cost is that an OS connectivity probe,
+      # which always goes to port 80, lands on the Anthias admin UI
+      # instead of the portal; the portal is reached through DHCP option
+      # 114 (RFC 8910), which iOS 14+, Android 11+, macOS and Windows 11
+      # all honour, and through the address printed on the setup screen.
+      - PORTAL_LISTENING_PORT=8000
+      # Where the join QR lands for /hotspot to render. resin-data is
+      # mounted at /data in anthias-server too, so the file the portal
+      # writes here is the file the page reads.
+      - WIFI_CONNECT_QR_OUTPUT=/data/hotspot
+      # The same QR also goes to stdout as Unicode blocks, which is a
+      # genuine fallback on a plain console but is unreadable once
+      # journald has line-wrapped it, and it is pure noise in
+      # `docker logs`. The SSID and passphrase are still logged as
+      # text, which is the path an operator actually uses.
+      - WIFI_CONNECT_NO_QR_STDOUT=true
+      # Bring the portal down after 15 minutes with no successful join
+      # and exit. This is the safety valve: if NetworkManager ever
+      # misreports a working network as offline (its connectivity check
+      # needs to reach network-test.debian.org, which a filtered
+      # corporate LAN may block), the portal has taken a working device
+      # off the air. A finite timeout bounds that to one window instead
+      # of forever.
+      - ACTIVITY_TIMEOUT=900
+    # Deliberately NOT `restart: always`. wifi-connect is a one-shot:
+    # it exits 0 the moment it finds the device online, so a restart
+    # policy turns into a container start every 60s forever, and — far
+    # worse — it would re-raise the portal every 15 minutes on a device
+    # whose connectivity check is blocked, which is an outage that never
+    # ends. One run per boot is upstream's own systemd semantic;
+    # anthias-wifi-connect.service (ansible network role) is what
+    # starts that run on each boot.
+    restart: "no"
+    volumes:
+      - resin-data:/data
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /run/dbus/system_bus_socket
+    logging:
+      driver: journald
+      options:
+        tag: anthias-wifi-connect
+
   redis:
     image: ghcr.io/screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:

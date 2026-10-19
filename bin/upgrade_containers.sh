@@ -107,8 +107,12 @@ fi
 
 # Drop legacy containers no longer in the compose file:
 #   * nginx / websocket — folded into anthias-server (uvicorn).
-#   * wifi-connect      — service removed; nmcli/nmtui is the supported
-#                          path now.
+#   * srly-ose-wifi-connect — the pre-rebrand container for the old
+#     balena-os wifi-connect integration. The current
+#     anthias-wifi-connect container runs the Screenly-Labs tool and is
+#     defined in the compose file, so it must NOT be listed here: `up
+#     -d` would recreate it on every upgrade and the `docker rm -f`
+#     above it would tear down a portal that happens to be live.
 #   * anthias-celery / srly-ose-celery containers from the era when
 #     celery had its own image. The new compose file recreates the
 #     anthias-celery container against ghcr.io/screenly/anthias-server,
@@ -121,7 +125,7 @@ fi
 # Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
-    anthias-nginx anthias-websocket anthias-wifi-connect \
+    anthias-nginx anthias-websocket \
     srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
     anthias-celery srly-ose-celery \
     srly-ose-redis \
