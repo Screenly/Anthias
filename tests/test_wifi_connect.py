@@ -35,8 +35,15 @@ _FIXTURE_IPV4 = '192.168.1.42'  # NOSONAR
 _GATEWAY_PREFIX_TRAP = '192.168.42.10'  # NOSONAR
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-COMPOSE_TEMPLATES = (
-    'docker-compose.yml.tmpl',
+
+# Only the Debian/Raspberry Pi OS template ships the portal. The
+# balena templates deliberately do not — there is no systemd there to
+# hang the ExecCondition gate on, and an ungated access point across a
+# fleet is not something to ship untested. Asserted by
+# test_balena_does_not_ship_an_ungated_portal.
+COMPOSE_TEMPLATES = ('docker-compose.yml.tmpl',)
+
+BALENA_TEMPLATES = (
     'docker-compose.balena.yml.tmpl',
     'docker-compose.balena.dev.yml.tmpl',
 )
@@ -936,3 +943,123 @@ def test_the_gate_retries_before_declaring_a_device_offline() -> None:
 
     assert attempts is not None
     assert int(attempts.group(1)) > 1
+
+
+# ---------------------------------------------------------------------------
+# The gate has to be the ONLY way the portal starts
+# ---------------------------------------------------------------------------
+#
+# `restart: "no"` governs restart-on-exit, not the initial start, so a
+# plain `docker compose up -d` would walk straight past the
+# ExecCondition and raise an access point on an online device — on
+# every upgrade.
+
+
+def test_the_portal_service_is_behind_a_compose_profile() -> None:
+    body = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    service = body.split('anthias-wifi-connect:', 1)[1]
+    service = re.split(r'\n(?=\S|  \S+:\n)', service)[0]
+
+    assert re.search(r'^\s+profiles:', service, re.MULTILINE), (
+        'anthias-wifi-connect has no compose profile, so `docker compose '
+        'up -d` starts it without the ExecCondition gate'
+    )
+
+
+def test_the_upgrade_script_creates_it_without_starting_it() -> None:
+    """The unit uses `docker start`, so the container must exist."""
+    body = (REPO_ROOT / 'bin/upgrade_containers.sh').read_text()
+
+    assert '--profile wifi-connect' in body
+    assert '--no-start anthias-wifi-connect' in body
+
+
+def test_balena_does_not_ship_an_ungated_portal() -> None:
+    """balena has no systemd to hang the ExecCondition on.
+
+    Its supervisor starts every service on every boot and release
+    apply, so the container being present at all would mean an
+    ungated access point across a fleet.
+    """
+    for template_name in BALENA_TEMPLATES:
+        body = (REPO_ROOT / template_name).read_text()
+        services = re.findall(r'^  ([a-z0-9-]+):$', body, re.MULTILINE)
+
+        assert 'anthias-wifi-connect' not in services, (
+            f'{template_name} starts wifi-connect with no gate in front of it'
+        )
+
+
+def test_a_timed_out_portal_is_not_a_failed_unit() -> None:
+    """Upstream's Outcome::TimedOut is 6, and it is the normal ending.
+
+    ACTIVITY_TIMEOUT elapsing with nobody completing setup is what
+    happens every time a screen is left alone; a unit that goes
+    `failed` each time teaches operators to ignore its state.
+    """
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+    statuses = re.search(r'^SuccessExitStatus=(.+)$', unit, re.MULTILINE)
+
+    assert statuses is not None
+    assert '6' in statuses.group(1).split()
+
+
+def test_a_non_object_json_body_does_not_strand_the_display(
+    viewer_wifi_state: None,
+) -> None:
+    """A 200 carrying a list parses fine, then AttributeErrors on .get."""
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        return_value=mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value=['not', 'an', 'object']),
+        ),
+    ):
+        viewer._poll_wifi_setup_once()
+
+    assert not viewer._wifi_setup_active
+
+
+def test_the_unit_and_compose_agree_on_the_container_name() -> None:
+    """Compose would otherwise name it `anthias-anthias-wifi-connect-1`.
+
+    The unit starts the portal with `docker start <name>`, so a
+    mismatch means "No such container" and a portal that never
+    appears. Invisible in testing until a device is genuinely
+    offline, because every other path stops at the ExecCondition
+    skip before `docker start` is reached — which is exactly how it
+    got shipped into review.
+    """
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    unit = (REPO_ROOT / UNIT_PATH).read_text()
+
+    declared = re.search(
+        r'^\s+container_name:\s*(\S+)$', compose, re.MULTILINE
+    )
+
+    assert declared is not None, (
+        'anthias-wifi-connect has no container_name, so compose will '
+        'generate one the systemd unit cannot address'
+    )
+    name = declared.group(1)
+    assert f'docker start --attach {name}' in unit
+    assert f'docker stop --timeout 20 {name}' in unit
+
+
+def test_the_upgrade_script_precreates_the_named_container() -> None:
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    declared = re.search(
+        r'^\s+container_name:\s*(\S+)$', compose, re.MULTILINE
+    )
+    assert declared is not None
+    name = declared.group(1)
+    body = (REPO_ROOT / 'bin/upgrade_containers.sh').read_text()
+
+    # The pre-create addresses the compose SERVICE (profiles key off
+    # service names); the unit addresses the CONTAINER. Both happen to
+    # be the same string here, which is the point of pinning it.
+    assert f'--no-start {name}' in body

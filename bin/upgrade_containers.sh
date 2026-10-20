@@ -227,6 +227,26 @@ fi
 # which is confusing on a `docker ps` audit later.
 sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
 
+# anthias-wifi-connect sits behind a compose profile, so the `up -d`
+# above deliberately skips it: starting the captive portal is the
+# systemd unit's job, and only after its ExecCondition has confirmed
+# the device is actually offline. Running it from here would raise an
+# access point on every upgrade, which on a WiFi-connected screen
+# means losing the network it is managed over.
+#
+# But the unit starts it with `docker start`, so the container has to
+# EXIST. `--no-start` creates it (and recreates it when the image or
+# the service definition changed) without running it. Naming the
+# service explicitly is what activates its profile.
+#
+# Best effort: a device with no wifi-connect service in its compose
+# file (MANAGE_NETWORK=No, or a partial upgrade) must not fail the
+# whole upgrade here.
+sudo -E docker compose "${COMPOSE_FILES[@]}" --profile wifi-connect \
+    up -d --no-start anthias-wifi-connect || \
+    echo "Could not pre-create anthias-wifi-connect; WiFi setup will be" \
+         "unavailable until the next upgrade."
+
 # Drop the images the release we just replaced was running on. Deliberately
 # the last thing we do, and only once the new stack is up, so a pull or a
 # start that failed above still leaves the previous images to fall back on.

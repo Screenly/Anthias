@@ -16,6 +16,14 @@ The tool that does this is
 [wifi-connect](https://github.com/Screenly-Labs/wifi-connect), which runs as
 the `anthias-wifi-connect` container alongside the rest of Anthias.
 
+> **Note**
+>
+> This is available on the Raspberry Pi OS / Debian installation path. It is
+> not enabled on balena deployments yet — the check that stops a screen
+> raising a setup network when it doesn't need one is a systemd unit, which
+> balena doesn't give us, and shipping it ungated to a fleet isn't something
+> to do untested.
+
 ## What you'll see
 
 When a screen can't reach a network, it puts a setup page on the display

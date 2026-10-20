@@ -52,10 +52,14 @@ AP_PROFILE_ID="wifi-connect-portal"
 PROBE_URL="https://1.1.1.1"  # NOSONAR
 
 # A boot can reach this point before DHCP or WiFi association has
-# finished, even behind NetworkManager-wait-online. Re-check across
-# ~30s rather than declaring a device unconfigured because we asked
-# early — a false "needs setup" costs a needless access point, which
-# is the whole thing this guards against.
+# finished, even behind NetworkManager-wait-online. Re-check rather
+# than declaring a device unconfigured because we asked early — a
+# false "needs setup" costs a needless access point, which is the
+# whole thing this guards against.
+#
+# 6 attempts with 5s between them is a 25-second window, not 30: the
+# sleep falls BETWEEN attempts, so there are five of them, and the
+# probe timeout adds to that only when it actually times out.
 ATTEMPTS=6
 INTERVAL=5
 

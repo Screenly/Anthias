@@ -3190,7 +3190,13 @@ def _poll_wifi_setup_once() -> None:
     try:
         response = requests.get(WIFI_SETUP_STATUS_URL, timeout=5)
         response.raise_for_status()
-        active = bool(response.json().get('active'))
+        payload = response.json()
+        # Not `payload.get(...)` directly: a 200 carrying a list or a
+        # bare string parses fine and then raises AttributeError on
+        # .get, which escapes this handler and leaves the previous
+        # value in place — stranding the display on a setup screen,
+        # the one outcome this function exists to prevent.
+        active = isinstance(payload, dict) and bool(payload.get('active'))
     except (requests.exceptions.RequestException, ValueError):
         # A server that is restarting, or a body that isn't JSON,
         # must not strand the display on a setup screen for a portal

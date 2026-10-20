@@ -211,6 +211,18 @@ services:
   # can never land on a fleet without a deliberate bump here.
   anthias-wifi-connect:
     image: ghcr.io/screenly-labs/wifi-connect:2026.10.0
+    # Pinned, because three other things address this container BY
+    # NAME and compose's generated name is `anthias-anthias-wifi-
+    # connect-1`: the systemd unit's `docker start`, the
+    # `docker logs anthias-wifi-connect` in the docs, and the
+    # pre-create in upgrade_containers.sh. Without this the unit fails
+    # with "No such container" and the portal never starts — which is
+    # invisible until a device is actually offline, because every
+    # other code path ends at the ExecCondition skip.
+    #
+    # Also the name the pre-rebrand container used, so journald tags
+    # and operator muscle memory carry over.
+    container_name: anthias-wifi-connect
     # The documented exception to "never network_mode: host" in
     # CLAUDE.md, and the only one. That rule exists so host-only facts
     # (IPs, MACs, interfaces) are routed through host_agent -> Redis
@@ -272,6 +284,21 @@ services:
     # anthias-wifi-connect.service (ansible network role) is what
     # starts that run on each boot.
     restart: "no"
+    # The safety gate lives in anthias-wifi-connect.service's
+    # ExecCondition, and a plain `docker compose up -d` would walk
+    # straight past it: `restart: "no"` governs restart-on-exit, not
+    # the initial start. Without this profile, every run of
+    # upgrade_containers.sh would raise an access point on a device
+    # that is online — losing a WiFi-connected screen its network for
+    # the length of a portal session, on every upgrade.
+    #
+    # A profiled service is skipped by `up -d` entirely: not started,
+    # not created, and NOT removed by `--remove-orphans` once it
+    # exists (verified against docker compose v5.6). So
+    # upgrade_containers.sh creates it stopped, by name, and the
+    # systemd unit is the only thing that ever starts it.
+    profiles:
+      - wifi-connect
     volumes:
       - resin-data:/data
       - type: bind

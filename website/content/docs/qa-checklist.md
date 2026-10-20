@@ -59,7 +59,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 
 Needs a board with a WiFi adapter, installed with the "manage the network" prompt enabled. See [WiFi Setup](/docs/wifi-setup/).
 
-1. On a device that is already online, reboot and confirm that **no** setup network appears and the display goes straight to the splash page. `journalctl -u anthias-wifi-connect.service -b` should show the run exiting because the device is online.
+1. On a device that is already online, reboot and confirm that **no** setup network appears and the display goes straight to the splash page. `journalctl -u anthias-wifi-connect.service -b` should show `Skipped due to 'exec-condition'` — the check refuses before wifi-connect runs at all, so there is no container log to read in this case.
 2. Forget the device's saved WiFi (`nmcli connection delete <name>`), unplug Ethernet, and reboot. Within about a minute the display should switch to the WiFi setup page showing a network name, a password, and a QR code.
 3. Scan the QR code with a phone. It should join **Anthias Setup** without you typing the password.
 4. Open `http://192.168.42.1:8000` on the phone, pick a network, and enter its password. The device should join it, the setup network should disappear, and the display should go back to the playlist (or standby) on its own, with no reboot.
@@ -69,3 +69,4 @@ Needs a board with a WiFi adapter, installed with the "manage the network" promp
 8. Leave the setup page up for 15 minutes without completing setup. The setup network should come down by itself and the device should return to normal — and then come back a few minutes later, because the check repeats. `systemctl list-timers anthias-wifi-connect.timer` shows when the next one is due.
 9. On a device whose WiFi *is* connected, run `sudo systemctl start anthias-wifi-connect.service` by hand. It must skip with `Skipped due to 'exec-condition'` and log *"WiFi is already configured and associated"* — raising an access point here would tear down the working WiFi.
 10. Same again on a device with only a wired connection: it must skip with *"a wired network is connected"*.
+11. Run `bin/upgrade_containers.sh` on an online device with WiFi configured. The upgrade must NOT raise a setup network — `anthias-wifi-connect` should end up `Created`, never `Up`. This is the path that bypasses the systemd gate if the compose profile is ever dropped.

@@ -64,11 +64,21 @@ ExecStop=-/usr/bin/docker stop --timeout 20 anthias-wifi-connect
 # leaving the radio in AP mode would strand the device), and that
 # teardown is a NetworkManager round trip.
 TimeoutStopSec=30s
-# Exit codes that mean "nothing for this tool to do here", not failure:
+# Exit codes that are not failures:
 #   3 — no WiFi device (every ethernet-only x86 box)
 #   4 — the adapter cannot do AP mode, is unmanaged, or is rfkilled
-# Without these a wired device shows a failed unit on every boot.
-SuccessExitStatus=0 3 4
+#   6 — Outcome::TimedOut: ACTIVITY_TIMEOUT elapsed with nobody
+#       completing setup. That is the ORDINARY end of an unattended
+#       portal session, not an error — the timer will offer another
+#       one. Without it the unit lands in `failed` after every
+#       unattended session, which is both wrong and the fastest way
+#       to teach an operator to ignore this unit's state.
+#
+# Upstream also returns 6 for PortalUnavailable (something else holds
+# the port). That genuinely is a failure and this masks it at the unit
+# level; it is distinguishable in `docker logs anthias-wifi-connect`,
+# and the alternative — crying wolf on every timeout — hides more.
+SuccessExitStatus=0 3 4 6
 Restart=no
 
 # Logging
