@@ -16,6 +16,8 @@ import platform
 import secrets
 import socket
 import sys
+import threading
+import time
 import zoneinfo
 from collections.abc import Iterator
 from os import getenv
@@ -159,6 +161,141 @@ def _is_late_soft_time_limit(exc: BaseException) -> bool:
     )
 
 
+# Per-issue event throttle.
+#
+# The project's Sentry quota is finite and is being spent faster than
+# it replenishes, which leaves the project blind for most of each
+# billing period: errors stop being accepted, and an issue's
+# ``lastSeen`` freezes at the day the allowance ran out. "It has not
+# recurred since" then means nothing, which is the part that hurts —
+# a regression lands and nothing records it.
+#
+# What spends the quota is not breadth but depth. A device stuck in a
+# retry loop repeats one error thousands of times while the rest of
+# the fleet contributes a handful each: the worst offender observed
+# in a fully recorded day was one board producing 1,761 of an issue's
+# 1,762 events, and the second was another board producing 1,063 of
+# 1,093. The first copy of that error is worth paying for and so is
+# knowing how many devices hit it; the thousandth copy from the same
+# board is what crowds out every other issue on the fleet.
+#
+# So each process counts occurrences per issue over a one-hour window
+# and keeps the 1st, 2nd, 4th, 8th, 16th, ..., dropping what falls
+# between two powers of two. A loop costs O(log n) events instead of
+# n — 1,761 becomes 11 — and the magnitude survives the thinning,
+# because each kept event carries its true running count in the
+# ``throttle.occurrence`` tag. Every device still reports every
+# distinct issue it hits, so no issue can be hidden by this; only
+# repetition of one already reported is.
+_SENTRY_THROTTLE_WINDOW_SECONDS = 3600
+# Bounds the bookkeeping on a long-lived process. A process producing
+# more than this many *distinct* issues within one window has larger
+# problems than its quota, and the overflow path only forgets windows,
+# which can let more events through but never fewer.
+_SENTRY_THROTTLE_MAX_KEYS = 512
+
+_sentry_throttle_lock = threading.Lock()
+# key -> (window started at, occurrences counted in that window)
+_sentry_throttle_state: dict[tuple[str, ...], tuple[float, int]] = {}
+
+
+def _throttle_key(event: Event, hint: Hint) -> tuple[str, ...] | None:
+    """A stand-in for the Sentry issue this event will group into.
+
+    Sentry fingerprints server-side and the SDK cannot ask it, so this
+    approximates the grouping with what grouping itself keys on: the
+    exception type plus the innermost Anthias frame (falling back to
+    the innermost frame of any kind when our code appears nowhere), or
+    for a logging-integration event the logger and the *unformatted*
+    message template. Using the template is what keeps "Timed out
+    waiting for UP message from <ForkPoolWorker-26>" and the same line
+    for worker 27 a single key rather than one per worker.
+
+    Returns ``None`` when neither shape fits, which leaves the event
+    unthrottled: a key coarse enough to merge unrelated issues could
+    drop a report that has no duplicate anywhere, and this filter must
+    never be the reason a real bug goes unseen.
+    """
+    exc_info = hint.get('exc_info')
+    if exc_info:
+        exc_type, _, tb = exc_info
+        innermost = ''
+        anthias_frame = ''
+        while tb is not None:
+            module = tb.tb_frame.f_globals.get('__name__', '')
+            innermost = f'{module}:{tb.tb_frame.f_code.co_name}'
+            # Prefer the innermost frame of *ours*: the third-party
+            # frames below it (django's cursor plumbing, redis' socket
+            # read) are shared by otherwise unrelated failures.
+            if module.startswith('anthias_'):
+                anthias_frame = innermost
+            tb = tb.tb_next
+        return (
+            'exc',
+            exc_type.__module__,
+            exc_type.__qualname__,
+            anthias_frame or innermost,
+        )
+    record = hint.get('log_record')
+    if record is not None:
+        return ('log', record.name, str(record.msg)[:200])
+    return None
+
+
+def _evict_throttle_keys(now: float) -> None:
+    """Expired windows first, then the oldest, until back under the cap.
+
+    The caller holds ``_sentry_throttle_lock``.
+    """
+    for key, (window_start, _) in list(_sentry_throttle_state.items()):
+        if now - window_start >= _SENTRY_THROTTLE_WINDOW_SECONDS:
+            del _sentry_throttle_state[key]
+    excess = len(_sentry_throttle_state) - _SENTRY_THROTTLE_MAX_KEYS
+    if excess <= 0:
+        return
+    by_age = sorted(
+        _sentry_throttle_state,
+        key=lambda key: _sentry_throttle_state[key][0],
+    )
+    for key in by_age[:excess]:
+        del _sentry_throttle_state[key]
+
+
+def _throttled(event: Event, hint: Hint) -> bool:
+    """Whether this event is a suppressed repeat; counts it either way.
+
+    Occurrences 1, 2, 4, 8, ... within the window survive; the ones in
+    between are dropped. A survivor past the first is tagged with the
+    running count, so the repetition the throttle removed is still
+    legible on the event that did get through.
+    """
+    key = _throttle_key(event, hint)
+    if key is None:
+        return False
+    # Monotonic: a device that has never had a clock sync can step its
+    # wall clock by years the moment NTP lands, which would otherwise
+    # expire or freeze every window at once.
+    now = time.monotonic()
+    with _sentry_throttle_lock:
+        window_start, count = _sentry_throttle_state.get(key, (now, 0))
+        if now - window_start >= _SENTRY_THROTTLE_WINDOW_SECONDS:
+            window_start, count = now, 0
+        count += 1
+        _sentry_throttle_state[key] = (window_start, count)
+        if len(_sentry_throttle_state) > _SENTRY_THROTTLE_MAX_KEYS:
+            _evict_throttle_keys(now)
+    # ``n & (n - 1)`` is zero exactly on the powers of two.
+    if count & (count - 1):
+        return True
+    if count > 1:
+        tags = event.setdefault('tags', {})
+        # The protocol also allows a list of pairs; the SDK only ever
+        # builds the mapping, so skip the tag rather than guess.
+        if isinstance(tags, dict):
+            tags['throttle.occurrence'] = str(count)
+    return False
+
+
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
     """Drop events that report expected transient states, not bugs.
 
@@ -235,6 +372,12 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         import celery — the viewer imports these settings and its image
         ships no celery. This one rule is applied to the head exception
         only rather than down the chain; see the comment at the check.
+
+    Anything that survives all of the above is a real report, and is
+    then passed through the repetition throttle (``_throttled``),
+    which thins one device's retry loop down to the powers of two so
+    a single looping board cannot spend the fleet's whole monthly
+    quota. That gate runs last, on log-only events too.
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -244,7 +387,7 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
 
     exc_info = hint.get('exc_info')
     if not exc_info:
-        return event
+        return None if _throttled(event, hint) else event
     transient_redis = (
         redis.exceptions.ConnectionError,
         redis.exceptions.TimeoutError,
@@ -277,7 +420,11 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
             or exc_cls.__module__.startswith('yt_dlp.')
         ):
             return None
-    return event
+    # The repetition throttle is the last gate deliberately: noise
+    # dropped above is not a report at all and must not spend a key's
+    # budget, or a loop of filtered redis blips would throttle the one
+    # real error raised alongside it.
+    return None if _throttled(event, hint) else event
 
 
 # celery's consumer, the embedded beat scheduler, and the redis
