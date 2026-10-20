@@ -1,0 +1,37 @@
+/* Anthias branding for the wifi-connect captive portal.
+ *
+ * Served at /brand.css by wifi-connect (--brand-css) and loaded after
+ * its own stylesheet, so this is the last word on the role tokens.
+ *
+ * ROLES ONLY. Upstream's palette.css is explicit that the --c-*
+ * primitives and the markup are not a public surface: a rebrand that
+ * touches them comes adrift the next time the portal's layout changes,
+ * whereas one that only renames roles keeps working. There is nothing
+ * in this file that is not a --color-* role.
+ *
+ * The values are Anthias's own, from
+ * src/anthias_server/app/static/src/tailwind.css, so the page a user
+ * sees on their phone and the setup screen on the display are the same
+ * yellow. Copied rather than imported because the portal is a separate
+ * container with no access to Anthias's static files, and because it is
+ * served to a phone over an access point with no internet.
+ */
+:root {
+  /* --color-sun-400, the Anthias accent. */
+  --color-accent: #ffe11a;
+  --color-accent-hover: #e6cb17;
+  /* Near-black aubergine: yellow needs dark text on it, and this is
+     --color-accent-text from the Anthias token set rather than a plain
+     black, so buttons match the admin UI. */
+  --color-on-accent: #1f002a;
+  --color-focus-ring: rgb(255 225 26 / 0.45);
+}
+
+/* Dark mode keeps the same accent — it is a brand colour, not a
+   surface — but the focus ring is lifted, because the same 45% alpha
+   reads as a smudge against a dark background. */
+:root[data-theme='dark'] {
+  --color-accent: #ffe11a;
+  --color-on-accent: #1f002a;
+  --color-focus-ring: rgb(255 225 26 / 0.6);
+}

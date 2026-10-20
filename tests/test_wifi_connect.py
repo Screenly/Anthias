@@ -1063,3 +1063,81 @@ def test_the_upgrade_script_precreates_the_named_container() -> None:
     # service names); the unit addresses the CONTAINER. Both happen to
     # be the same string here, which is the point of pinning it.
     assert f'--no-start {name}' in body
+
+
+# ---------------------------------------------------------------------------
+# Portal branding
+# ---------------------------------------------------------------------------
+#
+# The page the user opens on their phone is wifi-connect's, not ours. It
+# follows Anthias's accent only because we hand it a stylesheet; nothing
+# else connects the two, so the wiring is worth pinning.
+
+BRAND_CSS_PATH = 'ansible/roles/network/files/wifi-connect-brand.css'
+
+
+def test_the_portal_is_pointed_at_the_anthias_stylesheet() -> None:
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+
+    declared = re.search(r'WIFI_CONNECT_BRAND_CSS=(\S+)', compose)
+
+    assert declared is not None, 'the portal is not branded'
+    # The path has to be inside the bind mount, or the portal exits at
+    # startup with "could not read --brand-css".
+    assert declared.group(1).startswith('/brand/')
+    assert 'target: /brand' in compose
+
+
+def test_ansible_installs_the_stylesheet_where_compose_mounts_it() -> None:
+    tasks = (REPO_ROOT / 'ansible/roles/network/tasks/main.yml').read_text()
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+
+    source = re.search(
+        r'source: (/etc/anthias/\S+)\n\s+target: /brand', compose
+    )
+
+    assert source is not None
+    assert f'dest: {source.group(1)}/' in tasks
+
+
+def test_the_brand_stylesheet_overrides_roles_only() -> None:
+    """Upstream's contract: roles are the seam, primitives are not.
+
+    A rebrand that reaches past the roles into the --c-* primitives or
+    the markup comes adrift the next time the portal's layout changes.
+    """
+    css = (REPO_ROOT / BRAND_CSS_PATH).read_text()
+    declarations = re.findall(r'^\s*(--[a-z0-9-]+)\s*:', css, re.MULTILINE)
+
+    assert declarations, 'no custom properties in the brand stylesheet'
+    for name in declarations:
+        assert name.startswith('--color-'), (
+            f'{name} is not a role token; overriding it couples the '
+            f'rebrand to upstream internals'
+        )
+
+
+def test_the_brand_stylesheet_uses_the_anthias_accent() -> None:
+    """Same yellow as the setup screen on the device's own display."""
+    css = (REPO_ROOT / BRAND_CSS_PATH).read_text().lower()
+    tokens = (
+        (REPO_ROOT / 'src/anthias_server/app/static/src/tailwind.css')
+        .read_text()
+        .lower()
+    )
+
+    assert '#ffe11a' in css
+    # The same value the admin UI's accent resolves to.
+    assert '255 225 26' in tokens
+
+
+def test_branding_requires_the_release_that_implements_it() -> None:
+    """--brand-css landed in 2026.10.1; 2026.10.0 ignores it silently."""
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    tag = re.search(
+        r'ghcr\.io/screenly-labs/wifi-connect:(\d{4}\.\d{2}\.\d+)', compose
+    )
+
+    assert tag is not None
+    major, minor, patch = (int(p) for p in tag.group(1).split('.'))
+    assert (major, minor, patch) >= (2026, 10, 1)

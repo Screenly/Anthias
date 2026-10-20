@@ -210,7 +210,7 @@ services:
   # CalVer release rather than `2026.10` or `latest` so an upstream patch
   # can never land on a fleet without a deliberate bump here.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.0
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.1
     # Pinned, because three other things address this container BY
     # NAME and compose's generated name is `anthias-anthias-wifi-
     # connect-1`: the systemd unit's `docker start`, the
@@ -248,6 +248,12 @@ services:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
       - PORTAL_SSID=Anthias Setup
       - WIFI_CONNECT_BRAND_NAME=Anthias
+      # Themes the portal the user opens on their phone in Anthias
+      # colours. Without it the page says Anthias and looks like
+      # upstream's default blue. The file overrides upstream's role
+      # tokens only — see the header in it. New in wifi-connect
+      # 2026.10.1; earlier images ignore the variable.
+      - WIFI_CONNECT_BRAND_CSS=/brand/wifi-connect-brand.css
       # NOT port 80: anthias-server publishes 80:8080 on the host, so
       # binding the portal there fails outright (upstream reports it as
       # PortalUnavailable). 8000 matches the port the previous Anthias
@@ -301,6 +307,12 @@ services:
       - wifi-connect
     volumes:
       - resin-data:/data
+      # Read-only: the portal only ever reads this, and it is installed
+      # by ansible on the host rather than baked into upstream's image.
+      - type: bind
+        source: /etc/anthias/wifi-connect
+        target: /brand
+        read_only: true
       - type: bind
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket
