@@ -1200,6 +1200,10 @@ def test_branding_requires_the_release_that_implements_it() -> None:
     2026.10.2 fixed the cascade, and --default-theme and --brand-logo are
     2026.10.2 as well. Earlier images accept the variables and ignore
     them, so the pin and the branding move together.
+
+    2026.10.3 is the one the systemd unit depends on: before it, a portal
+    that could not bind its port exited 6, which SuccessExitStatus lists,
+    so a port conflict looked like an ordinary timeout.
     """
     compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
     tag = re.search(
@@ -1208,4 +1212,237 @@ def test_branding_requires_the_release_that_implements_it() -> None:
 
     assert tag is not None
     major, minor, patch = (int(p) for p in tag.group(1).split('.'))
-    assert (major, minor, patch) >= (2026, 10, 2)
+    assert (major, minor, patch) >= (2026, 10, 3)
+
+
+# ---------------------------------------------------------------------------
+# The ExecCondition gate
+# ---------------------------------------------------------------------------
+#
+# bin/wifi_connect_needed.sh decides whether a device gets a captive
+# portal raised at it. Getting that wrong is expensive in both
+# directions: a false "raise" tears down a working network or replaces
+# the content on an unattended screen, and a false "skip" leaves a
+# first-boot device with no way to get online.
+#
+# It is shelled out to, with nmcli / curl / docker stubbed, because the
+# logic lives in shell and reimplementing it here would test the
+# reimplementation.
+
+GATE = REPO_ROOT / 'bin' / 'wifi_connect_needed.sh'
+
+# One device per line, as `nmcli -t -f DEVICE,TYPE,STATE[,CONNECTION]`
+# prints it. The gate asks for a 4-field form and a 3-field form, and
+# awk's -F: handles the short rows, so one fixture serves both.
+NMCLI_WIFI_ASSOCIATED = (
+    'wlan0:wifi:connected:factory-local\neth0:ethernet:unavailable:'
+)
+NMCLI_WIRED = (
+    'wlan0:wifi:disconnected:\neth0:ethernet:connected:Wired connection 1'
+)
+NMCLI_PORTAL_ONLY = (
+    'wlan0:wifi:connected:wifi-connect-portal\neth0:ethernet:unavailable:'
+)
+NMCLI_NOTHING = 'wlan0:wifi:disconnected:\neth0:ethernet:unavailable:'
+NMCLI_SETTLING = (
+    'wlan0:wifi:connecting:factory-local\neth0:ethernet:unavailable:'
+)
+
+
+def run_gate(
+    tmp_path: Path,
+    nmcli: str,
+    *,
+    online: bool = False,
+    container: bool = True,
+    state: str | None = None,
+) -> tuple[int, str]:
+    """Run the real gate with its three external commands stubbed."""
+    import os
+    import subprocess
+
+    bindir = tmp_path / 'bin'
+    bindir.mkdir(exist_ok=True)
+    fixture = tmp_path / 'nmcli.out'
+    fixture.write_text(nmcli + '\n')
+
+    (bindir / 'nmcli').write_text(f'#!/bin/sh\ncat {fixture}\n')
+    (bindir / 'curl').write_text(f'#!/bin/sh\nexit {0 if online else 7}\n')
+    (bindir / 'docker').write_text(
+        f'#!/bin/sh\nexit {0 if container else 1}\n'
+    )
+    for stub in ('nmcli', 'curl', 'docker'):
+        (bindir / stub).chmod(0o755)
+
+    runtime = tmp_path / 'run'
+    runtime.mkdir(exist_ok=True)
+    if state is not None:
+        (runtime / 'raises').write_text(state)
+
+    proc = subprocess.run(
+        ['sh', str(GATE)],
+        # A non-zero exit is the answer, not an error: 1 means "skip".
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env={
+            **os.environ,
+            'PATH': f'{bindir}:{os.environ["PATH"]}',
+            'RUNTIME_DIRECTORY': str(runtime),
+        },
+    )
+    return proc.returncode, proc.stdout
+
+
+# Exit 1 is "skip" (systemd's ExecCondition treats a clean non-zero as
+# "do not run"); exit 0 raises the portal.
+SKIP, RAISE = 1, 0
+
+
+@pytest.mark.parametrize(
+    ('name', 'nmcli', 'online', 'expected'),
+    [
+        ('wifi associated, no internet', NMCLI_WIFI_ASSOCIATED, False, SKIP),
+        ('wired, no internet', NMCLI_WIRED, False, SKIP),
+        ('nothing, but internet somehow', NMCLI_NOTHING, True, SKIP),
+        ('only our own portal AP is up', NMCLI_PORTAL_ONLY, False, RAISE),
+        ('nothing at all', NMCLI_NOTHING, False, RAISE),
+    ],
+)
+def test_the_gate_decides_the_same_way_offline_as_online(
+    tmp_path: Path, name: str, nmcli: str, online: bool, expected: int
+) -> None:
+    """An airgapped site must not look like a device that needs setup.
+
+    Every skip here is reached without the internet probe mattering —
+    which is the whole point. A device on an airgapped LAN, or
+    associated to an airgapped SSID, is configured; it just cannot
+    reach 1.1.1.1, and raising an access point at it would tear down
+    the network it is managed over.
+    """
+    code, _ = run_gate(tmp_path, nmcli, online=online)
+
+    assert code == expected, name
+
+
+def test_a_missing_container_is_a_skip_not_a_failed_unit(
+    tmp_path: Path,
+) -> None:
+    """The airgapped case: the image could never be pulled.
+
+    upgrade_containers.sh pre-creates the container best-effort, so a
+    device that cannot reach ghcr.io has a compose file naming a
+    container that does not exist. Raising here would hand ExecStart a
+    `docker start` that fails every five minutes forever.
+    """
+    code, out = run_gate(tmp_path, NMCLI_NOTHING, container=False)
+
+    assert code == SKIP
+    assert 'does not exist' in out
+
+
+def test_the_portal_stops_being_raised_every_five_minutes(
+    tmp_path: Path,
+) -> None:
+    """After a few goes, back off — the screen is showing setup, not content."""
+    import time
+
+    recent = f'3 {int(time.time())}'
+    code, out = run_gate(tmp_path, NMCLI_NOTHING, state=recent)
+
+    assert code == SKIP
+    assert 'more minutes before' in out
+
+
+def test_the_backoff_expires_rather_than_giving_up(tmp_path: Path) -> None:
+    """A network can appear later, and nobody will be there to notice."""
+    import time
+
+    stale = f'9 {int(time.time()) - 7 * 60 * 60}'
+    code, _ = run_gate(tmp_path, NMCLI_NOTHING, state=stale)
+
+    assert code == RAISE
+
+
+def test_going_online_forgets_the_attempt_history(tmp_path: Path) -> None:
+    """Otherwise the next genuine outage starts already throttled."""
+    runtime = tmp_path / 'run'
+    runtime.mkdir()
+    (runtime / 'raises').write_text('3 1')
+
+    run_gate(tmp_path, NMCLI_WIRED)
+
+    assert not (runtime / 'raises').exists()
+
+
+def test_a_corrupt_state_file_does_not_wedge_the_gate(tmp_path: Path) -> None:
+    """It lives in /run and nothing stops an operator poking at it."""
+    code, _ = run_gate(tmp_path, NMCLI_NOTHING, state='not-a-number banana')
+
+    assert code == RAISE
+
+
+def test_a_settled_device_is_not_made_to_wait(tmp_path: Path) -> None:
+    """The retry window is for a boot that beat DHCP, not for every tick.
+
+    Sleeping it out regardless costs 25s on every timer tick of every
+    offline device, and delays the portal by 25s on the first boot this
+    all exists for.
+    """
+    import time
+
+    start = time.monotonic()
+    code, _ = run_gate(tmp_path, NMCLI_NOTHING)
+    elapsed = time.monotonic() - start
+
+    assert code == RAISE
+    assert elapsed < 5, f'settled device waited {elapsed:.1f}s'
+
+
+def test_a_device_still_settling_is_given_the_full_window(
+    tmp_path: Path,
+) -> None:
+    """A radio mid-association must not be called "needs setup"."""
+    import time
+
+    start = time.monotonic()
+    run_gate(tmp_path, NMCLI_SETTLING)
+    elapsed = time.monotonic() - start
+
+    assert elapsed >= 20, f'still-settling device only waited {elapsed:.1f}s'
+
+
+def test_the_unit_keeps_state_across_runs_but_not_across_reboots() -> None:
+    """The backoff counter is useless if systemd deletes it between runs.
+
+    RuntimeDirectory is removed when the unit stops unless Preserve is
+    set, and the unit stops after every single attempt — so without
+    this pair the gate would read a fresh counter every time and retry
+    at five-minute intervals forever, which is the behaviour the
+    backoff exists to end.
+    """
+    unit = (
+        REPO_ROOT
+        / 'ansible/roles/network/templates/anthias-wifi-connect.service'
+    ).read_text()
+
+    assert 'RuntimeDirectory=anthias-wifi-connect' in unit
+    assert 'RuntimeDirectoryPreserve=yes' in unit
+    # /run, not /var/lib: a reboot is an operator asking for another go.
+    assert 'StateDirectory=' not in unit
+
+
+def test_a_bind_failure_is_not_counted_as_success() -> None:
+    """Exit 7, which upstream split out in 2026.10.3, must stay off the list."""
+    unit = (
+        REPO_ROOT
+        / 'ansible/roles/network/templates/anthias-wifi-connect.service'
+    ).read_text()
+
+    success = re.search(r'^SuccessExitStatus=(.*)$', unit, re.MULTILINE)
+
+    assert success is not None
+    codes = success.group(1).split()
+    assert '6' in codes, 'a timeout is an ordinary ending'
+    assert '7' not in codes, 'a portal that cannot bind must surface as failed'

@@ -65,12 +65,29 @@ test compiled in, so asking it always returns "don't know" — and "don't know"
 would mean a setup network on every boot of every screen, including ones that
 are perfectly online.
 
+If nobody completes setup within 15 minutes, the setup network comes down and
+the screen goes back to what it was doing until the next check.
+
 Because it repeats, a screen that nobody gets to within one setup window is
 offered another one, and a screen whose router is replaced months later gets
 the setup network back on its own. You don't have to reboot it.
 
-If nobody completes setup within 15 minutes, the setup network comes down and
-the screen goes back to what it was doing until the next check.
+It does slow down, though. The setup screen replaces your content while it is
+up, so after **three** attempts with nobody completing setup, Anthias drops to
+**one attempt every six hours** instead of one every few minutes. On a site
+with no network to join — an airgapped installation, or a screen whose access
+point is gone for good — that is the difference between a screen showing the
+setup page three quarters of the time and one showing your content with a
+brief interruption four times a day.
+
+It never stops entirely, because a network can appear at any time and nobody
+would be there to notice. To get the quick cadence back, power cycle the
+screen: a reboot clears the count.
+
+A screen that has never been able to download the setup tool — an airgapped
+install, or one provisioned while the registry was unreachable — skips the
+whole thing quietly rather than retrying something it cannot run. Re-run the
+upgrade once it can reach the registry.
 
 ## Requirements
 
