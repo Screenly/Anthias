@@ -155,6 +155,19 @@
     mode: "0644"  # NOSONAR - read by the portal container as a web asset
   when: manage_network|bool
 
+# Byte-for-byte the splash logo from the Anthias static tree. It is
+# copied rather than mounted because the portal runs in its own container
+# with no access to Anthias's static files; tests/test_wifi_connect.py
+# asserts the two stay identical.
+- name: Install the Anthias logo for the WiFi Connect portal
+  ansible.builtin.copy:
+    src: wifi-connect-logo.svg
+    dest: /etc/anthias/wifi-connect/wifi-connect-logo.svg
+    owner: root
+    group: root
+    mode: "0644"  # NOSONAR - read by the portal container as a web asset
+  when: manage_network|bool
+
 - name: Install Anthias WiFi Connect systemd units
   ansible.builtin.template:
     src: "{{ item }}"

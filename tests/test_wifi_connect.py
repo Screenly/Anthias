@@ -1103,36 +1103,104 @@ def test_ansible_installs_the_stylesheet_where_compose_mounts_it() -> None:
 def test_the_brand_stylesheet_overrides_roles_only() -> None:
     """Upstream's contract: roles are the seam, primitives are not.
 
-    A rebrand that reaches past the roles into the --c-* primitives or
-    the markup comes adrift the next time the portal's layout changes.
+    A rebrand that reaches past the roles into the --c-* primitives or the
+    markup comes adrift the next time the portal's layout changes.
+    --font-sans is a role in the same sense — upstream declares it beside
+    the colour roles — so it is allowed by name rather than by pattern.
     """
     css = (REPO_ROOT / BRAND_CSS_PATH).read_text()
     declarations = re.findall(r'^\s*(--[a-z0-9-]+)\s*:', css, re.MULTILINE)
 
     assert declarations, 'no custom properties in the brand stylesheet'
     for name in declarations:
-        assert name.startswith('--color-'), (
+        assert name.startswith('--color-') or name == '--font-sans', (
             f'{name} is not a role token; overriding it couples the '
             f'rebrand to upstream internals'
         )
 
 
-def test_the_brand_stylesheet_uses_the_anthias_accent() -> None:
-    """Same yellow as the setup screen on the device's own display."""
+def test_the_brand_stylesheet_touches_no_component_classes() -> None:
+    """The gradient is the one non-role rule, and it is element-level.
+
+    `body` and `html` are the two selectors a portal layout change cannot
+    rename. A rule keyed on .card or .btn is exactly the coupling the
+    roles-only discipline exists to avoid, so it stays out even though
+    nothing stops us writing one.
+    """
+    css = (REPO_ROOT / BRAND_CSS_PATH).read_text()
+    # Strip comments first: the header discusses the very things this
+    # forbids, and matching prose would fail on the explanation.
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
+    # Everything between a } and the next { is a selector. The file has no
+    # nested at-rules, which a regex over the whole text would mangle.
+    selectors = [
+        chunk.rsplit('{', 1)[0].strip()
+        for chunk in css.split('}')
+        if '{' in chunk
+    ]
+
+    assert selectors, 'no rules in the brand stylesheet'
+    assert set(selectors) <= {':root', 'body'}, (
+        f'unexpected selector: {sorted(set(selectors) - {":root", "body"})}'
+    )
+
+
+def test_the_brand_stylesheet_uses_the_anthias_palette() -> None:
+    """Not just the accent: the canvas is what makes it read as Anthias.
+
+    The first version of this file set four accent tokens and left canvas,
+    surface, text and fields on upstream's defaults, which produced a
+    generic card UI with a yellow button on it.
+    """
     css = (REPO_ROOT / BRAND_CSS_PATH).read_text().lower()
-    tokens = (
-        (REPO_ROOT / 'src/anthias_server/app/static/src/tailwind.css')
+    palette = (
+        (REPO_ROOT / 'src/anthias_server/app/static/src/css/palette.css')
         .read_text()
         .lower()
     )
 
-    assert '#ffe11a' in css
-    # The same value the admin UI's accent resolves to.
-    assert '255 225 26' in tokens
+    for token, value in (
+        ('--color-canvas', '#270035'),  # plum-800
+        ('--color-accent', '#ffe11a'),  # sun-400
+        ('--color-on-accent', '#1f002a'),
+        ('--color-fg', '#ffffff'),
+    ):
+        assert f'{token}: {value}' in css, f'{token} is not the Anthias value'
+        if value not in ('#ffffff', '#1f002a'):
+            assert value in palette, f'{value} is not in the Anthias palette'
+
+
+def test_the_portal_carries_the_anthias_mark() -> None:
+    """And it is the same file the splash screen uses, not a lookalike."""
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    installed = (
+        REPO_ROOT / 'ansible/roles/network/files/wifi-connect-logo.svg'
+    ).read_bytes()
+    canonical = (
+        REPO_ROOT / 'src/anthias_server/app/static/img/logo-full-splash.svg'
+    ).read_bytes()
+
+    assert re.search(r'WIFI_CONNECT_BRAND_LOGO=/brand/\S+\.svg', compose)
+    assert installed == canonical, (
+        'the portal logo has drifted from the splash logo'
+    )
+
+
+def test_the_theme_is_ours_to_pick() -> None:
+    """A pinned theme is also what removes the portal's own switcher."""
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+
+    assert 'WIFI_CONNECT_DEFAULT_THEME=dark' in compose
 
 
 def test_branding_requires_the_release_that_implements_it() -> None:
-    """--brand-css landed in 2026.10.1; 2026.10.0 ignores it silently."""
+    """Each piece needs the release that made it do anything.
+
+    --brand-css landed in 2026.10.1 but could not reach the controls until
+    2026.10.2 fixed the cascade, and --default-theme and --brand-logo are
+    2026.10.2 as well. Earlier images accept the variables and ignore
+    them, so the pin and the branding move together.
+    """
     compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
     tag = re.search(
         r'ghcr\.io/screenly-labs/wifi-connect:(\d{4}\.\d{2}\.\d+)', compose
@@ -1140,4 +1208,4 @@ def test_branding_requires_the_release_that_implements_it() -> None:
 
     assert tag is not None
     major, minor, patch = (int(p) for p in tag.group(1).split('.'))
-    assert (major, minor, patch) >= (2026, 10, 1)
+    assert (major, minor, patch) >= (2026, 10, 2)

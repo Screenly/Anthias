@@ -210,7 +210,7 @@ services:
   # CalVer release rather than `2026.10` or `latest` so an upstream patch
   # can never land on a fleet without a deliberate bump here.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.1
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.2
     # Pinned, because three other things address this container BY
     # NAME and compose's generated name is `anthias-anthias-wifi-
     # connect-1`: the systemd unit's `docker start`, the
@@ -248,12 +248,18 @@ services:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
       - PORTAL_SSID=Anthias Setup
       - WIFI_CONNECT_BRAND_NAME=Anthias
-      # Themes the portal the user opens on their phone in Anthias
-      # colours. Without it the page says Anthias and looks like
-      # upstream's default blue. The file overrides upstream's role
-      # tokens only — see the header in it. New in wifi-connect
-      # 2026.10.1; earlier images ignore the variable.
+      # Themes the portal the user opens on their phone so it matches the
+      # setup screen on the display in front of them: plum canvas, yellow
+      # Connect, Anthias mark in the header. Role tokens only, with one
+      # documented exception — see the header in the file.
       - WIFI_CONNECT_BRAND_CSS=/brand/wifi-connect-brand.css
+      - WIFI_CONNECT_BRAND_LOGO=/brand/wifi-connect-logo.svg
+      # Pinned, which also removes the portal's "Switch theme" control.
+      # The plum canvas is the brand; which scheme a two-minute setup page
+      # uses is ours to decide, not a question to put to someone who is
+      # trying to get a screen online. Needs wifi-connect >= 2026.10.2,
+      # where --default-theme is actually read.
+      - WIFI_CONNECT_DEFAULT_THEME=dark
       # NOT port 80: anthias-server publishes 80:8080 on the host, so
       # binding the portal there fails outright (upstream reports it as
       # PortalUnavailable). 8000 matches the port the previous Anthias
