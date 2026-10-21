@@ -39,7 +39,7 @@ ANTHIAS_REPO_PATTERN='^ghcr\.io/screenly/anthias-[a-z0-9-]+$'
 # `docker` group membership is live.
 DOCKER=(sudo docker)
 
-if [ "$#" -eq 0 ]; then
+if [[ "$#" -eq 0 ]]; then
     echo "Usage: $0 IMAGE [IMAGE ...]" >&2
     exit 2
 fi
@@ -58,6 +58,8 @@ function pulled_digest() {
         --format '{{range .RepoDigests}}{{println .}}{{end}}' \
         "${image}" 2> /dev/null \
         | grep -m1 -F "${repo}@sha256:"
+    # The caller reads the output, not the status: no match prints nothing.
+    return 0
 }
 
 failed=()
@@ -68,7 +70,7 @@ for image in "$@"; do
     fi
 
     ref=$(pulled_digest "${image}")
-    if [ -z "${ref}" ]; then
+    if [[ -z "${ref}" ]]; then
         echo "Can't verify ${image}: no pulled digest for it." >&2
         failed+=("${image}")
         continue
@@ -88,7 +90,7 @@ for image in "$@"; do
     fi
 done
 
-if [ "${#failed[@]}" -gt 0 ]; then
+if [[ "${#failed[@]}" -gt 0 ]]; then
     exit 1
 fi
 exit 0

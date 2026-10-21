@@ -29,7 +29,7 @@ retry() {
     if "$@"; then
       return 0
     fi
-    if [ "${attempt}" -lt 5 ]; then
+    if [[ "${attempt}" -lt 5 ]]; then
       local delay=$((2 ** attempt))
       echo "Attempt ${attempt} failed; retrying in ${delay}s..." >&2
       sleep "${delay}"

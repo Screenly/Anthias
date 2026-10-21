@@ -222,8 +222,8 @@ sudo -E docker compose "${COMPOSE_FILES[@]}" ${MODE}
 # running. Locally built images (MODE=build) have no signature to check.
 # ANTHIAS_SKIP_IMAGE_VERIFICATION=1 is the escape hatch for an operator
 # who deliberately runs images of their own; nothing in Anthias sets it.
-if [ "$MODE" = "pull" ]; then
-    if [ "${ANTHIAS_SKIP_IMAGE_VERIFICATION:-}" = "1" ]; then
+if [[ "$MODE" = "pull" ]]; then
+    if [[ "${ANTHIAS_SKIP_IMAGE_VERIFICATION:-}" = "1" ]]; then
         echo "WARNING: ANTHIAS_SKIP_IMAGE_VERIFICATION=1 is set; starting" \
              "the pulled images without checking their signatures." >&2
     else
@@ -231,7 +231,7 @@ if [ "$MODE" = "pull" ]; then
             sudo -E docker compose "${COMPOSE_FILES[@]}" config --images
         )
         VERIFY_SCRIPT="${SCRIPT_DIR}/verify_image_signatures.sh"
-        if [ ! -x "${VERIFY_SCRIPT}" ] \
+        if [[ ! -x "${VERIFY_SCRIPT}" ]] \
             || ! "${VERIFY_SCRIPT}" "${IMAGES[@]}"; then
             echo "Refusing to start images that failed signature" \
                  "verification. The device stays on its current release." >&2
