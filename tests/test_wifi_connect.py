@@ -25,6 +25,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+import redis
 import requests
 from django.test import Client
 
@@ -755,6 +756,7 @@ def test_the_fast_host_refresh_does_no_internet_probe() -> None:
             'get_ip_addresses',
             return_value=[wifi_connect.PORTAL_GATEWAY],
         ),
+        mock.patch.object(host_agent, 'set_portal_serving'),
         mock.patch(
             'anthias_host_agent.__main__.requests.get',
             side_effect=AssertionError('must not probe the internet'),
@@ -784,44 +786,101 @@ def test_the_fast_host_refresh_is_reachable_as_a_host_command() -> None:
 # list froze with the access point's address still in it, and
 # /hotspot stayed full-screen on the display for a portal that had
 # been down for minutes. Any interruption to the refresh does this.
+#
+# The probe that confirms it runs in host_agent, NOT here. wifi-connect
+# binds its listener to the access point's address scoped to the
+# wireless device (`192.168.42.1%wlan0`) so it cannot answer on a
+# customer's ethernet LAN, so a packet from the Docker bridge is
+# refused: the server container gets a connection failure every time,
+# however healthy the portal is. Measured on a Pi 5 — 200 from the
+# host, unreachable from the container — and it made the first version
+# of this a permanent "no", which hid the setup screen entirely.
 
 
-def test_portal_is_serving_when_the_api_answers() -> None:
+def test_portal_is_serving_reads_the_fact_host_agent_published() -> None:
+    rdb = mock.Mock()
+    rdb.get.return_value = 'true'
+
+    assert wifi_connect.portal_is_serving(rdb)
+    rdb.get.assert_called_once_with(wifi_connect.PORTAL_SERVING_KEY)
+
+
+@pytest.mark.parametrize('value', ['false', None, '', 'yes', b'true'])
+def test_portal_is_not_serving_for_anything_but_a_true(value: object) -> None:
+    """Including absent: a key nobody has written yet is not a portal."""
+    rdb = mock.Mock()
+    rdb.get.return_value = value
+
+    assert not wifi_connect.portal_is_serving(rdb)
+
+
+def test_portal_is_not_serving_when_redis_is_down() -> None:
+    rdb = mock.Mock()
+    rdb.get.side_effect = redis.RedisError('nope')
+
+    assert not wifi_connect.portal_is_serving(rdb)
+
+
+def test_the_server_never_probes_the_portal_itself() -> None:
+    """The regression that made the setup screen unreachable.
+
+    A probe from this container cannot succeed, so if this module ever
+    grows one again the feature breaks in a way no unit test would
+    notice — the mock answers, the hardware does not.
+    """
+    source = (REPO_ROOT / 'src/anthias_server/lib/wifi_connect.py').read_text()
+
+    assert 'requests' not in source, (
+        'anthias-server cannot reach the portal: the listener is bound to '
+        'the AP address scoped to the wireless device, so a request from '
+        'the Docker bridge is refused. host_agent owns this probe.'
+    )
+
+
+def test_host_agent_probes_the_portal_where_the_radio_is() -> None:
+    """And only when the address list says there is something to probe."""
+    from anthias_host_agent import __main__ as host_agent
+
+    rdb = mock.Mock()
     with mock.patch(
-        'anthias_server.lib.wifi_connect.requests.get',
-        return_value=mock.Mock(ok=True),
+        'anthias_host_agent.__main__.requests.get',
+        side_effect=AssertionError('nothing holds the gateway; do not probe'),
     ):
-        assert wifi_connect.portal_is_serving()
+        host_agent.set_portal_serving(rdb, ['192.168.8.17'])
+    rdb.set.assert_called_once_with(host_agent.PORTAL_SERVING_KEY, 'false')
 
-
-def test_portal_is_not_serving_when_the_gateway_is_unreachable() -> None:
-    """The ordinary "no portal" path: nothing holds that address."""
+    rdb.reset_mock()
     with mock.patch(
-        'anthias_server.lib.wifi_connect.requests.get',
-        side_effect=requests.exceptions.ConnectionError(),
-    ):
-        assert not wifi_connect.portal_is_serving()
-
-
-def test_portal_is_not_serving_when_the_probe_times_out() -> None:
-    with mock.patch(
-        'anthias_server.lib.wifi_connect.requests.get',
-        side_effect=requests.exceptions.Timeout(),
-    ):
-        assert not wifi_connect.portal_is_serving()
-
-
-def test_the_probe_is_bounded() -> None:
-    """An unbounded probe would pin a request worker on every poll."""
-    with mock.patch(
-        'anthias_server.lib.wifi_connect.requests.get',
+        'anthias_host_agent.__main__.requests.get',
         return_value=mock.Mock(ok=True),
     ) as get:
-        wifi_connect.portal_is_serving()
+        host_agent.set_portal_serving(
+            rdb, ['192.168.8.17', host_agent.PORTAL_GATEWAY]
+        )
+    rdb.set.assert_called_once_with(host_agent.PORTAL_SERVING_KEY, 'true')
+    assert get.call_args.kwargs['timeout'] == host_agent.PORTAL_PROBE_TIMEOUT_S
 
-    assert get.call_args.kwargs['timeout'] == (
-        wifi_connect.PORTAL_PROBE_TIMEOUT_S
-    )
+
+def test_host_agent_reports_a_portal_that_stopped_answering() -> None:
+    """The stale-cache case: the address is held, the portal is gone."""
+    from anthias_host_agent import __main__ as host_agent
+
+    rdb = mock.Mock()
+    with mock.patch(
+        'anthias_host_agent.__main__.requests.get',
+        side_effect=requests.exceptions.ConnectionError(),
+    ):
+        host_agent.set_portal_serving(rdb, [host_agent.PORTAL_GATEWAY])
+
+    rdb.set.assert_called_once_with(host_agent.PORTAL_SERVING_KEY, 'false')
+
+
+def test_the_two_sides_agree_on_the_key() -> None:
+    """Two processes, one string, no compiler between them."""
+    from anthias_host_agent import __main__ as host_agent
+
+    assert host_agent.PORTAL_SERVING_KEY == wifi_connect.PORTAL_SERVING_KEY
+    assert host_agent.PORTAL_GATEWAY == wifi_connect.PORTAL_GATEWAY
 
 
 def test_a_stale_address_cache_does_not_report_setup_mode() -> None:

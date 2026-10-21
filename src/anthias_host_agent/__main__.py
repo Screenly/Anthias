@@ -63,6 +63,15 @@ SUPPORTED_INTERFACES = (
 # Public anycast, not a private/internal address.
 INTERNET_PROBE_URL = 'https://1.1.1.1'  # NOSONAR
 
+# The WiFi setup portal's own gateway, and the endpoint that exists only
+# while it is serving. Mirrors anthias_server.lib.wifi_connect, which
+# cannot be imported here: this service runs on the host with no access
+# to the server package. NOSONAR (S1313, S5332).
+PORTAL_GATEWAY = '192.168.42.1'  # NOSONAR
+PORTAL_PROBE_URL = f'http://{PORTAL_GATEWAY}:8000/api/captive-portal'  # NOSONAR
+PORTAL_PROBE_TIMEOUT_S = 2
+PORTAL_SERVING_KEY = 'wifi_setup_portal_serving'
+
 
 def get_ip_addresses() -> list[str]:
     try:
@@ -94,6 +103,40 @@ def get_ip_addresses() -> list[str]:
     ]
 
 
+def set_portal_serving(rdb: 'redis.Redis', addresses: list[str]) -> None:
+    """Publish whether the WiFi setup portal is actually answering.
+
+    This question cannot be asked from inside a container, which is why
+    it is answered here. wifi-connect binds its listener to the access
+    point's address scoped to the wireless device — `192.168.42.1%wlan0`
+    — so that it can never answer a request arriving on a customer's
+    ethernet LAN. A packet from the Docker bridge arrives on the wrong
+    interface and is refused, so anthias-server probing the portal
+    directly gets a connection failure every time, however healthy the
+    portal is. Verified on a Pi 5: 200 from the host, unreachable from
+    the server container, while that same container reaches the host
+    fine on every other address.
+
+    The address list is the cheap gate: NetworkManager holds the gateway
+    address only while the access point is up, so when it is absent
+    there is nothing to probe and no reason to spend the timeout. When
+    it is present the list may still be stale — which is the whole
+    reason a probe exists — and only asking the portal settles it.
+    """
+    if PORTAL_GATEWAY not in addresses:
+        rdb.set(PORTAL_SERVING_KEY, 'false')
+        return
+
+    try:
+        serving = requests.get(PORTAL_PROBE_URL, timeout=PORTAL_PROBE_TIMEOUT_S).ok
+    except requests.RequestException:
+        # The ordinary "the portal just went away" path: the address
+        # list said it was there and the portal disagrees, which is the
+        # disagreement this function exists to catch.
+        serving = False
+
+    rdb.set(PORTAL_SERVING_KEY, 'true' if serving else 'false')
+
 def set_ip_addresses(probe_internet: bool = True) -> None:
     """Publish the host's interface addresses to Redis.
 
@@ -121,7 +164,9 @@ def set_ip_addresses(probe_internet: bool = True) -> None:
         # Addresses first, then the readiness flag: a consumer that
         # gates on ``ip_addresses_ready`` should never be told the
         # answer is ready and then read the previous run's list.
-        rdb.set('ip_addresses', json.dumps(get_ip_addresses()))
+        addresses = get_ip_addresses()
+        rdb.set('ip_addresses', json.dumps(addresses))
+        set_portal_serving(rdb, addresses)
         rdb.set('ip_addresses_ready', 'true')
         return
 

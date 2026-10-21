@@ -363,7 +363,7 @@ def wifi_setup_state() -> dict[str, Any]:
         wifi_connect.portal_is_up(
             _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
         )
-        and wifi_connect.portal_is_serving()
+        and wifi_connect.portal_is_serving(r)
     )
     credentials = wifi_connect.read_portal_credentials() if active else None
 

@@ -40,7 +40,7 @@ import re
 from pathlib import Path
 from typing import NamedTuple
 
-import requests
+import redis
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,9 @@ PORTAL_URL = f'http://{PORTAL_GATEWAY}:{PORTAL_PORT}/'  # NOSONAR (S5332)
 # below. Short timeout: when the access point is down this address is
 # not on the host at all, so the request has nowhere to go and we must
 # not hold a request worker waiting to find that out.
-PORTAL_PROBE_URL = f'{PORTAL_URL}api/captive-portal'
-PORTAL_PROBE_TIMEOUT_S = 2
+# Published by anthias_host_agent, which can actually reach the portal.
+# Keep in step with PORTAL_SERVING_KEY there.
+PORTAL_SERVING_KEY = 'wifi_setup_portal_serving'
 
 # Cap on the SVG we will inline into the page. The real file is ~4 KB;
 # this only exists so a truncated or substituted file can't be read
@@ -212,7 +213,7 @@ def portal_is_up(node_ip: str) -> bool:
     return PORTAL_GATEWAY in node_ip.split()
 
 
-def portal_is_serving() -> bool:
+def portal_is_serving(rdb: 'redis.Redis') -> bool:
     """Is the portal answering on the gateway right now?
 
     ``portal_is_up`` reads a *cached* address list — host_agent writes
@@ -224,21 +225,29 @@ def portal_is_serving() -> bool:
     that stops the list being refreshed does the same.
 
     So the address list is the cheap gate and this is the authority.
-    Asking the portal itself cannot go stale: the endpoint exists only
-    while it is serving, and the address it lives on exists only while
-    the access point is up.
+    But the question cannot be asked from in here: wifi-connect binds
+    its listener to the access point's address scoped to the wireless
+    device (`192.168.42.1%wlan0`), so that it can never answer on a
+    customer's ethernet LAN — and a packet from the Docker bridge
+    arrives on the wrong interface and is refused. This container gets
+    a connection failure every time, however healthy the portal is,
+    which made the first version of this function a permanent "no" and
+    the setup screen unreachable.
+
+    So host_agent runs the probe out on the host where the wireless
+    device is, and publishes the answer alongside the address list it
+    is already refreshing for us. Absent key reads as not serving,
+    which fails towards playing content.
     """
     try:
-        response = requests.get(
-            PORTAL_PROBE_URL, timeout=PORTAL_PROBE_TIMEOUT_S
+        return rdb.get(PORTAL_SERVING_KEY) == 'true'
+    except redis.RedisError:
+        # Redis is how every other host fact arrives; if it is down the
+        # device has larger problems and the honest answer is "no".
+        logging.getLogger(__name__).warning(
+            'Could not read the portal-serving fact from Redis', exc_info=True
         )
-    except requests.RequestException:
-        # The ordinary "no portal" path, not an error worth logging on
-        # every poll: with the access point down, nothing holds the
-        # gateway address and the connection simply fails.
         return False
-
-    return response.ok
 
 
 def strip_portal_gateway(node_ip: str) -> str:
