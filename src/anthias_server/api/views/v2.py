@@ -162,6 +162,38 @@ _WIFI_SETUP_REFRESH_PENDING_KEY = 'wifi_setup:ip_refresh_pending'
 _WIFI_SETUP_REFRESH_DEBOUNCE_S = 14
 
 
+def _node_ip_from_supervisor() -> str:
+    """The Balena arm of ``_resolve_node_ip``.
+
+    Separate because it shares nothing with the bare-metal path but the
+    return type: there is no host_agent and no Redis cache on Balena, so
+    the supervisor is the only source of truth and every failure mode
+    here is an HTTP one. Lifted out of the resolver to keep that
+    function at one job apiece.
+
+    Reuses the shared anthias_common.utils helper so URL construction,
+    auth and headers stay in one place (extending it to accept a
+    timeout was the smaller change). The bounded timeout is the
+    load-bearing part — without it, a slow supervisor on first boot
+    would pin a request worker for longer than the JS poll cadence.
+
+    Returns '' for every failure: the caller is a 2-second poll that
+    recovers on the next tick, so there is nothing useful to raise.
+    """
+    try:
+        response = get_balena_device_info(timeout=_BALENA_SUPERVISOR_TIMEOUT_S)
+    except requests.RequestException:
+        return ''
+
+    if not response.ok:
+        return ''
+
+    try:
+        return str(response.json().get('ip_address') or '')
+    except ValueError:
+        return ''
+
+
 def _resolve_node_ip(
     refresh: Callable[[], None] | None = None,
 ) -> str:
@@ -195,24 +227,7 @@ def _resolve_node_ip(
     """
     refresh = refresh or _publish_refresh
     if is_balena_app():
-        # Reuse the shared anthias_common.utils helper so URL construction /
-        # auth / headers stay in one place (extending it to accept a
-        # timeout was the smaller change). The bounded timeout is the
-        # load-bearing part of this fix — without it, a slow
-        # supervisor on first boot would pin a request worker for
-        # longer than the JS poll cadence.
-        try:
-            response = get_balena_device_info(
-                timeout=_BALENA_SUPERVISOR_TIMEOUT_S,
-            )
-        except requests.RequestException:
-            return ''
-        if not response.ok:
-            return ''
-        try:
-            return str(response.json().get('ip_address') or '')
-        except ValueError:
-            return ''
+        return _node_ip_from_supervisor()
 
     try:
         raw = r.get('ip_addresses')
@@ -359,12 +374,9 @@ def wifi_setup_state() -> dict[str, Any]:
     # is plainly online. Gating the probe behind a positive address
     # match gives the cheap answer in the common case and the correct
     # one whenever it matters.
-    active = (
-        wifi_connect.portal_is_up(
-            _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
-        )
-        and wifi_connect.portal_is_serving(r)
-    )
+    active = wifi_connect.portal_is_up(
+        _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
+    ) and wifi_connect.portal_is_serving(r)
     credentials = wifi_connect.read_portal_credentials() if active else None
 
     return {

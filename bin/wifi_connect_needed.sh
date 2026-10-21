@@ -104,6 +104,7 @@ wifi_is_associated() {
         | awk -F: -v ap="${AP_PROFILE_ID}" \
             '$2 == "wifi" && $3 == "connected" && $4 != ap { found = 1 }
              END { exit !found }'
+    return $?
 }
 
 wired_is_connected() {
@@ -112,14 +113,17 @@ wired_is_connected() {
     nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null \
         | awk -F: '$2 == "ethernet" && $3 == "connected" { found = 1 }
                    END { exit !found }'
+    return $?
 }
 
 internet_is_reachable() {
     curl -fsS --max-time 5 -o /dev/null "${PROBE_URL}" 2>/dev/null
+    return $?
 }
 
 container_exists() {
     docker container inspect "${CONTAINER}" >/dev/null 2>&1
+    return $?
 }
 
 # Is any interface still making up its mind?
@@ -140,12 +144,14 @@ settling() {
         | awk -F: '$3 ~ /^(connecting|configuring|ip-config|prepare)/ { found = 1 }
                    $2 == "wifi" && $3 ~ /^unavailable/ { found = 1 }
                    END { exit !found }'
+    return $?
 }
 
 # Forget the attempt history: the device is online, so whatever we were
 # retrying is moot and the next genuine outage starts from a clean slate.
 clear_raises() {
     rm -f "${STATE_FILE}" 2>/dev/null || true
+    return 0
 }
 
 i=1
@@ -187,8 +193,15 @@ last=0
 if [ -r "${STATE_FILE}" ]; then
     read -r raises last < "${STATE_FILE}" 2>/dev/null || true
     # A truncated or hand-edited file must not wedge the gate either way.
-    case "${raises}" in ''|*[!0-9]*) raises=0 ;; esac
-    case "${last}" in ''|*[!0-9]*) last=0 ;; esac
+    # The default arm is the good case: all digits, keep what was read.
+    case "${raises}" in
+        ''|*[!0-9]*) raises=0 ;;
+        *) ;;
+    esac
+    case "${last}" in
+        ''|*[!0-9]*) last=0 ;;
+        *) ;;
+    esac
 fi
 
 now="$(date +%s)"

@@ -66,9 +66,12 @@ INTERNET_PROBE_URL = 'https://1.1.1.1'  # NOSONAR
 # The WiFi setup portal's own gateway, and the endpoint that exists only
 # while it is serving. Mirrors anthias_server.lib.wifi_connect, which
 # cannot be imported here: this service runs on the host with no access
-# to the server package. NOSONAR (S1313, S5332).
+# to the server package. The two literals below carry their own
+# suppressions; S1313 and S5332 are what they silence.
 PORTAL_GATEWAY = '192.168.42.1'  # NOSONAR
-PORTAL_PROBE_URL = f'http://{PORTAL_GATEWAY}:8000/api/captive-portal'  # NOSONAR
+PORTAL_PROBE_URL = (
+    f'http://{PORTAL_GATEWAY}:8000/api/captive-portal'  # NOSONAR
+)
 PORTAL_PROBE_TIMEOUT_S = 2
 PORTAL_SERVING_KEY = 'wifi_setup_portal_serving'
 
@@ -128,7 +131,9 @@ def set_portal_serving(rdb: 'redis.Redis', addresses: list[str]) -> None:
         return
 
     try:
-        serving = requests.get(PORTAL_PROBE_URL, timeout=PORTAL_PROBE_TIMEOUT_S).ok
+        serving = requests.get(
+            PORTAL_PROBE_URL, timeout=PORTAL_PROBE_TIMEOUT_S
+        ).ok
     except requests.RequestException:
         # The ordinary "the portal just went away" path: the address
         # list said it was there and the portal disagrees, which is the
@@ -136,6 +141,7 @@ def set_portal_serving(rdb: 'redis.Redis', addresses: list[str]) -> None:
         serving = False
 
     rdb.set(PORTAL_SERVING_KEY, 'true' if serving else 'false')
+
 
 def set_ip_addresses(probe_internet: bool = True) -> None:
     """Publish the host's interface addresses to Redis.

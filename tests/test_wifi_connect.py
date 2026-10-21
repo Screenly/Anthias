@@ -1521,3 +1521,25 @@ def test_the_splash_screen_calls_it_a_passphrase() -> None:
 
     assert '<span class="splash-cred__label">Passphrase</span>' in template
     assert 'Password' not in template
+
+
+def test_the_setup_screen_does_not_reload_itself() -> None:
+    """The viewer's re-navigation is what keeps the credentials current.
+
+    A `meta http-equiv="refresh"` used to sit on this page to cover the
+    case of a page left up from a previous portal run showing a
+    passphrase that no longer opens anything. It is not needed: the
+    portal stays down for minutes between runs, the viewer's poll
+    notices within WIFI_SETUP_POLL_INTERVAL_S and switches the display
+    away, and switching back re-navigates here with fresh credentials.
+
+    Kept out because /hotspot is opened from phones as well as the
+    device's own display, and reloading the page under someone reading
+    a 14-character passphrase off it is exactly the disruption
+    Web:MetaRefreshCheck exists to prevent.
+    """
+    template = (
+        REPO_ROOT / 'src/anthias_server/app/templates/hotspot.html'
+    ).read_text()
+
+    assert not re.search(r'<meta[^>]*http-equiv=["\']refresh', template)

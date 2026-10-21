@@ -7,20 +7,25 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     {% comment %}
-      Server-rendered and refreshed by the browser rather than polled by
-      a JS bundle. The page exists for a device with no network, shown
-      on a screen nobody is clicking: there is no interaction to drive,
-      and adding an entry point to the bun build to re-fetch two strings
-      would be more moving parts than the problem has.
+      Server-rendered rather than polled by a JS bundle. The page exists
+      for a device with no network, shown on a screen nobody is
+      clicking: there is no interaction to drive, and adding an entry
+      point to the bun build to re-fetch two strings would be more
+      moving parts than the problem has.
 
-      The refresh matters only across portal runs — each run of
-      wifi-connect generates a fresh passphrase, so a page left up from
-      a previous run would show credentials that no longer open
-      anything. Within a run nothing on it changes. The viewer is what
+      It does not refresh itself either. Each run of wifi-connect
+      generates a fresh passphrase, so a page left up from a previous
+      run would show credentials that no longer open anything — but
+      the viewer re-navigates here on every transition back into setup
+      mode, and a portal restart always crosses one: the portal stays
+      down for minutes between runs and the poll notices within
+      WIFI_SETUP_POLL_INTERVAL_S. A `meta http-equiv="refresh"` on top
+      of that bought nothing, and it reloaded the page under anyone
+      reading a passphrase off it on a phone — which is what
+      Web:MetaRefreshCheck objects to. The viewer is also what
       navigates away once the portal is down (see
       _wifi_setup_watch_loop).
     {% endcomment %}
-    <meta http-equiv="refresh" content="30"/>
     <title>Set up WiFi &mdash; Anthias</title>
     <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
     <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
