@@ -210,7 +210,7 @@ services:
   # CalVer release rather than `2026.10` or `latest` so an upstream patch
   # can never land on a fleet without a deliberate bump here.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.5
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.6
     # Pinned, because three other things address this container BY
     # NAME and compose's generated name is `anthias-anthias-wifi-
     # connect-1`: the systemd unit's `docker start`, the
@@ -246,6 +246,11 @@ services:
     # CAP_NET_BIND_SERVICE for udp/53 and udp/67.
     environment:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+      # A PREFIX as of wifi-connect 2026.10.6: the portal appends four
+      # random characters, so five screens unboxed in one room do not all
+      # broadcast "Anthias Setup" for a phone to collapse into one entry
+      # and join at random. The /hotspot screen shows the full name, so
+      # there is nothing for an installer to work out.
       - PORTAL_SSID=Anthias Setup
       - WIFI_CONNECT_BRAND_NAME=Anthias
       # Themes the portal the user opens on their phone so it matches the

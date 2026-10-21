@@ -1543,3 +1543,36 @@ def test_the_setup_screen_does_not_reload_itself() -> None:
     ).read_text()
 
     assert not re.search(r'<meta[^>]*http-equiv=["\']refresh', template)
+
+
+def test_the_splash_screen_calls_it_an_ssid() -> None:
+    """ "Network" is what the thing is; "SSID" is what the phone calls it.
+
+    The screen sits next to a phone showing a list of SSIDs, and the
+    label is there to tell someone which row to tap.
+    """
+    template = (
+        REPO_ROOT / 'src/anthias_server/app/templates/hotspot.html'
+    ).read_text()
+
+    assert '<span class="splash-cred__label">SSID</span>' in template
+    assert '>Network<' not in template
+
+
+def test_the_setup_ssid_is_a_prefix_not_the_whole_name() -> None:
+    """Five screens in one room must not broadcast one name.
+
+    wifi-connect appends four random characters from 2026.10.6 on. The
+    pin and this expectation move together: an earlier image takes
+    PORTAL_SSID literally and every device in the room collides again,
+    silently.
+    """
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    tag = re.search(
+        r'ghcr\.io/screenly-labs/wifi-connect:(\d{4})\.(\d{2})\.(\d+)', compose
+    )
+
+    assert tag is not None
+    assert tuple(int(g) for g in tag.groups()) >= (2026, 10, 6)
+    # Not set to 0 anywhere: that would opt back into the collision.
+    assert 'PORTAL_SSID_SUFFIX' not in compose
