@@ -21,6 +21,7 @@ on:
       - '!docs/**'
       - '!bin/install.sh'
       - '!bin/upgrade_containers.sh'
+      - '!bin/verify_image_signatures.sh'
       - '!bin/start_development_server.sh'
       - '!tests/**'
       - '!docker/Dockerfile.dev'
@@ -242,6 +243,40 @@ jobs:
           subject-name: docker.io/screenly/anthias-redis
           subject-digest: ${{ steps.digests.outputs.redis }}
           push-to-registry: true
+
+      # Keyless cosign signatures, on top of the provenance attestations
+      # above. Devices check these in bin/upgrade_containers.sh (via
+      # bin/verify_image_signatures.sh) before they start a pulled image,
+      # and only accept a certificate issued to this workflow on
+      # refs/heads/master. Like the attestations, the signature is bound
+      # to the digest, so the latest-<board> tags publish-latest points at
+      # these manifests are covered too. GHCR, which devices pull from, is
+      # hard-fail; the Docker Hub mirror is best-effort for the same
+      # rate-limit reason as its attestations.
+      - name: Install cosign
+        if: success() && github.event_name == 'push'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.1.4'
+
+      - name: Sign images with cosign (GHCR)
+        if: success() && github.event_name == 'push'
+        env:
+          NAMESPACE: ghcr.io/screenly/anthias
+          SERVER_DIGEST: ${{ steps.digests.outputs.server }}
+          VIEWER_DIGEST: ${{ steps.digests.outputs.viewer }}
+          REDIS_DIGEST: ${{ steps.digests.outputs.redis }}
+        run: bash .github/workflows/scripts/cosign-sign-images.sh
+
+      - name: Sign images with cosign (Docker Hub)
+        if: success() && github.event_name == 'push'
+        continue-on-error: true
+        env:
+          NAMESPACE: docker.io/screenly/anthias
+          SERVER_DIGEST: ${{ steps.digests.outputs.server }}
+          VIEWER_DIGEST: ${{ steps.digests.outputs.viewer }}
+          REDIS_DIGEST: ${{ steps.digests.outputs.redis }}
+        run: bash .github/workflows/scripts/cosign-sign-images.sh
 
   # Mirror the immutable <short-hash>-<board> tags pushed by the buildx
   # matrix onto the floating latest-<board> tag. Runs only after every
