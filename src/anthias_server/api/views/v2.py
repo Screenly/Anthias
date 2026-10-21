@@ -368,22 +368,26 @@ def wifi_setup_state() -> dict[str, Any]:
     resolving the host's addresses — the signal the whole thing turns
     on — is this module's job already.
     """
-    # Two-stage on purpose. The address list is cheap but cached, so
-    # it can say "up" for a portal that has already gone; the probe is
-    # authoritative but should not run on every poll of a device that
-    # is plainly online. Gating the probe behind a positive address
-    # match gives the cheap answer in the common case and the correct
-    # one whenever it matters.
-    active = wifi_connect.portal_is_up(
+    # Two signals, because each covers the other's blind spot.
+    # wifi-connect's state file says a portal run is live and carries
+    # the credentials, but a SIGKILLed portal cannot remove it. The
+    # address list cannot be left behind like that -- NetworkManager
+    # drops the gateway when the access point goes -- but it is a
+    # cache, so it can lag the other way. Requiring both is what makes
+    # a stale answer in either direction read as "not running", which
+    # fails towards playing content.
+    portal = wifi_connect.read_portal_state()
+    active = portal is not None and wifi_connect.portal_is_up(
         _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
-    ) and wifi_connect.portal_is_serving(r)
-    credentials = wifi_connect.read_portal_credentials() if active else None
+    )
 
     return {
         'active': active,
-        'ssid': credentials.ssid if credentials else None,
-        'passphrase': credentials.passphrase if credentials else None,
-        'portal_url': wifi_connect.PORTAL_URL,
+        'ssid': portal.ssid if active and portal else None,
+        'passphrase': portal.passphrase if active and portal else None,
+        'portal_url': (
+            portal.portal_url if active and portal else wifi_connect.PORTAL_URL
+        ),
     }
 
 

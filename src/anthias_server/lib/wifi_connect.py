@@ -1,53 +1,59 @@
 """Reading the state of the wifi-connect setup portal.
 
 The portal itself is Screenly-Labs/wifi-connect running as the
-``anthias-wifi-connect`` container (see the compose templates). It has
-no API this container could call and no hook to fire, so Anthias reads
-two artefacts it leaves behind:
+``anthias-wifi-connect`` container (see the compose templates). It
+publishes what a host application needs through ``--state-file``: one
+atomic JSON write on the shared ``resin-data`` volume, mounted at
+``/data`` here, carrying the SSID actually on the air, the per-run
+passphrase, the join payload and the portal's address.
 
-* **The join QR.** ``--qr-output`` writes ``wifi-connect-qr.svg`` and
-  ``wifi-connect-qr.txt`` into a directory on the shared ``resin-data``
-  volume, which is mounted at ``/data`` here. The ``.txt`` is the raw
-  ``WIFI:...`` payload the SVG encodes, so it — not a log line — is
-  where the SSID and the per-run passphrase come from.
+**Its presence is the liveness signal.** wifi-connect writes it once a
+run has committed to raising the access point and removes it when the
+run ends, on every exit. That distinction is the whole point: the
+``--qr-output`` files are written *before* the portal's own preflight
+decides whether a portal is needed, so a device that turned out to be
+online has them too, and their presence would put a setup screen on a
+healthy device.
 
-* **The access-point address.** The portal runs with
-  ``ipv4.method=manual``, so while it is up NetworkManager holds
-  ``PORTAL_GATEWAY`` on the WiFi interface and drops it the moment the
-  access point comes down. The server already resolves the host's
-  addresses for the splash page (via host_agent on bare metal, via the
-  supervisor on balena), so seeing that costs no new plumbing.
+Two further signals, because a portal can stop without saying so.
 
-Neither is sufficient alone, which is why ``wifi_setup_state`` uses
-both plus a probe:
+``portal_is_up`` corroborates with something the kernel owns: the
+portal runs with ``ipv4.method=manual``, so NetworkManager holds
+``PORTAL_GATEWAY`` on the WiFi interface for as long as the access
+point is up, and the server already resolves the host's addresses for
+the splash page.
 
-* The QR files are written at the *start* of every run, including the
-  runs that exit a second later because the device turned out to be
-  online — so their presence would show a setup screen on a healthy
-  device.
+The file's **heartbeat** covers what that cannot. A portal killed with
+``SIGKILL`` removes neither its state file nor its access point --
+nothing tore anything down, so NetworkManager keeps holding the
+gateway and the radio keeps broadcasting, and every signal outside the
+file says a healthy portal is running. Measured on a Pi 5.
+wifi-connect refreshes ``heartbeat_unix`` every
+``heartbeat_interval_s`` while it runs, and one that has stopped
+beating is a portal that has stopped running.
 
-* The address list is a *cache*. It is only as current as whatever
-  last refreshed it, and on the Pi 5 testbed a host_agent that had
-  stopped froze it with the access point's address still in it: the
-  setup screen stayed on the display for a portal that had been down
-  for minutes. ``portal_is_serving`` is the liveness check that
-  closes that hole.
+Anthias does not probe the portal's HTTP listener, and nothing here
+should start: it is bound to the gateway address scoped to the
+wireless device, specifically so that a setup portal cannot answer
+over a customer's wired LAN. A packet from the Docker bridge arrives
+on the wrong interface and is refused — measured on a Pi 5 as 200 from
+the host and a connection failure from this container. That is why the
+state file exists.
 """
 
 import base64
+import json
 import logging
-import re
+import time
 from pathlib import Path
 from typing import NamedTuple
-
-import redis
 
 logger = logging.getLogger(__name__)
 
 # Mirrors PORTAL_GATEWAY / PORTAL_LISTENING_PORT / WIFI_CONNECT_QR_OUTPUT
-# in the compose templates. Changing either side alone silently breaks
-# detection, so they are asserted against each other in
-# tests/test_wifi_connect.py.
+# / WIFI_CONNECT_STATE_FILE in the compose templates. Changing either
+# side alone silently breaks detection, so they are asserted against
+# each other in tests/test_wifi_connect.py.
 # NOSONAR (S1313): wifi-connect's fixed setup-AP address, not a
 # deployment endpoint; it only exists while the device is its own AP.
 PORTAL_GATEWAY = '192.168.42.1'  # NOSONAR
@@ -55,114 +61,130 @@ PORTAL_PORT = 8000
 QR_DIRECTORY = Path('/data/hotspot')
 
 QR_SVG_FILENAME = 'wifi-connect-qr.svg'
-QR_PAYLOAD_FILENAME = 'wifi-connect-qr.txt'
+STATE_FILENAME = 'state.json'
 
 PORTAL_URL = f'http://{PORTAL_GATEWAY}:{PORTAL_PORT}/'  # NOSONAR (S5332)
 
-# wifi-connect's RFC 8908 captive-portal API, which only answers while
-# the portal is actually serving. Used as the liveness confirmation
-# below. Short timeout: when the access point is down this address is
-# not on the host at all, so the request has nowhere to go and we must
-# not hold a request worker waiting to find that out.
-# Published by anthias_host_agent, which can actually reach the portal.
-# Keep in step with PORTAL_SERVING_KEY there.
-PORTAL_SERVING_KEY = 'wifi_setup_portal_serving'
+# The schema this code was written against. Upstream bumps it only for a
+# removed field or one that changes meaning, and promises that added
+# fields will not, so a higher number is read rather than refused: a
+# screen that shows the passphrase is worth more than one that is
+# correct about a version.
+STATE_SCHEMA = 1
 
-# Cap on the SVG we will inline into the page. The real file is ~4 KB;
-# this only exists so a truncated or substituted file can't be read
-# into a response body unbounded.
+# How many missed beats before a state file is a leftover rather than a
+# live portal. The interval itself comes from the file, so upstream can
+# change its cadence without this going wrong; two spare beats is slack
+# for a loaded device, and still notices a dead portal inside a minute.
+_HEARTBEAT_GRACE_BEATS = 3
+
+# Used only when a state file predates the heartbeat or omits it.
+_DEFAULT_HEARTBEAT_INTERVAL_S = 15
+
+# Cap on the state file we will read. It is ~400 bytes; this exists so a
+# truncated or substituted file cannot be parsed into memory unbounded.
+_MAX_STATE_BYTES = 64 * 1024
+
 _MAX_SVG_BYTES = 256 * 1024
 
 
-class PortalCredentials(NamedTuple):
-    """The SSID and passphrase of the access point currently offered."""
+class PortalState(NamedTuple):
+    """One portal run, as wifi-connect reported it."""
 
     ssid: str
     passphrase: str
+    portal_url: str
 
 
-def _unescape_field(value: str) -> str:
-    r"""Undo the ``\``-escaping the WIFI: payload applies.
+def read_portal_state(directory: Path | None = None) -> PortalState | None:
+    """Read wifi-connect's state file.
 
-    The payload escapes ``\``, ``;``, ``,``, ``:`` and ``"``. An SSID
-    containing any of them round-trips through here; everything else is
-    returned unchanged.
+    ``None`` when no portal run is live: either the file was never
+    written (a device that has not been offline since the volume was
+    created) or the run that wrote it has ended and removed it.
+
+    Never raises. A missing file is the ordinary case, and a malformed
+    one is worth a log line and a setup screen without credentials
+    rather than a 500 on the only page a stranded device can show.
     """
-    return re.sub(r'\\(.)', r'\1', value)
+    path = (directory or QR_DIRECTORY) / STATE_FILENAME
 
-
-def _split_payload_fields(body: str) -> list[str]:
-    """Split a ``WIFI:`` body on unescaped semicolons."""
-    fields: list[str] = []
-    current: list[str] = []
-    escaped = False
-
-    for char in body:
-        if escaped:
-            current.append(char)
-            escaped = False
-        elif char == '\\':
-            current.append(char)
-            escaped = True
-        elif char == ';':
-            fields.append(''.join(current))
-            current = []
-        else:
-            current.append(char)
-
-    if current:
-        fields.append(''.join(current))
-
-    return fields
-
-
-def parse_qr_payload(payload: str) -> PortalCredentials | None:
-    """Pull the SSID and passphrase out of a ``WIFI:`` QR payload.
-
-    wifi-connect emits ``WIFI:T:WPA;S:<ssid>;P:<passphrase>;H:false;;``.
-    Field order is not relied on here — the format does not guarantee
-    one, and a future upstream reordering should not blank the setup
-    screen. Returns ``None`` for anything that isn't a WiFi payload or
-    is missing an SSID.
-    """
-    payload = payload.strip()
-    if not payload.startswith('WIFI:'):
-        return None
-
-    ssid = None
-    passphrase = ''
-    for field in _split_payload_fields(payload[len('WIFI:') :]):
-        key, separator, value = field.partition(':')
-        if not separator:
-            continue
-        if key == 'S':
-            ssid = _unescape_field(value)
-        elif key == 'P':
-            passphrase = _unescape_field(value)
-
-    if not ssid:
-        return None
-
-    return PortalCredentials(ssid=ssid, passphrase=passphrase)
-
-
-def read_portal_credentials(
-    directory: Path | None = None,
-) -> PortalCredentials | None:
-    """Read the credentials of the access point from the QR payload.
-
-    ``None`` when the portal has not written one — a device that has
-    never been offline since the volume was created, or a run that died
-    before it got that far. Never raises: a setup screen that renders
-    without the passphrase is worth more than a 500.
-    """
-    path = (directory or QR_DIRECTORY) / QR_PAYLOAD_FILENAME
     try:
-        payload = path.read_text(encoding='utf-8')
+        if path.stat().st_size > _MAX_STATE_BYTES:
+            logger.warning(
+                'Ignoring %s: %s bytes is far larger than a portal state file.',
+                path,
+                path.stat().st_size,
+            )
+            return None
+        document = json.loads(path.read_text(encoding='utf-8'))
     except OSError:
         return None
+    except ValueError:
+        logger.warning('Could not parse %s as JSON.', path, exc_info=True)
+        return None
 
-    return parse_qr_payload(payload)
+    if not isinstance(document, dict):
+        logger.warning('%s is not a JSON object.', path)
+        return None
+
+    # The field exists so that a partial or substituted file fails
+    # closed: parsing is not the same as a portal being up.
+    if document.get('portal_active') is not True:
+        return None
+
+    ssid = document.get('ssid')
+    if not isinstance(ssid, str) or not ssid:
+        logger.warning('%s carries no SSID.', path)
+        return None
+
+    # Null on an open access point, where there is nothing to show.
+    passphrase = document.get('passphrase')
+    if not isinstance(passphrase, str):
+        passphrase = ''
+
+    url = document.get('portal_url')
+    if not isinstance(url, str) or not url:
+        url = PORTAL_URL
+
+    if _heartbeat_is_stale(document):
+        logger.warning(
+            'Ignoring %s: the portal stopped refreshing its heartbeat, so '
+            'the run that wrote it is gone.',
+            path,
+        )
+        return None
+
+    return PortalState(ssid=ssid, passphrase=passphrase, portal_url=url)
+
+
+def _heartbeat_is_stale(document: dict[str, object]) -> bool:
+    """Has the portal that wrote this file stopped running?
+
+    A portal killed hard enough cannot remove its own state file, and
+    on that path NetworkManager is left holding the access point -- so
+    the radio, the gateway address and the file all still say a portal
+    is up while nothing serves the page. The heartbeat is the only
+    thing that separates the two.
+
+    A file with no heartbeat at all is trusted: it was written by a
+    wifi-connect older than the field, where presence was the whole
+    contract, and refusing it would blank the setup screen on a device
+    whose portal is running perfectly well.
+    """
+    beat = document.get('heartbeat_unix')
+    if not isinstance(beat, int):
+        return False
+
+    interval = document.get('heartbeat_interval_s')
+    if not isinstance(interval, int) or interval <= 0:
+        interval = _DEFAULT_HEARTBEAT_INTERVAL_S
+
+    # A clock that jumped forward (NTP landing on a device that booted
+    # with no RTC -- every Pi) makes a live beat look ancient. Nothing
+    # here can tell that from a dead portal, and the address check is
+    # the backstop for the one tick it takes the next beat to land.
+    return time.time() - beat > interval * _HEARTBEAT_GRACE_BEATS
 
 
 def read_qr_svg(directory: Path | None = None) -> str | None:
@@ -211,43 +233,6 @@ def portal_is_up(node_ip: str) -> bool:
     follows the portal exactly with no timeout to tune.
     """
     return PORTAL_GATEWAY in node_ip.split()
-
-
-def portal_is_serving(rdb: 'redis.Redis') -> bool:
-    """Is the portal answering on the gateway right now?
-
-    ``portal_is_up`` reads a *cached* address list — host_agent writes
-    it on request, the balena supervisor answers from its own state —
-    and a cache has no obligation to be current. On the Pi 5 testbed a
-    stopped host_agent froze that list with the access point's address
-    still in it, and the setup screen stayed on the display
-    indefinitely for a portal that had been down for minutes. Anything
-    that stops the list being refreshed does the same.
-
-    So the address list is the cheap gate and this is the authority.
-    But the question cannot be asked from in here: wifi-connect binds
-    its listener to the access point's address scoped to the wireless
-    device (`192.168.42.1%wlan0`), so that it can never answer on a
-    customer's ethernet LAN — and a packet from the Docker bridge
-    arrives on the wrong interface and is refused. This container gets
-    a connection failure every time, however healthy the portal is,
-    which made the first version of this function a permanent "no" and
-    the setup screen unreachable.
-
-    So host_agent runs the probe out on the host where the wireless
-    device is, and publishes the answer alongside the address list it
-    is already refreshing for us. Absent key reads as not serving,
-    which fails towards playing content.
-    """
-    try:
-        return rdb.get(PORTAL_SERVING_KEY) == 'true'
-    except redis.RedisError:
-        # Redis is how every other host fact arrives; if it is down the
-        # device has larger problems and the honest answer is "no".
-        logging.getLogger(__name__).warning(
-            'Could not read the portal-serving fact from Redis', exc_info=True
-        )
-        return False
 
 
 def strip_portal_gateway(node_ip: str) -> str:

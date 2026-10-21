@@ -19,13 +19,14 @@ constants; assertions inherit it by referencing them.
 """
 
 import base64
+import json
 import re
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
 import pytest
-import redis
 import requests
 from django.test import Client
 
@@ -51,64 +52,199 @@ BALENA_TEMPLATES = (
 
 
 # ---------------------------------------------------------------------------
-# parse_qr_payload (pure parser, no I/O)
+# read_portal_state: wifi-connect's --state-file contract
 # ---------------------------------------------------------------------------
 
 
-def test_parses_the_payload_wifi_connect_writes() -> None:
-    credentials = wifi_connect.parse_qr_payload(
-        'WIFI:T:WPA;S:Anthias Setup;P:hunter2hunter2;H:false;;'
+def _state_document(**overrides: object) -> dict[str, object]:
+    """A state file as wifi-connect 2026.10.8 writes one."""
+    document: dict[str, object] = {
+        'schema': 1,
+        'portal_active': True,
+        'ssid': 'Anthias Setup-G4VV',
+        'security': 'wpa',
+        'passphrase': 'brave-plum-42',
+        'qr_payload': (
+            'WIFI:T:WPA;S:Anthias Setup-G4VV;P:brave-plum-42;H:false;;'
+        ),
+        'portal_url': 'http://192.168.42.1:8000/',
+        'gateway': '192.168.42.1',
+        'port': 8000,
+        'started_at_unix': int(time.time()),
+        'heartbeat_unix': int(time.time()),
+        'heartbeat_interval_s': 15,
+    }
+    document.update(overrides)
+    return document
+
+
+def _write_state(directory: Path, **overrides: object) -> None:
+    (directory / wifi_connect.STATE_FILENAME).write_text(
+        json.dumps(_state_document(**overrides))
     )
 
-    assert credentials is not None
-    assert credentials.ssid == 'Anthias Setup'
-    assert credentials.passphrase == 'hunter2hunter2'
+
+def test_reads_the_credentials_wifi_connect_published(tmp_path: Path) -> None:
+    _write_state(tmp_path)
+
+    portal = wifi_connect.read_portal_state(tmp_path)
+
+    assert portal is not None
+    assert portal.ssid == 'Anthias Setup-G4VV'
+    assert portal.passphrase == 'brave-plum-42'
+    assert portal.portal_url == 'http://192.168.42.1:8000/'
 
 
-def test_field_order_is_not_relied_on() -> None:
-    """The WIFI: format fixes no field order, so neither do we."""
-    credentials = wifi_connect.parse_qr_payload(
-        'WIFI:P:hunter2hunter2;S:Anthias Setup;T:WPA;;'
-    )
+def test_no_state_file_means_no_portal_run(tmp_path: Path) -> None:
+    """The ordinary case: a device that has never been offline.
 
-    assert credentials is not None
-    assert credentials.ssid == 'Anthias Setup'
-    assert credentials.passphrase == 'hunter2hunter2'
+    Also the case after a run ends -- wifi-connect removes the file on
+    every exit, which is what makes its presence the liveness signal.
+    """
+    assert wifi_connect.read_portal_state(tmp_path) is None
 
 
-def test_escaped_separators_round_trip() -> None:
-    r"""``\;`` inside an SSID is one SSID, not two fields."""
-    credentials = wifi_connect.parse_qr_payload(
-        r'WIFI:T:WPA;S:Lab\;Floor\:2;P:pass\\word;H:false;;'
-    )
+def test_a_file_that_disclaims_being_active_is_not_a_portal(
+    tmp_path: Path,
+) -> None:
+    """``portal_active`` is what makes a partial read fail closed.
 
-    assert credentials is not None
-    assert credentials.ssid == 'Lab;Floor:2'
-    assert credentials.passphrase == 'pass\\word'
+    Parsing a file is not the same as a portal being up, and upstream
+    writes the field explicitly so a consumer does not have to treat
+    "this is valid JSON" as "someone can join a network right now".
+    """
+    _write_state(tmp_path, portal_active=False)
+
+    assert wifi_connect.read_portal_state(tmp_path) is None
 
 
-def test_trailing_whitespace_is_tolerated() -> None:
-    credentials = wifi_connect.parse_qr_payload(
-        'WIFI:T:WPA;S:Anthias Setup;P:secret;;\n'
-    )
+def test_an_open_portal_reports_no_passphrase(tmp_path: Path) -> None:
+    """``--insecure-open-portal`` nulls the credential fields.
 
-    assert credentials is not None
-    assert credentials.ssid == 'Anthias Setup'
+    The page must say the network is open, not render "None" at
+    someone standing in front of it.
+    """
+    _write_state(tmp_path, security='open', passphrase=None, qr_payload=None)
+
+    portal = wifi_connect.read_portal_state(tmp_path)
+
+    assert portal is not None
+    assert portal.ssid == 'Anthias Setup-G4VV'
+    assert portal.passphrase == ''
+
+
+def test_unknown_fields_are_ignored(tmp_path: Path) -> None:
+    """Upstream adds fields without bumping the schema, by contract.
+
+    A reader that refused them would turn every upstream release into
+    a device that cannot show its own passphrase.
+    """
+    _write_state(tmp_path, schema=99, some_future_field={'nested': True})
+
+    portal = wifi_connect.read_portal_state(tmp_path)
+
+    assert portal is not None
+    assert portal.ssid == 'Anthias Setup-G4VV'
+
+
+def test_a_state_file_without_an_ssid_is_unusable(tmp_path: Path) -> None:
+    """Nothing to tell the user to join."""
+    _write_state(tmp_path, ssid='')
+
+    assert wifi_connect.read_portal_state(tmp_path) is None
 
 
 @pytest.mark.parametrize(
-    'payload',
+    'contents',
     [
         '',
-        'not a wifi payload',
-        # A non-WiFi QR that happens to be on the volume.
-        'https://anthias.screenly.io',
-        # Well-formed but no SSID: nothing to tell the user to join.
-        'WIFI:T:WPA;P:secret;;',
+        'not json at all',
+        '[]',
+        'null',
+        '{"portal_active": true',
     ],
 )
-def test_unusable_payloads_return_none(payload: str) -> None:
-    assert wifi_connect.parse_qr_payload(payload) is None
+def test_a_malformed_state_file_is_not_an_error(
+    tmp_path: Path, contents: str
+) -> None:
+    """The only page a stranded device can show must not 500."""
+    (tmp_path / wifi_connect.STATE_FILENAME).write_text(contents)
+
+    assert wifi_connect.read_portal_state(tmp_path) is None
+
+
+def test_an_implausibly_large_state_file_is_ignored(tmp_path: Path) -> None:
+    (tmp_path / wifi_connect.STATE_FILENAME).write_text(
+        ' ' * (wifi_connect._MAX_STATE_BYTES + 1)
+    )
+
+    assert wifi_connect.read_portal_state(tmp_path) is None
+
+
+def test_a_portal_that_stopped_beating_is_gone(tmp_path: Path) -> None:
+    """The case the address check cannot see.
+
+    SIGKILL the portal and it removes neither its state file nor its
+    access point: NetworkManager keeps holding the gateway and the
+    radio keeps broadcasting, so every other signal still reads as a
+    healthy portal. Measured on a Pi 5. Only the heartbeat separates
+    them.
+    """
+    _write_state(tmp_path, heartbeat_unix=int(time.time()) - 120)
+
+    assert wifi_connect.read_portal_state(tmp_path) is None
+
+
+def test_a_beat_or_two_may_be_missed(tmp_path: Path) -> None:
+    """A loaded device must not blank its own setup screen."""
+    _write_state(tmp_path, heartbeat_unix=int(time.time()) - 20)
+
+    assert wifi_connect.read_portal_state(tmp_path) is not None
+
+
+def test_the_staleness_bound_comes_from_the_file(tmp_path: Path) -> None:
+    """Upstream may change its cadence; it says so in the file.
+
+    A bound hardcoded here would turn a slower heartbeat upstream into
+    a setup screen that blanks itself every few seconds.
+    """
+    _write_state(
+        tmp_path,
+        heartbeat_interval_s=600,
+        heartbeat_unix=int(time.time()) - 300,
+    )
+
+    assert wifi_connect.read_portal_state(tmp_path) is not None
+
+
+def test_a_state_file_with_no_heartbeat_is_trusted(tmp_path: Path) -> None:
+    """Written by a wifi-connect older than the field.
+
+    Presence was the whole contract then, and refusing it would blank
+    the setup screen on a device whose portal is running fine.
+    """
+    document = _state_document()
+    del document['heartbeat_unix']
+    del document['heartbeat_interval_s']
+    (tmp_path / wifi_connect.STATE_FILENAME).write_text(json.dumps(document))
+
+    assert wifi_connect.read_portal_state(tmp_path) is not None
+
+
+def test_anthias_does_not_probe_the_portal_listener() -> None:
+    """The reason the state file exists at all.
+
+    wifi-connect binds its listener to the gateway scoped to the
+    wireless device, so a setup portal cannot answer over a customer's
+    wired LAN -- and a packet from the Docker bridge is refused with
+    it. A probe reintroduced here would pass every unit test in this
+    file and fail on every device, so the import is what gets pinned.
+    """
+    source = (REPO_ROOT / 'src/anthias_server/lib/wifi_connect.py').read_text()
+
+    assert 'requests' not in source
+    assert 'urllib' not in source
+    assert 'httpx' not in source
 
 
 # ---------------------------------------------------------------------------
@@ -151,22 +287,6 @@ def test_strip_portal_gateway_is_a_no_op_when_absent() -> None:
 # ---------------------------------------------------------------------------
 # Reading the artefacts off the shared volume
 # ---------------------------------------------------------------------------
-
-
-def test_reads_credentials_from_the_payload_file(tmp_path: Path) -> None:
-    (tmp_path / wifi_connect.QR_PAYLOAD_FILENAME).write_text(
-        'WIFI:T:WPA;S:Anthias Setup;P:secret;H:false;;'
-    )
-
-    credentials = wifi_connect.read_portal_credentials(tmp_path)
-
-    assert credentials is not None
-    assert credentials.ssid == 'Anthias Setup'
-
-
-def test_missing_payload_file_is_not_an_error(tmp_path: Path) -> None:
-    """A device that has never been offline has no QR on its volume."""
-    assert wifi_connect.read_portal_credentials(tmp_path) is None
 
 
 def test_reads_the_qr_svg(tmp_path: Path) -> None:
@@ -252,6 +372,15 @@ def test_compose_qr_directory_matches_this_module(
     assert f'WIFI_CONNECT_QR_OUTPUT={wifi_connect.QR_DIRECTORY}' in body, (
         f'{template_name} writes the join QR somewhere this container does '
         f'not read it from'
+    )
+
+    # Same hazard, worse failure: a state file written somewhere this
+    # container does not look means every portal run reads as "no
+    # portal", and the screen never shows a passphrase.
+    state_path = wifi_connect.QR_DIRECTORY / wifi_connect.STATE_FILENAME
+    assert f'WIFI_CONNECT_STATE_FILE={state_path}' in body, (
+        f'{template_name} and anthias_server.lib.wifi_connect disagree '
+        f'about where the portal state file lives'
     )
 
 
@@ -711,10 +840,45 @@ def test_wifi_setup_poll_asks_for_the_probe_free_refresh() -> None:
         ),
         mock.patch.object(v2_views.r, 'get', return_value=None),
         mock.patch.object(v2_views.r, 'publish') as publish,
+        mock.patch(
+            'anthias_server.lib.wifi_connect.read_portal_state',
+            return_value=wifi_connect.PortalState(
+                'Anthias Setup-G4VV', 'p', wifi_connect.PORTAL_URL
+            ),
+        ),
     ):
         v2_views.wifi_setup_state()
 
     publish.assert_called_once_with('hostcmd', 'set_ip_addresses_fast')
+
+
+def test_a_device_with_no_portal_does_not_wake_host_agent() -> None:
+    """The cheap signal is checked first, and it is local.
+
+    This poll runs every few seconds for the whole life of a device.
+    Before the state file there was nothing local to ask, so every
+    tick published a refresh command to host_agent -- on every healthy
+    screen in a fleet, forever. Now the host is only disturbed once
+    something on disk says a portal run is live.
+    """
+    from anthias_server.api.views import v2 as v2_views
+
+    v2_views.r.delete(v2_views._WIFI_SETUP_REFRESH_PENDING_KEY)
+
+    with (
+        mock.patch(
+            'anthias_server.api.views.v2.is_balena_app', return_value=False
+        ),
+        mock.patch.object(v2_views.r, 'get', return_value=None),
+        mock.patch.object(v2_views.r, 'publish') as publish,
+        mock.patch(
+            'anthias_server.lib.wifi_connect.read_portal_state',
+            return_value=None,
+        ),
+    ):
+        assert v2_views.wifi_setup_state()['active'] is False
+
+    publish.assert_not_called()
 
 
 def test_splash_poll_still_asks_for_the_probing_refresh() -> None:
@@ -756,7 +920,6 @@ def test_the_fast_host_refresh_does_no_internet_probe() -> None:
             'get_ip_addresses',
             return_value=[wifi_connect.PORTAL_GATEWAY],
         ),
-        mock.patch.object(host_agent, 'set_portal_serving'),
         mock.patch(
             'anthias_host_agent.__main__.requests.get',
             side_effect=AssertionError('must not probe the internet'),
@@ -779,112 +942,24 @@ def test_the_fast_host_refresh_is_reachable_as_a_host_command() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Liveness: the address list is a cache, so it needs confirming
+# Liveness: two signals, each covering the other's blind spot
 # ---------------------------------------------------------------------------
 #
-# Found on the Pi 5 testbed. host_agent stopped, the cached address
-# list froze with the access point's address still in it, and
-# /hotspot stayed full-screen on the display for a portal that had
-# been down for minutes. Any interruption to the refresh does this.
+# The state file says a portal run is live and carries the
+# credentials, but a SIGKILLed portal cannot remove its own file.
 #
-# The probe that confirms it runs in host_agent, NOT here. wifi-connect
-# binds its listener to the access point's address scoped to the
-# wireless device (`192.168.42.1%wlan0`) so it cannot answer on a
-# customer's ethernet LAN, so a packet from the Docker bridge is
-# refused: the server container gets a connection failure every time,
-# however healthy the portal is. Measured on a Pi 5 — 200 from the
-# host, unreachable from the container — and it made the first version
-# of this a permanent "no", which hid the setup screen entirely.
-
-
-def test_portal_is_serving_reads_the_fact_host_agent_published() -> None:
-    rdb = mock.Mock()
-    rdb.get.return_value = 'true'
-
-    assert wifi_connect.portal_is_serving(rdb)
-    rdb.get.assert_called_once_with(wifi_connect.PORTAL_SERVING_KEY)
-
-
-@pytest.mark.parametrize('value', ['false', None, '', 'yes', b'true'])
-def test_portal_is_not_serving_for_anything_but_a_true(value: object) -> None:
-    """Including absent: a key nobody has written yet is not a portal."""
-    rdb = mock.Mock()
-    rdb.get.return_value = value
-
-    assert not wifi_connect.portal_is_serving(rdb)
-
-
-def test_portal_is_not_serving_when_redis_is_down() -> None:
-    rdb = mock.Mock()
-    rdb.get.side_effect = redis.RedisError('nope')
-
-    assert not wifi_connect.portal_is_serving(rdb)
-
-
-def test_the_server_never_probes_the_portal_itself() -> None:
-    """The regression that made the setup screen unreachable.
-
-    A probe from this container cannot succeed, so if this module ever
-    grows one again the feature breaks in a way no unit test would
-    notice — the mock answers, the hardware does not.
-    """
-    source = (REPO_ROOT / 'src/anthias_server/lib/wifi_connect.py').read_text()
-
-    assert 'requests' not in source, (
-        'anthias-server cannot reach the portal: the listener is bound to '
-        'the AP address scoped to the wireless device, so a request from '
-        'the Docker bridge is refused. host_agent owns this probe.'
-    )
-
-
-def test_host_agent_probes_the_portal_where_the_radio_is() -> None:
-    """And only when the address list says there is something to probe."""
-    from anthias_host_agent import __main__ as host_agent
-
-    rdb = mock.Mock()
-    with mock.patch(
-        'anthias_host_agent.__main__.requests.get',
-        side_effect=AssertionError('nothing holds the gateway; do not probe'),
-    ):
-        host_agent.set_portal_serving(rdb, ['192.168.8.17'])
-    rdb.set.assert_called_once_with(host_agent.PORTAL_SERVING_KEY, 'false')
-
-    rdb.reset_mock()
-    with mock.patch(
-        'anthias_host_agent.__main__.requests.get',
-        return_value=mock.Mock(ok=True),
-    ) as get:
-        host_agent.set_portal_serving(
-            rdb, ['192.168.8.17', host_agent.PORTAL_GATEWAY]
-        )
-    rdb.set.assert_called_once_with(host_agent.PORTAL_SERVING_KEY, 'true')
-    assert get.call_args.kwargs['timeout'] == host_agent.PORTAL_PROBE_TIMEOUT_S
-
-
-def test_host_agent_reports_a_portal_that_stopped_answering() -> None:
-    """The stale-cache case: the address is held, the portal is gone."""
-    from anthias_host_agent import __main__ as host_agent
-
-    rdb = mock.Mock()
-    with mock.patch(
-        'anthias_host_agent.__main__.requests.get',
-        side_effect=requests.exceptions.ConnectionError(),
-    ):
-        host_agent.set_portal_serving(rdb, [host_agent.PORTAL_GATEWAY])
-
-    rdb.set.assert_called_once_with(host_agent.PORTAL_SERVING_KEY, 'false')
-
-
-def test_the_two_sides_agree_on_the_key() -> None:
-    """Two processes, one string, no compiler between them."""
-    from anthias_host_agent import __main__ as host_agent
-
-    assert host_agent.PORTAL_SERVING_KEY == wifi_connect.PORTAL_SERVING_KEY
-    assert host_agent.PORTAL_GATEWAY == wifi_connect.PORTAL_GATEWAY
+# The address list cannot be left behind like that -- NetworkManager
+# drops the gateway the moment the access point comes down -- but it
+# is a cache. Found on the Pi 5 testbed: host_agent stopped, the list
+# froze with the access point's address still in it, and /hotspot
+# stayed full-screen for a portal that had been down for minutes.
+#
+# Requiring both is what makes a stale answer in either direction read
+# as "not running", which fails towards playing content.
 
 
 def test_a_stale_address_cache_does_not_report_setup_mode() -> None:
-    """The regression this exists for, end to end through the view."""
+    """Gateway still cached, no portal run: not setup mode."""
     from anthias_server.api.views import v2 as v2_views
 
     with (
@@ -894,8 +969,34 @@ def test_a_stale_address_cache_does_not_report_setup_mode() -> None:
             return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
         ),
         mock.patch(
-            'anthias_server.lib.wifi_connect.portal_is_serving',
-            return_value=False,
+            'anthias_server.lib.wifi_connect.read_portal_state',
+            return_value=None,
+        ),
+    ):
+        state = v2_views.wifi_setup_state()
+
+    assert state['active'] is False
+    assert state['passphrase'] is None
+
+
+def test_a_state_file_left_behind_does_not_report_setup_mode() -> None:
+    """The other direction: a SIGKILLed portal cannot clean up.
+
+    Nothing on the device would ever remove that file, so without the
+    address check a screen would show a dead portal's passphrase until
+    the next run.
+    """
+    from anthias_server.api.views import v2 as v2_views
+
+    with (
+        mock.patch.object(
+            v2_views, '_resolve_node_ip', return_value=_FIXTURE_IPV4
+        ),
+        mock.patch(
+            'anthias_server.lib.wifi_connect.read_portal_state',
+            return_value=wifi_connect.PortalState(
+                'Anthias Setup-G4VV', 'p', wifi_connect.PORTAL_URL
+            ),
         ),
     ):
         state = v2_views.wifi_setup_state()
@@ -914,34 +1015,75 @@ def test_a_live_portal_still_reports_setup_mode() -> None:
             return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
         ),
         mock.patch(
-            'anthias_server.lib.wifi_connect.portal_is_serving',
-            return_value=True,
-        ),
-        mock.patch(
-            'anthias_server.lib.wifi_connect.read_portal_credentials',
-            return_value=wifi_connect.PortalCredentials('Anthias Setup', 'p'),
+            'anthias_server.lib.wifi_connect.read_portal_state',
+            return_value=wifi_connect.PortalState(
+                'Anthias Setup-G4VV',
+                'brave-plum-42',
+                'http://192.168.42.1:8000/',
+            ),
         ),
     ):
         state = v2_views.wifi_setup_state()
 
     assert state['active'] is True
-    assert state['ssid'] == 'Anthias Setup'
+    assert state['ssid'] == 'Anthias Setup-G4VV'
+    assert state['passphrase'] == 'brave-plum-42'
+    assert state['portal_url'] == 'http://192.168.42.1:8000/'
 
 
-def test_an_online_device_never_probes_the_portal() -> None:
-    """No stray packets toward 192.168.42.1 on a healthy device."""
+def test_the_ssid_shown_is_the_one_on_the_air() -> None:
+    """wifi-connect appends a per-device suffix to PORTAL_SSID.
+
+    The screen must show what the phone will list, not the prefix out
+    of the compose file -- that is the whole point of the suffix.
+    """
     from anthias_server.api.views import v2 as v2_views
+
+    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+    match = re.search(r'- PORTAL_SSID=(.+)', compose)
+    assert match is not None, 'the service block must still set PORTAL_SSID'
+    configured = match.group(1).strip()
 
     with (
         mock.patch.object(
-            v2_views, '_resolve_node_ip', return_value=_FIXTURE_IPV4
+            v2_views,
+            '_resolve_node_ip',
+            return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
         ),
         mock.patch(
-            'anthias_server.lib.wifi_connect.portal_is_serving',
-            side_effect=AssertionError('must not probe when not in setup'),
+            'anthias_server.lib.wifi_connect.read_portal_state',
+            return_value=wifi_connect.PortalState(
+                f'{configured}-G4VV', 'p', wifi_connect.PORTAL_URL
+            ),
         ),
     ):
-        assert v2_views.wifi_setup_state()['active'] is False
+        state = v2_views.wifi_setup_state()
+
+    assert state['ssid'] == f'{configured}-G4VV'
+    assert state['ssid'] != configured
+
+
+def test_host_agent_no_longer_probes_the_portal() -> None:
+    """Deleted along with the probe it published for.
+
+    wifi-connect reports its own state now, so the host-side HTTP
+    probe and the Redis key it wrote are gone. Keeping a dead key
+    around invites something to start reading it again.
+    """
+    from anthias_host_agent import __main__ as host_agent
+
+    source = (REPO_ROOT / 'src/anthias_host_agent/__main__.py').read_text()
+
+    assert not hasattr(host_agent, 'set_portal_serving')
+    assert 'wifi_setup_portal_serving' not in source
+    assert 'captive-portal' not in source
+
+
+def test_the_two_sides_agree_on_the_gateway() -> None:
+    """Two processes, one string, no compiler between them."""
+    from anthias_host_agent import __main__ as host_agent
+
+    assert not hasattr(host_agent, 'PORTAL_GATEWAY')
 
 
 # ---------------------------------------------------------------------------

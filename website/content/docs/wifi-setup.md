@@ -29,13 +29,17 @@ the `anthias-wifi-connect` container alongside the rest of Anthias.
 When a screen can't reach a network, it puts a setup page on the display
 showing three things:
 
-* the name of the temporary WiFi network it has created (**Anthias Setup**),
+* the name of the temporary WiFi network it has created — **Anthias Setup**
+  followed by four characters unique to that screen, like
+  **Anthias Setup-G4VV**,
 * the passphrase for it, which is different every time,
 * a QR code that joins that network for you, so you don't have to type the
   passphrase.
 
-Scan the QR code with a phone, or join **Anthias Setup** by hand using the
-passphrase shown. Then open **http://192.168.42.1:8000** in a browser, pick the
+Scan the QR code with a phone, or join the network by hand using the name and
+passphrase shown. The four characters on the end of the name are what tell two
+screens apart: unbox five in one room and each creates its own network, so the
+one you join is the one you are standing in front of. Then open **http://192.168.42.1:8000** in a browser, pick the
 network the screen should use, and enter its passphrase. The screen joins it and
 goes back to playing your content.
 
