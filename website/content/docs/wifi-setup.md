@@ -30,18 +30,18 @@ When a screen can't reach a network, it puts a setup page on the display
 showing three things:
 
 * the name of the temporary WiFi network it has created (**Anthias Setup**),
-* the password for it, which is different every time,
+* the passphrase for it, which is different every time,
 * a QR code that joins that network for you, so you don't have to type the
-  password.
+  passphrase.
 
 Scan the QR code with a phone, or join **Anthias Setup** by hand using the
-password shown. Then open **http://192.168.42.1:8000** in a browser, pick the
-network the screen should use, and enter its password. The screen joins it and
+passphrase shown. Then open **http://192.168.42.1:8000** in a browser, pick the
+network the screen should use, and enter its passphrase. The screen joins it and
 goes back to playing your content.
 
 > **Note**
 >
-> The password on screen is only valid for that one setup session. If the
+> The passphrase on screen is only valid for that one setup session. If the
 > screen gives up and tries again, it generates a new one and the display
 > updates — so read it off the screen rather than noting it down.
 
@@ -119,15 +119,15 @@ disabled does the same thing and removes the unit.
 
 ## Security
 
-The setup network is encrypted (WPA2/WPA3) with a password generated fresh for
+The setup network is encrypted (WPA2/WPA3) with a passphrase generated fresh for
 each session, and it is only up while setup is actually happening. That's a
 deliberate change from the captive portal Anthias used before 2026.04, which
 created an *open* network — everything typed into it, including your WiFi
-password, crossed the air in the clear.
+passphrase, crossed the air in the clear.
 
 The encryption protects you from anyone who isn't on the setup network. It
 does not protect you from someone who *is* — a second device that joined the
-same setup network at the same time could capture the handshake. The password
+same setup network at the same time could capture the handshake. The passphrase
 being different every time and the network being short-lived is what bounds
 that; it isn't a wall between two devices on the same setup network.
 

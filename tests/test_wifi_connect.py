@@ -1446,3 +1446,19 @@ def test_a_bind_failure_is_not_counted_as_success() -> None:
     codes = success.group(1).split()
     assert '6' in codes, 'a timeout is an ordinary ending'
     assert '7' not in codes, 'a portal that cannot bind must surface as failed'
+
+
+def test_the_splash_screen_calls_it_a_passphrase() -> None:
+    """WPA's own word, and the one on the back of a router.
+
+    The setup network is WPA2/WPA3, so what the screen displays is a
+    passphrase. Saying "password" sends someone looking for an account
+    credential — and the portal they open on their phone says
+    passphrase, so disagreeing with it is worse than either word alone.
+    """
+    template = (
+        REPO_ROOT / 'src/anthias_server/app/templates/hotspot.html'
+    ).read_text()
+
+    assert '<span class="splash-cred__label">Passphrase</span>' in template
+    assert 'Password' not in template
