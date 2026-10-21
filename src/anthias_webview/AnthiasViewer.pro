@@ -34,14 +34,16 @@ SOURCES += src/main.cpp \
     src/view.cpp \
     src/rotation.cpp \
     src/image_fallback.cpp \
-    src/image_transition.cpp
+    src/image_transition.cpp \
+    src/image_compositing.cpp
 
 HEADERS += \
     src/mainwindow.h \
     src/view.h \
     src/rotation.h \
     src/image_fallback.h \
-    src/image_transition.h
+    src/image_transition.h \
+    src/image_compositing.h
 
 greaterThan(QT_MAJOR_VERSION, 5) {
     QT += multimedia quickwidgets

@@ -165,10 +165,18 @@ private:
     //
     // Interruption (a new asset arriving mid-fade): loadAsStaticImage /
     // setupAnimation re-capture fadeFromImage from whatever
-    // ``currentImage`` actually holds at that instant and restart
-    // fadeElapsed, rather than queueing a second transition. So an
-    // interrupted fade always restarts cleanly from the frame
-    // currently on screen instead of stacking.
+    // ``currentImage`` holds at that instant and restart fadeElapsed,
+    // rather than queueing a second transition, so nothing stacks.
+    // That capture is NOT "the frame currently on screen". During an
+    // in-flight fade the screen shows a blend, but currentImage holds
+    // only the plain incoming frame of that fade (paintEvent() never
+    // writes a blended result back into it). So an asset arriving
+    // mid-fade restarts from the previous fade's target frame, at
+    // full fidelity, rather than from whatever partially-blended
+    // pixels were actually visible the instant before. In practice
+    // this rarely matters: it would take an asset shorter than
+    // fadeDurationMs to interrupt a fade at all, but the comment
+    // should describe what the code does, not what sounds tidiest.
     QImage fadeFromImage;
     QElapsedTimer fadeElapsed;
     QTimer* fadeTimer;

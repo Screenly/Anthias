@@ -31,6 +31,7 @@
 #include <QtGlobal>
 
 #include "view.h"
+#include "image_compositing.h"
 #include "image_fallback.h"
 #include "image_transition.h"
 #include "rotation.h"
@@ -412,9 +413,25 @@ View::View(QWidget* parent) : QWidget(parent)
     // Image-to-image crossfade. You can see the member comments in view.h.
     // Resolved once here, like pageLoadTimeoutMs() above, rather than
     // re-read on every loadImage().
+    //
+    // Force-disabled on Qt5 builds (Pi 1/2/3-32, linuxfb), regardless
+    // of what ANTHIAS_IMAGE_TRANSITION_MS is set to. Measured on the
+    // maintainer's hardware rig: a single blended paintEvent() costs
+    // ~517ms on a Pi 1 (armv6, Qt 5.15.15) at 1920x1080, longer than
+    // the entire default 300ms fade. That's not a duration problem
+    // (any nonzero duration still means at least one blended frame at
+    // that cost, and the viewer's main thread, including its D-Bus
+    // service, blocks for the duration of that paint), so it isn't
+    // something ANTHIAS_IMAGE_TRANSITION_MS can be tuned around; the
+    // env var is simply never read on this Qt version, same posture
+    // as not offering a dial for something that has no good setting.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     fadeDurationMs = image_transition::durationMs(
         qgetenv("ANTHIAS_IMAGE_TRANSITION_MS"),
         qEnvironmentVariableIsSet("ANTHIAS_IMAGE_TRANSITION_MS"));
+#else
+    fadeDurationMs = image_transition::kMinDurationMs;
+#endif
     fadeActive = false;
     fadeTimer = new QTimer(this);
     // ~60fps while a fade is running: only started/stopped in
@@ -1025,55 +1042,6 @@ void View::loadAsStaticImage(const QByteArray& data)
     }
 }
 
-namespace {
-// Draws ``image`` scaled (KeepAspectRatio) into ``box`` and centred,
-// at ``opacity``. ``originAtCentre`` selects which of paintEvent()'s
-// two pre-existing centring formulas to use: false for the
-// imageRotation == 0 path (image centred in the un-translated
-// widget, box == size()), true for the linuxfb-rotation path (the
-// painter has already been translated to the widget centre and
-// rotated, so the image is centred at the new origin). Both formulas
-// are exactly what paintEvent() used before this function existed.
-// They're kept separate rather than unified so neither path's rounding
-// changes. ``opacity`` is only touched when it isn't 1.0, so the
-// non-fading call (opacity == 1.0) leaves the QPainter's opacity
-// state exactly as untouched as it was before crossfade support was
-// added.
-void drawScaledImage(
-    QPainter &painter, const QImage &image, const QSize &box,
-    bool originAtCentre, qreal opacity)
-{
-    if (image.isNull() || opacity <= 0.0) {
-        return;
-    }
-    QSize scaledSize = image.size();
-    scaledSize.scale(box, Qt::KeepAspectRatio);
-    if (opacity < 1.0) {
-        painter.setOpacity(opacity);
-    }
-    if (originAtCentre) {
-        painter.drawImage(
-            QRect(
-                -scaledSize.width() / 2,
-                -scaledSize.height() / 2,
-                scaledSize.width(),
-                scaledSize.height()),
-            image);
-    } else {
-        painter.drawImage(
-            QRect(
-                (box.width() - scaledSize.width()) / 2,
-                (box.height() - scaledSize.height()) / 2,
-                scaledSize.width(),
-                scaledSize.height()),
-            image);
-    }
-    if (opacity < 1.0) {
-        painter.setOpacity(1.0);
-    }
-}
-}  // namespace
-
 void View::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
@@ -1102,8 +1070,13 @@ void View::paintEvent(QPaintEvent*)
     // (the previous asset's last frame) out from under imageToPaint
     // instead of the plain single-image draw. progressFor() is a
     // pure function (image_transition.cpp, covered by
-    // test_image_transition.cpp) so only the QElapsedTimer read and
-    // the actual drawing happen here.
+    // test_image_transition.cpp) so only the QElapsedTimer read
+    // happens here; the actual pixel blend is
+    // image_compositing::paintCrossfade() (image_compositing.cpp,
+    // covered by test_image_compositing.cpp), deliberately a plain
+    // source-over blend with no composition-mode switch: see that
+    // file's namespace comment for why a CompositionMode_Plus-based
+    // version shipped first and was wrong.
     qreal fadeProgress = 1.0;
     if (fadeActive) {
         fadeProgress = image_transition::progressFor(
@@ -1113,22 +1086,13 @@ void View::paintEvent(QPaintEvent*)
 
     if (imageRotation == 0) {
         if (blending) {
-            drawScaledImage(
-                painter, fadeFromImage, size(),
-                /*originAtCentre=*/false, 1.0 - fadeProgress);
-            // Two source-over draws don't sum to 1 (the second one
-            // re-attenuates whatever the first left behind, so the
-            // combined weight dips to 0.75 at the midpoint, a
-            // visible pulse toward black).Drawing the incoming
-            // frame additively instead makes the two weights sum to
-            // exactly 1 for every progress value: A*(1-p)+B*p.
-            painter.setCompositionMode(QPainter::CompositionMode_Plus);
-        }
-        drawScaledImage(
-            painter, imageToPaint, size(), /*originAtCentre=*/false,
-            fadeActive ? fadeProgress : 1.0);
-        if (blending) {
-            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            image_compositing::paintCrossfade(
+                painter, fadeFromImage, imageToPaint, size(),
+                /*originAtCentre=*/false, fadeProgress);
+        } else {
+            image_compositing::drawScaledImage(
+                painter, imageToPaint, size(), /*originAtCentre=*/false,
+                1.0);
         }
     } else {
         // linuxfb-only manual rotation (see linuxfbRotationOverride):
@@ -1136,27 +1100,22 @@ void View::paintEvent(QPaintEvent*)
         // drawable box, so the image is fit into the widget's
         // transposed dimensions and centred. A landscape image on a
         // portrait-turned screen is pillar-boxed, matching the
-        // GStreamer videoflip path. Both fade frames are drawn
-        // through this same translate+rotate, applied once, so a
-        // rotated screen composites them correctly instead of
-        // blending pre-rotation and rotating the (already blended)
-        // result.
+        // GStreamer videoflip path. Both fade frames go through this
+        // same translate+rotate, applied once, so a rotated screen
+        // composites them correctly instead of blending pre-rotation
+        // and rotating the (already blended) result.
         const QSize box =
             (imageRotation % 180 == 0) ? size() : QSize(height(), width());
         painter.translate(width() / 2.0, height() / 2.0);
         painter.rotate(imageRotation);
         if (blending) {
-            drawScaledImage(
-                painter, fadeFromImage, box, /*originAtCentre=*/true,
-                1.0 - fadeProgress);
-            // Same reasoning as the imageRotation == 0 branch above.
-            painter.setCompositionMode(QPainter::CompositionMode_Plus);
-        }
-        drawScaledImage(
-            painter, imageToPaint, box, /*originAtCentre=*/true,
-            fadeActive ? fadeProgress : 1.0);
-        if (blending) {
-            painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+            image_compositing::paintCrossfade(
+                painter, fadeFromImage, imageToPaint, box,
+                /*originAtCentre=*/true, fadeProgress);
+        } else {
+            image_compositing::drawScaledImage(
+                painter, imageToPaint, box, /*originAtCentre=*/true,
+                1.0);
         }
     }
 
