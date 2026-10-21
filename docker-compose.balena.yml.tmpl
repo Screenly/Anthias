@@ -103,20 +103,35 @@ services:
   # boot and every release apply, so shipping the container here
   # would mean an ungated access point on a whole fleet.
   #
-  # That gate exists because NetworkManager on Raspberry Pi OS and
-  # Debian is built without connectivity-check support, so
+  # The gate exists because NetworkManager on Raspberry Pi OS and
+  # Debian is built WITHOUT connectivity-check support, so
   # wifi-connect's own gate always reads "unknown" and shows the
-  # portal. Whether balenaOS builds NM the same way is untested — it
-  # is a different OS and may well be fine — and that is exactly the
-  # point: it needs a balenaOS device to find out, which this change
-  # has not had. Enabling it on a fleet on the assumption that it is
-  # fine is the wrong order.
+  # portal.
   #
-  # To add it back: confirm `ConnectivityCheckAvailable` is true on a
-  # balenaOS device (busctl get-property org.freedesktop.NetworkManager
-  # /org/freedesktop/NetworkManager org.freedesktop.NetworkManager
-  # ConnectivityCheckAvailable), then lift the service block from
-  # docker-compose.yml.tmpl minus the `profiles:` key.
+  # balenaOS is not the same on that point, and the difference is
+  # readable from source rather than guessable: meta-balena's
+  # networkmanager bbappend carries
+  #
+  #   PACKAGECONFIG:append = " modemmanager ppp resolvconf concheck"
+  #
+  # so `ConnectivityCheckAvailable` should be TRUE there. Do not read
+  # that as "it works on balena": no [connectivity] uri= is shipped in
+  # any NetworkManager.conf meta-balena installs, and with no URI the
+  # check never runs — available is a build flag, enabled is a
+  # configured URI. `ConnectivityCheckEnabled` is the one to look at,
+  # and it needs a real device to settle:
+  #
+  #   busctl get-property org.freedesktop.NetworkManager \
+  #     /org/freedesktop/NetworkManager org.freedesktop.NetworkManager \
+  #     ConnectivityCheckEnabled ConnectivityCheckUri
+  #
+  # And settling it is not sufficient, because the blocker above is
+  # structural and independent: there is no ExecCondition here to hang
+  # ANY gate on, whatever NetworkManager reports. The real unlock is
+  # moving the decision into wifi-connect itself, where it travels
+  # with the daemon instead of with systemd — then this is a service
+  # block again, lifted from docker-compose.yml.tmpl minus the
+  # `profiles:` key, with no host units at all.
 
   redis:
     image: ghcr.io/screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
