@@ -143,7 +143,7 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: "0755"  # NOSONAR - the portal container must traverse it to read the CSS
   when: manage_network|bool
 
 - name: Install the Anthias branding for the WiFi Connect portal
