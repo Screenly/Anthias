@@ -23,6 +23,7 @@ from anthias_server.api.views.v2 import (
     ShutdownViewV2,
     ViewerPlaylistViewV2,
     ViewerSettingsViewV2,
+    WifiSetupViewV2,
 )
 
 
@@ -103,6 +104,11 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
             'v2/network/ip-addresses',
             NetworkIpAddressesViewV2.as_view(),
             name='network_ip_addresses_v2',
+        ),
+        path(
+            'v2/network/wifi-setup',
+            WifiSetupViewV2.as_view(),
+            name='network_wifi_setup_v2',
         ),
         path(
             'v2/viewer/playlist',

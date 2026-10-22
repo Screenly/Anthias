@@ -201,6 +201,157 @@ services:
       options:
         tag: anthias-celery
 
+  # Captive-portal WiFi provisioning — Screenly-Labs/wifi-connect, a
+  # ground-up replacement for the balena-os tool Anthias shipped until
+  # 2026.04 (that one had no ARMv6 binary and a `set -e` bug that made
+  # its captive-portal branch unreachable; see "chore: drop wifi-connect
+  # service end-to-end"). Upstream publishes a multi-arch image, so
+  # there is nothing for Anthias to build: the tag is pinned to an exact
+  # CalVer release rather than `2026.10` or `latest` so an upstream patch
+  # can never land on a fleet without a deliberate bump here.
+  anthias-wifi-connect:
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.13
+    # Pinned, because three other things address this container BY
+    # NAME and compose's generated name is `anthias-anthias-wifi-
+    # connect-1`: the systemd unit's `docker start`, the
+    # `docker logs anthias-wifi-connect` in the docs, and the
+    # pre-create in upgrade_containers.sh. Without this the unit fails
+    # with "No such container" and the portal never starts — which is
+    # invisible until a device is actually offline, because every
+    # other code path ends at the ExecCondition skip.
+    #
+    # Also the name the pre-rebrand container used, so journald tags
+    # and operator muscle memory carry over.
+    container_name: anthias-wifi-connect
+    # The documented exception to "never network_mode: host" in
+    # CLAUDE.md, and the only one. That rule exists so host-only facts
+    # (IPs, MACs, interfaces) are routed through host_agent -> Redis
+    # instead of punching a hole in bridge isolation to read them, and
+    # every Anthias service still obeys it. This service is not reading
+    # a host fact: it is *serving DHCP*, an L2 broadcast protocol that
+    # does not survive Docker's DNAT, and pinning that server to the
+    # WiFi interface — so it cannot answer a lease request from the
+    # customer's ethernet LAN — needs an interface that exists in the
+    # namespace. There is no bridge-side equivalent to route through.
+    #
+    # The exception is bounded: nothing Anthias wrote runs in this
+    # namespace. The image is upstream's, built FROM scratch, and
+    # Anthias's own detection of it goes the ordinary way — through
+    # the address resolver the splash page already uses.
+    network_mode: host
+    # The whole flow is NetworkManager calls over the system bus. Root
+    # inside the container is what makes them pass NM's authorization
+    # (NM short-circuits uid 0 before polkit), so no `privileged: true`
+    # is needed — the default capability set already carries
+    # CAP_NET_BIND_SERVICE for udp/53 and udp/67.
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+      # A PREFIX as of wifi-connect 2026.10.6: the portal appends four
+      # random characters, so five screens unboxed in one room do not all
+      # broadcast "Anthias Setup" for a phone to collapse into one entry
+      # and join at random. The /hotspot screen shows the full name, so
+      # there is nothing for an installer to work out.
+      - PORTAL_SSID=Anthias Setup
+      - WIFI_CONNECT_BRAND_NAME=Anthias
+      # Themes the portal the user opens on their phone so it matches the
+      # setup screen on the display in front of them: plum canvas, yellow
+      # Connect, Anthias mark in the header. Role tokens only, with one
+      # documented exception — see the header in the file.
+      - WIFI_CONNECT_BRAND_CSS=/data/hotspot/brand/brand.css
+      - WIFI_CONNECT_BRAND_LOGO=/data/hotspot/brand/logo.svg
+      # Pinned, which also removes the portal's "Switch theme" control.
+      # The plum canvas is the brand; which scheme a two-minute setup page
+      # uses is ours to decide, not a question to put to someone who is
+      # trying to get a screen online. Needs wifi-connect >= 2026.10.2,
+      # where --default-theme is actually read.
+      - WIFI_CONNECT_DEFAULT_THEME=dark
+      # NOT port 80: anthias-server publishes 80:8080 on the host, so
+      # binding the portal there fails outright (upstream reports it as
+      # PortalUnavailable). 8000 matches the port the previous Anthias
+      # integration used. The cost is that an OS connectivity probe,
+      # which always goes to port 80, lands on the Anthias admin UI
+      # instead of the portal; the portal is reached through DHCP option
+      # 114 (RFC 8910), which iOS 14+, Android 11+, macOS and Windows 11
+      # all honour, and through the address printed on the setup screen.
+      - PORTAL_LISTENING_PORT=8000
+      # Where the join QR lands for /hotspot to render. resin-data is
+      # mounted at /data in anthias-server too, so the file the portal
+      # writes here is the file the page reads.
+      - WIFI_CONNECT_QR_OUTPUT=/data/hotspot
+      # How the portal tells anthias-server what to put on the screen:
+      # the SSID actually on the air, the per-run passphrase and the
+      # portal's address, in one atomic write. Its PRESENCE is also how
+      # the server knows a portal run is live -- wifi-connect writes it
+      # once it commits to raising the access point and removes it when
+      # the run ends, which the QR files cannot say because they are
+      # written before the portal's own online check.
+      #
+      # Read by anthias_server.lib.wifi_connect; the path is asserted
+      # against that module in tests/test_wifi_connect.py.
+      - WIFI_CONNECT_STATE_FILE=/data/hotspot/state.json
+      # The same QR also goes to stdout as Unicode blocks, which is a
+      # genuine fallback on a plain console but is unreadable once
+      # journald has line-wrapped it, and it is pure noise in
+      # `docker logs`. The SSID is still logged as text; the passphrase
+      # is NOT, as of upstream 2026.10.4 — it says "the passphrase is in
+      # the join QR" and gates the plaintext behind --log-passphrase.
+      # Deliberately left off: /hotspot renders both from the QR payload
+      # on the shared volume, which is the path an operator actually
+      # uses, and a WPA passphrase in journald is worth avoiding.
+      - WIFI_CONNECT_NO_QR_STDOUT=true
+      # Bring the portal down after 15 minutes with no successful join
+      # and exit. This is the safety valve: if NetworkManager ever
+      # misreports a working network as offline (its connectivity check
+      # needs to reach network-test.debian.org, which a filtered
+      # corporate LAN may block), the portal has taken a working device
+      # off the air. A finite timeout bounds that to one window instead
+      # of forever.
+      # IDLE, not a cap on the session, as of wifi-connect 2026.10.9:
+      # the clock restarts whenever someone loads a page or submits a
+      # join, so an installer typing a passphrase at minute 14 is not
+      # cut off -- which used to cost them the credentials too, since
+      # the next run generates a new passphrase and a new SSID suffix.
+      # Captive-portal probes do not count, so a phone left associated
+      # cannot hold a screen in setup mode.
+      - ACTIVITY_TIMEOUT=900
+    # Deliberately NOT `restart: always`. wifi-connect is a one-shot:
+    # it exits 0 the moment it finds the device online, so a restart
+    # policy turns into a container start every 60s forever, and — far
+    # worse — it would re-raise the portal every 15 minutes on a device
+    # whose connectivity check is blocked, which is an outage that never
+    # ends. One run per boot is upstream's own systemd semantic;
+    # anthias-wifi-connect.service (ansible network role) is what
+    # starts that run on each boot.
+    restart: "no"
+    # The safety gate lives in anthias-wifi-connect.service's
+    # ExecCondition, and a plain `docker compose up -d` would walk
+    # straight past it: `restart: "no"` governs restart-on-exit, not
+    # the initial start. Without this profile, every run of
+    # upgrade_containers.sh would raise an access point on a device
+    # that is online — losing a WiFi-connected screen its network for
+    # the length of a portal session, on every upgrade.
+    #
+    # A profiled service is skipped by `up -d` entirely: not started,
+    # not created, and NOT removed by `--remove-orphans` once it
+    # exists (verified against docker compose v5.6). So
+    # upgrade_containers.sh creates it stopped, by name, and the
+    # systemd unit is the only thing that ever starts it.
+    profiles:
+      - wifi-connect
+    volumes:
+      # Carries the QR, the state file AND the portal's branding: the
+      # branding is staged here by anthias-server's startup script, so
+      # there is nothing host-side to install and both platforms get the
+      # same portal.
+      - resin-data:/data
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /run/dbus/system_bus_socket
+    logging:
+      driver: journald
+      options:
+        tag: anthias-wifi-connect
+
   redis:
     image: ghcr.io/screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
     build:

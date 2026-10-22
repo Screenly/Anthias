@@ -107,8 +107,12 @@ fi
 
 # Drop legacy containers no longer in the compose file:
 #   * nginx / websocket — folded into anthias-server (uvicorn).
-#   * wifi-connect      — service removed; nmcli/nmtui is the supported
-#                          path now.
+#   * srly-ose-wifi-connect — the pre-rebrand container for the old
+#     balena-os wifi-connect integration. The current
+#     anthias-wifi-connect container runs the Screenly-Labs tool and is
+#     defined in the compose file, so it must NOT be listed here: `up
+#     -d` would recreate it on every upgrade and the `docker rm -f`
+#     above it would tear down a portal that happens to be live.
 #   * anthias-celery / srly-ose-celery containers from the era when
 #     celery had its own image. The new compose file recreates the
 #     anthias-celery container against ghcr.io/screenly/anthias-server,
@@ -121,7 +125,7 @@ fi
 # Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
-    anthias-nginx anthias-websocket anthias-wifi-connect \
+    anthias-nginx anthias-websocket \
     srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
     anthias-celery srly-ose-celery \
     srly-ose-redis \
@@ -222,6 +226,26 @@ fi
 # Without it `up -d` only logs a warning and leaves the orphans running,
 # which is confusing on a `docker ps` audit later.
 sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+
+# anthias-wifi-connect sits behind a compose profile, so the `up -d`
+# above deliberately skips it: starting the captive portal is the
+# systemd unit's job, and only after its ExecCondition has confirmed
+# the device is actually offline. Running it from here would raise an
+# access point on every upgrade, which on a WiFi-connected screen
+# means losing the network it is managed over.
+#
+# But the unit starts it with `docker start`, so the container has to
+# EXIST. `--no-start` creates it (and recreates it when the image or
+# the service definition changed) without running it. Naming the
+# service explicitly is what activates its profile.
+#
+# Best effort: a device with no wifi-connect service in its compose
+# file (MANAGE_NETWORK=No, or a partial upgrade) must not fail the
+# whole upgrade here.
+sudo -E docker compose "${COMPOSE_FILES[@]}" --profile wifi-connect \
+    up -d --no-start anthias-wifi-connect || \
+    echo "Could not pre-create anthias-wifi-connect; WiFi setup will be" \
+         "unavailable until the next upgrade."
 
 # Drop the images the release we just replaced was running on. Deliberately
 # the last thing we do, and only once the new stack is up, so a pull or a
