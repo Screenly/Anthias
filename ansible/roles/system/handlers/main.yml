@@ -19,3 +19,8 @@
   # re-executing PID 1 makes it open (or let go of) the device.
   ansible.builtin.systemd:
     daemon_reexec: true
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
