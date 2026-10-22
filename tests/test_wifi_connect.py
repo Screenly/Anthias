@@ -56,6 +56,24 @@ BALENA_TEMPLATES = (
 # ---------------------------------------------------------------------------
 
 
+def _seeded_brand_paths() -> dict[str, str]:
+    """Where the server stages the portal's branding, read from compose.
+
+    Taken from the template rather than hardcoded here so the tests
+    below check that the two halves agree, not that they both match a
+    third copy of the path.
+    """
+    service = _service_block(
+        (REPO_ROOT / 'docker-compose.yml.tmpl').read_text(),
+        'anthias-wifi-connect',
+    )
+    found = dict(
+        re.findall(r'(WIFI_CONNECT_BRAND_(?:CSS|LOGO))=(\S+)', service)
+    )
+    assert len(found) == 2, f'expected both brand paths, got {found}'
+    return found
+
+
 def _service_block(body: str, service: str) -> str:
     """One service's block out of a compose template.
 
@@ -1442,31 +1460,63 @@ def test_the_upgrade_script_precreates_the_named_container() -> None:
 # follows Anthias's accent only because we hand it a stylesheet; nothing
 # else connects the two, so the wiring is worth pinning.
 
-BRAND_CSS_PATH = 'ansible/roles/network/files/wifi-connect-brand.css'
+BRAND_CSS_PATH = 'src/anthias_server/app/branding/wifi-connect-brand.css'
+SPLASH_LOGO_PATH = 'src/anthias_server/app/static/img/logo-full-splash.svg'
 
 
-def test_the_portal_is_pointed_at_the_anthias_stylesheet() -> None:
-    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
+def test_every_platform_points_the_portal_at_the_seeded_branding() -> None:
+    """One portal, one set of colours, on both deployment paths.
 
-    declared = re.search(r'WIFI_CONNECT_BRAND_CSS=(\S+)', compose)
+    ansible does not run on balena, so host-installed branding meant a
+    portal that was Anthias on Debian and upstream's blue on balena.
+    The assets are staged on the shared volume instead, by the server
+    container that already has them in its image.
+    """
+    seeded = _seeded_brand_paths()
 
-    assert declared is not None, 'the portal is not branded'
-    # The path has to be inside the bind mount, or the portal exits at
-    # startup with "could not read --brand-css".
-    assert declared.group(1).startswith('/brand/')
-    assert 'target: /brand' in compose
+    for template_name in ('docker-compose.yml.tmpl', *BALENA_TEMPLATES):
+        body = (REPO_ROOT / template_name).read_text()
+        service = _service_block(body, 'anthias-wifi-connect')
+
+        for var, path in seeded.items():
+            assert f'{var}={path}' in service, (
+                f'{template_name} does not point {var} at the seeded asset'
+            )
 
 
-def test_ansible_installs_the_stylesheet_where_compose_mounts_it() -> None:
+def test_the_server_seeds_what_the_portal_is_pointed_at() -> None:
+    """The two halves have no compiler between them.
+
+    A path that disagrees means the portal logs "could not read
+    --brand-css" and serves upstream's colours, which nothing else
+    would notice.
+    """
+    startup = (REPO_ROOT / 'bin/start_server.sh').read_text()
+
+    for path in _seeded_brand_paths().values():
+        assert path in startup, f'nothing seeds {path}'
+
+    # And it seeds them from files that actually exist in the image.
+    assert BRAND_CSS_PATH in startup
+    assert SPLASH_LOGO_PATH in startup
+
+
+def test_the_branding_is_no_longer_installed_on_the_host() -> None:
+    """The host copy is gone, not merely unused.
+
+    Two installers for one asset is how the balena portal came to look
+    different in the first place.
+    """
     tasks = (REPO_ROOT / 'ansible/roles/network/tasks/main.yml').read_text()
+
+    assert '/etc/anthias/wifi-connect' not in tasks
+    assert 'wifi-connect-brand.css' not in tasks
+    assert not (
+        REPO_ROOT / 'ansible/roles/network/files/wifi-connect-logo.svg'
+    ).exists(), 'the duplicated logo is back'
+
     compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
-
-    source = re.search(
-        r'source: (/etc/anthias/\S+)\n\s+target: /brand', compose
-    )
-
-    assert source is not None
-    assert f'dest: {source.group(1)}/' in tasks
+    assert '/etc/anthias/wifi-connect' not in compose
 
 
 def test_the_brand_stylesheet_overrides_roles_only() -> None:
@@ -1540,19 +1590,19 @@ def test_the_brand_stylesheet_uses_the_anthias_palette() -> None:
 
 
 def test_the_portal_carries_the_anthias_mark() -> None:
-    """And it is the same file the splash screen uses, not a lookalike."""
-    compose = (REPO_ROOT / 'docker-compose.yml.tmpl').read_text()
-    installed = (
-        REPO_ROOT / 'ansible/roles/network/files/wifi-connect-logo.svg'
-    ).read_bytes()
-    canonical = (
-        REPO_ROOT / 'src/anthias_server/app/static/img/logo-full-splash.svg'
-    ).read_bytes()
+    """And it is literally the splash screen's own file.
 
-    assert re.search(r'WIFI_CONNECT_BRAND_LOGO=/brand/\S+\.svg', compose)
-    assert installed == canonical, (
-        'the portal logo has drifted from the splash logo'
+    It used to be a copy under ansible that a test kept byte-identical.
+    Seeding from the image means there is one file and nothing to
+    drift.
+    """
+    startup = (REPO_ROOT / 'bin/start_server.sh').read_text()
+
+    assert (REPO_ROOT / SPLASH_LOGO_PATH).exists()
+    assert SPLASH_LOGO_PATH in startup, (
+        'the portal logo is no longer taken from the splash logo'
     )
+    assert _seeded_brand_paths()['WIFI_CONNECT_BRAND_LOGO'].endswith('.svg')
 
 
 def test_the_theme_is_ours_to_pick() -> None:

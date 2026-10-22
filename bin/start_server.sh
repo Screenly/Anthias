@@ -16,6 +16,27 @@ mkdir -p \
 cp -n /usr/src/app/ansible/roles/anthias/files/anthias.conf /data/.anthias/anthias.conf
 cp -n /usr/src/app/ansible/roles/anthias/files/default_assets.yml /data/.anthias/default_assets.yml
 
+# Branding for the WiFi setup portal, which runs in its own container
+# from an image that is not ours and has no access to this one's files.
+# The shared volume is the only thing the two have in common, so the
+# assets are staged here and WIFI_CONNECT_BRAND_CSS / _LOGO point at
+# them (see the compose templates).
+#
+# Here rather than in ansible because ansible does not run on balena,
+# and a portal that is Anthias on one platform and upstream's blue on
+# the other is not a thing to explain to a customer. It also means the
+# logo has one source -- the splash page's own file -- instead of a
+# copy under ansible that a test had to keep honest.
+#
+# `cp -f`, not `-n`: these are ours, not the operator's, so an upgrade
+# that restyles the portal should restyle it. Both are small enough
+# that rewriting them on every start costs nothing worth measuring.
+mkdir -p /data/hotspot/brand
+cp -f /usr/src/app/src/anthias_server/app/branding/wifi-connect-brand.css \
+    /data/hotspot/brand/brand.css
+cp -f /usr/src/app/src/anthias_server/app/static/img/logo-full-splash.svg \
+    /data/hotspot/brand/logo.svg
+
 echo "Running migration..."
 
 # The following block ensures that the migration is transactional and that the

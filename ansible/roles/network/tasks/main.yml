@@ -133,41 +133,6 @@
 # installed with MANAGE_NETWORK=No has no NetworkManager at all (see
 # install.sh), and raising an access point on it would be exactly the
 # thing they declined.
-# Mounted read-only into the wifi-connect container, which points at
-# it with WIFI_CONNECT_BRAND_CSS. /etc/anthias already exists for
-# proxy.env; the subdirectory keeps the bind mount narrow so the
-# container cannot see the proxy file.
-- name: Create the WiFi Connect branding directory
-  ansible.builtin.file:
-    path: /etc/anthias/wifi-connect
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"  # NOSONAR - the portal container must traverse it to read the CSS
-  when: manage_network|bool
-
-- name: Install the Anthias branding for the WiFi Connect portal
-  ansible.builtin.copy:
-    src: wifi-connect-brand.css
-    dest: /etc/anthias/wifi-connect/wifi-connect-brand.css
-    owner: root
-    group: root
-    mode: "0644"  # NOSONAR - read by the portal container as a web asset
-  when: manage_network|bool
-
-# Byte-for-byte the splash logo from the Anthias static tree. It is
-# copied rather than mounted because the portal runs in its own container
-# with no access to Anthias's static files; tests/test_wifi_connect.py
-# asserts the two stay identical.
-- name: Install the Anthias logo for the WiFi Connect portal
-  ansible.builtin.copy:
-    src: wifi-connect-logo.svg
-    dest: /etc/anthias/wifi-connect/wifi-connect-logo.svg
-    owner: root
-    group: root
-    mode: "0644"  # NOSONAR - read by the portal container as a web asset
-  when: manage_network|bool
-
 - name: Install Anthias WiFi Connect systemd units
   ansible.builtin.template:
     src: "{{ item }}"

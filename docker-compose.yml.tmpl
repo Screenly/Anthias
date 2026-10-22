@@ -210,7 +210,7 @@ services:
   # CalVer release rather than `2026.10` or `latest` so an upstream patch
   # can never land on a fleet without a deliberate bump here.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.11
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.12
     # Pinned, because three other things address this container BY
     # NAME and compose's generated name is `anthias-anthias-wifi-
     # connect-1`: the systemd unit's `docker start`, the
@@ -257,8 +257,8 @@ services:
       # setup screen on the display in front of them: plum canvas, yellow
       # Connect, Anthias mark in the header. Role tokens only, with one
       # documented exception — see the header in the file.
-      - WIFI_CONNECT_BRAND_CSS=/brand/wifi-connect-brand.css
-      - WIFI_CONNECT_BRAND_LOGO=/brand/wifi-connect-logo.svg
+      - WIFI_CONNECT_BRAND_CSS=/data/hotspot/brand/brand.css
+      - WIFI_CONNECT_BRAND_LOGO=/data/hotspot/brand/logo.svg
       # Pinned, which also removes the portal's "Switch theme" control.
       # The plum canvas is the brand; which scheme a two-minute setup page
       # uses is ours to decide, not a question to put to someone who is
@@ -339,13 +339,11 @@ services:
     profiles:
       - wifi-connect
     volumes:
+      # Carries the QR, the state file AND the portal's branding: the
+      # branding is staged here by anthias-server's startup script, so
+      # there is nothing host-side to install and both platforms get the
+      # same portal.
       - resin-data:/data
-      # Read-only: the portal only ever reads this, and it is installed
-      # by ansible on the host rather than baked into upstream's image.
-      - type: bind
-        source: /etc/anthias/wifi-connect
-        target: /brand
-        read_only: true
       - type: bind
         source: /run/dbus/system_bus_socket
         target: /run/dbus/system_bus_socket

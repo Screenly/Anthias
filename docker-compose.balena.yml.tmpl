@@ -107,7 +107,11 @@ services:
   # with "already online; the portal is not needed", no access point, no
   # state file. The same test against 2026.10.10 raises one.
   #
-  # Do NOT pin this below 2026.10.11.
+  # Do NOT pin this below 2026.10.11. 2026.10.12 matters too:
+  # missing branding is a warning there rather than a refusal to
+  # start, which is what makes staging it on the shared volume
+  # safe, and a guessed `limited` verdict no longer raises an
+  # access point at a wired screen on an isolated LAN.
   #
   # Measured on balenaOS 2.83.18 (NetworkManager 1.28.0) booted in QEMU,
   # because the three facts this service depends on there are not
@@ -133,7 +137,7 @@ services:
   #     not 5, which is what a failure to reach NetworkManager looks
   #     like.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.11
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.12
     # Serving DHCP, which does not survive Docker's NAT, and binding the
     # access point's own address on the wireless device.
     network_mode: host
@@ -150,6 +154,13 @@ services:
       # screens in one room do not all broadcast one name.
       - PORTAL_SSID=Anthias Setup
       - WIFI_CONNECT_BRAND_NAME=Anthias
+      # Staged on the shared volume by anthias-server's startup
+      # script, because ansible does not run here. Missing files
+      # are a warning upstream as of 2026.10.12, not a refusal to
+      # start, so losing the race on a first boot costs the portal
+      # its colours and not its existence.
+      - WIFI_CONNECT_BRAND_CSS=/data/hotspot/brand/brand.css
+      - WIFI_CONNECT_BRAND_LOGO=/data/hotspot/brand/logo.svg
       - WIFI_CONNECT_DEFAULT_THEME=dark
       # NOT 80: anthias-server publishes 80:8080 on the host.
       - PORTAL_LISTENING_PORT=8000
