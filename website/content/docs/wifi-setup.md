@@ -18,11 +18,11 @@ the `anthias-wifi-connect` container alongside the rest of Anthias.
 
 > **Note**
 >
-> This is available on the Raspberry Pi OS / Debian installation path. It is
-> not enabled on balena deployments yet — the check that stops a screen
-> raising a setup network when it doesn't need one is a systemd unit, which
-> balena doesn't give us, and shipping it ungated to a fleet isn't something
-> to do untested.
+> Available on both installation paths — Raspberry Pi OS / Debian and balena.
+> The two differ in how often a screen retries: on Debian a timer re-checks
+> every five minutes for the first three attempts and then every six hours,
+> while on balena the setup network comes up once per boot (and once per
+> release apply). Power-cycling a screen asks for setup again on either.
 
 ## What you'll see
 

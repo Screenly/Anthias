@@ -56,6 +56,18 @@ BALENA_TEMPLATES = (
 # ---------------------------------------------------------------------------
 
 
+def _service_block(body: str, service: str) -> str:
+    """One service's block out of a compose template.
+
+    The inline version of this appears in a few older tests; it is here
+    because the balena assertions below check four separate things about
+    one block and must not accidentally match a sibling service.
+    """
+    block = body.split(f'{service}:', 1)[1]
+    # Up to the start of the next service / top-level key.
+    return re.split(r'\n(?=\S|  \S+:\n)', block)[0]
+
+
 def _state_document(**overrides: object) -> dict[str, object]:
     """A state file as wifi-connect 2026.10.8 writes one."""
     document: dict[str, object] = {
@@ -1264,19 +1276,86 @@ def test_the_upgrade_script_creates_it_without_starting_it() -> None:
     assert '--no-start anthias-wifi-connect' in body
 
 
-def test_balena_does_not_ship_an_ungated_portal() -> None:
-    """balena has no systemd to hang the ExecCondition on.
+def test_balena_ships_the_portal() -> None:
+    """A screen that cannot reach a network needs this everywhere.
 
-    Its supervisor starts every service on every boot and release
-    apply, so the container being present at all would mean an
-    ungated access point across a fleet.
+    balena has no systemd, so there is no ExecCondition and no compose
+    profile keeping it back: the supervisor starts it on every boot and
+    every release apply. What makes that safe is the daemon deciding
+    for itself -- see the pin assertion below.
     """
     for template_name in BALENA_TEMPLATES:
         body = (REPO_ROOT / template_name).read_text()
         services = re.findall(r'^  ([a-z0-9-]+):$', body, re.MULTILINE)
 
-        assert 'anthias-wifi-connect' not in services, (
-            f'{template_name} starts wifi-connect with no gate in front of it'
+        assert 'anthias-wifi-connect' in services, (
+            f'{template_name} does not ship the setup portal'
+        )
+
+
+def test_balena_pins_a_wifi_connect_that_gates_itself() -> None:
+    """The pin and the lack of a gate are one decision.
+
+    Before 2026.10.11 a device online over ethernet alone did not count
+    as online -- NetworkManager answers "unknown" wherever its
+    connectivity check is unavailable, and only an associated radio
+    counted -- so every supervisor start raised an access point at a
+    healthy screen. On balena that is a fleet, on every release apply.
+
+    Verified on a wired Pi 5 and Pi 3 B+: 2026.10.11 exits 0 with
+    "already online; the portal is not needed"; 2026.10.10 raises one.
+    """
+    for template_name in BALENA_TEMPLATES:
+        body = (REPO_ROOT / template_name).read_text()
+        pin = re.search(
+            r'ghcr\.io/screenly-labs/wifi-connect:(\d{4})\.(\d{2})\.(\d+)',
+            body,
+        )
+
+        assert pin is not None, f'{template_name} does not pin the portal'
+        assert tuple(int(g) for g in pin.groups()) >= (2026, 10, 11), (
+            f'{template_name} pins a wifi-connect that raises an access '
+            f'point at a wired device on every start'
+        )
+
+
+def test_balena_does_not_let_the_supervisor_restart_the_portal() -> None:
+    """It exits 0 the moment the device is online, which is immediately
+    on a healthy screen. A restarting service would churn a container
+    start a minute forever, and on a device whose connectivity cannot be
+    determined would re-raise the access point every ACTIVITY_TIMEOUT.
+    """
+    for template_name in BALENA_TEMPLATES:
+        service = _service_block(
+            (REPO_ROOT / template_name).read_text(), 'anthias-wifi-connect'
+        )
+
+        assert re.search(r'^\s+restart:\s*"no"', service, re.MULTILINE), (
+            f'{template_name} lets the supervisor restart the portal'
+        )
+
+
+def test_balena_gives_the_portal_the_host_bus_and_the_shared_volume() -> None:
+    """Two things it cannot work without.
+
+    NetworkManager is on the host, so without the dbus feature label the
+    daemon exits 5 before doing anything. And the state file is how
+    anthias-server learns the SSID and passphrase to put on the screen --
+    without the shared volume the portal comes up and the display has
+    nothing to show, which is the same as not working.
+    """
+    for template_name in BALENA_TEMPLATES:
+        service = _service_block(
+            (REPO_ROOT / template_name).read_text(), 'anthias-wifi-connect'
+        )
+
+        assert "io.balena.features.dbus: '1'" in service, template_name
+        assert '/host/run/dbus/system_bus_socket' in service, template_name
+        assert 'resin-data:/data' in service, template_name
+
+        state_path = wifi_connect.QR_DIRECTORY / wifi_connect.STATE_FILENAME
+        assert f'WIFI_CONNECT_STATE_FILE={state_path}' in service, (
+            f'{template_name} and the server disagree about the state file'
         )
 
 

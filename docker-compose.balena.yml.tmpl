@@ -93,45 +93,53 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
-  # NOTE: wifi-connect is deliberately absent here.
+  # The WiFi setup portal. Started by the supervisor on every boot and
+  # every release apply, which is safe because the DAEMON decides whether
+  # a portal is needed -- there is no systemd here to hang an
+  # ExecCondition on, and nothing in a compose file can gate a service.
   #
-  # On the Debian/Raspberry Pi OS path the portal is gated by
-  # anthias-wifi-connect.service's ExecCondition, which refuses to
-  # raise an access point on a device that already has WiFi, a wired
-  # link, or internet. balena has no systemd for us to hang that on
-  # and its supervisor starts every service in this file on every
-  # boot and every release apply, so shipping the container here
-  # would mean an ungated access point on a whole fleet.
+  # wifi-connect 2026.10.11 is the release that makes that true: before
+  # it, a device online over ethernet alone was not considered online
+  # (NetworkManager reports connectivity as "unknown" wherever the check
+  # is unavailable, and only an associated radio counted), so every start
+  # raised an access point at a perfectly healthy screen. Verified on a
+  # wired Pi 5 and Pi 3 B+ against 2026.10.11: exits 0 in ~20 seconds
+  # with "already online; the portal is not needed", no access point, no
+  # state file. The same test against 2026.10.10 raises one.
   #
-  # The gate exists because NetworkManager on Raspberry Pi OS and
-  # Debian is built WITHOUT connectivity-check support, so
-  # wifi-connect's own gate always reads "unknown" and shows the
-  # portal.
-  #
-  # balenaOS is not the same on that point, and the difference is
-  # readable from source rather than guessable: meta-balena's
-  # networkmanager bbappend carries
-  #
-  #   PACKAGECONFIG:append = " modemmanager ppp resolvconf concheck"
-  #
-  # so `ConnectivityCheckAvailable` should be TRUE there. Do not read
-  # that as "it works on balena": no [connectivity] uri= is shipped in
-  # any NetworkManager.conf meta-balena installs, and with no URI the
-  # check never runs — available is a build flag, enabled is a
-  # configured URI. `ConnectivityCheckEnabled` is the one to look at,
-  # and it needs a real device to settle:
-  #
-  #   busctl get-property org.freedesktop.NetworkManager \
-  #     /org/freedesktop/NetworkManager org.freedesktop.NetworkManager \
-  #     ConnectivityCheckEnabled ConnectivityCheckUri
-  #
-  # And settling it is not sufficient, because the blocker above is
-  # structural and independent: there is no ExecCondition here to hang
-  # ANY gate on, whatever NetworkManager reports. The real unlock is
-  # moving the decision into wifi-connect itself, where it travels
-  # with the daemon instead of with systemd — then this is a service
-  # block again, lifted from docker-compose.yml.tmpl minus the
-  # `profiles:` key, with no host units at all.
+  # Do NOT pin this below 2026.10.11.
+  anthias-wifi-connect:
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.11
+    # Serving DHCP, which does not survive Docker's NAT, and binding the
+    # access point's own address on the wireless device.
+    network_mode: host
+    # Exits 0 as soon as the device is online, which on a healthy screen
+    # is the first thing it does. `always` would both churn a container
+    # start a minute forever and, on a device whose connectivity cannot
+    # be determined, re-raise the access point every ACTIVITY_TIMEOUT.
+    restart: "no"
+    environment:
+      # NetworkManager lives on the host; io.balena.features.dbus below
+      # is what puts its socket in this container.
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
+      # A PREFIX: the portal appends four random characters, so five
+      # screens in one room do not all broadcast one name.
+      - PORTAL_SSID=Anthias Setup
+      - WIFI_CONNECT_BRAND_NAME=Anthias
+      - WIFI_CONNECT_DEFAULT_THEME=dark
+      # NOT 80: anthias-server publishes 80:8080 on the host.
+      - PORTAL_LISTENING_PORT=8000
+      - WIFI_CONNECT_QR_OUTPUT=/data/hotspot
+      # How anthias-server learns the SSID, passphrase and portal
+      # address to put on the screen, and whether a portal is live.
+      - WIFI_CONNECT_STATE_FILE=/data/hotspot/state.json
+      - WIFI_CONNECT_NO_QR_STDOUT=true
+      # Idle, not a session cap, as of 2026.10.9.
+      - ACTIVITY_TIMEOUT=900
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.dbus: '1'
 
   redis:
     image: ghcr.io/screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
