@@ -252,36 +252,109 @@ def test_anthias_does_not_probe_the_portal_listener() -> None:
 # ---------------------------------------------------------------------------
 
 
+_DEFAULT_GW = wifi_connect.DEFAULT_PORTAL_GATEWAY
+
+
 def test_portal_is_up_when_the_gateway_is_held() -> None:
     assert wifi_connect.portal_is_up(
-        f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}'
+        f'{_FIXTURE_IPV4} {_DEFAULT_GW}', _DEFAULT_GW
     )
 
 
 def test_portal_is_down_without_the_gateway() -> None:
-    assert not wifi_connect.portal_is_up(_FIXTURE_IPV4)
+    assert not wifi_connect.portal_is_up(_FIXTURE_IPV4, _DEFAULT_GW)
 
 
 def test_portal_is_down_for_an_empty_address_list() -> None:
     """A device whose addresses could not be resolved is not in setup."""
-    assert not wifi_connect.portal_is_up('')
+    assert not wifi_connect.portal_is_up('', _DEFAULT_GW)
 
 
 def test_an_address_that_merely_starts_with_the_gateway_is_not_it() -> None:
     """Substring matching here would put a LAN device into setup mode."""
-    assert not wifi_connect.portal_is_up(_GATEWAY_PREFIX_TRAP)
+    assert not wifi_connect.portal_is_up(_GATEWAY_PREFIX_TRAP, _DEFAULT_GW)
+
+
+def test_a_relocated_portal_is_found_where_it_says_it_is() -> None:
+    """``--portal-gateway`` is the operator's to change.
+
+    Detection follows the portal's own declaration, so a deployment
+    that moved it is still detected -- and the default, which nothing
+    now owns, is not mistaken for it.
+    """
+    addresses = f'{_FIXTURE_IPV4} 10.77.0.1'
+
+    assert wifi_connect.portal_is_up(addresses, '10.77.0.1')
+    assert not wifi_connect.portal_is_up(addresses, _DEFAULT_GW)
 
 
 def test_strip_portal_gateway_removes_only_the_gateway() -> None:
     stripped = wifi_connect.strip_portal_gateway(
-        f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY} {_GATEWAY_PREFIX_TRAP}'
+        f'{_FIXTURE_IPV4} {_DEFAULT_GW} {_GATEWAY_PREFIX_TRAP}', _DEFAULT_GW
     )
 
     assert stripped == f'{_FIXTURE_IPV4} {_GATEWAY_PREFIX_TRAP}'
 
 
 def test_strip_portal_gateway_is_a_no_op_when_absent() -> None:
-    assert wifi_connect.strip_portal_gateway(_FIXTURE_IPV4) == _FIXTURE_IPV4
+    assert (
+        wifi_connect.strip_portal_gateway(_FIXTURE_IPV4, _DEFAULT_GW)
+        == _FIXTURE_IPV4
+    )
+
+
+def test_a_lan_address_is_not_stripped_when_no_portal_owns_it() -> None:
+    """The bug this exists for.
+
+    A customer LAN really can be 192.168.42.0/24, and a device on it
+    really can be handed .1. With nothing to say that address belonged
+    to a setup portal, the splash page dropped it -- so the one screen
+    telling an operator where to reach the device hid its only address,
+    on a network where nothing was wrong.
+    """
+    addresses = f'{_DEFAULT_GW} {_FIXTURE_IPV4}'
+
+    assert wifi_connect.strip_portal_gateway(addresses, None) == addresses
+
+
+def test_a_relocated_portals_address_is_the_one_stripped() -> None:
+    """And the default is left alone, because nothing owns it."""
+    addresses = f'{_FIXTURE_IPV4} 10.77.0.1 {_DEFAULT_GW}'
+
+    stripped = wifi_connect.strip_portal_gateway(addresses, '10.77.0.1')
+
+    assert stripped == f'{_FIXTURE_IPV4} {_DEFAULT_GW}'
+
+
+def test_nothing_in_the_server_hardcodes_the_setup_address() -> None:
+    """The constant is a fallback for describing an absent portal.
+
+    Anything deciding about a LIVE portal has to use the address the
+    portal published, or a deployment that moved it silently stops
+    being detected -- which looks like a screen that never shows its
+    passphrase.
+    """
+    import ast
+
+    module = ast.parse(
+        (REPO_ROOT / 'src/anthias_server/lib/wifi_connect.py').read_text()
+    )
+    deciders = [
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {'portal_is_up', 'strip_portal_gateway'}
+    ]
+    assert len(deciders) == 2, 'both deciders should still be module-level'
+
+    for node in deciders:
+        # Skip the docstring: it explains the address, and explaining it
+        # is not the same as depending on it.
+        body = node.body[1:] if ast.get_docstring(node) else node.body
+        code = '\n'.join(ast.dump(statement) for statement in body)
+
+        assert 'DEFAULT_PORTAL_GATEWAY' not in code, node.name
+        assert '192.168.42' not in code, node.name
 
 
 # ---------------------------------------------------------------------------
@@ -356,8 +429,10 @@ def test_compose_pins_an_exact_wifi_connect_version(
 def test_compose_portal_port_matches_this_module(template_name: str) -> None:
     body = (REPO_ROOT / template_name).read_text()
 
-    assert f'PORTAL_LISTENING_PORT={wifi_connect.PORTAL_PORT}' in body, (
-        f'{template_name} and wifi_connect.PORTAL_PORT disagree about the '
+    assert (
+        f'PORTAL_LISTENING_PORT={wifi_connect.DEFAULT_PORTAL_PORT}' in body
+    ), (
+        f'{template_name} and wifi_connect.DEFAULT_PORTAL_PORT disagree about the '
         f'portal port; the setup screen would tell users to open the wrong '
         f'one'
     )
@@ -843,7 +918,11 @@ def test_wifi_setup_poll_asks_for_the_probe_free_refresh() -> None:
         mock.patch(
             'anthias_server.lib.wifi_connect.read_portal_state',
             return_value=wifi_connect.PortalState(
-                'Anthias Setup-G4VV', 'p', wifi_connect.PORTAL_URL
+                'Anthias Setup-G4VV',
+                'p',
+                wifi_connect.PORTAL_URL,
+                wifi_connect.DEFAULT_PORTAL_GATEWAY,
+                'wlan0',
             ),
         ),
     ):
@@ -918,7 +997,7 @@ def test_the_fast_host_refresh_does_no_internet_probe() -> None:
         mock.patch.object(
             host_agent,
             'get_ip_addresses',
-            return_value=[wifi_connect.PORTAL_GATEWAY],
+            return_value=[wifi_connect.DEFAULT_PORTAL_GATEWAY],
         ),
         mock.patch(
             'anthias_host_agent.__main__.requests.get',
@@ -930,7 +1009,7 @@ def test_the_fast_host_refresh_does_no_internet_probe() -> None:
     rdb = fake_redis.Redis.return_value
     rdb.set.assert_any_call('ip_addresses_ready', 'true')
     rdb.set.assert_any_call(
-        'ip_addresses', f'["{wifi_connect.PORTAL_GATEWAY}"]'
+        'ip_addresses', f'["{wifi_connect.DEFAULT_PORTAL_GATEWAY}"]'
     )
 
 
@@ -966,7 +1045,7 @@ def test_a_stale_address_cache_does_not_report_setup_mode() -> None:
         mock.patch.object(
             v2_views,
             '_resolve_node_ip',
-            return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
+            return_value=f'{_FIXTURE_IPV4} {wifi_connect.DEFAULT_PORTAL_GATEWAY}',
         ),
         mock.patch(
             'anthias_server.lib.wifi_connect.read_portal_state',
@@ -995,7 +1074,11 @@ def test_a_state_file_left_behind_does_not_report_setup_mode() -> None:
         mock.patch(
             'anthias_server.lib.wifi_connect.read_portal_state',
             return_value=wifi_connect.PortalState(
-                'Anthias Setup-G4VV', 'p', wifi_connect.PORTAL_URL
+                'Anthias Setup-G4VV',
+                'p',
+                wifi_connect.PORTAL_URL,
+                wifi_connect.DEFAULT_PORTAL_GATEWAY,
+                'wlan0',
             ),
         ),
     ):
@@ -1012,7 +1095,7 @@ def test_a_live_portal_still_reports_setup_mode() -> None:
         mock.patch.object(
             v2_views,
             '_resolve_node_ip',
-            return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
+            return_value=f'{_FIXTURE_IPV4} {wifi_connect.DEFAULT_PORTAL_GATEWAY}',
         ),
         mock.patch(
             'anthias_server.lib.wifi_connect.read_portal_state',
@@ -1020,6 +1103,8 @@ def test_a_live_portal_still_reports_setup_mode() -> None:
                 'Anthias Setup-G4VV',
                 'brave-plum-42',
                 'http://192.168.42.1:8000/',
+                wifi_connect.DEFAULT_PORTAL_GATEWAY,
+                'wlan0',
             ),
         ),
     ):
@@ -1048,12 +1133,16 @@ def test_the_ssid_shown_is_the_one_on_the_air() -> None:
         mock.patch.object(
             v2_views,
             '_resolve_node_ip',
-            return_value=f'{_FIXTURE_IPV4} {wifi_connect.PORTAL_GATEWAY}',
+            return_value=f'{_FIXTURE_IPV4} {wifi_connect.DEFAULT_PORTAL_GATEWAY}',
         ),
         mock.patch(
             'anthias_server.lib.wifi_connect.read_portal_state',
             return_value=wifi_connect.PortalState(
-                f'{configured}-G4VV', 'p', wifi_connect.PORTAL_URL
+                f'{configured}-G4VV',
+                'p',
+                wifi_connect.PORTAL_URL,
+                wifi_connect.DEFAULT_PORTAL_GATEWAY,
+                'wlan0',
             ),
         ),
     ):

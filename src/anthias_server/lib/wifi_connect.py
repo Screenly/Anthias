@@ -50,20 +50,26 @@ from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
 
-# Mirrors PORTAL_GATEWAY / PORTAL_LISTENING_PORT / WIFI_CONNECT_QR_OUTPUT
-# / WIFI_CONNECT_STATE_FILE in the compose templates. Changing either
-# side alone silently breaks detection, so they are asserted against
-# each other in tests/test_wifi_connect.py.
-# NOSONAR (S1313): wifi-connect's fixed setup-AP address, not a
+# Where the portal is, when nothing has said otherwise.
+#
+# NOT the authority: --portal-gateway and --portal-listening-port are
+# configurable, and wifi-connect publishes what it actually used in its
+# state file. These are upstream's defaults, used only to describe a
+# portal whose state file has not been read -- a device that has never
+# raised one, or one running an image older than the field. Anything
+# deciding about a LIVE portal takes the address from
+# ``read_portal_state``.
+#
+# NOSONAR (S1313): upstream's default setup-AP address, not a
 # deployment endpoint; it only exists while the device is its own AP.
-PORTAL_GATEWAY = '192.168.42.1'  # NOSONAR
-PORTAL_PORT = 8000
+DEFAULT_PORTAL_GATEWAY = '192.168.42.1'  # NOSONAR
+DEFAULT_PORTAL_PORT = 8000
 QR_DIRECTORY = Path('/data/hotspot')
 
 QR_SVG_FILENAME = 'wifi-connect-qr.svg'
 STATE_FILENAME = 'state.json'
 
-PORTAL_URL = f'http://{PORTAL_GATEWAY}:{PORTAL_PORT}/'  # NOSONAR (S5332)
+PORTAL_URL = f'http://{DEFAULT_PORTAL_GATEWAY}:{DEFAULT_PORTAL_PORT}/'  # NOSONAR (S5332)
 
 # The schema this code was written against. Upstream bumps it only for a
 # removed field or one that changes meaning, and promises that added
@@ -94,6 +100,13 @@ class PortalState(NamedTuple):
     ssid: str
     passphrase: str
     portal_url: str
+    #: The address the portal is actually on, and the interface it is on
+    #: there. Both come from the portal rather than from a constant here,
+    #: because ``--portal-gateway`` and ``--portal-interface`` are the
+    #: operator's to change -- and because the number alone does not
+    #: identify it: ``192.168.42.1`` is an ordinary LAN address too.
+    gateway: str
+    interface: str
 
 
 def read_portal_state(directory: Path | None = None) -> PortalState | None:
@@ -147,6 +160,16 @@ def read_portal_state(directory: Path | None = None) -> PortalState | None:
     if not isinstance(url, str) or not url:
         url = PORTAL_URL
 
+    gateway = document.get('gateway')
+    if not isinstance(gateway, str) or not gateway:
+        gateway = DEFAULT_PORTAL_GATEWAY
+
+    # Published since wifi-connect 2026.10.10. An older portal leaves it
+    # empty, which callers read as "do not match on the interface".
+    interface = document.get('interface')
+    if not isinstance(interface, str):
+        interface = ''
+
     if _heartbeat_is_stale(document):
         logger.warning(
             'Ignoring %s: the portal stopped refreshing its heartbeat, so '
@@ -155,7 +178,13 @@ def read_portal_state(directory: Path | None = None) -> PortalState | None:
         )
         return None
 
-    return PortalState(ssid=ssid, passphrase=passphrase, portal_url=url)
+    return PortalState(
+        ssid=ssid,
+        passphrase=passphrase,
+        portal_url=url,
+        gateway=gateway,
+        interface=interface,
+    )
 
 
 def _heartbeat_is_stale(document: dict[str, object]) -> bool:
@@ -223,28 +252,40 @@ def read_qr_data_uri(directory: Path | None = None) -> str | None:
     return f'data:image/svg+xml;base64,{encoded}'
 
 
-def portal_is_up(node_ip: str) -> bool:
+def portal_is_up(node_ip: str, gateway: str) -> bool:
     """Is the setup access point live right now?
 
     Takes the raw whitespace-separated address string host_agent and
-    the balena supervisor both publish, and looks for the access
-    point's own gateway address. NetworkManager adds it when the
-    access point goes up and removes it when it comes down, so this
-    follows the portal exactly with no timeout to tune.
+    the balena supervisor both publish, plus the address the portal
+    says it is on. NetworkManager adds it when the access point goes up
+    and removes it when it comes down, so this follows the portal
+    exactly with no timeout to tune.
+
+    ``gateway`` is passed in rather than read from a constant because
+    ``--portal-gateway`` is the operator's to change; it comes from the
+    portal's own state file.
     """
-    return PORTAL_GATEWAY in node_ip.split()
+    return bool(gateway) and gateway in node_ip.split()
 
 
-def strip_portal_gateway(node_ip: str) -> str:
-    """Drop the access point's own address from a host address list.
+def strip_portal_gateway(node_ip: str, gateway: str | None) -> str:
+    """Drop the setup access point's address from a host address list.
 
-    While the portal is up, ``192.168.42.1`` is a real address on this
-    host and every address resolver reports it. It is not an address
-    anyone should be told to manage the device on, though: it exists
-    only for the duration of the setup flow and disappears the moment
-    the device joins a network. The splash page's "open this on your
-    phone" list is strictly worse for carrying it.
+    While the portal is up, its gateway is a real address on this host
+    and every address resolver reports it. It is not an address anyone
+    should be told to manage the device on, though: it exists only for
+    the duration of the setup flow and disappears the moment the device
+    joins a network. The splash page's "open this on your phone" list is
+    strictly worse for carrying it.
+
+    ``gateway`` is ``None`` when no portal run is live, and then nothing
+    is stripped. That matters more than it looks: the address is only
+    special while a portal owns it. ``192.168.42.1`` is an ordinary LAN
+    address otherwise, and a device sitting on a 192.168.42.0/24 network
+    that happened to be handed ``.1`` would have hidden its real address
+    from its own operator -- on a network where nothing was wrong.
     """
-    return ' '.join(
-        token for token in node_ip.split() if token != PORTAL_GATEWAY
-    )
+    if not gateway:
+        return node_ip
+
+    return ' '.join(token for token in node_ip.split() if token != gateway)

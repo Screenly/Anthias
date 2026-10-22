@@ -378,7 +378,8 @@ def wifi_setup_state() -> dict[str, Any]:
     # fails towards playing content.
     portal = wifi_connect.read_portal_state()
     active = portal is not None and wifi_connect.portal_is_up(
-        _resolve_node_ip(refresh=_publish_wifi_setup_refresh)
+        _resolve_node_ip(refresh=_publish_wifi_setup_refresh),
+        portal.gateway,
     )
 
     return {
@@ -400,8 +401,16 @@ def _safe_ip_addresses() -> list[str]:
     # as a "open this on your phone" link. WifiSetupViewV2 below is
     # where that address is surfaced, with the context that makes it
     # mean something.
+    #
+    # Which address that is comes from the portal, and only while one is
+    # running: the setup address is configurable, and when no portal owns
+    # it, it is just an address. A device on a 192.168.42.0/24 LAN that
+    # was handed .1 used to have its real address hidden here.
+    portal = wifi_connect.read_portal_state()
     return _format_ip_urls(
-        wifi_connect.strip_portal_gateway(_resolve_node_ip())
+        wifi_connect.strip_portal_gateway(
+            _resolve_node_ip(), portal.gateway if portal else None
+        )
     )
 
 
