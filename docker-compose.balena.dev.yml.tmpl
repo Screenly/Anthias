@@ -139,15 +139,24 @@ services:
   #     not 5, which is what a failure to reach NetworkManager looks
   #     like.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.12
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.13
     # Serving DHCP, which does not survive Docker's NAT, and binding the
     # access point's own address on the wireless device.
     network_mode: host
-    # Exits 0 as soon as the device is online, which on a healthy screen
-    # is the first thing it does. `always` would both churn a container
-    # start a minute forever and, on a device whose connectivity cannot
-    # be determined, re-raise the access point every ACTIVITY_TIMEOUT.
-    restart: "no"
+    # `always` is the schedule here, because there is nothing else that
+    # can be one. The supervisor treats an exited `restart: "no"`
+    # container as finished and never starts it again -- not on reboot,
+    # only on a new release apply -- so a screen installed while online
+    # would never offer setup after being moved or after the WiFi
+    # password changed. Confirmed on balenaOS 9.0.3 with supervisor
+    # 18.2.2: the container's start and finish times were unchanged
+    # across a reboot.
+    #
+    # What makes `always` affordable is that the daemon waits before
+    # exiting (below). Without that it is a spin: measured on a wired
+    # Pi 5, a container start every eighteen seconds, 4,680 a day, with
+    # 19,000 log lines to match -- which on balena ship to the cloud.
+    restart: always
     environment:
       # NetworkManager lives on the host; io.balena.features.dbus below
       # is what puts its socket in this container.
@@ -173,6 +182,16 @@ services:
       - WIFI_CONNECT_NO_QR_STDOUT=true
       # Idle, not a session cap, as of 2026.10.9.
       - ACTIVITY_TIMEOUT=900
+      # The cadence `restart: always` turns into a schedule, as of
+      # 2026.10.13. Five minutes between checks on a screen that is
+      # online -- the check is one D-Bus round trip -- and six hours
+      # after a setup page nobody used, because that one just held the
+      # display for a quarter of an hour. A site with nothing to join
+      # therefore spends a minute in twenty-four showing setup instead
+      # of content, which is the same budget the systemd timer and its
+      # backoff give the Debian path.
+      - WIFI_CONNECT_RECHECK_INTERVAL=300
+      - WIFI_CONNECT_RETRY_AFTER=21600
     volumes:
       - resin-data:/data
     labels:

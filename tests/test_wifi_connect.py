@@ -1337,20 +1337,69 @@ def test_balena_pins_a_wifi_connect_that_gates_itself() -> None:
         )
 
 
-def test_balena_does_not_let_the_supervisor_restart_the_portal() -> None:
-    """It exits 0 the moment the device is online, which is immediately
-    on a healthy screen. A restarting service would churn a container
-    start a minute forever, and on a device whose connectivity cannot be
-    determined would re-raise the access point every ACTIVITY_TIMEOUT.
+def test_balena_uses_the_restart_policy_as_its_schedule() -> None:
+    """There is nothing else on balena that can be one.
+
+    The supervisor treats an exited `restart: "no"` container as
+    finished and never starts it again -- not on reboot, only on a new
+    release apply -- so a screen installed while online would never
+    offer setup after being moved. Confirmed on balenaOS 9.0.3.
     """
     for template_name in BALENA_TEMPLATES:
         service = _service_block(
             (REPO_ROOT / template_name).read_text(), 'anthias-wifi-connect'
         )
 
-        assert re.search(r'^\s+restart:\s*"no"', service, re.MULTILINE), (
-            f'{template_name} lets the supervisor restart the portal'
+        assert re.search(r'^\s+restart:\s*always', service, re.MULTILINE), (
+            f'{template_name} will not run the portal again after a reboot'
         )
+
+
+def test_balena_gives_the_restart_policy_a_cadence() -> None:
+    """Otherwise `restart: always` is a spin, not a schedule.
+
+    Measured on a wired Pi 5: without a wait the daemon exits in about
+    eighteen seconds and is restarted immediately -- 4,680 container
+    starts and 19,000 log lines per device per day, and on balena those
+    logs ship to the cloud.
+
+    The two intervals must differ. A screen that is online is cheap to
+    re-check; one that just showed a setup page nobody used held the
+    display for a quarter of an hour, and retrying that every five
+    minutes means a site with nothing to join never shows content.
+    """
+    for template_name in BALENA_TEMPLATES:
+        service = _service_block(
+            (REPO_ROOT / template_name).read_text(), 'anthias-wifi-connect'
+        )
+
+        recheck = re.search(r'WIFI_CONNECT_RECHECK_INTERVAL=(\d+)', service)
+        retry = re.search(r'WIFI_CONNECT_RETRY_AFTER=(\d+)', service)
+
+        assert recheck is not None, f'{template_name} has no recheck cadence'
+        assert retry is not None, f'{template_name} has no retry cadence'
+        assert int(recheck.group(1)) > 0
+        assert int(retry.group(1)) > int(recheck.group(1)), (
+            f'{template_name} retries an ignored portal as often as it '
+            f'checks a healthy screen'
+        )
+
+
+def test_the_debian_path_still_lets_systemd_own_the_schedule() -> None:
+    """Two schedulers would fight.
+
+    The timer's next tick would land while the last run was still
+    sitting in its wait, so the unit would look busy and the gate would
+    never be re-evaluated.
+    """
+    service = _service_block(
+        (REPO_ROOT / 'docker-compose.yml.tmpl').read_text(),
+        'anthias-wifi-connect',
+    )
+
+    assert 'WIFI_CONNECT_RECHECK_INTERVAL' not in service
+    assert 'WIFI_CONNECT_RETRY_AFTER' not in service
+    assert re.search(r'^\s+restart:\s*"no"', service, re.MULTILINE)
 
 
 def test_balena_gives_the_portal_the_host_bus_and_the_shared_volume() -> None:
