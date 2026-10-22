@@ -18,10 +18,20 @@ healthy device.
 Two further signals, because a portal can stop without saying so.
 
 ``portal_is_up`` corroborates with something the kernel owns: the
-portal runs with ``ipv4.method=manual``, so NetworkManager holds
-``PORTAL_GATEWAY`` on the WiFi interface for as long as the access
-point is up, and the server already resolves the host's addresses for
-the splash page.
+portal runs with ``ipv4.method=manual``, so NetworkManager holds the
+portal's gateway on the WiFi interface for as long as the access point
+is up, and the server already resolves the host's addresses for the
+splash page.
+
+That resolver is host_agent on bare metal and the balena supervisor on
+balena, and the two had to be confirmed separately. Measured on
+balenaOS 2.83.18 in QEMU: with the address on an interface named
+``wlan0`` the supervisor's ``/v1/device`` goes from ``10.0.2.15`` to
+``10.0.2.15 192.168.42.1`` within about twelve seconds, and it filters
+balena's own bridges (``balena0``, ``supervisor0``, ``resin-dns``) out
+of that list. It is also a lagging cache -- it kept reporting the
+address after the interface was deleted -- which is why it only ever
+corroborates, and the state file below is the authority.
 
 The file's **heartbeat** covers what that cannot. A portal killed with
 ``SIGKILL`` removes neither its state file nor its access point --

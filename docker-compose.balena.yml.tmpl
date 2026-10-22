@@ -108,6 +108,30 @@ services:
   # state file. The same test against 2026.10.10 raises one.
   #
   # Do NOT pin this below 2026.10.11.
+  #
+  # Measured on balenaOS 2.83.18 (NetworkManager 1.28.0) booted in QEMU,
+  # because the three facts this service depends on there are not
+  # obvious from the Debian path:
+  #
+  #   * ConnectivityCheckAvailable is FALSE, exactly as on Debian and
+  #     Raspberry Pi OS -- so the "unknown" fallback above is the code
+  #     path that runs here too. (meta-balena's current bbappend does
+  #     add `concheck` to PACKAGECONFIG; this released build predates
+  #     that, and either way the daemon handles both.) `Connectivity`
+  #     itself still answers 4/FULL, which is the trap: it is optimistic
+  #     when no probe ran.
+  #
+  #   * supervisor0 is a BRIDGE that NetworkManager reports as
+  #     `connected (externally)`. Upstream's online check counts only
+  #     ethernet, wifi and modem devices, which is what stops every
+  #     balena device reading as permanently online and never raising
+  #     a portal at all.
+  #
+  #   * The host D-Bus socket reaches the container through the label
+  #     below: the pinned image run with exactly this env and mount
+  #     exits 3 ("no WiFi device was found" -- the VM has no radio),
+  #     not 5, which is what a failure to reach NetworkManager looks
+  #     like.
   anthias-wifi-connect:
     image: ghcr.io/screenly-labs/wifi-connect:2026.10.11
     # Serving DHCP, which does not survive Docker's NAT, and binding the
