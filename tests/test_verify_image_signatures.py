@@ -18,10 +18,16 @@ SERVER = 'ghcr.io/screenly/anthias-server:latest-pi4-64'
 VIEWER = 'ghcr.io/screenly/anthias-viewer:latest-pi4-64'
 SERVER_DIGEST = 'ghcr.io/screenly/anthias-server@sha256:' + 'a' * 64
 VIEWER_DIGEST = 'ghcr.io/screenly/anthias-viewer@sha256:' + 'b' * 64
+WIFI = 'ghcr.io/screenly-labs/wifi-connect:2026.10.13'
+WIFI_DIGEST = 'ghcr.io/screenly-labs/wifi-connect@sha256:' + 'd' * 64
 
 IDENTITY = (
     'https://github.com/Screenly/Anthias/.github/workflows/'
     'docker-build.yaml@refs/heads/master'
+)
+WIFI_IDENTITY = (
+    'https://github.com/Screenly-Labs/wifi-connect/.github/workflows/'
+    'release.yml@refs/tags/v2026.10.13'
 )
 ISSUER = 'https://token.actions.githubusercontent.com'
 
@@ -41,8 +47,9 @@ for ref in digests[args[4]]:
 """
 
 # `cosign verify` succeeds only for a digest listed as signed, and only
-# when asked for the identity and issuer docker-build.yaml signs with.
-# Every invocation is logged so tests can assert what was checked.
+# when asked for the identity that digest was signed under (and the
+# GitHub Actions issuer). Every invocation is logged so tests can assert
+# what was checked.
 FAKE_COSIGN = """
 import json, os, sys
 args = sys.argv[1:]
@@ -50,12 +57,13 @@ with open(os.environ['FAKE_COSIGN_LOG'], 'a') as f:
     f.write(json.dumps(args) + '\\n')
 with open(os.environ['FAKE_STATE']) as f:
     signed = json.load(f)['signed']
+ref = args[-1]
 expected = [
     'verify',
-    '--certificate-identity', os.environ['EXPECTED_IDENTITY'],
+    '--certificate-identity', signed.get(ref),
     '--certificate-oidc-issuer', os.environ['EXPECTED_ISSUER'],
 ]
-if args[:-1] != expected or args[-1] not in signed:
+if ref not in signed or args[:-1] != expected:
     print('Error: no matching signatures', file=sys.stderr)
     sys.exit(1)
 print('[{"critical": {}}]')
@@ -91,7 +99,7 @@ class Harness:
     def set_state(
         self,
         digests: dict[str, list[str]],
-        signed: list[str],
+        signed: dict[str, str],
     ) -> None:
         with open(self.state_path, 'w') as f:
             json.dump({'digests': digests, 'signed': signed}, f)
@@ -109,7 +117,6 @@ class Harness:
         env['PATH'] = f'{self.bin_dir}:/usr/bin:/bin'
         env['FAKE_STATE'] = self.state_path
         env['FAKE_COSIGN_LOG'] = self.cosign_log
-        env['EXPECTED_IDENTITY'] = IDENTITY
         env['EXPECTED_ISSUER'] = ISSUER
         return subprocess.run(
             [SCRIPT, *images],
@@ -139,7 +146,7 @@ def harness() -> Iterator[Harness]:
 def test_accepts_signed_images(harness: Harness) -> None:
     harness.set_state(
         digests={SERVER: [SERVER_DIGEST], VIEWER: [VIEWER_DIGEST]},
-        signed=[SERVER_DIGEST, VIEWER_DIGEST],
+        signed={SERVER_DIGEST: IDENTITY, VIEWER_DIGEST: IDENTITY},
     )
 
     result = harness.run(SERVER, VIEWER)
@@ -152,7 +159,7 @@ def test_accepts_signed_images(harness: Harness) -> None:
 def test_rejects_an_unsigned_image(harness: Harness) -> None:
     harness.set_state(
         digests={SERVER: [SERVER_DIGEST], VIEWER: [VIEWER_DIGEST]},
-        signed=[SERVER_DIGEST],
+        signed={SERVER_DIGEST: IDENTITY},
     )
 
     result = harness.run(SERVER, VIEWER)
@@ -172,7 +179,7 @@ def test_verifies_the_pulled_digest_not_the_tag(harness: Harness) -> None:
     hub_digest = 'screenly/anthias-server@sha256:' + 'c' * 64
     harness.set_state(
         digests={SERVER: [hub_digest, SERVER_DIGEST]},
-        signed=[SERVER_DIGEST],
+        signed={SERVER_DIGEST: IDENTITY},
     )
 
     result = harness.run(SERVER)
@@ -182,7 +189,7 @@ def test_verifies_the_pulled_digest_not_the_tag(harness: Harness) -> None:
 
 
 def test_fails_when_the_image_was_never_pulled(harness: Harness) -> None:
-    harness.set_state(digests={}, signed=[])
+    harness.set_state(digests={}, signed={})
 
     result = harness.run(SERVER)
 
@@ -194,7 +201,7 @@ def test_fails_when_the_image_was_never_pulled(harness: Harness) -> None:
 def test_skips_images_that_are_not_ours(harness: Harness) -> None:
     harness.set_state(
         digests={SERVER: [SERVER_DIGEST]},
-        signed=[SERVER_DIGEST],
+        signed={SERVER_DIGEST: IDENTITY},
     )
 
     result = harness.run(
@@ -210,7 +217,7 @@ def test_skips_images_that_are_not_ours(harness: Harness) -> None:
 def test_fails_closed_without_cosign(harness: Harness) -> None:
     harness.set_state(
         digests={SERVER: [SERVER_DIGEST]},
-        signed=[SERVER_DIGEST],
+        signed={SERVER_DIGEST: IDENTITY},
     )
 
     result = harness.run(SERVER, without_cosign=True)
@@ -220,8 +227,62 @@ def test_fails_closed_without_cosign(harness: Harness) -> None:
 
 
 def test_requires_at_least_one_image(harness: Harness) -> None:
-    harness.set_state(digests={}, signed=[])
+    harness.set_state(digests={}, signed={})
 
     result = harness.run()
 
     assert result.returncode == 2
+
+
+def test_verifies_wifi_connect_against_its_release(harness: Harness) -> None:
+    harness.set_state(
+        digests={WIFI: [WIFI_DIGEST]},
+        signed={WIFI_DIGEST: WIFI_IDENTITY},
+    )
+
+    result = harness.run(WIFI)
+
+    assert result.returncode == 0, result.stderr
+    assert harness.verified_refs == [WIFI_DIGEST]
+
+
+def test_rejects_wifi_connect_signed_for_another_release(
+    harness: Harness,
+) -> None:
+    # A genuinely signed upstream image, re-pushed under the tag Anthias
+    # pins, must not pass for the release it was not cut from.
+    older = 'ghcr.io/screenly-labs/wifi-connect:2026.10.12'
+    harness.set_state(
+        digests={older: [WIFI_DIGEST]},
+        signed={WIFI_DIGEST: WIFI_IDENTITY},
+    )
+
+    result = harness.run(older)
+
+    assert result.returncode == 1
+    assert f'Signature verification FAILED for {older}' in result.stderr
+
+
+def test_rejects_wifi_connect_signed_by_anthias(harness: Harness) -> None:
+    harness.set_state(
+        digests={WIFI: [WIFI_DIGEST]},
+        signed={WIFI_DIGEST: IDENTITY},
+    )
+
+    result = harness.run(WIFI)
+
+    assert result.returncode == 1
+
+
+def test_rejects_wifi_connect_on_a_floating_tag(harness: Harness) -> None:
+    latest = 'ghcr.io/screenly-labs/wifi-connect:latest'
+    harness.set_state(
+        digests={latest: [WIFI_DIGEST]},
+        signed={WIFI_DIGEST: WIFI_IDENTITY},
+    )
+
+    result = harness.run(latest)
+
+    assert result.returncode == 1
+    assert 'not a pinned release' in result.stderr
+    assert harness.verified_refs == []
