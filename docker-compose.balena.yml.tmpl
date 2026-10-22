@@ -142,13 +142,33 @@ services:
     # access point's own address on the wireless device.
     network_mode: host
     # `always` is the schedule here, because there is nothing else that
-    # can be one. The supervisor treats an exited `restart: "no"`
-    # container as finished and never starts it again -- not on reboot,
-    # only on a new release apply -- so a screen installed while online
-    # would never offer setup after being moved or after the WiFi
-    # password changed. Confirmed on balenaOS 9.0.3 with supervisor
-    # 18.2.2: the container's start and finish times were unchanged
-    # across a reboot.
+    # can be one.
+    #
+    # `restart: "no"` does NOT mean "start once per boot", on balena or
+    # anywhere else. It means nothing will start the container again
+    # once it has exited, and that is by design at both layers:
+    #
+    #   * The supervisor starts a service only if it has never been
+    #     started. Its own words, in compose/app.ts: "Only start a
+    #     Service if we have never started it before and the service
+    #     matches target! This is so the engine can handle the restart
+    #     policy configured for the container." An exited service is
+    #     neither Installing nor Installed, so it is left alone. The one
+    #     exception is a container the Engine failed to start because a
+    #     host interface was not ready, matched by its error message.
+    #
+    #   * balena-engine, like Docker, only starts containers at daemon
+    #     start if their policy is `always` or `unless-stopped`.
+    #
+    # So on Debian `restart: "no"` is right because systemd starts the
+    # container; here there is no systemd, and nothing else volunteers.
+    # Confirmed on balenaOS 9.0.3 with supervisor 18.2.2: the
+    # container's start and finish times were unchanged across a reboot.
+    #
+    # Reboot-only would not be enough anyway. The common failure is a
+    # screen that stays powered on while the WiFi password changes
+    # around it, and telling an operator to power-cycle a wall-mounted
+    # display is the advice this feature exists to replace.
     #
     # What makes `always` affordable is that the daemon waits before
     # exiting (below). Without that it is a spin: measured on a wired
