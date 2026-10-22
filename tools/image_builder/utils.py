@@ -218,6 +218,17 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         'ca-certificates',
         'dbus-daemon',
         'fonts-arphic-uming',
+        # Emoji coverage for web assets. The image already ships CJK
+        # fonts so that pages render with their intended glyphs rather
+        # than tofu; emoji are the same problem and were simply
+        # missing — DejaVu carries a handful of the legacy Miscellaneous
+        # Symbols codepoints (U+2764, U+26A0) and nothing from the
+        # Supplemental Symbols blocks, so ordinary page content like
+        # U+1F44D / U+1F680 rendered as hex boxes (issue #3406).
+        # Architecture: all, so it is valid on the armhf Qt5 boards too,
+        # and at 11 MB installed it is smaller than either CJK font
+        # already in this list.
+        'fonts-noto-color-emoji',
         'libasound2-dev',
         'libavcodec-dev',
         'libavdevice-dev',
