@@ -87,7 +87,7 @@
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: '0755'  # NOSONAR - resolved must traverse its drop-in dir
 
 - name: Seed resolved's fallback servers from the pre-switch resolver
   ansible.builtin.copy:
@@ -98,7 +98,7 @@
       FallbackDNS={{ system_pre_switch_nameservers | join(' ') }}
     owner: root
     group: root
-    mode: '0644'
+    mode: '0644'  # NOSONAR - systemd-resolve user must read drop-ins
   vars:
     # Loopback entries are dropped: if resolv.conf already points at
     # resolved's own stub (127.0.0.53) -- an upgrade, or a re-run of
