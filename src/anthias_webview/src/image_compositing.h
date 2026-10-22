@@ -12,17 +12,16 @@
 // progress number, is unit-testable with a plain QImage, without
 // pulling in QtWebEngine or even QWidget.
 //
-// This split exists because of a real bug caught on hardware, not as
-// a speculative refactor: an earlier version composited the two
-// frames with CompositionMode_Plus, which looked correct by the
-// arithmetic (A*(1-p) + B*p sums to 1 for every p) but wasn't, because
-// Qt's raster engine applies opacity to Plus by saturating the add
-// first and interpolating the *result* against the original
-// destination afterwards, not by scaling the source down before
-// adding it. The pure progress-math tests (image_transition.cpp)
-// stayed green throughout, because they never touch a pixel; only a
-// test that actually composites and reads a colour back can catch
-// this class of bug. See test_image_compositing.cpp.
+// An earlier version composited the two frames with
+// CompositionMode_Plus, which looks correct by the arithmetic
+// (A*(1-p) + B*p sums to 1 for every p) but isn't: Qt's raster engine
+// applies opacity to Plus by saturating the add first and
+// interpolating the *result* against the original destination
+// afterwards, not by scaling the source down before adding it. The
+// pure progress-math tests (image_transition.cpp) stay green either
+// way, since they never touch a pixel; only a test that actually
+// composites and reads a colour back catches this class of bug. See
+// test_image_compositing.cpp.
 namespace image_compositing
 {
 // The rect ``imageSize`` lands in when scaled (Qt::KeepAspectRatio)
@@ -68,9 +67,9 @@ void drawScaledImage(
 //      "pop" a crossfade exists to avoid, just moved to the edges
 //      of the frame instead of the middle. Painted only over the
 //      gap, never the area ``incoming`` itself covers (that's about
-//      to be drawn over anyway, and this PR already has a
-//      performance problem on low-end boards (see #3398) so
-//      nothing here repaints a pixel that doesn't need it).
+//      to be drawn over anyway, and per-frame compositing cost on
+//      low-end boards is tight enough - see #3397 - that nothing
+//      here should repaint a pixel that doesn't need it).
 //   3. ``incoming`` at opacity ``progress``, source-over, on top.
 //
 // Steps 1 and 3 together, restricted to the region ``incoming``

@@ -149,7 +149,7 @@ private:
     // plain single-image draw. Scope is strictly image -> image: it
     // is armed only from loadAsStaticImage()/setupAnimation(), for
     // a genuine new asset (never for a playing GIF's own
-    // frameChanged repaint(see image_transition::shouldStartFade),
+    // frameChanged repaint (see image_transition::shouldStartFade),
     // and never when there's no real outgoing image to fade from
     // (first image after boot, or right after a video/webpage asset,
     // both of which blank currentImage before loadImage() runs. Look at
@@ -167,16 +167,14 @@ private:
     // setupAnimation re-capture fadeFromImage from whatever
     // ``currentImage`` holds at that instant and restart fadeElapsed,
     // rather than queueing a second transition, so nothing stacks.
-    // That capture is NOT "the frame currently on screen". During an
-    // in-flight fade the screen shows a blend, but currentImage holds
-    // only the plain incoming frame of that fade (paintEvent() never
-    // writes a blended result back into it). So an asset arriving
-    // mid-fade restarts from the previous fade's target frame, at
-    // full fidelity, rather than from whatever partially-blended
-    // pixels were actually visible the instant before. In practice
-    // this rarely matters: it would take an asset shorter than
-    // fadeDurationMs to interrupt a fade at all, but the comment
-    // should describe what the code does, not what sounds tidiest.
+    // During an in-flight fade, ``currentImage`` holds the plain
+    // incoming frame of that fade at full fidelity — paintEvent()
+    // never writes its blended result back into it — so this
+    // recapture restarts from that target frame, not from whichever
+    // partially-blended pixels happened to be visible on screen the
+    // instant before. In practice this rarely matters, since it
+    // would take an asset shorter than fadeDurationMs to interrupt a
+    // fade at all.
     QImage fadeFromImage;
     QElapsedTimer fadeElapsed;
     QTimer* fadeTimer;

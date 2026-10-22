@@ -179,8 +179,8 @@
       answer: |
         Yes, for images. Switching from one image (or animated GIF) to the next crossfades by default. There's no toggle in the dashboard yet, so tune it with the `ANTHIAS_IMAGE_TRANSITION_MS` environment variable: milliseconds, default `300`, clamped to `0`–`5000`, and `0` turns it off.
 
-        * **Docker:** add `ANTHIAS_IMAGE_TRANSITION_MS` to your `.env` (or compose override) before running `docker compose up -d`.
-        * **balena:** add it as a Device Variable, or a Service Variable scoped to `anthias-viewer`, in the [balena dashboard](https://dashboard.balena-cloud.com/): same mechanism as the `LANG` variable described above.
+        * **Docker / Raspberry Pi OS install:** `docker-compose.yml.tmpl` is rendered into `docker-compose.yml` by `upgrade_containers.sh`, not read by Compose directly, so a plain `.env` file has no effect here. Instead, create or edit `/etc/anthias/viewer.env` (`sudo nano /etc/anthias/viewer.env`) with a line like `ANTHIAS_IMAGE_TRANSITION_MS=150`, then re-run `~/anthias/bin/upgrade_containers.sh` so the new value is baked into the viewer container: same mechanism this install path already uses for `/etc/anthias/proxy.env`.
+        * **balena:** add it as a Device Variable, or a Service Variable scoped to `anthias-viewer`, in the [balena dashboard](https://dashboard.balena-cloud.com/): balena injects these directly, so no re-render or restart script is needed.
 
         Switching to or from a video or a web-page asset still cuts instantly; compositing those smoothly is a bigger piece of work and isn't done yet.
 

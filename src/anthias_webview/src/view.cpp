@@ -415,16 +415,16 @@ View::View(QWidget* parent) : QWidget(parent)
     // re-read on every loadImage().
     //
     // Force-disabled on Qt5 builds (Pi 1/2/3-32, linuxfb), regardless
-    // of what ANTHIAS_IMAGE_TRANSITION_MS is set to. Measured on the
-    // maintainer's hardware rig: a single blended paintEvent() costs
-    // ~517ms on a Pi 1 (armv6, Qt 5.15.15) at 1920x1080, longer than
-    // the entire default 300ms fade. That's not a duration problem
-    // (any nonzero duration still means at least one blended frame at
-    // that cost, and the viewer's main thread, including its D-Bus
-    // service, blocks for the duration of that paint), so it isn't
-    // something ANTHIAS_IMAGE_TRANSITION_MS can be tuned around; the
-    // env var is simply never read on this Qt version, same posture
-    // as not offering a dial for something that has no good setting.
+    // of what ANTHIAS_IMAGE_TRANSITION_MS is set to. On a Pi 1
+    // (armv6, Qt 5.15.15), a single blended paintEvent() costs
+    // roughly 517ms at 1920x1080, longer than the entire default
+    // 300ms fade. That's not a duration problem: any nonzero
+    // duration still means at least one blended frame at that cost,
+    // and the viewer's main thread, including its D-Bus service,
+    // blocks for the duration of that paint. So it isn't something
+    // ANTHIAS_IMAGE_TRANSITION_MS can be tuned around; the env var is
+    // simply never read on this Qt version, same posture as not
+    // offering a dial for something that has no good setting.
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     fadeDurationMs = image_transition::durationMs(
         qgetenv("ANTHIAS_IMAGE_TRANSITION_MS"),
@@ -1179,7 +1179,7 @@ void View::playVideo(const QString &uri, const QVariantMap &options)
     stopAnimation();
     currentImage = QImage();
     fallbackToLastImageOnBlank = false;
-    // Same reasoning as the blanks in loadPage() /the loadImage()
+    // Same reasoning as the blanks in loadPage() / the loadImage()
     // "null" branch: video is out of scope for the crossfade, so
     // cancel rather than leave it blending against a null image.
     stopImageFade();
@@ -1251,7 +1251,7 @@ void View::setupAnimation()
     });
 
     // Crossfade (issue #3351). Same capture-before-overwrite /
-    // interruption handling as loadAsStaticImage(). (see the comment
+    // interruption handling as loadAsStaticImage() (see the comment
     // there).
     const bool startFade = image_transition::shouldStartFade(
         /*hasOutgoingImage=*/!currentImage.isNull(),

@@ -40,16 +40,29 @@ QImage solidImage(const QSize &size, const QColor &color)
 // QImage, matching View::paintEvent()'s own
 // painter.fillRect(rect(), Qt::black) immediately before any of this
 // runs, and returns the result for pixel inspection.
+//
+// ``originAtCentre`` mirrors View::paintEvent()'s rotated path: when
+// true, the painter is translated to the canvas centre first (the
+// stand-in for paintEvent()'s translate+rotate about the widget
+// centre: rotation itself doesn't matter for what this is testing,
+// only that the origin has moved), exactly as paintCrossfade()
+// requires of its caller. Translating by exactly half of ``box`` in
+// each dimension means a pixel that lands at canvas (x, y) in the
+// originAtCentre == false case lands at the same canvas (x, y) here
+// too, so callers can reuse the same expected pixel coordinates for
+// both conventions.
 QImage renderCrossfade(
     const QImage &outgoing, const QImage &incoming, const QSize &box,
-    qreal progress)
+    qreal progress, bool originAtCentre = false)
 {
     QImage canvas(box, QImage::Format_RGB32);
     canvas.fill(Qt::black);
     QPainter painter(&canvas);
+    if (originAtCentre) {
+        painter.translate(box.width() / 2.0, box.height() / 2.0);
+    }
     image_compositing::paintCrossfade(
-        painter, outgoing, incoming, box, /*originAtCentre=*/false,
-        progress);
+        painter, outgoing, incoming, box, originAtCentre, progress);
     return canvas;
 }
 }  // namespace
@@ -176,6 +189,38 @@ private slots:
         // the "pop" fillLetterboxGaps() exists to avoid.
         QCOMPARE(result.pixelColor(200, 50), QColor(110, 90, 60));
         // Bottom bar (y in [200, 300)) is symmetric.
+        QCOMPARE(result.pixelColor(200, 250), QColor(110, 90, 60));
+    }
+
+    // Same case as letterboxGapFadesToBlack(), through the
+    // originAtCentre == true convention View::paintEvent() uses on
+    // the linuxfb rotated path (painter translated to the canvas
+    // centre before paintCrossfade() runs, instead of left at the
+    // top-left origin). Covers a path the compositing bug fix didn't
+    // originally have a dedicated test for: the two conventions
+    // share drawScaledImage() and scaledImageRect(), but
+    // fillLetterboxGaps()'s own box-rect construction branches on
+    // originAtCentre separately, so it needs its own pass to confirm
+    // the gap geometry lines up there too, not just that the two
+    // scaledImageRect() unit tests above agree on the rect in
+    // isolation.
+    void letterboxGapFadesToBlackWhenOriginAtCentre()
+    {
+        const QSize box(400, 300);
+        const QColor outgoingColor(220, 180, 120);
+        const QColor incomingColor(90, 160, 230);
+        const QImage outgoing = solidImage(box, outgoingColor);
+        const QImage incoming = solidImage(QSize(400, 100), incomingColor);
+
+        const QImage result = renderCrossfade(
+            outgoing, incoming, box, /*progress=*/0.5,
+            /*originAtCentre=*/true);
+
+        // Same expected pixels and positions as the
+        // originAtCentre == false case -- see renderCrossfade()'s
+        // comment for why the coordinates match up.
+        QCOMPARE(result.pixelColor(200, 150), QColor(155, 170, 175));
+        QCOMPARE(result.pixelColor(200, 50), QColor(110, 90, 60));
         QCOMPARE(result.pixelColor(200, 250), QColor(110, 90, 60));
     }
 

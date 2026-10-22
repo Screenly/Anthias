@@ -24,7 +24,7 @@ constexpr int kDefaultDurationMs = 300;
 // A duration at or below this disables the transition outright:
 // shouldStartFade() never arms one, so loadImage()/setupAnimation()
 // fall back to today's instant swap. Also the floor for clamping, so
-// a negative env value can't do anything stranger than ""disabled".
+// a negative env value can't do anything stranger than "disabled".
 constexpr int kMinDurationMs = 0;
 
 // Upper bound so a garbage/huge env value can't leave two assets

@@ -154,6 +154,21 @@ if [[ -f /etc/anthias/proxy.env ]]; then
     set +a
 fi
 
+# Pull viewer-side settings (currently just ANTHIAS_IMAGE_TRANSITION_MS)
+# into our shell env so envsubst can substitute them into the viewer
+# service block. docker-compose.yml.tmpl's ${...} references are
+# rendered once, here, into a plain docker-compose.yml — compose's own
+# .env-file auto-loading never runs against the template, so a value
+# in .env has no effect and silently renders as an empty string. This
+# file, like /etc/anthias/proxy.env above, is the actual source of
+# truth: when it's absent, the substitution resolves to empty and
+# image_transition::durationMs() falls back to its 300ms default.
+if [[ -f /etc/anthias/viewer.env ]]; then
+    set -a
+    . /etc/anthias/viewer.env
+    set +a
+fi
+
 cat /home/${USER}/anthias/docker-compose.yml.tmpl \
     | envsubst \
     > /home/${USER}/anthias/docker-compose.yml

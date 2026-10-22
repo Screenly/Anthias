@@ -14,10 +14,10 @@ int durationMs(const QByteArray &value, bool set)
         if (ok) {
             parsed = candidate;
         }
-        // Set but unparseable (e.g."abc"): silently keep the
+        // Set but unparseable (e.g. "abc"): silently keep the
         // default, same posture pageLoadTimeoutMs() takes for
         // ANTHIAS_WEBPAGE_TIMEOUT_S: a malformed override shouldn't
-        // crash or disable the feature,just fall back.
+        // crash or disable the feature, just fall back.
     }
     return std::clamp(parsed, kMinDurationMs, kMaxDurationMs);
 }
