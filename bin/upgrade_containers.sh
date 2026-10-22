@@ -214,7 +214,47 @@ if [ "$MODE" = "pull" ] && [ "${TOTAL_MEMORY_KB:-0}" -lt "$LOW_RAM_THRESHOLD_KB"
     sudo -E docker compose "${COMPOSE_FILES[@]}" stop anthias-viewer anthias-celery || true
 fi
 
-sudo -E docker compose "${COMPOSE_FILES[@]}" ${MODE}
+# A plain `compose pull` skips profiled services, so anthias-wifi-connect
+# would otherwise be fetched implicitly by the `up --no-start` further
+# down, after the signature check below had already run without it.
+# Activating the profile here pulls it with everything else, and that
+# later `up` then reuses the verified local image instead of pulling.
+PULL_PROFILES=()
+if [[ "$MODE" = "pull" ]]; then
+    PULL_PROFILES=(--profile wifi-connect)
+fi
+sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}"
+
+# Refuse to run pulled images their publisher didn't sign: ours, and the
+# upstream wifi-connect image (see verify_image_signatures.sh). The check
+# goes against what was just pulled and before anything is started from
+# it, so a failure leaves the device on the release it was already
+# running. Locally built images (MODE=build) have no signature to check.
+# ANTHIAS_SKIP_IMAGE_VERIFICATION=1 is the escape hatch for an operator
+# who deliberately runs images of their own; nothing in Anthias sets it.
+if [[ "$MODE" = "pull" ]]; then
+    if [[ "${ANTHIAS_SKIP_IMAGE_VERIFICATION:-}" = "1" ]]; then
+        echo "WARNING: ANTHIAS_SKIP_IMAGE_VERIFICATION=1 is set; starting" \
+             "the pulled images without checking their signatures." >&2
+    else
+        mapfile -t IMAGES < <(
+            sudo -E docker compose "${COMPOSE_FILES[@]}" \
+                "${PULL_PROFILES[@]}" config --images
+        )
+        VERIFY_SCRIPT="${SCRIPT_DIR}/verify_image_signatures.sh"
+        if [[ ! -x "${VERIFY_SCRIPT}" ]] \
+            || ! "${VERIFY_SCRIPT}" "${IMAGES[@]}"; then
+            echo "Refusing to start images that failed signature" \
+                 "verification. The device stays on its current release." >&2
+            # Bring back what the low-RAM branch stopped for the pull.
+            # `start` reuses the existing containers, which still point at
+            # the images they were created from, not the ones just pulled.
+            sudo -E docker compose "${COMPOSE_FILES[@]}" \
+                start anthias-viewer anthias-celery || true
+            exit 1
+        fi
+    fi
+fi
 
 if [ -f /var/run/reboot-required ]; then
     exit 0
