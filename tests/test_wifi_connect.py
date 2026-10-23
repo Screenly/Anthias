@@ -787,9 +787,11 @@ def viewer_wifi_state() -> Iterator[None]:
 
     viewer._wifi_setup_active = False
     viewer._wifi_setup_logged = False
+    viewer._wifi_setup_splash_pending = False
     yield
     viewer._wifi_setup_active = False
     viewer._wifi_setup_logged = False
+    viewer._wifi_setup_splash_pending = False
 
 
 def test_viewer_goes_active_when_the_server_says_so(
@@ -829,6 +831,9 @@ def test_viewer_leaves_setup_when_the_portal_comes_down(
     assert not viewer._wifi_setup_active
     # Re-armed, so a later portal logs its own edge.
     assert not viewer._wifi_setup_logged
+    # ...and the splash is queued, so the device shows the address it
+    # just acquired (GH #3411).
+    assert viewer._wifi_setup_splash_pending
 
 
 def test_an_unreachable_server_does_not_strand_the_setup_screen(
@@ -921,6 +926,127 @@ def test_playlist_runs_normally_when_setup_is_not_active(
 
     scheduler.get_next_asset.assert_called_once()
     view_webpage.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Showing the address the device just acquired (GH #3411)
+# ---------------------------------------------------------------------------
+#
+# The boot splash runs once, minutes before a portal user picks a
+# network -- so without this the one screen carrying the admin URL is
+# long gone by the time there is an address to put on it, and the
+# device sits on the standby logo with no way to find its web UI.
+
+
+def test_splash_replays_once_after_the_portal_ends(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_splash_pending = True
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = None
+
+    with (
+        mock.patch.dict(viewer.settings, {'show_splash': True}),
+        mock.patch.object(viewer, 'view_webpage') as view_webpage,
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch.object(viewer, 'get_skip_event'),
+        mock.patch.object(viewer, 'sleep'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+    ):
+        viewer.asset_loop(scheduler)
+
+        view_webpage.assert_called_once_with(viewer.SPLASH_PAGE_URL)
+        # The playlist is not consulted on the tick that shows it.
+        scheduler.get_next_asset.assert_not_called()
+
+        # ...and the next tick is an ordinary one. A replay that armed
+        # itself again would hold the display on the splash forever.
+        view_webpage.reset_mock()
+        viewer.asset_loop(scheduler)
+
+    assert not viewer._wifi_setup_splash_pending
+    scheduler.get_next_asset.assert_called_once()
+    view_webpage.assert_not_called()
+
+
+def test_splash_replay_honours_the_show_splash_setting(
+    viewer_wifi_state: None,
+) -> None:
+    """An operator who turned the splash off meant it here too."""
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_splash_pending = True
+    scheduler = mock.Mock()
+    scheduler.get_next_asset.return_value = None
+
+    with (
+        mock.patch.dict(viewer.settings, {'show_splash': False}),
+        mock.patch.object(viewer, 'view_webpage') as view_webpage,
+        mock.patch.object(viewer, 'view_image'),
+        mock.patch.object(viewer, 'get_skip_event'),
+        mock.patch.object(viewer, 'sleep'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+    ):
+        viewer.asset_loop(scheduler)
+
+    view_webpage.assert_not_called()
+    assert not viewer._wifi_setup_splash_pending
+
+
+def test_an_unreachable_server_does_not_queue_a_splash(
+    viewer_wifi_state: None,
+) -> None:
+    """A dropped poll is not a portal that finished.
+
+    The setup screen still goes away -- failing towards playback is
+    deliberate -- but the splash it would queue is served by the very
+    server that just failed to answer.
+    """
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        side_effect=requests.exceptions.ConnectionError(),
+    ):
+        viewer._poll_wifi_setup_once()
+
+    assert not viewer._wifi_setup_active
+    assert not viewer._wifi_setup_splash_pending
+
+
+def test_the_setup_screen_outranks_a_queued_splash(
+    viewer_wifi_state: None,
+) -> None:
+    """A portal that came back up is the more urgent screen.
+
+    The queued splash survives for the tick after it comes down again,
+    which is when its address is worth showing.
+    """
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_active = True
+    viewer._wifi_setup_splash_pending = True
+    scheduler = mock.Mock()
+
+    with (
+        mock.patch.object(viewer, 'view_webpage') as view_webpage,
+        mock.patch.object(viewer, 'sleep'),
+        mock.patch.object(viewer, '_consume_pending_rotation_bounce'),
+        mock.patch.object(viewer, '_retry_wayland_rotation_if_pending'),
+        mock.patch.object(viewer, '_wayland_output_watchdog'),
+    ):
+        viewer.asset_loop(scheduler)
+
+    view_webpage.assert_called_once_with(viewer.HOTSPOT_PAGE_URL)
+    assert viewer._wifi_setup_splash_pending
 
 
 # ---------------------------------------------------------------------------

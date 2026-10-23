@@ -229,6 +229,14 @@ _wifi_setup_active: bool = False
 # 15-minute window writes two lines instead of ~180.
 _wifi_setup_logged: bool = False
 
+# Armed by the reporter when a portal run ends, consumed once by
+# asset_loop. A device that just joined a network from the setup
+# portal has never shown its address: the boot splash ran minutes
+# earlier, while the only interface up was the device's own access
+# point, so the one screen carrying the admin URL went past before
+# there was an address to put on it (GH #3411). This replays it.
+_wifi_setup_splash_pending: bool = False
+
 
 def _rotation_value() -> int:
     """Coerce settings['screen_rotation'] to a known cardinal angle.
@@ -2840,6 +2848,14 @@ def asset_loop(scheduler: Any) -> None:
         sleep(EMPTY_PL_DELAY)
         return
 
+    # The portal has just come down, which on the path this exists for
+    # means someone picked a network on their phone and the device
+    # joined it. Show them where it landed. See
+    # ``_wifi_setup_splash_pending``.
+    if _wifi_setup_splash_pending:
+        _show_post_wifi_setup_splash()
+        return
+
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -3183,9 +3199,46 @@ def _show_wifi_setup_screen() -> None:
     view_webpage(HOTSPOT_PAGE_URL)
 
 
+def _show_post_wifi_setup_splash() -> None:
+    """Replay the boot splash once, after a setup portal has ended.
+
+    The flag is cleared before the page goes up, not after: this holds
+    the display thread for ``SPLASH_DELAY``, and a second portal run
+    that starts and ends inside that window must not queue a second
+    splash on top of the playlist it is finally free to play. A missed
+    replay costs an address the splash would have shown; a stuck one
+    costs the playlist.
+
+    The addresses themselves are not read here. /splash-page polls
+    ``/api/v2/network/ip-addresses`` from the page, so a DHCP lease
+    that lands a few seconds after the portal exits still appears
+    without this having to wait for one.
+    """
+    global _wifi_setup_splash_pending
+
+    _wifi_setup_splash_pending = False
+
+    if not settings['show_splash']:
+        return
+
+    logger.info(
+        "WiFi setup finished; showing the splash page so the device's "
+        'address is visible.'
+    )
+    view_webpage(SPLASH_PAGE_URL)
+    sleep(SPLASH_DELAY)
+    # No explicit repaint here: returning hands the display straight to
+    # the next asset_loop tick, which paints the playlist or standby as
+    # it finds them. main()'s trailing view_image() exists because it is
+    # covering the gap before the loop starts; there is no such gap here.
+
+
 def _poll_wifi_setup_once() -> None:
     """One tick of the wifi-setup reporter. Never raises."""
     global _wifi_setup_active, _wifi_setup_logged
+    global _wifi_setup_splash_pending
+
+    answered = True
 
     try:
         response = requests.get(WIFI_SETUP_STATUS_URL, timeout=5)
@@ -3203,10 +3256,18 @@ def _poll_wifi_setup_once() -> None:
         # that is long gone. Treating an unanswered question as "no
         # portal" fails towards playing content, which is the job.
         active = False
+        answered = False
 
     if _wifi_setup_active and not active:
         logger.info('WiFi setup portal is down; resuming normal playback.')
         _wifi_setup_logged = False
+        # Only on an answer. An unreachable server drops the setup
+        # screen (above, deliberately) but says nothing about a portal
+        # having finished — and the splash it would queue is served by
+        # the very server that just failed to answer, so a restart
+        # would trade the setup screen for a blank page.
+        if answered:
+            _wifi_setup_splash_pending = True
 
     _wifi_setup_active = active
 
