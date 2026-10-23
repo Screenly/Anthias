@@ -1,13 +1,23 @@
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from errno import ENOSYS
 from glob import glob
 from os import getenv, path
-from signal import SIGALRM, signal
+from signal import (
+    SIGALRM,
+    SIGKILL,
+    SIGTERM,
+    Signals,
+    pidfd_send_signal,
+    signal,
+)
 from threading import Lock
 from time import monotonic, sleep, time
 from typing import Any
@@ -27,10 +37,17 @@ from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
+from anthias_viewer.constants import HOTSPOT_PAGE_URL as HOTSPOT_PAGE_URL
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
+from anthias_viewer.constants import (
+    WIFI_SETUP_POLL_INTERVAL_S as WIFI_SETUP_POLL_INTERVAL_S,
+)
+from anthias_viewer.constants import (
+    WIFI_SETUP_STATUS_URL as WIFI_SETUP_STATUS_URL,
+)
 from anthias_viewer.media_player import MediaPlayerProxy
 from anthias_viewer.playback import (
     navigate_to_asset,
@@ -42,6 +59,7 @@ from anthias_viewer.utils import (
     command_not_found,
     get_skip_event,
     sigalrm,
+    wait_for_db_schema,
     wait_for_server,
     watchdog,
 )
@@ -198,6 +216,18 @@ _empty_playlist_logged: bool = False
 # logs once per offender instead of ~2 lines/second. Holds
 # "<asset_id>:<uri>" so a changed URI on the same row still reports.
 _unavailable_asset_logged: str | None = None
+
+# Set by the wifi-setup reporter thread, read by asset_loop. A plain
+# bool rather than a lock-guarded structure: CPython writes it
+# atomically, a tick that reads the previous value simply shows the
+# right screen one tick later, and the alternative -- the display
+# thread blocking on a lock held across an HTTP call -- is worse than
+# anything it would prevent.
+_wifi_setup_active: bool = False
+
+# Edge latch for the log line, so a portal left up for its full
+# 15-minute window writes two lines instead of ~180.
+_wifi_setup_logged: bool = False
 
 
 def _rotation_value() -> int:
@@ -876,6 +906,27 @@ BROWSER_SPAWN_INLINE_TIMEOUT_SECONDS = 10
 BROWSER_POLL_INTERVAL_SECONDS = 0.25
 # Grace period to let a SIGTERM'd webview exit before we SIGKILL it.
 BROWSER_TERMINATE_GRACE_SECONDS = 3
+# Cap on the Wayland readiness probe's connect(). A unix-domain connect
+# to a live listener returns immediately, so this only bounds the
+# pathological case (a compositor wedged with a full accept backlog)
+# and keeps the probe well inside one BROWSER_POLL_INTERVAL_SECONDS
+# tick of the spawn budget it shares.
+WAYLAND_SOCKET_PROBE_TIMEOUT_SECONDS = 0.2
+# Bounds on the post-mortem drain of a dead webview's output. sh feeds
+# the ``_out`` sink from its own reader thread, so the tail of a crash
+# can still be in flight at the moment ``is_alive()`` flips — see
+# ``_drain_webview_output``.
+WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS = 1.0
+WEBVIEW_OUTPUT_DRAIN_POLL_SECONDS = 0.05
+
+# The well-known bus name AnthiasViewer registers on the session bus.
+# Must stay in lockstep with registerService("anthias.viewer") in
+# src/anthias_webview/src/main.cpp.
+WEBVIEW_DBUS_NAME = 'anthias.viewer'
+# Bound on clearing a stale owner of that name before a spawn. Covers
+# both signals, and is itself clamped by the attempt's own deadline, so
+# the inline (asset_loop) respawn budget still holds.
+WEBVIEW_NAME_RECLAIM_TIMEOUT_SECONDS = 5.0
 
 
 class WebviewLaunchError(RuntimeError):
@@ -895,29 +946,249 @@ class WebviewBinaryMissingError(WebviewLaunchError):
     """
 
 
-def _terminate_webview(proc: Any) -> None:
+def _wait_for_webview_exit(proc: Any) -> bool:
+    """Poll ``proc`` for up to ``BROWSER_TERMINATE_GRACE_SECONDS``.
+
+    True as soon as it is gone, False if it outlived the grace window.
+
+    The status check is at the top of the loop and the deadline test is
+    below it, so the process is always polled once more after the final
+    sleep. Checking the clock first instead would misreport a process
+    that exited during that last interval as still alive, which costs a
+    needless SIGKILL in ``_terminate_webview`` and logs a warning about
+    a process that is already gone.
+    """
+    deadline = monotonic() + BROWSER_TERMINATE_GRACE_SECONDS
+    while True:
+        if not proc.is_alive():
+            return True
+        if monotonic() >= deadline:
+            return False
+        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+
+
+def _terminate_webview(proc: Any) -> bool:
     """Best-effort: stop an AnthiasViewer process and confirm it's gone.
 
     SIGTERM, wait up to ``BROWSER_TERMINATE_GRACE_SECONDS``, then SIGKILL
-    if still alive. Reaping before a retry matters so the old process has
+    and wait again. Reaping before a retry matters so the old process has
     released the framebuffer and the ``anthias.viewer`` D-Bus name before
     the next one starts — otherwise the retry contends with a zombie and
-    times out too. Never raises.
+    times out too. Never raises; returns whether the process is
+    confirmed gone.
+
+    Both waits are load-bearing, and neither used to be complete:
+
+    * A raising ``terminate()`` used to return here, skipping SIGKILL
+      entirely. ``sh`` signals with a bare ``os.kill``, so the raise
+      splits in two. ``ProcessLookupError`` means the PID is already
+      gone and reaped — success, reported as such, and deliberately not
+      escalated: re-signalling a PID we no longer own risks SIGKILLing
+      whatever the kernel has since reused it for. Any other failure
+      means the SIGTERM may never have landed, so the process could
+      still be alive and still own ``anthias.viewer``; those fall
+      through to SIGKILL rather than returning.
+    * SIGKILL used to be fire-and-forget. The signal is immediate for
+      the kernel, but the name is not released until the process is torn
+      down and sh's background thread reaps it, so confirm rather than
+      assume — the next spawn starts the moment we return.
     """
     try:
         proc.terminate()
+    except ProcessLookupError:
+        # The PID is already gone and reaped, which is the outcome this
+        # function exists to produce. Escalating would re-signal a
+        # numeric PID we no longer own — harmless today, but the kernel
+        # is free to reuse it, and SIGKILL to an unrelated process is
+        # not a risk worth running for a process already confirmed dead.
+        logger.debug('AnthiasViewer was already gone', exc_info=True)
+        return True
     except Exception:
+        # Any *other* failure means the SIGTERM may never have landed,
+        # so the process could still be alive and still own the name.
         logger.debug('Could not SIGTERM AnthiasViewer', exc_info=True)
-        return
-    deadline = monotonic() + BROWSER_TERMINATE_GRACE_SECONDS
-    while monotonic() < deadline:
-        if not proc.is_alive():
-            return
-        sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    else:
+        if _wait_for_webview_exit(proc):
+            return True
+    # Check before escalating. The SIGTERM may have raised for a reason
+    # that still left the process dying, or it may have landed and been
+    # missed; either way sh signals the saved numeric pid, so SIGKILLing
+    # a child that has already been reaped aims at a number the kernel
+    # may have handed to someone else.
+    if not proc.is_alive():
+        return True
     try:
         proc.kill()
+    except ProcessLookupError:
+        logger.debug('AnthiasViewer was already gone', exc_info=True)
+        return True
     except Exception:
         logger.debug('Could not SIGKILL AnthiasViewer', exc_info=True)
+    if _wait_for_webview_exit(proc):
+        return True
+    # "attempting" because kill() may itself have raised just above: the
+    # process outlasting a signal and the signal never landing are
+    # different faults with different fixes, and this line is what an
+    # operator reads first.
+    logger.warning(
+        'AnthiasViewer is still alive %gs after attempting SIGKILL; the '
+        'next spawn may collide with it over the %s D-Bus name.',
+        BROWSER_TERMINATE_GRACE_SECONDS,
+        WEBVIEW_DBUS_NAME,
+    )
+    return False
+
+
+def _webview_name_owner_pid() -> int | None:
+    """PID owning ``anthias.viewer`` on our session bus, or ``None``.
+
+    The viewer's bus is private — ``start_viewer.sh`` launches the whole
+    Python process under ``dbus-run-session`` — so the only thing that
+    can ever own this name is an AnthiasViewer *we* spawned.
+
+    ``None`` on any failure, including a bus we cannot reach. That keeps
+    this strictly an optimisation: a viewer that cannot introspect the
+    bus spawns exactly as it did before.
+    """
+    try:
+        dbus = pydbus.SessionBus().get('.DBus')
+        if not dbus.NameHasOwner(WEBVIEW_DBUS_NAME):
+            return None
+        return int(
+            dbus.GetConnectionUnixProcessID(
+                dbus.GetNameOwner(WEBVIEW_DBUS_NAME)
+            )
+        )
+    except Exception:
+        logger.debug(
+            'Could not read the %s D-Bus name owner',
+            WEBVIEW_DBUS_NAME,
+            exc_info=True,
+        )
+        return None
+
+
+@contextmanager
+def _signal_target(pid: int) -> Iterator[Callable[[int], None]]:
+    """Yield a callable that signals ``pid``, pinned against PID reuse.
+
+    The SIGKILL here can follow the SIGTERM by seconds, and a bare
+    number is not a stable handle across that gap: once the kernel has
+    reaped the original process it is free to hand the same number to
+    something else, and this container's other Python processes are
+    exactly what the second signal would then land on. A pidfd refers to
+    the process itself, so a signal sent through it either reaches the
+    process we meant or fails — it can never hit a stranger.
+
+    The numeric fallback is reserved for kernels that genuinely have no
+    pidfd (before 5.3), where it is exactly the previous behaviour. A
+    failure to open the fd is emphatically *not* a reason to reach for
+    it: ``ProcessLookupError`` means this pid is already gone, and
+    signalling a number nobody owns is the very race the fd exists to
+    close. Nothing is sent in that case — the caller still polls for the
+    bus name, which can lag the exit.
+    """
+    fd = None
+    send_nothing = False
+    try:
+        fd = os.pidfd_open(pid)
+    except AttributeError:
+        # Python without the pidfd API at all.
+        logger.debug('No pidfd API; using the numeric pid', exc_info=True)
+    except ProcessLookupError:
+        logger.debug('pid %d is already gone', pid, exc_info=True)
+        send_nothing = True
+    except OSError as exc:
+        if exc.errno == ENOSYS:
+            logger.debug('Kernel has no pidfd', exc_info=True)
+        else:
+            # EMFILE / ENFILE / ENOMEM and friends: the process is
+            # probably alive, we simply could not pin it. Dropping to the
+            # bare number here would reopen the reuse race for a reason
+            # that has nothing to do with kernel support, so decline to
+            # signal and let the reclaim fail — the caller retries.
+            logger.debug('Could not pin pid %d', pid, exc_info=True)
+            send_nothing = True
+    try:
+        if send_nothing:
+            yield lambda _sig: None
+        elif fd is None:
+            yield lambda sig: os.kill(pid, sig)
+        else:
+            yield lambda sig: pidfd_send_signal(fd, sig)
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def _reclaim_webview_dbus_name(deadline: float) -> bool:
+    """Make sure nothing owns ``anthias.viewer`` before we spawn.
+
+    A leftover owner is not a transient the retry loop can outlast: Qt's
+    ``registerService`` fails the moment the name is taken, main()
+    returns 1, and *every* remaining attempt dies the same way about
+    half a second in. On the startup budget that is 30 identical
+    failures — ~6.5 min of black screen — against a condition one bus
+    call detects. Measured on a Pi 5 (2026-10-02): the colliding spawn
+    dies in 0.509s having printed nothing but Qt's locale/Vulkan
+    boilerplate, which is the undiagnosable shape of Sentry ANTHIAS-D.
+
+    Reclaiming is safe because ``load_browser`` has already dropped its
+    handle (``browser = None``) by the time we get here, so an owner at
+    this point is by definition an orphan nobody is tracking — from an
+    earlier attempt in this same process that outlived its
+    ``_terminate_webview``.
+
+    Returns whether the name is free. Bounded by both
+    ``WEBVIEW_NAME_RECLAIM_TIMEOUT_SECONDS`` and the attempt's own
+    ``deadline``, so the inline respawn can't stall the asset_loop
+    thread.
+    """
+    pid = _webview_name_owner_pid()
+    if pid is None:
+        return True
+    logger.warning(
+        'A previous AnthiasViewer (pid %d) still owns the %s D-Bus name; '
+        'reclaiming it so this spawn is not refused.',
+        pid,
+        WEBVIEW_DBUS_NAME,
+    )
+    budget = min(deadline, monotonic() + WEBVIEW_NAME_RECLAIM_TIMEOUT_SECONDS)
+    signals = (
+        (SIGTERM, min(budget, monotonic() + BROWSER_TERMINATE_GRACE_SECONDS)),
+        (SIGKILL, budget),
+    )
+    with _signal_target(pid) as send_signal:
+        # The pid was read before the fd existed, so the owner could have
+        # exited in between and the kernel handed its number to someone
+        # else — in which case the fd now pins a stranger and the SIGTERM
+        # below would kill them. Confirm the name still resolves to the
+        # same pid before signalling anything; from here the open fd
+        # keeps that number from being recycled underneath us.
+        owner = _webview_name_owner_pid()
+        if owner != pid:
+            return owner is None
+        for sig, until in signals:
+            try:
+                send_signal(sig)
+            except OSError:
+                # Already gone — but the bus may not have processed the
+                # disconnect yet, so still wait for the name itself.
+                logger.debug('Could not signal pid %d', pid, exc_info=True)
+            # Owner check first, deadline second, so each phase polls the
+            # bus once more after its final sleep: an owner that let go
+            # during that last interval would otherwise be escalated from
+            # SIGTERM to SIGKILL for nothing, and a name freed in the
+            # SIGKILL phase's last interval would be reported as still
+            # taken. The check below is also what the loop exits on, so
+            # no trailing bus call is needed once both phases are spent.
+            while True:
+                if _webview_name_owner_pid() is None:
+                    return True
+                if monotonic() >= until:
+                    break
+                sleep(BROWSER_POLL_INTERVAL_SECONDS)
+    return False
 
 
 def _wayland_socket_path() -> str | None:
@@ -945,9 +1216,48 @@ def _wayland_socket_path() -> str | None:
     return os.path.join(runtime_dir, wayland_display)
 
 
+def _wayland_socket_ready(socket_path: str) -> bool:
+    """True when cage is actually *listening* on ``socket_path``.
+
+    Existence is not readiness. When cage dies or is restarting it
+    leaves its socket inode behind, and a spawn against that stale
+    path dies instantly with ``Failed to create wl_display (Connection
+    refused)`` — ``connect(2)`` finding nothing bound, as opposed to
+    ``No such file or directory`` when the path is genuinely absent.
+    An ``os.path.exists`` probe cannot tell the two apart, so the
+    ANTHIAS-19 wait returned at once and the whole retry budget burned
+    against a compositor that was seconds away from coming back
+    (Sentry ANTHIAS-1W).
+
+    Deliberately conservative — only ``ECONNREFUSED`` and the absent
+    path count as "not ready". Any other error means we cannot tell (a
+    permissions-restricted socket answering ``EACCES``, a path the
+    kernel rejects outright), and blocking the spawn on a probe we do
+    not understand would be worse than the race it guards: those report
+    ready and let the launch proceed exactly as before.
+
+    Note Linux answers ``ECONNREFUSED`` — not ``ENOTSOCK`` — for a
+    regular file at ``socket_path``, so a non-socket there is waited
+    out like a stale one. That is the right call for the real
+    deployment (nothing but cage ever writes this path) and it is why
+    the tests bind actual unix sockets rather than touching files.
+    """
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.settimeout(WAYLAND_SOCKET_PROBE_TIMEOUT_SECONDS)
+        probe.connect(socket_path)
+    except (FileNotFoundError, ConnectionRefusedError):
+        return False
+    except OSError:
+        return True
+    finally:
+        probe.close()
+    return True
+
+
 def _wait_for_wayland_socket(deadline: float) -> None:
-    """Block until cage's Wayland socket exists, until ``deadline``
-    (a ``monotonic()`` timestamp).
+    """Block until cage's Wayland socket accepts a connection, until
+    ``deadline`` (a ``monotonic()`` timestamp).
 
     No-op on non-cage boards (the env names no socket) and when the
     socket is already up — the common case, returns at once.
@@ -956,22 +1266,26 @@ def _wait_for_wayland_socket(deadline: float) -> None:
     ``startup_timeout``; a compositor that never returns falls through
     and the spawn fails the normal way rather than hanging the
     asset_loop thread.
+
+    Readiness is a ``connect()``, not an ``os.path.exists`` — see
+    ``_wayland_socket_ready`` for why a stale socket left by a dying
+    cage otherwise sails straight through this gate.
     """
     socket_path = _wayland_socket_path()
-    if socket_path is None or os.path.exists(socket_path):
+    if socket_path is None or _wayland_socket_ready(socket_path):
         return
     logger.warning(
-        'Wayland socket %s not present yet; waiting (within the spawn '
-        'budget) before launching the webview',
+        'Wayland socket %s not accepting connections yet; waiting '
+        '(within the spawn budget) before launching the webview',
         socket_path,
     )
     while monotonic() < deadline:
-        if os.path.exists(socket_path):
+        if _wayland_socket_ready(socket_path):
             return
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
     logger.warning(
-        'Wayland socket %s still absent; launching anyway (the launch '
-        'will fail and retry if cage is truly down)',
+        'Wayland socket %s still not accepting connections; launching '
+        'anyway (the launch will fail and retry if cage is truly down)',
         socket_path,
     )
 
@@ -1053,20 +1367,93 @@ class _BoundedWebviewOutput:
         return joined[-self._maxlen :]
 
 
+def _drain_webview_output(output: _BoundedWebviewOutput) -> str:
+    """Return the dead webview's output once sh has finished feeding it.
+
+    ``candidate.is_alive()`` flips as soon as the child is reaped, but
+    sh delivers that child's stdout on a *separate* reader thread. Read
+    the sink at that instant and the last chunks — the ones carrying
+    the actual fatal message — can still be in flight, so the
+    ``WebviewLaunchError`` we raise (and ship to Sentry) would carry
+    only the benign warnings Qt printed earlier.
+
+    This keeps a crash tail that *exists* from being cut off. It is not
+    on its own enough to explain Sentry ANTHIAS-D: those reports end on
+    a complete line of locale/Vulkan chatter, and the race could not be
+    reproduced on a Pi 5 (40 spawn-and-die trials against the shipped
+    sh 2.4.0, none lost the tail). A webview killed by a signal prints
+    no tail to drain at all, which is why the launch error also names
+    the exit status — see ``_describe_webview_exit``.
+
+    Poll until the sink stops growing, bounded by
+    ``WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS`` so a still-streaming
+    orphan cannot stall the retry loop (or the asset_loop thread the
+    inline respawn runs on). The common case — nothing left to flush —
+    costs a single poll interval.
+    """
+    deadline = monotonic() + WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS
+    text = output.text()
+    while monotonic() < deadline:
+        sleep(WEBVIEW_OUTPUT_DRAIN_POLL_SECONDS)
+        settled = output.text()
+        if settled == text:
+            return settled
+        text = settled
+    return text
+
+
+def _describe_webview_exit(candidate: Any) -> str:
+    """Name *how* the dead webview process ended, for the launch error.
+
+    Draining the output (above) recovers a crash tail when there is one
+    to recover. Often there is not: a webview killed by a signal — Qt or
+    Chromium aborting on a GPU/driver fault is the common one — writes
+    nothing on its way out, so the captured stdout simply stops after
+    whatever benign warning happened to be last and names no cause at
+    all. Every one of Sentry ANTHIAS-D's reports has that shape, ending
+    mid-chatter on the locale/Vulkan warnings; reproducing a
+    signal-killed child on a Pi 5 produces a byte-identical ending. The
+    exit status is then the *only* surviving record of what happened,
+    and sh has it all along — negative values carry the signal number.
+
+    Read it off ``candidate.process``. Not ``candidate.exit_code``:
+    that property re-raises the exit as ``SignalException_SIGSEGV``
+    even under ``_bg_exc=False`` (verified against the shipped sh
+    2.4.0), which would throw a brand-new exception out of the very
+    path trying to report the failure. Everything here is defensive for
+    the same reason — a launch failure must still be reportable even if
+    sh changes shape underneath us.
+    """
+    process = getattr(candidate, 'process', None)
+    code = getattr(process, 'exit_code', None)
+    if not isinstance(code, int):
+        return 'exit status unavailable'
+    if code >= 0:
+        return f'exit code {code}'
+    try:
+        return f'killed by {Signals(-code).name} ({code})'
+    except ValueError:
+        # A signal number this platform's enum doesn't know. The raw
+        # number still identifies it; don't lose the whole diagnostic
+        # to a lookup failure.
+        return f'killed by signal {-code} ({code})'
+
+
 def _spawn_webview_once(startup_timeout: float) -> Any:
     """Spawn AnthiasViewer once and block until it registers on D-Bus.
 
     Returns the live ``sh`` background command on success. Raises
     ``WebviewBinaryMissingError`` (permanent) if the binary is absent, or
-    ``WebviewLaunchError`` (retry-worthy) if the process exits before the
-    handshake or fails to emit it within ``startup_timeout``. The matched
-    string must stay in lockstep with ``qInfo() << "Anthias service
-    start"`` in src/anthias_webview/src/main.cpp.
+    ``WebviewLaunchError`` (retry-worthy) if the ``anthias.viewer`` name
+    cannot be reclaimed, or if the process exits before the handshake or
+    fails to emit it within ``startup_timeout``. The matched string must
+    stay in lockstep with ``qInfo() << "Anthias service start"`` in
+    src/anthias_webview/src/main.cpp.
 
     ``startup_timeout`` is the total budget for the attempt: on a cage
-    board one shared deadline covers both the wait for the Wayland
-    socket and the handshake, so the socket wait can't pile on top of
-    ``startup_timeout``.
+    board one shared deadline covers the wait for the Wayland socket,
+    the D-Bus name reclaim and the handshake, so they can't pile on top
+    of ``startup_timeout``.
     """
     global _webview_output
     deadline = monotonic() + startup_timeout
@@ -1075,6 +1462,26 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
     # wastes a retry attempt (Sentry ANTHIAS-19). No-op elsewhere and
     # when the socket is already up (the common case).
     _wait_for_wayland_socket(deadline)
+    # Same shape of guard for the other precondition a spawn silently
+    # needs: an unowned ``anthias.viewer``. Normally free (one bus
+    # call), and when it isn't, clearing it here is the difference
+    # between one recovered attempt and thirty identical failures.
+    if not _reclaim_webview_dbus_name(deadline):
+        # Deliberately retry-worthy rather than fatal: a process that
+        # outlived SIGKILL for this window was most likely uninterruptible
+        # for a moment, and the next attempt reclaims again. The point is
+        # that the failure now says so instead of arriving as Qt
+        # boilerplate with an empty D-Bus error behind it.
+        # Say only what is actually known. Reclaim also returns False
+        # when the owner could not be pinned (EMFILE/ENOMEM) or changed
+        # hands mid-flight, and in those cases nothing was signalled at
+        # all — "did not exit when signalled" would be a fabricated
+        # detail in exactly the reports this group exists to read.
+        raise WebviewLaunchError(
+            f'Another AnthiasViewer still owns the {WEBVIEW_DBUS_NAME} '
+            'D-Bus name and could not be cleared; a spawn now would be '
+            'refused registration and exit immediately.'
+        )
     # Bounded ``_out`` sink instead of sh's default: sh would otherwise
     # retain the process's entire stdout+stderr in RAM forever, and a
     # chatty decoder then leaks the viewer to death on a low-memory board
@@ -1114,19 +1521,36 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
         if BROWSER_HANDSHAKE_LINE in output.text():
             return candidate
         if not candidate.is_alive():
+            # Name the exit status *and* let sh's reader thread finish
+            # flushing before we quote the output: between them they are
+            # the whole diagnostic value of this message (ANTHIAS-D),
+            # and a signal death leaves the status as the only evidence.
             raise WebviewLaunchError(
-                'AnthiasViewer exited before emitting D-Bus handshake; '
-                'stdout: ' + output.text()
+                'AnthiasViewer exited before emitting D-Bus handshake '
+                f'({_describe_webview_exit(candidate)}); '
+                'stdout: ' + _drain_webview_output(output)
             )
         sleep(BROWSER_POLL_INTERVAL_SECONDS)
 
     # Timed out waiting for the handshake. Tear the half-started process
     # down AND confirm it is gone so a retry can't leave two AnthiasViewers
     # contending for the framebuffer / the ``anthias.viewer`` D-Bus name.
-    _terminate_webview(candidate)
+    #
+    # A survivor that never registered the bus name is invisible to the
+    # name probe on the next attempt, so it would be spawned over in
+    # silence. Say so in the error instead: this message is what reaches
+    # Sentry, and "two viewers are fighting over the framebuffer" and
+    # "the viewer will not start" are otherwise indistinguishable there.
+    survived = not _terminate_webview(candidate)
     raise WebviewLaunchError(
         f'AnthiasViewer did not emit "{BROWSER_HANDSHAKE_LINE}" within '
         f'{startup_timeout:g}s'
+        + (
+            '; it also outlasted an attempted SIGKILL, so it may still '
+            'hold the display'
+            if survived
+            else ''
+        )
     )
 
 
@@ -1671,7 +2095,25 @@ def view_image(uri: str, skip_ssl_verify: bool = False) -> None:
         logger.info(_webview_output.text())
 
 
-def view_video(uri: str, duration: int | str) -> None:
+def _seconds_until(deadline: float) -> float:
+    """Wait budget for the asset shown this tick.
+
+    ``deadline`` is ``tick_start + duration`` from ``asset_loop``. The
+    wait used to be a flat ``duration`` on top of everything the tick
+    did first (scheduler refresh, DB reads, the D-Bus load call), so
+    every rotation ran ``duration`` plus a device-specific overhead and
+    co-located players cycling the same playlist drifted apart by
+    seconds within hours (GH #3319). Anchoring on the tick start makes
+    the rotation take exactly ``duration``. Clamped at zero: a mid-tick
+    browser respawn or a stalled display probe can outlast a short
+    duration, and then the asset just moves on. Not logged on its own;
+    both callers log the computed wait next to the configured duration,
+    and a zero-duration asset would otherwise warn on every tick.
+    """
+    return max(0.0, deadline - monotonic())
+
+
+def view_video(uri: str, duration: int, deadline: float) -> None:
     logger.debug('Displaying video %s for %s ', uri, duration)
     media_player = MediaPlayerProxy.get_instance()
 
@@ -1681,9 +2123,11 @@ def view_video(uri: str, duration: int | str) -> None:
     view_image('null')
 
     try:
+        timeout = _seconds_until(deadline)
+        logger.info('Playing video for %.1f of %ss', timeout, duration)
         skip_event = get_skip_event()
         skip_event.clear()
-        if skip_event.wait(timeout=int(duration)):
+        if skip_event.wait(timeout=timeout):
             logger.info('Skip detected during video playback, stopping video')
             media_player.stop()
         else:
@@ -2207,6 +2651,28 @@ def _consume_pending_rotation_bounce() -> None:
     updated rotation env. Clearing ``current_browser_url`` defeats
     the value-comparison short-circuit so the fresh webview actually
     gets a loadPage/loadImage on its first asset.
+
+    The wait inside ``_terminate_webview`` is what makes that handoff
+    work, and a bare ``terminate()`` here used to skip it. SIGTERM only
+    *requests* the exit: measured on a Pi 5, AnthiasViewer takes ~16 ms
+    to go, while the gap to the first view_*() is a flag check, a cheap
+    no-op watchdog and one ``stat`` of the asset DB — well under a
+    millisecond. So ``is_alive()`` still answered True, no respawn
+    happened, and the loadImage went out over D-Bus to a process on its
+    way down. It came back as the NoReply that ``_send_to_webview``
+    catches, which does recover — but only after blocking the asset_loop
+    thread, and starving ``watchdog()``, for however long the dying peer
+    takes to drop off the bus. The spawn budget is the same either way
+    (``view_image`` / ``view_webpage`` pass the same inline limits that
+    the error path uses); what waiting buys is skipping the round trip
+    to a doomed peer and the stall behind it. Every operator rotation
+    and dark-mode change took that route.
+
+    Waiting also puts a SIGKILL behind the SIGTERM. A webview wedged
+    badly enough to ignore SIGTERM previously kept the name
+    ``anthias.viewer`` with the flag already cleared — the setting then
+    never applied at all, and the orphan is precisely the stale owner
+    that refuses the next spawn registration.
     """
     global _rotation_bounce_pending, current_browser_url
     if not _rotation_bounce_pending:
@@ -2214,13 +2680,9 @@ def _consume_pending_rotation_bounce() -> None:
     _rotation_bounce_pending = False
     logger.info('Consuming pending rotation bounce on main thread')
     if browser is not None:
-        try:
-            browser.terminate()
-        except Exception as exc:
-            logger.warning(
-                'Could not terminate AnthiasViewer for rotation change: %s',
-                exc,
-            )
+        # Never raises, and bounded by BROWSER_TERMINATE_GRACE_SECONDS —
+        # the same call _send_to_webview already makes on this thread.
+        _terminate_webview(browser)
     current_browser_url = None
 
 
@@ -2342,6 +2804,9 @@ def _trigger_asset_recheck(asset_id: str | None) -> None:
 
 def asset_loop(scheduler: Any) -> None:
     global _empty_playlist_logged, _unavailable_asset_logged
+    # Anchor for the per-asset wait; see ``_seconds_until``. It must be
+    # the first thing in the tick so the wait absorbs everything below.
+    tick_start = monotonic()
     # Issue #2856 — consume any pending rotation bounce queued by the
     # subscriber thread BEFORE we do anything else this tick. The
     # subscriber can only set the flag (it doesn't own ``browser`` or
@@ -2362,6 +2827,18 @@ def asset_loop(scheduler: Any) -> None:
     # it re-enumerates the display. Cheap no-op on healthy/non-Wayland
     # boards. See _wayland_output_watchdog().
     _wayland_output_watchdog()
+
+    # The WiFi setup portal outranks the playlist. A device showing
+    # this screen has no network, so whatever it would otherwise play
+    # is either a local file nobody can change or a URL that will not
+    # load -- and the passphrase for the setup access point exists
+    # nowhere else a user can reach. Checked here rather than handled
+    # as a viewer command because the trigger is on the host, outside
+    # any container that can publish to Redis.
+    if _wifi_setup_active:
+        _show_wifi_setup_screen()
+        sleep(EMPTY_PL_DELAY)
+        return
 
     asset = scheduler.get_next_asset()
 
@@ -2404,6 +2881,7 @@ def asset_loop(scheduler: Any) -> None:
         # rejects such values on write, but a pre-existing row must
         # not take the screen down.
         duration = clamp_duration(asset['duration'])
+        deadline = tick_start + duration
         logger.info('Showing asset %s (%s)', name, mime)
         logger.debug('Asset URI %s', uri)
         watchdog()
@@ -2452,15 +2930,16 @@ def asset_loop(scheduler: Any) -> None:
             # or ('streaming' in mime)`` — the truthy literal short-
             # circuits and the branch runs for every mimetype, making
             # the ``else: Unknown MimeType`` arm below unreachable.
-            view_video(uri, duration)
+            view_video(uri, duration, deadline)
         else:
             logger.error('Unknown MimeType %s', mime)
 
         if 'image' in mime or 'web' in mime:
-            logger.info('Sleeping for %s', duration)
+            timeout = _seconds_until(deadline)
+            logger.info('Sleeping for %.1f of %ss', timeout, duration)
             skip_event = get_skip_event()
             skip_event.clear()
-            if skip_event.wait(timeout=duration):
+            if skip_event.wait(timeout=timeout):
                 # Skip was triggered, continue immediately to next iteration
                 logger.info('Skip detected, moving to next asset immediately')
             else:
@@ -2684,6 +3163,87 @@ def _publish_smart_loop() -> None:
     t.start()
 
 
+def _show_wifi_setup_screen() -> None:
+    """Put the WiFi setup page on the display.
+
+    ``view_webpage`` short-circuits on an unchanged URL, so calling
+    this on every tick of the setup loop costs nothing after the first
+    one -- which is what lets asset_loop stay a plain top-of-tick
+    check with no state of its own to get out of step.
+    """
+    global _wifi_setup_logged
+
+    if not _wifi_setup_logged:
+        logger.info(
+            'WiFi setup portal is up; showing the setup screen until it '
+            'comes down.'
+        )
+        _wifi_setup_logged = True
+
+    view_webpage(HOTSPOT_PAGE_URL)
+
+
+def _poll_wifi_setup_once() -> None:
+    """One tick of the wifi-setup reporter. Never raises."""
+    global _wifi_setup_active, _wifi_setup_logged
+
+    try:
+        response = requests.get(WIFI_SETUP_STATUS_URL, timeout=5)
+        response.raise_for_status()
+        payload = response.json()
+        # Not `payload.get(...)` directly: a 200 carrying a list or a
+        # bare string parses fine and then raises AttributeError on
+        # .get, which escapes this handler and leaves the previous
+        # value in place — stranding the display on a setup screen,
+        # the one outcome this function exists to prevent.
+        active = isinstance(payload, dict) and bool(payload.get('active'))
+    except (requests.exceptions.RequestException, ValueError):
+        # A server that is restarting, or a body that isn't JSON,
+        # must not strand the display on a setup screen for a portal
+        # that is long gone. Treating an unanswered question as "no
+        # portal" fails towards playing content, which is the job.
+        active = False
+
+    if _wifi_setup_active and not active:
+        logger.info('WiFi setup portal is down; resuming normal playback.')
+        _wifi_setup_logged = False
+
+    _wifi_setup_active = active
+
+
+def _wifi_setup_watch_loop() -> None:
+    """Background reporter -- track whether the WiFi setup portal is up.
+
+    The portal is Screenly-Labs/wifi-connect running in its own
+    host-networked container (see the compose templates). Nothing about
+    it is visible from in here: it has no API this process could call,
+    it writes its QR to a volume whose contents say nothing about
+    whether the access point is currently broadcasting, and the address
+    that does say so is on a host interface this container cannot see.
+    anthias-server can answer the question -- it already resolves the
+    host's addresses for the splash page -- so this asks it.
+
+    Polled rather than pushed because both ends of a push would have to
+    be invented: wifi-connect has no hook to fire and the host has no
+    Anthias process in the path on balena.
+    """
+    import threading
+
+    def tick() -> None:
+        while True:
+            try:
+                _poll_wifi_setup_once()
+            except Exception:
+                # A reporter must never take the viewer down.
+                logger.warning(
+                    'Could not read WiFi setup status', exc_info=True
+                )
+            sleep(WIFI_SETUP_POLL_INTERVAL_S)
+
+    t = threading.Thread(target=tick, name='wifi-setup-reporter', daemon=True)
+    t.start()
+
+
 def _publish_cec_availability() -> None:
     """Tell anthias-server whether this device has a CEC adapter.
 
@@ -2723,11 +3283,18 @@ def main() -> None:
 
     _publish_smart_loop()
 
+    _wifi_setup_watch_loop()
+
     # This will prevent white screen from happening before showing the
     # splash screen with IP addresses.
     view_image(STANDBY_SCREEN)
 
     wait_for_server(SERVER_WAIT_TIMEOUT)
+
+    # Scheduler() queries the asset table on construction, so the table
+    # has to exist by now. wait_for_server() above does not establish
+    # that — see wait_for_db_schema().
+    wait_for_db_schema()
 
     scheduler = Scheduler()
 

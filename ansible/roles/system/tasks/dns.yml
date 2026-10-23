@@ -48,6 +48,79 @@
     enabled: true
     state: started
 
+# Adopting resolved is not enough on its own: Debian ships
+# resolved.conf with neither `DNS=` nor `FallbackDNS=`, and a resolved
+# with no servers for a link answers every query REFUSED. On a stock
+# Debian netinst the NIC is `iface <name> inet dhcp` under ifupdown with
+# dhcpcd as the DHCP client, and dhcpcd can only publish its nameservers
+# to resolved through the `resolvconf` shim -- which is owned by the
+# `systemd-resolved` package installed just above, so it did not exist
+# when the current lease was taken. dhcpcd does not re-publish until the
+# next lease event, so between the symlink swap below and the next
+# reboot the box has no resolver at all and the very next task (the
+# Docker apt key) dies on "Temporary failure in name resolution"
+# (GH #3408).
+#
+# The same gap reopens later: dhcpcd publishes separate record sets for
+# IPv4 and for IPv6 router advertisements, and withdrawing any one of
+# them takes the whole link's DNS with it, back to REFUSED until the
+# next boot.
+#
+# Seeding FallbackDNS from the nameservers that are live *right now*
+# closes both, because resolved consults the fallback whenever a link
+# has no servers of its own. These are by definition the servers that
+# were working a moment ago, so nothing has to be guessed about the
+# network. Once dhcpcd does publish, the per-link servers take
+# precedence and the fallback goes quiet.
+
+- name: Read the nameservers in use before the resolver switch
+  ansible.builtin.slurp:
+    src: /etc/resolv.conf
+  register: system_pre_switch_resolv_conf
+  # A box with no /etc/resolv.conf at all has nothing to preserve;
+  # that is a valid state to continue from, not a failure.
+  failed_when: false
+
+- name: Ensure the resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'  # NOSONAR - resolved must traverse its drop-in dir
+
+- name: Seed resolved's fallback servers from the pre-switch resolver
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/99-anthias-fallback.conf
+    content: |
+      # Managed by the Anthias installer. See GH #3408.
+      [Resolve]
+      FallbackDNS={{ system_pre_switch_nameservers | join(' ') }}
+    owner: root
+    group: root
+    mode: '0644'  # NOSONAR - systemd-resolve user must read drop-ins
+  vars:
+    # Loopback entries are dropped: if resolv.conf already points at
+    # resolved's own stub (127.0.0.53) -- an upgrade, or a re-run of
+    # this role -- then feeding it back as a fallback would make
+    # resolved its own upstream. In that case there is nothing new to
+    # learn and any drop-in from the first run is still in place.
+    system_pre_switch_nameservers: >-
+      {{ (system_pre_switch_resolv_conf.content | default('') | b64decode)
+         .splitlines()
+         | map('regex_search', '^\s*nameserver\s+(\S+)', '\1')
+         | select('truthy') | flatten
+         | reject('match', '^(127\.|::1$)')
+         | unique | list }}
+  when: system_pre_switch_nameservers | length > 0
+  notify: Restart systemd-resolved
+
+# The handler would not run until the end of the play, but the symlink
+# swap below breaks resolution the moment it lands, so the fallback has
+# to be live first.
+- name: Apply the fallback before resolution is handed to the stub
+  ansible.builtin.meta: flush_handlers
+
 - name: Point /etc/resolv.conf at the systemd-resolved stub
   ansible.builtin.file:
     src: /run/systemd/resolve/stub-resolv.conf

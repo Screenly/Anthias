@@ -251,9 +251,23 @@ def _read_text(path: str) -> str | None:
     ext4 leaves ``last_error_func`` empty on a filesystem that has
     never errored, and an empty string would reach the API as
     ``""`` where every other absent field is ``null``.
+
+    Decoded with ``errors='replace'`` because a sysfs attribute is
+    not guaranteed to be UTF-8. ``device/name`` is the MMC product
+    name copied verbatim out of the card's CID register — six bytes
+    the vendor is free to fill with anything — and a card carrying a
+    non-UTF-8 byte there made ``read()`` raise ``UnicodeDecodeError``.
+    That is a ``ValueError``, not an ``OSError``, so it escaped this
+    helper, propagated out of ``read_media_info`` -> ``probe`` and
+    killed the storage-health watcher at startup: one odd byte in a
+    product name cost the device all of its storage monitoring.
+    Replacing the byte degrades a single display string instead.
+    The encoding is pinned to UTF-8 rather than left to the container
+    locale, so a valid multi-byte name still decodes correctly when
+    ``LANG``/``LC_ALL`` is unset or not UTF-8.
     """
     try:
-        with open(path) as f:
+        with open(path, encoding='utf-8', errors='replace') as f:
             return f.read().strip() or None
     except OSError:
         return None

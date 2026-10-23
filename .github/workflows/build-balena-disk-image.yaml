@@ -360,18 +360,102 @@ jobs:
         # `latest`, `menu`, or `menu-esr` in balena-cli 25.x; the
         # `default` keyword that worked under balena-cli 22.x was
         # removed ("Version default is not available for ...").
+        #
+        # Retried because the download intermittently dies mid-stream
+        # against balena's CDN (`ERR_STREAM_PREMATURE_CLOSE`), which
+        # cost v2026.07.0 two attempts. A partial file is never
+        # resumed -- it is deleted and re-fetched, so a truncated
+        # image can't reach preload.
+        env:
+          DOWNLOAD_ATTEMPTS: '3'
         run: |
-          balena os download "$BALENA_IMAGE" \
-            --output "$BALENA_IMAGE.img" \
-            --version latest
+          set -euo pipefail
+          for attempt in $(seq 1 "$DOWNLOAD_ATTEMPTS"); do
+            if [ "$attempt" -gt 1 ]; then
+              echo "::warning title=balena os download retry::attempt $((attempt - 1)) failed for $BALENA_IMAGE; retrying"
+              sleep $((attempt * 15))
+            fi
+            rm -f "$BALENA_IMAGE.img"
+            if balena os download "$BALENA_IMAGE" \
+                --output "$BALENA_IMAGE.img" \
+                --version latest; then
+              exit 0
+            fi
+          done
+          echo "::error title=balena os download failed::$BALENA_IMAGE after $DOWNLOAD_ATTEMPTS attempts"
+          exit 1
+
+      # `balena preload` mounts the image's partitions through a loop
+      # device. udev reacts to a new loop device by probing it, and
+      # it keeps an inotify watch on block devices by default -- both
+      # of which can still hold the device when preload's context
+      # manager unmounts, giving `umount: target is busy` (exit 32).
+      # `nowatch` drops the inotify watch; settling first drains any
+      # events already queued. This narrows the race rather than
+      # closing it, so the preload step below still retries.
+      - name: Stop udev watching loop devices
+        run: |
+          set -euo pipefail
+          printf 'SUBSYSTEM=="block", KERNEL=="loop*", OPTIONS+="nowatch"\n' \
+            | sudo tee /etc/udev/rules.d/99-balena-preload-loop-nowatch.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm settle
 
       - name: Preload OS image
+        # The single largest source of failed release runs. preload
+        # calls `get_image_info` -> `free_space()`, which mounts a
+        # partition and unmounts it from a context manager; when that
+        # unmount loses the race against udev the exception aborts
+        # the whole preload. Observed on v2026.07.1, v2026.07.2,
+        # v2026.07.4, v2026.09.0 and v2026.10.0 -- every one of them
+        # passed on a plain re-run, which is what makes it a race and
+        # not a bad image.
+        #
+        # Retrying has to start from a pristine image: preload edits
+        # the .img in place, so a second attempt over a half-written
+        # one would bake in whatever the aborted attempt left behind.
+        # The copy is sparse, and it is removed before the packaging
+        # steps so it never competes for runner disk.
+        env:
+          PRELOAD_ATTEMPTS: '3'
         run: |
-          balena preload \
-            "$BALENA_IMAGE.img" \
-            --fleet "screenly_ose/$FLEET_SLUG" \
-            --splash-image ansible/roles/splashscreen/files/splashscreen.png \
-            --commit latest
+          set -euo pipefail
+          cp --sparse=always "$BALENA_IMAGE.img" "$BALENA_IMAGE.img.pristine"
+
+          # An aborted attempt leaves its mountpoint and loop device
+          # behind; inheriting those guarantees the next attempt hits
+          # the same EBUSY. Lazy unmount detaches a busy mount rather
+          # than failing on it.
+          cleanup_mounts() {
+            local mp
+            for mp in $(mount | awk '$3 ~ /^\/tmp\/tmp/ {print $3}'); do
+              sudo umount -l "$mp" 2>/dev/null || true
+            done
+            sudo losetup -D 2>/dev/null || true
+            sudo udevadm settle || true
+          }
+
+          for attempt in $(seq 1 "$PRELOAD_ATTEMPTS"); do
+            if [ "$attempt" -gt 1 ]; then
+              echo "::warning title=balena preload retry::attempt $((attempt - 1)) failed for $BALENA_IMAGE; restoring pristine image and retrying"
+              cleanup_mounts
+              cp -f --sparse=always \
+                "$BALENA_IMAGE.img.pristine" "$BALENA_IMAGE.img"
+              sleep $((attempt * 15))
+            fi
+            if balena preload \
+                "$BALENA_IMAGE.img" \
+                --fleet "screenly_ose/$FLEET_SLUG" \
+                --splash-image ansible/roles/splashscreen/files/splashscreen.png \
+                --commit latest; then
+              rm -f "$BALENA_IMAGE.img.pristine"
+              exit 0
+            fi
+          done
+
+          rm -f "$BALENA_IMAGE.img.pristine"
+          echo "::error title=balena preload failed::$BALENA_IMAGE after $PRELOAD_ATTEMPTS attempts"
+          exit 1
 
       - name: Configure OS image
         run: |
@@ -480,7 +564,7 @@ jobs:
           esac
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: balena-images-${{ matrix.board }}
           path: |
@@ -514,13 +598,13 @@ jobs:
           ref: ${{ needs.resolve-context.outputs.tag }}
 
       - name: Download OpenAPI schema
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: anthias-api-schema
           path: assets
 
       - name: Download balena images
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: balena-images-*
           path: assets
@@ -577,7 +661,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: '0.9.17'
 

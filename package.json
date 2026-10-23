@@ -1,6 +1,6 @@
 {
   "name": "anthias",
-  "version": "2026.08.2",
+  "version": "2026.10.0",
   "scripts": {
     "_build_note": "Alpine evaluates @click expressions against a `with(scope)`-style closure at runtime. Bun's --minify-identifiers renames internal Alpine vars (and our handler names in home.ts) in ways that break that lookup — silently. Stick to whitespace+syntax minification, which trims the bundle by half without touching identifiers.",
     "build:vendor": "bun build ./src/anthias_server/app/static/src/vendor.ts --outfile=./src/anthias_server/app/static/dist/js/vendor.js --target=browser --minify-whitespace --minify-syntax",
@@ -27,21 +27,21 @@
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.3.0",
-    "@tabler/icons-webfont": "^3.46.0",
-    "alpinejs": "^3.17.1",
+    "@tabler/icons-webfont": "^3.49.0",
+    "alpinejs": "^3.17.4",
     "flatpickr": "^4.6.13",
-    "htmx.org": "^2.0.10",
+    "htmx.org": "^2.0.11",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.14.0",
+    "@happy-dom/global-registrator": "^21.0.3",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/forms": "^0.5.11",
     "@types/leaflet": "^1.9.22",
     "@types/qrcode": "^1.5.6",
-    "happy-dom": "^20.14.0",
-    "sass": "^1.104.0",
+    "happy-dom": "^21.0.3",
+    "sass": "^1.105.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   }

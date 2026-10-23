@@ -450,3 +450,56 @@ def test_info_v2_survives_an_unreadable_filesystem(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.data['storage']['supported'] is False
+
+
+@pytest.mark.django_db
+def test_info_v2_reports_an_sbc_board_model(api_client: APIClient) -> None:
+    """A non-Pi SBC has no cpuinfo ``Model`` line, so before the
+    host_agent hop this field came back ``null``. The endpoint wiring
+    needs its own case: the board-level tests pass whether or not the
+    view actually calls through, and the main v2 test always supplies
+    a Pi model so it never reaches this branch.
+    """
+    with (
+        mock.patch(
+            'anthias_server.api.views.v2.device_helper.parse_cpu_info',
+            return_value={'cpu_count': 4},
+        ),
+        mock.patch(
+            'anthias_server.api.views.v2.machine', return_value='aarch64'
+        ),
+        mock.patch(
+            'anthias_server.api.views.v2.board.get_device_model',
+            return_value='FriendlyElec NanoPi R3S LTS',
+        ),
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['device_model'] == 'FriendlyElec NanoPi R3S LTS'
+
+
+@pytest.mark.django_db
+def test_info_v2_board_model_stays_null_when_unknown(
+    api_client: APIClient,
+) -> None:
+    """An aarch64 host nothing can identify keeps the historical
+    ``null`` rather than inventing a label — the field's existing
+    semantics for unknown hardware are unchanged by the fallback."""
+    with (
+        mock.patch(
+            'anthias_server.api.views.v2.device_helper.parse_cpu_info',
+            return_value={'cpu_count': 4},
+        ),
+        mock.patch(
+            'anthias_server.api.views.v2.machine', return_value='aarch64'
+        ),
+        mock.patch(
+            'anthias_server.api.views.v2.board.get_device_model',
+            return_value='',
+        ),
+    ):
+        response = api_client.get(reverse('api:info_v2'))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['device_model'] is None

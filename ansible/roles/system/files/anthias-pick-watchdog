@@ -1,0 +1,66 @@
+#!/bin/bash
+# Print the watchdog device systemd should open, and whether it is a
+# hardware device or the kernel's software one. Two lines: path, then
+# 'hw' or 'soft'. Nothing at all if this machine has neither.
+#
+# Run by ansible/roles/system/tasks/resilience.yml. A file rather than
+# an inline block so tests/ansible/watchdog_config.yml can run the
+# exact same code against fabricated sysfs trees — the x86 branch
+# cannot be exercised on our rig, whose only x86 box has its iTCO
+# locked off by firmware.
+#
+# The three env vars exist so those tests can vary the inputs; nothing
+# sets them in production.
+set -u
+root=${WD_SYSFS:-/sys/class/watchdog}
+arch=${WD_ARCH:-$(uname -m)}
+soc_allowlist=${WD_SOC_ALLOWLIST:-}
+
+# Never treats softdog as hardware: it is the fallback, not a device
+# this machine came with.
+pick_hw() {
+  local id
+  for id in "$root"/watchdog*/identity; do
+    [ -r "$id" ] || continue
+    grep -qi 'software watchdog' "$id" && continue
+    grep -qiE "$1" "$id" || continue
+    printf '/dev/%s\nhw\n' "$(basename "$(dirname "$id")")"
+    return 0
+  done
+  return 1
+}
+
+pick_soft() {
+  local id
+  for id in "$root"/watchdog*/identity; do
+    [ -r "$id" ] || continue
+    grep -qi 'software watchdog' "$id" || continue
+    printf '/dev/%s\nsoft\n' "$(basename "$(dirname "$id")")"
+    return 0
+  done
+  return 1
+}
+
+# On a PC the watchdog is a chipset or ACPI device — iTCO, sp5100_tco,
+# WDAT, hpwdt, an IPMI BMC — whose defined behaviour is to assert a
+# full system reset. That is what the platform specs require and what
+# the whole industry relies on, so any hardware watchdog a PC exposes
+# is used in preference to softdog.
+#
+# On an SoC it is vendor IP with vendor behaviour, and the two Rockchip
+# boards here HALT instead of resetting (see resilience.yml for the
+# measurements), which turns a wedge into a site visit. So there, only
+# an identity someone has actually watched reset a board is armed.
+case "$arch" in
+  x86_64 | amd64) hw_pattern='.' ;;
+  *) hw_pattern=$soc_allowlist ;;
+esac
+
+[ -n "$hw_pattern" ] && pick_hw "$hw_pattern" && exit 0
+
+# Already loaded is fine, and skipping the modprobe keeps this
+# side-effect free when there is nothing to do.
+pick_soft && exit 0
+modprobe softdog 2>/dev/null || true
+pick_soft || true
+exit 0

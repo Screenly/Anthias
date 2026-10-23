@@ -29,9 +29,12 @@ straight DOM query.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import json
+import mimetypes
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -149,6 +152,88 @@ def _disable_asset_poll(page: Page) -> None:
             if (el) el.removeAttribute('hx-trigger');
             if (window.htmx) window.htmx.process(document.body);
         }"""
+    )
+
+
+def _drop_files_on_page(
+    page: Page, paths: list[str], selector: str = 'body'
+) -> None:
+    """Drop real files on an arbitrary element, the way an operator
+    drags them in from the desktop.
+
+    Playwright has no API for a drag that starts outside the browser
+    (``set_input_files`` bypasses the gesture entirely), so the
+    DataTransfer is assembled inside the page and the three events a
+    real drop fires are dispatched by hand. The bytes are the file's
+    own, so the server receives exactly what a real drop would deliver.
+
+    ``selector`` defaults to somewhere with no dropzone under it: the
+    point of the feature is that the whole page takes drops, and the
+    handlers are bound on ``window``, so a dispatch anywhere that
+    bubbles reaches them.
+    """
+    payload = []
+    for path in paths:
+        with open(path, 'rb') as handle:
+            payload.append(
+                {
+                    'name': os.path.basename(path),
+                    'type': mimetypes.guess_type(path)[0]
+                    or 'application/octet-stream',
+                    'data': base64.b64encode(handle.read()).decode(),
+                }
+            )
+    page.evaluate(
+        """({ files, selector }) => {
+            const transfer = new DataTransfer();
+            for (const file of files) {
+                const binary = atob(file.data);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                transfer.items.add(
+                    new File([bytes], file.name, { type: file.type })
+                );
+            }
+            const target = document.querySelector(selector);
+            for (const type of ['dragenter', 'dragover', 'drop']) {
+                target.dispatchEvent(
+                    new DragEvent(type, {
+                        dataTransfer: transfer,
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+            }
+        }""",
+        {'files': payload, 'selector': selector},
+    )
+
+
+def _dispatch_file_dragenter(page: Page, selector: str) -> None:
+    """Start a file drag over ``selector`` without releasing it.
+
+    The drop-feedback assertions need the page mid-drag, which
+    ``_drop_files_on_page`` runs straight past. No bytes are needed —
+    the handlers read ``dataTransfer.types`` on the way in, and the
+    files only matter once the drop fires.
+    """
+    page.evaluate(
+        """(selector) => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            document.querySelector(selector).dispatchEvent(
+                new DragEvent('dragenter', {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        }""",
+        selector,
     )
 
 
@@ -805,6 +890,121 @@ def test_multi_upload_skips_rejected_file_and_continues(
     assert asset.mimetype == 'image'
 
 
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_drop_file_anywhere_on_page_uploads_it(
+    reset_assets: None, page: Page
+) -> None:
+    """Dragging a file onto the asset list uploads it.
+
+    The drop target used to be the dashed zone inside the add-asset
+    modal and nothing else, so the gesture everyone tries first — drag
+    a video straight onto the schedule — fell through to the browser,
+    which navigated the tab to the local file. The drop here is
+    dispatched on the asset table, which is not a dropzone and never
+    was.
+    """
+    with _TemporaryCopy(
+        'src/anthias_server/app/static/img/standby.png', 'dropped.png'
+    ) as image:
+        page.goto(BASE_URL)
+        _disable_asset_poll(page)
+        _drop_files_on_page(page, [image], selector='#asset-table')
+
+        # The batch's progress UI lives in the add modal's upload pane,
+        # so a drop opens it there rather than uploading invisibly.
+        _wait_alpine(page, 'state.tab', 'file')
+
+        _wait_db(
+            lambda: Asset.objects.count() == 1,
+            timeout=30.0,
+            description='dropped image persisted',
+        )
+
+    asset = Asset.objects.first()
+    assert asset is not None
+    assert asset.name == 'Dropped'
+    assert asset.mimetype == 'image'
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_file_drag_is_claimed_from_the_browser(
+    reset_assets: None, page: Page
+) -> None:
+    """A drag the page does not cancel belongs to the browser, which
+    opens the dropped file and takes the page with it. Cancelling both
+    dragenter and dragover is what keeps the drop ours, so it is
+    asserted directly rather than inferred from the upload landing."""
+    page.goto(BASE_URL)
+    _disable_asset_poll(page)
+
+    claimed = page.evaluate(
+        """() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            const target = document.getElementById('asset-table');
+            const dispatch = (type) => {
+                const event = new DragEvent(type, {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                target.dispatchEvent(event);
+                return event.defaultPrevented;
+            };
+            return {
+                dragenter: dispatch('dragenter'),
+                dragover: dispatch('dragover'),
+            };
+        }"""
+    )
+
+    assert claimed == {'dragenter': True, 'dragover': True}
+    # And the operator is told the page will take it.
+    expect(page.locator('.upload-drop-overlay')).to_be_visible()
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_drag_over_the_add_modals_url_pane_shows_the_drop_target(
+    reset_assets: None, page: Page
+) -> None:
+    """The Add modal open on "From URL" still takes a dropped file, so
+    it has to say so. The dashed dropzone lives on the upload pane and
+    is not on screen here, and the page overlay used to stand down for
+    any open modal — leaving the one pane where a drop works with no
+    sign that it does. It shows in its --layered form instead: the
+    card, without a second veil over a modal that already dimmed the
+    page."""
+    page.goto(BASE_URL)
+    _disable_asset_poll(page)
+    page.locator('#add-asset-button').click()
+    _wait_alpine(page, 'state.mode', 'add')
+    # openAdd() lands a non-upload open on the URL pane.
+    _wait_alpine(page, 'state.tab', 'uri')
+
+    # Dispatched on the URL box itself: it exists only on this pane,
+    # and it is where the pointer would be when the operator gives up
+    # on typing a URL and drags the file in instead.
+    _dispatch_file_dragenter(page, 'input[name="uri"]')
+
+    overlay = page.locator('.upload-drop-overlay')
+    expect(overlay).to_be_visible()
+    expect(overlay).to_have_class(re.compile(r'upload-drop-overlay--layered'))
+    # The veil is the modal's own, not two stacked.
+    assert (
+        page.evaluate(
+            """() => getComputedStyle(
+                document.querySelector('.upload-drop-overlay')
+            ).backgroundColor"""
+        )
+        == 'rgba(0, 0, 0, 0)'
+    )
+
+
 # ---------------------------------------------------------------------------
 # 4. Edit / preview / delete modals
 # ---------------------------------------------------------------------------
@@ -1063,6 +1263,68 @@ def test_preview_modal_renders_image_and_done_closes(
 
 @pytest.mark.integration
 @pytest.mark.django_db(transaction=True)
+def test_preview_iframe_is_shielded_from_a_file_drag(
+    reset_assets: None, page: Page
+) -> None:
+    """Drag events do not cross a browsing-context boundary, so a file
+    released over a webpage preview would belong to the iframe and the
+    frame would navigate away from the asset — the one surface the
+    page-wide drop handlers cannot claim. The frame leaves hit-testing
+    for the length of the drag instead, handing those events back to
+    the page, which refuses the drop without navigating anything."""
+    Asset.objects.create(**dict(asset_active, mimetype='webpage'))
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Preview"]'
+    ).click()
+    _wait_alpine(
+        page,
+        'state.previewAsset && state.previewAsset.asset_id',
+        asset_active['asset_id'],
+    )
+    frame = page.locator('iframe.preview-media--frame')
+    expect(frame).to_be_visible()
+
+    pointer_events = """() => getComputedStyle(
+        document.querySelector('iframe.preview-media--frame')
+    ).pointerEvents"""
+
+    # With no drag in flight the frame stays interactive: the shield
+    # must not cost the operator the ability to use the preview.
+    assert page.evaluate(pointer_events) == 'auto'
+
+    # A file drag entering the page. It is dispatched on the modal
+    # overlay because that is the page's own document, which the
+    # pointer has to cross to reach the frame in the middle of it.
+    page.evaluate(
+        """() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(
+                new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+            );
+            document.querySelector('.modal-overlay--nested').dispatchEvent(
+                new DragEvent('dragenter', {
+                    dataTransfer: transfer,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+        }"""
+    )
+
+    page.wait_for_function(
+        f'{pointer_events.strip()} === "none"', timeout=DEFAULT_TIMEOUT_MS
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
 def test_delete_confirm_modal_opens_with_pending_id(
     reset_assets: None, page: Page
 ) -> None:
@@ -1078,6 +1340,44 @@ def test_delete_confirm_modal_opens_with_pending_id(
         f'button[title="Delete"]'
     ).click()
     _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
+
+
+@pytest.mark.integration
+@pytest.mark.django_db(transaction=True)
+def test_drop_over_a_dialog_says_how_to_retry(
+    reset_assets: None, page: Page
+) -> None:
+    """A dialog that owns the screen refuses the drop — but not in
+    silence. Every dragover on the page is cancelled, so the cursor
+    spends the whole drag telling the operator this is a drop target;
+    releasing into nothing after that reads as a file that vanished.
+    The refusal names the way out instead."""
+    Asset.objects.create(**asset_active)
+    page.goto(BASE_URL)
+    expect(
+        page.locator(f'tr[data-asset-id="{asset_active["asset_id"]}"]')
+    ).to_be_visible()
+    _disable_asset_poll(page)
+
+    page.locator(
+        f'tr[data-asset-id="{asset_active["asset_id"]}"] '
+        f'button[title="Delete"]'
+    ).click()
+    _wait_alpine(page, 'state.pendingDeleteId', asset_active['asset_id'])
+
+    with _TemporaryCopy(
+        'src/anthias_server/app/static/img/standby.png', 'refused.png'
+    ) as image:
+        _drop_files_on_page(page, [image])
+
+        toast = page.locator('.app-toast--info').first
+        expect(toast).to_be_visible()
+        expect(toast).to_contain_text('Close this dialog first')
+
+    # Refused means refused: no upload started, and the Add modal did
+    # not open on top of the prompt the operator was answering.
+    assert _alpine_state(page, 'state.mode') is None
+    assert Asset.objects.count() == 1
 
 
 @pytest.mark.integration

@@ -29,7 +29,10 @@ from tenacity import (
 # systemd unit runs this module with PYTHONPATH=<repo>/src (see
 # ansible/roles/anthias/templates/anthias-host-agent.service), which
 # is what makes the import resolvable from the host venv.
-from anthias_common.device_helper import detect_board_subtype
+from anthias_common.device_helper import (
+    detect_board_subtype,
+    read_device_tree_model,
+)
 from anthias_host_agent.ifaddrs import interface_addresses
 
 logger = logging.getLogger(__name__)
@@ -91,12 +94,37 @@ def get_ip_addresses() -> list[str]:
     ]
 
 
-def set_ip_addresses() -> None:
+def set_ip_addresses(probe_internet: bool = True) -> None:
+    """Publish the host's interface addresses to Redis.
+
+    ``probe_internet`` is what the two callers differ on. The splash
+    page wants the addresses a user can reach the device on, and on a
+    cold boot those are not final until DHCP has settled — so it waits
+    for an outbound request to succeed first, and accepts taking ~10s
+    to answer when the device is offline.
+
+    The WiFi-setup poll wants the opposite. It is asking whether one
+    specific address (the setup portal's own gateway) is on an
+    interface right now, it runs for as long as a device is offline,
+    and it must not make this service spend ten seconds out of every
+    fifteen inside a retrying HTTP call — ``subscriber_loop`` is
+    single-threaded, and reboot/shutdown commands queue behind
+    whatever it is doing.
+    """
     rdb = redis.Redis(
         host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
     )
 
     rdb.set('ip_addresses_ready', 'false')
+
+    if not probe_internet:
+        # Addresses first, then the readiness flag: a consumer that
+        # gates on ``ip_addresses_ready`` should never be told the
+        # answer is ready and then read the previous run's list.
+        addresses = get_ip_addresses()
+        rdb.set('ip_addresses', json.dumps(addresses))
+        rdb.set('ip_addresses_ready', 'true')
+        return
 
     try:
         for attempt in Retrying(
@@ -126,6 +154,10 @@ CMD_TO_ARGV: dict[str, list[str] | Callable[[], None]] = {
     'reboot': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'reboot'],
     'shutdown': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'poweroff'],
     'set_ip_addresses': set_ip_addresses,
+    # The same refresh without the internet probe -- see the docstring
+    # on set_ip_addresses for why the WiFi-setup poll needs its own
+    # entry point rather than reusing the one above.
+    'set_ip_addresses_fast': lambda: set_ip_addresses(probe_internet=False),
 }
 
 
@@ -254,6 +286,31 @@ def set_board_subtype(rdb: 'redis.Redis') -> None:
         )
 
 
+def set_device_model(rdb: 'redis.Redis') -> None:
+    """Publish the host's device-tree board model to Redis.
+
+    The server renders ``host:device_model`` as the System Info card's
+    device label. It cannot read the tree itself — Docker masks
+    ``/sys/firmware`` in unprivileged containers — so without this the
+    card falls through to 'Generic aarch64 Device' on every non-Pi
+    SBC. Written before ``host_agent_ready`` flips, like the other
+    host facts.
+
+    x86 hosts have no device tree and publish the empty string; the
+    reader treats empty / missing identically and keeps its existing
+    DMI-derived label.
+    """
+    model = read_device_tree_model()
+    rdb.set('host:device_model', model)
+    if model:
+        logger.info('Published host device model %r to redis', model)
+    else:
+        logger.info(
+            'No /proc/device-tree/model on this host — device label '
+            'falls back to DMI / CPU / generic'
+        )
+
+
 def subscriber_loop() -> None:
     # On first boot the redis container may not yet accept connections;
     # retry quietly instead of crashing the unit on every attempt.
@@ -275,6 +332,7 @@ def subscriber_loop() -> None:
             pubsub = rdb.pubsub(ignore_subscribe_messages=True)
             pubsub.subscribe(CHANNEL_NAME)
     set_board_subtype(rdb)
+    set_device_model(rdb)
     set_total_mem_kb(rdb)
     rdb.set('host_agent_ready', 'true')
     logger.info(

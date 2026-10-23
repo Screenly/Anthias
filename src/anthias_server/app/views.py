@@ -40,6 +40,7 @@ from anthias_common.utils import (
     connect_to_redis,
     is_disk_full,
 )
+from anthias_server.api.views.v2 import wifi_setup_state
 from anthias_server.app import page_context
 from anthias_server.app.models import (
     clamp_duration,
@@ -54,6 +55,7 @@ from anthias_server.lib.auth import (
     apply_auth_settings,
     authorized,
 )
+from anthias_server.lib.wifi_connect import read_qr_data_uri
 from anthias_server.settings import ViewerPublisher, settings
 
 from .helpers import (
@@ -265,7 +267,7 @@ def _parse_local_datetime(value: str) -> datetime:
     for fmt in candidates:
         try:
             # Naive strptime is deliberate — make_aware attaches the tz.
-            return timezone.make_aware(datetime.strptime(value, fmt))  # noqa: DTZ007
+            return timezone.make_aware(datetime.strptime(value, fmt))
         except ValueError:
             continue
     return timezone.make_aware(datetime.fromisoformat(value))
@@ -287,7 +289,7 @@ def _parse_local_time(value: str) -> time:
     for fmt in ('%H:%M', '%I:%M %p'):
         try:
             # Time-of-day only, no date or tz involved.
-            return datetime.strptime(value, fmt).time()  # noqa: DTZ007
+            return datetime.strptime(value, fmt).time()
         except ValueError:
             continue
     return time.fromisoformat(value)
@@ -2074,6 +2076,11 @@ def settings_recover(request: HttpRequest) -> HttpResponse:
         try:
             backup_helper.recover(location)
             messages.success(request, 'Recovery successful.')
+        except backup_helper.IncompatibleBackupError as exc:
+            # Version mismatch is operator-actionable ("upgrade first"),
+            # so surface the specific message rather than the generic one.
+            logger.warning('Backup restore rejected: %s', exc)
+            messages.error(request, str(exc))
         except (backup_helper.BackupRecoverError, tarfile.TarError) as exc:
             # Same operator-input case as the API recover view: a bad /
             # non-backup upload is validation, not a bug (the error
@@ -2189,6 +2196,38 @@ def login(request: HttpRequest) -> HttpResponse:
             return template(request, 'login.html', {'next': next_url})
 
     return template(request, 'login.html', {'next': next_url})
+
+
+@require_http_methods(['GET'])
+def hotspot(request: HttpRequest) -> HttpResponse:
+    """The WiFi setup screen, shown while the setup portal is live.
+
+    Rendered on the device's own display by the viewer (see
+    ``_wifi_setup_watch_loop``), which is the only place the access
+    point's passphrase can reach a user: it is generated per run and
+    the network it unlocks is the one they need in order to read
+    anything served over it.
+
+    Unauth'd, like /splash-page, because the viewer has no credentials
+    to present. The passphrase is only included while the portal is
+    actually broadcasting — ``wifi_setup_state()`` returns nothing
+    otherwise — and at that point it is already on the screen in 2cm
+    type.
+    """
+    state = wifi_setup_state()
+
+    return template(
+        request,
+        'hotspot.html',
+        {
+            'splash_logo_url': settings['splash_logo_url'],
+            'active': state['active'],
+            'ssid': state['ssid'],
+            'passphrase': state['passphrase'],
+            'portal_url': state['portal_url'],
+            'qr_src': read_qr_data_uri() if state['active'] else None,
+        },
+    )
 
 
 @require_http_methods(['GET'])

@@ -10,6 +10,7 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import time, timedelta
 from types import SimpleNamespace
@@ -792,6 +793,73 @@ def test_assets_delete_removes_local_file(
     assert not asset_path.exists(), (
         f'asset file {asset_path} survived UI delete'
     )
+
+
+@pytest.mark.django_db
+def test_assets_delete_drops_row_before_unlinking(
+    client: Client, tmp_path: Any
+) -> None:
+    """The row must be gone by the time the file is unlinked.
+
+    The reverse order leaves a window where ``Asset.uri`` points at a
+    file that no longer exists, and a normalisation task picking the
+    row up in that window raised ``FileNotFoundError`` on an asset the
+    operator had already deleted (Sentry ANTHIAS-1G). Asserted on the
+    ordering rather than on the window, because the window itself is
+    a race no test can reliably hit.
+    """
+    from anthias_server.settings import settings as anthias_settings
+
+    asset_path = (
+        tmp_path / anthias_settings['assetdir'].lstrip('/') / 'clip.mp4'
+    )
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    asset_path.write_bytes(b'\x00payload')
+
+    now = timezone.now()
+    asset = Asset.objects.create(
+        name='Processing clip',
+        uri=str(asset_path),
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+
+    row_alive_at_unlink: list[bool] = []
+    real_remove = os.remove
+
+    def _spy_remove(target: str) -> None:
+        row_alive_at_unlink.append(
+            Asset.objects.filter(asset_id=asset.asset_id).exists()
+        )
+        real_remove(target)
+
+    with (
+        mock.patch.dict(
+            anthias_settings,
+            {'assetdir': str(asset_path.parent)},
+        ),
+        mock.patch(
+            'anthias_server.app.helpers.remove',
+            side_effect=_spy_remove,
+        ),
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_delete', args=[asset.asset_id])
+        )
+
+    assert row_alive_at_unlink == [False], (
+        'asset row was still live when its file was unlinked'
+    )
+    assert not asset_path.exists()
 
 
 @pytest.mark.django_db
@@ -2800,7 +2868,7 @@ def test_assets_upload_never_stores_an_asset_under_a_reserved_ext(
     """An asset stored as `<uuid>.tmp` deletes itself: the celery sweep
     removes `*.tmp` from the asset dir after an hour and the row is
     left pointing at nothing. `<uuid>.part` survives but is dropped
-    from every backup by _skip_staged_uploads.
+    from every backup by _exclude_from_backup.
 
     A browser cannot reach this — it sends application/octet-stream for
     an unknown extension, which the type gate rejects — but a crafted
@@ -3533,6 +3601,20 @@ def test_schedule_pills_everyday_short_circuit(asset: Asset) -> None:
 # get_device_model_parts — (primary, secondary) for the two-line card
 
 
+@pytest.fixture
+def no_device_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the device-tree read to "no board name".
+
+    ``get_device_model_parts`` consults the device tree before DMI, so
+    without this the x86 branches below would short-circuit whenever
+    the suite runs on a host that has a tree (any SBC dev box, and the
+    arm64 CI runner).
+    """
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(device_helper, 'read_device_tree_model', lambda: '')
+
+
 def test_device_model_parts_pi(monkeypatch: pytest.MonkeyPatch) -> None:
     from anthias_common import device_helper
 
@@ -3553,6 +3635,7 @@ def test_device_model_parts_pi(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_device_model_parts_x86_with_dmi(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -3584,6 +3667,7 @@ def test_device_model_parts_x86_with_dmi(
 
 def test_device_model_parts_x86_drops_redundant_vendor(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     """Reference / whitebox boards set sys_vendor to the CPU maker
     ('Intel Corporation' next to an 'Intel Celeron' CPU). The stuttering
@@ -3616,6 +3700,7 @@ def test_device_model_parts_x86_drops_redundant_vendor(
 
 def test_device_model_parts_x86_keeps_branded_vendor(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     """A branded OEM vendor that differs from the CPU maker is kept, but
     its corporate suffix ('Inc.') is trimmed."""
@@ -3646,6 +3731,7 @@ def test_device_model_parts_x86_keeps_branded_vendor(
 
 def test_device_model_parts_drops_virt_chassis(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -3676,6 +3762,7 @@ def test_device_model_parts_drops_virt_chassis(
 
 def test_device_model_parts_generic_fallback(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 

@@ -78,13 +78,13 @@
   x-show="bulkDeleteOpen"
   x-cloak
   class="modal-overlay modal-overlay--nested"
-  @keydown.escape.window="bulkDeleteOpen = false"
-  @click.self="bulkDeleteOpen = false"
+  @keydown.escape.window="closeBulkDelete()"
+  @click.self="closeBulkDelete()"
 >
   <div class="modal-card modal-card--sm">
     <div class="modal-card__header">
       <h2>Delete selected assets?</h2>
-      <button type="button" class="modal-card__close" @click="bulkDeleteOpen = false" aria-label="Close">
+      <button type="button" class="modal-card__close" @click="closeBulkDelete()" aria-label="Close">
         <i class="ti ti-x"></i>
       </button>
     </div>
@@ -97,7 +97,7 @@
       </p>
     </div>
     <div class="modal-card__footer">
-      <button type="button" class="app-btn app-btn-link" @click="bulkDeleteOpen = false">Cancel</button>
+      <button type="button" class="app-btn app-btn-link" @click="closeBulkDelete()">Cancel</button>
       <form
         method="post"
         action="{% url 'anthias_app:assets_bulk_action' %}"

@@ -288,7 +288,7 @@ def _aware(
     year: int, month: int, day: int, hour: int, minute: int = 0
 ) -> datetime:
     return timezone.make_aware(
-        datetime(year, month, day, hour, minute),  # noqa: DTZ001
+        datetime(year, month, day, hour, minute),
         timezone.get_current_timezone(),
     )
 

@@ -1,0 +1,103 @@
+{# vim: ft=htmldjango #}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    {% comment %}
+      Server-rendered rather than polled by a JS bundle. The page exists
+      for a device with no network, shown on a screen nobody is
+      clicking: there is no interaction to drive, and adding an entry
+      point to the bun build to re-fetch two strings would be more
+      moving parts than the problem has.
+
+      It does not refresh itself either. Each run of wifi-connect
+      generates a fresh passphrase, so a page left up from a previous
+      run would show credentials that no longer open anything — but
+      the viewer re-navigates here on every transition back into setup
+      mode, and a portal restart always crosses one: the portal stays
+      down for minutes between runs and the poll notices within
+      WIFI_SETUP_POLL_INTERVAL_S. A `meta http-equiv="refresh"` on top
+      of that bought nothing, and it reloaded the page under anyone
+      reading a passphrase off it on a phone — which is what
+      Web:MetaRefreshCheck objects to. The viewer is also what
+      navigates away once the portal is down (see
+      _wifi_setup_watch_loop).
+    {% endcomment %}
+    <title>Set up WiFi &mdash; Anthias</title>
+    <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
+    <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
+    <link rel="icon" href="/static/favicons/favicon.ico"/>
+</head>
+<body class="splash-page">
+<main class="splash-shell">
+  <div class="splash-card">
+    <div class="splash-card__brand">
+      <img src="{{ splash_logo_url }}" alt="Anthias" class="splash-logo"/>
+    </div>
+
+    <div class="splash-card__body">
+      {% if active %}
+        <p class="splash-status">
+          <span class="splash-status__dot splash-status__dot--pulse" aria-hidden="true"></span>
+          <span>No network &mdash; setup mode</span>
+        </p>
+
+        <h1 class="splash-headline">Connect this screen to WiFi</h1>
+        <p class="splash-subhead">
+          Join the WiFi network below from a phone or laptop &mdash; scan
+          the QR code to join without typing the passphrase &mdash; then open
+          <strong>{{ portal_url }}</strong> and pick the network this
+          screen should use.
+        </p>
+
+        <div class="splash-cred-list">
+          <div class="splash-cred">
+            <span class="splash-cred__label">SSID</span>
+            <span class="splash-cred__value">{{ ssid }}</span>
+          </div>
+          {% if passphrase %}
+            <div class="splash-cred">
+              <span class="splash-cred__label">Passphrase</span>
+              <span class="splash-cred__value">{{ passphrase }}</span>
+            </div>
+          {% endif %}
+        </div>
+      {% else %}
+        {% comment %}
+          Reachable when the viewer navigates here just as the portal
+          comes down, and when an operator opens /hotspot/ out of
+          curiosity on a device that is perfectly online. Say so plainly
+          rather than rendering an empty card.
+        {% endcomment %}
+        <p class="splash-status">
+          <span class="splash-status__dot splash-status__dot--ok" aria-hidden="true"></span>
+          <span>WiFi setup is not running</span>
+        </p>
+        <h1 class="splash-headline">Nothing to set up</h1>
+        <p class="splash-subhead">
+          This screen is not in WiFi setup mode. The setup network only
+          appears when the device cannot reach a network of its own.
+        </p>
+      {% endif %}
+    </div>
+
+    {% if active and qr_src %}
+      <aside class="splash-card__qr">
+        {% comment %}
+          A data: URI rather than a link to the file, so the page stays
+          a single request on a device whose network is, by definition,
+          not working. Drawn as an image rather than inlined into the
+          markup: the SVG comes from another container's shared volume,
+          and as an image nothing in it can run.
+        {% endcomment %}
+        <div class="splash-qr"><img src="{{ qr_src }}" alt="QR code to join the {{ ssid }} setup network"/></div>
+        <p class="splash-qr__caption">Scan to join</p>
+      </aside>
+    {% endif %}
+  </div>
+</main>
+</body>
+</html>

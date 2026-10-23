@@ -93,6 +93,128 @@ services:
     labels:
       io.balena.features.supervisor-api: '1'
 
+  # The WiFi setup portal. Started by the supervisor on every boot and
+  # every release apply, which is safe because the DAEMON decides whether
+  # a portal is needed -- there is no systemd here to hang an
+  # ExecCondition on, and nothing in a compose file can gate a service.
+  #
+  # wifi-connect 2026.10.11 is the release that makes that true: before
+  # it, a device online over ethernet alone was not considered online
+  # (NetworkManager reports connectivity as "unknown" wherever the check
+  # is unavailable, and only an associated radio counted), so every start
+  # raised an access point at a perfectly healthy screen. Verified on a
+  # wired Pi 5 and Pi 3 B+ against 2026.10.11: exits 0 in ~20 seconds
+  # with "already online; the portal is not needed", no access point, no
+  # state file. The same test against 2026.10.10 raises one.
+  #
+  # Do NOT pin this below 2026.10.11. 2026.10.12 matters too:
+  # missing branding is a warning there rather than a refusal to
+  # start, which is what makes staging it on the shared volume
+  # safe, and a guessed `limited` verdict no longer raises an
+  # access point at a wired screen on an isolated LAN.
+  #
+  # Measured on balenaOS 2.83.18 (NetworkManager 1.28.0) booted in QEMU,
+  # because the three facts this service depends on there are not
+  # obvious from the Debian path:
+  #
+  #   * ConnectivityCheckAvailable is FALSE, exactly as on Debian and
+  #     Raspberry Pi OS -- so the "unknown" fallback above is the code
+  #     path that runs here too. (meta-balena's current bbappend does
+  #     add `concheck` to PACKAGECONFIG; this released build predates
+  #     that, and either way the daemon handles both.) `Connectivity`
+  #     itself still answers 4/FULL, which is the trap: it is optimistic
+  #     when no probe ran.
+  #
+  #   * supervisor0 is a BRIDGE that NetworkManager reports as
+  #     `connected (externally)`. Upstream's online check counts only
+  #     ethernet, wifi and modem devices, which is what stops every
+  #     balena device reading as permanently online and never raising
+  #     a portal at all.
+  #
+  #   * The host D-Bus socket reaches the container through the label
+  #     below: the pinned image run with exactly this env and mount
+  #     exits 3 ("no WiFi device was found" -- the VM has no radio),
+  #     not 5, which is what a failure to reach NetworkManager looks
+  #     like.
+  anthias-wifi-connect:
+    image: ghcr.io/screenly-labs/wifi-connect:2026.10.13
+    # Serving DHCP, which does not survive Docker's NAT, and binding the
+    # access point's own address on the wireless device.
+    network_mode: host
+    # `always` is the schedule here, because there is nothing else that
+    # can be one.
+    #
+    # `restart: "no"` does NOT mean "start once per boot", on balena or
+    # anywhere else. It means nothing will start the container again
+    # once it has exited, and that is by design at both layers:
+    #
+    #   * The supervisor starts a service only if it has never been
+    #     started. Its own words, in compose/app.ts: "Only start a
+    #     Service if we have never started it before and the service
+    #     matches target! This is so the engine can handle the restart
+    #     policy configured for the container." An exited service is
+    #     neither Installing nor Installed, so it is left alone. The one
+    #     exception is a container the Engine failed to start because a
+    #     host interface was not ready, matched by its error message.
+    #
+    #   * balena-engine, like Docker, only starts containers at daemon
+    #     start if their policy is `always` or `unless-stopped`.
+    #
+    # So on Debian `restart: "no"` is right because systemd starts the
+    # container; here there is no systemd, and nothing else volunteers.
+    # Confirmed on balenaOS 9.0.3 with supervisor 18.2.2: the
+    # container's start and finish times were unchanged across a reboot.
+    #
+    # Reboot-only would not be enough anyway. The common failure is a
+    # screen that stays powered on while the WiFi password changes
+    # around it, and telling an operator to power-cycle a wall-mounted
+    # display is the advice this feature exists to replace.
+    #
+    # What makes `always` affordable is that the daemon waits before
+    # exiting (below). Without that it is a spin: measured on a wired
+    # Pi 5, a container start every eighteen seconds, 4,680 a day, with
+    # 19,000 log lines to match -- which on balena ship to the cloud.
+    restart: always
+    environment:
+      # NetworkManager lives on the host; io.balena.features.dbus below
+      # is what puts its socket in this container.
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
+      # A PREFIX: the portal appends four random characters, so five
+      # screens in one room do not all broadcast one name.
+      - PORTAL_SSID=Anthias Setup
+      - WIFI_CONNECT_BRAND_NAME=Anthias
+      # Staged on the shared volume by anthias-server's startup
+      # script, because ansible does not run here. Missing files
+      # are a warning upstream as of 2026.10.12, not a refusal to
+      # start, so losing the race on a first boot costs the portal
+      # its colours and not its existence.
+      - WIFI_CONNECT_BRAND_CSS=/data/hotspot/brand/brand.css
+      - WIFI_CONNECT_BRAND_LOGO=/data/hotspot/brand/logo.svg
+      - WIFI_CONNECT_DEFAULT_THEME=dark
+      # NOT 80: anthias-server publishes 80:8080 on the host.
+      - PORTAL_LISTENING_PORT=8000
+      - WIFI_CONNECT_QR_OUTPUT=/data/hotspot
+      # How anthias-server learns the SSID, passphrase and portal
+      # address to put on the screen, and whether a portal is live.
+      - WIFI_CONNECT_STATE_FILE=/data/hotspot/state.json
+      - WIFI_CONNECT_NO_QR_STDOUT=true
+      # Idle, not a session cap, as of 2026.10.9.
+      - ACTIVITY_TIMEOUT=900
+      # The cadence `restart: always` turns into a schedule, as of
+      # 2026.10.13. Five minutes between checks on a screen that is
+      # online -- the check is one D-Bus round trip -- and six hours
+      # after a setup page nobody used, because that one just held the
+      # display for a quarter of an hour. A site with nothing to join
+      # therefore spends a minute in twenty-four showing setup instead
+      # of content, which is the same budget the systemd timer and its
+      # backoff give the Debian path.
+      - WIFI_CONNECT_RECHECK_INTERVAL=300
+      - WIFI_CONNECT_RETRY_AFTER=21600
+    volumes:
+      - resin-data:/data
+    labels:
+      io.balena.features.dbus: '1'
+
   redis:
     image: ghcr.io/screenly/anthias-redis:${GIT_SHORT_HASH}-${BOARD}
     ports:

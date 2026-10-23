@@ -17,7 +17,12 @@ from typing import Any
 import psutil
 from django.template.defaultfilters import filesizeformat
 
-from anthias_common import device_helper, storage_health, undervoltage
+from anthias_common import (
+    board,
+    device_helper,
+    storage_health,
+    undervoltage,
+)
 from anthias_common.board import LOW_RAM_THRESHOLD_KB
 from anthias_common.utils import (
     clamp_screen_rotation,
@@ -353,7 +358,10 @@ def system_info() -> dict[str, Any]:
     disk_free = slash.f_bavail * slash.f_frsize
     disk_used = max(0, disk_total - disk_free)
     uptime = timedelta(seconds=diagnostics.get_uptime())
-    device_model, device_model_detail = device_helper.get_device_model_parts()
+    # Resolved through anthias_common.board, not device_helper directly:
+    # this runs in an unprivileged container that can't read the host's
+    # device tree, so the board name arrives via Redis (host_agent).
+    device_model, device_model_detail = board.get_device_model_parts()
 
     anthias_version = diagnostics.get_anthias_version()
     anthias_version_head = diagnostics.get_anthias_version_head()

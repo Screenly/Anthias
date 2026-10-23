@@ -107,8 +107,12 @@ fi
 
 # Drop legacy containers no longer in the compose file:
 #   * nginx / websocket — folded into anthias-server (uvicorn).
-#   * wifi-connect      — service removed; nmcli/nmtui is the supported
-#                          path now.
+#   * srly-ose-wifi-connect — the pre-rebrand container for the old
+#     balena-os wifi-connect integration. The current
+#     anthias-wifi-connect container runs the Screenly-Labs tool and is
+#     defined in the compose file, so it must NOT be listed here: `up
+#     -d` would recreate it on every upgrade and the `docker rm -f`
+#     above it would tear down a portal that happens to be live.
 #   * anthias-celery / srly-ose-celery containers from the era when
 #     celery had its own image. The new compose file recreates the
 #     anthias-celery container against ghcr.io/screenly/anthias-server,
@@ -121,7 +125,7 @@ fi
 # Volumes are shared across services, so removing the containers is safe.
 set +e
 docker rm -f \
-    anthias-nginx anthias-websocket anthias-wifi-connect \
+    anthias-nginx anthias-websocket \
     srly-ose-nginx srly-ose-websocket srly-ose-wifi-connect \
     anthias-celery srly-ose-celery \
     srly-ose-redis \
@@ -183,7 +187,74 @@ if [[ -f "$SSL_OVERRIDE" ]]; then
     COMPOSE_FILES+=(-f "$SSL_OVERRIDE")
 fi
 
-sudo -E docker compose "${COMPOSE_FILES[@]}" ${MODE}
+# On a memory-tight board, free RAM before pulling. `docker compose pull`
+# extracts the new image layers while the current stack is still resident;
+# on boards under LOW_RAM_THRESHOLD_KB (1.5 GiB — Pi 2, the 1 GB Pi 3s and
+# Rock Pi 4, and the 512 MB Pi 3 A+) the QtWebEngine viewer's footprint
+# plus that extraction exhausts RAM+swap and the board hard-resets
+# mid-pull — reproduced on the 512 MB Pi 3 A+ during the 2026.09.0
+# burn-in, where the same pull only completed once the viewer was stopped.
+# So stop the two heavy services (the Chromium viewer and the celery image
+# workers) first; the `up -d` below restarts them on the freshly pulled
+# images. anthias-server and redis stay up so the admin UI keeps answering
+# and a failed pull doesn't black the screen. install.sh does the same for
+# its host-side upgrade work (issue #3165); capable boards (>= 1.5 GiB)
+# keep pulling with the stack live to minimise downtime.
+#
+# `stop` — not `down` — on purpose: it leaves the containers defined, so
+# their `restart: always` policy still brings them back on the next boot.
+# That matters because the reboot-required branch below exits before the
+# `up -d`, and nothing else runs `docker compose up` at boot; a `down`
+# there would remove the containers and leave the board dark until a
+# manual bring-up.
+LOW_RAM_THRESHOLD_KB=1572864  # 1.5 GiB; mirrors anthias_common.board.LOW_RAM_THRESHOLD_KB
+if [ "$MODE" = "pull" ] && [ "${TOTAL_MEMORY_KB:-0}" -lt "$LOW_RAM_THRESHOLD_KB" ]; then
+    echo "Low-RAM board (${TOTAL_MEMORY_KB} kB total): stopping the viewer and" \
+         "celery before pulling so the image extraction doesn't OOM the board."
+    sudo -E docker compose "${COMPOSE_FILES[@]}" stop anthias-viewer anthias-celery || true
+fi
+
+# A plain `compose pull` skips profiled services, so anthias-wifi-connect
+# would otherwise be fetched implicitly by the `up --no-start` further
+# down, after the signature check below had already run without it.
+# Activating the profile here pulls it with everything else, and that
+# later `up` then reuses the verified local image instead of pulling.
+PULL_PROFILES=()
+if [[ "$MODE" = "pull" ]]; then
+    PULL_PROFILES=(--profile wifi-connect)
+fi
+sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}"
+
+# Refuse to run pulled images their publisher didn't sign: ours, and the
+# upstream wifi-connect image (see verify_image_signatures.sh). The check
+# goes against what was just pulled and before anything is started from
+# it, so a failure leaves the device on the release it was already
+# running. Locally built images (MODE=build) have no signature to check.
+# ANTHIAS_SKIP_IMAGE_VERIFICATION=1 is the escape hatch for an operator
+# who deliberately runs images of their own; nothing in Anthias sets it.
+if [[ "$MODE" = "pull" ]]; then
+    if [[ "${ANTHIAS_SKIP_IMAGE_VERIFICATION:-}" = "1" ]]; then
+        echo "WARNING: ANTHIAS_SKIP_IMAGE_VERIFICATION=1 is set; starting" \
+             "the pulled images without checking their signatures." >&2
+    else
+        mapfile -t IMAGES < <(
+            sudo -E docker compose "${COMPOSE_FILES[@]}" \
+                "${PULL_PROFILES[@]}" config --images
+        )
+        VERIFY_SCRIPT="${SCRIPT_DIR}/verify_image_signatures.sh"
+        if [[ ! -x "${VERIFY_SCRIPT}" ]] \
+            || ! "${VERIFY_SCRIPT}" "${IMAGES[@]}"; then
+            echo "Refusing to start images that failed signature" \
+                 "verification. The device stays on its current release." >&2
+            # Bring back what the low-RAM branch stopped for the pull.
+            # `start` reuses the existing containers, which still point at
+            # the images they were created from, not the ones just pulled.
+            sudo -E docker compose "${COMPOSE_FILES[@]}" \
+                start anthias-viewer anthias-celery || true
+            exit 1
+        fi
+    fi
+fi
 
 if [ -f /var/run/reboot-required ]; then
     exit 0
@@ -195,6 +266,26 @@ fi
 # Without it `up -d` only logs a warning and leaves the orphans running,
 # which is confusing on a `docker ps` audit later.
 sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+
+# anthias-wifi-connect sits behind a compose profile, so the `up -d`
+# above deliberately skips it: starting the captive portal is the
+# systemd unit's job, and only after its ExecCondition has confirmed
+# the device is actually offline. Running it from here would raise an
+# access point on every upgrade, which on a WiFi-connected screen
+# means losing the network it is managed over.
+#
+# But the unit starts it with `docker start`, so the container has to
+# EXIST. `--no-start` creates it (and recreates it when the image or
+# the service definition changed) without running it. Naming the
+# service explicitly is what activates its profile.
+#
+# Best effort: a device with no wifi-connect service in its compose
+# file (MANAGE_NETWORK=No, or a partial upgrade) must not fail the
+# whole upgrade here.
+sudo -E docker compose "${COMPOSE_FILES[@]}" --profile wifi-connect \
+    up -d --no-start anthias-wifi-connect || \
+    echo "Could not pre-create anthias-wifi-connect; WiFi setup will be" \
+         "unavailable until the next upgrade."
 
 # Drop the images the release we just replaced was running on. Deliberately
 # the last thing we do, and only once the new stack is up, so a pull or a

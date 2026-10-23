@@ -54,4 +54,11 @@ urlpatterns = [
     path('', include('anthias_server.app.urls')),
 ]
 
+# Django's stock 500 view reads 500.html off disk and only tolerates
+# the template being absent, so a device that is out of file
+# descriptors (or whose card has gone unreadable) raises a second,
+# uncaught OSError while rendering the page for the first one and the
+# operator gets no response at all. See lib/error_pages.
+handler500 = 'anthias_server.lib.error_pages.server_error'
+
 # @TODO: Write custom 403 and 404 pages.
