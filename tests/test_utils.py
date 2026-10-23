@@ -544,3 +544,15 @@ def test_url_fails_probes_private_host_instead_of_rejecting() -> None:
     ) as mock_head:
         assert url_fails(url) is False
     mock_head.assert_called_once()
+
+
+def test_redis_host_honours_redis_host(monkeypatch: Any) -> None:
+    # connect_to_redis() itself is replaced by a fake in conftest.py, so the
+    # host it connects to is checked through redis_host().
+    monkeypatch.setenv('REDIS_HOST', '127.0.0.1')
+    assert utils.redis_host() == '127.0.0.1'
+
+
+def test_redis_host_defaults_to_redis(monkeypatch: Any) -> None:
+    monkeypatch.delenv('REDIS_HOST', raising=False)
+    assert utils.redis_host() == 'redis'
