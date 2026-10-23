@@ -31,6 +31,7 @@ import requests
 from django.test import Client
 
 from anthias_server.lib import wifi_connect
+from anthias_server.settings import settings
 
 _FIXTURE_IPV4 = '192.168.1.42'  # NOSONAR
 # One octet longer than the gateway, to catch a substring match.
@@ -948,7 +949,7 @@ def test_splash_replays_once_after_the_portal_ends(
     scheduler.get_next_asset.return_value = None
 
     with (
-        mock.patch.dict(viewer.settings, {'show_splash': True}),
+        mock.patch.dict(settings, {'show_splash': True}),
         mock.patch.object(viewer, 'view_webpage') as view_webpage,
         mock.patch.object(viewer, 'view_image'),
         mock.patch.object(viewer, 'get_skip_event'),
@@ -984,7 +985,7 @@ def test_splash_replay_honours_the_show_splash_setting(
     scheduler.get_next_asset.return_value = None
 
     with (
-        mock.patch.dict(viewer.settings, {'show_splash': False}),
+        mock.patch.dict(settings, {'show_splash': False}),
         mock.patch.object(viewer, 'view_webpage') as view_webpage,
         mock.patch.object(viewer, 'view_image'),
         mock.patch.object(viewer, 'get_skip_event'),
