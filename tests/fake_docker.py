@@ -175,10 +175,28 @@ def handle_rmi(args: list[str]) -> int:
     return 1
 
 
+def clear_abandoned_content() -> None:
+    """
+    `docker image prune` also clears what a dead `docker pull` left in
+    containerd's content store -- part-written layers and whole ones no
+    image references -- but leaves all of it out of the total it
+    reports. Reproducing that here is what lets a test assert the script
+    notices the reclaim anyway.
+    """
+
+    path = os.environ.get('FAKE_DOCKER_CONTENT_DIR')
+    if not path or not os.path.isdir(path):
+        return
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            os.unlink(os.path.join(root, name))
+
+
 def handle_image(args: list[str]) -> int:
     if args[:2] != ['prune', '-f']:
         return 1
 
+    clear_abandoned_content()
     state = load_state()
     in_use = in_use_image_ids(state)
     reclaimed = 0

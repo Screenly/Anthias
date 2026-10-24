@@ -11,6 +11,12 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "${SCRIPT_DIR}/migrate_legacy_paths.sh"
 
+# Used on two paths below: the cleanup after a successful upgrade, and
+# the narrower reclaim after a failed pull. The existence check at each
+# call site covers the operator who pulled only this script down instead
+# of updating the whole checkout.
+PURGE_SCRIPT="${SCRIPT_DIR}/purge_stale_images.sh"
+
 # Export various environment variables
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
@@ -223,7 +229,41 @@ PULL_PROFILES=()
 if [[ "$MODE" = "pull" ]]; then
     PULL_PROFILES=(--profile wifi-connect)
 fi
-sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}"
+# Bring back whatever the low-RAM branch above stopped. `start` reuses
+# the existing containers, which still point at the images they were
+# created from rather than at anything just pulled, so this returns the
+# device to the release it was already running.
+function restore_stopped_services() {
+    sudo -E docker compose "${COMPOSE_FILES[@]}" \
+        start anthias-viewer anthias-celery || true
+}
+
+PULL_STATUS=0
+sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}" \
+    || PULL_STATUS=$?
+if [ "${PULL_STATUS}" -ne 0 ]; then
+    # A `${MODE}` that died partway leaves the bytes it had already
+    # fetched in containerd's ingest directory. Nothing collects them:
+    # they are invisible to `docker images`, they do not expire, and the
+    # cleanup at the end of this script never runs on this path. So a
+    # device upgrading *because* it is short of space loses a few hundred
+    # MB to every failed attempt and fails earlier on the next one —
+    # a ratchet, not a plateau (issue #3410).
+    #
+    # `--untagged-only` is what makes reclaiming safe this early.
+    # The full sweep would also drop the superseded images, and on a
+    # failed upgrade those are the release the device is still running —
+    # which is precisely why the cleanup is otherwise deferred to the end.
+    # Restricted to unreferenced, untagged content, there is nothing left
+    # for it to take away.
+    echo "The ${MODE} failed; reclaiming what it left behind." >&2
+    if [ -f "${PURGE_SCRIPT}" ]; then
+        bash "${PURGE_SCRIPT}" --untagged-only || true
+    fi
+
+    restore_stopped_services
+    exit "${PULL_STATUS}"
+fi
 
 # Refuse to run pulled images their publisher didn't sign: ours, and the
 # upstream wifi-connect image (see verify_image_signatures.sh). The check
@@ -246,11 +286,7 @@ if [[ "$MODE" = "pull" ]]; then
             || ! "${VERIFY_SCRIPT}" "${IMAGES[@]}"; then
             echo "Refusing to start images that failed signature" \
                  "verification. The device stays on its current release." >&2
-            # Bring back what the low-RAM branch stopped for the pull.
-            # `start` reuses the existing containers, which still point at
-            # the images they were created from, not the ones just pulled.
-            sudo -E docker compose "${COMPOSE_FILES[@]}" \
-                start anthias-viewer anthias-celery || true
+            restore_stopped_services
             exit 1
         fi
     fi
@@ -290,10 +326,7 @@ sudo -E docker compose "${COMPOSE_FILES[@]}" --profile wifi-connect \
 # Drop the images the release we just replaced was running on. Deliberately
 # the last thing we do, and only once the new stack is up, so a pull or a
 # start that failed above still leaves the previous images to fall back on.
-# Best effort: losing the cleanup must not fail the upgrade itself. The
-# existence check covers the operator who pulled only this script down
-# instead of updating the whole checkout.
-PURGE_SCRIPT="${SCRIPT_DIR}/purge_stale_images.sh"
+# Best effort: losing the cleanup must not fail the upgrade itself.
 if [ -f "${PURGE_SCRIPT}" ]; then
     bash "${PURGE_SCRIPT}" || true
 fi
