@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import logging
 import os
@@ -38,8 +39,20 @@ from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import HOTSPOT_PAGE_URL as HOTSPOT_PAGE_URL
+from anthias_viewer.constants import (
+    NETWORK_IP_ADDRESSES_URL as NETWORK_IP_ADDRESSES_URL,
+)
+from anthias_viewer.constants import (
+    POST_WIFI_SETUP_ADDRESS_POLL_S as POST_WIFI_SETUP_ADDRESS_POLL_S,
+)
+from anthias_viewer.constants import (
+    POST_WIFI_SETUP_ADDRESS_TIMEOUT_S as POST_WIFI_SETUP_ADDRESS_TIMEOUT_S,
+)
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
+from anthias_viewer.constants import (
+    SPLASH_PAGE_IP_POLL_WINDOW_S as SPLASH_PAGE_IP_POLL_WINDOW_S,
+)
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
 from anthias_viewer.constants import (
@@ -228,6 +241,22 @@ _wifi_setup_active: bool = False
 # Edge latch for the log line, so a portal left up for its full
 # 15-minute window writes two lines instead of ~180.
 _wifi_setup_logged: bool = False
+
+# Armed by the reporter when a portal run ends, consumed once by
+# asset_loop. A device that just joined a network from the setup
+# portal has never shown its address: the boot splash ran minutes
+# earlier, while the only interface up was the device's own access
+# point, so the one screen carrying the admin URL went past before
+# there was an address to put on it (GH #3411). This replays it.
+_wifi_setup_splash_pending: bool = False
+
+# The setup portal's own address, from the last answer that said a
+# portal was up. Once the portal ends nothing strips it from the
+# address list any more, and the resolvers behind that list are caches
+# that can lag the interface by a few seconds -- so without this the
+# address the device just stopped being reachable on would end the
+# wait for one it is.
+_wifi_setup_portal_gateway: str | None = None
 
 
 def _rotation_value() -> int:
@@ -2840,6 +2869,14 @@ def asset_loop(scheduler: Any) -> None:
         sleep(EMPTY_PL_DELAY)
         return
 
+    # The portal has just come down, which on the path this exists for
+    # means someone picked a network on their phone and the device
+    # joined it. Show them where it landed. See
+    # ``_wifi_setup_splash_pending``.
+    if _wifi_setup_splash_pending:
+        _show_post_wifi_setup_splash()
+        return
+
     asset = scheduler.get_next_asset()
 
     if asset is None:
@@ -3183,9 +3220,129 @@ def _show_wifi_setup_screen() -> None:
     view_webpage(HOTSPOT_PAGE_URL)
 
 
+def _show_post_wifi_setup_splash() -> None:
+    """Replay the boot splash once, after a setup portal has ended.
+
+    The flag is cleared before the page goes up, not after: this holds
+    the display thread for ``SPLASH_DELAY``, and a second portal run
+    that starts and ends inside that window must not queue a second
+    splash on top of the playlist it is finally free to play. A missed
+    replay costs an address the splash would have shown; a stuck one
+    costs the playlist.
+
+    The portal going down is not the device being online: it still
+    has to join the chosen network and get a lease, and a fixed
+    ``SPLASH_DELAY`` started here spent most of itself on "Detecting
+    network" (GH #3411). So the page goes up at once, is held until an
+    address the user can reach the device on appears, and the full
+    ``SPLASH_DELAY`` starts from there. The wait is capped at
+    ``POST_WIFI_SETUP_ADDRESS_TIMEOUT_S``, and ends early if the portal
+    comes back up -- which is what a failed join looks like -- so the
+    setup screen is never held off by it.
+    """
+    global _wifi_setup_splash_pending
+
+    _wifi_setup_splash_pending = False
+
+    if not settings['show_splash']:
+        return
+
+    logger.info(
+        "WiFi setup finished; showing the splash page so the device's "
+        'address is visible.'
+    )
+    view_webpage(SPLASH_PAGE_URL)
+    shown_at = monotonic()
+
+    while not _post_wifi_setup_addresses():
+        if _wifi_setup_active:
+            logger.info(
+                'WiFi setup portal is back up before the device got an '
+                'address; returning to the setup screen.'
+            )
+            return
+        if monotonic() - shown_at >= POST_WIFI_SETUP_ADDRESS_TIMEOUT_S:
+            logger.warning(
+                'No address %ss after WiFi setup finished; leaving the '
+                'splash page.',
+                POST_WIFI_SETUP_ADDRESS_TIMEOUT_S,
+            )
+            return
+        sleep(POST_WIFI_SETUP_ADDRESS_POLL_S)
+
+    # The page stops polling for addresses on its own after a while.
+    # An address that turned up near or after that point would never be
+    # painted, so load the page again; nocache is what gets it past
+    # view_webpage's unchanged-URL short-circuit.
+    if (
+        monotonic() - shown_at
+        >= SPLASH_PAGE_IP_POLL_WINDOW_S - 2 * POST_WIFI_SETUP_ADDRESS_POLL_S
+    ):
+        view_webpage(SPLASH_PAGE_URL, nocache=True)
+
+    logger.info(
+        'Device has an address after WiFi setup; showing it for %ss.',
+        SPLASH_DELAY,
+    )
+    sleep(SPLASH_DELAY)
+    # No explicit repaint here: returning hands the display straight to
+    # the next asset_loop tick, which paints the playlist or standby as
+    # it finds them. main()'s trailing view_image() exists because it is
+    # covering the gap before the loop starts; there is no such gap here.
+
+
+def _post_wifi_setup_addresses() -> list[str]:
+    """Addresses the device can be reached on, as the splash shows them.
+
+    Asks the endpoint the splash page itself polls rather than reading
+    interfaces from here: it is what decides which addresses the page
+    will paint, it already drops link-local ones and anything that is
+    not on a wired or wireless interface, and this container cannot see
+    the host's interfaces on balena anyway. What it cannot know once
+    the portal is gone is the portal's own address, still lingering in
+    a lagging cache, so that is dropped here; loopback and unspecified
+    addresses are dropped for the same reason -- nobody can reach the
+    device on them.
+
+    Empty on any failure: the caller keeps waiting, bounded by its cap.
+    """
+    try:
+        response = requests.get(NETWORK_IP_ADDRESSES_URL, timeout=5)
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.exceptions.RequestException, ValueError):
+        return []
+
+    urls = payload.get('ip_addresses') if isinstance(payload, dict) else None
+    if not isinstance(urls, list):
+        return []
+
+    reachable = []
+    for url in urls:
+        if not isinstance(url, str):
+            continue
+        host = urlparse(url).hostname
+        try:
+            address = ipaddress.ip_address(host or '')
+        except ValueError:
+            continue
+        if (
+            address.is_loopback
+            or address.is_link_local
+            or address.is_unspecified
+            or host == _wifi_setup_portal_gateway
+        ):
+            continue
+        reachable.append(url)
+    return reachable
+
+
 def _poll_wifi_setup_once() -> None:
     """One tick of the wifi-setup reporter. Never raises."""
     global _wifi_setup_active, _wifi_setup_logged
+    global _wifi_setup_splash_pending
+
+    answered = True
 
     try:
         response = requests.get(WIFI_SETUP_STATUS_URL, timeout=5)
@@ -3197,18 +3354,41 @@ def _poll_wifi_setup_once() -> None:
         # value in place — stranding the display on a setup screen,
         # the one outcome this function exists to prevent.
         active = isinstance(payload, dict) and bool(payload.get('active'))
+        if active:
+            _remember_portal_gateway(payload)
     except (requests.exceptions.RequestException, ValueError):
         # A server that is restarting, or a body that isn't JSON,
         # must not strand the display on a setup screen for a portal
         # that is long gone. Treating an unanswered question as "no
         # portal" fails towards playing content, which is the job.
         active = False
+        answered = False
 
     if _wifi_setup_active and not active:
         logger.info('WiFi setup portal is down; resuming normal playback.')
         _wifi_setup_logged = False
+        # Only on an answer. An unreachable server drops the setup
+        # screen (above, deliberately) but says nothing about a portal
+        # having finished — and the splash it would queue is served by
+        # the very server that just failed to answer, so a restart
+        # would trade the setup screen for a blank page.
+        if answered:
+            _wifi_setup_splash_pending = True
 
     _wifi_setup_active = active
+
+
+def _remember_portal_gateway(payload: dict[str, Any]) -> None:
+    """Keep the live portal's address for after it has gone.
+
+    See ``_wifi_setup_portal_gateway``. A server too old to report it
+    leaves the last known value alone.
+    """
+    global _wifi_setup_portal_gateway
+
+    gateway = payload.get('gateway')
+    if isinstance(gateway, str) and gateway:
+        _wifi_setup_portal_gateway = gateway
 
 
 def _wifi_setup_watch_loop() -> None:
