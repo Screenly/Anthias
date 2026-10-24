@@ -389,6 +389,10 @@ def wifi_setup_state() -> dict[str, Any]:
         'portal_url': (
             portal.portal_url if active and portal else wifi_connect.PORTAL_URL
         ),
+        # The portal's own address on this host. The viewer keeps it so
+        # it can tell, once the portal has ended, that a lagging address
+        # cache still listing it is not the device being online.
+        'gateway': portal.gateway if active and portal else None,
     }
 
 
@@ -498,6 +502,7 @@ class WifiSetupViewV2(APIView):
                     'ssid': {'type': 'string', 'nullable': True},
                     'passphrase': {'type': 'string', 'nullable': True},
                     'portal_url': {'type': 'string'},
+                    'gateway': {'type': 'string', 'nullable': True},
                 },
             },
         },

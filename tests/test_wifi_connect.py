@@ -23,7 +23,9 @@ import json
 import re
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -789,10 +791,12 @@ def viewer_wifi_state() -> Iterator[None]:
     viewer._wifi_setup_active = False
     viewer._wifi_setup_logged = False
     viewer._wifi_setup_splash_pending = False
+    viewer._wifi_setup_portal_gateway = None
     yield
     viewer._wifi_setup_active = False
     viewer._wifi_setup_logged = False
     viewer._wifi_setup_splash_pending = False
+    viewer._wifi_setup_portal_gateway = None
 
 
 def test_viewer_goes_active_when_the_server_says_so(
@@ -804,12 +808,23 @@ def test_viewer_goes_active_when_the_server_says_so(
         'anthias_viewer.requests.get',
         return_value=mock.Mock(
             raise_for_status=mock.Mock(),
-            json=mock.Mock(return_value={'active': True}),
+            json=mock.Mock(
+                return_value={
+                    'active': True,
+                    'gateway': wifi_connect.DEFAULT_PORTAL_GATEWAY,
+                }
+            ),
         ),
     ):
         viewer._poll_wifi_setup_once()
 
     assert viewer._wifi_setup_active
+    # Kept for after the portal has gone; see
+    # test_the_portal_address_does_not_end_the_wait.
+    assert (
+        viewer._wifi_setup_portal_gateway
+        == wifi_connect.DEFAULT_PORTAL_GATEWAY
+    )
 
 
 def test_viewer_leaves_setup_when_the_portal_comes_down(
@@ -950,6 +965,11 @@ def test_splash_replays_once_after_the_portal_ends(
 
     with (
         mock.patch.dict(settings, {'show_splash': True}),
+        mock.patch.object(
+            viewer,
+            '_post_wifi_setup_addresses',
+            return_value=[f'http://{_FIXTURE_IPV4}'],
+        ),
         mock.patch.object(viewer, 'view_webpage') as view_webpage,
         mock.patch.object(viewer, 'view_image'),
         mock.patch.object(viewer, 'get_skip_event'),
@@ -1048,6 +1068,212 @@ def test_the_setup_screen_outranks_a_queued_splash(
 
     view_webpage.assert_called_once_with(viewer.HOTSPOT_PAGE_URL)
     assert viewer._wifi_setup_splash_pending
+
+
+# ---------------------------------------------------------------------------
+# Holding the splash until the address it exists to show is there
+# ---------------------------------------------------------------------------
+#
+# The portal going down is not the device being online: it still has
+# to join the chosen network and get a lease. A fixed SPLASH_DELAY
+# started at the portal's edge spent most of itself on "Detecting
+# network", and testers saw the address for under 30 seconds.
+
+
+class _FakeClock:
+    """monotonic() that only moves when the code under test sleeps."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+@contextmanager
+def _post_setup_splash(
+    addresses: Any,
+) -> Iterator[tuple[_FakeClock, mock.Mock]]:
+    import anthias_viewer as viewer
+
+    clock = _FakeClock()
+    with (
+        mock.patch.dict(settings, {'show_splash': True}),
+        mock.patch.object(viewer, 'monotonic', clock.monotonic),
+        mock.patch.object(viewer, 'sleep', side_effect=clock.sleep),
+        mock.patch.object(
+            viewer, '_post_wifi_setup_addresses', side_effect=addresses
+        ),
+        mock.patch.object(viewer, 'view_webpage') as view_webpage,
+    ):
+        yield clock, view_webpage
+
+
+def test_splash_delay_starts_when_the_address_appears(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_splash_pending = True
+    url = f'http://{_FIXTURE_IPV4}'
+
+    with _post_setup_splash([[], [], [url]]) as (clock, view_webpage):
+        viewer._show_post_wifi_setup_splash()
+
+    poll = viewer.POST_WIFI_SETUP_ADDRESS_POLL_S
+    # Two empty answers, then the full window from the first address.
+    assert clock.sleeps == [poll, poll, viewer.SPLASH_DELAY]
+    # The page polls for itself well inside its own window: one load.
+    view_webpage.assert_called_once_with(viewer.SPLASH_PAGE_URL)
+
+
+def test_the_wait_for_an_address_is_capped(
+    viewer_wifi_state: None,
+) -> None:
+    """A device that never gets an address must not hold the splash."""
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_splash_pending = True
+
+    with _post_setup_splash(list) as (clock, view_webpage):
+        viewer._show_post_wifi_setup_splash()
+
+    assert clock.now >= viewer.POST_WIFI_SETUP_ADDRESS_TIMEOUT_S
+    assert clock.now < (
+        viewer.POST_WIFI_SETUP_ADDRESS_TIMEOUT_S
+        + viewer.POST_WIFI_SETUP_ADDRESS_POLL_S
+    )
+    assert viewer.SPLASH_DELAY not in clock.sleeps
+    view_webpage.assert_called_once_with(viewer.SPLASH_PAGE_URL)
+
+
+def test_a_portal_coming_back_ends_the_wait(
+    viewer_wifi_state: None,
+) -> None:
+    """A failed join brings the portal back; its screen comes first."""
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_splash_pending = True
+
+    def no_address_and_the_portal_returns() -> list[str]:
+        viewer._wifi_setup_active = True
+        return []
+
+    with _post_setup_splash(no_address_and_the_portal_returns) as (
+        clock,
+        _view_webpage,
+    ):
+        viewer._show_post_wifi_setup_splash()
+
+    assert clock.sleeps == []
+
+
+def test_a_late_address_reloads_the_splash(
+    viewer_wifi_state: None,
+) -> None:
+    """The page stops polling on its own; a late address needs a reload.
+
+    Without it the address would arrive after the page had stopped
+    asking for one, and the full window would be spent on "Detecting
+    network" again.
+    """
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_splash_pending = True
+    url = f'http://{_FIXTURE_IPV4}'
+    late = int(
+        viewer.SPLASH_PAGE_IP_POLL_WINDOW_S
+        / viewer.POST_WIFI_SETUP_ADDRESS_POLL_S
+    )
+    answers: list[list[str]] = [[]] * late + [[url]]
+
+    with _post_setup_splash(answers) as (clock, view_webpage):
+        viewer._show_post_wifi_setup_splash()
+
+    assert view_webpage.call_args_list == [
+        mock.call(viewer.SPLASH_PAGE_URL),
+        mock.call(viewer.SPLASH_PAGE_URL, nocache=True),
+    ]
+    assert clock.sleeps[-1] == viewer.SPLASH_DELAY
+
+
+def _ip_addresses_response(payload: Any) -> mock.Mock:
+    return mock.Mock(
+        raise_for_status=mock.Mock(),
+        json=mock.Mock(return_value=payload),
+    )
+
+
+def test_only_addresses_someone_can_reach_end_the_wait(
+    viewer_wifi_state: None,
+) -> None:
+    """The portal's address in a lagging cache is not being online."""
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_portal_gateway = wifi_connect.DEFAULT_PORTAL_GATEWAY
+    lan = f'http://{_FIXTURE_IPV4}'
+    payload = {
+        'ip_addresses': [
+            f'http://{wifi_connect.DEFAULT_PORTAL_GATEWAY}',
+            'http://127.0.0.1',  # NOSONAR
+            'http://169.254.10.20',  # NOSONAR
+            'http://[::1]',  # NOSONAR
+            'http://not-an-address',  # NOSONAR
+            42,
+            lan,
+        ]
+    }
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        return_value=_ip_addresses_response(payload),
+    ):
+        assert viewer._post_wifi_setup_addresses() == [lan]
+
+
+def test_the_portal_address_does_not_end_the_wait(
+    viewer_wifi_state: None,
+) -> None:
+    import anthias_viewer as viewer
+
+    viewer._wifi_setup_portal_gateway = wifi_connect.DEFAULT_PORTAL_GATEWAY
+    payload = {
+        'ip_addresses': [f'http://{wifi_connect.DEFAULT_PORTAL_GATEWAY}']
+    }
+
+    with mock.patch(
+        'anthias_viewer.requests.get',
+        return_value=_ip_addresses_response(payload),
+    ):
+        assert viewer._post_wifi_setup_addresses() == []
+
+
+@pytest.mark.parametrize(
+    'get_kwargs',
+    [
+        {'side_effect': requests.exceptions.ConnectionError()},
+        {
+            'return_value': mock.Mock(
+                raise_for_status=mock.Mock(),
+                json=mock.Mock(side_effect=ValueError()),
+            )
+        },
+        {'return_value': _ip_addresses_response(['http://192.0.2.1'])},
+        {'return_value': _ip_addresses_response({'ip_addresses': 'x'})},
+    ],
+)
+def test_an_unusable_answer_is_no_address(
+    viewer_wifi_state: None, get_kwargs: dict[str, Any]
+) -> None:
+    import anthias_viewer as viewer
+
+    with mock.patch('anthias_viewer.requests.get', **get_kwargs):
+        assert viewer._post_wifi_setup_addresses() == []
 
 
 # ---------------------------------------------------------------------------
@@ -1213,6 +1439,7 @@ def test_a_stale_address_cache_does_not_report_setup_mode() -> None:
 
     assert state['active'] is False
     assert state['passphrase'] is None
+    assert state['gateway'] is None
 
 
 def test_a_state_file_left_behind_does_not_report_setup_mode() -> None:
@@ -1271,6 +1498,7 @@ def test_a_live_portal_still_reports_setup_mode() -> None:
     assert state['ssid'] == 'Anthias Setup-G4VV'
     assert state['passphrase'] == 'brave-plum-42'
     assert state['portal_url'] == 'http://192.168.42.1:8000/'
+    assert state['gateway'] == wifi_connect.DEFAULT_PORTAL_GATEWAY
 
 
 def test_the_ssid_shown_is_the_one_on_the_air() -> None:
