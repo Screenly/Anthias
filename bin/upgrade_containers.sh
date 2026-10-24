@@ -241,7 +241,7 @@ function restore_stopped_services() {
 PULL_STATUS=0
 sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}" \
     || PULL_STATUS=$?
-if [ "${PULL_STATUS}" -ne 0 ]; then
+if [[ "${PULL_STATUS}" -ne 0 ]]; then
     # A `${MODE}` that died partway leaves the bytes it had already
     # fetched in containerd's ingest directory. Nothing collects them:
     # they are invisible to `docker images`, they do not expire, and the
@@ -257,7 +257,7 @@ if [ "${PULL_STATUS}" -ne 0 ]; then
     # Restricted to unreferenced, untagged content, there is nothing left
     # for it to take away.
     echo "The ${MODE} failed; reclaiming what it left behind." >&2
-    if [ -f "${PURGE_SCRIPT}" ]; then
+    if [[ -f "${PURGE_SCRIPT}" ]]; then
         bash "${PURGE_SCRIPT}" --untagged-only || true
     fi
 

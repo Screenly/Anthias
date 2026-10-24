@@ -37,7 +37,7 @@
 set -u
 
 UNTAGGED_ONLY=0
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --untagged-only)
             UNTAGGED_ONLY=1
@@ -121,17 +121,19 @@ function content_store_size_kb() {
     local size
     size=$(sudo du -sk "${CONTENT_DIR}" 2> /dev/null | awk '{print $1}')
     echo "${size:-0}"
+    return 0
 }
 
 function human_readable_kb() {
     local kb="$1"
-    if [ "${kb}" -ge 1048576 ]; then
+    if [[ "${kb}" -ge 1048576 ]]; then
         awk -v kb="${kb}" 'BEGIN { printf "%.1f GB", kb / 1048576 }'
-    elif [ "${kb}" -ge 1024 ]; then
+    elif [[ "${kb}" -ge 1024 ]]; then
         awk -v kb="${kb}" 'BEGIN { printf "%.0f MB", kb / 1024 }'
     else
         echo "${kb} kB"
     fi
+    return 0
 }
 
 function purge_untagged_images() {
@@ -169,7 +171,7 @@ function purge_untagged_images() {
     # reclaim visible, and it is exact where a free-space delta would be
     # at the mercy of anything else writing to the card.
     freed=$((before - after))
-    if [ "${freed}" -gt 0 ]; then
+    if [[ "${freed}" -gt 0 ]]; then
         echo "Reclaimed $(human_readable_kb "${freed}") left behind by an" \
              "interrupted download."
     fi
@@ -192,7 +194,7 @@ if [ -n "${CONTAINERS}" ]; then
         2> /dev/null)
 fi
 
-if [ "${UNTAGGED_ONLY}" -eq 0 ]; then
+if [[ "${UNTAGGED_ONLY}" -eq 0 ]]; then
     purge_tagged_images "${IN_USE}"
 fi
 purge_untagged_images
