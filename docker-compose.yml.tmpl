@@ -3,6 +3,21 @@
 services:
   anthias-server:
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    # A crash must not cost the device its storage. The host's
+    # core_pattern is the kernel default `core`, a relative path, so a
+    # dump lands in the crashing process's working directory, which is
+    # WORKDIR /usr/src/app: inside the container, on no mount. With
+    # core_uses_pid=1 every crash adds a fresh `core.<pid>` rather than
+    # replacing one, and nothing sweeps them. They are invisible to
+    # `docker images`, and `docker image prune` cannot touch a live
+    # container's writable layer, so the usual disk investigation comes
+    # back clean while the card fills. A device in the field reached
+    # 24.2 GB of them in anthias-celery (issue 3417). Sentry already
+    # reports crashes, so on a device a dump buys nothing and costs the
+    # card. Anchored here and aliased by every service below: the rule
+    # is "any of our containers", not "the one that happened to crash".
+    ulimits: &no-core-dumps
+      core: 0
     build:
       context: .
       dockerfile: docker/Dockerfile.server
@@ -68,6 +83,7 @@ services:
 
   anthias-viewer:
     image: ghcr.io/screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
+    ulimits: *no-core-dumps
     build:
       context: .
       dockerfile: docker/Dockerfile.viewer
@@ -146,6 +162,7 @@ services:
     # and a separate celery image was duplicating ~825 MB extracted of
     # identical content per device. See refactor: drop celery image.
     image: ghcr.io/screenly/anthias-server:${DOCKER_TAG}-${DEVICE_TYPE}
+    ulimits: *no-core-dumps
     # ``mem_limit`` keeps a runaway celery task (e.g. a HEIC →
     # WebP convert on a decompression-bomb fixture) from eating
     # the box's RAM and starving the viewer. 60% of host (computed
@@ -211,6 +228,7 @@ services:
   # can never land on a fleet without a deliberate bump here.
   anthias-wifi-connect:
     image: ghcr.io/screenly-labs/wifi-connect:2026.10.13
+    ulimits: *no-core-dumps
     # Pinned, because three other things address this container BY
     # NAME and compose's generated name is `anthias-anthias-wifi-
     # connect-1`: the systemd unit's `docker start`, the
@@ -354,6 +372,7 @@ services:
 
   redis:
     image: ghcr.io/screenly/anthias-redis:${DOCKER_TAG}-${DEVICE_TYPE}
+    ulimits: *no-core-dumps
     build:
       context: .
       dockerfile: docker/Dockerfile.redis
