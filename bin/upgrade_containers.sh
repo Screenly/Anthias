@@ -202,11 +202,12 @@ fi
 # keep pulling with the stack live to minimise downtime.
 #
 # `stop` — not `down` — on purpose: it leaves the containers defined, so
-# their `restart: always` policy still brings them back on the next boot.
-# That matters because the reboot-required branch below exits before the
-# `up -d`, and nothing else runs `docker compose up` at boot; a `down`
-# there would remove the containers and leave the board dark until a
-# manual bring-up.
+# their `restart: always` policy still brings them back on the next boot
+# even if this script dies between here and the `up -d`. A `down` would
+# remove them instead and leave the board dark until a manual bring-up.
+# (The reboot-required branch used to exit between the two and relied on
+# this; it now sits after the `up -d` precisely so no path depends on
+# that rescue. See the comment there.)
 LOW_RAM_THRESHOLD_KB=1572864  # 1.5 GiB; mirrors anthias_common.board.LOW_RAM_THRESHOLD_KB
 if [ "$MODE" = "pull" ] && [ "${TOTAL_MEMORY_KB:-0}" -lt "$LOW_RAM_THRESHOLD_KB" ]; then
     echo "Low-RAM board (${TOTAL_MEMORY_KB} kB total): stopping the viewer and" \
@@ -256,10 +257,6 @@ if [[ "$MODE" = "pull" ]]; then
     fi
 fi
 
-if [ -f /var/run/reboot-required ]; then
-    exit 0
-fi
-
 # --remove-orphans sweeps containers that linger after a service is
 # renamed or removed from the compose file (e.g. legacy run-NNN sidecar
 # instances left over from earlier `docker compose run` invocations).
@@ -286,6 +283,29 @@ sudo -E docker compose "${COMPOSE_FILES[@]}" --profile wifi-connect \
     up -d --no-start anthias-wifi-connect || \
     echo "Could not pre-create anthias-wifi-connect; WiFi setup will be" \
          "unavailable until the next upgrade."
+
+# Only now, with the stack up, is it safe to stop short for a pending
+# reboot.
+#
+# This check used to sit above the `up -d`, and that was correct when it
+# was written: nothing had removed the containers, so leaving them alone
+# meant `restart: always` brought them back on the next boot. It stopped
+# being correct once install.sh grew a `docker compose down
+# --remove-orphans` before the host work, to free RAM for the
+# dist-upgrade. A *removed* container is not something a restart policy
+# can bring back, so a dist-upgrade that asked for a reboot left the
+# device with no containers at all, this script exited 0, and the
+# installer reported success over a dark screen that the reboot did not
+# fix. Reproduced on a Pi 4 and reported from the field
+# (forums.screenly.io/t/sd-card-completely-full/6778).
+#
+# Starting the stack first costs nothing: the reboot is moments away and
+# `restart: always` restores it afterwards. What is still skipped here
+# is the image purge below, which is the one piece of work worth
+# deferring when the host is half-upgraded and about to go down.
+if [[ -f /var/run/reboot-required ]]; then
+    exit 0
+fi
 
 # Drop the images the release we just replaced was running on. Deliberately
 # the last thing we do, and only once the new stack is up, so a pull or a
