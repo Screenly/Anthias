@@ -2,8 +2,6 @@
 title: "WiFi Setup"
 description: "How Anthias gets a screen onto WiFi when it has no network yet, using the wifi-connect captive portal."
 slug: "wifi-setup"
-aliases:
-  - "/docs/wifi-setup/"
 ---
 
 A screen that has never been on a network has a chicken-and-egg problem: it
@@ -153,7 +151,7 @@ adapter, an adapter that can't do access-point mode, or an interface
 NetworkManager isn't managing.
 
 **I joined the setup network but the page doesn't open by itself.** Open
-<http://192.168.42.1:8000> manually. Phones running iOS 14+, Android 11+,
+[the setup page at 192.168.42.1:8000](http://192.168.42.1:8000) manually. Phones running iOS 14+, Android 11+,
 recent macOS and Windows 11 are told where the page is as part of getting an
 address and will open it for you; older devices won't, because the port a
 captive portal is normally found on (80) is already serving the Anthias web

@@ -12,6 +12,20 @@
         <article class="docs-prose">
             {{ .Content }}
         </article>
+
+        {{- /* Cross-links to the rest of the docs, so every docs page is
+               reachable from every other one rather than only from the
+               /docs/ index. */ -}}
+        {{- with where .CurrentSection.Pages "Permalink" "ne" .Permalink }}
+        <nav aria-labelledby="more-docs" class="mt-16 pt-8 border-t border-zinc-200">
+            <h2 id="more-docs" class="text-base font-bold text-brand-near-black">More documentation</h2>
+            <ul class="list-none m-0 p-0 mt-4 grid sm:grid-cols-2 gap-2">
+                {{- range . }}
+                <li><a class="text-brand-purple text-sm no-underline hover:underline" href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+                {{- end }}
+            </ul>
+        </nav>
+        {{- end }}
     </div>
 </section>
 {{ end }}

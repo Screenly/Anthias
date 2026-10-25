@@ -2,8 +2,6 @@
 title: "Display Schedule"
 description: "Switch the screen off outside opening hours on a daily on/off schedule."
 slug: "display-schedule"
-aliases:
-  - "/docs/display-schedule/"
 ---
 
 A device can switch its screen off outside opening hours and back on in
