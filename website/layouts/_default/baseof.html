@@ -83,29 +83,48 @@
     <link rel="stylesheet" href="{{ $chroma.RelPermalink }}" integrity="{{ $chroma.Data.Integrity }}">
     {{- end }}
 
+    {{- /* Home page structured data.
+
+           Deliberately not a SoftwareApplication: Google's rich-result
+           rules make aggregateRating or review mandatory for that type,
+           and the project has no first-party ratings to cite, so it was
+           reported as invalid markup. SoftwareSourceCode describes the
+           project honestly and has no such requirement.
+
+           Built as a dict and serialized with jsonify so every value is
+           JSON-escaped in one place rather than hand-quoted. */ -}}
     {{ if .IsHome }}
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Anthias",
-      "description": {{ $defaultDescription | jsonify | safeJS }},
-      "url": "{{ site.BaseURL }}",
-      "applicationCategory": "MultimediaApplication",
-      "operatingSystem": "Linux",
-      "license": "https://github.com/Screenly/Anthias/blob/master/LICENSE",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "author": {
-        "@type": "Organization",
-        "name": "Screenly, Inc",
-        "url": "https://www.screenly.io"
-      }
-    }
-    </script>
+      {{- $orgID := "https://www.screenly.io/#organization" -}}
+      {{- $siteURL := site.BaseURL | absURL -}}
+      {{- $ld := dict
+            "@context" "https://schema.org"
+            "@graph" (slice
+              (dict
+                "@type" "Organization"
+                "@id" $orgID
+                "name" "Screenly, Inc"
+                "url" "https://www.screenly.io")
+              (dict
+                "@type" "WebSite"
+                "@id" (printf "%s#website" $siteURL)
+                "name" $brand
+                "url" $siteURL
+                "description" $defaultDescription
+                "inLanguage" (default "en" site.LanguageCode)
+                "publisher" (dict "@id" $orgID))
+              (dict
+                "@type" "SoftwareSourceCode"
+                "@id" (printf "%s#software" $siteURL)
+                "name" $brand
+                "description" $defaultDescription
+                "url" $siteURL
+                "codeRepository" "https://github.com/Screenly/Anthias"
+                "license" "https://github.com/Screenly/Anthias/blob/master/LICENSE"
+                "programmingLanguage" (slice "Python" "TypeScript" "C++")
+                "runtimePlatform" "Linux"
+                "author" (dict "@id" $orgID)
+                "isAccessibleForFree" true)) -}}
+    <script type="application/ld+json">{{ $ld | jsonify | safeJS }}</script>
     {{ end }}
 
     {{- /* FAQPage structured data, generated from data/faq.yaml */ -}}

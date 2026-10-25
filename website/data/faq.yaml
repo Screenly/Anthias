@@ -91,7 +91,7 @@
         # exit
         ```
 
-        Log out and back in so your shell picks up the new group, then continue with the [x86 install steps](/docs/x86-installation/).
+        Log out and back in so your shell picks up the new group, then continue with the [x86 install steps](/docs/pc/).
 
         If you instead reinstall Debian and leave the root password blank, the Debian installer wires your regular user up as a `sudo` user automatically and you can skip this step.
 

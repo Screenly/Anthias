@@ -2,8 +2,6 @@
 title: "Asset Scheduling"
 description: "Restrict assets to specific days of the week and time-of-day windows."
 slug: "asset-scheduling"
-aliases:
-  - "/docs/asset-scheduling/"
 ---
 
 Each asset can be restricted to a specific set of days of the week and a
