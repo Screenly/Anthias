@@ -201,6 +201,7 @@ def build_journalctl_argv(
         'journalctl',
         '--no-pager',
         '--output=json',
+        '--all',
         f'--lines={clamp_count(count)}',
     ]
     if unit:

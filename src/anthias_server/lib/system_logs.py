@@ -184,6 +184,13 @@ def _snapshot_via_supervisor(
                 f'HTTP {response.status_code} for journal-logs.'
             )
         payload, truncated = _read_capped(response)
+    except requests.RequestException as error:
+        logger.warning(
+            'Balena supervisor journal-logs stream failed: %s', error
+        )
+        raise JournalUnavailable(
+            'Could not read system logs from the Balena supervisor.'
+        ) from error
     finally:
         response.close()
 

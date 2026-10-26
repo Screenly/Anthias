@@ -24,6 +24,8 @@ What's pinned here:
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import time
 from typing import Any
 from unittest import mock
@@ -106,6 +108,7 @@ def test_journalctl_argv_omits_unset_filters() -> None:
         'journalctl',
         '--no-pager',
         '--output=json',
+        '--all',
         '--lines=5',
     ]
 
@@ -310,7 +313,7 @@ def _run_journal_command(
 
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(f'{HOST_AGENT}.subprocess.run', **run_kwargs),
+        mock.patch(f'{HOST_AGENT}._run_journalctl', **run_kwargs),
         mock.patch(
             f'{HOST_AGENT}.glob.glob',
             side_effect=lambda pattern: (
@@ -374,7 +377,7 @@ def test_host_agent_bounds_the_subprocess(fake_rdb: mock.MagicMock) -> None:
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
         mock.patch(
-            f'{HOST_AGENT}.subprocess.run', return_value=completed
+            f'{HOST_AGENT}._run_journalctl', return_value=completed
         ) as run,
         mock.patch(
             f'{HOST_AGENT}.glob.glob',
@@ -389,37 +392,91 @@ def test_host_agent_bounds_the_subprocess(fake_rdb: mock.MagicMock) -> None:
     ):
         execute_host_command(journal.build_request('req-3'))
 
-    assert run.call_args.kwargs['timeout'] == (
-        journal.SUBPROCESS_TIMEOUT_SECONDS
-    )
+    assert '--all' in run.call_args.args[0]
     assert '--lines=500' in run.call_args.args[0]
     assert not any('follow' in arg for arg in run.call_args.args[0])
 
 
-def test_journalctl_output_is_decoded_leniently(
-    fake_rdb: mock.MagicMock,
+def test_journalctl_output_is_decoded_leniently() -> None:
+    from anthias_host_agent.__main__ import _run_journalctl
+
+    completed = _run_journalctl(
+        [
+            sys.executable,
+            '-c',
+            "import os; os.write(1, b'caf\\xc3\\xa9\\xff'); os.write(2, b'\\xff')",
+        ]
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout == 'café\ufffd'
+    assert completed.stderr == '\ufffd'
+
+
+def test_journalctl_drains_both_pipes_and_keeps_a_bounded_tail() -> None:
+    from anthias_host_agent.__main__ import _run_journalctl
+
+    # Exceed both pipe capacity and the payload cap; both pipes must be
+    # drained even after their retained buffers fill, without deadlock.
+    completed = _run_journalctl(
+        [
+            sys.executable,
+            '-c',
+            (
+                f"import os; os.write(1, b'x' * {journal.MAX_PAYLOAD_BYTES * 2}); "
+                "os.write(2, b'e' * 100000); os.write(1, b'newest')"
+            ),
+        ]
+    )
+
+    assert completed.returncode == 0
+    assert len(completed.stdout) == journal.MAX_PAYLOAD_BYTES + 1
+    assert completed.stdout.endswith('newest')
+    assert completed.stderr == 'e' * 500
+
+
+@pytest.mark.parametrize('close_pipes', [False, True])
+def test_journalctl_times_out_and_reaps_the_child(
+    monkeypatch: pytest.MonkeyPatch,
+    close_pipes: bool,
 ) -> None:
-    # `text=True` alone decodes with the locale encoding and strict
-    # errors, and a systemd unit runs with no LANG -- so that resolves
-    # to ASCII and one non-ASCII byte raises UnicodeDecodeError.
-    # Nothing here catches it: it would escape process_message, end
-    # subscriber_loop, and take reboot/shutdown with it.
-    completed = mock.Mock(returncode=0, stdout='', stderr='')
-    from anthias_host_agent.__main__ import execute_host_command
+    from anthias_host_agent import __main__ as host_agent
 
-    with (
-        mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(
-            f'{HOST_AGENT}.subprocess.run', return_value=completed
-        ) as run,
-        mock.patch(f'{HOST_AGENT}.glob.glob', return_value=[]),
-        mock.patch(f'{HOST_AGENT}.os.access', return_value=True),
-    ):
-        execute_host_command(journal.build_request('req-decode'))
+    monkeypatch.setattr(host_agent, 'SUBPROCESS_TIMEOUT_SECONDS', 0.2)
+    children = []
+    popen = subprocess.Popen
 
-    assert run.call_args.kwargs['encoding'] == 'utf-8'
-    assert run.call_args.kwargs['errors'] == 'replace'
-    assert 'text' not in run.call_args.kwargs
+    def spawn(*args: Any, **kwargs: Any) -> Any:
+        child = popen(*args, **kwargs)
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(host_agent.subprocess, 'Popen', spawn)
+    script = 'import os, time; '
+    if close_pipes:
+        script += 'os.close(1); os.close(2); '
+    script += 'time.sleep(30)'
+    with pytest.raises(subprocess.TimeoutExpired):
+        host_agent._run_journalctl([sys.executable, '-c', script])
+
+    assert len(children) == 1
+    assert children[0].returncode is not None
+
+
+def test_journalctl_preserves_messages_over_4096_bytes() -> None:
+    from anthias_host_agent.__main__ import _run_journalctl
+
+    # Simulate journalctl's documented JSON behavior with and without
+    # --all, using the actual argv builder and subprocess reader.
+    script = (
+        'import json, sys; '
+        "print(json.dumps({'MESSAGE': "
+        "'long-message ' * 500 if '--all' in sys.argv else None}))"
+    )
+    argv = journal.build_journalctl_argv(count=1)
+    completed = _run_journalctl([sys.executable, '-c', script, *argv[1:]])
+    entries = journal.normalize_payload(completed.stdout)
+    assert entries[0]['message'] == 'long-message ' * 500
 
 
 def test_host_agent_caps_a_huge_payload(fake_rdb: mock.MagicMock) -> None:
@@ -452,7 +509,7 @@ def test_host_agent_clamps_a_count_from_the_wire(
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
         mock.patch(
-            f'{HOST_AGENT}.subprocess.run', return_value=completed
+            f'{HOST_AGENT}._run_journalctl', return_value=completed
         ) as run,
         mock.patch(
             f'{HOST_AGENT}.glob.glob',
@@ -484,7 +541,7 @@ def test_host_agent_rejects_a_hostile_filter_from_the_wire(
     )
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(f'{HOST_AGENT}.subprocess.run') as run,
+        mock.patch(f'{HOST_AGENT}._run_journalctl') as run,
     ):
         execute_host_command(hostile)
 
@@ -561,7 +618,7 @@ def test_a_hidden_system_journal_is_reported(
 
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(f'{HOST_AGENT}.subprocess.run', return_value=completed),
+        mock.patch(f'{HOST_AGENT}._run_journalctl', return_value=completed),
         mock.patch(f'{HOST_AGENT}.glob.glob', return_value=files),
         mock.patch(f'{HOST_AGENT}.os.access', return_value=readable),
         mock.patch(f'{HOST_AGENT}.os.path.getmtime', return_value=1.0),
@@ -581,7 +638,7 @@ def test_an_unreadable_system_journal_never_runs_journalctl(
 
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(f'{HOST_AGENT}.subprocess.run') as run,
+        mock.patch(f'{HOST_AGENT}._run_journalctl') as run,
         mock.patch(
             f'{HOST_AGENT}.glob.glob',
             return_value=['/var/log/journal/m/system.journal'],
@@ -644,7 +701,7 @@ def test_persistence_is_measured_from_which_location_is_live(
 
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(f'{HOST_AGENT}.subprocess.run', return_value=completed),
+        mock.patch(f'{HOST_AGENT}._run_journalctl', return_value=completed),
         mock.patch(
             f'{HOST_AGENT}.glob.glob',
             side_effect=lambda pattern: (
@@ -684,7 +741,7 @@ def test_host_agent_ignores_a_journal_request_with_no_id(
 
     with (
         mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
-        mock.patch(f'{HOST_AGENT}.subprocess.run') as run,
+        mock.patch(f'{HOST_AGENT}._run_journalctl') as run,
     ):
         execute_host_command(
             json.dumps({'cmd': journal.JOURNAL_LOGS_COMMAND, 'args': {}})
@@ -1039,6 +1096,38 @@ def test_balena_reports_a_supervisor_error(on_balena: Any) -> None:
         pytest.raises(system_logs.JournalUnavailable, match='503'),
     ):
         system_logs.get_journal_snapshot()
+    response.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    'failure',
+    [
+        requests.ConnectionError('private transport detail'),
+        requests.ReadTimeout('private transport detail'),
+        requests.exceptions.ChunkedEncodingError('private transport detail'),
+    ],
+)
+def test_balena_reports_a_body_read_failure(
+    on_balena: Any, failure: requests.RequestException
+) -> None:
+    response = _supervisor_response()
+
+    def chunks() -> Any:
+        yield _payload(_record()).encode()
+        raise failure
+
+    response.iter_content.return_value = chunks()
+    with (
+        mock.patch(
+            f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
+            return_value=response,
+        ),
+        pytest.raises(system_logs.JournalUnavailable) as raised,
+    ):
+        system_logs.get_journal_snapshot()
+
+    assert 'private transport detail' not in raised.value.user_message
+    assert raised.value.__cause__ is failure
     response.close.assert_called_once()
 
 

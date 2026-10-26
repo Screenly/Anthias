@@ -8,7 +8,9 @@ import ipaddress
 import json
 import logging
 import os
+import selectors
 import subprocess
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -272,6 +274,59 @@ def _reply(
         )
 
 
+def _run_journalctl(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    """Read a snapshot with bounded buffers and one wall-clock deadline.
+
+    --all preserves long MESSAGE fields, so capturing all output before
+    applying the byte cap could exhaust memory. Drain both pipes while
+    retaining only the newest stdout bytes and the first 500 stderr
+    bytes. One extra stdout byte lets the caller detect truncation.
+    """
+    deadline = time.monotonic() + SUBPROCESS_TIMEOUT_SECONDS
+    stdout = bytearray()
+    stderr = bytearray()
+    with subprocess.Popen(
+        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    ) as process:
+        try:
+            with selectors.DefaultSelector() as selector:
+                assert process.stdout is not None
+                assert process.stderr is not None
+                selector.register(process.stdout, selectors.EVENT_READ, True)
+                selector.register(process.stderr, selectors.EVENT_READ, False)
+                while selector.get_map():
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(
+                            argv, SUBPROCESS_TIMEOUT_SECONDS
+                        )
+                    for key, _ in selector.select(remaining):
+                        chunk = os.read(key.fd, 64 * 1024)
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                        elif key.data:
+                            stdout.extend(chunk)
+                            overflow = len(stdout) - (MAX_PAYLOAD_BYTES + 1)
+                            if overflow > 0:
+                                del stdout[:overflow]
+                        else:
+                            stderr.extend(chunk[: max(0, 500 - len(stderr))])
+            returncode = process.wait(
+                timeout=max(0, deadline - time.monotonic())
+            )
+        except BaseException:
+            # Reap the exact child on timeouts and read failures as well.
+            process.kill()
+            process.wait()
+            raise
+    return subprocess.CompletedProcess(
+        argv,
+        returncode,
+        stdout.decode('utf-8', 'replace'),
+        stderr.decode('utf-8', 'replace'),
+    )
+
+
 def collect_journal_logs(request_id: str, args: dict[str, Any]) -> None:
     """Run a bounded ``journalctl`` snapshot and reply over Redis.
 
@@ -334,22 +389,7 @@ def collect_journal_logs(request_id: str, args: dict[str, Any]) -> None:
 
     logger.info('Collecting journal snapshot %s: %s', request_id, argv)
     try:
-        completed = subprocess.run(
-            argv,
-            capture_output=True,
-            check=False,
-            # Explicit encoding, and replace rather than raise.
-            # ``text=True`` alone decodes with the locale encoding and
-            # strict errors — and a systemd unit runs with no LANG, so
-            # that resolves to ASCII. One non-ASCII byte would then
-            # raise UnicodeDecodeError, which nothing here catches: it
-            # would escape process_message, end subscriber_loop, and
-            # take reboot/shutdown handling down with it, which is the
-            # exact failure this feature is built to avoid.
-            encoding='utf-8',
-            errors='replace',
-            timeout=SUBPROCESS_TIMEOUT_SECONDS,
-        )
+        completed = _run_journalctl(argv)
     except subprocess.TimeoutExpired:
         logger.warning(
             'journalctl timed out after %ss for request %s',

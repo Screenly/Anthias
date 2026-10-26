@@ -13,6 +13,7 @@ from typing import Any
 from unittest import mock
 
 import pytest
+import requests
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -177,6 +178,29 @@ def test_backend_failure_is_a_502(
 
     assert response.status_code == status.HTTP_502_BAD_GATEWAY
     assert 'Timed out' in response.data['message']
+
+
+@pytest.mark.django_db
+def test_supervisor_body_timeout_is_a_502(
+    api_client: APIClient, logs_url: str
+) -> None:
+    upstream = mock.Mock(ok=True)
+    upstream.iter_content.side_effect = requests.ConnectionError(
+        'private transport detail'
+    )
+    with (
+        mock.patch.object(system_logs, 'is_balena_app', return_value=True),
+        mock.patch.object(
+            system_logs,
+            'get_balena_supervisor_api_response',
+            return_value=upstream,
+        ),
+    ):
+        response = api_client.get(logs_url)
+
+    assert response.status_code == status.HTTP_502_BAD_GATEWAY
+    assert 'private transport detail' not in response.data['message']
+    upstream.close.assert_called_once()
 
 
 @pytest.mark.django_db
