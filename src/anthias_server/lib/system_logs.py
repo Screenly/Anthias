@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -41,6 +42,11 @@ _SUPERVISOR_TIMEOUT = (5, 30)
 
 SOURCE_BALENA = 'balena'
 SOURCE_HOST_AGENT = 'host_agent'
+
+#: A container ID as Docker and balena report it — the 64-hex form or
+#: its 12-hex short form. Used to tell an ID the caller already has
+#: from a service name that still needs resolving.
+_CONTAINER_ID_RE = re.compile(r'^[0-9a-f]{12}(?:[0-9a-f]{52})?$')
 
 
 class JournalUnavailable(Exception):
@@ -131,7 +137,9 @@ def _snapshot_via_supervisor(
 
     ``format: 'json'`` (supervisor >= 10.3) is what makes the payload
     identical in shape to the bare-metal ``journalctl -o json``
-    output, so one normaliser serves both. ``since`` / ``until`` need
+    output, so one normaliser serves both. A ``container`` filter is
+    resolved from a name to an ID first — see
+    ``_resolve_balena_container_id``. ``since`` / ``until`` need
     supervisor >= 14.7; an older supervisor ignores them rather than
     erroring, which would silently widen the window — so the API
     reports the backend that answered and callers that care can check
@@ -146,7 +154,7 @@ def _snapshot_via_supervisor(
     if unit:
         body['unit'] = unit
     if container:
-        body['containerId'] = container
+        body['containerId'] = _resolve_balena_container_id(container)
     if since:
         body['since'] = since
     if until:
@@ -190,6 +198,71 @@ def _snapshot_via_supervisor(
     )
 
 
+def _resolve_balena_container_id(container: str) -> str:
+    """Translate a container name into the ID the supervisor expects.
+
+    The ``container`` parameter means the same thing to a caller on
+    either platform — the name of a service — but the two backends
+    want different things. Bare metal matches journald's
+    ``CONTAINER_NAME=`` field directly; the supervisor's
+    ``containerId`` is matched against ``CONTAINER_ID_FULL`` and has
+    no name form at all.
+
+    Passing the name straight through would therefore match nothing
+    and return an empty 200 — the same request answering on bare metal
+    and silently blank on Balena, which is precisely the failure mode
+    this feature exists to stamp out. So resolve it, and raise rather
+    than return nothing when the name is not a service on this device.
+
+    A value that already looks like a container ID is passed through
+    untouched, so a caller holding an ID is not forced through a
+    pointless lookup.
+
+    ``/v2/containerId`` predates ``/v2/journal-logs`` in the
+    supervisor, so any supervisor new enough for this endpoint at all
+    can answer it.
+    """
+    if _CONTAINER_ID_RE.match(container):
+        return container
+
+    try:
+        response = get_balena_supervisor_api_response(
+            method='get',
+            action='containerId',
+            version='v2',
+            params={'serviceName': container},
+            timeout=_SUPERVISOR_TIMEOUT,
+        )
+    except requests.RequestException as error:
+        # Transport detail goes to the log, never into the response.
+        logger.warning(
+            'Balena supervisor containerId lookup failed: %s', error
+        )
+        raise JournalUnavailable(
+            'Could not reach the Balena supervisor.'
+        ) from error
+
+    if not response.ok:
+        raise JournalUnavailable(
+            f'No service named {container!r} on this device '
+            f'(supervisor returned HTTP {response.status_code}).'
+        )
+
+    try:
+        container_id = response.json()['containerId']
+    except (ValueError, KeyError, TypeError) as error:
+        raise JournalUnavailable(
+            'The Balena supervisor did not return a container ID for '
+            f'{container!r}.'
+        ) from error
+
+    if not container_id:
+        raise JournalUnavailable(
+            f'No running container for service {container!r}.'
+        )
+    return str(container_id)
+
+
 def _read_capped(response: requests.Response) -> tuple[str, bool]:
     """Drain a streamed supervisor response up to the byte cap.
 
@@ -198,19 +271,30 @@ def _read_capped(response: requests.Response) -> tuple[str, bool]:
     bytes — a handful of multi-megabyte messages would otherwise be
     read into memory in full before we got to cap them.
     """
-    chunks: list[bytes] = []
+    buffer = bytearray()
     total = 0
     truncated = False
     for chunk in response.iter_content(chunk_size=64 * 1024):
         if not chunk:
             continue
-        chunks.append(chunk)
         total += len(chunk)
-        if total >= journal.MAX_PAYLOAD_BYTES:
+        buffer += chunk
+        if len(buffer) > journal.MAX_PAYLOAD_BYTES:
+            # Drop from the FRONT, keeping the newest entries, because
+            # journalctl emits oldest-first. Taking the first 4 MB
+            # instead would silently throw away exactly the records an
+            # operator opened the log to see, and would disagree with
+            # the host-agent backend, which keeps its tail.
+            del buffer[: len(buffer) - journal.MAX_PAYLOAD_BYTES]
+            truncated = True
+        if total >= journal.MAX_STREAM_BYTES:
+            # Everything else here is bounded; this is too. ``count``
+            # caps lines, not bytes, so a supervisor streaming
+            # pathological messages could otherwise run until the
+            # socket timeout.
             truncated = True
             break
-    raw = b''.join(chunks)[: journal.MAX_PAYLOAD_BYTES]
-    return raw.decode('utf-8', 'replace'), truncated
+    return bytes(buffer).decode('utf-8', 'replace'), truncated
 
 
 def _snapshot_via_host_agent(
@@ -238,7 +322,7 @@ def _snapshot_via_host_agent(
     r = connect_to_redis()
 
     try:
-        r.publish(
+        subscribers = r.publish(
             'hostcmd',
             journal.build_request(
                 request_id,
@@ -249,6 +333,19 @@ def _snapshot_via_host_agent(
                 until=until,
             ),
         )
+        if not subscribers:
+            # PUBLISH reports how many clients received the message.
+            # Zero means nothing is listening on ``hostcmd`` — the
+            # host agent is stopped, crashed, or never installed — and
+            # no reply is ever coming. Without this check every
+            # request holds a worker thread for the full BLPOP
+            # timeout, so a log view that retries can stall the whole
+            # UI on a device whose agent is simply down.
+            raise JournalUnavailable(
+                'The anthias-host-agent service is not running, so the '
+                'system journal cannot be read. Start it with '
+                '`systemctl start anthias-host-agent`.'
+            )
         reply = r.blpop([reply_key], timeout=journal.REPLY_TIMEOUT_SECONDS)
     except redis.RedisError as error:
         logger.warning(

@@ -630,8 +630,9 @@ class SystemLogsQuerySerializerV2(Serializer[Any]):
         min_value=1,
         max_value=journal.MAX_COUNT,
         help_text=(
-            'Number of journal lines to return (most recent first on '
-            f'the wire). Capped at {journal.MAX_COUNT}.'
+            'Number of the most recent journal lines to return. '
+            'Entries come back in journald order, oldest first. '
+            f'Capped at {journal.MAX_COUNT}.'
         ),
     )
     unit = CharField(
@@ -643,9 +644,10 @@ class SystemLogsQuerySerializerV2(Serializer[Any]):
         required=False,
         allow_blank=True,
         help_text=(
-            "Restrict to one container. Matches journald's "
-            "CONTAINER_NAME on bare metal and the supervisor's "
-            'containerId on Balena.'
+            'Restrict to one container by name. Matched against '
+            "journald's CONTAINER_NAME on bare metal; on Balena the "
+            'name is resolved to a container ID first. A container ID '
+            'is also accepted.'
         ),
     )
     since = CharField(

@@ -338,7 +338,16 @@ def collect_journal_logs(request_id: str, args: dict[str, Any]) -> None:
             argv,
             capture_output=True,
             check=False,
-            text=True,
+            # Explicit encoding, and replace rather than raise.
+            # ``text=True`` alone decodes with the locale encoding and
+            # strict errors — and a systemd unit runs with no LANG, so
+            # that resolves to ASCII. One non-ASCII byte would then
+            # raise UnicodeDecodeError, which nothing here catches: it
+            # would escape process_message, end subscriber_loop, and
+            # take reboot/shutdown handling down with it, which is the
+            # exact failure this feature is built to avoid.
+            encoding='utf-8',
+            errors='replace',
             timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:

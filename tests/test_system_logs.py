@@ -24,6 +24,7 @@ What's pinned here:
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from unittest import mock
 
@@ -211,6 +212,34 @@ def test_redaction_is_applied_by_the_normaliser() -> None:
     assert 'letmein' not in entries[0]['message']
 
 
+@pytest.mark.parametrize(
+    'line',
+    [
+        # A long run of word characters with no separator: the shape
+        # that made the key=value pattern backtrack.
+        'a' * 49152,
+        '_' * 49152,
+        # Runs that repeatedly ALMOST match a secret keyword.
+        'psk_' * 12288,
+        'token' * 9830,
+        'a=b ' * 12288,
+    ],
+)
+def test_redaction_is_linear_not_quadratic(line: str) -> None:
+    # journald's default LineMax is 48 KB, so a single line this size
+    # is something a host can really emit. Before the lookbehind was
+    # added the key=value pattern was quadratic -- measured at 6.3s
+    # for 16 KB, extrapolating to roughly a minute for 48 KB, with a
+    # request worker pinned for the duration.
+    #
+    # The bound is deliberately loose (a slow shared CI runner should
+    # not flake this); the regression it catches is three orders of
+    # magnitude away from it.
+    started = time.perf_counter()
+    journal.redact(line)
+    assert time.perf_counter() - started < 1.0
+
+
 # ---------------------------------------------------------------------
 # Host agent (bare metal)
 # ---------------------------------------------------------------------
@@ -365,6 +394,32 @@ def test_host_agent_bounds_the_subprocess(fake_rdb: mock.MagicMock) -> None:
     )
     assert '--lines=500' in run.call_args.args[0]
     assert not any('follow' in arg for arg in run.call_args.args[0])
+
+
+def test_journalctl_output_is_decoded_leniently(
+    fake_rdb: mock.MagicMock,
+) -> None:
+    # `text=True` alone decodes with the locale encoding and strict
+    # errors, and a systemd unit runs with no LANG -- so that resolves
+    # to ASCII and one non-ASCII byte raises UnicodeDecodeError.
+    # Nothing here catches it: it would escape process_message, end
+    # subscriber_loop, and take reboot/shutdown with it.
+    completed = mock.Mock(returncode=0, stdout='', stderr='')
+    from anthias_host_agent.__main__ import execute_host_command
+
+    with (
+        mock.patch(f'{HOST_AGENT}.redis.Redis', return_value=fake_rdb),
+        mock.patch(
+            f'{HOST_AGENT}.subprocess.run', return_value=completed
+        ) as run,
+        mock.patch(f'{HOST_AGENT}.glob.glob', return_value=[]),
+        mock.patch(f'{HOST_AGENT}.os.access', return_value=True),
+    ):
+        execute_host_command(journal.build_request('req-decode'))
+
+    assert run.call_args.kwargs['encoding'] == 'utf-8'
+    assert run.call_args.kwargs['errors'] == 'replace'
+    assert 'text' not in run.call_args.kwargs
 
 
 def test_host_agent_caps_a_huge_payload(fake_rdb: mock.MagicMock) -> None:
@@ -671,6 +726,7 @@ def on_balena() -> Any:
 
 def test_bare_metal_round_trip(on_bare_metal: Any) -> None:
     fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 1
     reply = json.dumps(
         {
             'ok': True,
@@ -707,6 +763,7 @@ def test_bare_metal_blocking_pop_is_bounded(on_bare_metal: Any) -> None:
     # A dead or too-old host agent must produce a clean error, not a
     # hung request worker.
     fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 1
     fake_redis.blpop.return_value = None
 
     with (
@@ -720,8 +777,28 @@ def test_bare_metal_blocking_pop_is_bounded(on_bare_metal: Any) -> None:
     )
 
 
+def test_a_stopped_host_agent_fails_immediately(
+    on_bare_metal: Any,
+) -> None:
+    # PUBLISH reports its subscriber count. Zero means no reply is
+    # ever coming, so blocking for the full timeout would just pin a
+    # worker thread -- and a log view that retries would stall the UI
+    # on a device whose agent is simply down.
+    fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 0
+
+    with (
+        mock.patch(f'{SYSTEM_LOGS}.connect_to_redis', return_value=fake_redis),
+        pytest.raises(system_logs.JournalUnavailable, match='not running'),
+    ):
+        system_logs.get_journal_snapshot()
+
+    fake_redis.blpop.assert_not_called()
+
+
 def test_bare_metal_surfaces_the_agent_error(on_bare_metal: Any) -> None:
     fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 1
     fake_redis.blpop.return_value = (
         'k',
         json.dumps({'ok': False, 'error': 'No journal files were found.'}),
@@ -750,6 +827,7 @@ def test_bare_metal_handles_a_redis_outage(on_bare_metal: Any) -> None:
 
 def test_bare_metal_handles_an_unreadable_reply(on_bare_metal: Any) -> None:
     fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 1
     fake_redis.blpop.return_value = ('k', 'not json')
 
     with (
@@ -769,6 +847,22 @@ def _supervisor_response(
     return response
 
 
+def _container_id_response(
+    container_id: str | None = 'a' * 64,
+    *,
+    ok: bool = True,
+    status_code: int = 200,
+) -> mock.Mock:
+    response = mock.Mock()
+    response.ok = ok
+    response.status_code = status_code
+    response.json.return_value = {
+        'status': 'success',
+        'containerId': container_id,
+    }
+    return response
+
+
 def test_balena_round_trip(on_balena: Any) -> None:
     response = _supervisor_response(body=_payload(_record()))
 
@@ -777,7 +871,7 @@ def test_balena_round_trip(on_balena: Any) -> None:
         return_value=response,
     ) as supervisor:
         snapshot = system_logs.get_journal_snapshot(
-            count=50, unit='docker.service', container='abc', since='-1h'
+            count=50, unit='docker.service', since='-1h'
         )
 
     assert snapshot.source == system_logs.SOURCE_BALENA
@@ -798,10 +892,69 @@ def test_balena_round_trip(on_balena: Any) -> None:
         'format': 'json',
         'count': 50,
         'unit': 'docker.service',
-        'containerId': 'abc',
         'since': '-1h',
     }
     response.close.assert_called_once()
+
+
+def test_balena_resolves_a_container_name_to_an_id(on_balena: Any) -> None:
+    # `container` means a NAME to the caller on both platforms, but
+    # the supervisor only matches CONTAINER_ID_FULL. Forwarding the
+    # name verbatim matches nothing and returns an empty 200 — the
+    # same request answering on bare metal and silently blank here.
+    calls = [
+        _container_id_response('f' * 64),
+        _supervisor_response(body=_payload(_record())),
+    ]
+
+    with mock.patch(
+        f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
+        side_effect=calls,
+    ) as supervisor:
+        system_logs.get_journal_snapshot(count=10, container='anthias-viewer')
+
+    lookup, logs = supervisor.call_args_list
+    assert lookup.kwargs['action'] == 'containerId'
+    assert lookup.kwargs['params'] == {'serviceName': 'anthias-viewer'}
+    assert logs.kwargs['json']['containerId'] == 'f' * 64
+
+
+@pytest.mark.parametrize('container', ['a' * 64, 'b' * 12])
+def test_balena_passes_a_container_id_straight_through(
+    on_balena: Any, container: str
+) -> None:
+    # A caller already holding an ID shouldn't be put through a
+    # pointless lookup round trip.
+    with mock.patch(
+        f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
+        return_value=_supervisor_response(body=''),
+    ) as supervisor:
+        system_logs.get_journal_snapshot(count=10, container=container)
+
+    assert supervisor.call_count == 1
+    assert supervisor.call_args.kwargs['json']['containerId'] == container
+
+
+@pytest.mark.parametrize(
+    'lookup',
+    [
+        _container_id_response(ok=False, status_code=404),
+        _container_id_response(None),
+    ],
+)
+def test_balena_unknown_service_fails_loudly(
+    on_balena: Any, lookup: mock.Mock
+) -> None:
+    # Not an empty 200. An unmatched filter that looks like a quiet
+    # device is the exact failure this feature exists to stamp out.
+    with (
+        mock.patch(
+            f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
+            return_value=lookup,
+        ),
+        pytest.raises(system_logs.JournalUnavailable),
+    ):
+        system_logs.get_journal_snapshot(container='no-such-service')
 
 
 def test_balena_never_asks_for_follow(on_balena: Any) -> None:
@@ -823,6 +976,49 @@ def test_balena_caps_the_streamed_payload(on_balena: Any) -> None:
     # More chunks than the cap allows, so the reader must stop early
     # rather than buffering everything the supervisor offers.
     response.iter_content.return_value = iter([chunk] * 200)
+
+    with mock.patch(
+        f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
+        return_value=response,
+    ):
+        snapshot = system_logs.get_journal_snapshot()
+
+    assert snapshot.truncated is True
+
+
+def test_balena_keeps_the_NEWEST_entries_when_capping(
+    on_balena: Any,
+) -> None:
+    # journalctl emits oldest-first, so an over-cap payload has to be
+    # trimmed from the FRONT. Keeping the first 4 MB would throw away
+    # exactly the records an operator opened the log to read, and
+    # would disagree with the host-agent backend.
+    oldest = _payload(_record(MESSAGE='x' * 2_000_000))
+    newest = _payload(_record(MESSAGE='the-newest-entry'))
+    response = mock.Mock()
+    response.ok = True
+    response.iter_content.return_value = iter(
+        [oldest.encode(), oldest.encode(), oldest.encode(), newest.encode()]
+    )
+
+    with mock.patch(
+        f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
+        return_value=response,
+    ):
+        snapshot = system_logs.get_journal_snapshot()
+
+    assert snapshot.truncated is True
+    assert snapshot.entries[-1]['message'] == 'the-newest-entry'
+
+
+def test_balena_bounds_total_bytes_read(on_balena: Any) -> None:
+    # `count` caps lines, not bytes. Without a stream ceiling a
+    # supervisor emitting pathological messages runs until the socket
+    # timeout.
+    chunk = b'x' * (1024 * 1024)
+    response = mock.Mock()
+    response.ok = True
+    response.iter_content.return_value = iter([chunk] * 10_000)
 
     with mock.patch(
         f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',

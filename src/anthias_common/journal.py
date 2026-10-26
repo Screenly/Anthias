@@ -43,6 +43,13 @@ MAX_COUNT = 2000
 #: one pathological line from putting an unbounded blob into Redis.
 MAX_PAYLOAD_BYTES = 4 * 1024 * 1024
 
+#: Absolute ceiling on bytes read off the supervisor stream, as
+#: opposed to bytes kept. ``count`` bounds lines, not bytes, so a
+#: stream of pathological messages has to be bounded separately or it
+#: runs until the socket timeout. Generous enough that a realistic
+#: 2000-line read is never cut short.
+MAX_STREAM_BYTES = 16 * MAX_PAYLOAD_BYTES
+
 #: How long the host agent's reply stays in Redis. Short on purpose —
 #: the only reader is the request that asked for it, and journal
 #: contents shouldn't linger in the broker.
@@ -265,13 +272,24 @@ def build_request(
 # conservative — it blanks the *value*, keeps the key visible, so a
 # redacted line still tells you what happened.
 _REDACTION_PATTERNS = (
-    # key=value / key: value, with or without quotes. The leading
-    # ``[\w.-]*`` is load-bearing: the real-world offenders are
-    # prefixed (``wpa_passphrase=``, ``NM_PSK=``), and ``\b`` would
-    # not fire between ``_`` and ``p``.
+    # key=value / key: value, with or without quotes.
+    #
+    # The leading ``[\w.-]*`` is load-bearing: the real-world offenders
+    # are prefixed (``wpa_passphrase=``, ``NM_PSK=``) and a plain
+    # ``\b`` would not fire between ``_`` and ``p``.
+    #
+    # The ``(?<![\w.-])`` in front of it is what keeps that affordable.
+    # Without it this pattern is quadratic: inside a long run of word
+    # characters with no ``=``, every offset is a candidate start and
+    # every prefix length is retried against the alternation. Measured
+    # in-repo at 0.4s for 4 KB, 6.3s for 16 KB — and journald's default
+    # LineMax is 48 KB, so ONE pathological line would pin a request
+    # worker for the better part of a minute. The lookbehind means only
+    # a position that actually begins a token can start a match, which
+    # takes it back to linear.
     re.compile(
-        r'(?i)([\w.\-]*(?:pass(?:word|phrase)?|psk|secret|api[_-]?key|'
-        r'token|auth[_-]?key|private[_-]?key))(\s*[=:]\s*)'
+        r'(?i)(?<![\w.\-])([\w.\-]*(?:pass(?:word|phrase)?|psk|secret|'
+        r'api[_-]?key|token|auth[_-]?key|private[_-]?key))(\s*[=:]\s*)'
         r'("[^"]*"|\'[^\']*\'|\S+)'
     ),
     # Authorization: Bearer <token> / Basic <blob>.
