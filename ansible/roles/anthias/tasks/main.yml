@@ -73,15 +73,35 @@
 # outright. Without this the log endpoint can only ever show the
 # current boot, and the reboot an operator is trying to explain is
 # precisely what erased the evidence.
+#
+# `mkdir -p` then `systemd-tmpfiles --create` is the recipe documented
+# in journald.conf(5); both halves are needed. tmpfiles only *adjusts*
+# this path (`z` lines in /usr/lib/tmpfiles.d/systemd.conf), it does
+# not create it -- and creating it ourselves is not enough either,
+# because the `a+` line on the same path is what grants the `adm`
+# group its read ACL. Skip tmpfiles and adm-group journal access
+# silently does not work on a host where we made the directory.
 - name: Create the persistent journal directory
   ansible.builtin.file:
     path: /var/log/journal
     state: directory
     owner: root
     group: systemd-journal
-    # setgid so journald's own files inherit the group, matching what
-    # `systemd-tmpfiles --create` would produce.
+    # NOSONAR (S2612): not ours to tighten. systemd pins this exact
+    # mode -- `z /var/log/journal 2755 root systemd-journal` in
+    # /usr/lib/tmpfiles.d/systemd.conf -- so a narrower value is reset
+    # by the very next tmpfiles run, including the one below. setgid
+    # is what makes journald's files inherit the group.
     mode: "2755"
+
+- name: Apply systemd's own journal directory policy
+  # Normalises mode/ownership and installs the group ACLs journald
+  # expects. Not conditional on the task above reporting changed: a
+  # pre-existing directory created by something other than tmpfiles
+  # needs the same treatment, and the command is idempotent.
+  ansible.builtin.command:
+    cmd: systemd-tmpfiles --create --prefix=/var/log/journal
+  changed_when: false
 
 # journald.conf.d is not present on every image, and template: does
 # not create parent directories.
@@ -91,6 +111,9 @@
     state: directory
     owner: root
     group: root
+    # NOSONAR (S2612): matches /etc/systemd's own drop-in directories,
+    # which ship 0755 root:root. The directory holds no secrets and
+    # has to stay traversable for `systemd-analyze cat-config`.
     mode: "0755"
 
 - name: Configure journald persistence and size caps
@@ -102,6 +125,9 @@
     # with Storage=volatile; an unprefixed name only beats it by
     # alphabetical luck.
     dest: /etc/systemd/journald.conf.d/99-anthias.conf
+    # NOSONAR (S2612): a non-secret systemd config file. 0644 root:root
+    # is what every other file in /etc/systemd ships as, and what an
+    # operator needs to read it back.
     mode: "0644"
     owner: root
     group: root
