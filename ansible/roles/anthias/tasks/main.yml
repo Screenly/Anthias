@@ -87,12 +87,12 @@
     state: directory
     owner: root
     group: systemd-journal
-    # NOSONAR (S2612): not ours to tighten. systemd pins this exact
-    # mode -- `z /var/log/journal 2755 root systemd-journal` in
-    # /usr/lib/tmpfiles.d/systemd.conf -- so a narrower value is reset
-    # by the very next tmpfiles run, including the one below. setgid
-    # is what makes journald's files inherit the group.
-    mode: "2755"
+    # Not ours to tighten: systemd pins this exact mode with
+    # `z /var/log/journal 2755 root systemd-journal` in
+    # /usr/lib/tmpfiles.d/systemd.conf, so a narrower value is reset
+    # by the very next tmpfiles run -- including the one below. The
+    # setgid bit is what makes journald's files inherit the group.
+    mode: "2755"  # NOSONAR (S2612)
 
 - name: Apply systemd's own journal directory policy
   # Normalises mode/ownership and installs the group ACLs journald
@@ -111,10 +111,10 @@
     state: directory
     owner: root
     group: root
-    # NOSONAR (S2612): matches /etc/systemd's own drop-in directories,
-    # which ship 0755 root:root. The directory holds no secrets and
-    # has to stay traversable for `systemd-analyze cat-config`.
-    mode: "0755"
+    # Matches /etc/systemd's own drop-in directories, which ship
+    # 0755 root:root. Holds no secrets, and has to stay traversable
+    # for a non-root `systemd-analyze cat-config`.
+    mode: "0755"  # NOSONAR (S2612)
 
 - name: Configure journald persistence and size caps
   ansible.builtin.template:
@@ -125,10 +125,10 @@
     # with Storage=volatile; an unprefixed name only beats it by
     # alphabetical luck.
     dest: /etc/systemd/journald.conf.d/99-anthias.conf
-    # NOSONAR (S2612): a non-secret systemd config file. 0644 root:root
-    # is what every other file in /etc/systemd ships as, and what an
-    # operator needs to read it back.
-    mode: "0644"
+    # A non-secret systemd config file. 0644 root:root is what every
+    # other file in /etc/systemd ships as, and what an operator needs
+    # to read it back.
+    mode: "0644"  # NOSONAR (S2612)
     owner: root
     group: root
   notify: Restart systemd-journald
