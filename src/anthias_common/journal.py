@@ -273,7 +273,8 @@ def build_request(
 # conservative — it blanks the *value*, keeps the key visible, so a
 # redacted line still tells you what happened.
 _REDACTION_PATTERNS = (
-    # key=value / key: value, with or without quotes.
+    # key=value / key: value, with optional quotes on keys and values.
+    # Escapes inside a quoted value must not end the match early.
     #
     # The leading ``[\w.-]*`` is load-bearing: the real-world offenders
     # are prefixed (``wpa_passphrase=``, ``NM_PSK=``) and a plain
@@ -289,12 +290,15 @@ _REDACTION_PATTERNS = (
     # a position that actually begins a token can start a match, which
     # takes it back to linear.
     re.compile(
-        r'(?i)(?<![\w.\-])([\w.\-]*(?:pass(?:word|phrase)?|psk|secret|'
-        r'api[_-]?key|token|auth[_-]?key|private[_-]?key))(\s*[=:]\s*)'
-        r'("[^"]*"|\'[^\']*\'|\S+)'
+        r'(?i)(?<![\w.\-])(["\']?[\w.\-]*(?:pass(?:word|phrase)?|psk|secret|'
+        r'api[_-]?key|token|auth[_-]?key|private[_-]?key)["\']?)(\s*[=:]\s*)'
+        r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\S+)'
     ),
     # Authorization: Bearer <token> / Basic <blob>.
-    re.compile(r'(?i)\b(authorization)(\s*:\s*)(\S+\s+\S+|\S+)'),
+    re.compile(
+        r'(?i)(?<![\w.\-])(["\']?authorization["\']?)(\s*:\s*)'
+        r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\S+\s+\S+|\S+)'
+    ),
 )
 
 REDACTED = '[redacted]'
@@ -302,10 +306,16 @@ REDACTED = '[redacted]'
 
 def redact(message: str) -> str:
     """Blank secret-looking values in one journal message."""
+
+    def replacement(match: re.Match[str]) -> str:
+        value = match.group(3)
+        redacted = REDACTED
+        if value[0] in ('"', "'") and value[-1] == value[0]:
+            redacted = f'{value[0]}{REDACTED}{value[0]}'
+        return f'{match.group(1)}{match.group(2)}{redacted}'
+
     for pattern in _REDACTION_PATTERNS:
-        message = pattern.sub(
-            lambda m: f'{m.group(1)}{m.group(2)}{REDACTED}', message
-        )
+        message = pattern.sub(replacement, message)
     return message
 
 
