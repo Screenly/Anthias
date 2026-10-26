@@ -961,8 +961,8 @@ def test_balena_round_trip(on_balena: Any) -> None:
 
 def test_balena_resolves_a_container_name_to_an_id(on_balena: Any) -> None:
     # `container` means a NAME to the caller on both platforms, but
-    # the supervisor only matches CONTAINER_ID_FULL. Forwarding the
-    # name verbatim matches nothing and returns an empty 200 — the
+    # the supervisor matches SYSLOG_IDENTIFIER (the short ID by default).
+    # Forwarding the name or full ID returns an empty 200 — the
     # same request answering on bare metal and silently blank here.
     calls = [
         _container_id_response('f' * 64),
@@ -978,11 +978,11 @@ def test_balena_resolves_a_container_name_to_an_id(on_balena: Any) -> None:
     lookup, logs = supervisor.call_args_list
     assert lookup.kwargs['action'] == 'containerId'
     assert lookup.kwargs['params'] == {'serviceName': 'anthias-viewer'}
-    assert logs.kwargs['json']['containerId'] == 'f' * 64
+    assert logs.kwargs['json']['containerId'] == 'f' * 12
 
 
 @pytest.mark.parametrize('container', ['a' * 64, 'b' * 12])
-def test_balena_passes_a_container_id_straight_through(
+def test_balena_uses_the_short_journal_tag_without_looking_up_an_id(
     on_balena: Any, container: str
 ) -> None:
     # A caller already holding an ID shouldn't be put through a
@@ -994,7 +994,7 @@ def test_balena_passes_a_container_id_straight_through(
         system_logs.get_journal_snapshot(count=10, container=container)
 
     assert supervisor.call_count == 1
-    assert supervisor.call_args.kwargs['json']['containerId'] == container
+    assert supervisor.call_args.kwargs['json']['containerId'] == container[:12]
 
 
 @pytest.mark.parametrize(

@@ -212,8 +212,9 @@ def _resolve_balena_container_id(container: str) -> str:
     either platform — the name of a service — but the two backends
     want different things. Bare metal matches journald's
     ``CONTAINER_NAME=`` field directly; the supervisor's
-    ``containerId`` is matched against ``CONTAINER_ID_FULL`` and has
-    no name form at all.
+    ``containerId`` becomes ``journalctl -t`` and matches
+    ``SYSLOG_IDENTIFIER``. With the default journald log tag this is
+    the first 12 characters of the container ID, not the full ID.
 
     Passing the name straight through would therefore match nothing
     and return an empty 200 — the same request answering on bare metal
@@ -221,16 +222,15 @@ def _resolve_balena_container_id(container: str) -> str:
     this feature exists to stamp out. So resolve it, and raise rather
     than return nothing when the name is not a service on this device.
 
-    A value that already looks like a container ID is passed through
-    untouched, so a caller holding an ID is not forced through a
-    pointless lookup.
+    A value that already looks like a container ID needs no lookup,
+    but a full ID still has to be shortened to the journal tag.
 
     ``/v2/containerId`` predates ``/v2/journal-logs`` in the
     supervisor, so any supervisor new enough for this endpoint at all
     can answer it.
     """
     if _CONTAINER_ID_RE.match(container):
-        return container
+        return container[:12]
 
     try:
         response = get_balena_supervisor_api_response(
@@ -267,7 +267,7 @@ def _resolve_balena_container_id(container: str) -> str:
         raise JournalUnavailable(
             f'No running container for service {container!r}.'
         )
-    return str(container_id)
+    return str(container_id)[:12]
 
 
 def _read_capped(response: requests.Response) -> tuple[str, bool]:
