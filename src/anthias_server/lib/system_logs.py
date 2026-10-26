@@ -49,7 +49,16 @@ class JournalUnavailable(Exception):
     Distinct from ``journal.JournalRequestError`` (a bad request, 400):
     this is "we asked correctly and the backend didn't deliver", which
     the API surfaces as a 502/503.
+
+    ``user_message`` mirrors the constructor argument so the view can
+    return it without going through ``str(exc)``; every message is a
+    string composed here for display, never transport exception state
+    (that goes to the log instead).
     """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.user_message: str = message
 
 
 @dataclass(frozen=True)
@@ -153,8 +162,11 @@ def _snapshot_via_supervisor(
             timeout=_SUPERVISOR_TIMEOUT,
         )
     except requests.RequestException as error:
+        logger.warning(
+            'Balena supervisor journal-logs request failed: %s', error
+        )
         raise JournalUnavailable(
-            f'Could not reach the Balena supervisor: {error}'
+            'Could not reach the Balena supervisor.'
         ) from error
 
     try:
@@ -239,8 +251,11 @@ def _snapshot_via_host_agent(
         )
         reply = r.blpop([reply_key], timeout=journal.REPLY_TIMEOUT_SECONDS)
     except redis.RedisError as error:
+        logger.warning(
+            'Host agent journal request over Redis failed: %s', error
+        )
         raise JournalUnavailable(
-            f'Could not reach the host agent over Redis: {error}'
+            'Could not reach the host agent over Redis.'
         ) from error
 
     # On the timeout path the agent may still be mid-read and about to

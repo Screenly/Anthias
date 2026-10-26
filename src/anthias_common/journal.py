@@ -121,7 +121,15 @@ TIMESPEC_RE = re.compile(r'^[A-Za-z0-9 :@+\-]{1,64}$')
 
 
 class JournalRequestError(ValueError):
-    """A snapshot request carried a value we refuse to pass on."""
+    """A snapshot request carried a value we refuse to pass on.
+
+    ``user_message`` mirrors the constructor argument so API layers
+    can return it without going through ``str(exc)``.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.user_message: str = message
 
 
 def clamp_count(count: Any) -> int:

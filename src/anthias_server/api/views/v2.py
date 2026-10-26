@@ -1925,7 +1925,7 @@ class SystemLogsViewV2(APIView):
             # Belt and braces: the serializer already rejects these,
             # so reaching here means the two allowlists disagreed.
             return Response(
-                {'message': str(error)},
+                {'message': error.user_message},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except system_logs.JournalUnavailable as error:
@@ -1934,7 +1934,7 @@ class SystemLogsViewV2(APIView):
             # a condition an operator can act on.
             logger.warning('System log snapshot failed: %s', error)
             return Response(
-                {'message': str(error)},
+                {'message': error.user_message},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

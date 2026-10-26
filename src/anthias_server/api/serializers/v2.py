@@ -668,5 +668,5 @@ class SystemLogsQuerySerializerV2(Serializer[Any]):
                 until=attrs.get('until'),
             )
         except journal.JournalRequestError as error:
-            raise serializers.ValidationError(str(error)) from error
+            raise serializers.ValidationError(error.user_message) from error
         return attrs

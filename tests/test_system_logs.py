@@ -742,9 +742,10 @@ def test_bare_metal_handles_a_redis_outage(on_bare_metal: Any) -> None:
 
     with (
         mock.patch(f'{SYSTEM_LOGS}.connect_to_redis', return_value=fake_redis),
-        pytest.raises(system_logs.JournalUnavailable),
+        pytest.raises(system_logs.JournalUnavailable) as raised,
     ):
         system_logs.get_journal_snapshot()
+    assert 'down' not in raised.value.user_message
 
 
 def test_bare_metal_handles_an_unreadable_reply(on_bare_metal: Any) -> None:
@@ -851,9 +852,13 @@ def test_balena_reports_an_unreachable_supervisor(on_balena: Any) -> None:
             f'{SYSTEM_LOGS}.get_balena_supervisor_api_response',
             side_effect=requests.ConnectionError('refused'),
         ),
-        pytest.raises(system_logs.JournalUnavailable, match='Could not reach'),
+        pytest.raises(
+            system_logs.JournalUnavailable, match='Could not reach'
+        ) as raised,
     ):
         system_logs.get_journal_snapshot()
+    # Transport detail goes to the log, never into the API response.
+    assert 'refused' not in raised.value.user_message
 
 
 def test_filters_are_validated_before_either_backend_runs(
