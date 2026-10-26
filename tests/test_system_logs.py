@@ -451,7 +451,12 @@ def test_journalctl_times_out_and_reaps_the_child(
         children.append(child)
         return child
 
-    monkeypatch.setattr(host_agent.subprocess, 'Popen', spawn)
+    # Patch the stdlib module, not `host_agent.subprocess`. It is the
+    # same module object either way -- _run_journalctl resolves
+    # `subprocess.Popen` through its own globals -- but reaching for it
+    # as an attribute of the host-agent module is an implicit
+    # re-export, which mypy rejects under no_implicit_reexport.
+    monkeypatch.setattr(subprocess, 'Popen', spawn)
     script = 'import os, time; '
     if close_pipes:
         script += 'os.close(1); os.close(2); '
