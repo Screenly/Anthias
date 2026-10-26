@@ -18,6 +18,7 @@ from rest_framework.serializers import (
     TimeField,
 )
 
+from anthias_common import journal
 from anthias_common.utils import SCREEN_ROTATION_CHOICES
 from anthias_server.api.serializers import UpdateAssetSerializer
 from anthias_server.api.serializers.mixins import CreateAssetSerializerMixin
@@ -606,3 +607,66 @@ class ImportItemSerializerV2(Serializer[Any]):
     token = CharField(write_only=True)
     remote_id = CharField()
     enable = BooleanField(required=False, default=True)
+
+
+class SystemLogsQuerySerializerV2(Serializer[Any]):
+    """Query parameters for the host system-log snapshot endpoint.
+
+    Snapshot-only: there is deliberately no ``follow`` field. The
+    bare-metal backend runs inside the host agent's single-threaded
+    ``subscriber_loop``, where a streaming read would queue
+    reboot/shutdown behind it forever, so a live tail is not offered
+    on either platform rather than only on Balena.
+
+    Every filter is checked against the shared allowlist in
+    ``anthias_common.journal`` — the same one the host agent applies
+    again on its side — so a malformed value is a 400 here rather
+    than something that reaches a ``journalctl`` argv.
+    """
+
+    count = IntegerField(
+        required=False,
+        default=journal.DEFAULT_COUNT,
+        min_value=1,
+        max_value=journal.MAX_COUNT,
+        help_text=(
+            'Number of journal lines to return (most recent first on '
+            f'the wire). Capped at {journal.MAX_COUNT}.'
+        ),
+    )
+    unit = CharField(
+        required=False,
+        allow_blank=True,
+        help_text='Restrict to one systemd unit, e.g. "docker.service".',
+    )
+    container = CharField(
+        required=False,
+        allow_blank=True,
+        help_text=(
+            "Restrict to one container. Matches journald's "
+            "CONTAINER_NAME on bare metal and the supervisor's "
+            'containerId on Balena.'
+        ),
+    )
+    since = CharField(
+        required=False,
+        allow_blank=True,
+        help_text='journalctl time spec, e.g. "-1h" or "2026-10-26 09:00".',
+    )
+    until = CharField(
+        required=False,
+        allow_blank=True,
+        help_text='journalctl time spec, same grammar as "since".',
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        try:
+            journal.validate_filters(
+                unit=attrs.get('unit'),
+                container=attrs.get('container'),
+                since=attrs.get('since'),
+                until=attrs.get('until'),
+            )
+        except journal.JournalRequestError as error:
+            raise serializers.ValidationError(str(error)) from error
+        return attrs

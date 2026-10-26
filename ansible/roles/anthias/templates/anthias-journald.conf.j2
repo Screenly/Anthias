@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+#
+# Managed by the Anthias Ansible role. Makes the host journal readable
+# after a reboot, which is the whole point of /api/v2/system/logs: the
+# upstream default is Storage=auto, which is only persistent when
+# /var/log/journal already exists. Plain Debian / Armbian images ship
+# without it, so the journal lives in /run and is wiped on reboot --
+# exactly the moment an operator wants to read it. (balenaOS persists
+# the journal already; this file only applies to bare-metal installs.)
+#
+# The caps exist because Anthias runs on SD cards and eMMC: an
+# unbounded persistent journal is both a disk-space risk on a small
+# card and a write-wear one. Measured on the QA fleet: an uncapped
+# x86 install had grown to 1.8 GB over three months, while the Pi
+# boards sat at 14-51 MB.
+#
+# NOTE: SystemMaxUse is enforced by vacuuming, so on an existing
+# install whose journal is already larger than the cap, the first
+# journald restart after this lands DISCARDS the excess (oldest
+# first). Raise anthias_journal_max_use for a device where the longer
+# history matters more than the card.
+[Journal]
+Storage=persistent
+SystemMaxUse={{ anthias_journal_max_use }}
+Compress=yes

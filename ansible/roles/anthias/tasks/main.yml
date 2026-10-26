@@ -65,6 +65,48 @@
     group: root
     validate: /usr/sbin/visudo -cf %s
 
+# Journal persistence. /api/v2/system/logs reads the host journal via
+# anthias-host-agent, and on a stock host that journal is volatile:
+# Storage=auto only persists when /var/log/journal exists, which plain
+# Debian / Armbian images do not create -- and Raspberry Pi OS goes
+# further, shipping a vendor drop-in that pins Storage=volatile
+# outright. Without this the log endpoint can only ever show the
+# current boot, and the reboot an operator is trying to explain is
+# precisely what erased the evidence.
+- name: Create the persistent journal directory
+  ansible.builtin.file:
+    path: /var/log/journal
+    state: directory
+    owner: root
+    group: systemd-journal
+    # setgid so journald's own files inherit the group, matching what
+    # `systemd-tmpfiles --create` would produce.
+    mode: "2755"
+
+# journald.conf.d is not present on every image, and template: does
+# not create parent directories.
+- name: Ensure the journald drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure journald persistence and size caps
+  ansible.builtin.template:
+    src: anthias-journald.conf.j2
+    # 99- prefix so this wins over vendor drop-ins read from the same
+    # merged directory set. Raspberry Pi OS ships
+    # /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf
+    # with Storage=volatile; an unprefixed name only beats it by
+    # alphabetical luck.
+    dest: /etc/systemd/journald.conf.d/99-anthias.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Restart systemd-journald
+
 - name: Install Anthias systemd units
   ansible.builtin.template:
     src: "{{ item }}"
