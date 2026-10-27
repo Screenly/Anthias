@@ -839,6 +839,53 @@ def test_bare_metal_blocking_pop_is_bounded(on_bare_metal: Any) -> None:
     )
 
 
+def test_blocking_pop_socket_outlives_the_pop_timeout(
+    on_bare_metal: Any,
+) -> None:
+    # redis-py defaults socket_timeout to 5s, which cannot carry a 30s
+    # BLPOP: the socket gives up first, so the pop never gets to
+    # return None and the caller reports a Redis fault instead of a
+    # host-agent timeout. The socket must outlive the pop timer.
+    fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 1
+    fake_redis.blpop.return_value = None
+
+    with (
+        mock.patch(
+            f'{SYSTEM_LOGS}.connect_to_redis', return_value=fake_redis
+        ) as connect,
+        pytest.raises(system_logs.JournalUnavailable, match='Timed out'),
+    ):
+        system_logs.get_journal_snapshot()
+
+    socket_timeout = connect.call_args.kwargs['socket_timeout']
+    assert socket_timeout > journal.REPLY_TIMEOUT_SECONDS
+
+
+def test_blocking_pop_never_retries(on_bare_metal: Any) -> None:
+    # A retried BLPOP restarts its wait from zero. On redis-py's
+    # default ladder (retries=10) that turned one 30s budget into a
+    # ~59s stall, measured on the QA rig against a host agent that was
+    # subscribed but not answering. One attempt, one deadline.
+    fake_redis = mock.MagicMock()
+    fake_redis.publish.return_value = 1
+    fake_redis.blpop.return_value = None
+
+    with (
+        mock.patch(
+            f'{SYSTEM_LOGS}.connect_to_redis', return_value=fake_redis
+        ) as connect,
+        pytest.raises(system_logs.JournalUnavailable, match='Timed out'),
+    ):
+        system_logs.get_journal_snapshot()
+
+    kwargs = connect.call_args.kwargs
+    assert kwargs['retry_on_timeout'] is False
+    # Retry exposes its budget privately; what matters is that it is
+    # zero, whatever redis-py calls the attribute.
+    assert getattr(kwargs['retry'], '_retries', None) == 0
+
+
 def test_a_stopped_host_agent_fails_immediately(
     on_bare_metal: Any,
 ) -> None:
