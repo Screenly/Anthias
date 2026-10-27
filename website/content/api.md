@@ -40,10 +40,18 @@ shape of the responses you depend on.
 
 ## Authentication
 
-The API is designed for use on a trusted local network and does not require an
-API token. Because there is no authentication layer in front of it, do **not**
-expose a device's HTTP port directly to the public internet. Keep it behind your
-LAN, a VPN, or a reverse proxy that adds its own access control.
+A fresh install serves the API without authentication, on the assumption that it
+sits on a trusted local network. Switch that on from **Settings → Authentication**
+in the dashboard, or over this API by PATCHing `auth_backend` on
+`/api/v2/device_settings`; headless clients then authenticate with HTTP Basic.
+[Anthias for AI agents](/agents/) walks through enabling it and the behavior to
+expect, including the fact that an unauthenticated call redirects to the login
+form rather than returning `401`.
+
+Either way, do **not** expose a device's HTTP port directly to the public
+internet. Basic credentials travel in the clear over plain HTTP, so keep the
+device behind your LAN or a VPN, or put a reverse proxy with its own access
+control in front of it.
 
 ## Responses and errors
 
