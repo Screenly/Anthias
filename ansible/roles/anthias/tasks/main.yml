@@ -65,72 +65,108 @@
     group: root
     validate: /usr/sbin/visudo -cf %s
 
-# Journal persistence. /api/v2/system/logs reads the host journal via
-# anthias-host-agent, and on a stock host that journal is volatile:
-# Storage=auto only persists when /var/log/journal exists, which plain
-# Debian / Armbian images do not create -- and Raspberry Pi OS goes
-# further, shipping a vendor drop-in that pins Storage=volatile
-# outright. Without this the log endpoint can only ever show the
-# current boot, and the reboot an operator is trying to explain is
-# precisely what erased the evidence.
+# Journal persistence -- OFF by default, and deliberately so.
 #
-# `mkdir -p` then `systemd-tmpfiles --create` is the recipe documented
-# in journald.conf(5); both halves are needed. tmpfiles only *adjusts*
-# this path (`z` lines in /usr/lib/tmpfiles.d/systemd.conf), it does
-# not create it -- and creating it ourselves is not enough either,
-# because the `a+` line on the same path is what grants the `adm`
-# group its read ACL. Skip tmpfiles and adm-group journal access
-# silently does not work on a host where we made the directory.
-- name: Create the persistent journal directory
+# Raspberry Pi OS ships
+# /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf pinning
+# Storage=volatile, and that is not an oversight to work around: a
+# player runs from an SD card, and journald's pattern of small appends
+# plus periodic fsync is close to the worst case for the write
+# amplification those cards do internally. Measured on idle QA players
+# carrying the normal Anthias stack: 19-28 MiB of journal a day, about
+# 7-10 GiB a year, before any real content churn. Writing that to the
+# card to make logs survive a reboot is a trade only the operator can
+# make, so the role does not make it for them.
+#
+# /api/v2/system/logs does NOT need this. The host agent reads the
+# volatile journal in /run perfectly well; the only thing persistence
+# buys is history across a reboot. The API reports which one it got in
+# its `persistent` field, so a device left on the default is honest
+# about showing current-boot-only logs rather than silently truncated
+# ones.
+#
+# Enable per-device with `anthias_journal_persistent: true`, e.g. on
+# x86 boxes booting from an SSD, or on a device being actively
+# debugged. anthias_journal_max_use caps the result either way.
+- name: Configure journald persistence
+  when: anthias_journal_persistent | bool
+  block:
+    # `mkdir -p` then `systemd-tmpfiles --create` is the recipe
+    # documented in journald.conf(5); both halves are needed. tmpfiles
+    # only *adjusts* this path (`z` lines in
+    # /usr/lib/tmpfiles.d/systemd.conf), it does not create it -- and
+    # creating it ourselves is not enough either, because the `a+` line
+    # on the same path is what grants the `adm` group its read ACL.
+    # Skip tmpfiles and adm-group journal access silently does not work
+    # on a host where we made the directory.
+    #
+    # Creating this directory is itself a persistence switch on any
+    # image without the Pi vendor drop-in -- Debian defaults to
+    # Storage=auto, which means "persist if /var/log/journal exists" --
+    # which is the other reason it sits inside this conditional.
+    - name: Create the persistent journal directory
+      ansible.builtin.file:
+        path: /var/log/journal
+        state: directory
+        owner: root
+        group: systemd-journal
+        # Not ours to tighten: systemd pins this exact mode with
+        # `z /var/log/journal 2755 root systemd-journal` in
+        # /usr/lib/tmpfiles.d/systemd.conf, so a narrower value is
+        # reset by the very next tmpfiles run -- including the one
+        # below. The setgid bit is what makes journald's files inherit
+        # the group.
+        mode: "2755"  # NOSONAR (S2612)
+
+    - name: Apply systemd's own journal directory policy
+      # Normalises mode/ownership and installs the group ACLs journald
+      # expects. Not conditional on the task above reporting changed: a
+      # pre-existing directory created by something other than tmpfiles
+      # needs the same treatment, and the command is idempotent.
+      ansible.builtin.command:
+        cmd: systemd-tmpfiles --create --prefix=/var/log/journal
+      changed_when: false
+
+    # journald.conf.d is not present on every image, and template: does
+    # not create parent directories.
+    - name: Ensure the journald drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/journald.conf.d
+        state: directory
+        owner: root
+        group: root
+        # Matches /etc/systemd's own drop-in directories, which ship
+        # 0755 root:root. Holds no secrets, and has to stay traversable
+        # for a non-root `systemd-analyze cat-config`.
+        mode: "0755"  # NOSONAR (S2612)
+
+    - name: Configure journald persistence and size caps
+      ansible.builtin.template:
+        src: anthias-journald.conf.j2
+        # 99- prefix so this wins over vendor drop-ins read from the
+        # same merged directory set. Raspberry Pi OS ships
+        # /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf
+        # with Storage=volatile; an unprefixed name only beats it by
+        # alphabetical luck.
+        dest: /etc/systemd/journald.conf.d/99-anthias.conf
+        # A non-secret systemd config file. 0644 root:root is what
+        # every other file in /etc/systemd ships as, and what an
+        # operator needs to read it back.
+        mode: "0644"  # NOSONAR (S2612)
+        owner: root
+        group: root
+      notify: Restart systemd-journald
+
+# Converge the other way too, so flipping the flag back off actually
+# restores the image default instead of leaving our override in place.
+# Only this file is removed: /var/log/journal is left alone because it
+# may predate Anthias and may hold logs the operator still wants, and
+# on a Pi the vendor drop-in makes the directory inert anyway.
+- name: Remove the journald persistence drop-in when not enabled
+  when: not (anthias_journal_persistent | bool)
   ansible.builtin.file:
-    path: /var/log/journal
-    state: directory
-    owner: root
-    group: systemd-journal
-    # Not ours to tighten: systemd pins this exact mode with
-    # `z /var/log/journal 2755 root systemd-journal` in
-    # /usr/lib/tmpfiles.d/systemd.conf, so a narrower value is reset
-    # by the very next tmpfiles run -- including the one below. The
-    # setgid bit is what makes journald's files inherit the group.
-    mode: "2755"  # NOSONAR (S2612)
-
-- name: Apply systemd's own journal directory policy
-  # Normalises mode/ownership and installs the group ACLs journald
-  # expects. Not conditional on the task above reporting changed: a
-  # pre-existing directory created by something other than tmpfiles
-  # needs the same treatment, and the command is idempotent.
-  ansible.builtin.command:
-    cmd: systemd-tmpfiles --create --prefix=/var/log/journal
-  changed_when: false
-
-# journald.conf.d is not present on every image, and template: does
-# not create parent directories.
-- name: Ensure the journald drop-in directory exists
-  ansible.builtin.file:
-    path: /etc/systemd/journald.conf.d
-    state: directory
-    owner: root
-    group: root
-    # Matches /etc/systemd's own drop-in directories, which ship
-    # 0755 root:root. Holds no secrets, and has to stay traversable
-    # for a non-root `systemd-analyze cat-config`.
-    mode: "0755"  # NOSONAR (S2612)
-
-- name: Configure journald persistence and size caps
-  ansible.builtin.template:
-    src: anthias-journald.conf.j2
-    # 99- prefix so this wins over vendor drop-ins read from the same
-    # merged directory set. Raspberry Pi OS ships
-    # /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf
-    # with Storage=volatile; an unprefixed name only beats it by
-    # alphabetical luck.
-    dest: /etc/systemd/journald.conf.d/99-anthias.conf
-    # A non-secret systemd config file. 0644 root:root is what every
-    # other file in /etc/systemd ships as, and what an operator needs
-    # to read it back.
-    mode: "0644"  # NOSONAR (S2612)
-    owner: root
-    group: root
+    path: /etc/systemd/journald.conf.d/99-anthias.conf
+    state: absent
   notify: Restart systemd-journald
 
 - name: Install Anthias systemd units

@@ -1,0 +1,38 @@
+# Operator-tunable settings for the anthias role.
+#
+# These live in defaults/ rather than vars/ on purpose: role vars
+# outrank inventory and group_vars, so a per-device override set the
+# normal way would be silently ignored from vars/. Defaults are the
+# lowest precedence, which is what makes the overrides below actually
+# take effect.
+
+# Keep the host journal across reboots.
+#
+# Off by default. Raspberry Pi OS pins Storage=volatile in
+# /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf to keep
+# journald off the SD card, and that is a deliberate choice we follow
+# rather than override: journald writes small appends and fsyncs them,
+# which is close to the worst case for SD write amplification.
+# Measured on idle QA players running the normal Anthias stack:
+# 19-28 MiB of journal a day, roughly 7-10 GiB a year.
+#
+# /api/v2/system/logs works either way -- the host agent reads the
+# volatile journal in /run perfectly well, and the API's `persistent`
+# field reports which one answered. Turning this on only buys history
+# that survives a reboot.
+#
+# Worth enabling on hardware that is not writing to an SD card (an x86
+# player on an SSD), or temporarily on a device being debugged.
+anthias_journal_persistent: false
+
+# Upper bound on the journal when persistence is enabled. Anthias
+# devices run on SD / eMMC, where an uncapped journal is both a
+# disk-space and a write-wear problem. 64M holds comfortably more than
+# the 2000-line snapshot cap the API will ever return.
+#
+# NOTE: SystemMaxUse is enforced by vacuuming, so on a device whose
+# journal is already larger than this, the first journald restart after
+# enabling persistence DISCARDS the excess, oldest first. Observed on a
+# QA x86 board that had grown to 1.8 GB: it came back at 56 MB, losing
+# about 3.7 months of history.
+anthias_journal_max_use: 64M

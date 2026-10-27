@@ -1,8 +1,2 @@
 anthias_systemd_units:
   - anthias-host-agent.service
-
-# Upper bound on the persistent journal. Anthias devices run on SD /
-# eMMC, where an uncapped journal is both a disk-space and a
-# write-wear problem. 64M holds comfortably more than the 2000-line
-# snapshot cap the API will ever return.
-anthias_journal_max_use: 64M
