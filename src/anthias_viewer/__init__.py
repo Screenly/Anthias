@@ -249,6 +249,8 @@ _wifi_setup_logged: bool = False
 # point, so the one screen carrying the admin URL went past before
 # there was an address to put on it (GH #3411). This replays it.
 _wifi_setup_splash_pending: bool = False
+_wifi_setup_splash_showing: bool = False
+_wifi_setup_splash_lock = Lock()
 
 # The setup portal's own address, from the last answer that said a
 # portal was up. Once the portal ends nothing strips it from the
@@ -3221,14 +3223,39 @@ def _show_wifi_setup_screen() -> None:
 
 
 def _show_post_wifi_setup_splash() -> None:
-    """Replay the boot splash once, after a setup portal has ended.
+    """Consume one replay and coalesce portal cycles while it is visible."""
+    global _wifi_setup_splash_pending, _wifi_setup_splash_showing
 
-    The flag is cleared before the page goes up, not after: this holds
-    the display thread for ``SPLASH_DELAY``, and a second portal run
-    that starts and ends inside that window must not queue a second
-    splash on top of the playlist it is finally free to play. A missed
-    replay costs an address the splash would have shown; a stuck one
-    costs the playlist.
+    with _wifi_setup_splash_lock:
+        _wifi_setup_splash_showing = True
+        _wifi_setup_splash_pending = False
+    try:
+        get_skip_event().clear()
+        if loop_is_stopped or _wifi_setup_active:
+            return
+        _hold_post_wifi_setup_splash()
+    finally:
+        with _wifi_setup_splash_lock:
+            _wifi_setup_splash_showing = False
+
+
+def _wait_post_wifi_setup_splash(seconds: float) -> bool:
+    """Wait for the splash, yielding promptly to playback commands or setup."""
+    deadline = monotonic() + seconds
+    while True:
+        if loop_is_stopped or _wifi_setup_active:
+            return False
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return True
+        if get_skip_event().wait(
+            timeout=min(remaining, POST_WIFI_SETUP_ADDRESS_POLL_S)
+        ):
+            return False
+
+
+def _hold_post_wifi_setup_splash() -> None:
+    """Replay the boot splash once, after a setup portal has ended.
 
     The portal going down is not the device being online: it still
     has to join the chosen network and get a lease, and a fixed
@@ -3240,10 +3267,6 @@ def _show_post_wifi_setup_splash() -> None:
     comes back up -- which is what a failed join looks like -- so the
     setup screen is never held off by it.
     """
-    global _wifi_setup_splash_pending
-
-    _wifi_setup_splash_pending = False
-
     if not settings['show_splash']:
         return
 
@@ -3268,7 +3291,8 @@ def _show_post_wifi_setup_splash() -> None:
                 POST_WIFI_SETUP_ADDRESS_TIMEOUT_S,
             )
             return
-        sleep(POST_WIFI_SETUP_ADDRESS_POLL_S)
+        if not _wait_post_wifi_setup_splash(POST_WIFI_SETUP_ADDRESS_POLL_S):
+            return
 
     # The page stops polling for addresses on its own after a while.
     # An address that turned up near or after that point would never be
@@ -3284,7 +3308,7 @@ def _show_post_wifi_setup_splash() -> None:
         'Device has an address after WiFi setup; showing it for %ss.',
         SPLASH_DELAY,
     )
-    sleep(SPLASH_DELAY)
+    _wait_post_wifi_setup_splash(SPLASH_DELAY)
     # No explicit repaint here: returning hands the display straight to
     # the next asset_loop tick, which paints the playlist or standby as
     # it finds them. main()'s trailing view_image() exists because it is
@@ -3373,7 +3397,9 @@ def _poll_wifi_setup_once() -> None:
         # the very server that just failed to answer, so a restart
         # would trade the setup screen for a blank page.
         if answered:
-            _wifi_setup_splash_pending = True
+            with _wifi_setup_splash_lock:
+                if not _wifi_setup_splash_showing:
+                    _wifi_setup_splash_pending = True
 
     _wifi_setup_active = active
 

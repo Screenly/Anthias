@@ -1106,11 +1106,15 @@ def _post_setup_splash(
         mock.patch.dict(settings, {'show_splash': True}),
         mock.patch.object(viewer, 'monotonic', clock.monotonic),
         mock.patch.object(viewer, 'sleep', side_effect=clock.sleep),
+        mock.patch.object(viewer, 'get_skip_event') as skip_event,
         mock.patch.object(
             viewer, '_post_wifi_setup_addresses', side_effect=addresses
         ),
         mock.patch.object(viewer, 'view_webpage') as view_webpage,
     ):
+        skip_event.return_value.wait.side_effect = lambda timeout: clock.sleep(
+            timeout
+        )
         yield clock, view_webpage
 
 
@@ -1127,7 +1131,7 @@ def test_splash_delay_starts_when_the_address_appears(
 
     poll = viewer.POST_WIFI_SETUP_ADDRESS_POLL_S
     # Two empty answers, then the full window from the first address.
-    assert clock.sleeps == [poll, poll, viewer.SPLASH_DELAY]
+    assert clock.now == 2 * poll + viewer.SPLASH_DELAY
     # The page polls for itself well inside its own window: one load.
     view_webpage.assert_called_once_with(viewer.SPLASH_PAGE_URL)
 
@@ -1199,7 +1203,10 @@ def test_a_late_address_reloads_the_splash(
         mock.call(viewer.SPLASH_PAGE_URL),
         mock.call(viewer.SPLASH_PAGE_URL, nocache=True),
     ]
-    assert clock.sleeps[-1] == viewer.SPLASH_DELAY
+    assert (
+        clock.now
+        == late * viewer.POST_WIFI_SETUP_ADDRESS_POLL_S + viewer.SPLASH_DELAY
+    )
 
 
 def _ip_addresses_response(payload: Any) -> mock.Mock:
