@@ -313,7 +313,10 @@ class TestBeforeSendRepetitionThrottle:
         from anthias_server.django_project import settings
 
         clock = 0.0
-        monkeypatch.setattr(settings.time, 'monotonic', lambda: clock)
+        monkeypatch.setattr(
+            'anthias_server.django_project.settings.time.monotonic',
+            lambda: clock,
+        )
 
         hint = self._hint_for(ValueError())
         kept = 0
