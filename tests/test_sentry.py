@@ -105,8 +105,8 @@ class TestBeforeSendRepetitionThrottle:
     board accounted for 1,761 of ANTHIAS-3H's 1,762 events, and
     another for 1,063 of ANTHIAS-2D's 1,093, crowding out every other
     issue for the rest of the billing period. before_send keeps the
-    powers of two within an hour-long window per issue and drops what
-    falls between them, so a loop costs O(log n) events.
+    powers of two per issue and drops what falls between them, so a
+    loop costs O(log n) events for as long as it keeps looping.
     """
 
     @staticmethod
@@ -143,7 +143,7 @@ class TestBeforeSendRepetitionThrottle:
         ]
         assert kept == [1, 2, 4, 8, 16, 32]
 
-    def test_first_event_of_a_window_is_untagged(self) -> None:
+    def test_first_event_of_a_run_is_untagged(self) -> None:
         # Nothing has been thinned yet, so an occurrence tag would be
         # noise on the overwhelmingly common single-event case.
         from anthias_server.django_project.settings import (
@@ -275,7 +275,7 @@ class TestBeforeSendRepetitionThrottle:
             assert _sentry_before_send(event, {}) == event
         assert _sentry_throttle_state == {}
 
-    def test_a_stale_window_starts_the_count_again(self) -> None:
+    def test_an_issue_gone_quiet_starts_the_count_again(self) -> None:
         from anthias_server.django_project.settings import (
             _SENTRY_THROTTLE_WINDOW_SECONDS,
             _sentry_before_send,
@@ -286,9 +286,10 @@ class TestBeforeSendRepetitionThrottle:
         hint = self._hint_for(ValueError())
         key = _throttle_key({'event_id': 'x'}, hint)
         assert key is not None
-        # Rewind the window rather than patch the clock: the same
-        # state the throttle would be in an hour later, with no
-        # global time.monotonic monkeypatch for the rest of the suite.
+        # Rewind the last-seen stamp rather than patch the clock: the
+        # same state the throttle would be in after an hour with no
+        # occurrence, and no global time.monotonic monkeypatch left
+        # in place for the rest of the suite.
         _sentry_throttle_state[key] = (
             time.monotonic() - _SENTRY_THROTTLE_WINDOW_SECONDS - 1,
             9999,
@@ -298,7 +299,34 @@ class TestBeforeSendRepetitionThrottle:
         assert 'tags' not in event
         assert _sentry_throttle_state[key][1] == 1
 
-    def test_expired_windows_are_evicted_before_live_ones(self) -> None:
+    def test_a_loop_that_never_pauses_pays_log_of_the_whole_run(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The quota-spending case: the board behind ANTHIAS-3H.
+
+        It emitted 1,761 copies of one error over 33 unbroken hours,
+        about 53 an hour. The count has to span that whole run: reset
+        it every hour and each hour restarts the sequence at 1, so the
+        board pays 6 events an hour and 198 over the run — which is
+        what made one device able to spend a month's quota.
+        """
+        from anthias_server.django_project import settings
+
+        clock = 0.0
+        monkeypatch.setattr(settings.time, 'monotonic', lambda: clock)
+
+        hint = self._hint_for(ValueError())
+        kept = 0
+        occurrences = 53 * 33
+        for tick in range(occurrences):
+            clock = tick * (3600 / 53)
+            if settings._sentry_before_send({'event_id': 'x'}, hint):
+                kept += 1
+
+        # 1, 2, 4, ..., 1024 — the powers of two up to 1,749.
+        assert kept == 11
+
+    def test_keys_gone_quiet_are_evicted_before_active_ones(self) -> None:
         from anthias_server.django_project.settings import (
             _SENTRY_THROTTLE_MAX_KEYS,
             _SENTRY_THROTTLE_WINDOW_SECONDS,
@@ -312,7 +340,7 @@ class TestBeforeSendRepetitionThrottle:
         _sentry_before_send({'event_id': 'x'}, self._hint_for(ValueError()))
         assert len(_sentry_throttle_state) == 1
 
-    def test_live_windows_are_capped_by_dropping_the_oldest(self) -> None:
+    def test_active_keys_are_capped_by_least_recently_seen(self) -> None:
         from anthias_server.django_project.settings import (
             _SENTRY_THROTTLE_MAX_KEYS,
             _sentry_before_send,
@@ -327,7 +355,7 @@ class TestBeforeSendRepetitionThrottle:
             )
         _sentry_before_send({'event_id': 'x'}, self._hint_for(ValueError()))
         assert len(_sentry_throttle_state) == _SENTRY_THROTTLE_MAX_KEYS
-        # The newest live windows are the ones still counting.
+        # The most recently seen keys are the ones still counting.
         assert ('exc', 'm', 'E0', '') not in _sentry_throttle_state
         assert (
             'exc',
