@@ -10,6 +10,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import asyncio
 import configparser
+import hashlib
 import logging
 import math
 import platform
@@ -24,7 +25,9 @@ from os import getenv
 from pathlib import Path
 from typing import Any
 
+import redis.backoff
 import redis.exceptions
+import redis.retry
 import sentry_sdk
 from sentry_sdk.integrations.logging import ignore_logger
 from sentry_sdk.types import Event, Hint
@@ -179,7 +182,7 @@ def _is_late_soft_time_limit(exc: BaseException) -> bool:
 # knowing how many devices hit it; the thousandth copy from the same
 # board is what crowds out every other issue on the fleet.
 #
-# So each process counts occurrences per issue over a one-hour window
+# So each device counts occurrences per issue over a one-hour window
 # and keeps the 1st, 2nd, 4th, 8th, 16th, ..., dropping what falls
 # between two powers of two. A loop costs O(log n) events instead of
 # n — 1,761 becomes 11 — and the magnitude survives the thinning,
@@ -187,6 +190,10 @@ def _is_late_soft_time_limit(exc: BaseException) -> bool:
 # ``throttle.occurrence`` tag. Every device still reports every
 # distinct issue it hits, so no issue can be hidden by this; only
 # repetition of one already reported is.
+#
+# The counter lives in redis so it outlasts the container (see
+# ``_shared_occurrence``), with the process-local dict below as the
+# fallback for when redis cannot answer.
 _SENTRY_THROTTLE_WINDOW_SECONDS = 3600
 # Bounds the bookkeeping on a long-lived process. A process producing
 # more than this many *distinct* issues within one window has larger
@@ -261,17 +268,12 @@ def _evict_throttle_keys(now: float) -> None:
         del _sentry_throttle_state[key]
 
 
-def _throttled(event: Event, hint: Hint) -> bool:
-    """Whether this event is a suppressed repeat; counts it either way.
+def _local_occurrence(key: tuple[str, ...]) -> int:
+    """``key``'s running count in this process's window.
 
-    Occurrences 1, 2, 4, 8, ... within the window survive; the ones in
-    between are dropped. A survivor past the first is tagged with the
-    running count, so the repetition the throttle removed is still
-    legible on the event that did get through.
+    The fallback for when redis cannot answer — see
+    ``_shared_occurrence`` for why that is not the normal path.
     """
-    key = _throttle_key(event, hint)
-    if key is None:
-        return False
     # Monotonic: a device that has never had a clock sync can step its
     # wall clock by years the moment NTP lands, which would otherwise
     # expire or freeze every window at once.
@@ -284,6 +286,132 @@ def _throttled(event: Event, hint: Hint) -> bool:
         _sentry_throttle_state[key] = (window_start, count)
         if len(_sentry_throttle_state) > _SENTRY_THROTTLE_MAX_KEYS:
             _evict_throttle_keys(now)
+    return count
+
+
+# Where the counters live.
+#
+# A process-local dict forgets everything when the process goes away,
+# and the issues that spend the most quota are exactly the ones that
+# end in the process going away. A board whose webview will not start
+# raises ``WebviewLaunchError`` out of the viewer's retry loop, the
+# container exits, and the restart comes back to an empty dict: every
+# restart pays full price for occurrence 1 and the powers-of-two
+# thinning never engages at all. In the last fully recorded window the
+# launch-failure issues (ANTHIAS-D / F / 1W / 1C / 4V) were an eighth
+# of everything accepted, from a handful of boards in that loop.
+#
+# Redis outlives those restarts — it is the broker, the channel layer
+# and the viewer's signalling bus, and the telemetry cooldown is kept
+# there for this same reason — so the count goes there and the window
+# becomes the key's TTL. That also makes the window per *device*
+# rather than per process, which is the unit the quota is really spent
+# in: server, celery and viewer looping on one issue now share a
+# budget instead of each being allowed their own.
+_SENTRY_THROTTLE_REDIS_PREFIX = 'sentry-throttle:'
+# before_send runs inline on whichever thread is reporting, so a sick
+# redis must not stall it: short leash on the socket, and a failure
+# parks redis for a cooldown rather than being retried per event.
+_SENTRY_THROTTLE_REDIS_TIMEOUT = 0.5
+_SENTRY_THROTTLE_REDIS_RETRY_AFTER = 60.0
+
+_sentry_throttle_redis: 'redis.Redis | None' = None
+_sentry_throttle_redis_blocked_until = 0.0
+
+
+def _throttle_redis() -> 'redis.Redis | None':
+    """The device's redis handle, or ``None`` while it looks unusable.
+
+    Built straight from ``redis.Redis`` rather than through
+    ``anthias_common.utils.connect_to_redis``: this module has to stay
+    import-light (importing anthias_common.utils here crashes
+    django-stubs' mypy plugin in CI's slim environment), and the
+    helper sets no timeouts, which this path cannot do without.
+    """
+    global _sentry_throttle_redis
+    if IS_TEST:
+        # The unit suite runs with no redis at all. conftest mocks the
+        # shared helper, which this deliberately does not go through,
+        # so opt out explicitly rather than connect to nothing.
+        return None
+    if time.monotonic() < _sentry_throttle_redis_blocked_until:
+        return None
+    if _sentry_throttle_redis is None:
+        _sentry_throttle_redis = redis.Redis(
+            host='redis',
+            port=6379,
+            db=0,
+            decode_responses=True,
+            socket_timeout=_SENTRY_THROTTLE_REDIS_TIMEOUT,
+            socket_connect_timeout=_SENTRY_THROTTLE_REDIS_TIMEOUT,
+            # redis-py retries a failed connection three times with
+            # backoff by default, which turns the half-second leash
+            # above into a ~4s stall on the reporting thread — long
+            # enough to matter inside a celery task's soft limit. One
+            # attempt is all this needs: the cooldown below is what
+            # handles a redis that stays down.
+            retry=redis.retry.Retry(redis.backoff.NoBackoff(), 0),
+        )
+    return _sentry_throttle_redis
+
+
+def _shared_occurrence(key: tuple[str, ...]) -> int | None:
+    """``key``'s running count in the device-wide window.
+
+    ``None`` means redis could not answer and the caller should fall
+    back to the in-process counter — a throttle must never be the
+    reason an event is lost, and a device whose redis is down is
+    already having a worse day than its quota.
+
+    ``SET NX EX`` before ``INCR``, pipelined into one round trip, so
+    the counter can never exist without a TTL. ``INCR`` then
+    ``EXPIRE`` would leave a key that never expires if the process
+    died between the two, silencing that issue on that device for
+    good; losing an increment instead costs one extra reported event.
+    """
+    global _sentry_throttle_redis_blocked_until
+    client = _throttle_redis()
+    if client is None:
+        return None
+    digest = hashlib.sha256(
+        '\0'.join(key).encode('utf-8', 'replace')
+    ).hexdigest()
+    try:
+        pipe = client.pipeline(transaction=False)
+        pipe.set(
+            _SENTRY_THROTTLE_REDIS_PREFIX + digest,
+            0,
+            nx=True,
+            ex=_SENTRY_THROTTLE_WINDOW_SECONDS,
+        )
+        pipe.incr(_SENTRY_THROTTLE_REDIS_PREFIX + digest)
+        count = pipe.execute()[-1]
+    except Exception:
+        # Deliberately not logged above debug: the logging integration
+        # would turn an ERROR raised here into another event, decided
+        # by this same function. Redis being unreachable is already
+        # filtered as expected noise further up.
+        _sentry_throttle_redis_blocked_until = (
+            time.monotonic() + _SENTRY_THROTTLE_REDIS_RETRY_AFTER
+        )
+        return None
+    return int(count)
+
+
+def _throttled(event: Event, hint: Hint) -> bool:
+    """Whether this event is a suppressed repeat; counts it either way.
+
+    Occurrences 1, 2, 4, 8, ... within the window survive; the ones in
+    between are dropped. A survivor past the first is tagged with the
+    running count, so the repetition the throttle removed is still
+    legible on the event that did get through.
+    """
+    key = _throttle_key(event, hint)
+    if key is None:
+        return False
+    count = _shared_occurrence(key)
+    if count is None:
+        count = _local_occurrence(key)
     # ``n & (n - 1)`` is zero exactly on the powers of two.
     if count & (count - 1):
         return True
