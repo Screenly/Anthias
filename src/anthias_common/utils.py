@@ -86,6 +86,32 @@ DISK_FULL_ERROR = (
 )
 
 
+def memory_cache_mib(virtual_memory: Any) -> int:
+    """Reclaimable memory in MiB — kernel buffers + page cache + shared.
+
+    psutil's ``used`` already excludes buffers/cache on Linux (it
+    matches ``free -m``), so whatever ``total`` has left over once
+    ``used`` and ``free`` are taken out is the reclaimable slice.
+    Clamped to >= 0 so a kernel that reports the three differently
+    still yields sane pie geometry rather than a negative wedge.
+
+    Deliberately NOT ``virtual_memory.buffers``: that field is the
+    raw kernel "Buffers" line only, typically a few MiB, and it
+    omits the page cache that makes up almost all of this figure.
+    The System Info page's "Buffers / cache" row and /api/v2/info's
+    ``memory.cache`` both come from here so the two surfaces can't
+    drift apart again.
+    See https://forums.screenly.io/t/api-memory-discrepancy/6721
+    """
+    # Annotated rather than inferred: psutil's svmem is untyped, so
+    # without these mypy widens the arithmetic to Any and flags the
+    # return.
+    total: int = virtual_memory.total >> 20
+    used: int = virtual_memory.used >> 20
+    free: int = virtual_memory.free >> 20
+    return max(0, total - used - free)
+
+
 def is_disk_full(exc: OSError) -> bool:
     """True when ``exc`` is ENOSPC — the device disk is full.
 
