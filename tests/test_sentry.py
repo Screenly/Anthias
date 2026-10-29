@@ -14,9 +14,11 @@ import logging
 import time
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 import pytest
+import redis.exceptions
 import sentry_sdk
 from celery.exceptions import SoftTimeLimitExceeded
 from sentry_sdk.types import Event
@@ -335,6 +337,203 @@ class TestBeforeSendRepetitionThrottle:
             f'E{_SENTRY_THROTTLE_MAX_KEYS + 99}',
             '',
         ) in _sentry_throttle_state
+
+
+class _FakeRedisPipeline:
+    """Just the two commands ``_shared_occurrence`` pipelines."""
+
+    def __init__(self, store: dict[str, int], ttls: dict[str, int]) -> None:
+        self._store = store
+        self._ttls = ttls
+        self._queued: list[tuple[str, str, int, bool, int | None]] = []
+
+    def set(
+        self,
+        name: str,
+        value: int,
+        nx: bool = False,
+        ex: int | None = None,
+    ) -> '_FakeRedisPipeline':
+        self._queued.append(('set', name, value, nx, ex))
+        return self
+
+    def incr(self, name: str) -> '_FakeRedisPipeline':
+        self._queued.append(('incr', name, 0, False, None))
+        return self
+
+    def execute(self) -> list[object]:
+        results: list[object] = []
+        for command, name, value, nx, ex in self._queued:
+            if command == 'set':
+                if nx and name in self._store:
+                    results.append(None)
+                    continue
+                self._store[name] = value
+                if ex is not None:
+                    self._ttls[name] = ex
+                results.append(True)
+            else:
+                self._store[name] = self._store.get(name, 0) + 1
+                results.append(self._store[name])
+        self._queued = []
+        return results
+
+
+class _FakeRedis:
+    """A device-local redis that survives the "container restart"."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, int] = {}
+        self.ttls: dict[str, int] = {}
+
+    def pipeline(self, transaction: bool = True) -> _FakeRedisPipeline:
+        return _FakeRedisPipeline(self.store, self.ttls)
+
+
+class _BrokenRedis(_FakeRedis):
+    """A redis that refuses, the way an unreachable one does."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    def pipeline(self, transaction: bool = True) -> _FakeRedisPipeline:
+        self.calls += 1
+        raise redis.exceptions.ConnectionError('redis is down')
+
+
+class TestThrottleSurvivesARestart:
+    """The counter has to outlive the process it is counting for.
+
+    The issues that spend the most quota are the ones that end in the
+    process going away: the viewer raises ``WebviewLaunchError`` out
+    of its spawn retry loop, the container exits, and a process-local
+    counter comes back empty — so every restart pays full price for
+    occurrence 1 and the thinning never engages. Keeping the count in
+    redis, which outlives the container, is what closes that.
+    """
+
+    @staticmethod
+    def _hint_for(exc: BaseException) -> dict[str, object]:
+        return {'exc_info': (type(exc), exc, None)}
+
+    def test_the_unit_suite_never_reaches_for_redis(self) -> None:
+        # conftest mocks the shared connect_to_redis helper, which
+        # this path deliberately does not go through — so the opt-out
+        # has to be explicit, or the suite starts dialling a host that
+        # isn't there.
+        from anthias_server.django_project.settings import _throttle_redis
+
+        assert _throttle_redis() is None
+
+    def test_a_restart_loop_is_thinned_across_processes(self) -> None:
+        from anthias_server.django_project import settings as app_settings
+
+        fake = _FakeRedis()
+        kept = []
+        with mock.patch.object(
+            app_settings, '_throttle_redis', return_value=fake
+        ):
+            for restart in range(1, 33):
+                # Each pass is a fresh process: the in-memory state is
+                # exactly what a restart would hand us.
+                app_settings._sentry_throttle_state.clear()
+                event: Event = {'event_id': str(restart)}
+                if (
+                    app_settings._sentry_before_send(
+                        event, self._hint_for(RuntimeError('will not start'))
+                    )
+                    is not None
+                ):
+                    kept.append(restart)
+        assert kept == [1, 2, 4, 8, 16, 32]
+
+    def test_the_counter_always_carries_a_ttl(self) -> None:
+        # SET NX EX runs before the INCR precisely so the key can
+        # never exist without one: an INCR-then-EXPIRE pair that lost
+        # its process in between would silence that issue on that
+        # device permanently.
+        from anthias_server.django_project import settings as app_settings
+
+        fake = _FakeRedis()
+        with mock.patch.object(
+            app_settings, '_throttle_redis', return_value=fake
+        ):
+            app_settings._sentry_before_send(
+                {'event_id': 'x'}, self._hint_for(ValueError())
+            )
+        assert list(fake.ttls.values()) == [
+            app_settings._SENTRY_THROTTLE_WINDOW_SECONDS
+        ]
+
+    def test_distinct_issues_still_do_not_share_a_budget(self) -> None:
+        from anthias_server.django_project import settings as app_settings
+
+        fake = _FakeRedis()
+        with mock.patch.object(
+            app_settings, '_throttle_redis', return_value=fake
+        ):
+            for _ in range(50):
+                app_settings._sentry_before_send(
+                    {'event_id': 'x'}, self._hint_for(ValueError())
+                )
+            event: Event = {'event_id': 'other'}
+            assert (
+                app_settings._sentry_before_send(
+                    event, self._hint_for(TypeError())
+                )
+                is event
+            )
+
+    def test_an_unreachable_redis_falls_back_to_the_local_count(self) -> None:
+        # A device whose redis is down is already having a worse day
+        # than its quota; the throttle must never be the reason an
+        # event is lost, and must not start reporting everything twice
+        # either.
+        from anthias_server.django_project import settings as app_settings
+
+        broken = _BrokenRedis()
+        with mock.patch.object(
+            app_settings, '_throttle_redis', return_value=broken
+        ):
+            kept = [
+                occurrence
+                for occurrence in range(1, 17)
+                if app_settings._sentry_before_send(
+                    {'event_id': str(occurrence)},
+                    self._hint_for(ValueError()),
+                )
+                is not None
+            ]
+        assert kept == [1, 2, 4, 8, 16]
+
+    def test_a_failure_parks_redis_instead_of_retrying_per_event(
+        self,
+    ) -> None:
+        # before_send runs inline on the reporting thread, so a redis
+        # that times out must be asked once and then left alone, not
+        # waited on again for every event that follows.
+        from anthias_server.django_project import settings as app_settings
+
+        broken = _BrokenRedis()
+        original_blocked = app_settings._sentry_throttle_redis_blocked_until
+        original_client = app_settings._sentry_throttle_redis
+        # Typed as a real client; the fake only needs .pipeline().
+        app_settings._sentry_throttle_redis = cast('Any', broken)
+        app_settings._sentry_throttle_redis_blocked_until = 0.0
+        try:
+            with mock.patch.object(app_settings, 'IS_TEST', False):
+                for occurrence in range(20):
+                    app_settings._sentry_before_send(
+                        {'event_id': str(occurrence)},
+                        self._hint_for(ValueError()),
+                    )
+        finally:
+            app_settings._sentry_throttle_redis = original_client
+            app_settings._sentry_throttle_redis_blocked_until = (
+                original_blocked
+            )
+        assert broken.calls == 1
 
 
 class TestThrottleKey:
