@@ -60,13 +60,25 @@
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
 
-    {{- /* Preload the LCP hero image on the home page, only the
-           first slide of the screenshot slider. Subsequent slides
-           come in via lazy <img> as the user scrolls/advances. */ -}}
-    {{- if and .IsHome $heroSlides -}}
-      {{- $first := index $heroSlides 0 -}}
-    <link rel="preload" as="image" type="image/webp" href="{{ $first.fallbackWebp }}" imagesrcset="{{ $first.webpSrcset }}" imagesizes="(min-width: 1280px) 1200px, 100vw" fetchpriority="high">
-    {{- end }}
+    {{- /* No rel=preload for the LCP hero image. The first slide is
+           a server-rendered <picture> in the initial HTML, carrying
+           loading="eager" and fetchpriority="high" (layouts/index.html),
+           so the preload scanner already finds it and already fetches
+           it at high priority. rel=preload exists for resources the
+           parser cannot see, a CSS background or a JS-injected src;
+           for markup the parser does see it only duplicates the
+           srcset as a second source of truth.
+
+           That duplicate is not theoretical. It shipped for months
+           emitting a candidate ending in "%20480w", a URL that never
+           existed, because Go's html/template picks its escaper from
+           the attribute name: `srcset` has a srcset-aware escaper,
+           but `imagesrcset` is absent from that table and merely
+           contains "src", so the fallback heuristic treated the whole
+           value as one URL and percent-encoded the separators. Go
+           master still does this. Deleting the tag removes the bug
+           and the duplication together; if a preload is ever genuinely
+           needed here, the escaping trap comes back with it. */ -}}
 
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
 
