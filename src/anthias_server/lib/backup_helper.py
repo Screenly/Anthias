@@ -8,6 +8,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -685,6 +686,61 @@ def create_backup(name: str = default_archive_name) -> str:
     return archive_name
 
 
+def _is_asset_member(name: str) -> bool:
+    """True for a tar member that lives inside the media store."""
+    parts = name.replace('\\', '/').strip('/').split('/')
+    return len(parts) > 1 and parts[0] in _ASSET_DIRS
+
+
+def _extract_asset_atomically(
+    tar: tarfile.TarFile,
+    member: tarfile.TarInfo,
+    home: str,
+    extract_kwargs: dict[str, Any],
+) -> None:
+    """Extract one media-store file via a sibling temp name + ``os.replace``.
+
+    ``tar.extract`` writes straight to the member's final path, so an
+    asset that already exists on the device is truncated and then
+    refilled in place — while the viewer may be fetching that exact
+    file over ``/anthias_assets/<name>``. Django's ``FileResponse``
+    declares ``Content-Length`` from the file as it is at the moment
+    the response is built and then streams the same open fd to EOF, so
+    a restore that lands a *larger* copy makes the body overrun the
+    header (uvicorn: "Response content longer than Content-Length",
+    Sentry ANTHIAS-37) and a *smaller* one makes it fall short
+    ("Response content shorter than Content-Length"). Either way the
+    viewer has already been handed a spliced half-old/half-new image.
+
+    Staging to a sibling and renaming makes the swap a single inode
+    change: an in-flight response keeps reading the inode it opened and
+    still matches the length it promised, and no request can ever
+    observe a half-written asset. This is the same contract every other
+    writer of the media store already keeps (``processing.py``,
+    ``celery_tasks.py``, ``views.py``, ``integrations/ingest.py``) —
+    restore was the one path that did not.
+
+    The staging name is dot-prefixed *and* ``.tmp``-suffixed so both of
+    ``views_files.anthias_assets``' transient-file guards refuse to
+    serve it, ``_exclude_from_backup`` keeps it out of the next
+    archive, and the hourly ``cleanup()`` sweep collects it if the
+    process dies between the extract and the rename.
+    """
+    directory = path.dirname(member.name)
+    staged_name = f'{directory}/.restore-{uuid.uuid4().hex}.tmp'
+    staged = member.replace(name=staged_name, deep=False)
+    staged_path = path.join(home, staged_name)
+    try:
+        tar.extract(staged, **extract_kwargs)
+        os.replace(staged_path, path.join(home, member.name))
+    except BaseException:
+        try:
+            remove(staged_path)
+        except OSError:
+            pass
+        raise
+
+
 def recover(file_path: str) -> None:
     home = getenv('HOME')
     if not home:
@@ -738,7 +794,15 @@ def recover(file_path: str) -> None:
                         member.name,
                     )
                     continue
-                tar.extract(member, **extract_kwargs)
+                if member.isfile() and _is_asset_member(member.name):
+                    # Swapped in atomically — a live request for this
+                    # asset must never see it half-written. See
+                    # _extract_asset_atomically.
+                    _extract_asset_atomically(
+                        tar, member, home, extract_kwargs
+                    )
+                else:
+                    tar.extract(member, **extract_kwargs)
                 if member.isfile() and _is_db_file(member.name):
                     # On an upgraded device ``.screenly`` and
                     # ``screenly.db`` are back-compat symlinks to

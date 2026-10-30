@@ -495,6 +495,46 @@ def test_recover_writes_only_runtime_files(backup_home: str) -> None:
     assert not path.exists(path.join(a, 'evil.sh'))
 
 
+def test_recover_swaps_assets_atomically(backup_home: str) -> None:
+    """A restore must not rewrite an asset in place.
+
+    The viewer fetches assets over ``/anthias_assets/<name>`` while a
+    restore is running, and Django's ``FileResponse`` declares
+    ``Content-Length`` from the file as it stands when the response is
+    built, then streams that same open fd to EOF. Truncating and
+    refilling the path under a live reader therefore both corrupts what
+    the viewer renders and breaks the promised length — overrunning it
+    when the restored copy is larger (uvicorn: "Response content longer
+    than Content-Length", Sentry ANTHIAS-37) and falling short when it
+    is smaller. Staging to a sibling and renaming makes the swap one
+    inode change, so an in-flight response is unaffected.
+    """
+    asset_dir = path.join(backup_home, 'anthias_assets')
+    target = path.join(asset_dir, 'pic.jpg')
+    old_bytes = b'OLD'
+    new_bytes = b'NEW' * 100  # deliberately larger than what it replaces
+    with open(target, 'wb') as f:
+        f.write(old_bytes)
+    old_inode = os.stat(target).st_ino
+
+    archive = path.join(backup_home, 'assets.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, 'anthias_assets/pic.jpg', new_bytes)
+
+    # Stands in for the response that is already streaming this asset.
+    with open(target, 'rb') as inflight:
+        recover(archive)
+        assert inflight.read() == old_bytes
+        assert os.fstat(inflight.fileno()).st_size == len(old_bytes)
+
+    assert os.stat(target).st_ino != old_inode
+    with open(target, 'rb') as f:
+        assert f.read() == new_bytes
+    # The staging name is gone — no debris for the cleanup() sweep.
+    assert os.listdir(asset_dir) == ['pic.jpg']
+
+
 def test_backup_ships_only_runtime_files(backup_home: str) -> None:
     """A backup captures the runtime whitelist and nothing else. Config,
     DB, default-asset manifest, db backups and assets are kept; the
@@ -1188,7 +1228,10 @@ def test_recover_clears_the_stale_wal_when_a_later_member_fails(
     def extract(
         self: tarfile.TarFile, member: tarfile.TarInfo, **kwargs: object
     ) -> None:
-        if member.name == 'anthias_assets/after-the-db.bin':
+        # Matched by prefix, not by exact name: an asset is extracted
+        # under a staging name and renamed into place, so the member
+        # this sees is '.restore-<hex>.tmp', not the archived name.
+        if member.name.startswith('anthias_assets/'):
             raise OSError('disk full')
         real_extract(self, member, **kwargs)  # type: ignore[arg-type]
 
