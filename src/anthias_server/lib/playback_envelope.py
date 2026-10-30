@@ -274,15 +274,36 @@ _CODECS_WITH_RULES = frozenset({'h264'})
 # produces. The earlier set missed 9-bit, 14-bit, 16-bit, 4:4:0,
 # planar RGB and the semi-planar 4:2:2 / 4:4:4 pairs.
 #
-# ``gray`` is deliberately absent. H.264 monochrome is the one
-# remaining format an encoder could plausibly hand us that is not
-# 8-bit 4:2:0, and the queue has no gray fourcc. But a decoder
-# delivering a monochrome stream as NV12 with neutral chroma is
-# ordinary behaviour, so the likely truth is that it plays, and
-# guessing otherwise would cost an operator a working asset. Measure
-# it before adding it. Everything still unflagged beyond that is RGB
-# or a hardware-surface pseudo-format, neither of which appears as an
-# H.264 stream's pixel format.
+# Be clear about what is measured here and what is extrapolated,
+# because this is a BLOCKING rule and the bar is a driver fact. Two
+# points are measured, one on each axis, on a Pi 4B: a High 10 source
+# and a 4:2:2 source are both refused, ``not opened``, cores pegged,
+# ~36% drops. That pair is what makes the rest sound. It shows the
+# decoder does NOT quietly downconvert a format the capture queue
+# cannot express; it refuses the stream. So 9-, 12-, 14- and 16-bit
+# extrapolate from the measured 10-bit along the depth axis, and
+# 4:4:0, planar RGB and the semi-planar pairs extrapolate from the
+# measured 4:2:2 along the chroma axis. Same mechanism, same queue,
+# one step further out.
+#
+# Some of those markers are inert for H.264 and kept for breadth, not
+# because they can fire: 16-bit is not expressible in H.264 at all
+# (``bit_depth_luma_minus8`` tops out at 6), and 4:4:0 is not an H.264
+# chroma format. ``gbrp`` is reachable, through 4:4:4 with separate
+# colour planes. Do not read the count of markers as the weight of the
+# evidence; the two measurements above are the evidence.
+#
+# ``gray`` is deliberately absent, and it is the one case the
+# extrapolation above does NOT cover. Every marker here describes a
+# format carrying *more* than the queue can express, which is what the
+# two measurements tested. Monochrome carries *less*, and a decoder
+# can satisfy an NV12 capture buffer from it trivially by writing
+# neutral chroma. So the mechanism that refuses High 10 gives no
+# reason to expect a refusal here, the likely truth is that it plays,
+# and guessing otherwise would cost an operator a working asset.
+# Measure it before adding it. Everything still unflagged beyond that
+# is RGB or a hardware-surface pseudo-format, neither of which appears
+# as an H.264 stream's pixel format.
 UNSUPPORTED_PIX_FMT_MARKERS = (
     '9le',
     '9be',

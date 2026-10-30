@@ -312,7 +312,15 @@ def test_8bit_420_pixel_formats_pass(pix_fmt: str) -> None:
 )
 def test_formats_the_first_denylist_missed_are_flagged(pix_fmt: str) -> None:
     """Every one of these is a real ``ffmpeg -pix_fmts`` name outside
-    8-bit 4:2:0, and every one slipped through the original markers."""
+    8-bit 4:2:0, and every one slipped through the original markers.
+
+    These are extrapolated, not measured. A Pi 4B was measured
+    refusing a High 10 source and a 4:2:2 source, which is what shows
+    the decoder refuses rather than downconverts a format the capture
+    queue cannot express. Each name here is one step further out along
+    one of those two axes. See the marker list for which of them
+    cannot actually occur in H.264.
+    """
     assert env.is_unsupported_pix_fmt(pix_fmt), pix_fmt
 
 
