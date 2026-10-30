@@ -34,6 +34,7 @@ from anthias_common.utils import (
     get_node_ip,
     get_node_mac_address,
     is_balena_app,
+    memory_cache_mib,
 )
 from anthias_server.api.helpers import (
     AssetCreationError,
@@ -1103,6 +1104,15 @@ class InfoViewV2(InfoViewMixin):
             'free': virtual_memory.free >> 20,
             'shared': virtual_memory.shared >> 20,
             'buff': virtual_memory.buffers >> 20,
+            # ``buff`` above is the kernel's raw "Buffers" line alone,
+            # which is near-zero on most devices and is NOT what the
+            # System Info page's "Buffers / cache" row shows. That row
+            # is ``cache`` — buffers + page cache + shared. Both are
+            # exposed so a client polling this endpoint can reproduce
+            # the web figure instead of trying to derive it from
+            # ``buff`` and coming up short. See
+            # https://forums.screenly.io/t/api-memory-discrepancy/6721
+            'cache': memory_cache_mib(virtual_memory),
             'available': virtual_memory.available >> 20,
             'low_ram': virtual_memory.total < LOW_RAM_THRESHOLD_KB * 1024,
         }
@@ -1224,7 +1234,25 @@ class InfoViewV2(InfoViewMixin):
                             'used': {'type': 'integer'},
                             'free': {'type': 'integer'},
                             'shared': {'type': 'integer'},
-                            'buff': {'type': 'integer'},
+                            'buff': {
+                                'type': 'integer',
+                                'description': (
+                                    'Kernel "Buffers" only, in MiB. '
+                                    'Usually near zero; this is not '
+                                    'the figure the System Info page '
+                                    'labels "Buffers / cache" — see '
+                                    '`cache`.'
+                                ),
+                            },
+                            'cache': {
+                                'type': 'integer',
+                                'description': (
+                                    'Reclaimable memory in MiB — '
+                                    'kernel buffers + page cache + '
+                                    'shared. Matches the System Info '
+                                    'page\'s "Buffers / cache" row.'
+                                ),
+                            },
                             'available': {'type': 'integer'},
                             'low_ram': {'type': 'boolean'},
                         },
