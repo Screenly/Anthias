@@ -25,14 +25,14 @@ dev-host = [
     "django-stubs==6.1.2",
     "djangorestframework-stubs==3.18.1",
     "mypy==2.4.0",
-    "ruff==0.17.1",
+    "ruff==0.17.2",
     "tenacity==9.2.1",
     "types-gunicorn==26.2.0.20261008",
     # Direct dev dep: types-psutil used to arrive transitively via
     # djangorestframework-stubs, which dropped it in 3.17.1 — pin it
     # directly so the psutil import in the server keeps its stubs.
     "types-psutil==7.2.2.20260906",
-    "types-python-dateutil==2.9.0.20260807",
+    "types-python-dateutil==2.9.0.20261021",
     "types-pytz==2026.5.0.20261006",
     "types-PyYAML==6.0.12.20260518",
 ]
@@ -45,12 +45,12 @@ docker-image-builder = [
 ]
 server = [
     "celery==5.6.3",
-    "certifi==2026.10.18",
+    "certifi==2026.10.23",
     "channels==4.3.2",
     "channels-redis==4.3.0",
     "Django==5.2.17",
     "djangorestframework==3.18.3",
-    "django-dbbackup==5.3.1",
+    "django-dbbackup==5.4.0",
     "django-stubs-ext==6.1.2",
     "drf-spectacular==0.30.0",
     "Jinja2==3.1.6",
@@ -75,12 +75,12 @@ server = [
     "pillow-heif==1.4.0",
     "psutil==7.2.2",
     "pydbus==0.6.0",
-    "python-dateutil==2.9.0.post0",
+    "python-dateutil==3.0.0",
     "pytz==2026.5",
     "PyYAML==6.0.3",
     "redis==8.1.0",
     "requests==2.34.2",
-    "sentry-sdk==2.72.0",
+    "sentry-sdk==2.73.0",
     "tenacity==9.2.1",
     "sh==2.4.0",
     "urllib3==2.8.0",
@@ -89,15 +89,15 @@ server = [
     "yt-dlp>=2026.7.4",
 ]
 viewer = [
-    "certifi==2026.10.18",
+    "certifi==2026.10.23",
     "Django==5.2.17",
     "Jinja2==3.1.6",
     "pydbus==0.6.0",
-    "python-dateutil==2.9.0.post0",
+    "python-dateutil==3.0.0",
     "pytz==2026.5",
     "redis==8.1.0",
     "requests==2.34.2",
-    "sentry-sdk==2.72.0",
+    "sentry-sdk==2.73.0",
     "tenacity==9.2.1",
     "sh==2.4.0",
     "urllib3==2.8.0",
@@ -108,9 +108,9 @@ dev = [
     "pytest-django==4.14.0",
     "pytest-mock==3.17.0",
     "pytest-xdist==3.8.0",
-    "playwright==1.64.0",
+    "playwright==1.64.1",
     "pytest-playwright==0.10.0",
-    "time-machine==3.5.1",
+    "time-machine==3.6.0",
 ]
 host = [
     "ansible-core==2.21.5",
@@ -143,7 +143,7 @@ mypy = [
     "channels==4.3.2",
     "channels-redis==4.3.0",
     "Django==5.2.17",
-    "django-dbbackup==5.3.1",
+    "django-dbbackup==5.4.0",
     "django-stubs-ext==6.1.2",
     "djangorestframework==3.18.3",
     "drf-spectacular==0.30.0",
@@ -155,7 +155,7 @@ mypy = [
     # ignored, mirroring the pydbus / sh pattern.
     "Pillow==12.3.0",
     "pytz==2026.5",
-    "sentry-sdk==2.72.0",
+    "sentry-sdk==2.73.0",
     "whitenoise==6.12.0",
 ]
 
