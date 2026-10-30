@@ -3,11 +3,14 @@
 __author__ = 'Nash Kaminski'
 __license__ = 'Dual License: GPLv2 and Commercial License'
 
+import glob
 import ipaddress
 import json
 import logging
 import os
+import selectors
 import subprocess
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -32,6 +35,22 @@ from tenacity import (
 from anthias_common.device_helper import (
     detect_board_subtype,
     read_device_tree_model,
+)
+
+# Same deal for the journal snapshot contract: the caps, the
+# journalctl argv builder and the Redis key naming are shared with the
+# in-container reader (anthias_server.lib.system_logs), so neither
+# side can drift from the other.
+from anthias_common.journal import (
+    JOURNAL_LOGS_COMMAND,
+    MAX_PAYLOAD_BYTES,
+    PERSISTENT_JOURNAL_GLOB,
+    RESULT_TTL_SECONDS,
+    SUBPROCESS_TIMEOUT_SECONDS,
+    VOLATILE_JOURNAL_GLOB,
+    JournalRequestError,
+    build_journalctl_argv,
+    result_key,
 )
 from anthias_host_agent.ifaddrs import interface_addresses
 
@@ -149,6 +168,294 @@ def set_ip_addresses(probe_internet: bool = True) -> None:
     rdb.set('ip_addresses', json.dumps(ip_addresses))
 
 
+def _newest_journal_mtime(pattern: str) -> float | None:
+    """mtime of the most recently written journal file, or None."""
+    mtimes = []
+    for path in glob.glob(pattern):
+        try:
+            mtimes.append(os.path.getmtime(path))
+        except OSError:
+            # Rotated out from under us between glob and stat.
+            continue
+    return max(mtimes) if mtimes else None
+
+
+def journal_is_persistent() -> bool:
+    """Does this host keep the journal across reboots?
+
+    Measured, not inferred: whichever of ``/var/log/journal`` and
+    ``/run/log/journal`` holds the freshest journal file is where
+    journald is writing right now. Both cheaper probes give a wrong
+    "yes" on hardware we actually ship on — see the globs in
+    ``anthias_common.journal`` for the two cases.
+
+    Reported rather than assumed because an install predating the
+    Ansible persistence task still has a volatile journal, and the
+    API has to be able to tell an operator that what they are reading
+    is current-boot-only.
+    """
+    persistent = _newest_journal_mtime(PERSISTENT_JOURNAL_GLOB)
+    if persistent is None:
+        return False
+    volatile = _newest_journal_mtime(VOLATILE_JOURNAL_GLOB)
+    return volatile is None or persistent >= volatile
+
+
+def _system_journal_files() -> list[str]:
+    """Journal files that hold SYSTEM records, in either location.
+
+    ``user-<uid>.journal`` is excluded deliberately: journald makes a
+    user's own journal readable by that user, so including it would
+    make the readability probe below pass on exactly the host where
+    the system journal is hidden.
+    """
+    return [
+        path
+        for pattern in (PERSISTENT_JOURNAL_GLOB, VOLATILE_JOURNAL_GLOB)
+        for path in glob.glob(pattern)
+        if not os.path.basename(path).startswith('user-')
+    ]
+
+
+def system_journal_is_readable() -> bool:
+    """Can this process actually read the host's system journal?
+
+    There is no usable signal from journalctl itself. It never exits
+    non-zero for a caller that may not read the system journal: it
+    returns whatever that caller CAN see — its own user journal — and
+    exits 0. It does print a hint on stderr, but only for the human
+    output formats; measured on the QA rig, ``--output=json`` (what
+    this agent uses, because it is the format that matches the Balena
+    supervisor's) produces an EMPTY stderr and return code 0 whether
+    or not the system journal was visible. A ``-u docker.service``
+    read came back with zero lines, no error, nothing to distinguish
+    it from a unit that simply had not logged.
+
+    So ask the kernel instead. ``os.access`` honours POSIX ACLs as
+    well as group membership, which matters because journald grants
+    the ``adm`` group access by ACL rather than by file group.
+
+    A host with no system journal files at all answers True: we
+    cannot tell, and refusing the request would be worse than
+    returning whatever journalctl finds.
+    """
+    candidates = _system_journal_files()
+    if not candidates:
+        return True
+    return any(os.access(path, os.R_OK) for path in candidates)
+
+
+def _reply(
+    rdb: 'redis.Redis', request_id: str, payload: dict[str, Any]
+) -> None:
+    """Deliver one journal reply to the waiting container.
+
+    RPUSH + EXPIRE onto the correlation-ID key, which the server is
+    sitting on with BLPOP. A list rather than a pub/sub completion
+    message because a blocking pop has no subscribe-before-publish
+    race, and it is what the repo already uses for request/reply on
+    the viewer bus.
+
+    The TTL matters in the failure case: if the requesting worker has
+    already given up and gone away, nobody ever pops this and it would
+    otherwise sit in Redis holding journal text indefinitely.
+    """
+    key = result_key(request_id)
+    try:
+        rdb.rpush(key, json.dumps(payload))
+        rdb.expire(key, RESULT_TTL_SECONDS)
+    except redis.RedisError:
+        # Nothing useful left to do — the requester's BLPOP will time
+        # out and it will report the snapshot as unavailable.
+        logger.warning(
+            'Unable to deliver journal reply %s to redis',
+            request_id,
+            exc_info=True,
+        )
+
+
+def _run_journalctl(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    """Read a snapshot with bounded buffers and one wall-clock deadline.
+
+    --all preserves long MESSAGE fields, so capturing all output before
+    applying the byte cap could exhaust memory. Drain both pipes while
+    retaining only the newest stdout bytes and the first 500 stderr
+    bytes. One extra stdout byte lets the caller detect truncation.
+    """
+    deadline = time.monotonic() + SUBPROCESS_TIMEOUT_SECONDS
+    stdout = bytearray()
+    stderr = bytearray()
+    with subprocess.Popen(
+        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    ) as process:
+        try:
+            with selectors.DefaultSelector() as selector:
+                assert process.stdout is not None
+                assert process.stderr is not None
+                selector.register(process.stdout, selectors.EVENT_READ, True)
+                selector.register(process.stderr, selectors.EVENT_READ, False)
+                while selector.get_map():
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(
+                            argv, SUBPROCESS_TIMEOUT_SECONDS
+                        )
+                    for key, _ in selector.select(remaining):
+                        chunk = os.read(key.fd, 64 * 1024)
+                        if not chunk:
+                            selector.unregister(key.fileobj)
+                        elif key.data:
+                            stdout.extend(chunk)
+                            overflow = len(stdout) - (MAX_PAYLOAD_BYTES + 1)
+                            if overflow > 0:
+                                del stdout[:overflow]
+                        else:
+                            stderr.extend(chunk[: max(0, 500 - len(stderr))])
+            returncode = process.wait(
+                timeout=max(0, deadline - time.monotonic())
+            )
+        except BaseException:
+            # Reap the exact child on timeouts and read failures as well.
+            process.kill()
+            process.wait()
+            raise
+    return subprocess.CompletedProcess(
+        argv,
+        returncode,
+        stdout.decode('utf-8', 'replace'),
+        stderr.decode('utf-8', 'replace'),
+    )
+
+
+def collect_journal_logs(request_id: str, args: dict[str, Any]) -> None:
+    """Run a bounded ``journalctl`` snapshot and reply over Redis.
+
+    Every exit path writes exactly one reply, including the error
+    paths, so the container's BLPOP resolves promptly instead of
+    waiting out its timeout on a request that already failed.
+
+    **This must never block indefinitely.** ``subscriber_loop`` is
+    single-threaded — reboot and shutdown queue behind whatever runs
+    here — which is why the snapshot is capped by lines, capped by
+    bytes, and hard-capped in wall-clock by the subprocess timeout,
+    and why ``--follow`` is not and cannot be offered.
+    """
+    rdb = redis.Redis(
+        host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+    )
+
+    try:
+        argv = build_journalctl_argv(
+            count=args.get('count'),
+            unit=args.get('unit'),
+            container=args.get('container'),
+            since=args.get('since'),
+            until=args.get('until'),
+        )
+    except JournalRequestError as error:
+        # Re-validated here rather than trusted from the request: the
+        # hostcmd channel is unauthenticated local Redis, so the API
+        # serializer's 400 is not the only gate these values pass.
+        logger.warning('Rejecting journal request %s: %s', request_id, error)
+        _reply(rdb, request_id, {'ok': False, 'error': str(error)})
+        return
+
+    if not system_journal_is_readable():
+        # Fail fast and loudly. journalctl would exit 0 here and hand
+        # back the service account's own user journal with every
+        # system record silently missing — a log view that looks
+        # populated and omits everything an operator came for.
+        logger.warning(
+            'Refusing journal request %s: the host agent cannot read '
+            'the system journal. The unit needs '
+            'SupplementaryGroups=systemd-journal.',
+            request_id,
+        )
+        _reply(
+            rdb,
+            request_id,
+            {
+                'ok': False,
+                'error': (
+                    'The host agent cannot read the system journal '
+                    '(insufficient permissions). Update '
+                    'anthias-host-agent.service so it runs with '
+                    'SupplementaryGroups=systemd-journal, then restart '
+                    'it.'
+                ),
+            },
+        )
+        return
+
+    logger.info('Collecting journal snapshot %s: %s', request_id, argv)
+    try:
+        completed = _run_journalctl(argv)
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            'journalctl timed out after %ss for request %s',
+            SUBPROCESS_TIMEOUT_SECONDS,
+            request_id,
+        )
+        _reply(
+            rdb,
+            request_id,
+            {'ok': False, 'error': 'Timed out reading the system journal.'},
+        )
+        return
+    except OSError as error:
+        # No journalctl on PATH, or exec failed. Real on a
+        # non-systemd host; report it rather than dying inside the
+        # pubsub handler and taking subscriber_loop down with it.
+        logger.warning('Unable to execute journalctl: %s', error)
+        _reply(
+            rdb,
+            request_id,
+            {
+                'ok': False,
+                'error': 'journalctl is not available on this host.',
+            },
+        )
+        return
+
+    if completed.returncode != 0:
+        stderr_text = (completed.stderr or '').strip()[:500]
+        logger.warning(
+            'journalctl exited %s for request %s: %s',
+            completed.returncode,
+            request_id,
+            stderr_text,
+        )
+        _reply(
+            rdb,
+            request_id,
+            {
+                'ok': False,
+                'error': stderr_text or 'journalctl failed with no output.',
+            },
+        )
+        return
+
+    payload = completed.stdout or ''
+    encoded = payload.encode('utf-8')
+    truncated = len(encoded) > MAX_PAYLOAD_BYTES
+    if truncated:
+        # Keep the newest entries: journalctl -n emits oldest-first,
+        # so trim from the front. The decoder tolerates a partial
+        # leading line and drops it.
+        payload = encoded[-MAX_PAYLOAD_BYTES:].decode('utf-8', 'replace')
+
+    _reply(
+        rdb,
+        request_id,
+        {
+            'ok': True,
+            'payload': payload,
+            'truncated': truncated,
+            'persistent': journal_is_persistent(),
+        },
+    )
+
+
 # Explicit command whitelist for security reasons.
 CMD_TO_ARGV: dict[str, list[str] | Callable[[], None]] = {
     'reboot': ['/usr/bin/sudo', '-n', '/usr/bin/systemctl', 'reboot'],
@@ -161,7 +468,55 @@ CMD_TO_ARGV: dict[str, list[str] | Callable[[], None]] = {
 }
 
 
-def execute_host_command(cmd_name: str) -> None:
+def parse_host_command(
+    payload: str,
+) -> tuple[str, str | None, dict[str, Any]]:
+    """Split a ``hostcmd`` message into (name, correlation id, args).
+
+    Two wire shapes are accepted, on purpose:
+
+    * **Bare string** (``'reboot'``, ``'set_ip_addresses'``) — the
+      original fire-and-forget form. Still the only shape the
+      long-standing callers publish, and a container running an older
+      image than the host agent keeps working. Not going anywhere.
+    * **JSON object** (``{"cmd": …, "id": …, "args": {…}}``) — needed
+      by anything with parameters and a reply, i.e. journal snapshots.
+      The correlation ID is what keeps two concurrent requests from
+      reading each other's results.
+
+    A payload that merely looks like JSON but isn't falls back to the
+    bare-string path, where it fails the normal "no such command"
+    way rather than raising out of the pubsub handler.
+    """
+    stripped = payload.strip()
+    if stripped.startswith('{'):
+        try:
+            message = json.loads(stripped)
+        except ValueError:
+            message = None
+        if isinstance(message, dict):
+            args = message.get('args')
+            return (
+                str(message.get('cmd', '')),
+                message.get('id'),
+                args if isinstance(args, dict) else {},
+            )
+    return payload, None, {}
+
+
+def execute_host_command(payload: str) -> None:
+    cmd_name, request_id, args = parse_host_command(payload)
+
+    if cmd_name == JOURNAL_LOGS_COMMAND:
+        if not request_id:
+            logger.warning('Ignoring journal request with no correlation id')
+            return
+        # Deliberately not gated on TESTING the way reboot/shutdown
+        # are: that gate exists to stop destructive commands firing,
+        # and reading the journal is read-only.
+        collect_journal_logs(str(request_id), args)
+        return
+
     cmd = CMD_TO_ARGV.get(cmd_name, None)
     if cmd is None:
         logger.warning(

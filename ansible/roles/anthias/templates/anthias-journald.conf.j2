@@ -1,0 +1,32 @@
+# {{ ansible_managed }}
+#
+# Written by the Anthias Ansible role ONLY when
+# anthias_journal_persistent is true. It is false by default: a player
+# normally runs from an SD card, and Raspberry Pi OS pins
+# Storage=volatile in
+# /usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf
+# specifically to keep journald off it. journald's small appends and
+# periodic fsync are close to the worst case for the write
+# amplification SD cards do internally -- measured on idle QA players
+# carrying the normal Anthias stack, the journal grows 19-28 MiB a
+# day, about 7-10 GiB a year.
+#
+# /api/v2/system/logs does not depend on this file. The host agent
+# reads the volatile journal in /run just as well; persistence only
+# adds history that survives a reboot, and the API reports which it
+# got in its `persistent` field.
+#
+# The 99- prefix is what makes this win over the vendor drop-in when
+# an operator has asked for it: both are read from the same merged
+# directory set, and an unprefixed name would only beat
+# 40-rpi-volatile-storage.conf by alphabetical luck.
+#
+# NOTE: SystemMaxUse is enforced by vacuuming, so on a device whose
+# journal already exceeds the cap the first journald restart after
+# this lands DISCARDS the excess, oldest first. Raise
+# anthias_journal_max_use where the longer history matters more than
+# the card.
+[Journal]
+Storage=persistent
+SystemMaxUse={{ anthias_journal_max_use }}
+Compress=yes

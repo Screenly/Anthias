@@ -21,6 +21,7 @@ from anthias_server.api.views.v2 import (
     ScreenlyMigrateAssetViewV2,
     ScreenlyValidateTokenViewV2,
     ShutdownViewV2,
+    SystemLogsViewV2,
     ViewerPlaylistViewV2,
     ViewerSettingsViewV2,
     WifiSetupViewV2,
@@ -109,6 +110,11 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
             'v2/network/wifi-setup',
             WifiSetupViewV2.as_view(),
             name='network_wifi_setup_v2',
+        ),
+        path(
+            'v2/system/logs',
+            SystemLogsViewV2.as_view(),
+            name='system_logs_v2',
         ),
         path(
             'v2/viewer/playlist',
