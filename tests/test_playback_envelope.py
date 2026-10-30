@@ -290,6 +290,50 @@ def test_8bit_420_pixel_formats_pass(pix_fmt: str) -> None:
     assert warnings == []
 
 
+@pytest.mark.parametrize(
+    'pix_fmt',
+    [
+        # Deeper than 8 bits. The first version of the denylist caught
+        # only 10- and 12-bit and missed these.
+        'yuv420p9le',
+        'yuv420p9be',
+        'yuv420p14le',
+        'yuv420p16be',
+        'gray16le',
+        # Chroma the capture queue has no fourcc for, again all missed
+        # by the first version: 4:4:0, planar RGB, and the semi-planar
+        # 4:2:2 / 4:4:4 pairs whose names carry no "422" or "444".
+        'yuv440p',
+        'yuvj440p',
+        'gbrp',
+        'nv16',
+        'nv24',
+    ],
+)
+def test_formats_the_first_denylist_missed_are_flagged(pix_fmt: str) -> None:
+    """Every one of these is a real ``ffmpeg -pix_fmts`` name outside
+    8-bit 4:2:0, and every one slipped through the original markers."""
+    assert env.is_unsupported_pix_fmt(pix_fmt), pix_fmt
+
+
+@pytest.mark.parametrize(
+    'pix_fmt', ['yuv420p', 'yuvj420p', 'nv12', 'nv21', 'gray']
+)
+def test_what_the_capture_queue_produces_is_never_flagged(
+    pix_fmt: str,
+) -> None:
+    """The negative control, and the one that matters.
+
+    The four the ``bcm2835-codec`` capture queue actually produces must
+    never trip the denylist, however many markers it grows. ``gray``
+    rides along deliberately: H.264 monochrome is the one plausible
+    non-4:2:0 format left unflagged, because a decoder delivering it as
+    NV12 with neutral chroma is ordinary and refusing it on that guess
+    would cost an operator a working asset. Measure before adding it.
+    """
+    assert not env.is_unsupported_pix_fmt(pix_fmt), pix_fmt
+
+
 def test_unknown_pixel_format_is_not_flagged() -> None:
     """Denylist, not allowlist — an ffprobe name we did not
     anticipate must produce silence rather than a rejection."""
@@ -467,9 +511,10 @@ def test_as_positive_int_fails_open_on_overflow() -> None:
         # BCM2711's HEVC block does 4Kp60 and 10-bit, so an HEVC
         # target inherits none of the H.264 decoder's limits.
         ('pi4-64', 'hevc', False),
-        # Pi 5 has no VideoCore H.264 block at all. Its software
-        # throughput ceiling lives in
-        # ``processing._SW_DECODE_MAX_PIXELS``, not here.
+        # Pi 5 has no VideoCore H.264 block at all, so nothing here
+        # bounds it. Its software throughput ceiling belongs in
+        # ``processing._SW_DECODE_MAX_PIXELS`` and arrives with the
+        # gate that reads it.
         ('pi5', 'h264', False),
         # Boards this module deliberately does not characterise must
         # not have a Raspberry Pi bound borrowed on their behalf.

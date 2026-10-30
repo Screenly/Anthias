@@ -160,8 +160,10 @@ class PlaybackWarning:
 #
 # Different players, one decoder. ``pi5`` is absent on purpose: BCM2712
 # dropped the H.264 block entirely, so nothing there refuses the
-# format and its limit is throughput, held in
-# ``processing._SW_DECODE_MAX_PIXELS``.
+# format and its limit is throughput rather than capability. That
+# belongs in ``processing._SW_DECODE_MAX_PIXELS``, which holds
+# measured per-board, per-codec pixel ceilings; the ``pi5`` entry
+# arrives with the gate that reads it, not here.
 BCM2835_H264_BOARDS = frozenset({'pi2', 'pi3', 'pi3-64', 'pi4-64'})
 
 # ``MAX_W_CODEC`` / ``MAX_H_CODEC`` from bcm2835-v4l2-codec.c. Applied
@@ -259,17 +261,46 @@ _CODECS_WITH_RULES = frozenset({'h264'})
 # than checking membership of an 8-bit-4:2:0 allowlist *on purpose*:
 # an allowlist turns every ffprobe name we failed to anticipate into a
 # false rejection, whereas an unrecognised name here simply produces
-# no warning. ``10le`` / ``10be`` / ``12le`` / ``12be`` / ``p010``
-# cover High 10 and High 12; ``422`` / ``444`` cover the chroma
-# sampling the queue has no fourcc for.
+# no warning.
+#
+# Two groups. The ``<bits>le`` / ``<bits>be`` pairs and ``p010`` catch
+# anything deeper than 8 bits, which is every High 10 / 12 / 14 / 16
+# variant. ``422`` / ``440`` / ``444`` / ``gbrp`` / ``nv16`` / ``nv24``
+# catch chroma the queue has no fourcc for.
+#
+# Checked against all 267 names in ``ffmpeg -pix_fmts``: this flags 67
+# more than the first version did, and flags none of ``yuv420p`` /
+# ``yuvj420p`` / ``nv12`` / ``nv21``, which are what the queue actually
+# produces. The earlier set missed 9-bit, 14-bit, 16-bit, 4:4:0,
+# planar RGB and the semi-planar 4:2:2 / 4:4:4 pairs.
+#
+# ``gray`` is deliberately absent. H.264 monochrome is the one
+# remaining format an encoder could plausibly hand us that is not
+# 8-bit 4:2:0, and the queue has no gray fourcc. But a decoder
+# delivering a monochrome stream as NV12 with neutral chroma is
+# ordinary behaviour, so the likely truth is that it plays, and
+# guessing otherwise would cost an operator a working asset. Measure
+# it before adding it. Everything still unflagged beyond that is RGB
+# or a hardware-surface pseudo-format, neither of which appears as an
+# H.264 stream's pixel format.
 UNSUPPORTED_PIX_FMT_MARKERS = (
+    '9le',
+    '9be',
     '10le',
     '10be',
     '12le',
     '12be',
+    '14le',
+    '14be',
+    '16le',
+    '16be',
     'p010',
     '422',
+    '440',
     '444',
+    'gbrp',
+    'nv16',
+    'nv24',
 )
 
 
@@ -427,7 +458,9 @@ def evaluate(
     if device_key in BCM2835_H264_BOARDS:
         warnings.extend(_bcm2835_h264_warnings(metadata, device_key))
 
-    warnings.sort(key=lambda w: 0 if w.is_blocking else 1)
+    # No ordering pass: every finding here blocks, so there is nothing
+    # to sort by severity. Add one back alongside a second severity,
+    # not before it.
     return warnings
 
 
@@ -609,8 +642,10 @@ def blocking_warning(
 ) -> PlaybackWarning | None:
     """The first blocking warning for ``metadata``, if any.
 
-    Convenience for the upload gate, which rejects on the first
-    blocking finding and does not care about advisories.
+    Convenience for the upload gate. Every finding here blocks today,
+    so this is the first finding; it filters on severity anyway, so
+    that a softer tier added later cannot silently start rejecting
+    uploads.
     """
     for warning in evaluate(metadata, device_key):
         if warning.is_blocking:

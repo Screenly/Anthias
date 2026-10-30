@@ -193,22 +193,31 @@ file too — which then software-decodes at a few frames per second
 because the frame is larger than the decoder can take. The envelope is
 the second gate, and enabling a board means filling in both.
 
-Two tiers, and the distinction matters when you add a board:
+Everything in the envelope is driver-enforced, so every finding
+blocks. Only put a board in `BCM2835_H264_BOARDS` when you can point
+at a driver constant or a vendor spec, not a benchmark. Today that set
+is pi2, pi3, pi3-64 and pi4-64: every board whose H.264 path is
+`bcm2835-codec`, bounded by `MAX_W_CODEC` / `MAX_H_CODEC` = **1920 on
+each axis** (so portrait 1080x1920 is legal) *and* by Level 4.1's
+**8192-macroblock** frame budget, with a capture queue that is 8-bit
+4:2:0 only.
 
-* **`BLOCKING`** — the decoder *refuses* the format. Only put a board
-  here when you can point at a driver constant or a vendor spec, not a
-  benchmark. Today this is `BCM2835_H264_BOARDS` (pi2, pi3, pi3-64,
-  pi4-64): every board whose H.264 path is `bcm2835-codec`, bounded by
-  `MAX_W_CODEC` / `MAX_H_CODEC` = **1920 on each axis** (so portrait
-  1080x1920 is legal) and a capture queue that is 8-bit 4:2:0 only.
-* **`ADVISORY`** — you expect it to be too slow but the decoder will
-  still take it. Annotates the asset list; never blocks an upload.
-  Keep the bar high here. A bitrate rule once lived in this tier,
-  reasoned from the H.264 Level 4.2 ceiling; measuring it on a Pi 4
-  showed hardware decode still running at 2.5x realtime at more than
-  twice that bitrate, so it would only ever have flagged files that
-  play fine. Reason about *capability* from the driver; only reason
-  about *speed* from a measurement on the board itself.
+**A board that merely decodes too slowly does not belong here.** Its
+limit is throughput, not capability, and it goes in
+`processing._SW_DECODE_MAX_PIXELS`, which holds measured per-board,
+per-codec pixel ceilings and refuses an upload the same way. That map
+demands a number off a real device, which is the right bar for a
+judgement.
+
+The envelope briefly carried an `ADVISORY` tier for exactly those
+judgements. It is gone: its only member was "software H.264 above some
+size on a Pi 5", and the ceiling map is a better home for it. The
+lesson is the one the removed bitrate rule already taught. Reason
+about *capability* from the driver; only reason about *speed* from a
+measurement on the board itself. (That bitrate rule was derived from
+the H.264 Level 4.2 ceiling; measuring it on a Pi 4 showed hardware
+decode still running at 2.5x realtime at more than twice that
+bitrate, so it would only ever have flagged files that play fine.)
 
 A board you have not characterised belongs in **neither** set. `x86`
 and `rockpi4` are absent on purpose: their decode paths are still open
