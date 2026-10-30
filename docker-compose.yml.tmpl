@@ -123,6 +123,15 @@ services:
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
       - no_proxy=${no_proxy}
+      # Crossfade duration between image assets, milliseconds. Read
+      # by AnthiasWebview (image_transition::durationMs); unset or
+      # invalid falls back to the 300ms default, 0 disables the
+      # transition, see the FAQ entry for the full range and for how
+      # to set it on a Docker install. It IS forwarded on Qt5 builds
+      # (Pi 1/2/3-32) same as everywhere else: the viewer there just
+      # never reads it, since the crossfade is unconditionally
+      # compiled out below Qt 6 regardless of this value.
+      - ANTHIAS_IMAGE_TRANSITION_MS=${ANTHIAS_IMAGE_TRANSITION_MS}
     privileged: true
     restart: always
     # cage (the wlroots kiosk compositor used on Pi 5 / x86 /
