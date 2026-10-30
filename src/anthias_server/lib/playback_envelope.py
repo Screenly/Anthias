@@ -226,84 +226,54 @@ BCM2835_ENCODE_BOX = (1920, 1080)
 # dispatch in ``evaluate``.
 _CODECS_WITH_RULES = frozenset({'h264'})
 
-# There is deliberately NO bitrate rule here.
+# There is deliberately NO bitrate rule here. One was tried, set at
+# the H.264 High-profile Level 4.2 ceiling of 62.5 Mbps, and measuring
+# it on a Pi 4B killed it. 1080p25 through h264_v4l2m2m, clip looped
+# to 750 frames: 93 fps at ~9 Mbps falling to 62 fps at ~137 Mbps,
+# every clip accepted without error. At twice the threshold that rule
+# would have used, hardware decode still runs at 2.5x realtime.
 #
-# An earlier revision carried one, set at the H.264 High-profile
-# Level 4.2 ceiling (62.5 Mbps) on the reasoning that a stream past
-# the decoder's nominal level might stutter. Measured on a Pi 4B and
-# it is simply not true. Decoding 1080p25 through h264_v4l2m2m, with
-# the clip looped to 750 frames:
+# Content-insensitive, so the synthetic figures hold: real
+# High-profile content with B-frames measured 75 fps at 1080p30 Mbps,
+# in line with the sweep. Software decode is not, measuring ~5x more
+# expensive than synthetic clips, which is why nothing here reasons
+# about software throughput from a benchmark.
 #
-#     ~9 Mbps    93 fps        ~91 Mbps   75 fps
-#     ~45 Mbps   83 fps       ~137 Mbps   62 fps
-#
-# Throughput does fall as the bitrate climbs, but at 137 Mbps — more
-# than twice the threshold that rule would have used — hardware decode
-# still runs at 2.5x realtime, and the decoder accepted every clip
-# without error. The rule would have flagged files that play fine,
-# which is the exact failure this module is built to avoid.
-#
-# Cross-checked against real High-profile content with B-frames rather
-# than the synthetic noise those figures used: 1080p at 30 Mbps
-# hardware-decodes at 75 fps, in line with the sweep. The fixed-
-# function decoder is barely content-sensitive, so the conclusion
-# holds. (Software decode is a different story — real content measured
-# ~5x more expensive than the synthetic clips, which is exactly why
-# nothing here reasons about software throughput from a benchmark.)
-#
-# ``video_bit_rate`` is still recorded in asset metadata; it is useful
-# when diagnosing a report, it is just not evidence of a playback
-# problem on its own. If a bitrate rule is ever reintroduced it needs
-# a measurement showing real content failing, not a spec table.
+# ``video_bit_rate`` is still recorded for diagnostics. Reintroducing
+# a rule needs a measurement of real content failing, not a spec
+# table.
 
-# Substrings that positively identify a pixel format the VideoCore
-# decoder's capture queue cannot produce. Matched as a denylist rather
-# than checking membership of an 8-bit-4:2:0 allowlist *on purpose*:
-# an allowlist turns every ffprobe name we failed to anticipate into a
-# false rejection, whereas an unrecognised name here simply produces
-# no warning.
+# Pixel formats the VideoCore capture queue cannot produce, matched
+# as substrings. A denylist, not an 8-bit-4:2:0 allowlist: an
+# unrecognised ffprobe name must produce no warning rather than a
+# false rejection.
 #
-# Two groups. The ``<bits>le`` / ``<bits>be`` pairs and ``p010`` catch
-# anything deeper than 8 bits, which is every High 10 / 12 / 14 / 16
-# variant. ``422`` / ``440`` / ``444`` / ``gbrp`` / ``nv16`` / ``nv24``
-# catch chroma the queue has no fourcc for.
+# Two measured anchors, one per axis, on a Pi 4B: a High 10 source and
+# a 4:2:2 source are both refused, ``not opened``, cores pegged, ~36%
+# drops. That pair is the evidence for the rest, because it shows the
+# decoder refuses a format the queue cannot express rather than
+# downconverting it. So the ``<bits>le`` / ``<bits>be`` pairs and
+# ``p010`` extrapolate from the measured 10-bit along the depth axis,
+# and ``422`` / ``440`` / ``444`` / ``gbrp`` / ``nv16`` / ``nv24``
+# from the measured 4:2:2 along the chroma axis.
 #
-# Checked against all 267 names in ``ffmpeg -pix_fmts``: this flags 67
-# more than the first version did, and flags none of ``yuv420p`` /
-# ``yuvj420p`` / ``nv12`` / ``nv21``, which are what the queue actually
-# produces. The earlier set missed 9-bit, 14-bit, 16-bit, 4:4:0,
-# planar RGB and the semi-planar 4:2:2 / 4:4:4 pairs.
+# Verified against all 267 names in ``ffmpeg -pix_fmts``: none of
+# these match ``yuv420p``, ``yuvj420p``, ``nv12`` or ``nv21``, which
+# is what the queue produces.
 #
-# Be clear about what is measured here and what is extrapolated,
-# because this is a BLOCKING rule and the bar is a driver fact. Two
-# points are measured, one on each axis, on a Pi 4B: a High 10 source
-# and a 4:2:2 source are both refused, ``not opened``, cores pegged,
-# ~36% drops. That pair is what makes the rest sound. It shows the
-# decoder does NOT quietly downconvert a format the capture queue
-# cannot express; it refuses the stream. So 9-, 12-, 14- and 16-bit
-# extrapolate from the measured 10-bit along the depth axis, and
-# 4:4:0, planar RGB and the semi-planar pairs extrapolate from the
-# measured 4:2:2 along the chroma axis. Same mechanism, same queue,
-# one step further out.
+# Some markers cannot fire on H.264: 16-bit is not expressible
+# (``bit_depth_luma_minus8`` tops out at 6) and 4:4:0 is not an H.264
+# chroma format. ``gbrp`` is reachable, via 4:4:4 with separate colour
+# planes.
 #
-# Some of those markers are inert for H.264 and kept for breadth, not
-# because they can fire: 16-bit is not expressible in H.264 at all
-# (``bit_depth_luma_minus8`` tops out at 6), and 4:4:0 is not an H.264
-# chroma format. ``gbrp`` is reachable, through 4:4:4 with separate
-# colour planes. Do not read the count of markers as the weight of the
-# evidence; the two measurements above are the evidence.
-#
-# ``gray`` is deliberately absent, and it is the one case the
-# extrapolation above does NOT cover. Every marker here describes a
-# format carrying *more* than the queue can express, which is what the
-# two measurements tested. Monochrome carries *less*, and a decoder
-# can satisfy an NV12 capture buffer from it trivially by writing
-# neutral chroma. So the mechanism that refuses High 10 gives no
-# reason to expect a refusal here, the likely truth is that it plays,
-# and guessing otherwise would cost an operator a working asset.
-# Measure it before adding it. Everything still unflagged beyond that
-# is RGB or a hardware-surface pseudo-format, neither of which appears
-# as an H.264 stream's pixel format.
+# ``gray`` is excluded on purpose, and is the one case the
+# extrapolation does not cover: every marker here describes a format
+# carrying *more* than the queue can express, while monochrome carries
+# less, and a decoder can fill an NV12 buffer with neutral chroma. So
+# the mechanism that refuses High 10 predicts nothing here. Measure
+# before adding it. Everything else unflagged is RGB or a
+# hardware-surface pseudo-format, neither of which appears as an
+# H.264 stream's pixel format.
 UNSUPPORTED_PIX_FMT_MARKERS = (
     '9le',
     '9be',
@@ -526,13 +496,10 @@ def _bcm2835_h264_warnings(
                     'It would stutter badly instead of playing '
                     'smoothly.'
                 ),
-                # Generic on purpose. The rejection path replaces this
-                # with a sentence built from the same plan the ffmpeg
-                # recipe uses, because the right answer differs by
-                # board: a Pi 4 keeps the frame and changes codec, a
-                # Pi 3 shrinks it. Naming one of those here would
-                # contradict the command printed underneath, which is
-                # a mistake this pair has already made three times.
+                # Generic on purpose: the right fix differs by board,
+                # so naming one here would contradict the recipe
+                # printed underneath. The rejection path builds the
+                # specific sentence from the same plan the recipe uses.
                 remedy=(
                     'Convert it to a size or format this screen can '
                     'play. The details are below.'
