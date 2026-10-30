@@ -544,3 +544,36 @@ def test_url_fails_probes_private_host_instead_of_rejecting() -> None:
     ) as mock_head:
         assert url_fails(url) is False
     mock_head.assert_called_once()
+
+
+def test_get_node_ip_without_host_agent_skips_second_wait(
+    monkeypatch: Any, caplog: pytest.LogCaptureFixture, _mock_redis: MagicMock
+) -> None:
+    # The host agent never sets host_agent_ready: after the first wait, the
+    # IP addresses cannot arrive, so the second wait must not run.
+    monkeypatch.setenv('ENVIRONMENT', 'production')
+    monkeypatch.setattr(utils, 'is_balena_app', lambda: False)
+    monkeypatch.setattr(utils, 'sleep', lambda _: None)
+    with caplog.at_level('INFO'):
+        assert utils.get_node_ip() == 'Unable to retrieve IP.'
+    keys = [c.args[0] for c in _mock_redis.get.call_args_list]
+    assert 'ip_addresses_ready' not in keys
+    assert 'Internet connection' not in caplog.text
+    assert 'host agent' in caplog.text
+    # The last addresses published by the host agent are still used.
+    _mock_redis.set('ip_addresses', '["192.168.1.10"]')
+    assert utils.get_node_ip() == '192.168.1.10'
+
+
+def test_get_node_ip_reports_missing_ip_addresses_without_blaming_internet(
+    monkeypatch: Any, caplog: pytest.LogCaptureFixture, _mock_redis: MagicMock
+) -> None:
+    # The host agent is ready but never publishes the IP addresses.
+    monkeypatch.setenv('ENVIRONMENT', 'production')
+    monkeypatch.setattr(utils, 'is_balena_app', lambda: False)
+    monkeypatch.setattr('tenacity.nap.time.sleep', lambda _: None)
+    _mock_redis.set('host_agent_ready', 'true')
+    with caplog.at_level('INFO'):
+        assert utils.get_node_ip() == 'Unable to retrieve IP.'
+    assert 'Internet connection' not in caplog.text
+    assert 'did not publish the IP addresses' in caplog.text
