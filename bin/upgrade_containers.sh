@@ -262,7 +262,51 @@ fi
 # instances left over from earlier `docker compose run` invocations).
 # Without it `up -d` only logs a warning and leaves the orphans running,
 # which is confusing on a `docker ps` audit later.
-sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+UP_LOG="$(mktemp)"
+set +e
+sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans \
+    2>&1 | tee "${UP_LOG}"
+UP_STATUS=${PIPESTATUS[0]}
+set -e
+
+# A bring-up can fail with "port is already allocated" while nothing is
+# actually listening on that port. Docker keeps its host-port
+# reservations in libnetwork's store
+# (/var/lib/docker/network/files/local-kv.db), and an endpoint that was
+# never torn down cleanly leaves its reservation behind: the daemon
+# killed mid-upgrade, or an SD-card board that browned out or hard-reset
+# while the stack was running. The container then collides with its own
+# ghost on the next start, which is why the symptom is always the
+# service that publishes a port — redis on 127.0.0.1:6379, or the server
+# on :80. Reported on three Pi 4Bs and again on a separate upgrade:
+# forums.screenly.io/t/6688.
+#
+# `down` releases every endpoint this compose project owns and removes
+# its network, which drops the stale reservation with it, so a single
+# retry behind it recovers the upgrade.
+#
+# Deliberately NOT by deleting local-kv.db. That is the workaround
+# circulating in the forum thread and it is a much bigger hammer than
+# the problem: the file is the only record of every user-defined network
+# on the host, so removing it strands the running containers from the
+# daemon's point of view and leaves the web UI unreachable until the
+# stack is rebuilt (exactly what the reporter then had to do). Scoping
+# the recovery to this project's own network fixes the same stale
+# reservation and touches nothing else on the device.
+if [ "${UP_STATUS}" -ne 0 ]; then
+    if grep -qi 'port is already allocated' "${UP_LOG}"; then
+        echo "Bring-up hit a stale host-port reservation. Taking this" \
+             "project's containers and network down to release it, then" \
+             "retrying once." >&2
+        sudo -E docker compose "${COMPOSE_FILES[@]}" \
+            down --remove-orphans || true
+        sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+    else
+        rm -f "${UP_LOG}"
+        exit "${UP_STATUS}"
+    fi
+fi
+rm -f "${UP_LOG}"
 
 # anthias-wifi-connect sits behind a compose profile, so the `up -d`
 # above deliberately skips it: starting the captive portal is the
