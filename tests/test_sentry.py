@@ -105,8 +105,10 @@ class TestBeforeSendRepetitionThrottle:
     board accounted for 1,761 of ANTHIAS-3H's 1,762 events, and
     another for 1,063 of ANTHIAS-2D's 1,093, crowding out every other
     issue for the rest of the billing period. before_send keeps the
-    powers of two within an hour-long window per issue and drops what
-    falls between them, so a loop costs O(log n) events.
+    powers of two within a day-long window per issue and drops what
+    falls between them, so a loop costs O(log n) events — the window
+    has to outlast the burst for that bound to hold, since the count
+    restarts with every new window.
     """
 
     @staticmethod
@@ -297,6 +299,44 @@ class TestBeforeSendRepetitionThrottle:
         assert _sentry_before_send(event, hint) == event
         assert 'tags' not in event
         assert _sentry_throttle_state[key][1] == 1
+
+    def test_a_day_long_loop_is_billed_once_not_once_an_hour(self) -> None:
+        """The window has to outlast the burst or O(log n) is not the cost.
+
+        Replays the worst loop the fleet has actually produced — the
+        board behind 1,761 of ANTHIAS-3H's 1,762 events, roughly 73 an
+        hour for a day — advancing the clock an hour at a time by
+        rewinding the stored window start (same trick, and same
+        reason, as the stale-window test above).
+
+        The count restarts with every new window, so a window shorter
+        than the burst re-bills 1 + log2(rate) on each turn: at an
+        hour it is 7 an hour, ~168 for the day, which on its own
+        outspends the whole fleet's ~167/day share of the 5,000-error
+        monthly quota. The day-long window bills the burst once.
+        """
+        from anthias_server.django_project.settings import (
+            _sentry_before_send,
+            _sentry_throttle_state,
+            _throttle_key,
+        )
+
+        hint = self._hint_for(ValueError('the same loop'))
+        key = _throttle_key({'event_id': 'x'}, hint)
+        assert key is not None
+
+        kept = 0
+        for hour in range(24):
+            if hour:
+                window_start, count = _sentry_throttle_state[key]
+                _sentry_throttle_state[key] = (window_start - 3600, count)
+            for _ in range(73):
+                if _sentry_before_send({'event_id': 'x'}, hint) is not None:
+                    kept += 1
+
+        # 1,752 occurrences -> 1, 2, 4, ..., 1024.
+        assert _sentry_throttle_state[key][1] == 1752
+        assert kept == 11
 
     def test_expired_windows_are_evicted_before_live_ones(self) -> None:
         from anthias_server.django_project.settings import (

@@ -179,15 +179,30 @@ def _is_late_soft_time_limit(exc: BaseException) -> bool:
 # knowing how many devices hit it; the thousandth copy from the same
 # board is what crowds out every other issue on the fleet.
 #
-# So each process counts occurrences per issue over a one-hour window
-# and keeps the 1st, 2nd, 4th, 8th, 16th, ..., dropping what falls
+# So each process counts occurrences per issue over a window and
+# keeps the 1st, 2nd, 4th, 8th, 16th, ..., dropping what falls
 # between two powers of two. A loop costs O(log n) events instead of
 # n — 1,761 becomes 11 — and the magnitude survives the thinning,
 # because each kept event carries its true running count in the
 # ``throttle.occurrence`` tag. Every device still reports every
 # distinct issue it hits, so no issue can be hidden by this; only
 # repetition of one already reported is.
-_SENTRY_THROTTLE_WINDOW_SECONDS = 3600
+#
+# The window has to outlast the loop for that O(log n) to hold, which
+# is why it is a day and not an hour. The counter restarts with every
+# new window, so a window shorter than the burst charges the full
+# 1 + log2(rate) again on each turn: the 1,761-event board above ran
+# at ~70/hour for ~25 hours, which an hour-long window bills at 7
+# events an hour — about 175, not 11. One day covers every burst
+# observed in the fleet, and the budget it has to fit inside is
+# 5,000 errors a month (~167/day) for *all* devices together, so the
+# difference between 11 and 175 is the difference between fitting and
+# spending the month's allowance from a single board.
+#
+# Longer would thin harder still, but a window is also how quickly a
+# recurrence becomes visible again after a fix ships: a day means a
+# device that still has the bug tomorrow says so tomorrow.
+_SENTRY_THROTTLE_WINDOW_SECONDS = 86400
 # Bounds the bookkeeping on a long-lived process. A process producing
 # more than this many *distinct* issues within one window has larger
 # problems than its quota, and the overflow path only forgets windows,
