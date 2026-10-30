@@ -37,8 +37,8 @@ could have had, and every finding blocks.
 
 Performance judgements deliberately live elsewhere. A board that
 merely decodes *slowly* is bounded by
-``processing._SW_DECODE_MAX_PIXELS``, which holds measured per-board,
-per-codec throughput ceilings and refuses an upload the same way. Put
+``processing._SW_DECODE_MAX_PIXELS``, which holds measured per-board
+throughput ceilings and refuses an upload the same way. Put
 a new rule there, not here, unless the driver itself refuses the
 format: that module's convention demands a number off a real device,
 which is the right bar for a judgement. A bitrate rule lived here
@@ -162,8 +162,11 @@ class PlaybackWarning:
 # dropped the H.264 block entirely, so nothing there refuses the
 # format and its limit is throughput rather than capability. That
 # belongs in ``processing._SW_DECODE_MAX_PIXELS``, which holds
-# measured per-board, per-codec pixel ceilings; the ``pi5`` entry
-# arrives with the gate that reads it, not here.
+# measured per-board pixel ceilings; the ``pi5`` entry arrives with
+# the gate that reads it, not here. That entry is also what forces the
+# map to become per codec, because this chip decodes HEVC in hardware
+# and H.264 in software, so a board-wide ceiling would refuse 4K HEVC
+# the hardware plays.
 BCM2835_H264_BOARDS = frozenset({'pi2', 'pi3', 'pi3-64', 'pi4-64'})
 
 # ``MAX_W_CODEC`` / ``MAX_H_CODEC`` from bcm2835-v4l2-codec.c. Applied

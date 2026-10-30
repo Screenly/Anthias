@@ -204,10 +204,14 @@ each axis** (so portrait 1080x1920 is legal) *and* by Level 4.1's
 
 **A board that merely decodes too slowly does not belong here.** Its
 limit is throughput, not capability, and it goes in
-`processing._SW_DECODE_MAX_PIXELS`, which holds measured per-board,
-per-codec pixel ceilings and refuses an upload the same way. That map
-demands a number off a real device, which is the right bar for a
-judgement.
+`processing._SW_DECODE_MAX_PIXELS`, which holds measured per-board
+pixel ceilings and refuses an upload the same way. That map demands a
+number off a real device, which is the right bar for a judgement.
+
+A board that decodes one codec in hardware and another in software
+needs that map keyed by codec too, or a board-wide ceiling refuses the
+codec the hardware handles. The Pi 5 is the first such board, so the
+entry and the extra key arrive together.
 
 The envelope briefly carried an `ADVISORY` tier for exactly those
 judgements. It is gone: its only member was "software H.264 above some
