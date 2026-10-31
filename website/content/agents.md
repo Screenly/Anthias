@@ -280,18 +280,19 @@ the fleet an agent's problem rather than a platform's.
 ```python
 import requests
 
-DEVICES = ["10.0.0.11", "10.0.0.12", "10.0.0.13"]
-AUTH = ("agent", "<strong-password>")
+DEVICES = ['10.0.0.11', '10.0.0.12', '10.0.0.13']
+AUTH = ('agent', '<strong-password>')
+
 
 def publish(path: str, name: str, **fields) -> dict[str, str]:
     results = {}
     for host in DEVICES:
-        base = f"http://{host}/api/v2"
+        base = f'http://{host}/api/v2'
         try:
-            with open(path, "rb") as fh:
+            with open(path, 'rb') as fh:
                 up = requests.post(
-                    f"{base}/file_asset",
-                    files={"file_upload": fh},
+                    f'{base}/file_asset',
+                    files={'file_upload': fh},
                     auth=AUTH,
                     allow_redirects=False,
                     timeout=120,
@@ -300,16 +301,16 @@ def publish(path: str, name: str, **fields) -> dict[str, str]:
             upload = up.json()
 
             created = requests.post(
-                f"{base}/assets",
+                f'{base}/assets',
                 json={
-                    "name": name,
-                    "uri": upload["uri"],
-                    "ext": upload["ext"],
-                    "mimetype": "image",
-                    "duration": 15,
-                    "is_enabled": True,
-                    "start_date": "2026-11-01T00:00:00Z",
-                    "end_date": "2026-11-30T00:00:00Z",
+                    'name': name,
+                    'uri': upload['uri'],
+                    'ext': upload['ext'],
+                    'mimetype': 'image',
+                    'duration': 15,
+                    'is_enabled': True,
+                    'start_date': '2026-11-01T00:00:00Z',
+                    'end_date': '2026-11-30T00:00:00Z',
                     **fields,
                 },
                 auth=AUTH,
@@ -317,9 +318,9 @@ def publish(path: str, name: str, **fields) -> dict[str, str]:
                 timeout=60,
             )
             created.raise_for_status()
-            results[host] = created.json()["asset_id"]
+            results[host] = created.json()['asset_id']
         except requests.RequestException as exc:
-            results[host] = f"failed: {exc}"
+            results[host] = f'failed: {exc}'
     return results
 ```
 
