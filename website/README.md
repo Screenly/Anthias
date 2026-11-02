@@ -44,6 +44,17 @@ bun run build          # bun css:build && hugo
 
 Output goes to `website/public/`.
 
+## Markdown for AI agents
+
+After `hugo`, `bun run llms:generate` (`scripts/generate-llms.ts`) reads the built HTML and writes the site's Markdown copies, so they always say what the page says:
+
+- `index.md` next to every page, e.g. `/docs/wifi-setup/index.md`. Each HTML page links its copy with `<link rel="alternate" type="text/markdown">`.
+- `/llms.txt`, an index of every page that links to those copies, and `/llms-full.txt`, every page in one file ([llmstxt.org](https://llmstxt.org/)).
+
+Pages with a dark header also carry page tools (`layouts/partials/page-tools.html`, `assets/js/page-tools.ts`): copy or view the page as Markdown, or open it in Claude or ChatGPT. Mark any element that is page chrome rather than content with `data-md-skip` to keep it out of the Markdown.
+
+The copies repeat the pages, so they must not compete with them in search. GitHub Pages can't set headers, so Cloudflare does it: a Transform Rule sends `X-Robots-Tag: noindex` for `*.md` (and, ideally, `Link: <page URL>; rel="canonical"`). The sitemap lists only the HTML pages.
+
 ## Project Structure
 
 ```
