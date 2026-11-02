@@ -35,6 +35,11 @@
     <title>{{ $pageTitle }}</title>
     <meta name="description" content="{{ $description }}">
     <link rel="canonical" href="{{ .Permalink }}">
+    {{- /* The page as Markdown, for AI agents. scripts/generate-llms.ts
+           writes it after `hugo` runs; the 404 page has none. */ -}}
+    {{- if ne .Kind "404" }}
+    <link rel="alternate" type="text/markdown" href="{{ .RelPermalink }}index.md" title="Markdown">
+    {{- end }}
     <meta name="theme-color" content="#270035">
 
     <meta property="og:title" content="{{ $pageTitle }}">
@@ -164,6 +169,14 @@
       {{- $sliderOpts := dict "targetPath" "js/slider.js" "minify" true "target" "es2020" -}}
       {{- $slider := resources.Get "js/slider.ts" | js.Build $sliderOpts | fingerprint -}}
     <script defer src="{{ $slider.RelPermalink }}" integrity="{{ $slider.Data.Integrity }}"></script>
+    {{- end }}
+
+    {{- /* Every page with a dark header carries the page tools
+           (partials/page-tools.html); the home page has none. */ -}}
+    {{- if and (not .IsHome) (ne .Kind "404") -}}
+      {{- $toolsOpts := dict "targetPath" "js/page-tools.js" "minify" true "target" "es2020" -}}
+      {{- $tools := resources.Get "js/page-tools.ts" | js.Build $toolsOpts | fingerprint -}}
+    <script defer src="{{ $tools.RelPermalink }}" integrity="{{ $tools.Data.Integrity }}"></script>
     {{- end }}
 
     {{- /* Article structured data on individual docs pages */ -}}
