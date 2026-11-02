@@ -11,6 +11,7 @@ accumulate coverage. These tests do.
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from datetime import time, timedelta
 from types import SimpleNamespace
@@ -3953,7 +3954,6 @@ def test_no_bootstrap_class_names_in_templates() -> None:
     then split — so `btn-outline-light` and `btn-outline-dark` both
     appear in the token list and get checked.
     """
-    import re
     from pathlib import Path
 
     # Exact-match tokens (stable Bootstrap class names).
@@ -4111,7 +4111,6 @@ def test_every_app_class_in_templates_is_styled() -> None:
     Tailwind and are generated on demand, so they cannot be checked
     against a static list.
     """
-    import re
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent
@@ -4459,7 +4458,6 @@ def test_settings_renders_selected_schedule_days(
     settings.save()
 
     body = client.get(reverse('anthias_app:settings')).content.decode()
-    import re
 
     checked = {
         int(m)
@@ -4576,7 +4574,6 @@ def test_settings_renders_per_day_hours(
     settings.save()
 
     body = client.get(reverse('anthias_app:settings')).content.decode()
-    import re
 
     def value_of(name: str) -> str:
         match = re.search(rf'name="{name}"\s+value="([^"]*)"', body)
