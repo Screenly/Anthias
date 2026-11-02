@@ -7,6 +7,7 @@ surfaces stay in lockstep without going through the HTTP API.
 """
 
 import functools
+import json
 import logging
 import os
 import zoneinfo
@@ -527,7 +528,7 @@ _DATE_FORMAT_OPTIONS = (
 
 # Python weekday numbering (Monday=0 ... Sunday=6), matching what
 # lib/display_power.py parses and what datetime.weekday() returns.
-_WEEKDAY_OPTIONS = (
+WEEKDAY_OPTIONS = (
     (0, 'Mon'),
     (1, 'Tue'),
     (2, 'Wed'),
@@ -582,6 +583,7 @@ def device_settings() -> dict[str, Any]:
     # disabled but a User exists would mask the field the operator is
     # required to fill in to make the form succeed.
     has_persisted_operator = _persisted_operator() is not None
+    display_schedule = _display_schedule_context()
 
     return {
         'player_name': settings['player_name'],
@@ -627,15 +629,62 @@ def device_settings() -> dict[str, Any]:
         ],
         'display_power_on_time': settings['display_power_on_time'],
         'display_power_off_time': settings['display_power_off_time'],
-        # Parsed with the same helper the beat uses. An inline
-        # comprehension here had the opposite empty-input behaviour —
-        # it rendered *zero* days checked where parse_days reads the
-        # same value as *every* day, so the settings page would show a
-        # schedule running on no days while it actually ran daily.
-        'display_power_days': sorted(
-            display_power.parse_days(settings['display_power_days'])
-        ),
-        'weekday_options': _WEEKDAY_OPTIONS,
+        **display_schedule,
+        'weekday_options': WEEKDAY_OPTIONS,
+    }
+
+
+def _display_schedule_context() -> dict[str, Any]:
+    """The display-schedule section's per-day state.
+
+    ``display_power_day_rows`` gives every weekday its effective hours —
+    its own override, or the shared times — so switching on "Different
+    hours per day" starts from what the schedule does today instead of
+    from blank fields. ``display_power_state`` seeds the section's
+    Alpine component with the same values.
+    """
+    # Parsed with the same helper the beat uses. An inline
+    # comprehension here had the opposite empty-input behaviour — it
+    # rendered *zero* days checked where parse_days reads the same value
+    # as *every* day, so the settings page would show a schedule running
+    # on no days while it actually ran daily.
+    days = sorted(display_power.parse_days(settings['display_power_days']))
+    overrides = display_power.parse_day_times(
+        settings['display_power_day_times']
+    )
+    shared_on = settings['display_power_on_time']
+    shared_off = settings['display_power_off_time']
+    rows = []
+    for value, label in WEEKDAY_OPTIONS:
+        window = overrides.get(value)
+        rows.append(
+            {
+                'value': value,
+                'label': label,
+                'on': f'{window[0]:%H:%M}' if window else shared_on,
+                'off': f'{window[1]:%H:%M}' if window else shared_off,
+            }
+        )
+    per_day = bool(overrides)
+    state = {
+        'enabled': bool(settings['display_power_schedule_enabled']),
+        'perDay': per_day,
+        # Strings, because that is what Alpine's checkbox x-model puts
+        # in the array for value="0".
+        'days': [str(d) for d in days],
+        'onTime': shared_on,
+        'offTime': shared_off,
+        'dayTimes': [{'on': r['on'], 'off': r['off']} for r in rows],
+        # Stored overrides already hold the operator's per-day hours;
+        # only a schedule that never had any is seeded from the shared
+        # times when per-day hours are switched on.
+        'seeded': per_day,
+    }
+    return {
+        'display_power_days': days,
+        'display_power_per_day': per_day,
+        'display_power_day_rows': rows,
+        'display_power_state': json.dumps(state),
     }
 
 

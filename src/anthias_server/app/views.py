@@ -1880,6 +1880,51 @@ def _apply_display_power_schedule_settings(request: HttpRequest) -> None:
         str(d) for d in sorted(parsed_days)
     )
 
+    _apply_display_power_day_times(request)
+
+
+def _apply_display_power_day_times(request: HttpRequest) -> None:
+    """Persist the optional per-weekday hours.
+
+    With "Different hours per day" off the overrides are cleared, so
+    every day runs on the shared times again. With it on, each weekday
+    row posts ``display_power_on_time_<d>`` / ``display_power_off_time_<d>``.
+    A row that does not parse keeps that day's previous hours (or the
+    shared times, if it had none) and says so, mirroring the shared
+    time fields above.
+    """
+    from anthias_server.lib import display_power
+
+    if not _checkbox(request, 'display_power_per_day'):
+        settings['display_power_day_times'] = ''
+        return
+
+    previous = display_power.parse_day_times(
+        settings['display_power_day_times']
+    )
+    windows: dict[int, display_power.Window] = {}
+    for day, label in page_context.WEEKDAY_OPTIONS:
+        on_raw = request.POST.get(f'display_power_on_time_{day}') or ''
+        off_raw = request.POST.get(f'display_power_off_time_{day}') or ''
+        try:
+            _, window = display_power.parse_day_time(
+                f'{day}={on_raw.strip()}-{off_raw.strip()}'
+            )
+        except ValueError:
+            if on_raw.strip() or off_raw.strip():
+                messages.error(
+                    request,
+                    f'Ignored invalid display schedule hours for {label}: '
+                    f'{on_raw.strip() or "?"} to {off_raw.strip() or "?"}',
+                )
+            if day in previous:
+                windows[day] = previous[day]
+            continue
+        windows[day] = window
+    settings['display_power_day_times'] = display_power.format_day_times(
+        windows
+    )
+
 
 @authorized
 @require_http_methods(['GET'])

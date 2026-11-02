@@ -220,6 +220,181 @@ def test_unusable_schedule_expresses_no_opinion(
 
 
 # ---------------------------------------------------------------------------
+# Per-weekday hours
+# ---------------------------------------------------------------------------
+
+
+def test_parse_day_times() -> None:
+    assert display_power.parse_day_times(
+        ' 5=10:00-14:00, 0=7:30-18:00:00 ,'
+    ) == {
+        0: (time(7, 30), time(18, 0)),
+        5: (time(10, 0), time(14, 0)),
+    }
+
+
+@pytest.mark.parametrize('raw', ['', None, '   ', ',,'])
+def test_parse_day_times_empty_means_no_overrides(raw: Any) -> None:
+    assert display_power.parse_day_times(raw) == {}
+
+
+def test_parse_day_times_drops_junk_entries_without_raising() -> None:
+    """A hand-edited config must degrade to the shared times for the
+    affected day, never crash the beat."""
+    assert display_power.parse_day_times(
+        '9=10:00-14:00,x=10:00-14:00,1=10:00,2=10:00-10:00,'
+        '3=25:00-14:00,4=10:00-14:00'
+    ) == {4: (time(10, 0), time(14, 0))}
+
+
+@pytest.mark.parametrize(
+    'raw',
+    [
+        '5',
+        '5=10:00',
+        '=10:00-14:00',
+        '7=10:00-14:00',
+        'sat=10:00-14:00',
+        '5=10:00-',
+        '5=10:00-24:00',
+        '5=10:00-10:00',
+    ],
+)
+def test_parse_day_time_rejects_junk(raw: str) -> None:
+    with pytest.raises(ValueError):
+        display_power.parse_day_time(raw)
+
+
+def test_format_day_times_round_trips() -> None:
+    windows = {
+        5: (time(10, 0), time(14, 0)),
+        0: (time(7, 30), time(18, 0)),
+    }
+    stored = display_power.format_day_times(windows)
+    assert stored == '0=07:30-18:00,5=10:00-14:00'
+    assert display_power.parse_day_times(stored) == windows
+    assert display_power.format_day_times({}) == ''
+
+
+# Mon-Fri 07:30-18:00 from the shared times; Saturday 10:00-14:00.
+_SAT_SHORT = {5: (time(10, 0), time(14, 0))}
+
+
+@pytest.mark.parametrize(
+    ('now', 'expected'),
+    [
+        # Weekdays still use the shared times.
+        (('wed', '07:29'), False),
+        (('wed', '07:30'), True),
+        (('wed', '17:59'), True),
+        (('wed', '18:00'), False),
+        # Saturday uses its own hours.
+        (('sat', '09:59'), False),
+        (('sat', '10:00'), True),
+        (('sat', '13:59'), True),
+        (('sat', '14:00'), False),
+        (('sat', '16:00'), False),
+        # Sunday is deselected, so it is off whatever its hours.
+        (('sun', '12:00'), False),
+    ],
+)
+def test_per_day_hours_override_the_shared_times(
+    now: tuple[str, str], expected: bool
+) -> None:
+    assert (
+        display_power.should_be_on(
+            _at(*now),
+            time(7, 30),
+            time(18, 0),
+            {0, 1, 2, 3, 4, 5},
+            _SAT_SHORT,
+        )
+        is expected
+    )
+
+
+def test_per_day_overnight_tail_uses_the_previous_days_hours() -> None:
+    """Friday runs late (18:00 -> 02:00) while Saturday opens at 10:00.
+    Saturday 01:00 belongs to Friday's period and so is on, even though
+    Saturday's own hours would say off; Saturday 03:00 is between the
+    two periods and is off."""
+    day_times = {
+        4: (time(18, 0), time(2, 0)),
+        5: (time(10, 0), time(14, 0)),
+    }
+    days = set(range(7))
+
+    def at(day: str, hhmm: str) -> bool | None:
+        return display_power.should_be_on(
+            _at(day, hhmm), time(8, 0), time(18, 0), days, day_times
+        )
+
+    assert at('fri', '17:59') is False
+    assert at('fri', '23:00') is True
+    assert at('sat', '01:00') is True
+    assert at('sat', '03:00') is False
+    assert at('sat', '10:00') is True
+    # Friday's late period ends on Friday's off time, not the shared one.
+    assert at('sat', '02:00') is False
+
+
+def test_per_day_overnight_tail_follows_the_previous_days_checkbox() -> None:
+    day_times = {4: (time(18, 0), time(2, 0))}
+    assert (
+        display_power.should_be_on(
+            _at('sat', '01:00'),
+            time(8, 0),
+            time(18, 0),
+            {0, 1, 2, 3},
+            day_times,
+        )
+        is False
+    )
+
+
+def test_a_shared_overnight_tail_still_runs_into_a_per_day_morning() -> None:
+    """Sunday 18:00 -> 06:00 from the shared times, Monday overridden to
+    09:00 -> 17:00: Monday 05:00 is still Sunday's period."""
+    assert (
+        display_power.should_be_on(
+            _at('mon', '05:00'),
+            time(18, 0),
+            time(6, 0),
+            set(range(7)),
+            {0: (time(9, 0), time(17, 0))},
+        )
+        is True
+    )
+
+
+def test_per_day_hours_rescue_unusable_shared_times() -> None:
+    """With every day overridden the shared times are never consulted, so
+    identical shared times must not switch the schedule off."""
+    everyday = {d: (time(8, 0), time(18, 0)) for d in range(7)}
+    assert (
+        display_power.should_be_on(
+            _at('mon', '12:00'), time(8, 0), time(8, 0), {0}, everyday
+        )
+        is True
+    )
+
+
+def test_unusable_shared_times_with_a_gap_in_overrides_has_no_opinion() -> (
+    None
+):
+    assert (
+        display_power.should_be_on(
+            _at('mon', '12:00'),
+            time(8, 0),
+            time(8, 0),
+            set(range(7)),
+            {0: (time(8, 0), time(18, 0))},
+        )
+        is None
+    )
+
+
+# ---------------------------------------------------------------------------
 # Applying power — CEC first, local blanking as fallback
 # ---------------------------------------------------------------------------
 

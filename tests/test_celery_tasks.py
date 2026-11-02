@@ -2291,6 +2291,7 @@ def _schedule_settings(
         'display_power_on_time': '08:00',
         'display_power_off_time': '18:00',
         'display_power_days': '0,1,2,3,4,5,6',
+        'display_power_day_times': '',
     }
     values.update(overrides)
     return values

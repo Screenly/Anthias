@@ -242,6 +242,9 @@ def test_page_context_device_settings_keys() -> None:
         'display_power_on_time',
         'display_power_off_time',
         'display_power_days',
+        'display_power_per_day',
+        'display_power_day_rows',
+        'display_power_state',
         'weekday_options',
     ):
         assert key in ctx
@@ -4465,6 +4468,130 @@ def test_settings_renders_selected_schedule_days(
         )
     }
     assert checked == {0, 4}
+
+
+def _post_settings(client: Client, data: dict[str, Any]) -> Any:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        return client.post(
+            reverse('anthias_app:settings_save'),
+            data={'auth_backend': '', **data},
+        )
+
+
+def _per_day_rows(**overrides: tuple[str, str]) -> dict[str, str]:
+    """Form fields for all seven per-day rows: 08:00-18:00 by default,
+    with ``overrides`` keyed by ``d<weekday>``."""
+    data = {}
+    for day in range(7):
+        on, off = overrides.get(f'd{day}', ('08:00', '18:00'))
+        data[f'display_power_on_time_{day}'] = on
+        data[f'display_power_off_time_{day}'] = off
+    return data
+
+
+@pytest.mark.django_db
+def test_settings_save_per_day_hours(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    response = _post_settings(
+        client,
+        {
+            'display_power_schedule_enabled': 'true',
+            'display_power_per_day': ['false', 'true'],
+            'display_power_on_time': '08:00',
+            'display_power_off_time': '18:00',
+            **_per_day_rows(d5=('10:00', '14:00'), d6=('11:00:00', '15:30')),
+        },
+    )
+    assert response.status_code in (200, 302)
+    settings.load()
+    assert settings['display_power_day_times'] == (
+        '0=08:00-18:00,1=08:00-18:00,2=08:00-18:00,3=08:00-18:00,'
+        '4=08:00-18:00,5=10:00-14:00,6=11:00-15:30'
+    )
+
+
+@pytest.mark.django_db
+def test_settings_save_without_per_day_hours_clears_them(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    settings.load()
+    settings['display_power_day_times'] = '5=10:00-14:00'
+    settings.save()
+
+    # The hidden per-day inputs are still posted; with the toggle off
+    # they must be ignored.
+    _post_settings(
+        client,
+        {
+            'display_power_per_day': 'false',
+            'display_power_on_time': '08:00',
+            'display_power_off_time': '18:00',
+            **_per_day_rows(d5=('10:00', '14:00')),
+        },
+    )
+    settings.load()
+    assert settings['display_power_day_times'] == ''
+
+
+@pytest.mark.django_db
+def test_settings_save_per_day_hours_keeps_a_day_that_does_not_parse(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    settings.load()
+    settings['display_power_day_times'] = '5=10:00-14:00'
+    settings.save()
+
+    _post_settings(
+        client,
+        {
+            'display_power_per_day': 'true',
+            'display_power_on_time': '08:00',
+            'display_power_off_time': '18:00',
+            # Saturday: identical times. Sunday: junk with no previous
+            # override, so it falls back to the shared times.
+            **_per_day_rows(d5=('09:00', '09:00'), d6=('nope', '18:00')),
+        },
+    )
+    settings.load()
+    stored = settings['display_power_day_times']
+    assert '5=10:00-14:00' in stored
+    assert '6=' not in stored
+    assert '0=08:00-18:00' in stored
+
+
+@pytest.mark.django_db
+def test_settings_renders_per_day_hours(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """Each weekday row shows its own override, or the shared times when
+    it has none, and the per-day toggle reflects the stored state."""
+    settings.load()
+    settings['display_power_on_time'] = '07:30'
+    settings['display_power_off_time'] = '18:00'
+    settings['display_power_day_times'] = '5=10:00-14:00'
+    settings.save()
+
+    body = client.get(reverse('anthias_app:settings')).content.decode()
+    import re
+
+    def value_of(name: str) -> str:
+        match = re.search(rf'name="{name}"\s+value="([^"]*)"', body)
+        assert match, name
+        return match.group(1)
+
+    assert value_of('display_power_on_time_5') == '10:00'
+    assert value_of('display_power_off_time_5') == '14:00'
+    assert value_of('display_power_on_time_0') == '07:30'
+    assert value_of('display_power_off_time_0') == '18:00'
+    assert re.search(
+        r'id="display_power_per_day"\s+name="display_power_per_day"'
+        r'\s+value="true"\s+checked',
+        body,
+    )
 
 
 # ---------------------------------------------------------------------------
