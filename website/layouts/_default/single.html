@@ -3,6 +3,7 @@
     <div class="max-w-4xl mx-auto">
         <h1 class="text-white text-3xl md:text-4xl font-extrabold tracking-tight">{{ .Title }}</h1>
         {{ with .Description }}<p class="text-white/60 text-base mt-3 max-w-2xl">{{ . }}</p>{{ end }}
+        {{ partial "page-tools.html" . }}
     </div>
 </header>
 
