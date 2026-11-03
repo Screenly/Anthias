@@ -301,6 +301,29 @@ jobs:
       - name: Build website
         run: hugo --source website --minify
 
+      # Go's html/template picks its escaper from the attribute name.
+      # `srcset` has a srcset-aware escaper, but a srcset-shaped name
+      # it does not know (`imagesrcset`, say) merely contains "src",
+      # so the fallback heuristic treats the whole value as one URL
+      # and percent-encodes the separators. The result is a candidate
+      # ending in "%20<width>w", a URL that never exists, requested on
+      # every page view. No such attribute is emitted today, but that
+      # one shipped undetected for months because nothing reads the
+      # built HTML. Cheap to keep the class from coming back.
+      - name: Verify srcset separators survived escaping
+        run: |
+          set -euo pipefail
+          # Matches quoted and unquoted attributes alike: --minify
+          # drops the quotes precisely because the escaper replaced
+          # every literal space, so the broken form is unquoted.
+          if grep -rlE 'srcset=[^>]*%20[0-9]+w' website/public --include='*.html'; then
+            echo "::error::Percent-encoded srcset separator in the files above."
+            echo "Build an attribute with safeHTMLAttr instead of interpolating"
+            echo "into a quoted srcset-shaped attribute. See baseof.html."
+            exit 1
+          fi
+          echo "No percent-encoded srcset separators found."
+
       # Generate llms.txt / llms-full.txt from the rendered public/
       # tree (llmstxt.org convention). Reading the built HTML keeps
       # the files in sync with what visitors see, including marketing
