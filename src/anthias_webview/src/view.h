@@ -4,6 +4,7 @@
 #include <QWebEngineView>
 #include <QAuthenticator>
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QImage>
@@ -140,6 +141,47 @@ private:
     QMovie* movie;
     bool isAnimatedImage;
     quint64 loadGenerationId;
+
+    // Image-to-image crossfade (issue #3351). ``fadeFromImage`` is a
+    // copy of ``currentImage`` captured the instant before it gets
+    // overwritten by a new asset, so paintEvent() can blend the
+    // outgoing frame out from under the incoming one instead of the
+    // plain single-image draw. Scope is strictly image -> image: it
+    // is armed only from loadAsStaticImage()/setupAnimation(), for
+    // a genuine new asset (never for a playing GIF's own
+    // frameChanged repaint (see image_transition::shouldStartFade),
+    // and never when there's no real outgoing image to fade from
+    // (first image after boot, or right after a video/webpage asset,
+    // both of which blank currentImage before loadImage() runs. Look at
+    // playVideo() / loadPage()).
+    //
+    // fadeTimer ticks paintEvent()-driving update() calls at roughly
+    // 60fps only while fadeActive is true, so an idle screen pays no
+    // extra timer/repaint cost. fadeElapsed measures progress against
+    // fadeDurationMs, which is resolved once at construction from
+    // ANTHIAS_IMAGE_TRANSITION_MS (image_transition::durationMs) and
+    // not re-read afterwards, mirroring pageLoadTimeoutMs()'s
+    // once-at-startup posture for ANTHIAS_WEBPAGE_TIMEOUT_S.
+    //
+    // Interruption (a new asset arriving mid-fade): loadAsStaticImage /
+    // setupAnimation re-capture fadeFromImage from whatever
+    // ``currentImage`` holds at that instant and restart fadeElapsed,
+    // rather than queueing a second transition, so nothing stacks.
+    // During an in-flight fade, ``currentImage`` holds the plain
+    // incoming frame of that fade at full fidelity — paintEvent()
+    // never writes its blended result back into it — so this
+    // recapture restarts from that target frame, not from whichever
+    // partially-blended pixels happened to be visible on screen the
+    // instant before. In practice this rarely matters, since it
+    // would take an asset shorter than fadeDurationMs to interrupt a
+    // fade at all.
+    QImage fadeFromImage;
+    QElapsedTimer fadeElapsed;
+    QTimer* fadeTimer;
+    int fadeDurationMs;
+    bool fadeActive = false;
+    void startImageFade();
+    void stopImageFade();
 
     // Manual rotation applied in paintEvent to raster image assets —
     // still images and animated GIFs, which share the ``currentImage``
