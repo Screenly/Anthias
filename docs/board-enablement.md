@@ -185,6 +185,117 @@ The server uses the resolved key to pick the right entry in
 uploads, the catch-all `arm64` accepts nothing (because we can't certify
 a decoder on an unknown SBC).
 
+### Decode envelope (`lib/playback_envelope.py`)
+
+`_HW_DECODE_VIDEO_CODECS` settles the **codec**. It says nothing about
+the stream, so a board that accepts H.264 accepts a 3840x2160 H.264
+file too — which then software-decodes at a few frames per second
+because the frame is larger than the decoder can take. The envelope is
+the second gate, and enabling a board means filling in both.
+
+Everything in the envelope is driver-enforced, so every finding
+blocks. Only put a board in `BCM2835_H264_BOARDS` when you can point
+at a driver constant or a vendor spec, not a benchmark. Today that set
+is pi2, pi3, pi3-64 and pi4-64: every board whose H.264 path is
+`bcm2835-codec`, bounded by `MAX_W_CODEC` / `MAX_H_CODEC` = **1920 on
+each axis** (so portrait 1080x1920 is legal) *and* by Level 4.1's
+**8192-macroblock** frame budget, with a capture queue that is 8-bit
+4:2:0 only.
+
+**A board that merely decodes too slowly does not belong here.** Its
+limit is throughput, not capability, and it goes in
+`processing._SW_DECODE_MAX_PIXELS`, which holds measured per-board
+pixel ceilings and refuses an upload the same way. That map demands a
+number off a real device, which is the right bar for a judgement.
+
+A board that decodes one codec in hardware and another in software
+needs that map keyed by codec too, or a board-wide ceiling refuses the
+codec the hardware handles. The Pi 5 is the first such board, so the
+entry and the extra key arrive together.
+
+The envelope briefly carried an `ADVISORY` tier for exactly those
+judgements. It is gone: its only member was "software H.264 above some
+size on a Pi 5", and the ceiling map is a better home for it. The
+lesson is the one the removed bitrate rule already taught. Reason
+about *capability* from the driver; only reason about *speed* from a
+measurement on the board itself. (That bitrate rule was derived from
+the H.264 Level 4.2 ceiling; measuring it on a Pi 4 showed hardware
+decode still running at 2.5x realtime at more than twice that
+bitrate, so it would only ever have flagged files that play fine.)
+
+A board you have not characterised belongs in **neither** set. `x86`
+and `rockpi4` are absent on purpose: their decode paths are still open
+questions (see the `anthias-hardware` skill), and a guess here produces
+false rejections of working assets, which is worse than the silence it
+replaces.
+
+**How to characterise a board, step 1:** ask its decoder. The kernel
+enumerates its own bounds, which is cheaper and more exact than
+inferring them from playback:
+
+```
+v4l2-ctl -d /dev/video10 --list-framesizes=H264   # frame bounds
+v4l2-ctl -d /dev/video10 --list-formats           # capture (decoded) formats
+v4l2-ctl -d /dev/video10 --list-formats-out       # accepted bitstreams
+```
+
+On a Pi 4B this answers `Stepwise 32x32 - 1920x1920 with step 2/2`
+with `YU12`/`YV12`/`NV12`/`NV21`/`NC12` capture formats — the
+`MAX_W_CODEC` / 8-bit-4:2:0 pair the envelope encodes. pi2, pi3 and
+pi3-64 answer identically: one `bcm2835-codec`, four boards.
+
+**Step 2, and do not skip it: try to decode something.** The
+enumeration is necessary but not sufficient. It tells you what you may
+*ask for*, not what will be *accepted*. The VideoCore block is a Level
+4.1 decoder and separately refuses any frame over that level's
+8192-macroblock `MaxFS`, so 1920x1200 clears the enumerated 1920x1920
+range and is still refused:
+
+| frame | macroblocks | hardware |
+|---|---|---|
+| 1920x1080 | 8160 | ok |
+| 1456x1440 | 8190 | ok |
+| 1472x1440 | 8280 | refused |
+| 1920x1200 | 9000 | refused |
+| 1920x1920 | 14400 | refused |
+| 2560x720 | 7200 | refused, on width |
+
+The gate's first version trusted the enumeration alone and let
+1920x1200 through to silent software fallback, which is the failure it
+exists to prevent. Generate a clip at each size you care about and
+feed it to the board's decoder:
+
+```
+ffmpeg -f lavfi -i mandelbrot=s=1920x1200:r=25 -t 2 -c:v libx264 \
+    -profile:v high -pix_fmt yuv420p probe.mp4
+ffmpeg -hwaccel v4l2m2m -c:v h264_v4l2m2m -i probe.mp4 -f null -
+```
+
+A refusal shows up as `Error while opening decoder`. Bracket the
+boundary rather than sampling one size: two frames 16 pixels apart on
+one axis, one either side of the suspected limit, distinguish a real
+bound from a coincidence.
+
+Do this **per decode node**, not per board. The same Pi 4's HEVC node
+(`/dev/video19`, `rpi-hevc-dec`) is a *stateless* decoder taking
+`S265` and advertising `Nc30`/`NC30` — 10-bit 4:2:0. So the
+8-bit-only restriction belongs to the H.264 path, not to the board,
+and a pixel-format rule applied board-wide would reject 10-bit HEVC
+that decodes in hardware. Note also that `rpivid` is bound **by
+default** on current Raspberry Pi OS; the older docs telling you to add
+`dtoverlay=rpivid-v4l2` are out of date and `config.txt.j2` is correct
+as it stands.
+
+**Do not gate on the declared H.264 level.** It is the obvious-looking
+rule and it is wrong: `bcm2835-codec` exposes
+`V4L2_CID_MPEG_VIDEO_H264_LEVEL` read-only and never validates the
+bitstream against it, and Raspberry Pi describe the hardware as
+"nominally level 4.1, level 4.2 generally achievable" while noting it
+can decode 5.0 and possibly 5.1 without guaranteeing the macroblock
+rate. Encoders routinely stamp an inflated level on 1080p files that
+play perfectly. The level is recorded in asset metadata for
+diagnostics; branch on frame size.
+
 The balena fleet (`screenly_ose/anthias-rockpi4`, device type
 `rockpi-4b-rk3399`) deploys the generic **arm64** container images — there
 is no rockpi4-specific image build; only the balenaOS device type and the

@@ -1,0 +1,644 @@
+"""Per-board *decode envelope* for video assets.
+
+``processing._HW_DECODE_VIDEO_CODECS`` answers "can this board
+hardware-decode this **codec** at all?". It does not answer the second
+question, which is what this module adds: given that the codec is
+right, is the *stream itself* — its frame size, its pixel format —
+inside the envelope that board's decoder can actually take?
+
+The gap is not theoretical, and it is not a prediction. Measured on a
+Pi 4B with a 3840x2160 High L5.1 clip at 115 Mbps — the shape of an
+export that reached a real screen — against a 1920x1080 re-encode of
+the *same content*:
+
+                        4K            1080p
+    hardware decode     REFUSED       75 fps
+    software, 4 cores   10 fps        37 fps
+    software, 1 thread   3 fps        12 fps
+
+The 4K clip does not decode slowly in hardware; it never gets in.
+``h264_v4l2m2m`` fails outright with ``Error while opening decoder``
+because 3840 is past the device's frame bound, so libavcodec falls
+back to software — where 10 fps on an otherwise idle four-core box is
+already under the 25 fps the clip needs, before the viewer has spent
+anything on presentation. Sharing those cores with QtWebEngine and the
+scene graph drags it toward the single-thread figure, which is what
+puts a real screen at the ~4 fps operators actually report.
+
+Meanwhile the same content at 1080p hardware-decodes at 3x realtime.
+Nothing in the pipeline says a word about any of this. That is the
+failure this module exists to name.
+
+Everything here is driver-enforced: the decoder *cannot* accept the
+stream, not "will be slow" but "``VIDIOC_S_FMT`` refuses it". No
+configuration, firmware knob or future kernel makes the format work on
+that silicon, so refusing the upload costs the operator nothing they
+could have had, and every finding blocks.
+
+Performance judgements deliberately live elsewhere. A board that
+merely decodes *slowly* is bounded by
+``processing._SW_DECODE_MAX_PIXELS``, which holds measured per-board
+throughput ceilings and refuses an upload the same way. Put
+a new rule there, not here, unless the driver itself refuses the
+format: that module's convention demands a number off a real device,
+which is the right bar for a judgement. A bitrate rule lived here
+briefly and was removed once measurement showed it would only have
+produced false positives.
+
+Every predicate here is written to fail *open*: a dimension we could
+not measure (``None``, 0, an unparseable ``pix_fmt``) yields no
+warning. A false positive costs an operator a working asset and
+teaches them to ignore the badge; a false negative costs them the same
+silent 4 fps they get today. Given the choice we take the miss.
+
+Sources for the blocking envelope
+---------------------------------
+
+``drivers/staging/vc04_services/bcm2835-codec/bcm2835-v4l2-codec.c``
+(raspberrypi/linux) sets the hard frame-size bound for every
+VideoCore H.264 decode path::
+
+    #define MIN_W        32
+    #define MIN_H        32
+    #define MAX_W_CODEC  1920
+    #define MAX_H_CODEC  1920
+
+Note that the bound is **1920 on both axes**, not "1080p": a portrait
+1080x1920 signage clip is inside the envelope and must not be flagged.
+The same table restricts the decoder's capture queue to 8-bit 4:2:0
+(``YUV420`` / ``YVU420`` / ``NV12`` / ``NV21`` / ``NV12_COL128``) with
+no 10-bit or 4:2:2 YUV entry, which is why High 10 and 4:2:2 sources
+fall to software.
+
+The driver's own numbers are *necessary but not sufficient*, which is
+the trap this module fell into first time round. What the device
+enumerates is the range of formats it will let you *set*; the hardware
+behind it is a Level 4.1 decoder and separately refuses any frame over
+that level's 8192-macroblock ``MaxFS``, whatever the axes say. So
+1920x1200 passes the enumerated range and is still refused. See
+``BCM2835_MAX_MACROBLOCKS`` for the measurements. The lesson
+generalises past this driver: when characterising a new board, an
+enumerated capability is a bound on what can be *asked for*, not a
+promise about what will be *accepted*, and only a decode attempt
+settles the difference.
+
+The driver deliberately does **not** validate the bitstream's declared
+H.264 *level*: ``V4L2_CID_MPEG_VIDEO_H264_LEVEL`` is exposed
+``V4L2_CTRL_FLAG_READ_ONLY``. Raspberry Pi's own engineers put the
+hardware at "nominally level 4.1, although level 4.2 is generally
+achievable", and note it "can decode level 5.0 (and possibly 5.1), but
+there is no guarantee that the macroblocks/sec required will be
+achieved". So the level field is a *symptom* of an oversized stream,
+never the cause, and gating on it would reject the many 1080p files
+that carry an inflated level tag and play perfectly. We record the
+level for diagnostics and branch on frame size instead.
+"""
+
+import math
+from typing import Any
+
+# Every finding here is driver-enforced, so there is one severity. It
+# stays in the serialised shape because the templates key a chip class
+# off it, and because a module that grows a softer tier should have to
+# add the constant deliberately rather than find one lying around.
+BLOCKING = 'blocking'
+
+
+class PlaybackWarning:
+    """One reason an asset will not play well on the current board.
+
+    Deliberately a plain object rather than an exception: the same
+    finding has to serve two callers with opposite needs. The upload
+    gate turns a ``BLOCKING`` warning into a rejection, while the
+    asset list renders whatever it finds against rows that are
+    already on disk and must keep playing.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        severity: str,
+        message: str,
+        remedy: str = '',
+    ) -> None:
+        self.code = code
+        self.severity = severity
+        self.message = message
+        self.remedy = remedy
+
+    @property
+    def is_blocking(self) -> bool:
+        return self.severity == BLOCKING
+
+    def as_dict(self) -> dict[str, str]:
+        """Serialise for ``metadata`` / template consumption."""
+        return {
+            'code': self.code,
+            'severity': self.severity,
+            'message': self.message,
+            'remedy': self.remedy,
+        }
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PlaybackWarning):
+            return NotImplemented
+        return self.as_dict() == other.as_dict()
+
+    def __repr__(self) -> str:
+        return f'PlaybackWarning({self.code!r}, {self.severity!r})'
+
+
+# Boards whose H.264 decode path is the VideoCore ``bcm2835-codec``
+# V4L2 M2M device at ``/dev/video10``, and which therefore inherit its
+# frame bounds — both the enumerated 1920-per-axis one and the Level
+# 4.1 macroblock budget behind it — and its 8-bit 4:2:0 capture queue
+# verbatim. Confirmed identical on all four against driver 6.18.34.
+#
+#   pi2 / pi3      GStreamer ``v4l2h264dec`` (GstFbdevMediaPlayer)
+#   pi3-64         GStreamer ``v4l2h264dec`` -> kmssink overlay plane
+#   pi4-64         QtMultimedia -> libavcodec ``h264_v4l2m2m``
+#
+# Different players, one decoder. ``pi5`` is absent on purpose: BCM2712
+# dropped the H.264 block entirely, so nothing there refuses the
+# format and its limit is throughput rather than capability. That
+# belongs in ``processing._SW_DECODE_MAX_PIXELS``, which holds
+# measured per-board pixel ceilings; the ``pi5`` entry arrives with
+# the gate that reads it, not here. That entry is also what forces the
+# map to become per codec, because this chip decodes HEVC in hardware
+# and H.264 in software, so a board-wide ceiling would refuse 4K HEVC
+# the hardware plays.
+BCM2835_H264_BOARDS = frozenset({'pi2', 'pi3', 'pi3-64', 'pi4-64'})
+
+# ``MAX_W_CODEC`` / ``MAX_H_CODEC`` from bcm2835-v4l2-codec.c. Applied
+# per axis, never as a pixel-area budget — 1080x1920 portrait is
+# inside the envelope and 3840x2160 is outside it on the width alone.
+BCM2835_MAX_DIMENSION = 1920
+
+# H.264 carves every frame into 16x16 macroblocks, and a decoder's
+# *level* caps how many of them one frame may hold. 8192 is ``MaxFS``
+# for Levels 4.0 and 4.1 (ITU-T H.264, Annex A, Table A-1), and the
+# VideoCore block is a Level 4.1 decoder.
+#
+# This is a SECOND bound, not a restatement of the first. The driver
+# enumerates ``32x32 - 1920x1920`` and means it, but the hardware
+# behind it still refuses a frame inside those axes that carries too
+# many macroblocks. Measured on the Screenly testbed against
+# ``h264_v4l2m2m``, with pi2, pi3, pi3-64 and pi4-64 agreeing
+# exactly:
+#
+#     1920x1080   8160 mb   accepted      1472x1440   8280 mb   refused
+#     1456x1440   8190 mb   accepted      1920x1200   9000 mb   refused
+#     1440x1440   8100 mb   accepted      1920x1920  14400 mb   refused
+#
+# 1456x1440 accepted against 1472x1440 refused is the pair that
+# settles it: same height, 16 pixels of width apart, one either side
+# of 8192. So it is not a height bound. It is not the declared level
+# either — both the accepted 1920x1080 and the refused 1920x1200 clip
+# carried ``-level 5.1``, which is independent confirmation that
+# refusing to gate on the level tag was right.
+#
+# Neither bound subsumes the other, and both are needed: 2560x720 is
+# 7200 macroblocks yet refused on width, while 1920x1200 is inside
+# both axes yet refused on macroblocks. 1080p sits at 8160 of 8192,
+# which is no accident: Level 4.1 was specified to fit it.
+MACROBLOCK_SIZE = 16
+BCM2835_MAX_MACROBLOCKS = 8192
+
+# The box a re-encode targeting this decoder has to fit inside, as
+# distinct from the bounds above, which describe what it will *accept*.
+#
+# Scaled with ``force_original_aspect_ratio=decrease``, the output is
+# bounded by the box on both axes, so a box that is itself legal makes
+# every possible output legal: 1920x1080 is 8160 macroblocks and sits
+# on the axis bound exactly. Oriented to the source before use, so a
+# portrait clip gets 1080x1920 rather than being squeezed to 608x1080.
+#
+# A square-ish source is the one case this leaves value on the table —
+# 1600x1600 becomes 1080x1080 where the hardware would have taken
+# 1440x1440 (8100 mb). Deriving the largest legal box per aspect ratio
+# would recover it, at the cost of a second way to compute a frame
+# size, in the part of this feature where every historical defect has
+# come from two code paths disagreeing about one. A square signage
+# clip is rare, the loss is quality rather than function, and a Pi 4
+# reaches the box only when it has no HEVC escape. Not worth it.
+BCM2835_ENCODE_BOX = (1920, 1080)
+
+# Every codec that has a rule below. ``evaluate`` returns early
+# for anything else, which is what keeps the asset list off the
+# network for images and non-H.264 video. Keep in step with the
+# dispatch in ``evaluate``.
+_CODECS_WITH_RULES = frozenset({'h264'})
+
+# There is deliberately NO bitrate rule here. One was tried, set at
+# the H.264 High-profile Level 4.2 ceiling of 62.5 Mbps, and measuring
+# it on a Pi 4B killed it. 1080p25 through h264_v4l2m2m, clip looped
+# to 750 frames: 93 fps at ~9 Mbps falling to 62 fps at ~137 Mbps,
+# every clip accepted without error. At twice the threshold that rule
+# would have used, hardware decode still runs at 2.5x realtime.
+#
+# Content-insensitive, so the synthetic figures hold: real
+# High-profile content with B-frames measured 75 fps at 1080p30 Mbps,
+# in line with the sweep. Software decode is not, measuring ~5x more
+# expensive than synthetic clips, which is why nothing here reasons
+# about software throughput from a benchmark.
+#
+# ``video_bit_rate`` is still recorded for diagnostics. Reintroducing
+# a rule needs a measurement of real content failing, not a spec
+# table.
+
+# Pixel formats the VideoCore capture queue cannot produce, matched
+# as substrings. A denylist, not an 8-bit-4:2:0 allowlist: an
+# unrecognised ffprobe name must produce no warning rather than a
+# false rejection.
+#
+# Two measured anchors, one per axis, on a Pi 4B: a High 10 source and
+# a 4:2:2 source are both refused, ``not opened``, cores pegged, ~36%
+# drops. That pair is the evidence for the rest, because it shows the
+# decoder refuses a format the queue cannot express rather than
+# downconverting it. So the ``<bits>le`` / ``<bits>be`` pairs and
+# ``p010`` extrapolate from the measured 10-bit along the depth axis,
+# and ``422`` / ``440`` / ``444`` / ``gbrp`` / ``nv16`` / ``nv24``
+# from the measured 4:2:2 along the chroma axis.
+#
+# Verified against all 267 names in ``ffmpeg -pix_fmts``: none of
+# these match ``yuv420p``, ``yuvj420p``, ``nv12`` or ``nv21``, which
+# is what the queue produces.
+#
+# Some markers cannot fire on H.264: 16-bit is not expressible
+# (``bit_depth_luma_minus8`` tops out at 6) and 4:4:0 is not an H.264
+# chroma format. ``gbrp`` is reachable, via 4:4:4 with separate colour
+# planes.
+#
+# ``gray`` is excluded on purpose, and is the one case the
+# extrapolation does not cover: every marker here describes a format
+# carrying *more* than the queue can express, while monochrome carries
+# less, and a decoder can fill an NV12 buffer with neutral chroma. So
+# the mechanism that refuses High 10 predicts nothing here. Measure
+# before adding it. Everything else unflagged is RGB or a
+# hardware-surface pseudo-format, neither of which appears as an
+# H.264 stream's pixel format.
+UNSUPPORTED_PIX_FMT_MARKERS = (
+    '9le',
+    '9be',
+    '10le',
+    '10be',
+    '12le',
+    '12be',
+    '14le',
+    '14be',
+    '16le',
+    '16be',
+    'p010',
+    '422',
+    '440',
+    '444',
+    'gbrp',
+    'nv16',
+    'nv24',
+)
+
+
+def _as_positive_int(value: Any) -> int | None:
+    """Coerce a metadata field to a positive int, or ``None``.
+
+    Metadata arrives from ffprobe via JSON and from historical asset
+    rows written by older releases, so a field may be an int, a
+    numeric string, ``None``, or missing entirely. Anything that is
+    not confidently a positive number reads as "not measured" and
+    suppresses the warning that depends on it.
+
+    ``OverflowError`` is in the net alongside the obvious two: an
+    ``inf`` reaches ``int()`` perfectly happily through ``float()``
+    and only fails at the conversion, and an integer too large for a
+    float fails on the way in. Both escape as an exception rather
+    than a ``None`` unless caught, and this runs inside the template
+    filter that renders every asset row — so one odd metadata value
+    would take out the whole asset list rather than one warning.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if number > 0 else None
+
+
+def exceeds_dimension(
+    width: Any, height: Any, limit: int = BCM2835_MAX_DIMENSION
+) -> bool:
+    """``True`` when both axes are known and either is above ``limit``.
+
+    Per axis, not by pixel area: the decoder bound is a bound on each
+    dimension, so an ultrawide 5760x1080 clip is out of envelope on
+    width despite carrying fewer pixels than 4K, and a portrait
+    1080x1920 clip is inside it despite being "taller than 1080p".
+
+    A *partially* measured stream returns ``False`` too, which is
+    deliberate rather than an oversight: a known 3840 width with an
+    unreadable height clears the gate. Blocking an upload is the
+    strong action here, and half a measurement is not enough to take
+    it — an asset row whose metadata predates the field, or whose
+    ffprobe failed, must not be rejected on a number we never read.
+    """
+    w = _as_positive_int(width)
+    h = _as_positive_int(height)
+    if w is None or h is None:
+        return False
+    return w > limit or h > limit
+
+
+def macroblocks(width: Any, height: Any) -> int | None:
+    """Macroblocks in one frame, or ``None`` if either axis is unknown.
+
+    Rounds each axis *up* to a whole 16-pixel block, which is what the
+    encoder does: a 1080-pixel height occupies 68 macroblock rows with
+    the last one only half used. Rounding down would put 1920x1080 and
+    1920x1088 in different classes when the hardware treats them as
+    the same 8160-macroblock frame.
+    """
+    w = _as_positive_int(width)
+    h = _as_positive_int(height)
+    if w is None or h is None:
+        return None
+    return math.ceil(w / MACROBLOCK_SIZE) * math.ceil(h / MACROBLOCK_SIZE)
+
+
+def exceeds_macroblocks(
+    width: Any, height: Any, limit: int = BCM2835_MAX_MACROBLOCKS
+) -> bool:
+    """``True`` when both axes are known and the frame is past ``limit``.
+
+    Fails open on a partial measurement for the same reason
+    ``exceeds_dimension`` does: rejecting an upload is the strong
+    action, and half a frame size is not enough to take it.
+    """
+    total = macroblocks(width, height)
+    return total is not None and total > limit
+
+
+def is_unsupported_pix_fmt(pix_fmt: Any) -> bool:
+    """``True`` when ``pix_fmt`` is certainly outside 8-bit 4:2:0.
+
+    See ``UNSUPPORTED_PIX_FMT_MARKERS`` for why this is a denylist.
+    A missing or non-string value returns ``False``.
+    """
+    if not isinstance(pix_fmt, str) or not pix_fmt:
+        return False
+    token = pix_fmt.strip().lower()
+    return any(marker in token for marker in UNSUPPORTED_PIX_FMT_MARKERS)
+
+
+def _dimensions_label(metadata: dict[str, Any]) -> str:
+    """``'3840x2160'`` for messages, or ``'unknown size'``."""
+    w = _as_positive_int(metadata.get('video_width'))
+    h = _as_positive_int(metadata.get('video_height'))
+    if w is None or h is None:
+        return 'unknown size'
+    return f'{w}x{h}'
+
+
+def evaluate(
+    metadata: dict[str, Any] | None,
+    device_key: str,
+) -> list[PlaybackWarning]:
+    """Return every envelope warning that applies to ``metadata``.
+
+    ``metadata`` is an asset's stored metadata dict — the same shape
+    ``processing._ffprobe_summary`` writes.
+
+    ``device_key`` is required, and comes from
+    ``anthias_common.board.resolve_device_key()`` resolved by the
+    caller: once per upload in ``processing``, once per render in
+    ``page_context.assets()``. This module deliberately does not look
+    it up. On the catch-all ``arm64`` image the lookup reaches the
+    host_agent's published subtype over Redis, and the asset list
+    renders every row through ``to_json`` several times and re-renders
+    the whole table on a 5 s poll, so a per-call lookup cost a 40-row
+    render roughly 11 ms against a quarter of a second. Threading it
+    is also what keeps one render, or one upload, reasoning about a
+    single snapshot of the board: two lookups while the host_agent is
+    mid publish can disagree, and ``processing`` threads the same key
+    for exactly that reason.
+
+    An empty string is a legitimate key: it matches no rule, so a
+    caller with no board gets no findings rather than wrong ones.
+
+    An empty list means "nothing we can prove is wrong with this asset
+    on this board" — which is not the same as "this will play well",
+    and callers should not present it as a guarantee.
+    """
+    # ``isinstance`` rather than a falsy check: ``Asset.metadata`` is a
+    # free-form JSONField, and an admin edit or a restored backup can
+    # put a list or a string in it. A truthy non-dict would reach
+    # ``.get`` and raise straight out of the filter that renders every
+    # asset row — the one failure this module promises it cannot have.
+    if not isinstance(metadata, dict) or not metadata:
+        return []
+    # Codec first: it is a set lookup, while the board can be a Redis
+    # round-trip. Every image, web page and non-H.264 video on the
+    # asset list settles here without touching the network.
+    #
+    # Gated on ``_CODECS_WITH_RULES`` rather than a literal so this
+    # guard and the dispatch below cannot drift. Adding an HEVC or
+    # AV1 rule means adding its codec here too, and forgetting would
+    # fail *silently* — the new rule would simply never run, which is
+    # the worst outcome this module has.
+    codec = str(metadata.get('video_codec') or '').strip().lower()
+    if codec not in _CODECS_WITH_RULES:
+        return []
+    warnings: list[PlaybackWarning] = []
+
+    if device_key in BCM2835_H264_BOARDS:
+        warnings.extend(_bcm2835_h264_warnings(metadata, device_key))
+
+    # No ordering pass: every finding here blocks, so there is nothing
+    # to sort by severity. Add one back alongside a second severity,
+    # not before it.
+    return warnings
+
+
+def _bcm2835_h264_warnings(
+    metadata: dict[str, Any], board: str
+) -> list[PlaybackWarning]:
+    """Blocking findings for the VideoCore H.264 decoder."""
+    found: list[PlaybackWarning] = []
+    width = metadata.get('video_width')
+    height = metadata.get('video_height')
+    # Two independent bounds, one finding. The decoder refuses the
+    # frame either way and the fix is the same, so emitting two
+    # warnings would only put a second amber chip on the row saying
+    # what the first already said. Which sentence the operator gets
+    # depends on which bound broke, because they are surprising in
+    # different ways: an over-1920 axis is visible in the file's own
+    # dimensions, while an over-budget frame is not, and telling
+    # someone looking at 1920x1200 that the limit is "1920 per side"
+    # reads as a bug in us. The axis message wins when both are
+    # broken; it is the more obvious of the two.
+    over_axis = exceeds_dimension(width, height)
+    over_budget = exceeds_macroblocks(width, height)
+    if over_axis or over_budget:
+        found.append(
+            PlaybackWarning(
+                code='h264_frame_too_large',
+                severity=BLOCKING,
+                message=(
+                    f'This video is {_dimensions_label(metadata)}. '
+                    f'This screen ({board}) plays H.264 video up to '
+                    f'{BCM2835_MAX_DIMENSION} pixels on each side, so '
+                    'this one would stutter badly instead of playing '
+                    'smoothly.'
+                )
+                if over_axis
+                else (
+                    f'This video is {_dimensions_label(metadata)}. '
+                    'Neither side is over '
+                    f'{BCM2835_MAX_DIMENSION} pixels, but this screen '
+                    f'({board}) also limits the whole frame to about '
+                    'the size of 1920x1080, and this video is larger. '
+                    'It would stutter badly instead of playing '
+                    'smoothly.'
+                ),
+                # Generic on purpose: the right fix differs by board,
+                # so naming one here would contradict the recipe
+                # printed underneath. The rejection path builds the
+                # specific sentence from the same plan the recipe uses.
+                remedy=(
+                    'Convert it to a size or format this screen can '
+                    'play. The details are below.'
+                ),
+            )
+        )
+    pix_fmt = metadata.get('video_pix_fmt')
+    if is_unsupported_pix_fmt(pix_fmt):
+        found.append(
+            PlaybackWarning(
+                code='h264_pixel_format_unsupported',
+                severity=BLOCKING,
+                message=(
+                    f'This video uses the {pix_fmt} colour format. '
+                    f'This screen ({board}) can only play 8-bit 4:2:0 '
+                    'H.264 video, so this one would stutter badly '
+                    'instead of playing smoothly.'
+                ),
+                remedy=('Convert it to 8-bit 4:2:0. The details are below.'),
+            )
+        )
+    return found
+
+
+def _is_bcm2835_h264(codec: str, device_key: str) -> bool:
+    """Does the VideoCore H.264 decoder own this codec on this board?
+
+    The one question the three callers below need, and deliberately
+    one function rather than a bound-per-rule: every bound here
+    belongs to the same decoder, so a board either inherits all of
+    them or none.
+
+    ``False`` for every board this module does not characterise, which
+    is the fail-open that matters most. ``x86`` and ``rockpi4`` reach
+    the recipe path too, and answering from a Raspberry Pi constant
+    there would tell an x86 operator to downscale a 4K file their
+    board plays. It is also ``False`` for HEVC on a Pi 4: that block
+    does 4Kp60 and 10-bit, so an HEVC target inherits none of the
+    H.264 limits.
+    """
+    return (
+        codec.strip().lower() == 'h264' and device_key in BCM2835_H264_BOARDS
+    )
+
+
+def frame_exceeds_envelope(
+    codec: str,
+    width: Any,
+    height: Any,
+    device_key: str,
+) -> bool:
+    """Would this board refuse ``width x height`` encoded as ``codec``?
+
+    The question the *recipe* has to ask, as opposed to the one
+    ``evaluate`` asks about an asset that already exists. Both bounds
+    are consulted, because neither implies the other: 2560x720 is
+    inside the macroblock budget and refused on width, while 1920x1200
+    is inside both axes and refused on macroblocks.
+
+    Fails open for an unbounded codec, an uncharacterised board and an
+    unmeasured axis alike, so the recipe never downscales on a limit
+    this module cannot name.
+    """
+    if not _is_bcm2835_h264(codec, device_key):
+        return False
+    return exceeds_dimension(
+        width, height, BCM2835_MAX_DIMENSION
+    ) or exceeds_macroblocks(width, height, BCM2835_MAX_MACROBLOCKS)
+
+
+def encode_box_for(
+    codec: str,
+    width: Any,
+    height: Any,
+    device_key: str,
+) -> tuple[int, int] | None:
+    """The box a re-encode to ``codec`` must fit inside, or ``None``.
+
+    ``width`` / ``height`` are the *displayed* frame, not the coded
+    one: ffmpeg applies the rotation matrix before user filters, so
+    the ``scale`` clause sees a rotated clip the right way round, and
+    the box has to be turned to match or a portrait source loses two
+    thirds of its picture. (The acceptance question above is the
+    opposite: the decoder sees the coded frame, so rotation is
+    irrelevant there. The distinction only became visible once the box
+    stopped being square.)
+
+    ``None`` means this board bounds nothing for this codec and the
+    frame should survive the re-encode untouched.
+    """
+    if not _is_bcm2835_h264(codec, device_key):
+        return None
+    return _oriented(BCM2835_ENCODE_BOX, width, height)
+
+
+def _oriented(
+    box: tuple[int, int], width: Any, height: Any
+) -> tuple[int, int]:
+    """``box`` turned to match a portrait source.
+
+    A square box is returned unchanged either way, and an unmeasured
+    frame keeps the landscape orientation, which is the safe default:
+    it can only shrink the output further, never past a bound.
+    """
+    w = _as_positive_int(width)
+    h = _as_positive_int(height)
+    if w is not None and h is not None and h > w:
+        return (box[1], box[0])
+    return box
+
+
+def requires_8bit_420(codec: str, device_key: str) -> bool:
+    """Does a re-encode to ``codec`` have to be 8-bit 4:2:0 here?
+
+    The restriction belongs to the VideoCore H.264 capture queue, not
+    to the board. The same Pi 4's HEVC node advertises ``Nc30``/
+    ``NC30``, so 10-bit HEVC decodes there in hardware — and forcing
+    ``-pix_fmt yuv420p`` on a recipe that targets HEVC would strip bit
+    depth the operator's file has and the board can play, to satisfy a
+    rule for a codec we are not recommending.
+    """
+    return _is_bcm2835_h264(codec, device_key)
+
+
+def blocking_warning(
+    metadata: dict[str, Any] | None,
+    device_key: str,
+) -> PlaybackWarning | None:
+    """The first blocking warning for ``metadata``, if any.
+
+    Convenience for the upload gate. Every finding here blocks today,
+    so this is the first finding; it filters on severity anyway, so
+    that a softer tier added later cannot silently start rejecting
+    uploads.
+    """
+    for warning in evaluate(metadata, device_key):
+        if warning.is_blocking:
+            return warning
+    return None
