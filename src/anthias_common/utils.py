@@ -746,8 +746,25 @@ def generate_perfect_paper_password(
     )
 
 
-def connect_to_redis() -> 'redis.Redis':
-    return redis.Redis(host='redis', decode_responses=True, port=6379, db=0)
+def connect_to_redis(**overrides: Any) -> 'redis.Redis':
+    """Client for the Compose-internal redis.
+
+    ``overrides`` is passed straight through to ``redis.Redis`` so a
+    caller with different timing needs can widen the defaults without
+    restating where redis lives. Almost nobody should: redis-py's
+    defaults (``socket_timeout=5``, ``Retry(retries=10)``) suit the
+    short GET/SET round trips that make up nearly every call site
+    here. A *blocking* command is the exception — see
+    ``lib.system_logs._reply_connection`` — because a 5s socket read
+    cannot carry a 30s BLPOP.
+    """
+    return redis.Redis(
+        host='redis',
+        decode_responses=True,
+        port=6379,
+        db=0,
+        **overrides,
+    )
 
 
 def is_docker() -> bool:

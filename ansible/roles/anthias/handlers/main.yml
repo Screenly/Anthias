@@ -8,3 +8,20 @@
     state: restarted
     daemon_reload: true
   with_items: "{{ anthias_systemd_units }}"
+
+- name: Restart systemd-journald
+  # Picks up the persistence drop-in.
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
+  notify: Flush the runtime journal to disk
+
+- name: Flush the runtime journal to disk
+  # Without this the switch to persistent storage only takes effect at
+  # the NEXT boot: journald keeps writing to /run until something asks
+  # it to migrate, which normally only systemd-journal-flush.service
+  # does at startup. Verified on the QA rig -- a restart alone left the
+  # journal in /run; the flush moved it to /var/log/journal.
+  ansible.builtin.command:
+    cmd: journalctl --flush
+  changed_when: true
