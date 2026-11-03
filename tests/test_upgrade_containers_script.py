@@ -78,13 +78,17 @@ def test_reboot_gate_still_skips_the_image_purge(lines: list[str]) -> None:
     very end.
     """
     gate = _only_index(lines, REBOOT_GATE)
+    # The `--untagged-only` sweep on the failed-pull path exits before
+    # the gate is ever reached, so only the full purge is held to it.
     purge = [
         i
         for i, line in enumerate(lines)
-        if 'PURGE_SCRIPT' in line and 'bash' in line
+        if 'PURGE_SCRIPT' in line
+        and 'bash' in line
+        and '--untagged-only' not in line
     ]
 
-    assert purge, 'no call to the purge script found'
+    assert purge, 'no call to the full purge script found'
     assert gate < min(purge), (
         'the reboot gate should still sit above the stale-image purge'
     )
