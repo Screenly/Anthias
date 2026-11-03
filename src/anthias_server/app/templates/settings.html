@@ -167,7 +167,14 @@
         </div>
       </header>
 
-      <div x-data="{ enabled: {{ display_power_schedule_enabled|yesno:'true,false' }} }">
+      {% comment %}
+        One Alpine component for the whole section. Its initial state comes
+        from page_context._display_schedule_context, serialised as JSON (an
+        object literal is a valid x-data expression; autoescaping turns the
+        quotes into entities the browser decodes back before Alpine reads
+        the attribute).
+      {% endcomment %}
+      <div x-data="{{ display_power_state }}">
         <div @change="enabled = $event.target.checked">
           {% include "_settings_toggle.html" with name="display_power_schedule_enabled" label="Enable schedule" hint="Outside the hours below, the screen switches off." checked=display_power_schedule_enabled %}
         </div>
@@ -179,11 +186,24 @@
         {% endcomment %}
         <div x-show="enabled" x-cloak class="mt-4">
           {% comment %}
+            Switching per-day hours on for the first time copies the shared
+            times into every row, so the operator edits the one day that
+            differs instead of re-entering all seven.
+          {% endcomment %}
+          <div @change="perDay = $event.target.checked; if (perDay && !seeded) { dayTimes = dayTimes.map(() => ({ on: onTime, off: offTime })); seeded = true }">
+            {% include "_settings_toggle.html" with name="display_power_per_day" label="Different hours per day" hint="Set separate on and off times for each weekday." checked=display_power_per_day %}
+          </div>
+
+          {% comment %}
             type="time" rather than the .js-flatpickr-time treatment used
             in the asset modal — flatpickr is initialised in home.ts,
             which this page does not load.
+
+            The shared times stay in the form while per-day hours are on:
+            they are what a day falls back to, and what every day uses
+            again once per-day hours are switched off.
           {% endcomment %}
-          <div class="app-form-grid mb-4">
+          <div x-show="!perDay" class="app-form-grid mt-4 mb-4">
             <div class="app-floating">
               <input
                 type="time"
@@ -191,6 +211,7 @@
                 id="display_power_on_time"
                 name="display_power_on_time"
                 value="{{ display_power_on_time }}"
+                x-model="onTime"
                 placeholder=" ">
               <label for="display_power_on_time">Turn on at</label>
             </div>
@@ -201,12 +222,13 @@
                 id="display_power_off_time"
                 name="display_power_off_time"
                 value="{{ display_power_off_time }}"
+                x-model="offTime"
                 placeholder=" ">
               <label for="display_power_off_time">Turn off at</label>
             </div>
           </div>
 
-          <p class="settings-section__lede mb-3">
+          <p class="settings-section__lede mt-4 mb-3">
             Active days. An overnight schedule belongs to the day it starts —
             18:00 to 06:00 on Friday runs into Saturday morning.
           </p>
@@ -214,17 +236,67 @@
             Same .weekday-picker pill chips the asset modal and bulk-edit
             modal use for choosing days, so the two places in the product
             that pick weekdays look and behave identically.
+
+            The chips appear twice — as one row here, and at the start of
+            each per-day row below. Both sets share the `days` model, and
+            whichever set is hidden is disabled so the form posts each
+            selected day exactly once.
           {% endcomment %}
-          <div class="weekday-picker">
+          <div x-show="!perDay" class="weekday-picker">
             {% for value, label in weekday_options %}
             <label class="weekday">
               <input
                 type="checkbox"
                 name="display_power_days"
                 value="{{ value }}"
-                {% if value in display_power_days %}checked{% endif %}>
+                {% if value in display_power_days %}checked{% endif %}
+                {% if display_power_per_day %}disabled{% endif %}
+                x-model="days"
+                :disabled="perDay">
               <span>{{ label }}</span>
             </label>
+            {% endfor %}
+          </div>
+
+          <div x-show="perDay" x-cloak class="display-schedule-days">
+            {% for row in display_power_day_rows %}
+            <div class="display-schedule-day">
+              <div class="weekday-picker">
+                <label class="weekday">
+                  <input
+                    type="checkbox"
+                    name="display_power_days"
+                    value="{{ row.value }}"
+                    {% if row.value in display_power_days %}checked{% endif %}
+                    {% if not display_power_per_day %}disabled{% endif %}
+                    x-model="days"
+                    :disabled="!perDay">
+                  <span>{{ row.label }}</span>
+                </label>
+              </div>
+              <div class="app-floating">
+                <input
+                  type="time"
+                  class="app-input"
+                  id="display_power_on_time_{{ row.value }}"
+                  name="display_power_on_time_{{ row.value }}"
+                  value="{{ row.on }}"
+                  x-model="dayTimes[{{ row.value }}].on"
+                  placeholder=" ">
+                <label for="display_power_on_time_{{ row.value }}">Turn on at</label>
+              </div>
+              <div class="app-floating">
+                <input
+                  type="time"
+                  class="app-input"
+                  id="display_power_off_time_{{ row.value }}"
+                  name="display_power_off_time_{{ row.value }}"
+                  value="{{ row.off }}"
+                  x-model="dayTimes[{{ row.value }}].off"
+                  placeholder=" ">
+                <label for="display_power_off_time_{{ row.value }}">Turn off at</label>
+              </div>
+            </div>
             {% endfor %}
           </div>
         </div>

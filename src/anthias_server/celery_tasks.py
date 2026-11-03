@@ -491,6 +491,7 @@ def apply_display_power_schedule() -> None:
             display_power.parse_hhmm(settings['display_power_on_time']),
             display_power.parse_hhmm(settings['display_power_off_time']),
             display_power.parse_days(settings['display_power_days']),
+            display_power.parse_day_times(settings['display_power_day_times']),
         )
         if desired is None:
             # Unusable schedule (missing or identical times). Leave the

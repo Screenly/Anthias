@@ -445,6 +445,10 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     display_power_on_time = CharField()
     display_power_off_time = CharField()
     display_power_days = CharField(allow_blank=True)
+    # Optional per-weekday hours overriding the shared on/off times:
+    # comma-separated 'D=HH:MM-HH:MM' (e.g. '5=10:00-14:00'). Empty
+    # means every day uses display_power_on_time/display_power_off_time.
+    display_power_day_times = CharField(allow_blank=True)
 
 
 class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
@@ -494,6 +498,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     display_power_on_time = CharField(required=False)
     display_power_off_time = CharField(required=False)
     display_power_days = CharField(required=False, allow_blank=True)
+    display_power_day_times = CharField(required=False, allow_blank=True)
 
     def validate_display_power_on_time(self, value: str) -> str:
         return _validate_hhmm(value)
@@ -522,6 +527,29 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
                 )
             days.append(int(token))
         return ','.join(str(d) for d in sorted(set(days)))
+
+    def validate_display_power_day_times(self, value: str) -> str:
+        """Normalise the per-weekday hours to sorted ``D=HH:MM-HH:MM``.
+
+        Blank clears every override. Like the weekday list, a malformed
+        entry is a 400 rather than being dropped, and so is a weekday
+        given twice — keeping either one would silently discard the
+        other.
+        """
+        windows: dict[int, display_power.Window] = {}
+        for token in (value or '').split(','):
+            if not token.strip():
+                continue
+            try:
+                day, window = display_power.parse_day_time(token)
+            except ValueError as exc:
+                raise serializers.ValidationError(str(exc)) from exc
+            if day in windows:
+                raise serializers.ValidationError(
+                    f'Weekday {day} is given more than once.'
+                )
+            windows[day] = window
+        return display_power.format_day_times(windows)
 
     def validate_timezone(self, value: str) -> str:
         value = (value or '').strip()

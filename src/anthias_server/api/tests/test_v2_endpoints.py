@@ -56,6 +56,7 @@ def test_get_device_settings(
         'display_power_on_time': '08:00',
         'display_power_off_time': '18:00',
         'display_power_days': '0,1,2,3,4,5,6',
+        'display_power_day_times': '',
     }[key]
 
     response = api_client.get(device_settings_url)
@@ -377,6 +378,7 @@ def test_disable_basic_auth(
         'display_power_on_time': '08:00',
         'display_power_off_time': '18:00',
         'display_power_days': '0,1,2,3,4,5,6',
+        'display_power_day_times': '',
     }[key]
     settings_mock.__setitem__ = mock.MagicMock()
 
@@ -782,6 +784,7 @@ def test_device_settings_get_exposes_the_display_schedule(
         'display_power_on_time',
         'display_power_off_time',
         'display_power_days',
+        'display_power_day_times',
     ):
         assert field in response.data
 
@@ -845,6 +848,12 @@ def test_device_settings_patch_accepts_seconds_in_a_time(
         {'display_power_off_time': '19:45:60'},
         {'display_power_days': '0,9'},
         {'display_power_days': 'mon,tue'},
+        {'display_power_day_times': '5=10:00'},
+        {'display_power_day_times': '7=10:00-14:00'},
+        {'display_power_day_times': 'sat=10:00-14:00'},
+        {'display_power_day_times': '5=10:00-25:00'},
+        {'display_power_day_times': '5=10:00-10:00'},
+        {'display_power_day_times': '5=10:00-14:00,5=09:00-13:00'},
     ],
 )
 def test_device_settings_patch_rejects_a_bad_schedule(
@@ -877,6 +886,53 @@ def test_device_settings_patch_blank_days_means_every_day(
     assert response.status_code == status.HTTP_200_OK
     settings.load()
     assert settings['display_power_days'] == '0,1,2,3,4,5,6'
+
+
+@pytest.mark.django_db
+def test_device_settings_patch_sets_per_day_hours(
+    api_client: APIClient, _isolated_settings_conf: Any
+) -> None:
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = api_client.patch(
+            reverse('api:device_settings_v2'),
+            {'display_power_day_times': ' 5=10:00-14:00:00, 0=7:30-18:00'},
+            format='json',
+        )
+    assert response.status_code == status.HTTP_200_OK
+    settings.load()
+    # Sorted by weekday, times normalised to HH:MM.
+    assert settings['display_power_day_times'] == (
+        '0=07:30-18:00,5=10:00-14:00'
+    )
+
+    response = api_client.get(reverse('api:device_settings_v2'))
+    assert response.data['display_power_day_times'] == (
+        '0=07:30-18:00,5=10:00-14:00'
+    )
+
+
+@pytest.mark.django_db
+def test_device_settings_patch_blank_per_day_hours_clears_them(
+    api_client: APIClient, _isolated_settings_conf: Any
+) -> None:
+    settings.load()
+    settings['display_power_day_times'] = '5=10:00-14:00'
+    settings.save()
+    with mock.patch(
+        'anthias_server.settings.ViewerPublisher.send_to_viewer',
+        return_value=None,
+    ):
+        response = api_client.patch(
+            reverse('api:device_settings_v2'),
+            {'display_power_day_times': ''},
+            format='json',
+        )
+    assert response.status_code == status.HTTP_200_OK
+    settings.load()
+    assert settings['display_power_day_times'] == ''
 
 
 # ---------------------------------------------------------------------------

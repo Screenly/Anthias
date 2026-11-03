@@ -1336,6 +1336,33 @@ label { text-align: left; }
   }
 }
 
+// Settings → Display schedule, "Different hours per day": one row per
+// weekday — the day's chip, then its on and off times.
+.display-schedule-days {
+  display: grid;
+  gap: calc(var(--spacing) * 3);
+}
+
+.display-schedule-day {
+  display: grid;
+  grid-template-columns: 4.5rem repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: calc(var(--spacing) * 4);
+
+  // A deselected day keeps its hours (re-selecting it restores them)
+  // but they are not in effect, so they recede.
+  &:has(.weekday input:not(:checked)) .app-floating {
+    opacity: 0.5;
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--spacing) * 2);
+
+    > .weekday-picker { grid-column: 1 / -1; }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // 12. Stat card (system info)
 // -----------------------------------------------------------------------------
