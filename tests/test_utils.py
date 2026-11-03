@@ -17,6 +17,7 @@ from anthias_common.utils import (
     is_demo_node,
     is_docker,
     json_dump,
+    memory_cache_mib,
     string_to_bool,
     template_handle_unicode,
     url_fails,
@@ -544,3 +545,28 @@ def test_url_fails_probes_private_host_instead_of_rejecting() -> None:
     ) as mock_head:
         assert url_fails(url) is False
     mock_head.assert_called_once()
+
+
+def _vmem(total_mib: int, used_mib: int, free_mib: int) -> Any:
+    return MagicMock(
+        total=total_mib << 20,
+        used=used_mib << 20,
+        free=free_mib << 20,
+    )
+
+
+def test_memory_cache_mib_is_buffers_plus_cache_not_raw_buffers() -> None:
+    # 8 GiB board: 3 used, 4 free, so 1 GiB is reclaimable. The raw
+    # kernel "Buffers" line is deliberately set to a different value —
+    # reading it instead of deriving the slice is the bug this guards
+    # https://forums.screenly.io/t/api-memory-discrepancy/6721 ), and
+    # it would make the figure 64 not 1024.
+    vmem = _vmem(8192, 3072, 4096)
+    vmem.buffers = 64 << 20
+    assert memory_cache_mib(vmem) == 1024
+
+
+def test_memory_cache_mib_clamps_negative_to_zero() -> None:
+    # A kernel whose used + free overshoots total must not produce a
+    # negative wedge in the System Info pie.
+    assert memory_cache_mib(_vmem(1024, 900, 512)) == 0

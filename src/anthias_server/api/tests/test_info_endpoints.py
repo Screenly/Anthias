@@ -131,10 +131,14 @@ def test_info_v1_endpoint(
     'anthias_server.api.views.v2.psutil.virtual_memory',
     return_value=mock.MagicMock(
         total=8192 << 20,  # 8GB
-        used=4096 << 20,  # 4GB
+        used=3072 << 20,  # 3GB
         free=4096 << 20,  # 4GB
         shared=0,
-        buffers=1024 << 20,  # 1GB
+        # Raw kernel "Buffers" only. Deliberately different from the
+        # 1024 MiB that total-used-free yields for `cache`, so the
+        # assertion below would catch `cache` being wired to
+        # `buffers` by mistake.
+        buffers=64 << 20,  # 64MB
         available=7168 << 20,  # 7GB
     ),
 )
@@ -204,10 +208,13 @@ def test_info_v2_endpoint(
         'uptime': {'days': 1, 'hours': 0.0},
         'memory': {
             'total': 8192,
-            'used': 4096,
+            'used': 3072,
             'free': 4096,
             'shared': 0,
-            'buff': 1024,
+            'buff': 64,
+            # total - used - free, i.e. the same quantity the System
+            # Info page labels "Buffers / cache".
+            'cache': 1024,
             'available': 7168,
             # mock total=8 GiB is well above the 1.5 GiB low-RAM
             # cutoff, so the gate is inactive on this synthetic
