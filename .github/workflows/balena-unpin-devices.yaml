@@ -12,6 +12,14 @@ name: Balena unpin devices
 # bounded to a small per-run tranche so the backlog walks forward a
 # slice at a time rather than stampeding the fleet.
 #
+# --audit prepends a read-only report of the fleet's balenaOS and
+# supervisor version spread. It exists to track one specific number:
+# how much of the fleet is on supervisor >= 19, the first release that
+# can retrieve a queued host OS update without balenaCloud pushing it.
+# That is a prerequisite for devices to keep self-updating against a
+# self-hosted backend, and the uplift can only be driven while we still
+# have balenaCloud, so the burndown needs to be visible every run.
+#
 # PRIVACY: this repo is public, so these workflow logs are
 # world-readable. The script's default output is aggregate-only
 # (counts + release histogram) by design — never pass --verbose here,
@@ -58,7 +66,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Unpin + OS-update + supervisor
+      - name: Audit + unpin + OS-update + supervisor
         env:
           BALENA_TOKEN: ${{ secrets.BALENA_TOKEN }}
           # Empty on schedule events, "true"/"false" on dispatch.
@@ -67,10 +75,13 @@ jobs:
           set -euo pipefail
           # --os-update + --supervisor each move only a small tranche
           # per run (script default 5%); the hourly cadence ramps the
-          # backlog. Never pass --verbose — these logs are public.
+          # backlog. --audit only reads, so it runs on both branches —
+          # a dry-run should still report the burndown. Never pass
+          # --verbose — these logs are public.
           if [[ "$DRY_RUN" == "true" ]]; then
-            python3 bin/balena_unpin_devices.py --os-update --supervisor
+            python3 bin/balena_unpin_devices.py \
+              --audit --os-update --supervisor
           else
             python3 bin/balena_unpin_devices.py \
-              --os-update --supervisor --apply
+              --audit --os-update --supervisor --apply
           fi
