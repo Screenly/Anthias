@@ -179,23 +179,42 @@ def _is_late_soft_time_limit(exc: BaseException) -> bool:
 # knowing how many devices hit it; the thousandth copy from the same
 # board is what crowds out every other issue on the fleet.
 #
-# So each process counts occurrences per issue over a one-hour window
-# and keeps the 1st, 2nd, 4th, 8th, 16th, ..., dropping what falls
-# between two powers of two. A loop costs O(log n) events instead of
-# n — 1,761 becomes 11 — and the magnitude survives the thinning,
-# because each kept event carries its true running count in the
-# ``throttle.occurrence`` tag. Every device still reports every
-# distinct issue it hits, so no issue can be hidden by this; only
-# repetition of one already reported is.
+# So each process counts occurrences per issue and keeps the 1st,
+# 2nd, 4th, 8th, 16th, ..., dropping what falls between two powers of
+# two. A loop costs O(log n) events instead of n — 1,761 becomes 11 —
+# and the magnitude survives the thinning, because each kept event
+# carries its true running count in the ``throttle.occurrence`` tag.
+# Every device still reports every distinct issue it hits, so no
+# issue can be hidden by this; only repetition of one already
+# reported is.
+#
+# The count is reset by an issue going *quiet*, not by the clock
+# running on. That distinction is the whole value of the thinning on
+# the loops that actually spend the quota, because those loops do not
+# stop: the 1,761-event board above was emitting for 33 hours
+# straight, about 53 an hour. Reset the count every hour and each of
+# those hours restarts the sequence at 1, so the board pays 6 events
+# an hour, 198 over the run — O(log n) *per hour*, which for a loop
+# that never ends is just a slower O(n). Reset it only after a full
+# quiet window and the same board pays 11 events for the whole 33
+# hours, an 18x difference on the single largest stream in the fleet.
+#
+# The cost is that a genuinely long-running issue reports more
+# sparsely the longer it runs, so ``lastSeen`` lags further behind
+# the real last occurrence as the count climbs. That is the right
+# trade here: a stale ``lastSeen`` on an issue whose
+# ``throttle.occurrence`` tag reads 262,144 still says "this is
+# happening constantly", whereas the quota it would otherwise spend
+# is what silences every *other* issue on the fleet completely.
 _SENTRY_THROTTLE_WINDOW_SECONDS = 3600
 # Bounds the bookkeeping on a long-lived process. A process producing
 # more than this many *distinct* issues within one window has larger
-# problems than its quota, and the overflow path only forgets windows,
+# problems than its quota, and the overflow path only forgets counts,
 # which can let more events through but never fewer.
 _SENTRY_THROTTLE_MAX_KEYS = 512
 
 _sentry_throttle_lock = threading.Lock()
-# key -> (window started at, occurrences counted in that window)
+# key -> (last seen at, occurrences in the current run of activity)
 _sentry_throttle_state: dict[tuple[str, ...], tuple[float, int]] = {}
 
 
@@ -243,12 +262,13 @@ def _throttle_key(event: Event, hint: Hint) -> tuple[str, ...] | None:
 
 
 def _evict_throttle_keys(now: float) -> None:
-    """Expired windows first, then the oldest, until back under the cap.
+    """Gone-quiet keys first, then the least recently seen, until
+    back under the cap.
 
     The caller holds ``_sentry_throttle_lock``.
     """
-    for key, (window_start, _) in list(_sentry_throttle_state.items()):
-        if now - window_start >= _SENTRY_THROTTLE_WINDOW_SECONDS:
+    for key, (last_seen, _) in list(_sentry_throttle_state.items()):
+        if now - last_seen >= _SENTRY_THROTTLE_WINDOW_SECONDS:
             del _sentry_throttle_state[key]
     excess = len(_sentry_throttle_state) - _SENTRY_THROTTLE_MAX_KEYS
     if excess <= 0:
@@ -264,10 +284,17 @@ def _evict_throttle_keys(now: float) -> None:
 def _throttled(event: Event, hint: Hint) -> bool:
     """Whether this event is a suppressed repeat; counts it either way.
 
-    Occurrences 1, 2, 4, 8, ... within the window survive; the ones in
-    between are dropped. A survivor past the first is tagged with the
-    running count, so the repetition the throttle removed is still
-    legible on the event that did get through.
+    Occurrences 1, 2, 4, 8, ... survive; the ones in between are
+    dropped. A survivor past the first is tagged with the running
+    count, so the repetition the throttle removed is still legible on
+    the event that did get through.
+
+    The count spans a *run of activity* rather than a fixed window:
+    it carries on across hour boundaries for as long as the issue
+    keeps recurring, and only starts again once the issue has been
+    quiet for a whole window. See the rationale above
+    ``_SENTRY_THROTTLE_WINDOW_SECONDS`` for why resetting on the
+    clock instead would hand a non-stop loop a fresh budget an hour.
     """
     key = _throttle_key(event, hint)
     if key is None:
@@ -277,11 +304,11 @@ def _throttled(event: Event, hint: Hint) -> bool:
     # expire or freeze every window at once.
     now = time.monotonic()
     with _sentry_throttle_lock:
-        window_start, count = _sentry_throttle_state.get(key, (now, 0))
-        if now - window_start >= _SENTRY_THROTTLE_WINDOW_SECONDS:
-            window_start, count = now, 0
+        last_seen, count = _sentry_throttle_state.get(key, (now, 0))
+        if now - last_seen >= _SENTRY_THROTTLE_WINDOW_SECONDS:
+            count = 0
         count += 1
-        _sentry_throttle_state[key] = (window_start, count)
+        _sentry_throttle_state[key] = (now, count)
         if len(_sentry_throttle_state) > _SENTRY_THROTTLE_MAX_KEYS:
             _evict_throttle_keys(now)
     # ``n & (n - 1)`` is zero exactly on the powers of two.
