@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import errno
 import logging
 import os
@@ -11,6 +12,7 @@ from unittest import mock
 
 import pytest
 import requests
+from django.utils import timezone
 
 import anthias_viewer as viewer
 from anthias_server.app.models import DURATION_S_MAX
@@ -2169,7 +2171,13 @@ def test_displayable_remote_uri_consults_is_reachable() -> None:
         'skip_asset_check': False,
         'is_reachable': True,
     }
-    bad = {**ok, 'is_reachable': False}
+    # A *fresh* unreachable verdict is honoured. The timestamp matters
+    # now: see the staleness tests below.
+    bad = {
+        **ok,
+        'is_reachable': False,
+        'last_reachability_check': timezone.now(),
+    }
     assert viewer._asset_is_displayable(ok)
     assert not viewer._asset_is_displayable(bad)
 
@@ -2183,6 +2191,83 @@ def test_displayable_missing_is_reachable_defaults_to_displayable() -> None:
         'skip_asset_check': False,
     }
     assert viewer._asset_is_displayable(asset)
+
+
+# ---------------------------------------------------------------------------
+# Stale reachability verdicts (GH #3424)
+# ---------------------------------------------------------------------------
+#
+# Both paths that can clear is_reachable=False are celery tasks (the
+# beat sweep and the viewer-requested recheck). A celery container
+# that is down or crash-looping therefore freezes the field, and the
+# asset used to be skipped for the rest of the device's uptime even
+# once the network was long back. Fail open once the verdict is older
+# than the sweep could plausibly explain.
+
+
+def _unreachable_since(age_s: float) -> dict[str, object]:
+    return {
+        'asset_id': 'a',
+        'uri': 'http://example.com/x',  # NOSONAR
+        'skip_asset_check': False,
+        'is_reachable': False,
+        'last_reachability_check': timezone.now()
+        - datetime.timedelta(seconds=age_s),
+    }
+
+
+def test_displayable_recent_unreachable_verdict_is_honoured() -> None:
+    """Just inside the window: something is still probing, so the
+    verdict is current information and the asset stays skipped."""
+    age = viewer.REACHABILITY_STALE_AFTER_S - 60
+    assert not viewer._asset_is_displayable(_unreachable_since(age))
+
+
+def test_displayable_stale_unreachable_verdict_fails_open() -> None:
+    """Past the window, nothing has re-probed in three sweep
+    intervals. That says the checker stopped, not that the asset is
+    still down — so show it rather than skipping it forever."""
+    age = viewer.REACHABILITY_STALE_AFTER_S + 60
+    assert viewer._asset_is_displayable(_unreachable_since(age))
+
+
+def test_displayable_unreachable_with_no_timestamp_fails_open() -> None:
+    """A row that has never been probed carries no timestamp, so
+    there is no verdict to trust — same answer as a stale one."""
+    asset = _unreachable_since(0)
+    del asset['last_reachability_check']
+    assert viewer._asset_is_displayable(asset)
+
+
+def test_displayable_unreachable_with_none_timestamp_fails_open() -> None:
+    """``last_reachability_check`` is nullable in the model."""
+    asset = {**_unreachable_since(0), 'last_reachability_check': None}
+    assert viewer._asset_is_displayable(asset)
+
+
+def test_displayable_unusable_timestamp_fails_open(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A naive datetime can't be subtracted from an aware one. A
+    hand-crafted row must not be able to take the screen down."""
+    asset = {
+        **_unreachable_since(0),
+        'last_reachability_check': datetime.datetime(2020, 1, 1),
+    }
+    with caplog.at_level(logging.WARNING):
+        assert viewer._asset_is_displayable(asset)
+    assert 'Unusable last_reachability_check' in caplog.text
+
+
+def test_displayable_stale_verdict_does_not_override_local_file() -> None:
+    """Staleness only governs the remote-URI branch. A local file that
+    is genuinely missing is still not displayable, however old the
+    row's reachability timestamp is."""
+    asset = {
+        **_unreachable_since(viewer.REACHABILITY_STALE_AFTER_S + 60),
+        'uri': '/data/anthias_assets/definitely-not-here.jpg',
+    }
+    assert not viewer._asset_is_displayable(asset)
 
 
 # ---------------------------------------------------------------------------
@@ -2278,6 +2363,9 @@ def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
         'duration': 10,
         'skip_asset_check': False,
         'is_reachable': False,
+        # Fresh verdict: a stale one fails open and takes the display
+        # path instead of the skip path (GH #3424).
+        'last_reachability_check': timezone.now(),
     }
     skip_event = mock.Mock()
     skip_event.wait.return_value = False

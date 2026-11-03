@@ -48,6 +48,9 @@ from anthias_viewer.constants import (
 from anthias_viewer.constants import (
     POST_WIFI_SETUP_ADDRESS_TIMEOUT_S as POST_WIFI_SETUP_ADDRESS_TIMEOUT_S,
 )
+from anthias_viewer.constants import (
+    REACHABILITY_STALE_AFTER_S as REACHABILITY_STALE_AFTER_S,
+)
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import (
@@ -2775,7 +2778,50 @@ def _asset_is_displayable(asset: dict[str, Any]) -> bool:
     # Default to True so a row written before this field existed
     # (or by an older serializer that doesn't set it) doesn't get
     # silently skipped.
-    return bool(asset.get('is_reachable', True))
+    if bool(asset.get('is_reachable', True)):
+        return True
+    # An "unreachable" verdict is only evidence for as long as
+    # something is still producing verdicts. Both refresh paths are
+    # celery tasks -- the beat sweep and the recheck we ask for below
+    # -- so a celery container that is down or crash-looping freezes
+    # this field at False, and the asset is skipped for the rest of
+    # the device's uptime even once the network is long back. The
+    # device looks healthy throughout: the web UI still answers, and
+    # the only trace is a single line in the viewer log. Reported from
+    # the field, reproduced on the testbed (GH #3424).
+    #
+    # So fail open once the verdict goes stale, which is the same
+    # choice the default above already makes when there is no verdict
+    # at all. A page that fails to load is on the screen where someone
+    # can see it; a page that never appears is not.
+    return _reachability_verdict_is_stale(asset)
+
+
+def _reachability_verdict_is_stale(asset: dict[str, Any]) -> bool:
+    """True if nothing has re-probed this asset in a long time.
+
+    ``last_reachability_check`` is written by the same celery tasks
+    that write ``is_reachable``, so its age is a direct measure of
+    whether those tasks are still running. A row that has never been
+    probed carries no timestamp and counts as stale: there is no
+    verdict to trust in that case either.
+    """
+    checked_at = asset.get('last_reachability_check')
+    if checked_at is None:
+        return True
+    try:
+        age = (timezone.now() - checked_at).total_seconds()
+    except TypeError:
+        # A hand-crafted row could hold a naive datetime, which can't
+        # be subtracted from an aware one. Treat an unusable timestamp
+        # as no timestamp rather than letting it take the screen down.
+        logger.warning(
+            'Unusable last_reachability_check on asset %s; '
+            'treating its reachability verdict as stale',
+            asset.get('asset_id'),
+        )
+        return True
+    return bool(age > REACHABILITY_STALE_AFTER_S)
 
 
 def _asset_is_local_file(asset: dict[str, Any]) -> bool:
