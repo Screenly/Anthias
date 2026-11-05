@@ -204,7 +204,8 @@ def _resolve_node_ip(
     ``anthias_common.utils.get_node_ip()`` is the right primitive for one-shot
     server-rendered surfaces like ``/api/v2/info``: it publishes
     ``set_ip_addresses`` to host_agent and waits up to ~80s
-    (60s host_agent_ready + 20s ip_addresses_ready) for the result.
+    (60s host_agent_ready + 20s ip_addresses_ready) for the result,
+    or ~60s when the host agent never became ready.
     That's catastrophic from inside a 2-second polling endpoint —
     request workers would queue behind a single slow first call and
     the splash would never populate.

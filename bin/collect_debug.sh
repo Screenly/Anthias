@@ -743,9 +743,10 @@ section "DNS resolution" "$NET" sh -c \
 # The timeout is deliberately generous. /api/v2/info calls
 # get_node_ip(), which publishes a hostcmd and then waits up to ~80s
 # (60s host_agent_ready + 20s ip_addresses_ready) for the host agent to
-# populate Redis. A host agent that is not running is itself a common
-# fault this bundle is meant to diagnose, so a 10s timeout would drop
-# the API snapshot on precisely the broken devices that need it. The
+# populate Redis, or ~60s when the host agent never became ready. A
+# host agent that is not running is itself a common fault this bundle is
+# meant to diagnose, so a 10s timeout would drop the API snapshot on
+# precisely the broken devices that need it. The
 # endpoint is not polled, so waiting is cheap and happens once.
 API_FETCH_TIMEOUT_S=90
 
