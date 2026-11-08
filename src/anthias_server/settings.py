@@ -15,6 +15,13 @@ logger = logging.getLogger(__name__)
 VIEWER_CHANNEL = 'anthias.viewer'
 REPLY_KEY_PREFIX = 'anthias.reply.'
 
+#: Socket headroom over a blocking pop's own deadline. The socket read
+#: has to outlive the server-side BLPOP timer: if it expires first, the
+#: client abandons a pop that was about to come back empty, and "came
+#: back empty" is precisely the outcome the caller needs to report. See
+#: ``ReplyCollector._blocking_connection``.
+REPLY_SOCKET_MARGIN_SECONDS = 5
+
 CONFIG_DIR = '.anthias/'
 CONFIG_FILE = 'anthias.conf'
 DEFAULTS = {
@@ -258,12 +265,71 @@ class ReplyCollector:
         from anthias_common.utils import connect_to_redis
 
         self._redis: redis.Redis = connect_to_redis()
+        self._blocking_redis: dict[int, redis.Redis] = {}
 
     @classmethod
     def get_instance(cls) -> 'ReplyCollector':
         if cls.INSTANCE is None:
             cls.INSTANCE = ReplyCollector()
         return cls.INSTANCE
+
+    def _blocking_connection(self, timeout_seconds: int) -> 'redis.Redis':
+        """A client whose socket read can actually carry this BLPOP.
+
+        ``connect_to_redis()`` takes redis-py's defaults, and for a
+        blocking pop those defaults are wrong in a way that hides
+        itself: ``socket_timeout=5`` with ``Retry(retries=10)``. The
+        socket read gives up five seconds into a longer pop, the retry
+        ladder silently re-issues it ten more times, and about a minute
+        later the call raises ``redis.TimeoutError`` instead of
+        returning ``None``.
+
+        That is not theoretical. ``lib/cec_client`` sizes its reply
+        budget from the viewer's worst-case CEC fan-out
+        (``REPLY_TIMEOUT_MS`` = 15s), and a 15s pop against a viewer
+        that is alive but slow to answer was measured at **58.0s** —
+        long enough to blow ``get_display_power``'s 30s soft limit and
+        reach its 60s hard limit, at which point billiard SIGKILLs the
+        pool child and celery forks a replacement (Sentry
+        ANTHIAS-A / 9 / B / 1Q). The caller's own timeout bounded
+        nothing; the retry ladder was the real bound, at roughly four
+        times the intended budget.
+
+        Worse, the ladder raises instead of returning ``None``, so the
+        ``ReplyTimeoutError`` -> ``ViewerUnavailableError`` path that
+        turns a late viewer into a clean "Error" reading was
+        unreachable from here. A slow viewer surfaced as a dead celery
+        worker.
+
+        This is the same trap ``lib/system_logs._reply_connection``
+        already removes for the host-agent pop, and the same fix:
+        widen the socket read past the pop's own deadline and turn
+        retries off. Retries are off deliberately — a blocking pop is
+        not idempotent the way a GET is, and re-issuing it after a
+        socket timeout restarts the wait from zero, which is exactly
+        how one bounded request grew into a minute-long stall.
+
+        Sized per call and cached per socket timeout rather than fixed
+        at construction, so a caller that widens its budget is carried
+        automatically instead of silently falling back into the ladder.
+        There are two call sites today (2s and 15s), so the cache holds
+        two connections.
+        """
+        from redis.backoff import NoBackoff
+        from redis.retry import Retry
+
+        from anthias_common.utils import connect_to_redis
+
+        socket_timeout = timeout_seconds + REPLY_SOCKET_MARGIN_SECONDS
+        connection = self._blocking_redis.get(socket_timeout)
+        if connection is None:
+            connection = connect_to_redis(
+                socket_timeout=socket_timeout,
+                retry=Retry(NoBackoff(), 0),
+                retry_on_timeout=False,
+            )
+            self._blocking_redis[socket_timeout] = connection
+        return connection
 
     def recv_json(self, correlation_id: str, timeout_ms: int) -> Any:
         key = f'{REPLY_KEY_PREFIX}{correlation_id}'
@@ -272,6 +338,9 @@ class ReplyCollector:
         # collector's contract (zmq.poll(0) returns immediately) instead
         # of blocking BLPOP for a full second. Use LPOP and raise the
         # same timeout error if nothing's queued.
+        #
+        # Stays on the shared connection: redis-py's defaults are right
+        # for a short round trip, which is what this branch is.
         if timeout_ms <= 0:
             result = self._redis.lpop(key)
             if result is None:
@@ -281,7 +350,9 @@ class ReplyCollector:
         # BLPOP takes whole seconds; round up so the caller never waits
         # less than the requested ms.
         timeout_seconds = (timeout_ms + 999) // 1000
-        blpop_result = self._redis.blpop(key, timeout=timeout_seconds)
+        blpop_result = self._blocking_connection(timeout_seconds).blpop(
+            key, timeout=timeout_seconds
+        )
         if blpop_result is None:
             raise ReplyTimeoutError
         return json.loads(blpop_result[1])
