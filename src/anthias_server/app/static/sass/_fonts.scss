@@ -20,9 +20,11 @@
 // Tabler Icons webfont — 5,800+ modern line-art glyphs, MIT, ships
 // in @tabler/icons-webfont. The upstream stylesheet is loaded as a
 // separate <link> in base.html (build:icons copies the .css to
-// /static/dist/css/tabler-icons.css and the woff2 to
-// /static/dist/css/fonts/tabler-icons.woff2 so the relative font URL
-// inside the upstream CSS resolves). SASS @import of a .css file
+// /static/dist/css/tabler-icons.css and the outline font files to
+// /static/dist/css/fonts/ so the relative font URLs inside the
+// upstream CSS resolve). Since 3.50 the outline font is split into
+// per-category woff2 subsets (tabler-icons.core.woff2, ...), which
+// the tabler-icons.* glob picks up along with the legacy files. SASS @import of a .css file
 // emits a runtime @import url(...) instead of inlining, which then
 // fails to resolve against /static/dist/css/anthias.css's path —
 // hence the separate <link>.
