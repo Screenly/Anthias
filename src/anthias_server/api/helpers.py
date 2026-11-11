@@ -116,7 +116,7 @@ def get_active_asset_ids() -> list[str]:
         is_enabled=True,
         start_date__isnull=False,
         end_date__isnull=False,
-    )
+    ).order_by('play_order')
     return [asset.asset_id for asset in enabled_assets if asset.is_active()]
 
 
