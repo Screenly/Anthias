@@ -4,11 +4,13 @@ Tests for asset-related API endpoints.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import timedelta
 from typing import Any
 from unittest import mock
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -18,7 +20,7 @@ from anthias_server.api.tests.test_common import (
     ASSET_UPDATE_DATA_V2,
     get_request_data,
 )
-from anthias_server.app.models import DURATION_S_MAX
+from anthias_server.app.models import DURATION_S_MAX, Asset
 
 
 @pytest.fixture
@@ -274,6 +276,37 @@ def test_update_asset_should_return_updated_asset(
     assert updated_asset['duration'] == data['duration']
     assert updated_asset['is_enabled'] == data['is_enabled']
     assert updated_asset['play_order'] == data['play_order']
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('version', ['v1_2', 'v2'])
+def test_renaming_asset_keeps_existing_playlist_order(
+    api_client: APIClient, version: str
+) -> None:
+    now = timezone.now()
+    for name, play_order in [('A', 1), ('B', 2), ('C', 0)]:
+        Asset.objects.create(
+            asset_id=name,
+            name=name,
+            uri='https://example.com',
+            mimetype='webpage',
+            start_date=now - timedelta(days=1),
+            end_date=now + timedelta(days=1),
+            is_enabled=True,
+            play_order=play_order,
+        )
+
+    response = api_client.patch(
+        reverse(f'api:asset_detail_{version}', args=['A']),
+        data={'name': 'Renamed A'},
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['name'] == 'Renamed A'
+    assert list(
+        Asset.objects.order_by('play_order').values_list('asset_id', flat=True)
+    ) == ['C', 'A', 'B']
 
 
 @pytest.mark.django_db
