@@ -18,7 +18,7 @@ from anthias_server.api.tests.test_common import (
     ASSET_UPDATE_DATA_V2,
     get_request_data,
 )
-from anthias_server.app.models import DURATION_S_MAX
+from anthias_server.app.models import DURATION_S_MAX, Asset
 
 
 @pytest.fixture
@@ -1432,3 +1432,103 @@ def test_create_heic_image_does_not_dispatch_on_legacy_endpoints(
 
     assert response.status_code == status.HTTP_201_CREATED, response.data
     mock_dispatch.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Active-playlist ordering survives an enable/disable round-trip
+# (issue #3455)
+# ---------------------------------------------------------------------------
+#
+# ``finalize_asset_update`` rebuilds the active ordering from
+# ``get_active_asset_ids()``, which used to return rows in SQLite table
+# (insertion) order because its queryset had no ``order_by`` and
+# ``Asset.Meta`` sets no default ordering. The rebuilt list was then
+# renumbered 0..n in that scrambled order, so any client that enabled,
+# disabled, or edited an asset through the API ended up with a
+# playlist ordered by *creation time* rather than by the operator's
+# explicit ``play_order``. The dashboard path
+# (``app.views.assets_toggle``) saves ``is_enabled`` directly and never
+# calls ``finalize_asset_update``, which is why it was unaffected.
+#
+# The regression reproduces the issue's exact steps: create A, B, C;
+# reorder to C, A, B via the playlist-order endpoint; disable A then
+# re-enable it through the API update path; assert the ordering is
+# still C, A, B. On the unpatched code the re-enable renumbers from
+# insertion order (A, B, C); with the fix it stays C, A, B.
+
+
+@pytest.mark.django_db
+@mock.patch('anthias_server.api.helpers.ViewerPublisher')
+def test_reorder_preserved_when_disabling_and_reenabling_asset(
+    publisher_mock: Any, api_client: APIClient
+) -> None:
+    publisher_instance = mock.MagicMock()
+    publisher_mock.get_instance.return_value = publisher_instance
+
+    base = dict(ASSET_CREATION_DATA)
+    base['is_enabled'] = True
+    base['duration'] = 20
+
+    def _create(name: str) -> dict[str, Any]:
+        response = api_client.post(
+            reverse('api:asset_list_v2'),
+            data={**base, 'name': name},
+            format='json',
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        return response.data
+
+    asset_a = _create('Asset A')
+    asset_b = _create('Asset B')
+    asset_c = _create('Asset C')
+
+    # Reorder the active playlist to C, A, B through the endpoint that
+    # the API uses to persist an explicit ordering.
+    order_response = api_client.post(
+        reverse('api:playlist_order_v2'),
+        data={
+            'ids': (
+                f'{asset_c["asset_id"]},'
+                f'{asset_a["asset_id"]},'
+                f'{asset_b["asset_id"]}'
+            )
+        },
+        format='json',
+    )
+    assert order_response.status_code == status.HTTP_204_NO_CONTENT
+
+    assert Asset.objects.get(asset_id=asset_c['asset_id']).play_order == 0
+    assert Asset.objects.get(asset_id=asset_a['asset_id']).play_order == 1
+    assert Asset.objects.get(asset_id=asset_b['asset_id']).play_order == 2
+
+    # Disable A through the API update path (which funnels through
+    # ``finalize_asset_update``). The active rows are renumbered while
+    # the now-disabled A keeps its old play_order (see NOTES.md for the
+    # out-of-scope edge case this leaves behind): C -> 0, B -> 1, A
+    # stays at 1.
+    disable_response = api_client.patch(
+        reverse('api:asset_detail_v2', args=[asset_a['asset_id']]),
+        data={'is_enabled': False},
+        format='json',
+    )
+    assert disable_response.status_code == status.HTTP_200_OK
+    assert Asset.objects.get(asset_id=asset_c['asset_id']).play_order == 0
+    assert Asset.objects.get(asset_id=asset_a['asset_id']).play_order == 1
+    assert Asset.objects.get(asset_id=asset_b['asset_id']).play_order == 1
+
+    # Re-enable A through the same API update path. On the unpatched
+    # code ``finalize_asset_update`` rebuilds the active list in
+    # insertion order (A, B, C) and renumbers from 0, scrambling the
+    # playlist the operator had explicitly set. With the fix the
+    # rebuild follows play_order, so the operator's C, A, B is
+    # restored.
+    enable_response = api_client.patch(
+        reverse('api:asset_detail_v2', args=[asset_a['asset_id']]),
+        data={'is_enabled': True},
+        format='json',
+    )
+    assert enable_response.status_code == status.HTTP_200_OK
+
+    assert Asset.objects.get(asset_id=asset_c['asset_id']).play_order == 0
+    assert Asset.objects.get(asset_id=asset_a['asset_id']).play_order == 1
+    assert Asset.objects.get(asset_id=asset_b['asset_id']).play_order == 2
