@@ -1470,6 +1470,42 @@ def _describe_webview_exit(candidate: Any) -> str:
         return f'killed by signal {-code} ({code})'
 
 
+# How much of a dead webview's output to quote in a log line. The full
+# 64 KiB sink would not survive as a Sentry breadcrumb; the cause of an
+# init death is in its last few lines.
+WEBVIEW_DEATH_TAIL_CHARS = 2000
+
+
+def _describe_dead_webview() -> str:
+    """Exit status and output tail of the webview ``setup()`` lost.
+
+    ``_spawn_webview_once`` names both when the webview dies *before*
+    the handshake. A death *after* it — between the handshake and
+    ``setup()``'s ``bus.get`` — surfaces only as a D-Bus
+    ``ServiceUnknown`` / ``NoReply``, which says that the process went
+    away but never why. On a board that dies there on every spawn (an
+    x86 VM in Sentry ANTHIAS-3, ~1 spawn/s) those GErrors were the whole
+    record, so whether it is a GL-context failure, a signal or a clean
+    refusal could only be guessed at. Never raises: it runs on the path
+    that is already reporting a failure.
+    """
+    try:
+        candidate = browser
+        if candidate is None:
+            return 'no webview process recorded'
+        if candidate.is_alive():
+            status = 'process still running'
+        else:
+            status = _describe_webview_exit(candidate)
+        output = _webview_output
+        if output is None:
+            return status
+        tail = _drain_webview_output(output)[-WEBVIEW_DEATH_TAIL_CHARS:]
+        return f'{status}; output tail: {tail.strip() or "<empty>"}'
+    except Exception as exc:
+        return f'webview state unavailable: {exc!r}'
+
+
 def _spawn_webview_once(startup_timeout: float) -> Any:
     """Spawn AnthiasViewer once and block until it registers on D-Bus.
 
@@ -3054,14 +3090,28 @@ def setup() -> None:
         if not _is_webview_gone_error(exc):
             raise
         logger.warning(
-            'AnthiasViewer died between handshake and bus.get; '
+            'AnthiasViewer died between handshake and bus.get (%s); '
             'respawning and retrying once: %s',
+            _describe_dead_webview(),
             exc,
         )
         if browser is not None:
             _terminate_webview(browser)
         load_browser()
-        browser_bus = bus.get('anthias.viewer', '/Anthias')
+        try:
+            browser_bus = bus.get('anthias.viewer', '/Anthias')
+        except Exception as retry_exc:
+            # The retry budget is spent and the GError is about to
+            # escape main(). It names only the D-Bus symptom, so leave
+            # the respawned webview's own account of how it died next
+            # to it — otherwise the container restarts with no record
+            # of the cause (Sentry ANTHIAS-3).
+            if _is_webview_gone_error(retry_exc):
+                logger.warning(
+                    'Respawned AnthiasViewer also died before bus.get (%s)',
+                    _describe_dead_webview(),
+                )
+            raise
     # MPVMediaPlayer calls AnthiasViewer's playVideo / stopVideo
     # slots via this same proxy now that video lives in-process
     # (issue #2904). Inject after load_browser so the proxy is
