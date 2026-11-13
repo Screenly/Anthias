@@ -210,6 +210,83 @@ def test_setup_respawns_webview_when_busget_finds_name_gone(
     assert viewer_fixtures.u.browser_bus is proxy
 
 
+def test_setup_logs_how_the_webview_died_before_busget(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A death between handshake and bus.get surfaces only as a D-Bus
+    ServiceUnknown/NoReply. The respawn warning must carry the dead
+    process's exit status and output tail, or the cause is lost with
+    the process (Sentry ANTHIAS-3)."""
+    gone = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The '
+        'name anthias.viewer was not provided by any .service files'
+    )
+    no_reply = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message '
+        'recipient disconnected from message bus without replying'
+    )
+    fake_bus = mock.Mock()
+    fake_bus.get.side_effect = [gone, no_reply]
+    dead_browser = mock.Mock(name='dead_browser')
+    dead_browser.is_alive.return_value = False
+    dead_browser.process.exit_code = -6
+    output = viewer_fixtures.u._BoundedWebviewOutput()
+    output('This plugin does not support createPlatformOpenGLContext!\n')
+
+    viewer_fixtures.p_loadb.start()
+    try:
+        with (
+            mock.patch('pydbus.SessionBus', mock.Mock(return_value=fake_bus)),
+            mock.patch.object(viewer_fixtures.u, 'browser', dead_browser),
+            mock.patch.object(viewer_fixtures.u, '_webview_output', output),
+            mock.patch.object(viewer_fixtures.u.logger, 'warning') as warn,
+            pytest.raises(RuntimeError, match='NoReply'),
+        ):
+            viewer_fixtures.u.setup()
+    finally:
+        viewer_fixtures.p_loadb.stop()
+
+    messages = [c.args[0] % c.args[1:] for c in warn.call_args_list]
+    assert len(messages) == 2
+    for message in messages:
+        assert 'killed by SIGABRT (-6)' in message
+        assert 'createPlatformOpenGLContext' in message
+    assert messages[1].startswith('Respawned AnthiasViewer also died')
+
+
+def test_describe_dead_webview_tail_is_bounded(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    u = viewer_fixtures.u
+    output = u._BoundedWebviewOutput()
+    output('x' * 10_000 + 'FATAL\n')
+    live = mock.Mock()
+    live.is_alive.return_value = True
+    with (
+        mock.patch.object(u, 'browser', live),
+        mock.patch.object(u, '_webview_output', output),
+        mock.patch.object(u, 'sleep'),
+    ):
+        described = u._describe_dead_webview()
+    assert described.startswith('process still running; output tail: ')
+    assert described.endswith('FATAL')
+    assert len(described) < u.WEBVIEW_DEATH_TAIL_CHARS + 100
+
+
+def test_describe_dead_webview_never_raises(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    u = viewer_fixtures.u
+    broken = mock.Mock()
+    broken.is_alive.side_effect = OSError('reaped')
+    with mock.patch.object(u, 'browser', broken):
+        assert u._describe_dead_webview().startswith(
+            'webview state unavailable'
+        )
+    with mock.patch.object(u, 'browser', None):
+        assert u._describe_dead_webview() == 'no webview process recorded'
+
+
 def test_setup_reraises_unrelated_busget_error(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
