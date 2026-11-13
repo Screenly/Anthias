@@ -76,15 +76,22 @@ def test_reboot_gate_still_skips_the_image_purge(lines: list[str]) -> None:
     skip when the host is half-upgraded and about to go down, so the
     gate belongs between the bring-up and the purge rather than at the
     very end.
+
+    Only the full sweep counts here. The pull's failure path also calls
+    the purge script, with `--untagged-only`, and exits well above the
+    bring-up; that narrower reclaim is meant to run early, so it is not
+    something the gate has to sit above.
     """
     gate = _only_index(lines, REBOOT_GATE)
     purge = [
         i
         for i, line in enumerate(lines)
-        if 'PURGE_SCRIPT' in line and 'bash' in line
+        if 'PURGE_SCRIPT' in line
+        and 'bash' in line
+        and '--untagged-only' not in line
     ]
 
-    assert purge, 'no call to the purge script found'
+    assert purge, 'no call to the full stale-image purge found'
     assert gate < min(purge), (
         'the reboot gate should still sit above the stale-image purge'
     )
