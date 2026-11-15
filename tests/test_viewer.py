@@ -386,6 +386,50 @@ def test_spawn_webview_once_stays_quiet_when_the_teardown_works(
     assert 'outlasted an attempted SIGKILL' not in str(excinfo.value)
 
 
+def test_spawn_webview_once_quotes_output_on_timeout(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A webview that never handshakes must say where Qt stopped.
+
+    Sentry ANTHIAS-F, 1C, 1W and 4V are all handshake timeouts, and
+    the message carried nothing but the timeout, so a stall in platform
+    init and a hang in WebEngine startup were indistinguishable.
+    """
+    browser_proc = viewer_fixtures.m_cmd.return_value.return_value
+    browser_proc.is_alive.side_effect = lambda: (
+        not browser_proc.terminate.called
+    )
+    _capture_out_sink(
+        viewer_fixtures,
+        browser_proc,
+        seed='qt.qpa.wayland: waiting for compositor\n',
+    )
+    viewer_fixtures.p_cmd.start()
+    viewer_fixtures.p_sleep.start()
+    try:
+        with (
+            mock.patch.object(viewer, 'BROWSER_TERMINATE_GRACE_SECONDS', 0),
+            pytest.raises(viewer_fixtures.u.WebviewLaunchError) as excinfo,
+        ):
+            viewer_fixtures.u._spawn_webview_once(0)
+    finally:
+        viewer_fixtures.p_sleep.stop()
+        viewer_fixtures.p_cmd.stop()
+    assert 'waiting for compositor' in str(excinfo.value)
+
+
+def test_webview_output_tail_names_silence_and_keeps_the_end() -> None:
+    assert viewer._webview_output_tail('') == 'it printed no output'
+    assert viewer._webview_output_tail('  \n') == 'it printed no output'
+    assert viewer._webview_output_tail('boom\n') == 'stdout: boom\n'
+    limit = viewer.WEBVIEW_TIMEOUT_TAIL_CHARS
+    long = 'x' * (limit * 3) + 'FATAL last line'
+    tail = viewer._webview_output_tail(long)
+    assert tail.endswith('FATAL last line')
+    assert tail.startswith('stdout tail: ...')
+    assert len(tail) == len('stdout tail: ...') + limit
+
+
 def test_spawn_webview_once_drains_output_before_reporting(
     viewer_fixtures: _ViewerFixtures,
 ) -> None:
