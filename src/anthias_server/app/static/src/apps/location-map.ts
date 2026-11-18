@@ -85,8 +85,16 @@ export function initLocationMap(
       scrollWheelZoom: false,
     })
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // OSM's tile usage policy requires browser apps to send a valid
+    // Referer, and tiles from clients without one can come back as an
+    // "Access blocked" 403 image. Django's SecurityMiddleware serves
+    // `Referrer-Policy: same-origin`, which strips the Referer from
+    // these cross-origin requests, so opt the tile <img>s back in with
+    // an origin-only Referer. The `{s}` subdomains are deprecated by
+    // OSM; the single host is the supported endpoint.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
+      referrerPolicy: 'strict-origin-when-cross-origin',
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map)

@@ -1,0 +1,18 @@
+{{- /* Tools for people and their AI agents, shown in a page's dark header:
+       copy or view the page as Markdown, or open it in an assistant.
+       All static: scripts/generate-llms.ts writes the index.md next to
+       each page after `hugo` runs, and assets/js/page-tools.ts does the
+       copying. data-md-skip keeps the toolbar out of that Markdown.
+
+       Usage: {{ partial "page-tools.html" . }} */ -}}
+{{- $md := printf "%sindex.md" .RelPermalink -}}
+{{- $mdAbs := printf "%sindex.md" .Permalink -}}
+{{- $ask := printf "Read %s and use it to help me with Anthias, the open source digital signage software. Summarize what the page covers in a few lines, then ask me what I am trying to do." $mdAbs -}}
+{{- $btn := "inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium no-underline transition" -}}
+<div class="mt-6 flex flex-wrap gap-2" role="toolbar" aria-label="Page tools" data-md-skip>
+    <button type="button" class="{{ $btn }} cursor-pointer" data-copy-url="{{ $md }}">{{ partial "icon.html" (dict "name" "copy") }}<span>Copy as Markdown</span></button>
+    <a class="{{ $btn }}" href="{{ $md }}">{{ partial "icon.html" (dict "name" "markdown") }}View as Markdown</a>
+    <a class="{{ $btn }}" href="https://claude.ai/new?q={{ $ask | urlquery }}" target="_blank" rel="noopener">{{ partial "icon.html" (dict "name" "claude") }}Ask Claude</a>
+    <a class="{{ $btn }}" href="https://chatgpt.com/?q={{ $ask | urlquery }}" target="_blank" rel="noopener">{{ partial "icon.html" (dict "name" "openai") }}Ask ChatGPT</a>
+    <span class="sr-only" aria-live="polite" data-copy-status></span>
+</div>
