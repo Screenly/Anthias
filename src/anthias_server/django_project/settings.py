@@ -338,7 +338,7 @@ def _throttle_redis() -> 'redis.Redis | None':
         return None
     if _sentry_throttle_redis is None:
         _sentry_throttle_redis = redis.Redis(
-            host='redis',
+            host=getenv('REDIS_HOST', 'redis'),
             port=6379,
             db=0,
             decode_responses=True,
