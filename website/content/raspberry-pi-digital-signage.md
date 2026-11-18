@@ -87,7 +87,7 @@ A single backup file holds your settings and asset list, so you can restore it l
 
 Anthias manages content per device, each with its own dashboard. Several screens means several Pis, and there is no single dashboard where you change tomorrow's playlist for all of them at once.
 
-Two things make a small estate practical: a fleet can be deployed and updated over the air through [Balena](/docs/balena-fleet-deployment/), and the backup file lets you clone a configured device onto the next one. For a shop, a building or a floor that works well. For a large multi-site estate managed centrally, it is the wrong tool.
+Two things make a small estate practical: a fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you clone a configured device onto the next one. For a shop, a building or a floor that works well. For a large multi-site estate managed centrally, it is the wrong tool.
 
 ## Automating it
 

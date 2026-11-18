@@ -37,7 +37,7 @@ There is also a [REST API](/api/) if you would rather drive content from a scrip
 
 Free is only useful if you know the trade. Anthias manages **content per device**, and each install has its own dashboard, so there is no single screen where you set tomorrow's playlist for ten displays at once. You host it yourself, and support comes from the [community forum](https://forums.screenly.io) and [GitHub](https://github.com/Screenly/Anthias/issues) rather than a helpdesk with an SLA.
 
-Setting up several devices is less repetitive than that makes it sound. A backup file holds your settings and asset list so you can restore it onto the next device, a fleet can be deployed and updated over the air through [Balena](/docs/balena-fleet-deployment/), and the [built-in importer](/docs/import-content/) brings a library across from Yodeck, ScreenCloud, piSignage or Xibo.
+Setting up several devices is less repetitive than that makes it sound. A backup file holds your settings and asset list so you can restore it onto the next device, a fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the [built-in importer](/docs/import-content/) brings a library across from Yodeck, ScreenCloud, piSignage or Xibo.
 
 For one screen, or a handful you are content to manage individually, none of that is a problem and nothing is held back.
 

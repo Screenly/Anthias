@@ -11,6 +11,12 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 "${SCRIPT_DIR}/migrate_legacy_paths.sh"
 
+# Used on two paths below: the cleanup after a successful upgrade, and
+# the narrower reclaim after a failed pull. The existence check at each
+# call site covers the operator who pulled only this script down instead
+# of updating the whole checkout.
+PURGE_SCRIPT="${SCRIPT_DIR}/purge_stale_images.sh"
+
 # Export various environment variables
 TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk {'print $2'})
 export VIEWER_MEMORY_LIMIT_KB=$(echo "$TOTAL_MEMORY_KB" \* 0.8 | bc)
@@ -202,11 +208,12 @@ fi
 # keep pulling with the stack live to minimise downtime.
 #
 # `stop` — not `down` — on purpose: it leaves the containers defined, so
-# their `restart: always` policy still brings them back on the next boot.
-# That matters because the reboot-required branch below exits before the
-# `up -d`, and nothing else runs `docker compose up` at boot; a `down`
-# there would remove the containers and leave the board dark until a
-# manual bring-up.
+# their `restart: always` policy still brings them back on the next boot
+# even if this script dies between here and the `up -d`. A `down` would
+# remove them instead and leave the board dark until a manual bring-up.
+# (The reboot-required branch used to exit between the two and relied on
+# this; it now sits after the `up -d` precisely so no path depends on
+# that rescue. See the comment there.)
 LOW_RAM_THRESHOLD_KB=1572864  # 1.5 GiB; mirrors anthias_common.board.LOW_RAM_THRESHOLD_KB
 if [ "$MODE" = "pull" ] && [ "${TOTAL_MEMORY_KB:-0}" -lt "$LOW_RAM_THRESHOLD_KB" ]; then
     echo "Low-RAM board (${TOTAL_MEMORY_KB} kB total): stopping the viewer and" \
@@ -223,7 +230,41 @@ PULL_PROFILES=()
 if [[ "$MODE" = "pull" ]]; then
     PULL_PROFILES=(--profile wifi-connect)
 fi
-sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}"
+# Bring back whatever the low-RAM branch above stopped. `start` reuses
+# the existing containers, which still point at the images they were
+# created from rather than at anything just pulled, so this returns the
+# device to the release it was already running.
+function restore_stopped_services() {
+    sudo -E docker compose "${COMPOSE_FILES[@]}" \
+        start anthias-viewer anthias-celery || true
+}
+
+PULL_STATUS=0
+sudo -E docker compose "${COMPOSE_FILES[@]}" "${PULL_PROFILES[@]}" "${MODE}" \
+    || PULL_STATUS=$?
+if [[ "${PULL_STATUS}" -ne 0 ]]; then
+    # A `${MODE}` that died partway leaves the bytes it had already
+    # fetched in containerd's ingest directory. Nothing collects them:
+    # they are invisible to `docker images`, they do not expire, and the
+    # cleanup at the end of this script never runs on this path. So a
+    # device upgrading *because* it is short of space loses a few hundred
+    # MB to every failed attempt and fails earlier on the next one —
+    # a ratchet, not a plateau (issue #3410).
+    #
+    # `--untagged-only` is what makes reclaiming safe this early.
+    # The full sweep would also drop the superseded images, and on a
+    # failed upgrade those are the release the device is still running —
+    # which is precisely why the cleanup is otherwise deferred to the end.
+    # Restricted to unreferenced, untagged content, there is nothing left
+    # for it to take away.
+    echo "The ${MODE} failed; reclaiming what it left behind." >&2
+    if [[ -f "${PURGE_SCRIPT}" ]]; then
+        bash "${PURGE_SCRIPT}" --untagged-only || true
+    fi
+
+    restore_stopped_services
+    exit "${PULL_STATUS}"
+fi
 
 # Refuse to run pulled images their publisher didn't sign: ours, and the
 # upstream wifi-connect image (see verify_image_signatures.sh). The check
@@ -246,18 +287,10 @@ if [[ "$MODE" = "pull" ]]; then
             || ! "${VERIFY_SCRIPT}" "${IMAGES[@]}"; then
             echo "Refusing to start images that failed signature" \
                  "verification. The device stays on its current release." >&2
-            # Bring back what the low-RAM branch stopped for the pull.
-            # `start` reuses the existing containers, which still point at
-            # the images they were created from, not the ones just pulled.
-            sudo -E docker compose "${COMPOSE_FILES[@]}" \
-                start anthias-viewer anthias-celery || true
+            restore_stopped_services
             exit 1
         fi
     fi
-fi
-
-if [ -f /var/run/reboot-required ]; then
-    exit 0
 fi
 
 # --remove-orphans sweeps containers that linger after a service is
@@ -265,7 +298,51 @@ fi
 # instances left over from earlier `docker compose run` invocations).
 # Without it `up -d` only logs a warning and leaves the orphans running,
 # which is confusing on a `docker ps` audit later.
-sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+UP_LOG="$(mktemp)"
+set +e
+sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans \
+    2>&1 | tee "${UP_LOG}"
+UP_STATUS=${PIPESTATUS[0]}
+set -e
+
+# A bring-up can fail with "port is already allocated" while nothing is
+# actually listening on that port. Docker keeps its host-port
+# reservations in libnetwork's store
+# (/var/lib/docker/network/files/local-kv.db), and an endpoint that was
+# never torn down cleanly leaves its reservation behind: the daemon
+# killed mid-upgrade, or an SD-card board that browned out or hard-reset
+# while the stack was running. The container then collides with its own
+# ghost on the next start, which is why the symptom is always the
+# service that publishes a port — redis on 127.0.0.1:6379, or the server
+# on :80. Reported on three Pi 4Bs and again on a separate upgrade:
+# forums.screenly.io/t/6688.
+#
+# `down` releases every endpoint this compose project owns and removes
+# its network, which drops the stale reservation with it, so a single
+# retry behind it recovers the upgrade.
+#
+# Deliberately NOT by deleting local-kv.db. That is the workaround
+# circulating in the forum thread and it is a much bigger hammer than
+# the problem: the file is the only record of every user-defined network
+# on the host, so removing it strands the running containers from the
+# daemon's point of view and leaves the web UI unreachable until the
+# stack is rebuilt (exactly what the reporter then had to do). Scoping
+# the recovery to this project's own network fixes the same stale
+# reservation and touches nothing else on the device.
+if [ "${UP_STATUS}" -ne 0 ]; then
+    if grep -qi 'port is already allocated' "${UP_LOG}"; then
+        echo "Bring-up hit a stale host-port reservation. Taking this" \
+             "project's containers and network down to release it, then" \
+             "retrying once." >&2
+        sudo -E docker compose "${COMPOSE_FILES[@]}" \
+            down --remove-orphans || true
+        sudo -E docker compose "${COMPOSE_FILES[@]}" up -d --remove-orphans
+    else
+        rm -f "${UP_LOG}"
+        exit "${UP_STATUS}"
+    fi
+fi
+rm -f "${UP_LOG}"
 
 # anthias-wifi-connect sits behind a compose profile, so the `up -d`
 # above deliberately skips it: starting the captive portal is the
@@ -287,13 +364,33 @@ sudo -E docker compose "${COMPOSE_FILES[@]}" --profile wifi-connect \
     echo "Could not pre-create anthias-wifi-connect; WiFi setup will be" \
          "unavailable until the next upgrade."
 
+# Only now, with the stack up, is it safe to stop short for a pending
+# reboot.
+#
+# This check used to sit above the `up -d`, and that was correct when it
+# was written: nothing had removed the containers, so leaving them alone
+# meant `restart: always` brought them back on the next boot. It stopped
+# being correct once install.sh grew a `docker compose down
+# --remove-orphans` before the host work, to free RAM for the
+# dist-upgrade. A *removed* container is not something a restart policy
+# can bring back, so a dist-upgrade that asked for a reboot left the
+# device with no containers at all, this script exited 0, and the
+# installer reported success over a dark screen that the reboot did not
+# fix. Reproduced on a Pi 4 and reported from the field
+# (forums.screenly.io/t/sd-card-completely-full/6778).
+#
+# Starting the stack first costs nothing: the reboot is moments away and
+# `restart: always` restores it afterwards. What is still skipped here
+# is the image purge below, which is the one piece of work worth
+# deferring when the host is half-upgraded and about to go down.
+if [[ -f /var/run/reboot-required ]]; then
+    exit 0
+fi
+
 # Drop the images the release we just replaced was running on. Deliberately
 # the last thing we do, and only once the new stack is up, so a pull or a
 # start that failed above still leaves the previous images to fall back on.
-# Best effort: losing the cleanup must not fail the upgrade itself. The
-# existence check covers the operator who pulled only this script down
-# instead of updating the whole checkout.
-PURGE_SCRIPT="${SCRIPT_DIR}/purge_stale_images.sh"
+# Best effort: losing the cleanup must not fail the upgrade itself.
 if [ -f "${PURGE_SCRIPT}" ]; then
     bash "${PURGE_SCRIPT}" || true
 fi

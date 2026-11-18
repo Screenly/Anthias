@@ -111,6 +111,6 @@ Not built in. Anthias plays images, videos and web pages, so anything you can bu
 
 ### How does Anthias handle several screens?
 
-Content is managed per device, each with its own dashboard. Two features keep that from becoming repetitive work: a whole fleet can be deployed and updated over the air through [Balena](/docs/balena-fleet-deployment/), and the backup file lets you configure one device and restore that setup onto the rest.
+Content is managed per device, each with its own dashboard. Two features keep that from becoming repetitive work: a whole fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you configure one device and restore that setup onto the rest.
 
 What Anthias does not offer is a single dashboard where you change tomorrow's playlist for every screen at once. If that specific workflow is what you need, a cloud platform priced per screen is the trade on offer.
