@@ -227,7 +227,7 @@ public:
 
 private:
     // In-process GStreamer HW video path for pi3-64 (issue #3084):
-    // filesrc ! qtdemux ! h264parse ! v4l2h264dec ! v4l2convert(ISP) !
+    // <file or stream source> ! h264parse ! v4l2h264dec ! v4l2convert(ISP) !
     // RGB16 ! appsink. The bcm2835 ISP does the SAND→RGB conversion in
     // hardware — the CPU can't (~600 ms/frame, [[toImage]] wall) — so the
     // decode+convert stays fully on the VideoCore IV hardware and only a
@@ -250,6 +250,10 @@ private:
     struct _GstElement* gstAudioPipeline = nullptr;
     struct _GstElement* gstAppSink = nullptr;
     bool gstMode = false;
+    // The current asset is a network stream (rtsp://, http(s)://) rather
+    // than a local file: no audio pipeline, no segment/loop seeks, and EOS
+    // ends playback instead of looping. Set in gstPlay.
+    bool gstStreamSource = false;
     // Enter segment mode ONCE, from ASYNC_DONE (preroll complete) rather
     // than synchronously after set_state(PLAYING) — a segment seek issued
     // while the pipeline is still prerolling returns FALSE, so the pipeline

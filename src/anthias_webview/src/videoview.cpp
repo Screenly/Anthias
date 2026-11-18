@@ -955,6 +955,66 @@ GstFlowReturn anthias_gst_on_new_sample(GstAppSink* sink, gpointer user_data)
     return GST_FLOW_OK;
 }
 
+// Escape a value for a double-quoted gst_parse_launch property: a ``"`` or
+// ``\`` in a path/URL would otherwise end the string early and break the
+// parse (or splice extra elements into the pipeline).
+QString anthias_gst_quote(const QString& value)
+{
+    QString escaped = value;
+    escaped.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
+    escaped.replace(QLatin1Char('"'), QLatin1String("\\\""));
+    return escaped;
+}
+
+// The viewer hands pi3-64 two kinds of video URI: a bare local path for an
+// uploaded asset (``/data/anthias_assets/<id>``) and a network URL for a
+// streaming asset (``rtsp://``, ``rtsps://``, ``http(s)://``). Anything
+// carrying a scheme other than ``file://`` is a stream.
+bool anthias_gst_is_stream(const QString& uri)
+{
+    static const QRegularExpression schemeRe(
+        QStringLiteral("^[a-zA-Z][a-zA-Z0-9+.\\-]*://"));
+    return schemeRe.match(uri).hasMatch()
+           && !uri.startsWith(QLatin1String("file://"), Qt::CaseInsensitive);
+}
+
+// Source half of the pi3-64 video pipeline, up to and including the parsed
+// H.264 elementary stream that v4l2h264dec consumes. Both the overlay and
+// the appsink-raster paths share it, so a stream plays on whichever one
+// the board ends up on.
+//   * local file — ``filesrc ! qtdemux`` (uploads are always MP4).
+//   * RTSP — ``rtspsrc ! rtph264depay``. Interleaved TCP rather than UDP:
+//     the viewer runs on a Docker bridge network, and RTP the server
+//     sends to the negotiated client UDP ports isn't reliably NAT'd back
+//     into the container. When it isn't, rtspsrc sits out its 5 s UDP
+//     timeout before retrying over TCP, a quarter of a typical 20 s slot.
+//     Only the video pad links; rtspsrc tolerates the unlinked audio pad.
+//   * anything else (HTTP(S) progressive MP4, HLS, …) — ``urisourcebin !
+//     parsebin``, which picks the protocol source and the demuxer; the
+//     delayed link to h264parse takes the H.264 video pad.
+// The codec gate does not cover streams, so a non-H.264 stream fails to
+// link (not-negotiated / not-linked); the bus ERROR handler then tears
+// the pipeline down and logs it. The VideoCore IV has no other HW
+// decoder, and software decode would thermally reboot the board.
+QString anthias_gst_h264_source(const QString& uri)
+{
+    const QString quoted = anthias_gst_quote(uri);
+    if (!anthias_gst_is_stream(uri)) {
+        return QStringLiteral(
+                   "filesrc location=\"%1\" ! qtdemux ! h264parse")
+            .arg(quoted);
+    }
+    if (uri.startsWith(QLatin1String("rtsp://"), Qt::CaseInsensitive)
+        || uri.startsWith(QLatin1String("rtsps://"), Qt::CaseInsensitive)) {
+        return QStringLiteral(
+                   "rtspsrc location=\"%1\" protocols=tcp ! rtph264depay ! "
+                   "h264parse")
+            .arg(quoted);
+    }
+    return QStringLiteral("urisourcebin uri=\"%1\" ! parsebin ! h264parse")
+        .arg(quoted);
+}
+
 // Find a free OVERLAY plane usable on ``crtcId``. The overlay-plane path
 // (kmssink) needs an explicit plane-id — otherwise kmssink grabs the
 // primary plane, which eglfs already scans out. Skips planes already
@@ -1142,14 +1202,15 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     }
 
     // filesrc needs a filesystem path. Anthias passes bare local paths
-    // (e.g. /data/anthias_assets/<id>) today; normalise a file:// URL
-    // defensively so a future caller can't yield a broken location=.
-    // Per-pipeline ``"``/``\`` escaping happens where each filesrc is
-    // built below.
+    // (e.g. /data/anthias_assets/<id>) for uploads; normalise a file://
+    // URL defensively so a caller can't yield a broken location=. Network
+    // URLs (streaming assets) pass through untouched and get a network
+    // source instead — see anthias_gst_h264_source.
     QString localPath = uri;
     if (localPath.startsWith(QLatin1String("file://"))) {
         localPath = QUrl(uri).toLocalFile();
     }
+    gstStreamSource = anthias_gst_is_stream(localPath);
     // Resolve the audio device once and start audio HERE (not inside
     // gstPlayOverlay) so BOTH the overlay and the appsink-raster fallback
     // get sound — previously the raster path played silent. Same
@@ -1170,9 +1231,10 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
         return true;
     }
 
-    // Explicit hardware pipeline. pi3-64 only ever receives H.264/MP4
-    // (the codec gate rejects every other codec for this board), so an
-    // explicit qtdemux ! h264parse ! v4l2h264dec chain is safe and
+    // Explicit hardware pipeline. pi3-64 only ever receives H.264 (the
+    // codec gate rejects every other codec for uploads; see
+    // anthias_gst_h264_source for streams), so an explicit
+    // <source> ! h264parse ! v4l2h264dec chain is safe and
     // *guarantees* the bcm2835 hardware decoder — letting decodebin pick
     // would risk the software avdec_h264, which can't sustain realtime and
     // thermally reboots the 1 GB board. v4l2convert is the bcm2835 ISP
@@ -1181,9 +1243,6 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     // them (the GUI-side coalescing gate in pushGstFrame paces what
     // actually paints); drop=true / max-buffers=2 bounds latency to the
     // freshest frame.
-    QString location = localPath;
-    location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
-    location.replace(QLatin1Char('"'), QLatin1String("\\\""));
     // Optional ISP downscale (ANTHIAS_GST_SCALE="WxH", e.g. 1280x720):
     // the bcm2835 ISP scales in hardware, so a smaller output cuts the
     // ISP's per-frame work (and, if the display substrate uploads a
@@ -1207,11 +1266,11 @@ bool VideoView::gstPlay(const QString& uri, const QVariantMap& options)
     // gate (pushGstFrame) bounds what actually reaches the paint.
     const QString description =
         QStringLiteral(
-            "filesrc location=\"%1\" ! qtdemux ! h264parse ! v4l2h264dec ! "
+            "%1 ! v4l2h264dec ! "
             "v4l2convert ! video/x-raw,format=RGB16%2 ! "
             "queue max-size-buffers=3 leaky=downstream ! "
             "appsink name=asink max-buffers=2 drop=true sync=false")
-            .arg(location, scaleCaps);
+            .arg(anthias_gst_h264_source(localPath), scaleCaps);
 
     GError* error = nullptr;
     gstPipeline = gst_parse_launch(description.toUtf8().constData(), &error);
@@ -1303,15 +1362,13 @@ bool VideoView::gstPlayOverlay(const QString& uri)
     }
 
     // Explicit HW pipeline (reliably reaches the overlay — the playbin
-    // variant hung in set_state). pi3-64 only receives H.264/MP4 (the
-    // codec gate rejects other codecs), so qtdemux ! h264parse !
-    // v4l2h264dec forces the bcm2835 HW decoder. Default is decoder-direct
+    // variant hung in set_state). pi3-64 only receives H.264 (the codec
+    // gate rejects other codecs for uploads), so <source> ! h264parse !
+    // v4l2h264dec forces the bcm2835 HW decoder. The source is a file or a
+    // network stream (anthias_gst_h264_source). Default is decoder-direct
     // (I420 straight to kmssink — see the decode/convert stage notes
     // below); the ``queue`` decouples the decoder thread from the scanout
     // thread.
-    QString location = uri;
-    location.replace(QLatin1Char('\\'), QLatin1String("\\\\"));
-    location.replace(QLatin1Char('"'), QLatin1String("\\\""));
     // Clamp to a sane positive count: a 0 / negative / non-numeric
     // ANTHIAS_GST_QUEUE would make queueBuffers 0, i.e. queue
     // max-size-buffers=0 with time/bytes also 0 = UNBOUNDED buffering →
@@ -1381,18 +1438,18 @@ bool VideoView::gstPlayOverlay(const QString& uri)
             : QString();
     const QString description =
         QStringLiteral(
-            "filesrc location=\"%1\" ! qtdemux ! h264parse ! %7 ! "
+            "%1 ! %7 ! "
             "queue max-size-buffers=%5 max-size-time=0 max-size-bytes=0 ! "
             "%6"
             "kmssink name=vsink qos=true fd=%2 connector-id=%3 plane-id=%4%8 "
             "force-modesetting=false can-scale=true skip-vsync=true")
-            .arg(location)
-            .arg(driFd)
-            .arg(connId)
-            .arg(planeId)
-            .arg(queueBuffers)
-            .arg(convertStage, decodeStage)
-            .arg(planeProps);
+            // One multi-arg .arg(): chained single-arg calls would re-scan
+            // the substituted source, so a stream URL's percent-escape
+            // (``%1F``, ``%20``) would be taken for a later placeholder.
+            .arg(anthias_gst_h264_source(uri), QString::number(driFd),
+                 QString::number(connId), QString::number(planeId),
+                 QString::number(queueBuffers), convertStage, decodeStage,
+                 planeProps);
 
     GError* error = nullptr;
     gstPipeline = gst_parse_launch(description.toUtf8().constData(), &error);
@@ -1463,6 +1520,19 @@ bool VideoView::gstPlayOverlay(const QString& uri)
 
 void VideoView::gstStartAudio(const QString& location, const QString& alsaDev)
 {
+    if (gstStreamSource) {
+        // The audio pipeline is a second, independent reader of the same
+        // source (see gstPlayOverlay for why it can't share the video
+        // pipeline). For a stream that means a second RTSP/HTTP session
+        // per asset, doubling the camera/server load and bandwidth, and
+        // its filesrc ! qtdemux chain can't read a network URL anyway.
+        // Streams play video-only on this board.
+        Q_UNUSED(location);
+        Q_UNUSED(alsaDev);
+        writeStats(QStringLiteral("AUDIO"),
+                   QStringLiteral("skipped source=stream"));
+        return;
+    }
     const QString audioSink =
         qEnvironmentVariable("ANTHIAS_GST_AUDIO_SINK",
                              QStringLiteral("alsasink"));
@@ -1655,6 +1725,20 @@ void VideoView::gstRestartLoop()
     if (!gstPipeline) {
         return;
     }
+    if (gstStreamSource) {
+        // A stream has no start to seek back to: EOS means the server
+        // ended it. Report it like the QMediaPlayer path's EndOfMedia and
+        // tear down on the GUI thread (we may be inside the bus watch,
+        // which stop() removes) instead of seeking a live source.
+        QMetaObject::invokeMethod(
+            this,
+            [this] {
+                stop();
+                emit videoEnded();
+            },
+            Qt::QueuedConnection);
+        return;
+    }
     gst_element_seek_simple(
         GST_ELEMENT(gstPipeline), GST_FORMAT_TIME,
         static_cast<GstSeekFlags>(
@@ -1691,7 +1775,9 @@ bool VideoView::gstSegmentSeek(GstElement* pipe, bool flush)
 
 void VideoView::gstArmVideoSegment()
 {
-    if (gstSegmentArmed || !gstPipeline) {
+    // A live stream can't be segment-seeked (rtspsrc would re-issue PLAY
+    // with a Range the server rejects or restarts on), and it never loops.
+    if (gstSegmentArmed || !gstPipeline || gstStreamSource) {
         return;
     }
     // Latch only on success: an early ASYNC_DONE (e.g. from a child bin
