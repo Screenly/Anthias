@@ -22,11 +22,12 @@
     <div class="max-w-7xl mx-auto">
         <h1 class="text-white text-4xl md:text-5xl font-extrabold tracking-tight">API Reference</h1>
         <p class="text-white/60 text-lg mt-4 max-w-2xl">{{ $spec.info.title }} v{{ $spec.info.version }}. Manage assets, device settings, backups, and integrations over HTTP.</p>
-        <div class="mt-6 flex flex-wrap gap-2">
+        <div class="mt-6 flex flex-wrap gap-2" data-md-skip>
             {{- range $tags -}}
             <a href="#tag-{{ . | urlize }}" class="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition">{{ . }}</a>
             {{- end -}}
         </div>
+        {{ partial "page-tools.html" . }}
     </div>
 </header>
 

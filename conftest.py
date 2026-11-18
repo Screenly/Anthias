@@ -242,7 +242,14 @@ _SESSION_FAKE_REDIS = _make_fake_redis()
 def _patch_connect_to_redis() -> None:
     import anthias_common.utils as _lib_utils
 
-    _lib_utils.connect_to_redis = lambda: _SESSION_FAKE_REDIS
+    # Swallows the connection overrides a caller may pass (see
+    # ``lib.system_logs._reply_connection``, which widens the socket
+    # for its blocking pop). The fake has no sockets to tune, but the
+    # stub still has to accept the call rather than TypeError on it.
+    def _fake_connect(**_overrides: Any) -> Any:
+        return _SESSION_FAKE_REDIS
+
+    _lib_utils.connect_to_redis = _fake_connect
 
 
 if _APP_AVAILABLE:
