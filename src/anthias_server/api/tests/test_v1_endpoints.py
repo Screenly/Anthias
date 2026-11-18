@@ -2,19 +2,30 @@
 Tests for V1 API endpoints.
 """
 
+import base64
+import errno
+import json
 import os
+import warnings
 from collections.abc import Iterator
+from contextlib import suppress
+from mimetypes import guess_type
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 import pytest
 from django.conf import settings as django_settings
+from django.core.files.uploadedfile import UploadedFile
+from django.http import StreamingHttpResponse
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.renderers import JSONRenderer
 from rest_framework.test import APIClient
 
 from anthias_server.api.tests.test_common import ASSET_CREATION_DATA
+from anthias_server.api.views import mixins
+from anthias_server.api.views.mixins import B64_STREAM_CHUNK_SIZE
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
 
@@ -676,3 +687,369 @@ def test_viewer_current_asset(
 
         assert data['asset_id'] == asset_id
         assert data['is_active'] == 1
+
+
+# ---------------------------------------------------------------------------
+# Streaming upload / asset-content (issue #3345)
+# ---------------------------------------------------------------------------
+#
+# Both endpoints used to materialise a whole media file in RAM to serve
+# one request, which is enough to OOM any board under
+# ``LOW_RAM_THRESHOLD_KB``. These pin the streaming behaviour AND the
+# wire format, which must not move: the JSON body is part of the v1 and
+# v2 contract.
+
+
+def _pieces(response: Any) -> list[bytes]:
+    """The body as the individual pieces the view yielded.
+
+    The response carries an *async* iterator (see
+    ``test_asset_content_is_async_iterable``), which the synchronous
+    test client can only drain through ``async_to_sync``; Django warns
+    about that and the warning is the test client's problem, not the
+    view's.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='StreamingHttpResponse')
+        return list(response)
+
+
+def _body(response: Any) -> bytes:
+    return b''.join(_pieces(response))
+
+
+def _make_file_asset(name: str, body: bytes) -> Asset:
+    asset_file = Path(anthias_settings['assetdir']) / 'clip.png'
+    asset_file.write_bytes(body)
+    return Asset.objects.create(
+        name=name,
+        uri=str(asset_file),
+        mimetype='image',
+        is_enabled=False,
+        duration=10,
+    )
+
+
+class _NoSlurpUpload:
+    """An uploaded file that refuses to hand over its whole body at once.
+
+    Delegates everything to the real ``UploadedFile`` except an
+    unbounded ``read()`` — the call this fix removed, and the one that
+    costs a full copy of the asset in RAM. ``chunks()`` internally
+    issues *bounded* reads, which are exactly what we want, so the
+    distinction the assertion needs is size-of-read, not read-at-all.
+    """
+
+    def __init__(self, wrapped: UploadedFile[Any]) -> None:
+        self._wrapped = wrapped
+        self.chunk_calls = 0
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._wrapped, name)
+
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            raise AssertionError('unbounded read() of the upload body')
+        return cast(bytes, self._wrapped.read(size))
+
+    def chunks(self, chunk_size: int | None = None) -> Iterator[bytes]:
+        self.chunk_calls += 1
+        return cast(Iterator[bytes], self._wrapped.chunks(chunk_size))
+
+
+@pytest.mark.django_db
+def test_file_asset_upload_never_reads_whole_body_into_memory(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """The single-shot upload path must copy the body with ``chunks()``.
+
+    ``data = file_upload.read()`` was the bug: one full copy of the
+    asset in RAM before a single byte reached the disk. Asserting on
+    the access pattern rather than on a memory number keeps this
+    deterministic — a reintroduced slurp fails here even on a machine
+    with RAM to spare.
+
+    The proxy is swapped in on the object the *view* receives, not the
+    one the test client sends: those are different objects, and the
+    client is entitled to read its own copy while encoding the request.
+    """
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    payload = b'abc' * 5000
+    proxies: list[_NoSlurpUpload] = []
+    original_post = mixins.FileAssetViewMixin.post
+
+    def spying_post(self: Any, request: Any, *args: Any, **kwargs: Any) -> Any:
+        # Touching ``request.data`` first forces the multipart parse,
+        # so the entry we overwrite is the parsed one.
+        proxy = _NoSlurpUpload(request.data['file_upload'])
+        proxies.append(proxy)
+        request.data['file_upload'] = proxy
+        return original_post(self, request, *args, **kwargs)
+
+    with mock.patch.object(mixins.FileAssetViewMixin, 'post', spying_post):
+        response = api_client.post(
+            reverse('api:file_asset_v1'),
+            data={
+                'file_upload': SimpleUploadedFile(
+                    'clip.png', payload, content_type='image/png'
+                )
+            },
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert proxies[0].chunk_calls == 1
+    with open(response.data['uri'], 'rb') as f:
+        assert f.read() == payload
+
+
+@pytest.mark.django_db
+def test_file_asset_content_range_still_validates_chunk_length(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """The range-length check now consults the size the multipart
+    parser recorded instead of ``len(body)``; it must still reject a
+    chunk whose length contradicts the declared range."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    response = api_client.post(
+        reverse('api:file_asset_v1'),
+        data={
+            'file_upload': SimpleUploadedFile(
+                'clip.png', b'AAAA', content_type='image/png'
+            )
+        },
+        headers={'Content-Range': 'bytes 0-1/2'},
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'size',
+    # Clustered around the 3-byte base64 group boundary: the streaming
+    # encoder only splices correctly on multiples of 3, so an
+    # off-by-one emits mid-stream ``=`` padding and corrupts the asset.
+    [0, 1, 2, 3, 4, 5, 6, 7, B64_STREAM_CHUNK_SIZE + 1],
+)
+def test_asset_content_round_trips_exactly(
+    api_client: APIClient, isolated_asset_dir: None, size: int
+) -> None:
+    """Whatever the size, the base64 in the response decodes back to
+    the file on disk byte for byte."""
+    body = (bytes(range(256)) * (size // 256 + 1))[:size]
+    asset = _make_file_asset('clip.png', body)
+
+    response = api_client.get(_get_asset_content_url(asset.asset_id))
+
+    assert response.status_code == status.HTTP_200_OK
+    payload = json.loads(_body(response))
+    assert base64.b64decode(payload['content'], validate=True) == body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'filename',
+    # An empty name, and names carrying the very JSON punctuation the
+    # envelope is spliced on — both are places a naive splice picks the
+    # wrong field or emits invalid JSON.
+    ['clip.png', '', 'oddly "quoted" ünï.png', '{"content":""}.png'],
+)
+def test_asset_content_body_matches_the_unstreamed_json(
+    api_client: APIClient, isolated_asset_dir: None, filename: str
+) -> None:
+    """The streamed bytes are exactly what rendering the equivalent
+    dict produced before: same fields, same order, same escaping.
+
+    That JSON is the v1/v2 wire contract; streaming is an
+    implementation detail and must not show through.
+    """
+    body = b'hello \xc3\xa9 world'
+    asset = _make_file_asset(filename, body)
+
+    response = api_client.get(_get_asset_content_url(asset.asset_id))
+    streamed = _body(response)
+
+    assert streamed == JSONRenderer().render(
+        {
+            'type': 'file',
+            'filename': filename,
+            'content': base64.b64encode(body).decode(),
+            'mimetype': guess_type(filename)[0] or 'application/octet-stream',
+        }
+    )
+    assert response['Content-Type'] == 'application/json'
+    assert int(response['Content-Length']) == len(streamed)
+
+
+@pytest.mark.django_db
+def test_asset_content_streams_in_bounded_pieces(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """No single piece of the body — and so no single allocation —
+    scales with the asset.
+
+    This is the guard that matters on a 1 GB board. A response yielded
+    as one big piece would satisfy every round-trip assertion above
+    while reintroducing the bug in full.
+    """
+    asset = _make_file_asset(
+        'clip.png', b'\0' * (B64_STREAM_CHUNK_SIZE * 3 + 7)
+    )
+
+    response = api_client.get(_get_asset_content_url(asset.asset_id))
+    pieces = _pieces(response)
+
+    assert len(pieces) > 3
+    # base64 inflates 3 bytes to 4, so one chunk's worth of output is
+    # 4/3 of the read size; the envelope rides on top of that.
+    assert max(map(len, pieces)) <= B64_STREAM_CHUNK_SIZE * 4 // 3 + 1024
+
+
+@pytest.mark.django_db
+def test_asset_content_is_async_iterable(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """The response must carry an *async* iterator.
+
+    Under ASGI — how anthias-server actually runs — Django drains a
+    synchronous ``streaming_content`` through ``sync_to_async(list)``
+    before sending a single byte, which silently restores full
+    buffering while every other test here still passes.
+    """
+    asset = _make_file_asset('clip.png', b'hello')
+
+    response = api_client.get(_get_asset_content_url(asset.asset_id))
+
+    assert cast(StreamingHttpResponse, response).is_async
+
+
+@pytest.mark.django_db
+def test_asset_content_404s_when_file_vanishes_before_streaming(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """A file deleted between the ``isfile`` probe and the open is a
+    clean 404, not a 200 whose body dies after the headers ship."""
+    asset = _make_file_asset('clip.png', b'hello')
+    real_open = open
+
+    def open_but_gone(file: Any, *args: Any, **kwargs: Any) -> Any:
+        if str(file) == asset.uri:
+            raise FileNotFoundError(asset.uri)
+        return real_open(file, *args, **kwargs)
+
+    with mock.patch(
+        'anthias_server.api.views.mixins.open', open_but_gone, create=True
+    ):
+        response = api_client.get(_get_asset_content_url(asset.asset_id))
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_asset_content_releases_the_fd_when_the_response_closes(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """An aborted download must not pin the asset's file descriptor.
+
+    The streaming handle outlives the view, so something has to close
+    it. Django only auto-registers a closer when ``streaming_content``
+    exposes ``close``, and an async generator exposes ``aclose`` — so
+    the registration silently does not happen and ``response.close()``,
+    the only cleanup Django runs for an abandoned streaming response,
+    would leave the fd and its inode pinned until GC.
+    """
+    asset = _make_file_asset('clip.png', b'x' * 4096)
+
+    def open_fds() -> list[str]:
+        found = []
+        for fd in os.listdir('/proc/self/fd'):
+            with suppress(OSError):
+                if os.readlink(f'/proc/self/fd/{fd}') == asset.uri:
+                    found.append(fd)
+        return found
+
+    response = api_client.get(_get_asset_content_url(asset.asset_id))
+    assert open_fds(), 'expected the view to hold the asset open'
+
+    # Never drain the body — exactly what an aborted download looks
+    # like from the server's side.
+    response.close()
+
+    assert open_fds() == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('errno_code', [errno.EIO, errno.EACCES, errno.EMFILE])
+def test_asset_content_does_not_disguise_io_errors_as_404(
+    api_client: APIClient, isolated_asset_dir: None, errno_code: int
+) -> None:
+    """Only a missing file is a 404.
+
+    A failing SD card (EIO), a permissions mistake (EACCES) or fd
+    exhaustion (EMFILE) dressed up as "no such asset" is a clean 404
+    that tells Sentry nothing and that a backup client skips over
+    without ever reporting a problem. Those have to surface as errors.
+    """
+    asset = _make_file_asset('clip.png', b'hello')
+    real_open = open
+
+    def failing_open(file: Any, *args: Any, **kwargs: Any) -> Any:
+        if str(file) == asset.uri:
+            raise OSError(errno_code, os.strerror(errno_code))
+        return real_open(file, *args, **kwargs)
+
+    with mock.patch(
+        'anthias_server.api.views.mixins.open', failing_open, create=True
+    ):
+        response = api_client.get(_get_asset_content_url(asset.asset_id))
+
+    assert response.status_code != status.HTTP_404_NOT_FOUND
+    assert response.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR
+
+
+@pytest.mark.django_db
+def test_asset_content_honours_the_indent_media_type_parameter(
+    api_client: APIClient, isolated_asset_dir: None
+) -> None:
+    """``application/json; indent=4`` must format both shapes alike.
+
+    The URL branch is still a DRF ``Response`` and honours the
+    parameter; the file branch renders its own envelope, so it has to
+    be handed the negotiated media type or one endpoint would format
+    its two shapes differently.
+    """
+    body = b'hi'
+    file_asset = _make_file_asset('clip.png', body)
+    url_asset = Asset.objects.create(
+        name='somewhere',
+        uri='https://anthias.screenly.io',
+        mimetype='webpage',
+        is_enabled=False,
+        duration=10,
+    )
+    accept = 'application/json; indent=4'
+
+    file_response = api_client.get(
+        _get_asset_content_url(file_asset.asset_id), HTTP_ACCEPT=accept
+    )
+    url_response = api_client.get(
+        _get_asset_content_url(url_asset.asset_id), HTTP_ACCEPT=accept
+    )
+
+    streamed = _body(file_response)
+    assert streamed == JSONRenderer().render(
+        {
+            'type': 'file',
+            'filename': 'clip.png',
+            'content': base64.b64encode(body).decode(),
+            'mimetype': 'image/png',
+        },
+        accepted_media_type=accept,
+    )
+    # Both branches pretty-printed, and the advertised length still
+    # describes the indented body.
+    assert streamed.startswith(b'{\n    ')
+    assert url_response.content.startswith(b'{\n    ')
+    assert int(file_response['Content-Length']) == len(streamed)

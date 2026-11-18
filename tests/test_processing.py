@@ -46,8 +46,10 @@ from unittest import mock
 
 import pytest
 import sh
+from celery.exceptions import SoftTimeLimitExceeded
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from anthias_common.board import resolve_device_key
 from anthias_server import processing
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings as anthias_settings
@@ -526,7 +528,7 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
             'anthias_server.processing.Image.open',
             return_value=_FakeImage(),
         ),
-        pytest.raises(ValueError, match='exceed cap'),
+        pytest.raises(processing.ImageTooLargeError, match='decode cap'),
     ):
         processing._run_image_normalisation(asset)
 
@@ -997,7 +999,8 @@ def test_pi3_64_hw_decode_set_is_h264_only(
     silicon as the 32-bit ``pi3`` — H.264-only HW decode, no HEVC. The
     gate must reject HEVC for it just like the armhf stream."""
     monkeypatch.setenv('DEVICE_TYPE', 'pi3-64')
-    assert processing._hw_decoded_codecs() == frozenset({'h264'})
+    key = resolve_device_key()
+    assert processing._hw_decoded_codecs(key) == frozenset({'h264'})
 
 
 # ---------------------------------------------------------------------------
@@ -1101,11 +1104,14 @@ def test_video_unknown_codec_is_rejected(
 def test_video_arm64_catch_all_rejects_everything(
     asset_dir: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the HW
-    decode map (an unknown aarch64 SBC isn't guaranteed to expose a
-    v4l2-request decoder mpv can address). Without a host_agent
-    subtype publish, every video upload is rejected — operator has
-    to install a board-specific image to get HW decode."""
+    """The catch-all ``arm64`` DEVICE_TYPE has no entry in the map of
+    codecs a board accepts (``_HW_DECODE_VIDEO_CODECS`` — the name is
+    historical), so nothing is certified to play there: an unidentified
+    aarch64 SBC may have a perfectly good decoder, we just have no
+    model match or measurement saying which codecs. Every video upload
+    is therefore rejected, and the message has to explain why in terms
+    the operator can act on — which differs by deployment, so it names
+    both rather than one."""
     monkeypatch.setenv('DEVICE_TYPE', 'arm64')
     src = path.join(asset_dir, 'sample.mp4')
     # Create an empty placeholder file so the FileNotFoundError check
@@ -1137,12 +1143,25 @@ def test_video_arm64_catch_all_rejects_everything(
     ):
         processing._run_video_normalisation(asset)
 
-    msg = str(excinfo.value)
-    # Catch-all branch must explain the board-subtype gap rather
-    # than the misleading "Supported: none." that earlier revisions
-    # surfaced.
-    assert 'subtype' in msg.lower()
-    assert 'board-specific image' in msg.lower()
+    msg = str(excinfo.value).lower()
+    # Explain that the board wasn't identified, rather than the
+    # misleading "Supported: none." earlier revisions surfaced, which
+    # reads like the board has no decoder at all.
+    assert 'could not identify this board' in msg
+    # Compose installs: a stopped agent and an unreachable Redis both
+    # land here, so naming only the agent would have operators certify
+    # a running service and conclude the board is unprofiled.
+    assert 'anthias-host-agent' in msg
+    assert 'redis' in msg
+    # balena ships no host agent, and the in-container device-tree read
+    # is masked in the unprivileged server container — there is no
+    # subtype source on that fleet, so the message must not send those
+    # operators after a service their device has never had.
+    assert 'balena' in msg
+    # Never advertise a board-specific image — every SBC runs the
+    # generic arm64 build, so that advice sent operators re-flashing
+    # for an image that was never built.
+    assert 'board-specific image' not in msg
 
 
 @pytest.mark.django_db
@@ -1182,6 +1201,239 @@ def test_video_arm64_with_rockpi4_subtype_accepts_h264(
     asset.refresh_from_db()
     assert asset.is_processing is False
     assert asset.metadata.get('video_codec') == 'h264'
+
+
+@pytest.mark.django_db
+def test_video_arm64_with_rk3566_subtype_accepts_h264(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RK3566 boards (NanoPi R3S, Radxa Zero 3, Orange Pi 3B …) accept
+    H.264. It is software-decoded — measured at 2.56x real time for
+    1080p30 on a NanoPi R3S LTS — the same "CPU keeps up, so ship it"
+    call the pi5 h264 entry makes."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+    ):
+        processing._run_video_normalisation(asset)
+
+    asset.refresh_from_db()
+    assert asset.is_processing is False
+    assert asset.metadata.get('video_codec') == 'h264'
+
+
+@pytest.mark.django_db
+def test_video_rk3566_rejects_hevc(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HEVC stays out of the RK3566 set: 1.15x real time at 1080p30
+    leaves nothing for the web UI running alongside, and the VPU can't
+    help (stateless rkvdec vs the image's stateful v4l2m2m wrappers)."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-hevc', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 1920 * 1080,
+        'video_width': 1920,
+        'video_height': 1080,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert 'hevc' in msg.lower()
+    assert 'h264' in msg.lower()
+
+
+@pytest.mark.django_db
+def test_video_rk3566_4k_hevc_recipe_also_downscales(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 4K HEVC upload fails on the codec, so it never reaches the
+    resolution branch — but the H.264 it is steered towards is the
+    codec this board decodes in *software*, and 4K H.264 is rejected by
+    the throughput ceiling. Folding only the low-RAM cap into the recipe
+    sent the operator round twice: transcode to 4K H.264, re-upload, get
+    rejected again for resolution. The recipe has to carry the
+    downscale even though this 2 GB board never trips the memory cap."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-4k-hevc', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'hevc',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        # 2 GB board: the memory cap is definitively not in play, so
+        # only the software-decode ceiling can put the scale filter in.
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    # Codec-focused message, because the codec is the stronger
+    # rejection — but a recipe that fixes both in one pass.
+    assert 'hevc' in str(excinfo.value).lower()
+    assert 'scale=1920:1080' in excinfo.value.recipe
+    assert 'libx264' in excinfo.value.recipe
+
+
+@pytest.mark.django_db
+def test_video_rk3566_rejects_4k_h264_on_throughput(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Accepting h264 must not let 4K through. This board has 2 GB so
+    the low-RAM cap never fires; the rejection has to come from the
+    software-decode ceiling, and must say so — an operator told "the
+    board OOMs" would go buy RAM for a board that is merely slow."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-4k', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype', return_value='rk3566'
+        ),
+        # 2 GB board — above LOW_RAM_THRESHOLD_KB, so the memory cap
+        # is definitively not what rejects this.
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value)
+    assert '3840x2160' in msg
+    assert 'software' in msg.lower()
+    assert 'oom' not in msg.lower()
+
+
+@pytest.mark.django_db
+def test_video_gate_resolves_the_board_once(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codec and resolution must judge the same board. On arm64 the
+    subtype comes from Redis, so resolving per-check let a transient
+    miss split the decision: the codec check sees ``rk3566`` and allows
+    h264, the cap check sees bare ``arm64``, finds no ceiling, and waves
+    a 4K file through onto a board that cannot decode it in real time.
+    The gate takes one snapshot and passes it down."""
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-rk3566-flaky', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 3840 * 2160,
+        'video_width': 3840,
+        'video_height': 2160,
+        'video_fps': 30.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    reads: list[str] = []
+
+    def flaky_subtype() -> str:
+        # First read lands, every later one comes back empty — the
+        # shape of a Redis blip between two lookups.
+        reads.append('read')
+        return 'rk3566' if len(reads) == 1 else ''
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        mock.patch(
+            'anthias_common.board.get_board_subtype',
+            side_effect=flaky_subtype,
+        ),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=False
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    assert '3840x2160' in str(excinfo.value)
+    # The invariant behind it: the board was identified exactly once.
+    assert len(reads) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1846,6 +2098,92 @@ def test_normalize_image_asset_celery_no_op_when_row_missing() -> None:
     run.assert_not_called()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize('kind', ['image', 'video'])
+def test_normalize_task_no_op_when_row_deleted_mid_flight(
+    asset_dir: str, kind: str
+) -> None:
+    """The operator deleted the asset after the entry guard passed.
+
+    ``delete_asset_with_file`` drops the row and then unlinks the file,
+    so the body fails wherever it next touches the source. With the row
+    gone that is the delete winning the race, not a fault: the task
+    returns instead of raising into Sentry (ANTHIAS-1G).
+    """
+    from anthias_server import celery_tasks
+
+    asset_id = f'{kind}-deleted'
+    _make_processing_asset(
+        asset_id, path.join(asset_dir, f'gone.{kind}'), mimetype=kind
+    )
+
+    def _deleted_then_fail(_asset: Asset) -> None:
+        Asset.objects.filter(asset_id=asset_id).delete()
+        raise FileNotFoundError('source vanished')
+
+    with mock.patch.object(
+        processing,
+        f'_run_{kind}_normalisation',
+        side_effect=_deleted_then_fail,
+    ):
+        getattr(celery_tasks, f'normalize_{kind}_asset')(asset_id)
+
+
+@pytest.mark.django_db
+def test_image_task_no_op_when_source_deleted_after_isfile(
+    asset_dir: str,
+) -> None:
+    """The window ``isfile`` cannot close: the delete lands after the
+    check passes and before Pillow opens the source."""
+    from anthias_server.celery_tasks import normalize_image_asset
+
+    src = path.join(asset_dir, 'racing.tiff')
+    Image.new('RGB', (4, 4)).save(src)
+    _make_processing_asset('img-racing', src)
+
+    def _delete_then_open(source: str, _staging: str) -> None:
+        Asset.objects.filter(asset_id='img-racing').delete()
+        os.remove(source)
+        Image.open(source)
+
+    with (
+        mock.patch.object(
+            processing,
+            '_convert_image_to_webp',
+            side_effect=_delete_then_open,
+        ),
+        mock.patch.object(processing, '_notify') as notify,
+    ):
+        normalize_image_asset('img-racing')
+
+    assert notify.call_count == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('kind', ['image', 'video'])
+def test_normalize_task_raises_when_row_still_live(
+    asset_dir: str, kind: str
+) -> None:
+    """A source that vanished under a row nobody deleted is a genuine
+    fault and must still raise."""
+    from anthias_server import celery_tasks
+
+    asset_id = f'{kind}-live'
+    _make_processing_asset(
+        asset_id, path.join(asset_dir, f'gone.{kind}'), mimetype=kind
+    )
+
+    with (
+        mock.patch.object(
+            processing,
+            f'_run_{kind}_normalisation',
+            side_effect=FileNotFoundError('source vanished'),
+        ),
+        pytest.raises(FileNotFoundError),
+    ):
+        getattr(celery_tasks, f'normalize_{kind}_asset')(asset_id)
+
+
 def test_normalize_tasks_exclude_permanent_oserrors_from_autoretry() -> None:
     """Both normalisation tasks have ``autoretry_for=(OSError,)`` so a
     transient disk hiccup is retried automatically. Several OSError
@@ -1918,6 +2256,53 @@ def test_video_task_declares_codec_rejection_as_expected() -> None:
     )
     assert processing.UnsupportedVideoCodecError not in tuple(
         getattr(normalize_image_asset, 'throws', ())
+    )
+
+
+def test_a_missing_source_is_declared_as_expected() -> None:
+    """A source file that is gone is an outcome, not a fault.
+
+    The row was deleted, or ``cleanup()`` swept the upload, between
+    dispatch and pickup — which is why both tasks already list
+    ``FileNotFoundError`` in ``dont_autoretry_for``. Reporting the same
+    condition to Sentry as an unhandled crash says a bug happened
+    (ANTHIAS-1G). ``on_failure`` still runs, so the operator still gets
+    the Failed pill and the reason on the row; only the crash report
+    goes away.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    for task in (normalize_video_asset, normalize_image_asset):
+        assert FileNotFoundError in tuple(getattr(task, 'throws', ())), (
+            f'{task.name} expected throws to include FileNotFoundError'
+        )
+        # The two lists have to agree: a condition that is expected
+        # enough to skip the retry is expected enough not to page.
+        assert FileNotFoundError in tuple(
+            getattr(task, 'dont_autoretry_for', ())
+        ), task.name
+
+
+def test_image_task_declares_too_large_rejection_as_expected() -> None:
+    """The pixel cap's ``ImageTooLargeError`` is the image counterpart
+    of the video codec gate: an operator-facing rejection, not a fault.
+    ``normalize_image_asset`` must list it in ``throws`` so an over-cap
+    upload is not logged with a traceback or reported to Sentry, and
+    the video task, which never raises it, must not.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    assert processing.ImageTooLargeError in tuple(
+        getattr(normalize_image_asset, 'throws', ())
+    )
+    assert processing.ImageTooLargeError not in tuple(
+        getattr(normalize_video_asset, 'throws', ())
     )
 
 
@@ -2218,6 +2603,110 @@ def test_needs_low_ram_downscale_routes_bomb_instead_of_raising(
         # what gets the operator a real error message.
         assert processing.needs_low_ram_image_downscale(src) is True
         assert processing.needs_image_processing(src) is True
+
+
+def _write_bomb_png(out_path: str, side: int = 20000) -> str:
+    """A ~24 KB PNG whose IHDR declares ``side``x``side`` pixels.
+
+    At the default 20000 that is 400 MP: 8x the 50 MP cap and well
+    over the 2x threshold at which Pillow raises rather than warns.
+    Written by hand because a real fixture of that size would need
+    hundreds of MB to create.
+    """
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(out_path, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+    return out_path
+
+
+# The 9000x9000 fixture below is over the cap but under Pillow's 2x
+# raise threshold, so Pillow warns on the way past; that is the band
+# this test is deliberately exercising.
+@pytest.mark.filterwarnings('ignore::PIL.Image.DecompressionBombWarning')
+@pytest.mark.django_db
+def test_open_image_translates_pillow_bomb_error(asset_dir: str) -> None:
+    """Over twice the cap, Pillow raises from inside ``Image.open``
+    before ``_guard_and_fit_for_board`` ever sees ``image.size``.
+
+    ``DecompressionBombError`` derives straight from ``Exception``, so
+    it slipped past every ``except (OSError, ..., ValueError)`` in the
+    pipeline and surfaced as a crash carrying Pillow's "could be
+    decompression bomb DOS attack" wording — on what is usually a
+    scanner output or a poster export. ``_open_image`` turns it into
+    the same ``ImageTooLargeError`` the in-range band raises."""
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
+
+    with pytest.raises(
+        processing.ImageTooLargeError, match='is 400000000 pixels'
+    ) as excinfo:
+        processing._open_image(src)
+    # Pillow's alarming wording stays out of the operator's message.
+    assert 'DOS attack' not in str(excinfo.value)
+    assert 'decode cap' in str(excinfo.value)
+
+    # The band between the cap and 2x the cap still goes through the
+    # explicit size check, and reports the dimensions it read.
+    under_2x = _write_bomb_png(path.join(asset_dir, 'big.png'), side=9000)
+    with (
+        pytest.raises(processing.ImageTooLargeError, match='9000x9000'),
+        processing._open_image(under_2x) as image,
+    ):
+        processing._guard_and_fit_for_board(image)
+
+
+@pytest.mark.django_db
+def test_over_cap_image_fails_with_operator_message(asset_dir: str) -> None:
+    """End to end: an over-2x-cap upload reaches the task (that is what
+    ``needs_low_ram_image_downscale`` returning True is for) and must
+    fail as a handled rejection, not as a Pillow bomb error.
+
+    Guards the contract the two halves have asserted separately but
+    never together: the predicate routes the bomb into the task, and
+    the task is the thing that owes the operator an answer."""
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
+    asset = _make_processing_asset('img-over-cap', src)
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.ImageTooLargeError, match='decode cap'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    # Staging cleanup contract holds on this path too.
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
+
+    # The message the operator sees carries no class-name prefix and
+    # none of Pillow's "DOS attack" wording.
+    task = processing._NormalizeAssetTask()
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(
+            processing.ImageTooLargeError('image exceeds the cap'),
+            'task-id',
+            (asset.asset_id,),
+            {},
+            None,
+        )
+    asset.refresh_from_db()
+    assert asset.metadata['error_message'] == 'image exceeds the cap'
+    assert asset.is_processing is False
 
 
 @pytest.mark.django_db
@@ -2820,3 +3309,118 @@ def test_prepare_asset_skips_pipeline_for_jpeg_upload(
     ):
         assert serializer.is_valid(), serializer.errors
     assert serializer._pending_normalize is None
+
+
+@pytest.mark.django_db
+def test_unidentified_board_message_scopes_the_balena_advice(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The empty-codec-set message is selected for *any* empty set, not
+    just the generic arm64 keys: an unset or unrecognised DEVICE_TYPE
+    resolves to a key with no entry too. Those installs get no
+    host-agent or balena diagnosis, because neither applies to them —
+    telling an x86 operator with a typo'd DEVICE_TYPE to check balena
+    would send them somewhere with no answer."""
+    monkeypatch.setenv('DEVICE_TYPE', 'not-a-real-board')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-unknown-key', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value).lower()
+    assert 'cannot certify that any codec plays here' in msg
+    assert 'balena' not in msg
+    assert 'device_type' in msg
+
+
+@pytest.mark.django_db
+def test_unidentified_board_message_survives_an_unknown_subtype(
+    asset_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A subtype Redis knows but the codec map doesn't — host_agent
+    ahead of the server during a rollout — is still an arm64 catch-all
+    deployment, and must still get the host-agent/balena diagnosis.
+
+    Branching on the resolved key instead would call it "DEVICE_TYPE
+    unset or unrecognised", which is both wrong and unactionable.
+    """
+    monkeypatch.setenv('DEVICE_TYPE', 'arm64')
+    src = path.join(asset_dir, 'sample.mp4')
+    with open(src, 'wb') as f:
+        f.write(b'\x00')
+    asset = _make_processing_asset('vid-future-subtype', src, mimetype='video')
+
+    fake_summary = {
+        'container': 'mp4',
+        'video_codec': 'h264',
+        'video_pixels': 32 * 32,
+        'video_width': 32,
+        'video_height': 32,
+        'video_fps': 10.0,
+        'audio_codec': 'aac',
+        'duration_seconds': 1,
+    }
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch.object(
+            processing, '_ffprobe_summary', return_value=fake_summary
+        ),
+        # A board the running server has never heard of.
+        mock.patch(
+            'anthias_common.board.get_board_subtype',
+            return_value='rk9999-from-the-future',
+        ),
+        pytest.raises(processing.UnsupportedVideoCodecError) as excinfo,
+    ):
+        processing._run_video_normalisation(asset)
+
+    msg = str(excinfo.value).lower()
+    assert 'anthias-host-agent' in msg
+    assert 'unset or unrecognised' not in msg
+
+
+class TestDescribeTaskFailure:
+    """``metadata.error_message`` is read by an operator, on a tooltip.
+
+    Celery's ``SoftTimeLimitExceeded`` stringifies as its own budget
+    tuple, so the default rendering would reach them as
+    "SoftTimeLimitExceeded: SoftTimeLimitExceeded(870,)".
+    """
+
+    def test_a_time_limit_reads_as_a_timeout(self) -> None:
+        message = processing.describe_task_failure(SoftTimeLimitExceeded(870))
+        assert 'Timed out' in message
+        assert '870' in message
+        assert 'SoftTimeLimitExceeded' not in message
+
+    def test_a_time_limit_without_a_budget_still_reads(self) -> None:
+        message = processing.describe_task_failure(SoftTimeLimitExceeded())
+        assert 'Timed out' in message
+        assert 'SoftTimeLimitExceeded' not in message
+
+    def test_other_failures_keep_the_type_and_message(self) -> None:
+        # The library errors the pipeline raises are already
+        # operator-readable this way.
+        message = processing.describe_task_failure(
+            FileNotFoundError('no such file')
+        )
+        assert message == 'FileNotFoundError: no such file'

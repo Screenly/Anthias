@@ -5,10 +5,10 @@
   vars:
     # install.sh passes -e anthias_user explicitly (robust under sudo).
     # For a direct `ansible-playbook` run, fall back to the connection
-    # user (ansible_user_id) rather than only env USER, which resolves to
-    # root under sudo/become and renders /home/root host-agent paths that
-    # crash-loop the unit (GH #3239 point 5).
-    anthias_user: "{{ lookup('env', 'USER') | default(ansible_user_id, true) }}"
+    # user (ansible_facts['user_id']) rather than only env USER, which
+    # resolves to root under sudo/become and renders /home/root host-agent
+    # paths that crash-loop the unit (GH #3239 point 5).
+    anthias_user: "{{ lookup('env', 'USER') | default(ansible_facts['user_id'], true) }}"
     anthias_branch: "{{ lookup('env', 'ANTHIAS_BRANCH') | default('master', true) }}"
     manage_network: "{{ lookup('env', 'MANAGE_NETWORK') }}"
     docker_tag: "{{ lookup('env', 'DOCKER_TAG') }}"

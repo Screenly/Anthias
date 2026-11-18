@@ -1,0 +1,3 @@
+from typing import Any
+
+def AuthMiddlewareStack(inner: Any) -> Any: ...

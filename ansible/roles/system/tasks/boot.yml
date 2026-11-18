@@ -1,8 +1,8 @@
 ---
 - name: Resolve boot config and cmdline paths
   ansible.builtin.set_fact:
-    system_config_path: "{{ '/boot/config.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/config.txt' }}"
-    system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_distribution_major_version | int <= 11 else '/boot/firmware/cmdline.txt' }}"
+    system_config_path: "{{ '/boot/config.txt' if ansible_facts['distribution_major_version'] | int <= 11 else '/boot/firmware/config.txt' }}"
+    system_cmdline_path: "{{ '/boot/cmdline.txt' if ansible_facts['distribution_major_version'] | int <= 11 else '/boot/firmware/cmdline.txt' }}"
 
 # Render config.txt from a vanilla template that owns the whole file.
 # Pi firmware sections ([cm4], [cm5], etc.) handle per-model variants

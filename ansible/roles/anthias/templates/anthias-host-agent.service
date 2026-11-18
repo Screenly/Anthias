@@ -25,6 +25,18 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=anthias-host-agent
 
+# Read access to the system journal, for the /api/v2/system/logs backend.
+# `User=` above is an ordinary non-privileged account, and a user outside
+# systemd-journal/adm sees only its OWN user journal — journalctl then exits
+# 0 with no entries, so the failure mode is a silently empty log view rather
+# than an error. Granting the group on the UNIT keeps the read scoped to this
+# service instead of handing the login user journal access everywhere.
+#
+# SupplementaryGroups= does NOT implicitly enable NoNewPrivileges, so this is
+# safe alongside the sudo/reboot path the block below warns about. It is a
+# strictly read-only grant.
+SupplementaryGroups=systemd-journal
+
 # Sandboxing — anthias_host_agent shells out to `sudo systemctl reboot|poweroff`,
 # so this profile must NOT set NoNewPrivileges. On systemd <= 252 (Debian
 # 11/12), most Protect*/Restrict* directives implicitly enable NNP and

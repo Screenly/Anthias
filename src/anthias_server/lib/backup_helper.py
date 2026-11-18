@@ -1,8 +1,12 @@
 import asyncio
+import io
+import json
 import logging
 import os
+import sqlite3
 import sys
 import tarfile
+import tempfile
 import threading
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -11,43 +15,317 @@ from os import getenv, makedirs, path, remove
 from typing import Any
 
 from anthias_common.utils import STAGED_UPLOAD_DIR
+from anthias_common.version import get_anthias_release
 
 logger = logging.getLogger(__name__)
 
 directories = ['.anthias', 'anthias_assets']
 
-
-def _skip_staged_uploads(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
-    """Keep half-finished uploads out of a backup.
-
-    ``tar.add`` recurses, and the asset dir holds several kinds of
-    in-progress file, each of which can be gigabytes of something
-    nobody finished sending: ``.uploads/<id>.part`` from the browser,
-    ``<upload_id>.tmp`` from the REST API, and ``.import-<hex>`` (plus
-    its ``.part``) from the content importer, which allows 5 GiB. All
-    are meaningless once restored — the session that was writing them
-    is long gone — so they only inflate the archive.
-    """
-    parts = member.name.split('/')
-    # Scoped to the asset dir, which is where all four shapes are
-    # written. `.anthias` is in the same archive and holds the config
-    # and the database, where an atomic-write sidecar is a plausible
-    # future name — excluding one of those would mean a backup that
-    # silently restores incomplete.
-    if parts[0] != 'anthias_assets':
-        return member
-    if STAGED_UPLOAD_DIR in parts:
-        return None
-    leaf = parts[-1]
-    if leaf.endswith(('.tmp', '.part')) or leaf.startswith('.import-'):
-        return None
-    return member
-
-
 # Tarballs created by older releases used these top-level entry names.
 # Recognise them so users can still restore pre-rename backups.
 legacy_directories = ['.screenly', 'screenly_assets']
-allowed_top_level = set(directories) | set(legacy_directories)
+
+# The runtime is exactly two things: a config directory and a media
+# store. Backup and restore work off a *whitelist* of what belongs in
+# them — a backup ships only these, and a restore writes only these.
+# Anything else that happens to sit under the config dir (SSL keys the
+# operator installed, a Caddyfile, the playback-stats log, or a file a
+# crafted archive tries to smuggle in) is not runtime state, so it is
+# neither shipped nor restored. Whitelisting rather than blacklisting is
+# deliberate: we do not try to enumerate every dangerous file (SSH keys
+# and the like), we simply refuse everything we do not positively
+# recognise as ours.
+_CONFIG_DIRS = ('.anthias', '.screenly')
+_ASSET_DIRS = ('anthias_assets', 'screenly_assets')
+
+# The database files under the config dir, current and legacy names.
+_DB_FILES = ('anthias.db', 'screenly.db')
+
+# SQLite's per-database sidecars. These are NOT runtime state: they are
+# the tail of the write-ahead log and its shared-memory index, both only
+# meaningful alongside the exact main database file they were written
+# against.
+#
+# Shipping them was a corruption route in both directions. A backup tars
+# ``anthias.db`` and ``anthias.db-wal`` at two different instants while
+# the fleet keeps writing, so the pair in the archive need not be
+# consistent; and ``recover()`` extracts over a live config dir, so an
+# archive that carries no ``-wal`` (its source device was on the
+# rollback journal) leaves *this* device's old ``-wal`` next to a
+# brand-new ``anthias.db`` — SQLite then replays one database's log into
+# another and the first read says ``database disk image is malformed``
+# (Sentry ANTHIAS-67/68, raised out of the post-restore migrate).
+#
+# So the archive carries the main database alone, as a consistent
+# snapshot taken through SQLite itself (see ``_snapshot_databases``), and
+# a restore clears the sidecars of each database it restores.
+_DB_SIDECAR_SUFFIXES = ('-wal', '-shm', '-journal')
+
+# The files the runtime keeps directly under the config dir: the
+# settings file, the metadata database, and the default-asset manifest,
+# under both the current and legacy names.
+_CONFIG_FILES = frozenset(
+    {
+        'anthias.conf',
+        'default_assets.yml',
+        'screenly.conf',
+        *_DB_FILES,
+    }
+)
+# Sub-directories of the config dir that are part of the runtime — the
+# django-dbbackup dumps (and their metadata sidecars) live here.
+_CONFIG_SUBTREES = ('backups',)
+
+
+# Busy-wait budget for the pre-backup snapshot. In WAL mode the snapshot
+# is an ordinary reader and never waits; on the rollback journal it only
+# has to outlast a writer mid-transaction. Past that the archive falls
+# back to the file as it sits on disk.
+_SNAPSHOT_TIMEOUT_S = 10.0
+
+
+def _db_paths(home: str) -> list[str]:
+    """Every database file a backup or restore has to reason about."""
+    return [
+        path.join(home, config_dir, db_file)
+        for config_dir in _CONFIG_DIRS
+        for db_file in _DB_FILES
+    ]
+
+
+def _is_db_file(name: str) -> bool:
+    """True for a tar member that is a database directly under a config dir."""
+    parts = name.replace('\\', '/').strip('/').split('/')
+    return (
+        len(parts) == 2 and parts[0] in _CONFIG_DIRS and parts[1] in _DB_FILES
+    )
+
+
+def _is_db_sidecar(name: str) -> bool:
+    """True for a ``-wal`` / ``-shm`` / ``-journal`` tar member.
+
+    Only the sidecars of the database itself, i.e. directly under a
+    config dir. A media-store file that merely shares the name is user
+    content and must still be restored.
+    """
+    parts = name.replace('\\', '/').strip('/').split('/')
+    return (
+        len(parts) == 2
+        and parts[0] in _CONFIG_DIRS
+        and any(
+            parts[1] == db_file + suffix
+            for db_file in _DB_FILES
+            for suffix in _DB_SIDECAR_SUFFIXES
+        )
+    )
+
+
+class BackupSnapshotError(Exception):
+    """A database could not be captured whole for a backup archive."""
+
+
+def _has_wal_tail(db_path: str) -> bool:
+    """True if ``db_path`` is a WAL-mode database with a non-empty log.
+
+    Bytes 18 and 19 of the SQLite header are the read/write format
+    versions, both 2 in WAL mode. A non-empty ``-wal`` beside such a
+    file may hold commits that have not been checkpointed into it yet.
+    """
+    try:
+        with open(db_path, 'rb') as f:
+            header = f.read(20)
+        return (
+            header[:16] == b'SQLite format 3\x00'
+            and header[18:20] == b'\x02\x02'
+            and path.getsize(db_path + '-wal') > 0
+        )
+    except OSError:
+        return False
+
+
+def _snapshot_databases(home: str, dest_dir: str) -> dict[str, str]:
+    """Copy each backed-up database into ``dest_dir`` through SQLite.
+
+    Returns ``{arcname: snapshot_path}`` for the archive to ship in
+    place of the live file. Taring ``anthias.db`` directly is not a
+    snapshot: the server and Celery keep writing while the archive is
+    built, and a checkpoint (or, on the rollback journal, any commit)
+    can rewrite pages of the main file while ``tar`` is half way through
+    reading it. The online-backup API copies the database under a single
+    read transaction, so the copy is one point-in-time state, WAL tail
+    included, and nothing has to be checkpointed first.
+
+    Best effort by design: a database that cannot be snapshotted (held
+    locked past the timeout, not actually SQLite) is left out of the
+    result and the archive ships the file as it is on disk, which is
+    what a backup always did — strictly better than failing the
+    operator's download. Except in WAL mode with a non-empty ``-wal``:
+    the archive never carries sidecars, so the main file alone would be
+    missing every commit still in the log, and that fails the backup
+    with ``BackupSnapshotError`` instead of passing for a good one.
+    """
+    snapshots: dict[str, str] = {}
+    for db_path in _db_paths(home):
+        arcname = path.relpath(db_path, home).replace(os.sep, '/')
+        if arcname.split('/', 1)[0] not in directories:
+            continue  # not part of the archive at all
+        if path.islink(db_path):
+            # An upgraded device keeps ``.anthias/screenly.db`` as a
+            # back-compat symlink to ``anthias.db``
+            # (bin/migrate_legacy_paths.sh). Snapshotting it would ship
+            # a second, independent copy of the same database under the
+            # legacy name, and a restore would land that copy as a
+            # regular file which then diverges from the real one. Leave
+            # it to ``tar``, which records it as the symlink it is; the
+            # file it points at is snapshotted under its own name.
+            continue
+        if not path.isfile(db_path):
+            continue
+        snapshot = path.join(dest_dir, arcname.replace('/', '_'))
+        try:
+            src = sqlite3.connect(
+                db_path, timeout=_SNAPSHOT_TIMEOUT_S, isolation_level=None
+            )
+            try:
+                # Take the read lock *before* backup(), so it is bounded.
+                # ``Connection.backup()`` retries SQLITE_BUSY / LOCKED
+                # in a sleep loop with no limit, so against a writer
+                # holding the rollback journal's exclusive lock it would
+                # block create_backup() (and the streamed download)
+                # forever, whatever ``timeout`` says. An explicit read
+                # transaction acquires the shared lock through the busy
+                # handler instead, raising "database is locked" once
+                # the timeout runs out; holding it, backup() never has
+                # to wait for the source again.
+                src.execute('BEGIN')
+                src.execute('SELECT count(*) FROM sqlite_master').fetchone()
+                dst = sqlite3.connect(snapshot)
+                try:
+                    src.backup(dst)
+                finally:
+                    dst.close()
+            finally:
+                src.close()
+        except sqlite3.Error as exc:
+            if _has_wal_tail(db_path):
+                raise BackupSnapshotError(
+                    f'Could not snapshot {db_path} for backup, and its '
+                    'write-ahead log holds commits the file on disk does '
+                    'not; refusing to ship an archive without them'
+                ) from exc
+            logger.warning(
+                'Could not snapshot %s for backup; shipping the file as '
+                'it is on disk',
+                db_path,
+                exc_info=True,
+            )
+            continue
+        snapshots[arcname] = snapshot
+    return snapshots
+
+
+def _add_runtime_tree(tar: tarfile.TarFile, home: str) -> None:
+    """Add the runtime directories to ``tar``, databases as snapshots."""
+    with tempfile.TemporaryDirectory(prefix='anthias-backup-') as tmp:
+        snapshots = _snapshot_databases(home, tmp)
+
+        def member_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+            # The live database file is replaced by its snapshot below.
+            if member.name in snapshots:
+                return None
+            return _exclude_from_backup(member)
+
+        for directory in directories:
+            tar.add(
+                path.join(home, directory),
+                arcname=directory,
+                filter=member_filter,
+            )
+        for arcname, snapshot in sorted(snapshots.items()):
+            tar.add(snapshot, arcname=arcname)
+
+
+def _clear_db_sidecars(db_paths: set[str]) -> None:
+    """Delete the SQLite sidecars a restore has just orphaned.
+
+    ``recover()`` overwrites the main database file in place. Any
+    ``-wal`` / ``-shm`` left beside it belongs to the database that was
+    there a moment ago, and SQLite would replay it into the restored one
+    on the next open. Removing them is what makes the restored file the
+    whole truth.
+
+    Only ``db_paths``, the databases the archive actually replaced, are
+    touched: a live database the archive did not carry keeps its WAL,
+    which may hold its only copy of committed rows. And a sidecar that
+    cannot be removed is not just logged and stepped over: the restored
+    database is then known to be one open away from the corruption this
+    exists to prevent, so the ``OSError`` fails the restore.
+    """
+    for db_path in sorted(db_paths):
+        for suffix in _DB_SIDECAR_SUFFIXES:
+            try:
+                remove(db_path + suffix)
+            except FileNotFoundError:
+                continue
+
+
+def _is_runtime_member(name: str) -> bool:
+    """True if a tar member is part of the Anthias runtime.
+
+    The whitelist both directions run through:
+
+    * the config dir itself, its known files (see ``_CONFIG_FILES``),
+      and its runtime sub-trees (see ``_CONFIG_SUBTREES``);
+    * the media store and any asset beneath it.
+
+    Everything else — keys, logs, a Caddyfile, an atomic-write sidecar,
+    a path a hostile archive invents — is not ours and returns False.
+    Path confinement to the extraction root is enforced separately by
+    ``_safe_tar_member``.
+    """
+    parts = name.replace('\\', '/').strip('/').split('/')
+    if not parts or parts == ['']:
+        return False
+    top, rest = parts[0], parts[1:]
+    if top in _ASSET_DIRS:
+        # The media store holds arbitrary user files; the whole subtree
+        # is runtime state.
+        return True
+    if top in _CONFIG_DIRS:
+        if not rest:
+            return True  # the config directory entry itself
+        if len(rest) == 1 and rest[0] in _CONFIG_FILES:
+            return True
+        return rest[0] in _CONFIG_SUBTREES
+    return False
+
+
+def _exclude_from_backup(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """Filter applied to every member as a backup archive is built.
+
+    Ships only runtime state (see ``_is_runtime_member``); everything
+    else under the backed-up directories is dropped. Within the
+    whitelisted media store it also drops half-finished uploads:
+    ``tar.add`` recurses, and the asset dir holds several kinds of
+    in-progress file, each of which can be gigabytes of something nobody
+    finished sending — ``.uploads/<id>.part`` from the browser,
+    ``<upload_id>.tmp`` from the REST API, and ``.import-<hex>`` (plus
+    its ``.part``) from the content importer, which allows 5 GiB. All are
+    meaningless once restored, so they only inflate the archive.
+    """
+    if not _is_runtime_member(member.name):
+        return None
+
+    parts = member.name.split('/')
+    if parts[0] in _ASSET_DIRS and len(parts) > 1:
+        if STAGED_UPLOAD_DIR in parts:
+            return None
+        leaf = parts[-1]
+        if leaf.endswith(('.tmp', '.part')) or leaf.startswith('.import-'):
+            return None
+    return member
+
+
 default_archive_name = 'anthias-backup'
 static_dir = 'anthias/staticfiles'
 
@@ -58,9 +336,10 @@ def _safe_tar_member(member: tarfile.TarInfo, dest_root: str) -> bool:
     Reject:
       - absolute paths (drive-letter or starts-with-/)
       - any '..' path component (parent traversal)
+      - anything that is not runtime state (see ``_is_runtime_member``);
+        this whitelist is what keeps keys, logs and stray files out
       - links and special files (symlinks, hardlinks, devices, FIFOs)
       - members that resolve outside dest_root after normalisation
-      - members not under one of our expected top-level directories
 
     Returning False from here causes the extractor to skip the member
     rather than raise — partial recovery is preferable to bailing out
@@ -73,7 +352,10 @@ def _safe_tar_member(member: tarfile.TarInfo, dest_root: str) -> bool:
     parts = name.replace('\\', '/').split('/')
     if any(p in ('', '..') for p in parts):
         return False
-    if parts[0] not in allowed_top_level:
+    # Whitelist: restore only files that belong to the runtime. Anything
+    # else in the archive is skipped, so a crafted backup can neither
+    # plant a key nor drop a stray file on the device.
+    if not _is_runtime_member(name):
         return False
     if not (member.isfile() or member.isdir()):
         return False
@@ -86,6 +368,159 @@ def _safe_tar_member(member: tarfile.TarInfo, dest_root: str) -> bool:
 
 class BackupRecoverError(Exception):
     """Raised when a backup archive cannot be safely recovered."""
+
+
+class IncompatibleBackupError(BackupRecoverError):
+    """Raised when a backup was made by a newer, incompatible version.
+
+    A subclass of ``BackupRecoverError`` so existing ``except`` clauses
+    still treat it as a failed restore, but distinct so the recover
+    views can surface its specific "upgrade first" message instead of
+    the generic "invalid archive" one.
+    """
+
+
+# Metadata member carried at the archive root. It records which version
+# of Anthias produced the archive so a restore can refuse a backup from
+# a newer release (whose data this system may not understand) and can
+# tell that an older backup needs its database migrated up. Kept at the
+# root, outside the two runtime directories, so it is never written to
+# disk on restore — it is read for the version check and then ignored by
+# the extraction whitelist.
+BACKUP_MANIFEST_NAME = 'anthias-backup.json'
+
+# Bump only if the archive layout itself changes shape in a way an older
+# reader could not parse. It is independent of the schema version below.
+BACKUP_FORMAT_VERSION = 1
+
+# The Django app whose migrations define the backup's data schema. The
+# schema version is the highest migration number applied for this app —
+# monotonic across releases and readable from disk without a database.
+_SCHEMA_APP_LABEL = 'anthias_app'
+
+
+def _current_schema_version() -> int | None:
+    """Highest ``anthias_app`` migration number this code carries.
+
+    Read from the migration files on disk (no database connection), so
+    it is available both when writing a backup and when validating one.
+    Returns ``None`` if the migration graph can't be read; callers treat
+    an unknown version as "can't decide", so a lookup failure never
+    stamps a wrong number into a backup nor wrongly rejects a restore.
+    """
+    try:
+        from django.db.migrations.loader import MigrationLoader
+
+        loader = MigrationLoader(None, ignore_no_migrations=True)
+        numbers = [
+            int(prefix)
+            for (app_label, name) in loader.disk_migrations
+            if app_label == _SCHEMA_APP_LABEL
+            and (prefix := name.split('_', 1)[0]).isdigit()
+        ]
+        return max(numbers, default=0)
+    except Exception:
+        logger.exception('Could not determine the backup schema version')
+        return None
+
+
+def _build_manifest() -> dict[str, Any]:
+    return {
+        'format': BACKUP_FORMAT_VERSION,
+        'anthias_version': get_anthias_release(),
+        'schema_version': _current_schema_version(),
+        'created_at': datetime.now(UTC).isoformat(),
+    }
+
+
+def _add_manifest(tar: tarfile.TarFile) -> None:
+    """Write the version manifest into an archive as it is built."""
+    payload = json.dumps(_build_manifest(), indent=2).encode('utf-8')
+    info = tarfile.TarInfo(BACKUP_MANIFEST_NAME)
+    info.size = len(payload)
+    info.mtime = int(datetime.now(UTC).timestamp())
+    tar.addfile(info, io.BytesIO(payload))
+
+
+def _read_manifest(tar: tarfile.TarFile) -> dict[str, Any] | None:
+    """Return the parsed manifest, or None for a pre-versioning backup."""
+    try:
+        member = tar.getmember(BACKUP_MANIFEST_NAME)
+    except KeyError:
+        return None
+    if not member.isfile():
+        return None
+    fobj = tar.extractfile(member)
+    if fobj is None:
+        return None
+    try:
+        data = json.loads(fobj.read().decode('utf-8'))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _check_backup_compatibility(manifest: dict[str, Any] | None) -> None:
+    """Reject a backup this system is too old to restore.
+
+    A backup whose schema is newer than this code's may carry data an
+    older Anthias cannot represent, so restoring it would silently
+    corrupt state — refuse it and tell the operator to upgrade first.
+    An older or equal backup is accepted; its database is migrated up
+    afterwards (see ``_upgrade_restored_database``). A pre-versioning
+    backup (no manifest) predates every schema we know, so it is treated
+    as older and accepted.
+    """
+    if not manifest:
+        return
+    backup_schema = manifest.get('schema_version')
+    # bool is an int subclass; a boolean here is a malformed manifest,
+    # not a schema number.
+    if isinstance(backup_schema, bool) or not isinstance(backup_schema, int):
+        return
+    current = _current_schema_version()
+    if current is None:
+        # Couldn't read our own schema — don't guess, don't block.
+        logger.warning(
+            'Skipping backup version check: local schema version unknown'
+        )
+        return
+    if backup_schema > current:
+        release = manifest.get('anthias_version') or 'a newer release'
+        raise IncompatibleBackupError(
+            f'This backup was created by a newer version of Anthias '
+            f'({release}, data schema {backup_schema}) than this system '
+            f'supports (data schema {current}). Upgrade Anthias to at '
+            f'least that version before restoring this backup.'
+        )
+
+
+def _upgrade_restored_database() -> None:
+    """Bring a just-restored database up to the current schema.
+
+    An older backup's database is behind this code's migrations; run
+    them so the restore is immediately consistent. The startup ``migrate``
+    pass is the backstop if this fails, so a failure is logged rather
+    than aborting the restore. Skipped under the test environment, where
+    there is no real database to migrate.
+    """
+    if getenv('ENVIRONMENT') == 'test':
+        return
+    try:
+        from django.core.management import call_command
+        from django.db import connections
+
+        # recover() rewrote the database file under this worker's cached
+        # SQLite connection, which still points at the old file. Drop it
+        # so migrate (and everything after) opens a fresh handle on the
+        # restored database rather than migrating a stale one.
+        connections.close_all()
+        call_command('migrate', interactive=False, verbosity=0)
+    except Exception:
+        logger.exception(
+            'Post-restore database migration failed; the next startup '
+            'migrate will retry'
+        )
 
 
 # gzip level for backup archives. The bulk of a backup is video/image
@@ -144,12 +579,8 @@ def stream_backup() -> Generator[bytes]:
                     compresslevel=BACKUP_COMPRESSLEVEL,
                 ) as tar,
             ):
-                for directory in directories:
-                    tar.add(
-                        path.join(home, directory),
-                        arcname=directory,
-                        filter=_skip_staged_uploads,
-                    )
+                _add_manifest(tar)
+                _add_runtime_tree(tar, home)
         except BrokenPipeError:
             logger.info('backup download cancelled by the client')
         except Exception as exc:
@@ -245,14 +676,9 @@ def create_backup(name: str = default_archive_name) -> str:
         with tarfile.open(
             file_path, 'w:gz', compresslevel=BACKUP_COMPRESSLEVEL
         ) as tar:
-            for directory in directories:
-                path_to_dir = path.join(home, directory)
-                tar.add(
-                    path_to_dir,
-                    arcname=directory,
-                    filter=_skip_staged_uploads,
-                )
-    except OSError:
+            _add_manifest(tar)
+            _add_runtime_tree(tar, home)
+    except (OSError, BackupSnapshotError):
         remove(file_path)
         raise
 
@@ -274,6 +700,11 @@ def recover(file_path: str) -> None:
         if not new_present and not legacy_present:
             raise BackupRecoverError('Archive is wrong.')
 
+        # Version guard: refuse a backup from a newer release before we
+        # write anything. Raises IncompatibleBackupError, which the
+        # recover views surface with its "upgrade first" message.
+        _check_backup_compatibility(_read_manifest(tar))
+
         # Manually iterate so each member is validated before any
         # filesystem write. Avoids tarfile.extractall's older
         # path-traversal vulnerabilities (Zip Slip / CVE-2007-4559).
@@ -284,13 +715,52 @@ def recover(file_path: str) -> None:
         extract_kwargs: dict[str, Any] = {'path': home}
         if hasattr(tarfile, 'data_filter'):
             extract_kwargs['filter'] = 'data'
-        for member in tar.getmembers():
-            if not _safe_tar_member(member, home):
-                logger.warning(
-                    'Skipping unsafe tar member during recover: %r',
-                    member.name,
-                )
-                continue
-            tar.extract(member, **extract_kwargs)
+        restored_dbs: set[str] = set()
+        try:
+            for member in tar.getmembers():
+                # The manifest is metadata read above, not runtime state;
+                # never write it to disk.
+                if member.name == BACKUP_MANIFEST_NAME:
+                    continue
+                # Archives written before the sidecars were dropped still
+                # carry them. They are not unsafe in the path-traversal
+                # sense this loop's warning is about, just never writable —
+                # see _DB_SIDECAR_SUFFIXES.
+                if _is_db_sidecar(member.name):
+                    logger.info(
+                        'Skipping SQLite sidecar carried by an older archive: %r',
+                        member.name,
+                    )
+                    continue
+                if not _safe_tar_member(member, home):
+                    logger.warning(
+                        'Skipping unsafe tar member during recover: %r',
+                        member.name,
+                    )
+                    continue
+                tar.extract(member, **extract_kwargs)
+                if member.isfile() and _is_db_file(member.name):
+                    # On an upgraded device ``.screenly`` and
+                    # ``screenly.db`` are back-compat symlinks to
+                    # ``.anthias/anthias.db`` (bin/migrate_legacy_paths.sh),
+                    # so a pre-rebrand archive's database is extracted
+                    # through them into the canonical file. SQLite keeps the
+                    # WAL beside the file it resolves to, so clear the
+                    # sidecars of both the name as written and the file it
+                    # landed in.
+                    db_path = path.join(home, member.name)
+                    restored_dbs.add(db_path)
+                    restored_dbs.add(path.realpath(db_path))
+        finally:
+            # The main database file has just been replaced; anything
+            # left of the old one's write-ahead log would be replayed
+            # into it on the next open. Clear the sidecars before that
+            # open happens, also when a later member failed to extract
+            # and the restore is about to fail half done.
+            _clear_db_sidecars(restored_dbs)
+
+    # The archive may hold an older schema; migrate the restored
+    # database up to what this system expects.
+    _upgrade_restored_database()
 
     remove(file_path)

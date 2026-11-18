@@ -1,0 +1,34 @@
+---
+# Watchdog timeout systemd programs into the device; it pings at half
+# of this. Every device in the fleet supports at least 30s (BCM2835
+# reports 60s, softdog 60s) and drivers clamp rather than reject, so a
+# board with a shorter maximum rounds down safely.
+system_watchdog_timeout_sec: 30
+
+# Cap on a hung shutdown, applied after PID 1 has been replaced by
+# systemd-shutdown.
+system_reboot_watchdog_sec: 5min
+
+# SoC watchdog driver identities (/sys/class/watchdog/*/identity)
+# measured to actually reset a board rather than halt it. Matched
+# case-insensitively as an extended regex.
+#
+# This applies to SoC platforms only. On x86 any hardware watchdog the
+# machine exposes is used — iTCO, sp5100_tco, ACPI WDAT, hpwdt, IPMI
+# are chipset/firmware devices specified to assert a system reset, and
+# they recover a wedged kernel that softdog cannot. An SoC watchdog is
+# vendor IP with vendor behaviour, so there it is opt-in per driver.
+#
+# Measured:
+#   * Broadcom BCM2835 (Raspberry Pi) — resets.
+#   * Synopsys DesignWare — HALTS, on both Rockchip boards in the rig.
+#     Rock Pi 4 (RK3399): petting stopped 10:41:31, unreachable 10:42:05,
+#     stayed dark. NanoPi R3S LTS (RK3566): armed 10:27:03 with its 44 s
+#     timeout while systemd went on petting softdog normally, last
+#     reachable 10:27:36, dead from 10:27:53 and still dark 12 minutes
+#     later — a power cycle got it back. softdog on that same board
+#     resets it in ~30 s and has it reachable again in ~64 s.
+#
+# Anything not matching falls back to softdog, which reboots through
+# the kernel's ordinary restart path.
+system_watchdog_soc_allowlist_pattern: 'bcm2835'

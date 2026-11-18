@@ -80,7 +80,7 @@ The screen is usually seen in passing, from across a room, by someone who did no
 Anthias manages content per device, each with its own dashboard, so several screens means several Pis. That is less work than it sounds:
 
 - **Clone a configured device.** Download a backup file holding your settings and asset list, then restore it onto a new device instead of setting it up from scratch.
-- **Deploy and update a fleet over the air** through [Balena](/docs/balena-fleet-deployment/), so you are not carrying cards around to push an update.
+- **Deploy and update a fleet over the air** through [Balena](/docs/balena/), so you are not carrying cards around to push an update.
 - **Bring a library in from another platform** with the [built-in importer](/docs/import-content/), which supports Yodeck, ScreenCloud, piSignage and Xibo.
 
 What you do not get is one dashboard where you change tomorrow's loop for every screen at once. For a window bank or a handful of sites that is rarely the blocker; for a large estate it will be.

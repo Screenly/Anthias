@@ -10,6 +10,7 @@ accumulate coverage. These tests do.
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import time, timedelta
 from types import SimpleNamespace
@@ -17,6 +18,8 @@ from typing import Any
 from unittest import mock
 
 import pytest
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -790,6 +793,73 @@ def test_assets_delete_removes_local_file(
     assert not asset_path.exists(), (
         f'asset file {asset_path} survived UI delete'
     )
+
+
+@pytest.mark.django_db
+def test_assets_delete_drops_row_before_unlinking(
+    client: Client, tmp_path: Any
+) -> None:
+    """The row must be gone by the time the file is unlinked.
+
+    The reverse order leaves a window where ``Asset.uri`` points at a
+    file that no longer exists, and a normalisation task picking the
+    row up in that window raised ``FileNotFoundError`` on an asset the
+    operator had already deleted (Sentry ANTHIAS-1G). Asserted on the
+    ordering rather than on the window, because the window itself is
+    a race no test can reliably hit.
+    """
+    from anthias_server.settings import settings as anthias_settings
+
+    asset_path = (
+        tmp_path / anthias_settings['assetdir'].lstrip('/') / 'clip.mp4'
+    )
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    asset_path.write_bytes(b'\x00payload')
+
+    now = timezone.now()
+    asset = Asset.objects.create(
+        name='Processing clip',
+        uri=str(asset_path),
+        mimetype='video',
+        duration=0,
+        is_enabled=True,
+        is_processing=True,
+        play_order=0,
+        start_date=now,
+        end_date=now + timedelta(days=30),
+    )
+
+    row_alive_at_unlink: list[bool] = []
+    real_remove = os.remove
+
+    def _spy_remove(target: str) -> None:
+        row_alive_at_unlink.append(
+            Asset.objects.filter(asset_id=asset.asset_id).exists()
+        )
+        real_remove(target)
+
+    with (
+        mock.patch.dict(
+            anthias_settings,
+            {'assetdir': str(asset_path.parent)},
+        ),
+        mock.patch(
+            'anthias_server.app.helpers.remove',
+            side_effect=_spy_remove,
+        ),
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+    ):
+        client.post(
+            reverse('anthias_app:assets_delete', args=[asset.asset_id])
+        )
+
+    assert row_alive_at_unlink == [False], (
+        'asset row was still live when its file was unlinked'
+    )
+    assert not asset_path.exists()
 
 
 @pytest.mark.django_db
@@ -2798,7 +2868,7 @@ def test_assets_upload_never_stores_an_asset_under_a_reserved_ext(
     """An asset stored as `<uuid>.tmp` deletes itself: the celery sweep
     removes `*.tmp` from the asset dir after an hour and the row is
     left pointing at nothing. `<uuid>.part` survives but is dropped
-    from every backup by _skip_staged_uploads.
+    from every backup by _exclude_from_backup.
 
     A browser cannot reach this — it sends application/octet-stream for
     an unknown extension, which the type gate rejects — but a crafted
@@ -3531,6 +3601,20 @@ def test_schedule_pills_everyday_short_circuit(asset: Asset) -> None:
 # get_device_model_parts — (primary, secondary) for the two-line card
 
 
+@pytest.fixture
+def no_device_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the device-tree read to "no board name".
+
+    ``get_device_model_parts`` consults the device tree before DMI, so
+    without this the x86 branches below would short-circuit whenever
+    the suite runs on a host that has a tree (any SBC dev box, and the
+    arm64 CI runner).
+    """
+    from anthias_common import device_helper
+
+    monkeypatch.setattr(device_helper, 'read_device_tree_model', lambda: '')
+
+
 def test_device_model_parts_pi(monkeypatch: pytest.MonkeyPatch) -> None:
     from anthias_common import device_helper
 
@@ -3551,6 +3635,7 @@ def test_device_model_parts_pi(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_device_model_parts_x86_with_dmi(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -3582,6 +3667,7 @@ def test_device_model_parts_x86_with_dmi(
 
 def test_device_model_parts_x86_drops_redundant_vendor(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     """Reference / whitebox boards set sys_vendor to the CPU maker
     ('Intel Corporation' next to an 'Intel Celeron' CPU). The stuttering
@@ -3614,6 +3700,7 @@ def test_device_model_parts_x86_drops_redundant_vendor(
 
 def test_device_model_parts_x86_keeps_branded_vendor(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     """A branded OEM vendor that differs from the CPU maker is kept, but
     its corporate suffix ('Inc.') is trimmed."""
@@ -3644,6 +3731,7 @@ def test_device_model_parts_x86_keeps_branded_vendor(
 
 def test_device_model_parts_drops_virt_chassis(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -3674,6 +3762,7 @@ def test_device_model_parts_drops_virt_chassis(
 
 def test_device_model_parts_generic_fallback(
     monkeypatch: pytest.MonkeyPatch,
+    no_device_tree: None,
 ) -> None:
     from anthias_common import device_helper
 
@@ -5029,3 +5118,305 @@ def test_system_info_storage_card_exposes_the_evidence(
     assert 'ext4_find_entry' in body
     assert 'SanDisk SC32G' in body
     assert 'survives reboots' in body
+
+
+# ---------------------------------------------------------------------------
+# Auth changes reap open /ws sockets (Copilot reviews on PRs 3324/3336).
+#
+# AssetConsumer decides authorization at handshake time, so a socket
+# opened before an auth change would otherwise keep streaming under the
+# old rules. Two things reap them: this view, and the User post_save
+# receiver in app/signals.py.
+#
+# Every test here toggles auth_backend against an operator row that
+# already exists, so apply_auth_settings() returns "changed" without
+# writing the User — which keeps the receiver silent and leaves the
+# view as the only possible caller. Enabling auth from scratch would
+# create the operator and fire the receiver too, and then a passing
+# assertion would prove nothing about this view at all.
+# ---------------------------------------------------------------------------
+
+_OPERATOR_PWD = 'a-str0ng-QA-passphrase'
+
+
+def _existing_operator() -> None:
+    """The row a previous "enable auth" left behind — turning auth off
+    keeps it so that re-enabling doesn't lose the operator.
+
+    Creating it fires the post_save receiver, so the reap is patched out
+    for this one write: the tests below exist to observe what the *view*
+    does, and letting the receiver through here would also cost a real
+    channel-layer round-trip during setup.
+    """
+    with mock.patch('anthias_server.app.consumers.disconnect_all'):
+        User.objects.create_user(
+            username='operator',
+            password=_OPERATOR_PWD,
+            is_staff=True,
+            is_superuser=True,
+        )
+
+
+def _toggle_auth_on(client: Client, **extra: str) -> Any:
+    """Flip auth_backend with no new credentials, so the existing
+    operator row is left untouched."""
+    return client.post(
+        reverse('anthias_app:settings_save'),
+        data={
+            'player_name': 'Test Player',
+            'default_duration': '15',
+            'default_streaming_duration': '300',
+            'audio_output': 'hdmi',
+            'date_format': 'mm/dd/yyyy',
+            'auth_backend': 'auth_basic',
+            'current_password': _OPERATOR_PWD,
+            **extra,
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_settings_save_reaps_sockets_before_the_viewer_publish(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """Order matters: send_to_viewer() goes over Redis and can raise,
+    and the handler would then finish the request with the auth change
+    live and every old socket still attached."""
+    _existing_operator()
+    ordering = mock.Mock()
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ) as publish,
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        ordering.attach_mock(publish, 'publish')
+        ordering.attach_mock(disconnect, 'disconnect')
+        response = _toggle_auth_on(client)
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_called_once()
+    assert [call[0] for call in ordering.mock_calls] == [
+        'disconnect',
+        'publish',
+    ]
+
+
+@pytest.mark.django_db
+def test_settings_save_leaves_sockets_alone_when_auth_is_unchanged(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """The form POSTs the whole page, so an unrelated save (a player
+    rename) must not bounce every operator's dashboard socket."""
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Renamed Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': '',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_settings_save_reaps_sockets_even_if_the_viewer_publish_fails(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    _existing_operator()
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            side_effect=RuntimeError('redis is down'),
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = _toggle_auth_on(client)
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_settings_save_reaps_sockets_even_if_the_conf_write_fails(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """A conf write can fail on a full or read-only /data volume. The
+    reap is in a finally, so it happens on that path too."""
+    _existing_operator()
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch.object(
+            settings, 'save', side_effect=OSError('read-only file system')
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = _toggle_auth_on(client)
+
+    assert response.status_code in (200, 302)
+    disconnect.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_settings_save_leaves_the_reap_to_the_receiver_on_a_rotation(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """A password change with auth_backend unchanged writes the User
+    row, so app/signals.py reaps it. This view must not reap it again —
+    doing so fanned a second force_disconnect out over Redis for every
+    credential rotation, and closed every dashboard socket twice."""
+    _existing_operator()
+    settings['auth_backend'] = 'auth_basic'
+    settings.save()
+    operator = User.objects.get(username='operator')
+    client.force_login(operator)
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as disconnect,
+    ):
+        response = client.post(
+            reverse('anthias_app:settings_save'),
+            data={
+                'player_name': 'Test Player',
+                'default_duration': '15',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': 'auth_basic',
+                'current_password': _OPERATOR_PWD,
+                'password': 'a-rotated-QA-passphrase',
+                'password_2': 'a-rotated-QA-passphrase',
+            },
+        )
+
+    assert response.status_code in (200, 302)
+    operator.refresh_from_db()
+    assert operator.check_password('a-rotated-QA-passphrase')
+    disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_settings_save_reaps_once_when_enabling_auth_with_credentials(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """One operator action must produce one revocation.
+
+    Enabling auth *and* setting the username/password in the same save
+    returns ``AuthChange(backend_changed=True, credentials_rotated=True)``
+    — both halves true. The User write is already reaped by the
+    post_save receiver, so a view that keys only on ``backend_changed``
+    fans a second force_disconnect over Redis and bumps the generation
+    twice, which is the duplicate this split exists to prevent.
+    """
+    _existing_operator()
+
+    with (
+        mock.patch(
+            'anthias_server.settings.ViewerPublisher.send_to_viewer',
+            return_value=None,
+        ),
+        mock.patch(
+            'anthias_server.app.consumers.disconnect_all'
+        ) as view_disconnect,
+    ):
+        response = _toggle_auth_on(
+            client,
+            user='alice',
+            password='Correct-Horse-9',
+            password_2='Correct-Horse-9',
+        )
+
+    assert response.status_code in (200, 302)
+    # The receiver owns this one; the view must stand down.
+    view_disconnect.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_first_time_auth_setup_writes_the_operator_once(
+    client: Client, _isolated_settings_conf: Any
+) -> None:
+    """Enabling auth from scratch must write the User row once.
+
+    The revocation receiver is on ``post_save``, so every extra write
+    in this path is another ``disconnect_all()`` scheduled for the same
+    operator action — and each one pays the channel-layer timeout in
+    full when Redis is down. Building the row and hashing the password
+    before a single ``save()`` keeps it at one; the earlier
+    ``update_or_create()`` + ``set_password()`` + ``save()`` was two.
+    """
+    assert not User.objects.exists()
+    writes: list[bool] = []
+
+    def _count(
+        sender: Any, instance: User, created: bool, **kwargs: Any
+    ) -> None:
+        writes.append(created)
+
+    post_save.connect(_count, sender=User, dispatch_uid='test_count_writes')
+    try:
+        with (
+            mock.patch(
+                'anthias_server.settings.ViewerPublisher.send_to_viewer',
+                return_value=None,
+            ),
+            mock.patch('anthias_server.app.consumers.disconnect_all'),
+        ):
+            response = client.post(
+                reverse('anthias_app:settings_save'),
+                data={
+                    'player_name': 'Test Player',
+                    'default_duration': '15',
+                    'default_streaming_duration': '300',
+                    'audio_output': 'hdmi',
+                    'date_format': 'mm/dd/yyyy',
+                    'auth_backend': 'auth_basic',
+                    'current_password': '',
+                    'user': 'alice',
+                    'password': 'Correct-Horse-9',
+                    'password_2': 'Correct-Horse-9',
+                },
+            )
+    finally:
+        post_save.disconnect(sender=User, dispatch_uid='test_count_writes')
+
+    assert response.status_code in (200, 302)
+    # One create, no follow-up update.
+    assert writes == [True]
+    # And the credentials that were saved are the ones the operator
+    # typed — a single write must not cost the password hash.
+    operator = User.objects.get(username='alice')
+    assert operator.check_password('Correct-Horse-9')
+    assert operator.is_staff and operator.is_superuser and operator.is_active

@@ -4,9 +4,11 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from celery.exceptions import SoftTimeLimitExceeded
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import Timeout
 
+from anthias_server.app.models import Asset
 from anthias_server.lib import telemetry
 
 
@@ -241,3 +243,24 @@ def test_version_name_falls_back_to_an_explicit_bucket(
         'params'
     ]
     assert params['version_name'] == 'unknown'
+
+
+def test_asset_counts_let_a_soft_time_limit_through() -> None:
+    """The blanket "degrade to zeros" arm must not eat celery's one
+    soft-limit delivery: swallowing it here left
+    ``send_telemetry_task``'s handler unreachable and the pool child to
+    be SIGKILLed at the 60s hard limit (Sentry ANTHIAS-A / 9 / B)."""
+    with (
+        patch.object(
+            Asset.objects,
+            'filter',
+            side_effect=SoftTimeLimitExceeded(),
+        ),
+        pytest.raises(SoftTimeLimitExceeded),
+    ):
+        telemetry._get_asset_counts()
+
+
+def test_asset_counts_still_degrade_to_zeros_on_a_db_fault() -> None:
+    with patch.object(Asset.objects, 'filter', side_effect=OSError('no db')):
+        assert telemetry._get_asset_counts()['asset_count'] == 0

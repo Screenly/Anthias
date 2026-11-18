@@ -128,7 +128,8 @@ fi
 
 # Production tags the containers on the journald driver; capture by tag
 # as well as by container so we get logs even if the compose file moved.
-CONTAINER_TAGS=(anthias-server anthias-viewer anthias-celery anthias-redis anthias-caddy)
+CONTAINER_TAGS=(anthias-server anthias-viewer anthias-celery anthias-redis anthias-caddy
+    anthias-wifi-connect)
 
 # Captured up front so the PII-scrub pass can redact this device's
 # hostname (it appears in journald prefixes, `uname -a`, and the README).
@@ -200,6 +201,16 @@ scrub_pii() {
             -e 's/^([[:space:]]*Serial Number:[[:space:]]*).*/\1<redacted-serial>/I' \
             -e 's/^([[:space:]]*LU WWN Device Id:[[:space:]]*).*/\1<redacted-wwn>/I' \
             -e 's/^([[:space:]]*serial[[:space:]]*:[[:space:]]*).*/\1<redacted-serial>/I' \
+            "$f"
+
+        # wifi-connect logs the setup access point's passphrase as
+        # text -- deliberately, since that line is how an operator
+        # reads it off a serial console. It has no value by the time
+        # anyone opens this bundle (it is regenerated per run and the
+        # access point is long down), but a bundle that promises to
+        # carry no credentials should not carry one.
+        sed -i -E \
+            -e 's/(passphrase=)("[^"]*"|[^[:space:]]+)/\1<redacted-passphrase>/g' \
             "$f"
 
         sed -i \

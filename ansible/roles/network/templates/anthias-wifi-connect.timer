@@ -1,0 +1,35 @@
+[Unit]
+Description=Periodic check for whether the Anthias WiFi setup portal is needed
+Documentation=https://anthias.screenly.io/docs/wifi-setup/
+
+[Timer]
+# One check shortly after boot, then again after each check finishes.
+#
+# This is the `CHECK_CONN_FREQ` loop the pre-2026.04 implementation
+# ran inside the container (`while true; ... sleep $freq`, default
+# 120s, Anthias set it to 10s), expressed as a timer instead of a
+# shell loop so systemd owns the cadence and journald shows each
+# decision.
+#
+# Why re-check at all, rather than once per boot: a screen whose
+# router is replaced, or whose WiFi password changes, has no way back
+# otherwise. The old implementation retried until the device came
+# online; this keeps checking afterwards too, so a network lost months
+# later still brings the portal back. That is only safe because the
+# condition on the service is ours and conservative — see
+# bin/wifi_connect_needed.sh. It raises the portal only on a device
+# with no WiFi, no wired network and no internet.
+#
+# OnUnitInactiveSec, not OnCalendar: it measures from when the last
+# check *finished*, so a 15-minute portal session is never interrupted
+# by the next tick, and the gap after a session is a real gap.
+OnBootSec=30s
+OnUnitInactiveSec=5min
+
+# These checks are cheap and nothing depends on their phase; let
+# systemd batch them with other timers rather than waking the board on
+# its own schedule.
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

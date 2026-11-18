@@ -190,7 +190,7 @@ means reflashing the card.
 
 Each device runs its own dashboard, and two features keep that from being
 repetitive: deploy and update a whole fleet over the air through
-[Balena](/docs/balena-fleet-deployment/), and use the backup file to configure
+[Balena](/docs/balena/), and use the backup file to configure
 one device then restore that setup onto the rest. What Anthias does not offer is
 one dashboard that changes every screen's playlist at once.
 

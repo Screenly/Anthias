@@ -1,0 +1,131 @@
+[Unit]
+Description=Anthias WiFi Connect (captive-portal provisioning)
+Documentation=https://github.com/Screenly-Labs/wifi-connect
+Requires=docker.service
+After=docker.service
+# Do not race NetworkManager's own startup attempts. wifi-connect's
+# connectivity gate exits 0 when a saved network comes up by itself,
+# which is the behaviour you want; starting before NM has had a chance
+# to try just burns the 60s autoconnect budget on every boot. `After=`
+# a unit that is absent or disabled is a no-op, so this is safe on the
+# boards where NetworkManager-wait-online is not enabled.
+After=NetworkManager.service NetworkManager-wait-online.service
+
+[Service]
+# Started by anthias-wifi-connect.timer, not at boot directly, and
+# deliberately has no [Install] section so it cannot be enabled on its
+# own. The container itself is created by `docker compose up` (see the
+# anthias-wifi-connect service, which carries `restart: "no"`); this
+# unit starts that container when the timer says it is time to look.
+#
+# The timer provides the retry cadence the pre-2026.04 implementation
+# got from its own `while true; ... sleep $CHECK_CONN_FREQ` loop. A
+# `Restart=` policy here would be wrong for it: wifi-connect exits 0
+# as soon as it has nothing to do, so the restart would be immediate
+# and unconditional, where what is wanted is "wait, then re-evaluate
+# the condition".
+# Type=exec, NOT oneshot. A portal session legitimately lasts up to
+# ACTIVITY_TIMEOUT (15 minutes), and a oneshot unit is killed at
+# DefaultTimeoutStartSec — 90 seconds on Debian — which would tear the
+# access point down mid-setup every time. Type=exec considers the unit
+# started once the process execs and imposes no limit on how long it
+# then runs.
+Type=exec
+User={{ anthias_user }}
+WorkingDirectory=/home/{{ anthias_user }}/anthias
+
+# The gate that keeps a working device working.
+#
+# wifi-connect's own connectivity gate asks NetworkManager, and on
+# every platform Anthias supports NM is built WITHOUT connectivity-check
+# support — so it answers "unknown", which upstream (reasonably, for a
+# tool that assumes NM can answer) treats as a reason to show the
+# portal. The effect here would be an access point raised on every boot
+# of every device, online or not. See the script for the measurements.
+#
+# ExecCondition, not ExecStartPre: a clean non-zero exit from a
+# condition marks the unit skipped rather than failed, so an online
+# device reports `inactive (dead)` instead of a red unit every boot.
+# Where wifi_connect_needed.sh records how many times it has raised the
+# portal without a join, so it can slow from the timer's 5-minute cadence
+# to one attempt every 6 hours. On a site with nothing to join — an
+# airgapped install, a screen whose access point is gone for good — the
+# portal stays up for 15 minutes at a time and the viewer shows the setup
+# page for all of it, so retrying forever at five-minute intervals costs
+# three quarters of the device's screen time, indefinitely.
+#
+# Preserve=yes because the state must outlive each run (the unit stops
+# between attempts) but NOT a reboot: power cycling is what an operator
+# does when they want another go, and /run is cleared for us.
+RuntimeDirectory=anthias-wifi-connect
+RuntimeDirectoryPreserve=yes
+ExecCondition=/home/{{ anthias_user }}/anthias/bin/wifi_connect_needed.sh
+
+# The probe honours a configured proxy, same as anthias-host-agent's.
+# The leading '-' makes a missing file (no proxy) non-fatal.
+EnvironmentFile=-/etc/anthias/proxy.env
+# --attach so the unit's lifetime matches the portal's: systemd sees
+# the run finish and journald gets the portal's own log lines.
+ExecStart=/usr/bin/docker start --attach anthias-wifi-connect
+# SIGTERM to `docker start --attach` detaches the CLI; it does not stop
+# the container, so without this a `systemctl stop` would leave the
+# access point broadcasting with nothing supervising it. The leading
+# `-` keeps a stop from failing when the container is already gone.
+ExecStop=-/usr/bin/docker stop --timeout 20 anthias-wifi-connect
+# Long enough for the ExecStop above: wifi-connect handles SIGTERM to
+# bring the access point down (balena sends one on every update, and
+# leaving the radio in AP mode would strand the device), and that
+# teardown is a NetworkManager round trip.
+TimeoutStopSec=30s
+# Exit codes that are not failures:
+#   3 — no WiFi device (every ethernet-only x86 box)
+#   4 — the adapter cannot do AP mode, is unmanaged, or is rfkilled
+#   6 — Outcome::TimedOut: ACTIVITY_TIMEOUT elapsed with nobody
+#       completing setup. That is the ORDINARY end of an unattended
+#       portal session, not an error — the timer will offer another
+#       one. Without it the unit lands in `failed` after every
+#       unattended session, which is both wrong and the fastest way
+#       to teach an operator to ignore this unit's state.
+#
+# 7 is deliberately NOT here. Until wifi-connect 2026.10.3 a portal that
+# could not bind its port exited 6 as well, so listing 6 masked it and
+# the only trace was `docker logs anthias-wifi-connect`; upstream split
+# them (Screenly-Labs/wifi-connect#24) precisely so this unit can say
+# "a timeout is fine, a bind failure is not". A port conflict now shows
+# up in `systemctl --failed`, which is where someone will look.
+SuccessExitStatus=0 3 4 6
+Restart=no
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=anthias-wifi-connect
+
+# Sandboxing. All the privileged work happens inside the container;
+# this process only talks to /run/docker.sock, so it can be locked
+# down hard. ProtectSystem=strict still allows connect() on the
+# socket — that is an inode lookup, not a filesystem write.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0027

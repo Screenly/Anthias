@@ -402,7 +402,7 @@
           font-size="14px"
           line-height="1.45"
           padding="0">
-          <a href="https://anthias.screenly.io/docs/balena-fleet-deployment/"
+          <a href="https://anthias.screenly.io/docs/balena/"
              style="color: #ffe11a; text-decoration: underline;">
             Deploying a Balena fleet
           </a><br />

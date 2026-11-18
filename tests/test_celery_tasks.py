@@ -8,6 +8,7 @@ from unittest import mock
 
 import pytest
 from celery.exceptions import SoftTimeLimitExceeded
+from celery.signals import worker_init
 
 import anthias_server.celery_tasks as celery_tasks_module
 from anthias_common.utils import STAGED_UPLOAD_DIR
@@ -16,6 +17,7 @@ from anthias_server.celery_tasks import (
     ASSET_REVALIDATION_LOCK_KEY,
     DISPLAY_POWER_STATE_KEY,
     DISPLAY_POWER_STATE_TTL_S,
+    YoutubeDownloadError,
     apply_display_power_schedule,
     asset_recheck_lock_key,
     cleanup,
@@ -1170,12 +1172,21 @@ def test_download_youtube_asset_failure_propagates_for_on_failure(
     fake_youtube_dl: mock.MagicMock,
 ) -> None:
     """yt-dlp DownloadError is permanent — the task re-raises so
-    Celery's on_failure path runs (which clears is_processing)."""
+    Celery's on_failure path runs (which clears is_processing).
+
+    It is re-raised as ``YoutubeDownloadError`` and that type is in
+    the task's ``throws``: the causes yt-dlp reports (403, 404,
+    age-gate, geo-block, an origin read timing out) are properties of
+    the pasted URL, and the operator's answer is the Failed pill on
+    the row rather than a crash report. The message is carried through
+    unchanged so the pill still says what yt-dlp said."""
     _make_youtube_asset()
     DownloadError = fake_youtube_dl._download_error
     fake_youtube_dl.extract_info.side_effect = DownloadError('404')
-    with pytest.raises(DownloadError):
+    with pytest.raises(YoutubeDownloadError, match='404'):
         download_youtube_asset('yt-1', 'https://youtu.be/dead')
+
+    assert YoutubeDownloadError in download_youtube_asset.throws
 
 
 @pytest.mark.django_db
@@ -2078,6 +2089,37 @@ class TestProbeTimeLimits:
         assert refreshed.last_reachability_check is not None
 
     @pytest.mark.django_db
+    def test_recheck_soft_limit_in_the_prologue_is_caught(
+        self, eager_celery_recheck: None
+    ) -> None:
+        """The prologue is not free — the SELECT can block on a
+        contended SQLite write lock — and a soft signal landing there
+        used to escape as a task failure (Sentry ANTHIAS-5K, whose
+        traceback lands exactly on this query)."""
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        _make_recheck_asset()
+        with mock.patch.object(
+            Asset.objects, 'get', side_effect=SoftTimeLimitExceeded
+        ):
+            result = revalidate_asset_url.apply(args=('a1',))
+        assert result.successful()
+
+    @pytest.mark.django_db
+    def test_recheck_soft_limit_in_the_cooldown_gate_is_caught(
+        self, eager_celery_recheck: None
+    ) -> None:
+        """Same for the cooldown SETNX, which is a redis round trip."""
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        _make_recheck_asset()
+        fake_redis = mock.MagicMock()
+        fake_redis.set.side_effect = SoftTimeLimitExceeded
+        with mock.patch.object(celery_tasks_module, 'r', fake_redis):
+            result = revalidate_asset_url.apply(args=('a1',))
+        assert result.successful()
+
+    @pytest.mark.django_db
     def test_sweep_soft_limit_aborts_and_releases_lock(
         self, eager_celery: None
     ) -> None:
@@ -2136,6 +2178,29 @@ class TestPeriodicPokeTimeLimits:
         assert result.successful()
         fake_redis.set.assert_not_called()
 
+    def test_display_power_soft_limit_in_the_availability_gate(self) -> None:
+        """``cec_available()`` is the *first* thing the task does, and it
+        wrapped its redis GET in a blanket ``except Exception`` — which
+        swallowed celery's one soft-limit delivery, left this task's
+        handler unreachable, and let the tick run on into the 60s hard
+        limit and a SIGKILLed pool child. That is why #3063's soft limit
+        never actually closed ANTHIAS-A / 9 / B / 1Q."""
+        fake_redis = mock.MagicMock()
+        with (
+            mock.patch.object(celery_tasks_module, 'r', fake_redis),
+            # Raised from the real GET inside cec_client.available(), so
+            # the blanket handler that used to eat it is on the path.
+            mock.patch(
+                'anthias_server.lib.cec_client.connect_to_redis',
+                side_effect=SoftTimeLimitExceeded,
+            ),
+        ):
+            result = get_display_power.apply()
+        assert result.successful()
+        # The tick is skipped whole: no second redis call is attempted
+        # on a connection that has already burned the budget.
+        fake_redis.set.assert_not_called()
+
     def test_telemetry_soft_limit_skips_tick(self) -> None:
         with mock.patch.object(
             celery_tasks_module,
@@ -2188,82 +2253,29 @@ class TestReconcileTimeLimits:
 
 
 class TestWaitForMigrations:
-    """Startup gate for Sentry ANTHIAS-1 — the worker must not consume
-    tasks while the server's migrate/dbrestore pass is still rewriting
-    the shared SQLite schema."""
+    """The worker must not consume tasks while the server's
+    migrate/dbrestore pass is still rewriting the shared SQLite schema
+    (Sentry ANTHIAS-1). The gate itself is tested in
+    ``tests/test_db_readiness.py``; what matters here is that the
+    worker still arms it, and arms it on ``worker_init`` — a gate that
+    runs after the first task is consumed is no gate at all.
+    """
 
-    def _patch_executor(self) -> tuple[mock.MagicMock, Any]:
-        fake_conn = mock.MagicMock()
-        connections_patch = mock.patch(
-            'django.db.connections', {'default': fake_conn}
-        )
-        executor_patch = mock.patch(
-            'django.db.migrations.executor.MigrationExecutor'
-        )
-        return fake_conn, (connections_patch, executor_patch)
-
-    def test_ready_when_plan_is_empty(self) -> None:
-        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
-        with connections_patch, executor_patch as executor_cls:
-            executor_cls.return_value.migration_plan.return_value = []
-            assert celery_tasks_module._migrations_ready() is True
-        # The probe connection must not leak into the prefork children.
-        fake_conn.close.assert_called_once()
-
-    def test_not_ready_with_unapplied_migrations(self) -> None:
-        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
-        with connections_patch, executor_patch as executor_cls:
-            executor_cls.return_value.migration_plan.return_value = [
-                (mock.sentinel.migration, False)
-            ]
-            assert celery_tasks_module._migrations_ready() is False
-        fake_conn.close.assert_called_once()
-
-    def test_not_ready_when_db_is_locked(self) -> None:
-        # The window that produced ANTHIAS-1: the server's
-        # dbbackup/dbrestore holds the SQLite file (or the
-        # django_migrations table is mid-recreate) and the probe
-        # raises instead of returning a plan.
-        from django.db.utils import OperationalError
-
-        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
-        with connections_patch, executor_patch as executor_cls:
-            executor_cls.side_effect = OperationalError('database is locked')
-            assert celery_tasks_module._migrations_ready() is False
-        fake_conn.close.assert_called_once()
-
-    def test_non_database_errors_fail_fast(self) -> None:
-        # A programming bug in the probe must not be mistaken for
-        # "database not ready" — that would park the worker in an
-        # infinite startup wait with no failing signal.
-        fake_conn, (connections_patch, executor_patch) = self._patch_executor()
-        with connections_patch, executor_patch as executor_cls:
-            executor_cls.side_effect = TypeError('probe bug')
-            with pytest.raises(TypeError, match='probe bug'):
-                celery_tasks_module._migrations_ready()
-        fake_conn.close.assert_called_once()
-
-    def test_worker_init_returns_immediately_when_ready(self) -> None:
-        with (
-            mock.patch.object(
-                celery_tasks_module, '_migrations_ready', return_value=True
-            ),
-            mock.patch('anthias_server.celery_tasks.time.sleep') as sleep,
-        ):
+    def test_worker_init_waits_on_the_shared_gate(self) -> None:
+        with mock.patch(
+            'anthias_server.lib.db_readiness.wait_for_migrations'
+        ) as gate:
             celery_tasks_module.wait_for_migrations()
-        sleep.assert_not_called()
+        gate.assert_called_once()
+        assert gate.call_args.kwargs['description'] == 'celery worker startup'
 
-    def test_worker_init_blocks_until_ready(self) -> None:
-        with (
-            mock.patch.object(
-                celery_tasks_module,
-                '_migrations_ready',
-                side_effect=[False, False, True],
-            ),
-            mock.patch('anthias_server.celery_tasks.time.sleep') as sleep,
-        ):
-            celery_tasks_module.wait_for_migrations()
-        assert sleep.call_count == 2
+    def test_the_gate_is_connected_to_worker_init(self) -> None:
+        receivers = [
+            receiver()
+            for _, receiver in worker_init.receivers
+            if receiver() is not None
+        ]
+        assert celery_tasks_module.wait_for_migrations in receivers
 
 
 # ---------------------------------------------------------------------------
@@ -2418,3 +2430,97 @@ def test_schedule_survives_a_soft_time_limit() -> None:
     ):
         apply_display_power_schedule.apply()
     fake_redis.set.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Time limits (Sentry ANTHIAS-A / 9 / B / 1Q)
+# ---------------------------------------------------------------------------
+
+
+class TestTaskTimeLimits:
+    """A hard limit without a soft one is a SIGKILL waiting to happen.
+
+    The soft limit arrives as an exception inside the task, so celery
+    runs ``on_failure`` — where every media task clears
+    ``is_processing`` and writes the row's error message. The hard
+    limit arrives as SIGKILL to the pool child: no handler runs, the
+    row is stranded at "Processing", and one overrun files three
+    reports (the hard-limit line, billiard's ``TimeLimitExceeded``,
+    and the ``signal 9 (SIGKILL)`` exit) plus a worker respawn.
+    """
+
+    def _anthias_tasks(self) -> dict[str, Any]:
+        return {
+            name: task
+            for name, task in celery_tasks_module.celery.tasks.items()
+            if name.startswith('anthias_server.')
+        }
+
+    def test_every_time_limited_task_has_a_soft_limit(self) -> None:
+        """Pinned over the whole registry, not task by task.
+
+        This has now been fixed four times for four different tasks,
+        each time by someone reading a Sentry report, because nothing
+        stopped the next task from being written the same way. A new
+        task with a bare ``time_limit`` fails here instead.
+        """
+        offenders = sorted(
+            name
+            for name, task in self._anthias_tasks().items()
+            if task.time_limit is not None and task.soft_time_limit is None
+        )
+        assert offenders == [], (
+            'these tasks will be SIGKILLed on overrun instead of raising '
+            f'inside the task: {offenders}'
+        )
+
+    def test_soft_limits_leave_room_for_the_failure_handler(self) -> None:
+        """A soft limit at or above the hard one never fires."""
+        for name, task in self._anthias_tasks().items():
+            if task.soft_time_limit is None or task.time_limit is None:
+                continue
+            assert task.soft_time_limit < task.time_limit, name
+
+    @pytest.mark.parametrize(
+        'name',
+        [
+            'probe_video_duration',
+            'normalize_image_asset',
+            'normalize_video_asset',
+            'download_youtube_asset',
+            'download_remote_video_asset',
+        ],
+    )
+    def test_media_tasks_use_the_shared_headroom(self, name: str) -> None:
+        task = celery_tasks_module.celery.tasks[
+            f'anthias_server.celery_tasks.{name}'
+        ]
+        hard, soft = task.time_limit, task.soft_time_limit
+        assert hard is not None and soft is not None, name
+        assert hard - soft == celery_tasks_module.MEDIA_TASK_TIMEOUT_HEADROOM_S
+
+    def test_a_soft_limit_lands_on_the_download_failure_handler(self) -> None:
+        """The point of the soft limit: ``on_failure`` actually runs.
+
+        Under the hard limit the child is killed outright, so none of
+        this happens and the row keeps its Processing pill forever.
+        """
+        with (
+            mock.patch(
+                'anthias_server.processing._set_processing_error'
+            ) as set_error,
+            mock.patch('anthias_server.processing._notify') as notify,
+        ):
+            celery_tasks_module._DownloadAssetTask().on_failure(
+                SoftTimeLimitExceeded(870),
+                'task-id',
+                ('asset-1',),
+                {},
+                None,
+            )
+        notify.assert_called_once_with('asset-1')
+        message = set_error.call_args.args[1]
+        assert 'Timed out' in message
+        assert '870' in message
+        # The raw celery repr must not reach the operator's tooltip.
+        assert 'SoftTimeLimitExceeded' not in message

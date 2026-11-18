@@ -38,6 +38,9 @@
 - name: Install and configure Docker
   ansible.builtin.include_tasks: docker.yml
 
+- name: Install cosign for image signature verification
+  ansible.builtin.include_tasks: cosign.yml
+
 - name: Configure /etc/timezone
   ansible.builtin.include_tasks: timezone.yml
 
@@ -48,3 +51,6 @@
 
 - name: Miscellaneous host-level config (rc.local, dpkg, swap)
   ansible.builtin.include_tasks: misc.yml
+
+- name: Configure memory-pressure recovery (watchdog, durable swapoff)
+  ansible.builtin.include_tasks: resilience.yml

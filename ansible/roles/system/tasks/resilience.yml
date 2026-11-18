@@ -1,0 +1,138 @@
+---
+# Arm the watchdog that is already in the system.
+#
+# systemd does the work: RuntimeWatchdogSec= makes PID 1 open the
+# device, program the timeout and ping at half of it, for a hardware
+# watchdog and for softdog alike. Raspberry Pi OS already ships this
+# on (RuntimeWatchdogSec=1m in
+# /usr/lib/systemd/system.conf.d/40-rpi-enable-watchdog.conf); Armbian
+# and Debian ship it off. So this is one drop-in template, plus the
+# one thing systemd cannot work out on its own: which device to open.
+#
+# The answer differs by platform, and deliberately so
+# (anthias-pick-watchdog holds the logic):
+#
+#   * On a PC, any hardware watchdog it exposes is used. iTCO,
+#     sp5100_tco, ACPI WDAT, hpwdt, an IPMI BMC — these are chipset or
+#     firmware devices whose specified behaviour is a full system
+#     reset, and preferring softdog over one of them would throw away
+#     the better recovery path (softdog cannot help if the kernel
+#     itself is wedged, a hardware watchdog can).
+#   * On an SoC, only a driver identity someone has watched reset a
+#     board is armed, because vendor IP does what the vendor felt
+#     like.
+#
+# That second rule is not academic. Measured on both Rockchip boards
+# in the rig — the Rock Pi 4 (RK3399) and the NanoPi R3S LTS (RK3566) —
+# whose DesignWare blocks both halt rather than reset. On the Rock Pi 4:
+#
+#   * Synopsys DesignWare (its only hardware watchdog) HALTS instead of
+#     resetting — petting stopped 10:41:31, unreachable 10:42:05, still
+#     dark. Arming it turns a wedge into a site visit.
+#   * softdog on the same board minutes later — unreachable 10:49:23,
+#     back 10:49:53 with uptime=20s, because it reboots through the
+#     kernel's ordinary restart path.
+#
+# The R3S behaves the same way: its DesignWare block was armed on its
+# own (44 s timeout) with systemd still petting softdog normally, so
+# nothing else could have been responsible, and the board was dead
+# 15 s after the timeout expired and stayed dark until it was power
+# cycled. softdog on that board resets it in ~30 s.
+#
+# The DesignWare driver is built into both kernels
+# (CONFIG_DW_WATCHDOG=y), so it cannot be blacklisted away: it will
+# always be watchdog0 there, and softdog — loaded from userspace —
+# will always be watchdog1. Hence one probe task that names the right
+# node, by driver identity rather than by number.
+#
+# This does not gate the petting on a health check. An earlier
+# revision installed the Debian watchdog daemon with a memory-pressure
+# test binary for the case of a board thrashing while PID 1 is still
+# scheduled; it cost ~870 lines, a device handover away from systemd
+# and a keepalive to keep masked, and no measurement ever showed it
+# firing. The wedges we reproduced were the viewer container being
+# unkillable, which bin/lib/viewer/common.sh fixes directly.
+
+- name: Pick a watchdog device that reboots rather than halts
+  # Two lines out: the device path, then 'hw' or 'soft'; nothing at all
+  # if this machine has neither. Lines rather than one delimited line
+  # on purpose — '\t' inside a YAML block scalar is a literal
+  # backslash-t, and an earlier revision silently resolved every board
+  # to "no watchdog" that way.
+  ansible.builtin.script: anthias-pick-watchdog
+  args:
+    executable: /bin/bash
+  environment:
+    WD_SOC_ALLOWLIST: "{{ system_watchdog_soc_allowlist_pattern }}"
+  register: system_watchdog_probe
+  changed_when: false
+
+- name: Note which device will be armed
+  ansible.builtin.set_fact:
+    system_watchdog_device: "{{ (system_watchdog_probe.stdout | default('')).splitlines() | first | default('') | trim }}"
+    system_watchdog_kind: "{{ (system_watchdog_probe.stdout | default('')).splitlines()[1:] | first | default('') | trim }}"
+
+- name: Report the decision
+  ansible.builtin.debug:
+    msg: >-
+      {{ ('Arming ' + system_watchdog_device + ' (' + system_watchdog_kind + ')')
+         if system_watchdog_device != ''
+         else 'No watchdog armed: no device on this board is known to reset it, and softdog could not be loaded.' }}
+
+- name: Keep softdog across reboots
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/anthias-softdog.conf
+    content: |
+      # Managed by Anthias: this board has no watchdog driver measured
+      # to reset it, so the kernel's software watchdog backs the reset
+      # instead. See ansible/roles/system/tasks/resilience.yml.
+      softdog
+    mode: "0644"  # NOSONAR - modules-load.d entries are world-readable
+    owner: root
+    group: root
+  when: system_watchdog_kind == 'soft'
+
+# Neither Raspberry Pi OS nor Armbian ships this directory, and
+# `template` does not create parents — measured: without this the run
+# fails on both, right at the point where it would have armed the
+# watchdog.
+- name: Ensure the systemd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    mode: "0755"  # NOSONAR - systemd requires this readable
+    owner: root
+    group: root
+
+# Written on every host, with no `when`: on a board whose only
+# watchdog halts, the file's job is to keep systemd from arming it —
+# including Raspberry Pi OS's stock RuntimeWatchdogSec=1m — which is
+# the opposite of the usual "only write it when we have something".
+- name: Configure systemd's watchdog
+  ansible.builtin.template:
+    src: anthias-watchdog.conf
+    dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
+    mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
+    owner: root
+    group: root
+  notify: Re-execute systemd to apply the watchdog settings
+
+# The handler would otherwise run at the end of the play, after the
+# check below has already looked.
+- name: Apply the watchdog settings before checking them
+  ansible.builtin.meta: flush_handlers
+
+# A typo'd device leaves systemd running with the watchdog silently
+# off, so ask the manager what it actually did rather than trusting
+# the file on disk.
+- name: Confirm systemd armed the device we picked
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    systemctl show --property=RuntimeWatchdogUSec --value | grep -qv '^0$'
+    && ls -l /proc/1/fd | grep -c -- '-> {{ system_watchdog_device }}$'
+  args:
+    executable: /bin/bash
+  register: system_watchdog_armed
+  changed_when: false
+  failed_when: system_watchdog_armed.stdout | trim | int < 1
+  when: system_watchdog_device != ''

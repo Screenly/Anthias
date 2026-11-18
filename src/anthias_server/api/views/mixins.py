@@ -4,18 +4,22 @@ import re
 import tarfile
 import uuid
 from base64 import b64encode
+from collections.abc import AsyncIterator, Iterator
 from contextlib import suppress
 from inspect import cleandoc
 from mimetypes import guess_extension, guess_type
 from os import path, remove, statvfs
-from typing import Any
+from typing import BinaryIO
 
+from asgiref.sync import sync_to_async
+from django.http import HttpResponseBase, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.defaultfilters import filesizeformat
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -52,6 +56,178 @@ r = connect_to_redis()
 # guard, not a UUID-version check: 32 hex chars simply can't contain a
 # ``/`` or ``..`` to escape the asset dir.
 UPLOAD_ID_RE = re.compile(r'[0-9a-f]{32}')
+
+# How much of an asset ``AssetContentViewMixin`` base64-encodes per
+# step. Must stay a multiple of 3: base64 maps 3 input bytes to 4
+# output characters, so only on 3-byte boundaries does encoding the
+# pieces and concatenating give the same string as encoding the whole
+# file — anywhere else each piece picks up its own ``=`` padding and
+# the parts no longer splice into valid base64.
+B64_STREAM_CHUNK_SIZE = 3 * 1024 * 1024
+
+
+def build_file_content_response(
+    handle: BinaryIO,
+    size: int,
+    filename: str,
+    mimetype: str,
+    accepted_media_type: str | None = None,
+) -> StreamingHttpResponse:
+    """Stream ``{"type": "file", ..., "content": "<base64>"}``.
+
+    Byte-for-byte the same JSON the view used to hand DRF as a dict,
+    but produced in ``B64_STREAM_CHUNK_SIZE`` steps so the server's
+    memory stays flat instead of scaling with the asset. The old path
+    held the file, its base64 copy and the rendered response at once —
+    measured ~4x the file size as RSS on anthias-server for JSON, and
+    ~14x when a browser's ``Accept: text/html`` selected the browsable
+    renderer, which is more than enough to OOM a board under
+    ``LOW_RAM_THRESHOLD_KB`` (issue #3345).
+
+    The envelope is assembled by rendering the real payload through
+    DRF's own ``JSONRenderer`` with a one-shot random sentinel standing
+    in for ``content``, then splitting on it. Hand-writing the JSON
+    would fork the escaping rules for ``filename`` (non-ASCII asset
+    names, quotes) away from whatever the renderer is configured to do;
+    this way only the base64 — which is ASCII and needs no escaping —
+    bypasses it. The sentinel is a fresh uuid4 hex rather than a fixed
+    marker so no asset name can collide with it, and being plain
+    alphanumerics it survives rendering unescaped.
+
+    Streaming means DRF content negotiation no longer applies to file
+    assets: the browsable API cannot render a multi-gigabyte base64
+    blob into an HTML page without reintroducing the bug it exists to
+    fix, so this always responds ``application/json``. URL assets keep
+    the negotiated ``Response``.
+    """
+    sentinel = uuid.uuid4().hex.encode()
+    # ``accepted_media_type`` is forwarded so an ``application/json;
+    # indent=4`` request still pretty-prints. Without it this branch
+    # would quietly ignore the parameter that the URL branch — still a
+    # DRF ``Response`` — keeps honouring, and one endpoint would format
+    # its two shapes differently.
+    envelope = JSONRenderer().render(
+        {
+            'type': 'file',
+            'filename': filename,
+            'content': sentinel.decode(),
+            'mimetype': mimetype,
+        },
+        accepted_media_type=accepted_media_type,
+    )
+    head, found, tail = envelope.partition(b'"' + sentinel + b'"')
+    if not found:
+        raise RuntimeError('Unexpected JSON envelope for asset content.')
+
+    def pieces() -> Iterator[bytes]:
+        with handle:
+            yield head + b'"'
+            remaining = size
+            # 0-2 bytes left over when a read doesn't land on a 3-byte
+            # boundary, carried into the next encode so the pieces
+            # still splice. Reads off a regular file are exact, so this
+            # only ever fills on the truncation path below.
+            pending = b''
+            while remaining > 0:
+                chunk = handle.read(min(B64_STREAM_CHUNK_SIZE, remaining))
+                if not chunk:
+                    # Truncated under us. Make the shortfall up with
+                    # NULs rather than stopping short: we have already
+                    # promised a Content-Length, and a body that never
+                    # reaches it leaves the client waiting on bytes
+                    # that will not come.
+                    chunk = b'\x00' * min(B64_STREAM_CHUNK_SIZE, remaining)
+                remaining -= len(chunk)
+                chunk = pending + chunk
+                # Hold back a partial group unless this is the last
+                # chunk, which takes the trailing ``=`` padding.
+                cut = (
+                    len(chunk)
+                    if remaining == 0
+                    else len(chunk) - len(chunk) % 3
+                )
+                pending = chunk[cut:]
+                yield b64encode(chunk[:cut])
+            yield b'"' + tail
+
+    async def apieces() -> AsyncIterator[bytes]:
+        """``pieces()`` as an async iterator, reads off the event loop.
+
+        Handing ``StreamingHttpResponse`` the synchronous generator
+        directly looks like it works and silently undoes the whole
+        fix: under ASGI — which is how anthias-server runs — Django's
+        ``StreamingHttpResponse.__aiter__`` funnels a sync iterator
+        through ``await sync_to_async(list)(...)``, draining it into a
+        list in full before the first byte reaches the client. Memory
+        then tracks the response again, just one layer further out
+        (measured +405 MB RSS for a 300 MB asset, versus +15 MB here).
+
+        Each ``next()`` runs in a worker thread rather than inline:
+        one step reads ``B64_STREAM_CHUNK_SIZE`` off what may be an SD
+        card, and blocking the event loop for that long stalls every
+        other request the device is serving.
+        """
+        iterator = pieces()
+        step = sync_to_async(_next_piece, thread_sensitive=False)
+        while True:
+            piece = await step(iterator)
+            if piece is None:
+                return
+            yield piece
+
+    # Wrapped rather than passed bare so Django registers a teardown
+    # closer for the handle — see ``_ClosingAsyncBody``.
+    response = StreamingHttpResponse(
+        _ClosingAsyncBody(apieces(), handle),
+        content_type='application/json',
+    )
+    # Known up front, so clients keep the progress bar the buffered
+    # response gave them.
+    response.headers['Content-Length'] = str(
+        len(head) + 1 + _b64_len(size) + 1 + len(tail)
+    )
+    return response
+
+
+class _ClosingAsyncBody:
+    """An async response body that owns — and can close — its file.
+
+    ``StreamingHttpResponse`` registers a teardown closer only when the
+    object it is handed exposes ``close``. A bare async generator
+    exposes ``aclose`` instead, so nothing is registered and the asset's
+    fd survives ``response.close()`` — which, on a download the client
+    aborts, is the only cleanup Django runs. The fd and its inode would
+    then stay pinned until GC finalised the abandoned generator, so a
+    deleted asset would not even give its disk space back.
+
+    Wrapping the generator in an object with a real ``close`` hands the
+    handle to Django's own resource management, rather than reaching
+    into ``response._resource_closers`` behind its back.
+    """
+
+    def __init__(self, body: AsyncIterator[bytes], handle: BinaryIO) -> None:
+        self._body = body
+        self._handle = handle
+
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self._body
+
+    def close(self) -> None:
+        self._handle.close()
+
+
+def _b64_len(size: int) -> int:
+    """Length of ``b64encode`` output for ``size`` input bytes."""
+    return 4 * ((size + 2) // 3)
+
+
+def _next_piece(iterator: Iterator[bytes]) -> bytes | None:
+    """One step of a body generator, or ``None`` when it is spent.
+
+    A named function rather than ``next`` itself so the value handed
+    to ``sync_to_async`` has a single, checkable signature.
+    """
+    return next(iterator, None)
 
 
 class DeleteAssetViewMixin:
@@ -149,6 +325,11 @@ class RecoverViewMixin(APIView):
 
             try:
                 backup_helper.recover(location)
+            except backup_helper.IncompatibleBackupError as exc:
+                # Version mismatch is operator-actionable ("upgrade
+                # first"); surface its specific message.
+                logger.warning('Backup restore rejected: %s', exc)
+                raise ValidationError({'backup_upload': str(exc)})
             except (
                 backup_helper.BackupRecoverError,
                 tarfile.TarError,
@@ -344,7 +525,13 @@ class FileAssetViewMixin(APIView):
         start_bytes = 0
         end_bytes = 0
         total_bytes = 0
-        data = file_upload.read()
+        # Never materialise the body: the upload is copied to disk with
+        # ``chunks()`` below, and the length checks read the size the
+        # multipart parser already recorded. A single-shot ``.read()``
+        # here cost one full copy of the file in RAM (a 300 MB upload
+        # measured +302 MB RSS on anthias-server), which is enough to
+        # OOM every board under ``LOW_RAM_THRESHOLD_KB`` (issue #3345).
+        upload_size = file_upload.size
         if has_range:
             # ``Content-Range`` is client-controlled; parse it strictly
             # and 400 on anything malformed rather than letting a bad
@@ -374,7 +561,7 @@ class FileAssetViewMixin(APIView):
                 raise ValidationError(
                     {'Content-Range': 'Invalid Content-Range bounds.'}
                 )
-            if len(data) != end_bytes - start_bytes + 1:
+            if upload_size != end_bytes - start_bytes + 1:
                 raise ValidationError(
                     {
                         'Content-Range': (
@@ -405,7 +592,8 @@ class FileAssetViewMixin(APIView):
                 )
                 with os.fdopen(fd, 'r+b') as f:
                     f.seek(start_bytes)
-                    f.write(data)
+                    for chunk in file_upload.chunks():
+                        f.write(chunk)
                     # On the final chunk, truncate to the declared total
                     # so a resumed session that shrank can't keep trailing
                     # bytes from a longer earlier attempt. Order-
@@ -416,7 +604,8 @@ class FileAssetViewMixin(APIView):
                         f.truncate(total_bytes)
             else:
                 with open(file_path, 'wb') as f:
-                    f.write(data)
+                    for chunk in file_upload.chunks():
+                        f.write(chunk)
         except OSError as exc:
             if not is_disk_full(exc):
                 raise
@@ -467,32 +656,47 @@ class AssetContentViewMixin(APIView):
         request: Request,
         asset_id: str,
         format: str | None = None,
-    ) -> Response:
+    ) -> HttpResponseBase:
         asset = get_object_or_404(Asset, asset_id=asset_id)
         if asset.uri is None:
             raise NotFound('Asset has no content URI.')
 
-        result: dict[str, Any]
-        if path.isfile(asset.uri):
-            filename = asset.name or ''
+        if not path.isfile(asset.uri):
+            return Response({'type': 'url', 'url': asset.uri})
 
-            with open(asset.uri, 'rb') as f:
-                content = f.read()
+        filename = asset.name or ''
+        mimetype = guess_type(filename)[0] or 'application/octet-stream'
 
-            mimetype = guess_type(filename)[0]
-            if not mimetype:
-                mimetype = 'application/octet-stream'
+        # Open before building the response, not inside the generator:
+        # an asset deleted between the ``isfile`` above and the first
+        # read then still surfaces as a clean 404 instead of a 200 whose
+        # body dies halfway through, after the status line has shipped.
+        #
+        # Only ``FileNotFoundError``, deliberately. A broader ``OSError``
+        # would dress a failing SD card (EIO/EUCLEAN), a permissions
+        # mistake (EACCES) or fd exhaustion (EMFILE) up as "no such
+        # asset" — a clean 404 that tells Sentry nothing and that a
+        # backup client silently skips over. Those belong in a 500.
+        try:
+            # SIM115 false positive: the handle *is* managed, by the
+            # generator in build_file_content_response, which owns it
+            # for the life of the response. A ``with`` here would
+            # close it before the first byte is streamed.
+            handle = open(asset.uri, 'rb')  # noqa: SIM115
+        except FileNotFoundError as exc:
+            raise NotFound('Asset content is no longer available.') from exc
 
-            result = {
-                'type': 'file',
-                'filename': filename,
-                'content': b64encode(content).decode(),
-                'mimetype': mimetype,
-            }
-        else:
-            result = {'type': 'url', 'url': asset.uri}
-
-        return Response(result)
+        # Size the body from the open handle rather than the path, so
+        # the Content-Length we advertise describes exactly the bytes
+        # the generator below reads from *this* handle.
+        size = os.fstat(handle.fileno()).st_size
+        return build_file_content_response(
+            handle,
+            size,
+            filename,
+            mimetype,
+            accepted_media_type=request.accepted_media_type,
+        )
 
 
 class PlaylistOrderViewMixin(APIView):
