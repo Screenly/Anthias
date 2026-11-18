@@ -1,9 +1,10 @@
 {{ define "main" }}
 <header class="bg-brand-dark py-12 md:py-16 px-6 md:px-12 lg:px-20">
     <div class="max-w-4xl mx-auto">
-        <a href="/docs/" class="text-white/60 text-sm hover:text-white transition">← Documentation</a>
+        <a href="/docs/" data-md-skip class="text-white/60 text-sm hover:text-white transition">← Documentation</a>
         <h1 class="text-white text-3xl md:text-4xl font-extrabold tracking-tight mt-3">{{ .Title }}</h1>
         {{ with .Description }}<p class="text-white/60 text-base mt-3 max-w-2xl">{{ . }}</p>{{ end }}
+        {{ partial "page-tools.html" . }}
     </div>
 </header>
 
@@ -12,6 +13,20 @@
         <article class="docs-prose">
             {{ .Content }}
         </article>
+
+        {{- /* Cross-links to the rest of the docs, so every docs page is
+               reachable from every other one rather than only from the
+               /docs/ index. */ -}}
+        {{- with where .CurrentSection.Pages "Permalink" "ne" .Permalink }}
+        <nav aria-labelledby="more-docs" class="mt-16 pt-8 border-t border-zinc-200">
+            <h2 id="more-docs" class="text-base font-bold text-brand-near-black">More documentation</h2>
+            <ul class="list-none m-0 p-0 mt-4 grid sm:grid-cols-2 gap-2">
+                {{- range . }}
+                <li><a class="text-brand-purple text-sm no-underline hover:underline" href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+                {{- end }}
+            </ul>
+        </nav>
+        {{- end }}
     </div>
 </section>
 {{ end }}

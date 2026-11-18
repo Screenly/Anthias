@@ -59,13 +59,16 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import struct
+from collections.abc import Callable
 from os import path
 from typing import Any
 
 import sh
 from celery import Task
+from celery.exceptions import SoftTimeLimitExceeded
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import (
@@ -376,6 +379,37 @@ def _row_or_none(asset_id: str) -> Asset | None:
     return asset
 
 
+def _run_unless_deleted(run: Callable[[Asset], None], asset: Asset) -> None:
+    """Run a normalisation body, treating a mid-flight delete as a no-op.
+
+    ``_row_or_none`` rejects a deleted row at task entry, but the
+    operator can delete the asset at any point after that, and
+    ``helpers.delete_asset_with_file`` takes the file with it. The body
+    then fails wherever it next touches the source: the ``isfile``
+    check, Pillow's ``open``, ffprobe, the final ``replace``. Asking at
+    each of those would still leave gaps between them, so the question
+    is asked once, here, after whatever the body raised:
+
+    * **No row** — the operator deleted the asset mid-flight. There is
+      nothing to normalise and no row to carry ``metadata.error_message``,
+      so log and return rather than raise a failure that reaches Sentry
+      as a fault (ANTHIAS-1G). Any output the body already wrote is an
+      orphan that the periodic ``cleanup()`` sweep removes.
+    * **Live row** — a genuine failure (corrupt upload, disk pressure,
+      a file that vanished under a row nobody deleted). Re-raise so
+      ``on_failure`` writes the Failed pill and the fault is reported.
+    """
+    try:
+        run(asset)
+    except Exception:
+        if Asset.objects.filter(asset_id=asset.asset_id).exists():
+            raise
+        logger.info(
+            'normalisation: asset %s was deleted mid-flight; skipping',
+            asset.asset_id,
+        )
+
+
 def _ext(filename: str) -> str:
     """Lowercase trailing extension *with* the dot, or ``''``.
 
@@ -582,13 +616,96 @@ _MAX_IMAGE_PIXELS = 50_000_000
 Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
 
 
+def describe_task_failure(exc: BaseException) -> str:
+    """Render a failed media task's cause for the asset table.
+
+    The message lands in ``metadata.error_message``, which the table
+    shows on the Failed pill's tooltip, so it is read by an operator
+    rather than by a developer. The default rendering is good enough
+    for the library errors the pipeline raises ("DownloadError: HTTP
+    Error 404", "UnidentifiedImageError: cannot identify image file")
+    but not for a time limit: celery's ``SoftTimeLimitExceeded``
+    stringifies as its own budget tuple, so it would reach the
+    operator as "SoftTimeLimitExceeded: SoftTimeLimitExceeded(870,)".
+    """
+    if isinstance(exc, SoftTimeLimitExceeded):
+        seconds = exc.args[0] if exc.args else None
+        if isinstance(seconds, int | float):
+            return (
+                f'Timed out: processing did not finish within {int(seconds)}s.'
+            )
+        return 'Timed out: processing did not finish in time.'
+    return f'{type(exc).__name__}: {exc}'
+
+
+class ImageTooLargeError(ValueError):
+    """An image declares more pixels than the board will decode.
+
+    The operator-facing counterpart of ``UnsupportedVideoCodecError``
+    for the image path: an expected rejection of an input, not a
+    fault in Anthias. Subclasses ``ValueError`` so the existing
+    ``except ... ValueError`` probes and the callers that already
+    treat an over-cap image as a plain value error keep working.
+    """
+
+
+# Pillow's bomb guard words both its error and its warning as
+# "Image size (N pixels) exceeds limit of M pixels, ...".
+_PILLOW_BOMB_PIXELS_RE = re.compile(r'Image size \((\d+) pixels\)')
+
+
+def _open_image(input_path: str) -> Image.Image:
+    """``Image.open`` with the bomb cap reported in our own words.
+
+    Every pixel cap in this module is meant to be enforced by
+    ``_guard_and_fit_for_board``, which reads ``image.size`` from the
+    format header and raises a message naming the dimensions and the
+    cap. Pillow's own guard fires *first* and only above twice
+    ``Image.MAX_IMAGE_PIXELS``, so inputs over 2× the cap never
+    reached ours: Pillow raised ``DecompressionBombError`` straight
+    out of ``Image.open``, which derives from ``Exception`` rather
+    than ``OSError``/``ValueError`` and so slipped past the callers'
+    ``except`` clauses entirely. A 144 MP upload therefore failed with
+    Pillow's "could be decompression bomb DOS attack" wording — alarming
+    for what is usually a scanner or a poster export — and was reported
+    as a crash instead of a handled rejection.
+
+    Translating here puts both bands (cap..2×cap caught by our size
+    check, above 2×cap caught by Pillow) on the same exception type and
+    the same operator-facing wording, and keeps the global
+    ``Image.MAX_IMAGE_PIXELS`` tightening in place for code outside
+    this pipeline.
+    """
+    try:
+        return Image.open(input_path)
+    except (
+        Image.DecompressionBombError,
+        # Promoted to an exception by a ``warnings`` filter of
+        # ``error``; a ``RuntimeWarning`` subclass, so it would miss
+        # the line above. Same reasoning as the pair caught in
+        # ``needs_low_ram_image_downscale``.
+        Image.DecompressionBombWarning,
+    ) as exc:
+        # Pillow discards the image object before raising, so the
+        # width and height are gone; its message does carry the
+        # declared pixel count, which is the number the operator needs
+        # to judge how far to resize. Fall back to the bare cap if a
+        # future Pillow rewords it.
+        match = _PILLOW_BOMB_PIXELS_RE.search(str(exc))
+        size = f' is {int(match.group(1))} pixels, which' if match else ''
+        raise ImageTooLargeError(
+            f'image{size} exceeds the {_MAX_IMAGE_PIXELS} pixel decode '
+            'cap — resize it and upload again'
+        ) from exc
+
+
 class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
     """Common ``on_failure`` for both normalisation tasks.
 
     Mirrors the YouTube task's failure handling: clears
     ``is_processing`` and writes ``metadata.error_message`` so the
     operator's table row never stays stuck on "Processing" after a
-    crash. Two message shapes:
+    crash. Three message shapes:
 
     * ``UnsupportedVideoCodecError`` — the gate's user-facing
       exception. The message body is already operator-readable
@@ -596,11 +713,16 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
       ``metadata.error_recipe`` so the modal can render it in a
       copyable ``<code>`` block, and the equivalent HandBrake steps
       land in ``metadata.error_handbrake``.
+    * ``ImageTooLargeError`` — the pixel cap's rejection, likewise
+      already phrased for the operator and likewise written without
+      a class-name prefix.
     * Anything else (corrupt HEIC, ffmpeg subprocess error, ...) —
-      prefix with the exception class so the operator sees a
-      concrete signal (``UnidentifiedImageError: cannot identify
-      image file '/data/.../abc.heic'``) without leaking the full
-      traceback.
+      rendered by ``describe_task_failure``, which prefixes the
+      exception class so the operator sees a concrete signal
+      (``UnidentifiedImageError: cannot identify image file
+      '/data/.../abc.heic'``) without leaking the full traceback,
+      and special-cases a soft time limit, whose own ``str()`` is an
+      unreadable budget tuple.
     """
 
     def on_failure(
@@ -622,8 +744,14 @@ class _NormalizeAssetTask(Task):  # type: ignore[type-arg]
                     recipe=exc.recipe,
                     handbrake=exc.handbrake,
                 )
+            elif isinstance(exc, ImageTooLargeError):
+                # Already phrased for the operator ("image dimensions
+                # 12000x12000 exceed the 50000000 pixel cap — resize it
+                # and upload again"); prefixing ``ImageTooLargeError:``
+                # would only add noise to the pill.
+                _set_processing_error(asset_id, str(exc))
             else:
-                _set_processing_error(asset_id, f'{type(exc).__name__}: {exc}')
+                _set_processing_error(asset_id, describe_task_failure(exc))
             _notify(asset_id)
         except Exception:
             logger.exception(
@@ -655,7 +783,7 @@ def _convert_image_to_webp(input_path: str, output_path: str) -> None:
     ``_guard_and_fit_for_board``, shared with the in-place JPEG/PNG
     downscale path.
     """
-    with Image.open(input_path) as image:
+    with _open_image(input_path) as image:
         _guard_and_fit_for_board(image)
         # Bake the EXIF Orientation into the pixels before we drop the
         # metadata. WebP output carries no Orientation tag, so a
@@ -695,6 +823,11 @@ def _guard_and_fit_for_board(image: Image.Image) -> None:
     phone camera output but tiny compared to the ~10 GP payloads
     typical bomb fixtures advertise.
 
+    Above 2× the cap this function is never reached — Pillow raises
+    inside ``Image.open``. ``_open_image`` translates that into the
+    same ``ImageTooLargeError`` raised here so both bands fail
+    identically from the caller's point of view.
+
     Low-RAM fit: at full resolution a ~24 MP image drives peak RSS to
     ~770 MB (measured); a Pi 2/3 normalisation container is capped
     around 540 MiB, so an encode OOM-kills and can reboot the board.
@@ -707,9 +840,10 @@ def _guard_and_fit_for_board(image: Image.Image) -> None:
     """
     width, height = image.size
     if width * height > _MAX_IMAGE_PIXELS:
-        raise ValueError(
-            f'image dimensions {width}x{height} exceed cap '
-            f'{_MAX_IMAGE_PIXELS} pixels — refusing to decode'
+        raise ImageTooLargeError(
+            f'image dimensions {width}x{height} exceed the '
+            f'{_MAX_IMAGE_PIXELS} pixel decode cap — resize it and '
+            'upload again'
         )
     if not _exceeds_low_ram_pixel_cap(width, height):
         return
@@ -851,7 +985,7 @@ def _downscale_image_in_place(input_path: str, output_path: str) -> None:
         source_bytes = os.path.getsize(input_path)
     except OSError:
         pass
-    with Image.open(input_path) as image:
+    with _open_image(input_path) as image:
         source_format = (image.format or '').upper()
         _guard_and_fit_for_board(image)
         _bake_exif_orientation(image)
@@ -946,7 +1080,7 @@ def _run_image_normalisation(asset: Asset) -> None:
         # will raise a real decode error a moment later if the file is
         # genuinely broken.
         try:
-            with Image.open(src_uri) as probe:
+            with _open_image(src_uri) as probe:
                 src_width, src_height = _display_size(probe)
         except (OSError, UnidentifiedImageError, ValueError):
             logger.warning(

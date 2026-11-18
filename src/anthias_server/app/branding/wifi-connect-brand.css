@@ -1,0 +1,81 @@
+/* Anthias branding for the wifi-connect captive portal.
+ *
+ * Served at /brand.css by wifi-connect (--brand-css) and loaded after its
+ * own stylesheet, so this is the last word on the role tokens.
+ *
+ * The values come from the Anthias design system —
+ * src/anthias_server/app/static/src/css/palette.css and tailwind.css — so
+ * the page a user opens on their phone and the setup screen on the
+ * display in front of them are the same product. Copied rather than
+ * imported because the portal is a separate container with no access to
+ * Anthias's static files, and because it is served to a phone over an
+ * access point with no internet behind it.
+ *
+ * ROLES ONLY, with one deliberate exception noted at the bottom. Upstream
+ * is explicit that the --c-* primitives and the markup are not a public
+ * surface: a rebrand that reaches into them comes adrift the next time
+ * the portal's layout changes, whereas one that renames roles keeps
+ * working. A test enforces that every custom property here is a role.
+ *
+ * One :root block covers light and dark both — the portal's dark arms are
+ * specificity-neutral as of 2026.10.2, so a stylesheet loaded after them
+ * wins in either scheme. We pin the theme to dark anyway
+ * (WIFI_CONNECT_DEFAULT_THEME), because the plum canvas IS the brand and
+ * a light arrangement of it would be a different design, not a variant.
+ */
+:root {
+  /* Canvas and card, as the splash screen has them: plum-800 behind a
+     4%-white card. Not a white card on plum — that reads as a web form
+     dropped on a brand background, which is what the first attempt at
+     this looked like. */
+  --color-canvas: #270035; /* plum-800 */
+  --color-surface: rgb(255 255 255 / 0.04);
+  --color-surface-soft: rgb(255 255 255 / 0.07);
+  --color-border: rgb(255 255 255 / 0.08); /* paper-8 */
+  --color-divider: rgb(255 255 255 / 0.08);
+
+  /* Type. paper-65 over plum-800 measures about 7:1, comfortably past AA
+     for the hint and footer text that use it. */
+  --color-fg: #ffffff;
+  --color-fg-muted: rgb(255 255 255 / 0.65); /* paper-65 */
+  --color-fg-faint: rgb(255 255 255 / 0.55); /* paper-55 */
+
+  /* Fields. Dark enough to read as inputs against the card, with a border
+     that survives a phone at an angle in daylight. */
+  --color-field: rgb(255 255 255 / 0.06);
+  --color-field-border: rgb(255 255 255 / 0.18); /* paper-18 */
+
+  /* Accent: sun-400 on the aubergine the admin UI uses for text on
+     yellow. The Connect button is the one control that matters here. */
+  --color-accent: #ffe11a; /* sun-400 */
+  --color-accent-hover: #ffd800; /* sun-500 */
+  --color-on-accent: #1f002a;
+  --color-focus-ring: rgb(255 225 26 / 0.45);
+
+  /* Red reads as mud on plum at the admin UI's weight; lift it for a dark
+     surface so a wrong-password banner is legible. */
+  --color-danger: #f87171;
+  --color-danger-wash: rgb(248 113 113 / 0.12);
+
+  /* Named, not loaded: there is no internet behind the setup hotspot and
+     no Plus Jakarta Sans in the image, so a phone falls back to Helvetica
+     or Arial. Naming it costs nothing and is right on a device that
+     happens to have it. */
+  --font-sans: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+}
+
+/* The one rule here that is not a role token.
+ *
+ * The splash gradient is an Anthias signature and there is no role for a
+ * background image. `body` is deliberate: it and `html` are the two
+ * selectors a portal layout change cannot rename, unlike any component
+ * class. min-height keeps the gradient spanning the document rather than
+ * banding at the fold on a long network list. */
+body {
+  min-height: 100vh;
+  background-color: #0f0019; /* canvas-deep */
+  background-image:
+    radial-gradient(at 20% 10%, rgb(124 48 205 / 0.45), transparent 55%),
+    radial-gradient(at 85% 90%, rgb(91 32 144 / 0.4), transparent 55%),
+    linear-gradient(160deg, #270035 0%, #0f0019 100%);
+}

@@ -63,7 +63,7 @@
       answer: |
         Anthias uses [NetworkManager](https://wiki.debian.org/NetworkManager) for networking when the installer's "manage the network" prompt is enabled. SSH into the device and run `sudo nmtui` for an interactive UI, or use `nmcli device wifi connect <SSID> password <pwd>` from the command line.
 
-        The legacy WiFi-Connect captive portal has been removed; `nmtui` / `nmcli` are the supported path going forward.
+        If the screen can't reach a network at all, it sets one up for you: it creates a temporary WiFi network called **Anthias Setup** and shows the password and a QR code on the display. Join it, open http://192.168.42.1:8000, and pick the network the screen should use. See [WiFi Setup](/docs/wifi-setup/).
 
     - question: Can I assign a static IP address?
       answer: |
@@ -91,7 +91,7 @@
         # exit
         ```
 
-        Log out and back in so your shell picks up the new group, then continue with the [x86 install steps](/docs/x86-installation/).
+        Log out and back in so your shell picks up the new group, then continue with the [x86 install steps](/docs/pc/).
 
         If you instead reinstall Debian and leave the root password blank, the Debian installer wires your regular user up as a `sudo` user automatically and you can skip this step.
 

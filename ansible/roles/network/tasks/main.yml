@@ -119,3 +119,75 @@
   when:
     - ansible_facts['distribution_major_version']|int >= 9
     - manage_network|bool
+
+# --- wifi-connect ---------------------------------------------------
+#
+# Captive-portal provisioning for a device that has no network yet.
+# The tool itself (Screenly-Labs/wifi-connect) runs as the
+# anthias-wifi-connect container defined in the compose templates;
+# the units here are what decide when to start it. See
+# docs/wifi-setup.md.
+#
+# Gated on manage_network because that is the operator's explicit
+# answer to "should Anthias touch this device's networking". A device
+# installed with MANAGE_NETWORK=No has no NetworkManager at all (see
+# install.sh), and raising an access point on it would be exactly the
+# thing they declined.
+- name: Install Anthias WiFi Connect systemd units
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"  # NOSONAR - systemd units are world-readable
+    owner: root
+    group: root
+  with_items:
+    - anthias-wifi-connect.service
+    - anthias-wifi-connect.timer
+  when: manage_network|bool
+  notify: Reload systemd daemon
+
+# The TIMER is what gets enabled; the service has no [Install]
+# section and is started only by it. That is what restores the
+# periodic re-check the pre-2026.04 implementation had from its own
+# `while true; ... sleep $CHECK_CONN_FREQ` loop — a screen whose
+# router is replaced gets the portal back without a reboot.
+#
+# Enabled, not started: install.sh runs this playbook before
+# `docker compose up`, so on a fresh install the container the service
+# attaches to does not exist yet. The timer's OnBootSec picks it up
+# from the next boot onwards.
+- name: Enable Anthias WiFi Connect timer
+  ansible.builtin.systemd:
+    name: anthias-wifi-connect.timer
+    enabled: true
+    daemon_reload: true
+  when: manage_network|bool
+
+# The inverse path: a device re-installed with MANAGE_NETWORK=No must
+# stop raising access points. Idempotent where the unit was never
+# installed.
+- name: Check for Anthias WiFi Connect timer when network is unmanaged
+  ansible.builtin.stat:
+    path: /etc/systemd/system/anthias-wifi-connect.timer
+  register: network_wifi_connect_unit
+  when: not manage_network|bool
+
+- name: Disable Anthias WiFi Connect timer
+  ansible.builtin.systemd:
+    name: anthias-wifi-connect.timer
+    state: stopped
+    enabled: false
+  when:
+    - not manage_network|bool
+    - network_wifi_connect_unit.stat.exists | default(false)
+  failed_when: false
+
+- name: Remove Anthias WiFi Connect systemd units
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}"
+    state: absent
+  with_items:
+    - anthias-wifi-connect.service
+    - anthias-wifi-connect.timer
+  when: not manage_network|bool
+  notify: Reload systemd daemon

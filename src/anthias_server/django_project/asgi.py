@@ -14,6 +14,7 @@ from channels.security.websocket import (
     AllowedHostsOriginValidator,
 )
 
+from anthias_server.app.consumers import stamp_auth_generation
 from anthias_server.django_project.routing import (
     websocket_urlpatterns,
 )
@@ -34,11 +35,18 @@ from anthias_server.django_project.routing import (
 #    the operator has auth switched on. Mirroring @authorized's
 #    feature flag there rather than here keeps the "auth_backend == ''
 #    means the device is fully open" contract in one place.
+#
+#    stamp_auth_generation sits *outside* it so the revocation
+#    generation is recorded before the session lookup: a rotation
+#    committing while that lookup is in flight must refuse the
+#    handshake, not be missed by it.
 application = ProtocolTypeRouter(
     {
         'http': django_asgi_app,
         'websocket': AllowedHostsOriginValidator(
-            AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+            stamp_auth_generation(
+                AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+            )
         ),
     }
 )

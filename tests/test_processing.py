@@ -46,6 +46,7 @@ from unittest import mock
 
 import pytest
 import sh
+from celery.exceptions import SoftTimeLimitExceeded
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from anthias_common.board import resolve_device_key
@@ -527,7 +528,7 @@ def test_image_decompression_bomb_is_rejected(asset_dir: str) -> None:
             'anthias_server.processing.Image.open',
             return_value=_FakeImage(),
         ),
-        pytest.raises(ValueError, match='exceed cap'),
+        pytest.raises(processing.ImageTooLargeError, match='decode cap'),
     ):
         processing._run_image_normalisation(asset)
 
@@ -2097,6 +2098,92 @@ def test_normalize_image_asset_celery_no_op_when_row_missing() -> None:
     run.assert_not_called()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize('kind', ['image', 'video'])
+def test_normalize_task_no_op_when_row_deleted_mid_flight(
+    asset_dir: str, kind: str
+) -> None:
+    """The operator deleted the asset after the entry guard passed.
+
+    ``delete_asset_with_file`` drops the row and then unlinks the file,
+    so the body fails wherever it next touches the source. With the row
+    gone that is the delete winning the race, not a fault: the task
+    returns instead of raising into Sentry (ANTHIAS-1G).
+    """
+    from anthias_server import celery_tasks
+
+    asset_id = f'{kind}-deleted'
+    _make_processing_asset(
+        asset_id, path.join(asset_dir, f'gone.{kind}'), mimetype=kind
+    )
+
+    def _deleted_then_fail(_asset: Asset) -> None:
+        Asset.objects.filter(asset_id=asset_id).delete()
+        raise FileNotFoundError('source vanished')
+
+    with mock.patch.object(
+        processing,
+        f'_run_{kind}_normalisation',
+        side_effect=_deleted_then_fail,
+    ):
+        getattr(celery_tasks, f'normalize_{kind}_asset')(asset_id)
+
+
+@pytest.mark.django_db
+def test_image_task_no_op_when_source_deleted_after_isfile(
+    asset_dir: str,
+) -> None:
+    """The window ``isfile`` cannot close: the delete lands after the
+    check passes and before Pillow opens the source."""
+    from anthias_server.celery_tasks import normalize_image_asset
+
+    src = path.join(asset_dir, 'racing.tiff')
+    Image.new('RGB', (4, 4)).save(src)
+    _make_processing_asset('img-racing', src)
+
+    def _delete_then_open(source: str, _staging: str) -> None:
+        Asset.objects.filter(asset_id='img-racing').delete()
+        os.remove(source)
+        Image.open(source)
+
+    with (
+        mock.patch.object(
+            processing,
+            '_convert_image_to_webp',
+            side_effect=_delete_then_open,
+        ),
+        mock.patch.object(processing, '_notify') as notify,
+    ):
+        normalize_image_asset('img-racing')
+
+    assert notify.call_count == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('kind', ['image', 'video'])
+def test_normalize_task_raises_when_row_still_live(
+    asset_dir: str, kind: str
+) -> None:
+    """A source that vanished under a row nobody deleted is a genuine
+    fault and must still raise."""
+    from anthias_server import celery_tasks
+
+    asset_id = f'{kind}-live'
+    _make_processing_asset(
+        asset_id, path.join(asset_dir, f'gone.{kind}'), mimetype=kind
+    )
+
+    with (
+        mock.patch.object(
+            processing,
+            f'_run_{kind}_normalisation',
+            side_effect=FileNotFoundError('source vanished'),
+        ),
+        pytest.raises(FileNotFoundError),
+    ):
+        getattr(celery_tasks, f'normalize_{kind}_asset')(asset_id)
+
+
 def test_normalize_tasks_exclude_permanent_oserrors_from_autoretry() -> None:
     """Both normalisation tasks have ``autoretry_for=(OSError,)`` so a
     transient disk hiccup is retried automatically. Several OSError
@@ -2169,6 +2256,53 @@ def test_video_task_declares_codec_rejection_as_expected() -> None:
     )
     assert processing.UnsupportedVideoCodecError not in tuple(
         getattr(normalize_image_asset, 'throws', ())
+    )
+
+
+def test_a_missing_source_is_declared_as_expected() -> None:
+    """A source file that is gone is an outcome, not a fault.
+
+    The row was deleted, or ``cleanup()`` swept the upload, between
+    dispatch and pickup — which is why both tasks already list
+    ``FileNotFoundError`` in ``dont_autoretry_for``. Reporting the same
+    condition to Sentry as an unhandled crash says a bug happened
+    (ANTHIAS-1G). ``on_failure`` still runs, so the operator still gets
+    the Failed pill and the reason on the row; only the crash report
+    goes away.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    for task in (normalize_video_asset, normalize_image_asset):
+        assert FileNotFoundError in tuple(getattr(task, 'throws', ())), (
+            f'{task.name} expected throws to include FileNotFoundError'
+        )
+        # The two lists have to agree: a condition that is expected
+        # enough to skip the retry is expected enough not to page.
+        assert FileNotFoundError in tuple(
+            getattr(task, 'dont_autoretry_for', ())
+        ), task.name
+
+
+def test_image_task_declares_too_large_rejection_as_expected() -> None:
+    """The pixel cap's ``ImageTooLargeError`` is the image counterpart
+    of the video codec gate: an operator-facing rejection, not a fault.
+    ``normalize_image_asset`` must list it in ``throws`` so an over-cap
+    upload is not logged with a traceback or reported to Sentry, and
+    the video task, which never raises it, must not.
+    """
+    from anthias_server.celery_tasks import (
+        normalize_image_asset,
+        normalize_video_asset,
+    )
+
+    assert processing.ImageTooLargeError in tuple(
+        getattr(normalize_image_asset, 'throws', ())
+    )
+    assert processing.ImageTooLargeError not in tuple(
+        getattr(normalize_video_asset, 'throws', ())
     )
 
 
@@ -2469,6 +2603,110 @@ def test_needs_low_ram_downscale_routes_bomb_instead_of_raising(
         # what gets the operator a real error message.
         assert processing.needs_low_ram_image_downscale(src) is True
         assert processing.needs_image_processing(src) is True
+
+
+def _write_bomb_png(out_path: str, side: int = 20000) -> str:
+    """A ~24 KB PNG whose IHDR declares ``side``x``side`` pixels.
+
+    At the default 20000 that is 400 MP: 8x the 50 MP cap and well
+    over the 2x threshold at which Pillow raises rather than warns.
+    Written by hand because a real fixture of that size would need
+    hundreds of MB to create.
+    """
+    ihdr = struct.pack('>IIBBBBB', side, side, 8, 2, 0, 0, 0)
+
+    def _chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack('>I', len(payload))
+            + kind
+            + payload
+            + struct.pack('>I', zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    with open(out_path, 'wb') as handle:
+        handle.write(
+            b'\x89PNG\r\n\x1a\n'
+            + _chunk(b'IHDR', ihdr)
+            + _chunk(b'IDAT', zlib.compress(b'\x00' * 16))
+            + _chunk(b'IEND', b'')
+        )
+    return out_path
+
+
+# The 9000x9000 fixture below is over the cap but under Pillow's 2x
+# raise threshold, so Pillow warns on the way past; that is the band
+# this test is deliberately exercising.
+@pytest.mark.filterwarnings('ignore::PIL.Image.DecompressionBombWarning')
+@pytest.mark.django_db
+def test_open_image_translates_pillow_bomb_error(asset_dir: str) -> None:
+    """Over twice the cap, Pillow raises from inside ``Image.open``
+    before ``_guard_and_fit_for_board`` ever sees ``image.size``.
+
+    ``DecompressionBombError`` derives straight from ``Exception``, so
+    it slipped past every ``except (OSError, ..., ValueError)`` in the
+    pipeline and surfaced as a crash carrying Pillow's "could be
+    decompression bomb DOS attack" wording — on what is usually a
+    scanner output or a poster export. ``_open_image`` turns it into
+    the same ``ImageTooLargeError`` the in-range band raises."""
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
+
+    with pytest.raises(
+        processing.ImageTooLargeError, match='is 400000000 pixels'
+    ) as excinfo:
+        processing._open_image(src)
+    # Pillow's alarming wording stays out of the operator's message.
+    assert 'DOS attack' not in str(excinfo.value)
+    assert 'decode cap' in str(excinfo.value)
+
+    # The band between the cap and 2x the cap still goes through the
+    # explicit size check, and reports the dimensions it read.
+    under_2x = _write_bomb_png(path.join(asset_dir, 'big.png'), side=9000)
+    with (
+        pytest.raises(processing.ImageTooLargeError, match='9000x9000'),
+        processing._open_image(under_2x) as image,
+    ):
+        processing._guard_and_fit_for_board(image)
+
+
+@pytest.mark.django_db
+def test_over_cap_image_fails_with_operator_message(asset_dir: str) -> None:
+    """End to end: an over-2x-cap upload reaches the task (that is what
+    ``needs_low_ram_image_downscale`` returning True is for) and must
+    fail as a handled rejection, not as a Pillow bomb error.
+
+    Guards the contract the two halves have asserted separately but
+    never together: the predicate routes the bomb into the task, and
+    the task is the thing that owes the operator an answer."""
+    src = _write_bomb_png(path.join(asset_dir, 'bomb.png'))
+    asset = _make_processing_asset('img-over-cap', src)
+
+    with (
+        mock.patch.object(processing, '_notify'),
+        mock.patch(
+            'anthias_server.processing.is_low_ram_device', return_value=True
+        ),
+        pytest.raises(processing.ImageTooLargeError, match='decode cap'),
+    ):
+        processing._run_image_normalisation(asset)
+
+    # Staging cleanup contract holds on this path too.
+    leftover = [n for n in os.listdir(asset_dir) if n.endswith('.tmp')]
+    assert not leftover, f'image staging leftover: {leftover}'
+
+    # The message the operator sees carries no class-name prefix and
+    # none of Pillow's "DOS attack" wording.
+    task = processing._NormalizeAssetTask()
+    with mock.patch.object(processing, '_notify'):
+        task.on_failure(
+            processing.ImageTooLargeError('image exceeds the cap'),
+            'task-id',
+            (asset.asset_id,),
+            {},
+            None,
+        )
+    asset.refresh_from_db()
+    assert asset.metadata['error_message'] == 'image exceeds the cap'
+    assert asset.is_processing is False
 
 
 @pytest.mark.django_db
@@ -3158,3 +3396,31 @@ def test_unidentified_board_message_survives_an_unknown_subtype(
     msg = str(excinfo.value).lower()
     assert 'anthias-host-agent' in msg
     assert 'unset or unrecognised' not in msg
+
+
+class TestDescribeTaskFailure:
+    """``metadata.error_message`` is read by an operator, on a tooltip.
+
+    Celery's ``SoftTimeLimitExceeded`` stringifies as its own budget
+    tuple, so the default rendering would reach them as
+    "SoftTimeLimitExceeded: SoftTimeLimitExceeded(870,)".
+    """
+
+    def test_a_time_limit_reads_as_a_timeout(self) -> None:
+        message = processing.describe_task_failure(SoftTimeLimitExceeded(870))
+        assert 'Timed out' in message
+        assert '870' in message
+        assert 'SoftTimeLimitExceeded' not in message
+
+    def test_a_time_limit_without_a_budget_still_reads(self) -> None:
+        message = processing.describe_task_failure(SoftTimeLimitExceeded())
+        assert 'Timed out' in message
+        assert 'SoftTimeLimitExceeded' not in message
+
+    def test_other_failures_keep_the_type_and_message(self) -> None:
+        # The library errors the pipeline raises are already
+        # operator-readable this way.
+        message = processing.describe_task_failure(
+            FileNotFoundError('no such file')
+        )
+        assert message == 'FileNotFoundError: no such file'

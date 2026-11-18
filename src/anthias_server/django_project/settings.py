@@ -16,6 +16,8 @@ import platform
 import secrets
 import socket
 import sys
+import threading
+import time
 import zoneinfo
 from collections.abc import Iterator
 from os import getenv
@@ -79,15 +81,26 @@ IS_TEST = ENVIRONMENT == 'test' or _running_under_pytest
 # setting SENTRY_DSN, or disable it entirely by setting it to an
 # empty string (sentry_sdk treats a falsy DSN as "don't send").
 #
-# Test runs default to the empty DSN: the unit suite is built to run
-# with no external network dependencies (conftest.py force-mocks
-# Redis for the same reason), and exceptions raised on purpose by
-# failing tests must not land in the production Sentry project. An
-# explicit SENTRY_DSN still wins so the integration stack can opt in
-# deliberately.
+# Test AND development runs default to the empty DSN. The unit suite
+# is built to run with no external network dependencies (conftest.py
+# force-mocks Redis for the same reason), and exceptions raised on
+# purpose — by a failing test, or by a developer halfway through a
+# feature — must not land in the production Sentry project.
+#
+# Tagging the event `environment=development` is not sufficient on its
+# own. The tag sorts events once they have arrived, but they are
+# counted against the organisation's error quota on the way in, where
+# they compete with the fleet reports the project exists to collect.
+# A half-written branch can be far noisier than any real device, and
+# the events are not actionable for anyone but their author, who has
+# the traceback in their own terminal already.
+#
+# An explicit SENTRY_DSN still wins, so the integration stack — and a
+# developer who genuinely wants to exercise the reporting path — can
+# opt in deliberately.
 _default_sentry_dsn = (
     ''
-    if IS_TEST
+    if IS_TEST or ENVIRONMENT == 'development'
     else (
         'https://da18c7bdab65c9adc4afcd311f5b6f09'
         '@o4511522371534848.ingest.us.sentry.io/4511522375794688'
@@ -146,6 +159,141 @@ def _is_late_soft_time_limit(exc: BaseException) -> bool:
         and cls.__module__.split('.')[0] in ('billiard', 'celery')
         and _raised_outside_anthias_code(exc)
     )
+
+
+# Per-issue event throttle.
+#
+# The project's Sentry quota is finite and is being spent faster than
+# it replenishes, which leaves the project blind for most of each
+# billing period: errors stop being accepted, and an issue's
+# ``lastSeen`` freezes at the day the allowance ran out. "It has not
+# recurred since" then means nothing, which is the part that hurts —
+# a regression lands and nothing records it.
+#
+# What spends the quota is not breadth but depth. A device stuck in a
+# retry loop repeats one error thousands of times while the rest of
+# the fleet contributes a handful each: the worst offender observed
+# in a fully recorded day was one board producing 1,761 of an issue's
+# 1,762 events, and the second was another board producing 1,063 of
+# 1,093. The first copy of that error is worth paying for and so is
+# knowing how many devices hit it; the thousandth copy from the same
+# board is what crowds out every other issue on the fleet.
+#
+# So each process counts occurrences per issue over a one-hour window
+# and keeps the 1st, 2nd, 4th, 8th, 16th, ..., dropping what falls
+# between two powers of two. A loop costs O(log n) events instead of
+# n — 1,761 becomes 11 — and the magnitude survives the thinning,
+# because each kept event carries its true running count in the
+# ``throttle.occurrence`` tag. Every device still reports every
+# distinct issue it hits, so no issue can be hidden by this; only
+# repetition of one already reported is.
+_SENTRY_THROTTLE_WINDOW_SECONDS = 3600
+# Bounds the bookkeeping on a long-lived process. A process producing
+# more than this many *distinct* issues within one window has larger
+# problems than its quota, and the overflow path only forgets windows,
+# which can let more events through but never fewer.
+_SENTRY_THROTTLE_MAX_KEYS = 512
+
+_sentry_throttle_lock = threading.Lock()
+# key -> (window started at, occurrences counted in that window)
+_sentry_throttle_state: dict[tuple[str, ...], tuple[float, int]] = {}
+
+
+def _throttle_key(event: Event, hint: Hint) -> tuple[str, ...] | None:
+    """A stand-in for the Sentry issue this event will group into.
+
+    Sentry fingerprints server-side and the SDK cannot ask it, so this
+    approximates the grouping with what grouping itself keys on: the
+    exception type plus the innermost Anthias frame (falling back to
+    the innermost frame of any kind when our code appears nowhere), or
+    for a logging-integration event the logger and the *unformatted*
+    message template. Using the template is what keeps "Timed out
+    waiting for UP message from <ForkPoolWorker-26>" and the same line
+    for worker 27 a single key rather than one per worker.
+
+    Returns ``None`` when neither shape fits, which leaves the event
+    unthrottled: a key coarse enough to merge unrelated issues could
+    drop a report that has no duplicate anywhere, and this filter must
+    never be the reason a real bug goes unseen.
+    """
+    exc_info = hint.get('exc_info')
+    if exc_info:
+        exc_type, _, tb = exc_info
+        innermost = ''
+        anthias_frame = ''
+        while tb is not None:
+            module = tb.tb_frame.f_globals.get('__name__', '')
+            innermost = f'{module}:{tb.tb_frame.f_code.co_name}'
+            # Prefer the innermost frame of *ours*: the third-party
+            # frames below it (django's cursor plumbing, redis' socket
+            # read) are shared by otherwise unrelated failures.
+            if module.startswith('anthias_'):
+                anthias_frame = innermost
+            tb = tb.tb_next
+        return (
+            'exc',
+            exc_type.__module__,
+            exc_type.__qualname__,
+            anthias_frame or innermost,
+        )
+    record = hint.get('log_record')
+    if record is not None:
+        return ('log', record.name, str(record.msg)[:200])
+    return None
+
+
+def _evict_throttle_keys(now: float) -> None:
+    """Expired windows first, then the oldest, until back under the cap.
+
+    The caller holds ``_sentry_throttle_lock``.
+    """
+    for key, (window_start, _) in list(_sentry_throttle_state.items()):
+        if now - window_start >= _SENTRY_THROTTLE_WINDOW_SECONDS:
+            del _sentry_throttle_state[key]
+    excess = len(_sentry_throttle_state) - _SENTRY_THROTTLE_MAX_KEYS
+    if excess <= 0:
+        return
+    by_age = sorted(
+        _sentry_throttle_state,
+        key=lambda key: _sentry_throttle_state[key][0],
+    )
+    for key in by_age[:excess]:
+        del _sentry_throttle_state[key]
+
+
+def _throttled(event: Event, hint: Hint) -> bool:
+    """Whether this event is a suppressed repeat; counts it either way.
+
+    Occurrences 1, 2, 4, 8, ... within the window survive; the ones in
+    between are dropped. A survivor past the first is tagged with the
+    running count, so the repetition the throttle removed is still
+    legible on the event that did get through.
+    """
+    key = _throttle_key(event, hint)
+    if key is None:
+        return False
+    # Monotonic: a device that has never had a clock sync can step its
+    # wall clock by years the moment NTP lands, which would otherwise
+    # expire or freeze every window at once.
+    now = time.monotonic()
+    with _sentry_throttle_lock:
+        window_start, count = _sentry_throttle_state.get(key, (now, 0))
+        if now - window_start >= _SENTRY_THROTTLE_WINDOW_SECONDS:
+            window_start, count = now, 0
+        count += 1
+        _sentry_throttle_state[key] = (window_start, count)
+        if len(_sentry_throttle_state) > _SENTRY_THROTTLE_MAX_KEYS:
+            _evict_throttle_keys(now)
+    # ``n & (n - 1)`` is zero exactly on the powers of two.
+    if count & (count - 1):
+        return True
+    if count > 1:
+        tags = event.setdefault('tags', {})
+        # The protocol also allows a list of pairs; the SDK only ever
+        # builds the mapping, so skip the tag rather than guess.
+        if isinstance(tags, dict):
+            tags['throttle.occurrence'] = str(count)
+    return False
 
 
 def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
@@ -224,6 +372,12 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         import celery — the viewer imports these settings and its image
         ships no celery. This one rule is applied to the head exception
         only rather than down the chain; see the comment at the check.
+
+    Anything that survives all of the above is a real report, and is
+    then passed through the repetition throttle (``_throttled``),
+    which thins one device's retry loop down to the powers of two so
+    a single looping board cannot spend the fleet's whole monthly
+    quota. That gate runs last, on log-only events too.
     """
     # Imported lazily — this runs only when an event is about to send,
     # well after Django is configured, and avoids an import cycle at
@@ -233,7 +387,7 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
 
     exc_info = hint.get('exc_info')
     if not exc_info:
-        return event
+        return None if _throttled(event, hint) else event
     transient_redis = (
         redis.exceptions.ConnectionError,
         redis.exceptions.TimeoutError,
@@ -266,7 +420,11 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
             or exc_cls.__module__.startswith('yt_dlp.')
         ):
             return None
-    return event
+    # The repetition throttle is the last gate deliberately: noise
+    # dropped above is not a report at all and must not spend a key's
+    # budget, or a loop of filtered redis blips would throttle the one
+    # real error raised alongside it.
+    return None if _throttled(event, hint) else event
 
 
 # celery's consumer, the embedded beat scheduler, and the redis
@@ -621,9 +779,6 @@ else:
 #     instead of failing on the spot. Longer than any transaction
 #     Anthias runs (the writes are single-row UPDATEs; the longest
 #     holder is the startup ``migrate``/``dbbackup`` pass).
-#   * ``journal_mode=WAL`` — readers no longer block the writer and
-#     vice versa; persists in the DB file but is re-asserted each
-#     connect so restored backups / legacy DBs get upgraded too.
 #   * ``synchronous=NORMAL`` — the recommended pairing with WAL;
 #     FULL's per-commit fsync cost buys nothing extra under WAL on
 #     a power-loss-prone SD card (WAL commits are crash-safe at
@@ -633,15 +788,27 @@ else:
 #     instead of deadlocking mid-transaction on the read→write lock
 #     upgrade (those fail instantly, ignoring the busy timeout).
 #
+# ``journal_mode=WAL`` is deliberately NOT here. It is a property of
+# the database file rather than of a connection, and asserting it per
+# connect made the *un*converted case fatal: the switch takes an
+# exclusive lock, so with three processes on the file it blocked for
+# the whole busy timeout and then raised ``OperationalError: database
+# is locked`` out of ``get_new_connection`` — before Django owns the
+# connection, so the request 500s and the half-built sqlite handle
+# leaks an fd (Sentry ANTHIAS-38, and the ANTHIAS-62/63 EMFILE that
+# followed it on the same device). ``lib.sqlite_journal`` performs the
+# conversion once per process at startup instead, where a refusal is
+# survivable; the busy timeout above is what keeps a database that is
+# still on the rollback journal usable meanwhile.
+#
 # Unit runs (pytest-django's per-worker ``:memory:`` DBs) accept the
-# same pragmas harmlessly: ``journal_mode=WAL`` is a no-op that
-# reports ``memory`` on in-memory databases.
+# remaining pragma harmlessly.
 _db_default: dict[str, Any] = {
     'ENGINE': 'django.db.backends.sqlite3',
     'NAME': db_path,
     'OPTIONS': {
         'timeout': 20,
-        'init_command': ('PRAGMA journal_mode=WAL;PRAGMA synchronous=NORMAL;'),
+        'init_command': 'PRAGMA synchronous=NORMAL;',
         'transaction_mode': 'IMMEDIATE',
     },
 }

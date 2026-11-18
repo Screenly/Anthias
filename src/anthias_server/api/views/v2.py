@@ -2,6 +2,7 @@ import ipaddress
 import json
 import logging
 import secrets
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from os import getenv, statvfs
 from platform import machine
@@ -22,6 +23,7 @@ from rest_framework.views import APIView
 from anthias_common import (
     board,
     device_helper,
+    journal,
     storage_health,
     undervoltage,
 )
@@ -48,6 +50,7 @@ from anthias_server.api.serializers.v2 import (
     IntegrationsSerializerV2,
     ScreenlyMigrateAssetSerializerV2,
     ScreenlyTokenSerializerV2,
+    SystemLogsQuerySerializerV2,
     UpdateAssetSerializerV2,
     UpdateDeviceSettingsSerializerV2,
     ViewerPlaylistSerializerV2,
@@ -71,7 +74,7 @@ from anthias_server.app.helpers import (
     remove_default_assets,
 )
 from anthias_server.app.models import Asset
-from anthias_server.lib import diagnostics
+from anthias_server.lib import diagnostics, system_logs, wifi_connect
 from anthias_server.lib.auth import (
     AuthSettingsError,
     apply_auth_settings,
@@ -144,8 +147,58 @@ _BALENA_SUPERVISOR_TIMEOUT_S = 1.5
 _IP_REFRESH_PENDING_KEY = 'splash:ip_refresh_pending'
 _IP_REFRESH_DEBOUNCE_S = 12
 
+# The WiFi-setup poll's own debounce. Separate key so the two
+# refreshes can't starve each other, and a window matched to the
+# viewer's 15s poll rather than the splash's 2s one: this poll runs
+# for the whole life of the device, not for 60 seconds at boot.
+#
+# It asks host_agent for the no-probe variant. The probing one takes
+# ~10s to answer on an offline device -- exactly the device this poll
+# exists for -- and host_agent processes commands one at a time, so
+# driving the probing refresh every 15s forever would leave reboot and
+# shutdown queued behind an HTTP retry loop most of the time. It would
+# also put an outbound request on every Anthias device every 15s,
+# permanently, which is not something a signage appliance should do to
+# answer a question about its own interfaces.
+_WIFI_SETUP_REFRESH_PENDING_KEY = 'wifi_setup:ip_refresh_pending'
+_WIFI_SETUP_REFRESH_DEBOUNCE_S = 14
 
-def _resolve_node_ip() -> str:
+
+def _node_ip_from_supervisor() -> str:
+    """The Balena arm of ``_resolve_node_ip``.
+
+    Separate because it shares nothing with the bare-metal path but the
+    return type: there is no host_agent and no Redis cache on Balena, so
+    the supervisor is the only source of truth and every failure mode
+    here is an HTTP one. Lifted out of the resolver to keep that
+    function at one job apiece.
+
+    Reuses the shared anthias_common.utils helper so URL construction,
+    auth and headers stay in one place (extending it to accept a
+    timeout was the smaller change). The bounded timeout is the
+    load-bearing part — without it, a slow supervisor on first boot
+    would pin a request worker for longer than the JS poll cadence.
+
+    Returns '' for every failure: the caller is a 2-second poll that
+    recovers on the next tick, so there is nothing useful to raise.
+    """
+    try:
+        response = get_balena_device_info(timeout=_BALENA_SUPERVISOR_TIMEOUT_S)
+    except requests.RequestException:
+        return ''
+
+    if not response.ok:
+        return ''
+
+    try:
+        return str(response.json().get('ip_address') or '')
+    except ValueError:
+        return ''
+
+
+def _resolve_node_ip(
+    refresh: Callable[[], None] | None = None,
+) -> str:
     """Non-blocking IP-string resolver for the splash polling endpoint.
 
     ``anthias_common.utils.get_node_ip()`` is the right primitive for one-shot
@@ -164,29 +217,19 @@ def _resolve_node_ip() -> str:
     timeout, since the supervisor is the only source of truth there
     and there's no host_agent cache to fall back on.
 
+    ``refresh`` is how the caller asks host_agent to repopulate the
+    cache; it defaults to the splash page's probing refresh. The
+    WiFi-setup poll passes its own, because it needs a different
+    cost/latency tradeoff — see
+    ``_WIFI_SETUP_REFRESH_PENDING_KEY``.
+
     Returns the raw whitespace-separated IP string (or empty), shaped
     to match what ``get_node_ip()`` would have returned, so the
     formatter below can stay shared with ``InfoViewV2``.
     """
+    refresh = refresh or _publish_refresh
     if is_balena_app():
-        # Reuse the shared anthias_common.utils helper so URL construction /
-        # auth / headers stay in one place (extending it to accept a
-        # timeout was the smaller change). The bounded timeout is the
-        # load-bearing part of this fix — without it, a slow
-        # supervisor on first boot would pin a request worker for
-        # longer than the JS poll cadence.
-        try:
-            response = get_balena_device_info(
-                timeout=_BALENA_SUPERVISOR_TIMEOUT_S,
-            )
-        except requests.RequestException:
-            return ''
-        if not response.ok:
-            return ''
-        try:
-            return str(response.json().get('ip_address') or '')
-        except ValueError:
-            return ''
+        return _node_ip_from_supervisor()
 
     try:
         raw = r.get('ip_addresses')
@@ -223,10 +266,10 @@ def _resolve_node_ip() -> str:
             # during its display window (DHCP renewal, link flap,
             # operator plugging in a different cable). Without this,
             # once the cache is populated the splash would freeze on
-            # whatever IPs were valid at first poll. _publish_refresh
-            # is bounded by the same SETNX TTL as the cache-miss path,
+            # whatever IPs were valid at first poll. The refresh is
+            # bounded by the same SETNX TTL as the cache-miss path,
             # so a busy poll loop won't queue redundant refreshes.
-            _publish_refresh()
+            refresh()
             return ' '.join(ips)
 
     # Cache miss / empty list / malformed / Redis flake: ask
@@ -234,11 +277,15 @@ def _resolve_node_ip() -> str:
     # block waiting for completion. The JS keeps polling and the
     # splash shows "Detecting network…" until host_agent fills the
     # cache.
-    _publish_refresh()
+    refresh()
     return ''
 
 
-def _publish_refresh() -> None:
+def _publish_refresh(
+    command: str = 'set_ip_addresses',
+    pending_key: str = _IP_REFRESH_PENDING_KEY,
+    debounce_s: int = _IP_REFRESH_DEBOUNCE_S,
+) -> None:
     """Best-effort host_agent refresh, debounced.
 
     At a 2s poll cadence, host_agent's set_ip_addresses takes longer
@@ -254,25 +301,34 @@ def _publish_refresh() -> None:
     """
     try:
         acquired = r.set(
-            _IP_REFRESH_PENDING_KEY,
+            pending_key,
             '1',
             nx=True,
-            ex=_IP_REFRESH_DEBOUNCE_S,
+            ex=debounce_s,
         )
     except redis.RedisError:
         return
     if not acquired:
         return
     try:
-        r.publish('hostcmd', 'set_ip_addresses')
+        r.publish('hostcmd', command)
     except redis.RedisError:
         # Drop the debounce key so the next poll can retry —
         # otherwise we'd wait out the TTL after a transient flake
         # that didn't actually queue a refresh.
         try:
-            r.delete(_IP_REFRESH_PENDING_KEY)
+            r.delete(pending_key)
         except redis.RedisError:
             pass
+
+
+def _publish_wifi_setup_refresh() -> None:
+    """The WiFi-setup poll's refresh: no internet probe, own debounce."""
+    _publish_refresh(
+        command='set_ip_addresses_fast',
+        pending_key=_WIFI_SETUP_REFRESH_PENDING_KEY,
+        debounce_s=_WIFI_SETUP_REFRESH_DEBOUNCE_S,
+    )
 
 
 def _format_ip_urls(node_ip: str) -> list[str]:
@@ -305,9 +361,63 @@ def _format_ip_urls(node_ip: str) -> list[str]:
     return out
 
 
+def wifi_setup_state() -> dict[str, Any]:
+    """Current state of the wifi-connect setup portal.
+
+    Shared by ``WifiSetupViewV2`` (what the viewer polls) and the
+    ``/hotspot/`` page (what it then renders), so the two can never
+    disagree about whether setup is running. Lives here because
+    resolving the host's addresses — the signal the whole thing turns
+    on — is this module's job already.
+    """
+    # Two signals, because each covers the other's blind spot.
+    # wifi-connect's state file says a portal run is live and carries
+    # the credentials, but a SIGKILLed portal cannot remove it. The
+    # address list cannot be left behind like that -- NetworkManager
+    # drops the gateway when the access point goes -- but it is a
+    # cache, so it can lag the other way. Requiring both is what makes
+    # a stale answer in either direction read as "not running", which
+    # fails towards playing content.
+    portal = wifi_connect.read_portal_state()
+    active = portal is not None and wifi_connect.portal_is_up(
+        _resolve_node_ip(refresh=_publish_wifi_setup_refresh),
+        portal.gateway,
+    )
+
+    return {
+        'active': active,
+        'ssid': portal.ssid if active and portal else None,
+        'passphrase': portal.passphrase if active and portal else None,
+        'portal_url': (
+            portal.portal_url if active and portal else wifi_connect.PORTAL_URL
+        ),
+        # The portal's own address on this host. The viewer keeps it so
+        # it can tell, once the portal has ended, that a lagging address
+        # cache still listing it is not the device being online.
+        'gateway': portal.gateway if active and portal else None,
+    }
+
+
 def _safe_ip_addresses() -> list[str]:
     """Fast-path resolver+formatter for the splash polling endpoint."""
-    return _format_ip_urls(_resolve_node_ip())
+    # While the wifi-connect setup portal is up, its own gateway
+    # address is a real address on this host and shows up here. It is
+    # not somewhere to manage the device from — it exists only for the
+    # length of the setup flow — so it is dropped rather than offered
+    # as a "open this on your phone" link. WifiSetupViewV2 below is
+    # where that address is surfaced, with the context that makes it
+    # mean something.
+    #
+    # Which address that is comes from the portal, and only while one is
+    # running: the setup address is configurable, and when no portal owns
+    # it, it is just an address. A device on a 192.168.42.0/24 LAN that
+    # was handed .1 used to have its real address hidden here.
+    portal = wifi_connect.read_portal_state()
+    return _format_ip_urls(
+        wifi_connect.strip_portal_gateway(
+            _resolve_node_ip(), portal.gateway if portal else None
+        )
+    )
 
 
 class NetworkIpAddressesViewV2(APIView):
@@ -365,6 +475,42 @@ class NetworkIpAddressesViewV2(APIView):
     )
     def get(self, request: Request) -> Response:
         return Response({'ip_addresses': _safe_ip_addresses()})
+
+
+class WifiSetupViewV2(APIView):
+    """Is the wifi-connect setup portal up, and what joins it?
+
+    Polled by the viewer so it can put the setup instructions on the
+    screen for as long as the portal is live, and read by /hotspot to
+    render them. Unauth'd for the same reason as the sibling IP
+    endpoint: the consumer is the device's own webview, which has no
+    credentials to present.
+
+    The passphrase in this response is the one thing here that isn't
+    already public. It is exposed only while ``active`` is true, i.e.
+    while the access point it unlocks is being broadcast and shown
+    full-screen on the device anyway, and it is regenerated on every
+    run of the portal. A device that is online returns ``active:
+    false`` and no credentials at all.
+    """
+
+    @extend_schema(
+        summary='Get WiFi setup portal status',
+        responses={
+            200: {
+                'type': 'object',
+                'properties': {
+                    'active': {'type': 'boolean'},
+                    'ssid': {'type': 'string', 'nullable': True},
+                    'passphrase': {'type': 'string', 'nullable': True},
+                    'portal_url': {'type': 'string'},
+                    'gateway': {'type': 'string', 'nullable': True},
+                },
+            },
+        },
+    )
+    def get(self, request: Request) -> Response:
+        return Response(wifi_setup_state())
 
 
 class AssetListViewV2(APIView):
@@ -639,7 +785,7 @@ class DeviceSettingsViewV2(APIView):
             auth_backend = data.get('auth_backend', settings['auth_backend'])
             prev_auth_backend = settings['auth_backend']
 
-            auth_changed = apply_auth_settings(
+            auth_change = apply_auth_settings(
                 request,
                 new_auth_backend=auth_backend,
                 current_pwd=current_password,
@@ -697,15 +843,35 @@ class DeviceSettingsViewV2(APIView):
                 if field in data:
                     settings[field] = data[field]
 
-            settings.save()
+            # Narrow on purpose: it guards the conf write, which is the
+            # only thing here that can fail *after* apply_auth_settings()
+            # has already committed its half. A toggle is live in the
+            # in-process settings dict from the assignment above — that is
+            # what _is_authorized() reads — so reaping is owed whether or
+            # not the write lands.
+            #
+            # backend_changed AND NOT credentials_rotated. A credential
+            # rotation is already reaped by the User post_save receiver in
+            # app/signals.py, and firing here too would fan a second
+            # force_disconnect out over Redis for every password change. A
+            # backend toggle writes no User row, so nothing but this sees
+            # it — but one save can do both (enable auth *and* set the
+            # username/password), and checking only backend_changed
+            # double-reaps exactly that case: the receiver fires on the
+            # User write, then this fires again, bumping the generation
+            # twice for one operator action.
+            try:
+                settings.save()
+            finally:
+                if (
+                    auth_change.backend_changed
+                    and not auth_change.credentials_rotated
+                ):
+                    from anthias_server.app.consumers import disconnect_all
+
+                    disconnect_all()
             publisher = ViewerPublisher.get_instance()
             publisher.send_to_viewer('reload')
-            # After save(), so a socket that reconnects immediately is
-            # judged against the new auth_backend rather than the old one.
-            if auth_changed:
-                from anthias_server.app.consumers import disconnect_all
-
-                disconnect_all()
 
             return Response({'message': 'Settings were successfully saved.'})
         except AuthSettingsError as exc:
@@ -1680,3 +1846,110 @@ class ImportItemViewV2(APIView):
             )
 
         return Response({**outcome.as_dict(), 'error': None})
+
+
+_SYSTEM_LOGS_ENTRY_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'timestamp': {
+            'type': 'string',
+            'format': 'date-time',
+            'nullable': True,
+        },
+        'priority': {'type': 'integer', 'nullable': True},
+        'unit': {'type': 'string', 'nullable': True},
+        'identifier': {'type': 'string', 'nullable': True},
+        'hostname': {'type': 'string', 'nullable': True},
+        'container_name': {'type': 'string', 'nullable': True},
+        'message': {'type': 'string'},
+    },
+}
+
+_SYSTEM_LOGS_RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'entries': {
+            'type': 'array',
+            'items': _SYSTEM_LOGS_ENTRY_SCHEMA,
+        },
+        'count': {'type': 'integer'},
+        'source': {'type': 'string', 'enum': ['balena', 'host_agent']},
+        'truncated': {'type': 'boolean'},
+        'persistent': {'type': 'boolean', 'nullable': True},
+        'max_count': {'type': 'integer'},
+    },
+}
+
+
+class SystemLogsViewV2(APIView):
+    """Host system-journal snapshot, same contract on both platforms.
+
+    The container cannot read the host journal directly on either
+    platform, so this fans out to whichever backend the device has:
+    the Balena supervisor's ``/v2/journal-logs``, or the
+    ``anthias-host-agent`` systemd unit over Redis. ``source`` in the
+    response names which one answered.
+
+    **Snapshot-only.** No ``follow`` parameter, by design — see
+    ``anthias_server.lib.system_logs``. Clients that want a live view
+    re-request with the same filters.
+
+    ``persistent`` is the one place the platforms genuinely differ and
+    it is reported rather than papered over: a bare-metal host whose
+    journald is still volatile (an install predating the Ansible
+    persistence task) returns ``false``, which means these entries
+    are current-boot-only and a UI should say so.
+    """
+
+    serializer_class = SystemLogsQuerySerializerV2
+
+    @extend_schema(
+        summary='Get a snapshot of the host system journal',
+        parameters=[SystemLogsQuerySerializerV2],
+        responses={
+            200: _SYSTEM_LOGS_RESPONSE_SCHEMA,
+            400: None,
+            502: None,
+        },
+    )
+    @authorized
+    def get(self, request: Request) -> Response:
+        serializer = SystemLogsQuerySerializerV2(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        params = serializer.validated_data
+
+        try:
+            snapshot = system_logs.get_journal_snapshot(
+                count=params.get('count', journal.DEFAULT_COUNT),
+                unit=params.get('unit') or None,
+                container=params.get('container') or None,
+                since=params.get('since') or None,
+                until=params.get('until') or None,
+            )
+        except journal.JournalRequestError as error:
+            # Belt and braces: the serializer already rejects these,
+            # so reaching here means the two allowlists disagreed.
+            return Response(
+                {'message': error.user_message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except system_logs.JournalUnavailable as error:
+            # 502, not 500: we're reporting that an upstream (the
+            # supervisor, or the host agent) didn't deliver, which is
+            # a condition an operator can act on.
+            logger.warning('System log snapshot failed: %s', error)
+            return Response(
+                {'message': error.user_message},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                'entries': snapshot.entries,
+                'count': len(snapshot.entries),
+                'source': snapshot.source,
+                'truncated': snapshot.truncated,
+                'persistent': snapshot.persistent,
+                'max_count': journal.MAX_COUNT,
+            }
+        )

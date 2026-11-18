@@ -16,6 +16,7 @@ app_name = 'anthias_app'
 # directions.
 urlpatterns = [
     path('splash-page/', views.splash_page, name='splash_page'),
+    path('hotspot/', views.hotspot, name='hotspot'),
     path('login/', views.login, name='login'),
     path('', views.home, name='home'),
     path('system-info/', views.system_info, name='system_info'),

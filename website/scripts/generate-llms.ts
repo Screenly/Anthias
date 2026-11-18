@@ -1,15 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Generates `llms.txt` and `llms-full.txt` for the marketing site.
+ * Generates the Markdown copies of the marketing site for AI agents:
+ * `llms.txt`, `llms-full.txt` and an `index.md` next to every page.
  *
- * Both files follow the llmstxt.org convention and are served from the
- * site root so LLM tooling can find them at the well-known paths:
+ * The llms files follow the llmstxt.org convention and are served from
+ * the site root so LLM tooling can find them at the well-known paths:
  *
  *   - /llms.txt       — a curated index: H1, a `>` summary, then H2
- *                       sections linking to each page.
+ *                       sections linking to each page's Markdown copy.
  *   - /llms-full.txt  — the full text of every page concatenated into
  *                       one Markdown document, so a model can ingest the
  *                       whole site without following links.
+ *   - <page>/index.md — one page as Markdown, e.g. /docs/wifi-setup/index.md.
+ *                       Every HTML page links it with
+ *                       <link rel="alternate" type="text/markdown">, and
+ *                       the page tools copy it to the clipboard.
  *
  * The generator runs AFTER `hugo` against the built `public/` tree and
  * extracts text from the rendered HTML. Reading the published output
@@ -65,6 +70,10 @@ const STRIP_TAGS = new Set([
   'template',
 ])
 
+// Elements carrying this attribute are page chrome (breadcrumbs, the
+// page tools) and are dropped from every Markdown copy.
+const SKIP_ATTR = 'data-md-skip'
+
 // Preferred ordering for the top of the file; anything not listed
 // falls through in alphabetical route order after these.
 const ROUTE_ORDER = [
@@ -113,6 +122,9 @@ function routeForFile(file: string): string {
   return '/' + rel.replace(/\\/g, '/')
 }
 
+// Set from hugo.toml in main(); inline() uses it to absolutize links.
+let siteURL = ''
+
 const collapse = (s: string) => s.replace(/[ \t\r\n]+/g, ' ')
 
 /** Serialize an element's inline children (text, links, emphasis) to Markdown. */
@@ -122,7 +134,7 @@ function inline(node: Node): string {
   const el = node as HTMLElement
   if (!el.tagName) return ''
   const tag = el.tagName.toLowerCase()
-  if (STRIP_TAGS.has(tag)) return ''
+  if (STRIP_TAGS.has(tag) || el.hasAttribute(SKIP_ATTR)) return ''
   const inner = el.childNodes.map(inline).join('')
   switch (tag) {
     case 'br':
@@ -135,7 +147,9 @@ function inline(node: Node): string {
       if (/^[#¶§]+$/.test(text)) return ''
       // Keep the visible text but drop the target for in-page anchors.
       if (!href || href.startsWith('#')) return text
-      return `[${text}](${href})`
+      // Root-relative links would resolve against wherever the Markdown
+      // ends up (a clipboard, a chat), so make them absolute.
+      return `[${text}](${href.startsWith('/') && !href.startsWith('//') ? siteURL + href : href})`
     }
     case 'strong':
     case 'b':
@@ -172,7 +186,7 @@ function serializeMixed(el: HTMLElement, out: string[]): void {
     }
     const c = child as HTMLElement
     const tag = c.tagName?.toLowerCase()
-    if (!tag || STRIP_TAGS.has(tag)) continue
+    if (!tag || STRIP_TAGS.has(tag) || c.hasAttribute(SKIP_ATTR)) continue
     if (INLINE_TAGS.has(tag)) {
       buf += inline(c)
       continue
@@ -193,7 +207,7 @@ function block(node: Node, out: string[]): void {
   const el = node as HTMLElement
   if (!el.tagName) return
   const tag = el.tagName.toLowerCase()
-  if (STRIP_TAGS.has(tag)) return
+  if (STRIP_TAGS.has(tag) || el.hasAttribute(SKIP_ATTR)) return
 
   // A standalone inline element at block level: serialize inline so
   // link/emphasis handling (and permalink-glyph stripping) applies.
@@ -212,9 +226,7 @@ function block(node: Node, out: string[]): void {
     case 'h6': {
       const level = Number(tag[1])
       const text = inline(el).trim()
-      // Down-shift by one so page <h1> becomes "##" under the page's
-      // own "#" heading in llms-full.txt.
-      if (text) out.push(`${'#'.repeat(Math.min(level + 1, 6))} ${text}`)
+      if (text) out.push(`${'#'.repeat(level)} ${text}`)
       return
     }
     case 'p': {
@@ -324,6 +336,25 @@ function extractPage(html: string, route: string, baseURL: string): Page | null 
   return { route, url, title, description, body: text }
 }
 
+/**
+ * Down-shift every heading by one level, outside code fences, so each
+ * page's "#" becomes "##" under its own section in llms-full.txt.
+ */
+function shiftHeadings(md: string): string {
+  let fenced = false
+  return md
+    .split('\n')
+    .map((line) => {
+      if (/^\s*```/.test(line)) fenced = !fenced
+      if (fenced || !/^#{1,6} /.test(line)) return line
+      return line.startsWith('###### ') ? line : '#' + line
+    })
+    .join('\n')
+}
+
+/** The page's Markdown copy URL: /docs/qa/ -> /docs/qa/index.md */
+const markdownURL = (p: Page) => `${siteURL}${p.route}index.md`
+
 function orderPages(pages: Page[]): Page[] {
   const rank = (route: string) => {
     const i = ROUTE_ORDER.indexOf(route)
@@ -343,6 +374,7 @@ function stripHtmlTitleSuffix(title: string): string {
 
 async function main() {
   const { baseURL, title } = await readSiteMeta()
+  siteURL = baseURL
   const files = await findHtmlFiles(PUBLIC_DIR)
 
   const pages: Page[] = []
@@ -362,19 +394,26 @@ async function main() {
     'lock-in.'
 
   // --- llms.txt (curated index) ---
-  const indexLines: string[] = [`# ${title}`, '', `> ${summary}`, '']
+  const indexLines: string[] = [
+    `# ${title}`,
+    '',
+    `> ${summary}`,
+    '',
+    `Every page on ${baseURL} has a Markdown copy: append \`index.md\` to its URL, for example ${baseURL}/docs/wifi-setup/index.md. The links below point to those copies. To drive Anthias players from an agent, start with ${baseURL}/agents/index.md.`,
+    '',
+  ]
   const docs = ordered.filter((p) => p.route.startsWith('/docs/') && p.route !== '/docs/')
   const primary = ordered.filter((p) => !p.route.startsWith('/docs/') || p.route === '/docs/')
   indexLines.push('## Pages', '')
   for (const p of primary) {
     const name = stripHtmlTitleSuffix(p.title)
-    indexLines.push(`- [${name}](${p.url})${p.description ? `: ${p.description}` : ''}`)
+    indexLines.push(`- [${name}](${markdownURL(p)})${p.description ? `: ${p.description}` : ''}`)
   }
   if (docs.length) {
     indexLines.push('', '## Documentation', '')
     for (const p of docs) {
       const name = stripHtmlTitleSuffix(p.title)
-      indexLines.push(`- [${name}](${p.url})${p.description ? `: ${p.description}` : ''}`)
+      indexLines.push(`- [${name}](${markdownURL(p)})${p.description ? `: ${p.description}` : ''}`)
     }
   }
   indexLines.push('', '## Full text', '')
@@ -395,7 +434,13 @@ async function main() {
     fullLines.push(`# ${stripHtmlTitleSuffix(p.title)}`, '')
     fullLines.push(`Source: ${p.url}`, '')
     if (p.description) fullLines.push(`> ${p.description}`, '')
-    fullLines.push(p.body, '')
+    fullLines.push(shiftHeadings(p.body), '')
+  }
+
+  // --- <page>/index.md (one page each) ---
+  for (const p of ordered) {
+    const md = [p.body, '', '---', '', `Source: ${p.url}`, '']
+    await writeFile(join(PUBLIC_DIR, p.route, 'index.md'), md.join('\n'))
   }
 
   await writeFile(join(PUBLIC_DIR, 'llms.txt'), indexLines.join('\n'))
@@ -404,7 +449,8 @@ async function main() {
   const fullBytes = Buffer.byteLength(fullLines.join('\n'))
   console.log(
     `Wrote llms.txt (${primary.length + docs.length} pages indexed) and ` +
-      `llms-full.txt (${ordered.length} pages, ${(fullBytes / 1024).toFixed(1)} KiB).`,
+      `llms-full.txt (${ordered.length} pages, ${(fullBytes / 1024).toFixed(1)} KiB), ` +
+      `plus ${ordered.length} index.md copies.`,
   )
 }
 
