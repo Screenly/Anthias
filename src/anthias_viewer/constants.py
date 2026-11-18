@@ -50,3 +50,17 @@ SPLASH_PAGE_IP_POLL_WINDOW_S = 120
 WIFI_SETUP_POLL_INTERVAL_S = 15
 
 SERVER_WAIT_TIMEOUT = 60
+
+# How long an ``Asset.is_reachable`` verdict stays trustworthy.
+#
+# The server refreshes that field on a 15-minute celery-beat cadence
+# (``ASSET_REVALIDATION_INTERVAL_S``), and the viewer asks for an
+# out-of-band recheck whenever it hits an asset it can't display. Both
+# of those paths are celery tasks, so when that container is down or
+# crash-looping the field freezes at whatever the last probe said and
+# nothing on the device can ever clear it -- see GH #3424.
+#
+# Three sweep intervals, so a verdict only goes stale after the sweep
+# has had several chances to land. A single missed tick (a long
+# streaming-heavy sweep, a worker restart) must not be enough.
+REACHABILITY_STALE_AFTER_S = 3 * 15 * 60
