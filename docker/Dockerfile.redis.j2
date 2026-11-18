@@ -40,10 +40,35 @@ ENV GIT_BRANCH={{ git_branch }}
 # inside a save window; the RDB save points are kept as a belt-and-braces
 # snapshot. --protected-mode no preserves the existing cross-container
 # access (other services connect over the `redis` service network).
+#
+# --stop-writes-on-bgsave-error no: redis defaults this to `yes`, which
+# means that once a background save fails, redis refuses *every*
+# write command until a save succeeds again. On a device whose card has
+# filled up that is not a degraded mode, it is a total outage, and a
+# worse one than the disk-full condition that triggered it:
+#
+#   * the celery worker cannot even start -- its first broker PING comes
+#     back MISCONF, kombu reraises it as a ConnectionError, and celery
+#     logs "Unrecoverable error" and exits (Sentry ANTHIAS-6J, fatal);
+#   * the viewer cannot publish the display resolution or read the
+#     command bus, so the screen stops following the playlist
+#     (ANTHIAS-4X, 450 events from a single pi3 in one day).
+#
+# None of that is required to protect the data. The durability this
+# image actually cares about -- the telemetry device_id, per the note
+# above -- rides on the AOF, which has its own error handling and is
+# unaffected by this flag; the RDB save points below are the
+# belt-and-braces copy, and losing a snapshot while the card is full
+# costs nothing a restart would not cost anyway. Redis still logs every
+# failed bgsave, and a full card keeps announcing itself through the
+# writes that genuinely cannot proceed (ANTHIAS-6M, celerybeat's
+# on-disk schedule), so this hides no evidence -- it only stops one
+# device-local problem from taking the whole player down with it.
 CMD ["redis-server", \
      "--protected-mode", "no", \
      "--dir", "/var/lib/redis", \
      "--appendonly", "yes", \
+     "--stop-writes-on-bgsave-error", "no", \
      "--save", "3600 1", \
      "--save", "300 100", \
      "--save", "60 10000"]

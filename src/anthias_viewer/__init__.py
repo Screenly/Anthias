@@ -48,6 +48,9 @@ from anthias_viewer.constants import (
 from anthias_viewer.constants import (
     POST_WIFI_SETUP_ADDRESS_TIMEOUT_S as POST_WIFI_SETUP_ADDRESS_TIMEOUT_S,
 )
+from anthias_viewer.constants import (
+    REACHABILITY_STALE_AFTER_S as REACHABILITY_STALE_AFTER_S,
+)
 from anthias_viewer.constants import SERVER_WAIT_TIMEOUT as SERVER_WAIT_TIMEOUT
 from anthias_viewer.constants import SPLASH_DELAY as SPLASH_DELAY
 from anthias_viewer.constants import (
@@ -1470,6 +1473,42 @@ def _describe_webview_exit(candidate: Any) -> str:
         return f'killed by signal {-code} ({code})'
 
 
+# How much of a dead webview's output to quote in a log line. The full
+# 64 KiB sink would not survive as a Sentry breadcrumb; the cause of an
+# init death is in its last few lines.
+WEBVIEW_DEATH_TAIL_CHARS = 2000
+
+
+def _describe_dead_webview() -> str:
+    """Exit status and output tail of the webview ``setup()`` lost.
+
+    ``_spawn_webview_once`` names both when the webview dies *before*
+    the handshake. A death *after* it — between the handshake and
+    ``setup()``'s ``bus.get`` — surfaces only as a D-Bus
+    ``ServiceUnknown`` / ``NoReply``, which says that the process went
+    away but never why. On a board that dies there on every spawn (an
+    x86 VM in Sentry ANTHIAS-3, ~1 spawn/s) those GErrors were the whole
+    record, so whether it is a GL-context failure, a signal or a clean
+    refusal could only be guessed at. Never raises: it runs on the path
+    that is already reporting a failure.
+    """
+    try:
+        candidate = browser
+        if candidate is None:
+            return 'no webview process recorded'
+        if candidate.is_alive():
+            status = 'process still running'
+        else:
+            status = _describe_webview_exit(candidate)
+        output = _webview_output
+        if output is None:
+            return status
+        tail = _drain_webview_output(output)[-WEBVIEW_DEATH_TAIL_CHARS:]
+        return f'{status}; output tail: {tail.strip() or "<empty>"}'
+    except Exception as exc:
+        return f'webview state unavailable: {exc!r}'
+
+
 def _spawn_webview_once(startup_timeout: float) -> Any:
     """Spawn AnthiasViewer once and block until it registers on D-Bus.
 
@@ -2729,6 +2768,22 @@ def _skip_if_current_asset_inactive() -> None:
     refresh itself happens inside ``get_next_asset`` via the existing
     ``get_db_mtime`` short-circuit, so we don't touch ``scheduler``
     state from the subscriber thread — we only signal.
+
+    Two cases, deliberately not treated the same:
+
+    * The row is **gone**. ``delete_asset_with_file`` unlinks the media
+      alongside the row, so whatever is on screen is already detached
+      from anything the operator can still manage. Always skip.
+
+    * The row still exists but is no longer active — disabled, removed
+      from the playlist, or outside its date / day / time window. The
+      content is still valid, so whether cutting the rotation short is
+      right depends on how the operator curates the playlist. Honour
+      ``settings['skip_deactivated_asset']``: on (default, the #2430
+      behaviour) skips immediately; off lets the asset finish the
+      rotation it already started and simply not come round again,
+      which is what the playlist stays consistent with either way —
+      ``get_next_asset`` rebuilds from the DB on the next tick.
     """
     if scheduler is None:
         return
@@ -2743,12 +2798,30 @@ def _skip_if_current_asset_inactive() -> None:
             current_id,
         )
         return
-    if asset is None or not asset.is_active():
+
+    if asset is None:
         logger.info(
-            'Current asset %s is no longer active; signalling skip',
-            current_id,
+            'Current asset %s was deleted; signalling skip', current_id
         )
         get_skip_event().set()
+        return
+
+    if asset.is_active():
+        return
+
+    if not settings['skip_deactivated_asset']:
+        logger.info(
+            'Current asset %s left the playlist; letting it finish its '
+            'rotation (skip_deactivated_asset is off)',
+            current_id,
+        )
+        return
+
+    logger.info(
+        'Current asset %s is no longer active; signalling skip',
+        current_id,
+    )
+    get_skip_event().set()
 
 
 def _asset_is_displayable(asset: dict[str, Any]) -> bool:
@@ -2775,7 +2848,50 @@ def _asset_is_displayable(asset: dict[str, Any]) -> bool:
     # Default to True so a row written before this field existed
     # (or by an older serializer that doesn't set it) doesn't get
     # silently skipped.
-    return bool(asset.get('is_reachable', True))
+    if bool(asset.get('is_reachable', True)):
+        return True
+    # An "unreachable" verdict is only evidence for as long as
+    # something is still producing verdicts. Both refresh paths are
+    # celery tasks -- the beat sweep and the recheck we ask for below
+    # -- so a celery container that is down or crash-looping freezes
+    # this field at False, and the asset is skipped for the rest of
+    # the device's uptime even once the network is long back. The
+    # device looks healthy throughout: the web UI still answers, and
+    # the only trace is a single line in the viewer log. Reported from
+    # the field, reproduced on the testbed (GH #3424).
+    #
+    # So fail open once the verdict goes stale, which is the same
+    # choice the default above already makes when there is no verdict
+    # at all. A page that fails to load is on the screen where someone
+    # can see it; a page that never appears is not.
+    return _reachability_verdict_is_stale(asset)
+
+
+def _reachability_verdict_is_stale(asset: dict[str, Any]) -> bool:
+    """True if nothing has re-probed this asset in a long time.
+
+    ``last_reachability_check`` is written by the same celery tasks
+    that write ``is_reachable``, so its age is a direct measure of
+    whether those tasks are still running. A row that has never been
+    probed carries no timestamp and counts as stale: there is no
+    verdict to trust in that case either.
+    """
+    checked_at = asset.get('last_reachability_check')
+    if checked_at is None:
+        return True
+    try:
+        age = (timezone.now() - checked_at).total_seconds()
+    except TypeError:
+        # A hand-crafted row could hold a naive datetime, which can't
+        # be subtracted from an aware one. Treat an unusable timestamp
+        # as no timestamp rather than letting it take the screen down.
+        logger.warning(
+            'Unusable last_reachability_check on asset %s; '
+            'treating its reachability verdict as stale',
+            asset.get('asset_id'),
+        )
+        return True
+    return bool(age > REACHABILITY_STALE_AFTER_S)
 
 
 def _asset_is_local_file(asset: dict[str, Any]) -> bool:
@@ -3054,14 +3170,28 @@ def setup() -> None:
         if not _is_webview_gone_error(exc):
             raise
         logger.warning(
-            'AnthiasViewer died between handshake and bus.get; '
+            'AnthiasViewer died between handshake and bus.get (%s); '
             'respawning and retrying once: %s',
+            _describe_dead_webview(),
             exc,
         )
         if browser is not None:
             _terminate_webview(browser)
         load_browser()
-        browser_bus = bus.get('anthias.viewer', '/Anthias')
+        try:
+            browser_bus = bus.get('anthias.viewer', '/Anthias')
+        except Exception as retry_exc:
+            # The retry budget is spent and the GError is about to
+            # escape main(). It names only the D-Bus symptom, so leave
+            # the respawned webview's own account of how it died next
+            # to it — otherwise the container restarts with no record
+            # of the cause (Sentry ANTHIAS-3).
+            if _is_webview_gone_error(retry_exc):
+                logger.warning(
+                    'Respawned AnthiasViewer also died before bus.get (%s)',
+                    _describe_dead_webview(),
+                )
+            raise
     # MPVMediaPlayer calls AnthiasViewer's playVideo / stopVideo
     # slots via this same proxy now that video lives in-process
     # (issue #2904). Inject after load_browser so the proxy is

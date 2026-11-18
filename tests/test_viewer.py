@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import errno
 import logging
 import os
@@ -11,6 +12,7 @@ from unittest import mock
 
 import pytest
 import requests
+from django.utils import timezone
 
 import anthias_viewer as viewer
 from anthias_server.app.models import DURATION_S_MAX
@@ -208,6 +210,83 @@ def test_setup_respawns_webview_when_busget_finds_name_gone(
     assert viewer_fixtures.m_loadb.call_count == 2
     assert viewer_fixtures.m_loadb.call_args_list[1] == mock.call()
     assert viewer_fixtures.u.browser_bus is proxy
+
+
+def test_setup_logs_how_the_webview_died_before_busget(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    """A death between handshake and bus.get surfaces only as a D-Bus
+    ServiceUnknown/NoReply. The respawn warning must carry the dead
+    process's exit status and output tail, or the cause is lost with
+    the process (Sentry ANTHIAS-3)."""
+    gone = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The '
+        'name anthias.viewer was not provided by any .service files'
+    )
+    no_reply = RuntimeError(
+        'GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message '
+        'recipient disconnected from message bus without replying'
+    )
+    fake_bus = mock.Mock()
+    fake_bus.get.side_effect = [gone, no_reply]
+    dead_browser = mock.Mock(name='dead_browser')
+    dead_browser.is_alive.return_value = False
+    dead_browser.process.exit_code = -6
+    output = viewer_fixtures.u._BoundedWebviewOutput()
+    output('This plugin does not support createPlatformOpenGLContext!\n')
+
+    viewer_fixtures.p_loadb.start()
+    try:
+        with (
+            mock.patch('pydbus.SessionBus', mock.Mock(return_value=fake_bus)),
+            mock.patch.object(viewer_fixtures.u, 'browser', dead_browser),
+            mock.patch.object(viewer_fixtures.u, '_webview_output', output),
+            mock.patch.object(viewer_fixtures.u.logger, 'warning') as warn,
+            pytest.raises(RuntimeError, match='NoReply'),
+        ):
+            viewer_fixtures.u.setup()
+    finally:
+        viewer_fixtures.p_loadb.stop()
+
+    messages = [c.args[0] % c.args[1:] for c in warn.call_args_list]
+    assert len(messages) == 2
+    for message in messages:
+        assert 'killed by SIGABRT (-6)' in message
+        assert 'createPlatformOpenGLContext' in message
+    assert messages[1].startswith('Respawned AnthiasViewer also died')
+
+
+def test_describe_dead_webview_tail_is_bounded(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    u = viewer_fixtures.u
+    output = u._BoundedWebviewOutput()
+    output('x' * 10_000 + 'FATAL\n')
+    live = mock.Mock()
+    live.is_alive.return_value = True
+    with (
+        mock.patch.object(u, 'browser', live),
+        mock.patch.object(u, '_webview_output', output),
+        mock.patch.object(u, 'sleep'),
+    ):
+        described = u._describe_dead_webview()
+    assert described.startswith('process still running; output tail: ')
+    assert described.endswith('FATAL')
+    assert len(described) < u.WEBVIEW_DEATH_TAIL_CHARS + 100
+
+
+def test_describe_dead_webview_never_raises(
+    viewer_fixtures: _ViewerFixtures,
+) -> None:
+    u = viewer_fixtures.u
+    broken = mock.Mock()
+    broken.is_alive.side_effect = OSError('reaped')
+    with mock.patch.object(u, 'browser', broken):
+        assert u._describe_dead_webview().startswith(
+            'webview state unavailable'
+        )
+    with mock.patch.object(u, 'browser', None):
+        assert u._describe_dead_webview() == 'no webview process recorded'
 
 
 def test_setup_reraises_unrelated_busget_error(
@@ -2169,7 +2248,13 @@ def test_displayable_remote_uri_consults_is_reachable() -> None:
         'skip_asset_check': False,
         'is_reachable': True,
     }
-    bad = {**ok, 'is_reachable': False}
+    # A *fresh* unreachable verdict is honoured. The timestamp matters
+    # now: see the staleness tests below.
+    bad = {
+        **ok,
+        'is_reachable': False,
+        'last_reachability_check': timezone.now(),
+    }
     assert viewer._asset_is_displayable(ok)
     assert not viewer._asset_is_displayable(bad)
 
@@ -2183,6 +2268,83 @@ def test_displayable_missing_is_reachable_defaults_to_displayable() -> None:
         'skip_asset_check': False,
     }
     assert viewer._asset_is_displayable(asset)
+
+
+# ---------------------------------------------------------------------------
+# Stale reachability verdicts (GH #3424)
+# ---------------------------------------------------------------------------
+#
+# Both paths that can clear is_reachable=False are celery tasks (the
+# beat sweep and the viewer-requested recheck). A celery container
+# that is down or crash-looping therefore freezes the field, and the
+# asset used to be skipped for the rest of the device's uptime even
+# once the network was long back. Fail open once the verdict is older
+# than the sweep could plausibly explain.
+
+
+def _unreachable_since(age_s: float) -> dict[str, object]:
+    return {
+        'asset_id': 'a',
+        'uri': 'http://example.com/x',  # NOSONAR
+        'skip_asset_check': False,
+        'is_reachable': False,
+        'last_reachability_check': timezone.now()
+        - datetime.timedelta(seconds=age_s),
+    }
+
+
+def test_displayable_recent_unreachable_verdict_is_honoured() -> None:
+    """Just inside the window: something is still probing, so the
+    verdict is current information and the asset stays skipped."""
+    age = viewer.REACHABILITY_STALE_AFTER_S - 60
+    assert not viewer._asset_is_displayable(_unreachable_since(age))
+
+
+def test_displayable_stale_unreachable_verdict_fails_open() -> None:
+    """Past the window, nothing has re-probed in three sweep
+    intervals. That says the checker stopped, not that the asset is
+    still down — so show it rather than skipping it forever."""
+    age = viewer.REACHABILITY_STALE_AFTER_S + 60
+    assert viewer._asset_is_displayable(_unreachable_since(age))
+
+
+def test_displayable_unreachable_with_no_timestamp_fails_open() -> None:
+    """A row that has never been probed carries no timestamp, so
+    there is no verdict to trust — same answer as a stale one."""
+    asset = _unreachable_since(0)
+    del asset['last_reachability_check']
+    assert viewer._asset_is_displayable(asset)
+
+
+def test_displayable_unreachable_with_none_timestamp_fails_open() -> None:
+    """``last_reachability_check`` is nullable in the model."""
+    asset = {**_unreachable_since(0), 'last_reachability_check': None}
+    assert viewer._asset_is_displayable(asset)
+
+
+def test_displayable_unusable_timestamp_fails_open(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A naive datetime can't be subtracted from an aware one. A
+    hand-crafted row must not be able to take the screen down."""
+    asset = {
+        **_unreachable_since(0),
+        'last_reachability_check': datetime.datetime(2020, 1, 1),
+    }
+    with caplog.at_level(logging.WARNING):
+        assert viewer._asset_is_displayable(asset)
+    assert 'Unusable last_reachability_check' in caplog.text
+
+
+def test_displayable_stale_verdict_does_not_override_local_file() -> None:
+    """Staleness only governs the remote-URI branch. A local file that
+    is genuinely missing is still not displayable, however old the
+    row's reachability timestamp is."""
+    asset = {
+        **_unreachable_since(viewer.REACHABILITY_STALE_AFTER_S + 60),
+        'uri': '/data/anthias_assets/definitely-not-here.jpg',
+    }
+    assert not viewer._asset_is_displayable(asset)
 
 
 # ---------------------------------------------------------------------------
@@ -2278,6 +2440,9 @@ def test_asset_loop_rechecks_unreachable_remote_asset() -> None:
         'duration': 10,
         'skip_asset_check': False,
         'is_reachable': False,
+        # Fresh verdict: a stale one fails open and takes the display
+        # path instead of the skip path (GH #3424).
+        'last_reachability_check': timezone.now(),
     }
     skip_event = mock.Mock()
     skip_event.wait.return_value = False
@@ -2456,8 +2621,20 @@ def test_skip_when_current_asset_deleted() -> None:
     skip_event.set.assert_called_once()
 
 
-def test_skip_when_current_asset_deactivated() -> None:
+@pytest.fixture
+def restore_skip_deactivated_asset() -> Iterator[None]:
+    original = settings['skip_deactivated_asset']
+    try:
+        yield
+    finally:
+        settings['skip_deactivated_asset'] = original
+
+
+def test_skip_when_current_asset_deactivated(
+    restore_skip_deactivated_asset: None,
+) -> None:
     """Toggling is_enabled off on the displayed asset must skip."""
+    settings['skip_deactivated_asset'] = True
     scheduler = mock.Mock()
     scheduler.current_asset_id = 'asset-1'
     skip_event = mock.Mock()
@@ -2469,6 +2646,49 @@ def test_skip_when_current_asset_deactivated() -> None:
         mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
     ):
         objects_filter.return_value.first.return_value = inactive_asset
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_called_once()
+
+
+def test_no_skip_when_deactivated_and_setting_off(
+    restore_skip_deactivated_asset: None,
+) -> None:
+    """With skip_deactivated_asset off, an asset removed from the
+    playlist mid-rotation finishes what it started — the pre-#2430
+    behaviour operators asked to keep. The playlist itself is still
+    rebuilt by get_next_asset(), so it won't come round again."""
+    settings['skip_deactivated_asset'] = False
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'asset-1'
+    skip_event = mock.Mock()
+    inactive_asset = mock.Mock()
+    inactive_asset.is_active.return_value = False
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        objects_filter.return_value.first.return_value = inactive_asset
+        viewer._skip_if_current_asset_inactive()
+    skip_event.set.assert_not_called()
+
+
+def test_skip_when_deleted_even_with_setting_off(
+    restore_skip_deactivated_asset: None,
+) -> None:
+    """skip_deactivated_asset only governs *deactivation*. A deleted
+    asset has had its file unlinked alongside the row, so it always
+    comes off the screen immediately."""
+    settings['skip_deactivated_asset'] = False
+    scheduler = mock.Mock()
+    scheduler.current_asset_id = 'gone'
+    skip_event = mock.Mock()
+    with (
+        mock.patch.object(viewer, 'scheduler', scheduler),
+        mock.patch('anthias_viewer.get_skip_event', return_value=skip_event),
+        mock.patch('anthias_viewer.Asset.objects.filter') as objects_filter,
+    ):
+        objects_filter.return_value.first.return_value = None
         viewer._skip_if_current_asset_inactive()
     skip_event.set.assert_called_once()
 
