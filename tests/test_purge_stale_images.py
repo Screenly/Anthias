@@ -27,7 +27,10 @@ class Harness:
         self.state_path = os.path.join(workdir, 'state.json')
         self.removed_log = os.path.join(workdir, 'removed.log')
         self.bin_dir = os.path.join(workdir, 'bin')
+        self.content_dir = os.path.join(workdir, 'content')
         os.makedirs(self.bin_dir)
+        os.makedirs(os.path.join(self.content_dir, 'ingest'))
+        os.makedirs(os.path.join(self.content_dir, 'blobs'))
         self._write_shim('sudo', '#!/bin/sh\nexec "$@"\n')
         self._write_shim(
             'docker',
@@ -48,9 +51,27 @@ class Harness:
         with open(self.state_path, 'w') as f:
             json.dump({'images': images, 'containers': containers}, f)
 
+    def seed_abandoned_pull(self, ingest_kb: int, blob_kb: int) -> None:
+        """
+        Stand in for what a dead `docker pull` abandons in containerd's
+        content store: a part-written layer under `ingest/`, and a whole
+        layer under `blobs/` that finished before the pull gave up.
+        Neither is reachable from any image.
+        """
+
+        for subdir, kilobytes in (
+            ('ingest', ingest_kb),
+            ('blobs', blob_kb),
+        ):
+            path = os.path.join(self.content_dir, subdir, 'abandoned-pull')
+            with open(path, 'wb') as f:
+                f.write(b'\0' * kilobytes * 1024)
+
     def run(
         self,
+        *args: str,
         docker_fails: bool = False,
+        check: bool = True,
     ) -> 'subprocess.CompletedProcess[str]':
         env = os.environ.copy()
         # The shims go first so `docker` and `sudo` resolve to them
@@ -58,14 +79,16 @@ class Harness:
         env['PATH'] = f'{self.bin_dir}:{env.get("PATH", "/usr/bin:/bin")}'
         env['FAKE_DOCKER_STATE'] = self.state_path
         env['FAKE_DOCKER_REMOVED_LOG'] = self.removed_log
+        env['FAKE_DOCKER_CONTENT_DIR'] = self.content_dir
+        env['ANTHIAS_CONTAINERD_CONTENT_DIR'] = self.content_dir
         if docker_fails:
             env['FAKE_DOCKER_FAIL'] = '1'
         return subprocess.run(
-            [SCRIPT],
+            [SCRIPT, *args],
             env=env,
             capture_output=True,
             text=True,
-            check=True,
+            check=check,
         )
 
     @property
@@ -297,3 +320,83 @@ def test_no_containers_at_all_still_purges(harness: Harness) -> None:
 
     assert harness.removed == [f'{SERVER_REPO}:v0.19.5-pi4-64']
     assert harness.remaining_ids == set()
+
+
+def test_untagged_only_spares_the_superseded_release(harness: Harness) -> None:
+    # The upgrade's failure path runs this. The images it must not touch
+    # are exactly the superseded ones: a pull that died leaves the device
+    # still running them.
+    harness.set_state(
+        images=[
+            image('sha256:running', SERVER_REPO, 'v0.19.5-pi4-64'),
+            image('sha256:superseded', SERVER_REPO, 'v0.19.4-pi4-64'),
+            image('sha256:untagged', size=4096),
+        ],
+        containers={'container-server': 'sha256:running'},
+    )
+
+    result = harness.run('--untagged-only')
+
+    assert harness.removed == ['sha256:untagged']
+    assert harness.remaining_ids == {'sha256:running', 'sha256:superseded'}
+    assert 'superseded' not in result.stdout
+
+
+def test_reports_abandoned_pull_though_prune_counts_none(
+    harness: Harness,
+) -> None:
+    # The whole point of issue #3410: `prune` clears what a dead pull
+    # abandoned but reports `0B`, so on a device that is out of space the
+    # one number the operator needs is the one docker will not print.
+    # The split mirrors a measurement on a Pi 5, where an interrupted
+    # pull left 130 MB part-written and 39 MB of whole orphaned layers.
+    harness.set_state(
+        images=[image('sha256:running', SERVER_REPO, 'v0.19.5-pi4-64')],
+        containers={'container-server': 'sha256:running'},
+    )
+    harness.seed_abandoned_pull(ingest_kb=130 * 1024, blob_kb=39 * 1024)
+
+    result = harness.run('--untagged-only')
+
+    assert 'Total reclaimed space' not in result.stdout
+    assert 'untagged images' not in result.stdout
+    # Both halves counted, not just the part-written one.
+    assert 'Reclaimed 169 MB left behind by an interrupted download.' in (
+        ' '.join(result.stdout.split())
+    )
+
+
+def test_untouched_content_store_stays_quiet(harness: Harness) -> None:
+    harness.set_state(
+        images=[image('sha256:running', SERVER_REPO, 'v0.19.5-pi4-64')],
+        containers={'container-server': 'sha256:running'},
+    )
+
+    result = harness.run('--untagged-only')
+
+    assert result.stdout.strip() == ''
+
+
+def test_missing_content_store_is_not_an_error(harness: Harness) -> None:
+    # A device on the classic image store has no content directory at
+    # all, and on a containerd one it only appears after the first pull.
+    harness.set_state(
+        images=[image('sha256:old', SERVER_REPO, 'v0.19.5-pi4-64')],
+        containers={},
+    )
+    shutil.rmtree(harness.content_dir)
+
+    result = harness.run()
+
+    assert result.returncode == 0
+    assert harness.removed == [f'{SERVER_REPO}:v0.19.5-pi4-64']
+
+
+def test_unknown_flag_is_rejected(harness: Harness) -> None:
+    harness.set_state(images=[], containers={})
+
+    result = harness.run('--purge-everything', check=False)
+
+    assert result.returncode == 2
+    assert 'Usage:' in result.stderr
+    assert harness.removed == []

@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from anthias_common import (
     board,
     device_helper,
+    journal,
     storage_health,
     undervoltage,
 )
@@ -49,6 +50,7 @@ from anthias_server.api.serializers.v2 import (
     IntegrationsSerializerV2,
     ScreenlyMigrateAssetSerializerV2,
     ScreenlyTokenSerializerV2,
+    SystemLogsQuerySerializerV2,
     UpdateAssetSerializerV2,
     UpdateDeviceSettingsSerializerV2,
     ViewerPlaylistSerializerV2,
@@ -72,7 +74,7 @@ from anthias_server.app.helpers import (
     remove_default_assets,
 )
 from anthias_server.app.models import Asset
-from anthias_server.lib import diagnostics, wifi_connect
+from anthias_server.lib import diagnostics, system_logs, wifi_connect
 from anthias_server.lib.auth import (
     AuthSettingsError,
     apply_auth_settings,
@@ -1844,3 +1846,110 @@ class ImportItemViewV2(APIView):
             )
 
         return Response({**outcome.as_dict(), 'error': None})
+
+
+_SYSTEM_LOGS_ENTRY_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'timestamp': {
+            'type': 'string',
+            'format': 'date-time',
+            'nullable': True,
+        },
+        'priority': {'type': 'integer', 'nullable': True},
+        'unit': {'type': 'string', 'nullable': True},
+        'identifier': {'type': 'string', 'nullable': True},
+        'hostname': {'type': 'string', 'nullable': True},
+        'container_name': {'type': 'string', 'nullable': True},
+        'message': {'type': 'string'},
+    },
+}
+
+_SYSTEM_LOGS_RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'entries': {
+            'type': 'array',
+            'items': _SYSTEM_LOGS_ENTRY_SCHEMA,
+        },
+        'count': {'type': 'integer'},
+        'source': {'type': 'string', 'enum': ['balena', 'host_agent']},
+        'truncated': {'type': 'boolean'},
+        'persistent': {'type': 'boolean', 'nullable': True},
+        'max_count': {'type': 'integer'},
+    },
+}
+
+
+class SystemLogsViewV2(APIView):
+    """Host system-journal snapshot, same contract on both platforms.
+
+    The container cannot read the host journal directly on either
+    platform, so this fans out to whichever backend the device has:
+    the Balena supervisor's ``/v2/journal-logs``, or the
+    ``anthias-host-agent`` systemd unit over Redis. ``source`` in the
+    response names which one answered.
+
+    **Snapshot-only.** No ``follow`` parameter, by design — see
+    ``anthias_server.lib.system_logs``. Clients that want a live view
+    re-request with the same filters.
+
+    ``persistent`` is the one place the platforms genuinely differ and
+    it is reported rather than papered over: a bare-metal host whose
+    journald is still volatile (an install predating the Ansible
+    persistence task) returns ``false``, which means these entries
+    are current-boot-only and a UI should say so.
+    """
+
+    serializer_class = SystemLogsQuerySerializerV2
+
+    @extend_schema(
+        summary='Get a snapshot of the host system journal',
+        parameters=[SystemLogsQuerySerializerV2],
+        responses={
+            200: _SYSTEM_LOGS_RESPONSE_SCHEMA,
+            400: None,
+            502: None,
+        },
+    )
+    @authorized
+    def get(self, request: Request) -> Response:
+        serializer = SystemLogsQuerySerializerV2(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        params = serializer.validated_data
+
+        try:
+            snapshot = system_logs.get_journal_snapshot(
+                count=params.get('count', journal.DEFAULT_COUNT),
+                unit=params.get('unit') or None,
+                container=params.get('container') or None,
+                since=params.get('since') or None,
+                until=params.get('until') or None,
+            )
+        except journal.JournalRequestError as error:
+            # Belt and braces: the serializer already rejects these,
+            # so reaching here means the two allowlists disagreed.
+            return Response(
+                {'message': error.user_message},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except system_logs.JournalUnavailable as error:
+            # 502, not 500: we're reporting that an upstream (the
+            # supervisor, or the host agent) didn't deliver, which is
+            # a condition an operator can act on.
+            logger.warning('System log snapshot failed: %s', error)
+            return Response(
+                {'message': error.user_message},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                'entries': snapshot.entries,
+                'count': len(snapshot.entries),
+                'source': snapshot.source,
+                'truncated': snapshot.truncated,
+                'persistent': snapshot.persistent,
+                'max_count': journal.MAX_COUNT,
+            }
+        )
