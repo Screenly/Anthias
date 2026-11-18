@@ -355,8 +355,17 @@ def _sentry_before_send(event: Event, hint: Hint) -> Event | None:
         short by the disconnect — a broken pipe, not a truncated file.
         Same client-disconnect class as ``CancelledError`` above, but it
         surfaces as a bare ``RuntimeError``, so it's matched by message
-        text to avoid swallowing unrelated RuntimeErrors (Sentry
-        ANTHIAS-37).
+        text to avoid swallowing unrelated RuntimeErrors.
+
+        Note the message: uvicorn raises *shorter* when the body ends
+        early and *longer* when it overruns the header, and only the
+        first is the client-disconnect case described above. This rule
+        was originally credited with ANTHIAS-37, which is the *longer*
+        variant and so never matched it — a real overrun is a bug in
+        whatever produced the response, not noise, and must keep
+        reporting. ANTHIAS-37's own cause (a restore rewriting an asset
+        in place under a live ``FileResponse``) is fixed at the source
+        in ``backup_helper._extract_asset_atomically``.
       * ``SoftTimeLimitExceeded`` **with no Anthias frame anywhere in
         its traceback** — celery arms the soft-limit timer for the whole
         job, not just the task body, so a task that finishes a hair
