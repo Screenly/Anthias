@@ -13,8 +13,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from anthias_common.youtube import dispatch_download
+from anthias_server.api.errors import AssetCreationError
 from anthias_server.api.helpers import (
-    AssetCreationError,
     parse_request,
 )
 from anthias_server.api.serializers import (

@@ -168,7 +168,7 @@ def test_create_video_asset_v2_with_non_zero_duration_should_fail(
 
     response = api_client.post(asset_list_url, data=test_data, format='json')
 
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert 'Duration must be zero for video assets' in str(response.data)
 
     assert mock_rename.call_count == 1

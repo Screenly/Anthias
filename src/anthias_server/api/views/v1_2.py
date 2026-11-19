@@ -7,8 +7,8 @@ from rest_framework.views import APIView
 
 from anthias_common.remote_video import dispatch_remote_video_download
 from anthias_common.youtube import dispatch_download
+from anthias_server.api.errors import AssetCreationError
 from anthias_server.api.helpers import (
-    AssetCreationError,
     finalize_asset_update,
     get_active_asset_ids,
     save_active_assets_ordering,

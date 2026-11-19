@@ -210,7 +210,12 @@ class CreateAssetSerializerMixin:
                     video_duration = get_video_duration(uri)
                     if video_duration is None:
                         raise AssetCreationError(
-                            f'Could not determine duration of video {uri!r}'
+                            {
+                                'error': (
+                                    'Could not determine duration of '
+                                    f'video {uri!r}'
+                                )
+                            }
                         )
                     # Clamp (not reject): the file itself is playable,
                     # only a corrupted container header can advertise
@@ -221,7 +226,7 @@ class CreateAssetSerializerMixin:
                     )
             else:
                 raise AssetCreationError(
-                    'Duration must be zero for video assets.'
+                    {'error': 'Duration must be zero for video assets.'}
                 )
         elif not is_youtube and not is_remote_video_download:
             duration = data.get('duration', settings['default_duration'])
@@ -287,7 +292,7 @@ class CreateAssetSerializerMixin:
             )
         ):
             raise AssetCreationError(
-                'Could not retrieve file. Check the asset URL.'
+                {'error': 'Could not retrieve file. Check the asset URL.'}
             )
 
         # Hand the row off to the normalisation pipeline. We do this

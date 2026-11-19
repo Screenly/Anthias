@@ -30,7 +30,8 @@ from urllib.parse import urlparse
 import requests
 
 from anthias_common.utils import validate_url
-from anthias_server.api.helpers import AssetCreationError, persist_new_asset
+from anthias_server.api.errors import AssetCreationError
+from anthias_server.api.helpers import persist_new_asset
 from anthias_server.api.serializers.v2 import CreateAssetSerializerV2
 from anthias_server.app.models import Asset
 from anthias_server.settings import settings
