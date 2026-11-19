@@ -50,6 +50,12 @@ below is also captured, in depth, in the committed skills under
   webpages. Read "wedge/unresponsive" on a small board as memory pressure first.
 - **CI unit tests run on the ephemeral merge SHA**, so head-SHA check-runs look
   empty — find them via `gh run list`.
+- **balena is not Docker Compose v3.** It supports compose 2.4 fields only, and
+  its parser can silently store a different value than the template says.
+  `core: 0` became `core: {}` and put every 2026.11.0 balena device in a
+  container-recreate loop. Keep the balena templates inside the allowlist in
+  `tests/test_balena_compose_compat.py`, and let `bin/check_balena_compose.py`
+  gate every deploy (anthias-release has the details).
 - **CalVer resets MICRO each month**; balena needs no-leading-zero semver in
   `balena.yml`; cut the GH release only AFTER the master Docker build is green.
 
