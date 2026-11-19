@@ -17,8 +17,23 @@ services:
     # reports crashes, so on a device a dump buys nothing and costs the
     # card. Anchored here and aliased by every service below: the rule
     # is "any of our containers", not "the one that happened to crash".
+    #
+    # 1, NOT 0, and not `{soft: 0, hard: 0}` either. `balena deploy`
+    # parses this file with balena-compose-parser, which drops every
+    # zero-valued ulimit field: both spellings of 0 reach the release
+    # as `core: {}`. The supervisor then reads the target as an unset
+    # limit, the running container as 0/0, never sees them match, and
+    # kills and recreates the services forever without reaching
+    # anthias-server (2026.11.0, issues 3475 and 3477). Helios rejects
+    # `{}` outright. 1 survives the parser as an integer, and to the
+    # kernel it disables dumps just as well: a 1-byte limit is below
+    # the size of any ELF core, so nothing is written, and for a piped
+    # core_pattern the kernel treats a limit of exactly 1 as "skip this
+    # dump", which it does not do for 0. Measured on a Pi 5: unlimited
+    # writes core.<pid>, 1 writes nothing. tests/test_core_dump_limits.py
+    # pins the value and rejects any zero ulimit in these templates.
     ulimits: &no-core-dumps
-      core: 0
+      core: 1
     build:
       context: .
       dockerfile: ./docker/Dockerfile.server

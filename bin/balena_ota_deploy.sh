@@ -53,6 +53,13 @@ export BOARD
 bin/render_balena_yml.sh balena-deploy "$RELEASE_VERSION"
 envsubst < docker-compose.balena.yml.tmpl > balena-deploy/docker-compose.yml
 
+# balena stores its own parser's reading of this file, not the file.
+# That parser drops zero-valued ulimit fields, which in 2026.11.0
+# shipped `core: {}` and left every device recreating its services
+# forever. Run the same parser here and refuse to deploy anything the
+# supervisor could not compare.
+python3 bin/check_balena_compose.py balena-deploy/docker-compose.yml
+
 # The /dev/vchiq strip that used to live here is gone: the template no
 # longer bind-mounts it. It existed only for libcec, which has been
 # replaced by the kernel CEC uABI.

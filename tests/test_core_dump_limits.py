@@ -30,6 +30,19 @@ TEMPLATES = (
     'docker-compose.balena.dev.yml.tmpl',
 )
 
+BALENA_TEMPLATES = tuple(t for t in TEMPLATES if '.balena.' in t)
+
+# The value that disables dumps differs by deployment. Docker Compose
+# takes `core: 0` as written. `balena deploy` does not: its compose
+# parser drops every zero-valued ulimit field, so both `core: 0` and
+# `{soft: 0, hard: 0}` reach the release as `core: {}`, which the
+# supervisor never sees as matching the running container and
+# recreates forever (2026.11.0, issues 3475 and 3477). A limit of 1
+# byte survives the parser and writes no core either: it is below the
+# size of any ELF core, and the kernel treats exactly 1 as "skip" for
+# a piped core_pattern too.
+EXPECTED_CORE_LIMIT = {t: 1 if t in BALENA_TEMPLATES else 0 for t in TEMPLATES}
+
 
 Service = dict[str, object]
 
@@ -47,7 +60,7 @@ def test_every_service_disables_core_dumps(template: str) -> None:
         name: service.get('ulimits')
         for name, service in _services(template).items()
         if not isinstance(limits := service.get('ulimits'), dict)
-        or limits.get('core') != 0
+        or limits.get('core') != EXPECTED_CORE_LIMIT[template]
     }
 
     assert not offenders, (
@@ -61,7 +74,7 @@ def test_every_service_disables_core_dumps(template: str) -> None:
 def test_core_limit_is_shared_rather_than_retyped(template: str) -> None:
     """One anchor, aliased everywhere else.
 
-    Five copies of `core: 0` would drift the moment someone edits one of
+    Five copies of the core limit would drift the moment someone edits one of
     them, and the YAML alias is what makes "every service" checkable by
     reading a single line.
     """
@@ -88,4 +101,41 @@ def test_templates_agree_on_which_services_exist() -> None:
 
     assert len(distinct) == 1, (
         f'compose templates list different services: {by_template}'
+    )
+
+
+def _zero_fields(name: str, limit: object) -> list[str]:
+    if isinstance(limit, dict):
+        return [
+            f'{name}.{field}' for field, value in limit.items() if value == 0
+        ]
+    return [name] if limit == 0 else []
+
+
+@pytest.mark.parametrize('template', BALENA_TEMPLATES)
+def test_balena_templates_have_no_zero_valued_ulimit(template: str) -> None:
+    """balena's compose parser deletes zeros, whatever the limit.
+
+    This is wider than the core limit on purpose: a future
+    `nofile: {soft: 0, ...}` would be mangled the same way, and the
+    symptom is a device that never starts its services rather than a
+    failed deploy, so it has to be caught here.
+    """
+    offenders = {
+        service_name: zeros
+        for service_name, service in _services(template).items()
+        if isinstance(limits := service.get('ulimits'), dict)
+        and (
+            zeros := [
+                z
+                for name, limit in limits.items()
+                for z in _zero_fields(name, limit)
+            ]
+        )
+    }
+
+    assert not offenders, (
+        f'{template}: balena-compose-parser drops zero-valued ulimit '
+        f'fields, which leaves the supervisor recreating these services '
+        f'forever: {offenders}'
     )
