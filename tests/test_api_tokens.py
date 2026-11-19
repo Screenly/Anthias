@@ -21,6 +21,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
+from django.db.models import QuerySet
 from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
@@ -144,6 +145,33 @@ def test_authenticate_token_throttles_last_used_writes(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize('previously_used', [False, True])
+def test_last_used_throttle_handles_concurrent_requests(
+    operator: User, auth_on: None, previously_used: bool
+) -> None:
+    """A request holding a stale row must not repeat another request's write."""
+    token, plaintext = api_tokens.create_token(operator, 'Controller')
+    if previously_used:
+        ApiToken.objects.filter(pk=token.pk).update(
+            last_used_at=timezone.now() - timedelta(minutes=2)
+        )
+    recent = timezone.now() - timedelta(seconds=5)
+    first = QuerySet.first
+
+    def concurrent_first(queryset: QuerySet[ApiToken]) -> ApiToken | None:
+        snapshot = first(queryset)
+        # Another request updates the row after this one's SELECT.
+        ApiToken.objects.filter(pk=token.pk).update(last_used_at=recent)
+        return snapshot
+
+    with patch.object(QuerySet, 'first', concurrent_first):
+        assert api_tokens.authenticate_token(plaintext) is not None
+
+    token.refresh_from_db()
+    assert token.last_used_at == recent
+
+
+@pytest.mark.django_db
 def test_authenticate_token_rejects_unknown_revoked_and_inactive(
     operator: User, auth_on: None
 ) -> None:
@@ -184,7 +212,14 @@ def test_authenticate_token_ignored_while_auth_disabled(
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    'path', ['/api/v2/info', '/api/v2/assets', '/api/v1.2/assets']
+    'path',
+    [
+        '/api/v2/info',
+        '/api/v2/assets',
+        '/api/v1.2/assets',
+        '/api/v1.1/assets',
+        '/api/v1/assets',
+    ],
 )
 def test_bearer_token_authenticates_api(
     operator: User, auth_on: None, path: str

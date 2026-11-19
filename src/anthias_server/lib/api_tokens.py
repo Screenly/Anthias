@@ -126,6 +126,7 @@ def authenticate_token(plaintext: str) -> ApiToken | None:
     None when authentication is disabled, when no token matches, when
     the token is revoked, or when its user is inactive.
     """
+    from django.db.models import Q
     from django.utils import timezone
 
     from anthias_server.app.models import ApiToken
@@ -144,6 +145,14 @@ def authenticate_token(plaintext: str) -> ApiToken | None:
     now = timezone.now()
     last_used = token.last_used_at
     if last_used is None or now - last_used >= LAST_USED_RESOLUTION:
-        ApiToken.objects.filter(pk=token.pk).update(last_used_at=now)
-        token.last_used_at = now
+        updated = (
+            ApiToken.objects.filter(pk=token.pk)
+            .filter(
+                Q(last_used_at__isnull=True)
+                | Q(last_used_at__lte=now - LAST_USED_RESOLUTION)
+            )
+            .update(last_used_at=now)
+        )
+        if updated:
+            token.last_used_at = now
     return token
