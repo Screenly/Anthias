@@ -49,8 +49,19 @@ grep -n -A1 'name = "anthias"' uv.lock
 
 - Branch, commit as `chore(release): bump version metadata to <ver>` (the
   established convention), open a PR ready-for-review, let CI pass, merge to
-  `master`. Admin can merge past `REVIEW_REQUIRED` with `gh pr merge --squash
-  --admin` (`enforce_admins=false` on master).
+  `master`.
+- **Merging needs a human approval.** The "Default" ruleset on master
+  requires one approving review from someone other than the last pusher,
+  and has no bypass actors, so `gh pr merge --admin` is refused for the
+  bot ("New changes require approval from someone other than the last
+  pusher"). Open the fix PR and the bump PR together and ask for both
+  approvals at once. Do not loosen the ruleset to get around it.
+- **If the release touches a balena compose template**, it must pass
+  `tests/test_balena_compose_compat.py` and `tests/test_core_dump_limits.py`.
+  `bin/check_balena_compose.py` must also accept the rendered file, and it
+  runs automatically in `bin/balena_ota_deploy.sh`. balena supports compose
+  2.4 fields only and can silently store a different value than the one
+  you wrote (see anthias-release, "Balena is NOT Docker Compose v3").
 
 ## 3. Wait for the master Docker build (ALL boards)
 

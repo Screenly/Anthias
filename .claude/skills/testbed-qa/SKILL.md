@@ -99,6 +99,44 @@ then prune again. Rule of thumb: remove the old image before loading the new one
 own ssh command line and reports the job "running" forever. Confirm completion
 by side effect (images present, disk stable), not by pgrep.
 
+### 2a. Reproducing balena-only bugs (the testbeds are not balena)
+
+Every testbed runs plain docker compose, so it cannot show a bug that lives
+in balena's compose handling or the supervisor. The 2026.11.0 recreate loop
+is one: compose accepted `core: 0`, and balena stored it as `core: {}`.
+Reproduce those on a real balenaOS supervisor instead, using a release image
+in a KVM VM on the x86 testbed. Claim the board first, per section 1.
+
+1. Download the release's `*-anthias-x86.img.xz` and check its `.sha256`.
+   The x86 image is a **flasher**: it installs itself to another disk and
+   powers off.
+2. Loop-mount partition 1 (`flash-boot`) and edit `config.json`:
+   - **Remove** `apiKey`, `apiEndpoint`, `vpnEndpoint`, `deltaEndpoint`,
+     `registryEndpoint`, `logsEndpoint` and `mixpanelToken`. Otherwise the VM
+     provisions itself into the production fleet as a new device. Without
+     them the supervisor runs unmanaged from the preloaded release.
+   - Add `"os": {"sshKeys": ["<your pubkey>"]}` (production images accept
+     these, with sshd on port 22222) and `"persistentLogging": true`.
+3. Flash: run `qemu-system-x86_64 -enable-kvm -machine q35` with OVMF, the
+   image as a `usb-storage` boot device and a blank 16G qcow2 on
+   `virtio-blk`, plus `-no-reboot`. It exits when the install is done.
+4. Boot the qcow2 alone with
+   `-netdev user,hostfwd=tcp::22223-:22222,hostfwd=tcp::8081-:80`, and SSH in
+   as `root` on port 22223 through the testbed (`ssh -J`).
+5. Observe with `balena-engine ps -a` and
+   `balena-engine logs balena_supervisor | grep "Replacing container"` (a
+   loop shows dozens a minute). Check port 80 with `curl localhost/`.
+6. Test a fix without a new release. The target state lives in the `app`
+   table of `/mnt/data/resin-data/balena-supervisor/database.sqlite` (the
+   preloaded `/mnt/data/apps.json` is emptied after first boot). Stop
+   `balena-supervisor` and back up the DB. Edit the `services` JSON with
+   `python3` from one of the already-loaded app images (the host has no
+   sqlite), e.g.
+   `balena-engine run --rm --entrypoint python3 -v <db dir>:/db <image id> ...`.
+   Then start the supervisor again. Put in exactly what balena-compose-parser
+   produces from the new template, not what the template says.
+7. Clean up: kill the qemu PID, delete the images and release the lock.
+
 ## 3. Validate a pure-Python fix without an image rebuild (overlay method)
 
 For server/viewer/common Python changes on a full-stack testbed:
