@@ -2067,7 +2067,8 @@ label { text-align: left; }
   gap: calc(var(--spacing) * 2);
   align-items: center;
 
-  > :first-child { flex: 1; }
+  > .app-input,
+  > .app-floating { flex: 1; }
 }
 .api-tokens__value {
   font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
