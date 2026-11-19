@@ -9,6 +9,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
+from anthias_common.paths import is_within
 from anthias_common.utils import get_video_duration
 from anthias_server.app.models import Asset
 from anthias_server.app.page_context import navbar as _navbar_context
@@ -161,7 +162,10 @@ def delete_asset_with_file(asset: Asset, *, nudge_viewer: bool = True) -> None:
     # ``delete()`` clears only the pk; the instance keeps its field
     # values, so ``asset.uri`` still reads the path we just dropped the
     # row for.
-    if asset.uri and asset.uri.startswith(settings['assetdir']):
+    # Confined, not prefix-tested: a row restored from a backup could
+    # carry `<assetdir>/../<anything>`, which starts with the asset dir
+    # and names a file outside it.
+    if asset.uri and is_within(settings['assetdir'], asset.uri):
         try:
             remove(asset.uri)
         except OSError as exc:

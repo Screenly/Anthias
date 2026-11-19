@@ -12,6 +12,7 @@ from rest_framework.serializers import (
     Serializer,
 )
 
+from anthias_common.paths import is_within
 from anthias_common.utils import validate_url
 from anthias_server.app.models import DURATION_S_MAX, Asset
 
@@ -69,9 +70,7 @@ def _is_within_assetdir(uri: str) -> bool:
     """
     from anthias_server.settings import settings
 
-    base = path.realpath(settings['assetdir']) + path.sep
-    target = path.realpath(uri)
-    return target.startswith(base)
+    return is_within(settings['assetdir'], uri)
 
 
 def validate_uri(uri: str) -> None:
