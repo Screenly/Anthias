@@ -21,7 +21,8 @@ REPO_ROOT = os.path.abspath(
 def _load() -> ModuleType:
     path = os.path.join(REPO_ROOT, 'bin', 'check_balena_compose.py')
     spec = importlib.util.spec_from_file_location('check_balena_compose', path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

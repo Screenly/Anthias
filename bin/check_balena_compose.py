@@ -52,11 +52,11 @@ def find_parser() -> Path:
     return Path(npm_root) / PARSER_IN_CLI
 
 
-def parse(parser: Path, compose_file: str) -> dict[str, object]:
+def parse(parser: Path, compose_file: Path) -> dict[str, object]:
     # balena-cli runs the parser with an empty environment and a fresh
     # project name; mirror it so we see exactly what the deploy sends.
     result = subprocess.run(
-        [str(parser), '-f', compose_file, str(uuid.uuid4())],
+        [str(parser), '-f', str(compose_file), str(uuid.uuid4())],
         check=True,
         capture_output=True,
         text=True,
@@ -99,7 +99,12 @@ def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    compose_file = argv[1]
+    # Resolved to an existing absolute path, so whatever is passed in
+    # reaches the parser as a file and can never be read as a flag.
+    compose_file = Path(argv[1]).resolve()
+    if not compose_file.is_file():
+        print(f'::error::{compose_file} is not a file', file=sys.stderr)
+        return 2
 
     parser = find_parser()
     if not parser.is_file():
@@ -110,7 +115,20 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    problems = malformed_ulimits(parse(parser, compose_file))
+    try:
+        composition = parse(parser, compose_file)
+    except subprocess.CalledProcessError as e:
+        # The parser reports its own errors as JSON on either stream;
+        # balena deploy would fail on the same file, so say why here.
+        detail = (e.stderr or e.stdout or '').strip()
+        print(
+            f'::error::balena-compose-parser rejected {compose_file}: '
+            f'{detail}',
+            file=sys.stderr,
+        )
+        return 1
+
+    problems = malformed_ulimits(composition)
     if problems:
         for problem in problems:
             print(
