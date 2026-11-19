@@ -71,7 +71,7 @@ server = [
     # the 32-bit board images and the whole master build matrix. Hold at
     # 1.4.0 until trixie carries libheif >= 1.23.1 (or a 1.5.x with armhf
     # wheels lands). Do not let dependabot bump this past 1.4.0.
-    "Pillow==12.3.0",
+    "Pillow==13.0.0",
     "pillow-heif==1.4.0",
     "psutil==7.2.2",
     "pydbus==0.6.0",
@@ -153,7 +153,7 @@ mypy = [
     # pillow-heif is intentionally not pinned here — it's listed in
     # tool.mypy.overrides above so its missing-import error is
     # ignored, mirroring the pydbus / sh pattern.
-    "Pillow==12.3.0",
+    "Pillow==13.0.0",
     "pytz==2026.6",
     "sentry-sdk==2.75.0",
     "whitenoise==6.12.0",
