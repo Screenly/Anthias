@@ -3,6 +3,7 @@ from typing import Any
 
 from dateutil import parser as date_parser
 from rest_framework import status
+from rest_framework.exceptions import ParseError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -11,11 +12,6 @@ from anthias_common.youtube import dispatch_download
 from anthias_server.app.models import Asset
 from anthias_server.processing import dispatch_pending_normalize
 from anthias_server.settings import ViewerPublisher
-
-
-class AssetCreationError(Exception):
-    def __init__(self, errors: Any) -> None:
-        self.errors = errors
 
 
 def update_asset(asset: dict[str, Any], data: dict[str, Any]) -> None:
@@ -152,14 +148,21 @@ def finalize_asset_update(asset: Asset) -> None:
 
 
 def parse_request(request: Any) -> Any:
-    data = None
+    """The asset JSON from a v1 / v1.1 request.
 
+    Either the raw body is the JSON, or (the historical form) a ``model``
+    form field holds it. A body that is neither is the client's mistake
+    and answers a 400 via DRF's ``ParseError``, not a 500 from the
+    ``KeyError`` / ``JSONDecodeError`` underneath.
+    """
     # For backward compatibility
     try:
-        data = json.loads(request.data)
-    except ValueError:
-        data = json.loads(request.data['model'])
-    except TypeError:
-        data = json.loads(request.data['model'])
-
-    return data
+        return json.loads(request.data)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return json.loads(request.data['model'])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ParseError(
+            'Expected the asset as JSON, or in a "model" form field.'
+        ) from exc

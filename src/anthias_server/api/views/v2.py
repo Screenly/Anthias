@@ -36,8 +36,8 @@ from anthias_common.utils import (
     get_node_mac_address,
     is_balena_app,
 )
+from anthias_server.api.errors import AssetCreationError
 from anthias_server.api.helpers import (
-    AssetCreationError,
     finalize_asset_update,
     persist_new_asset,
 )

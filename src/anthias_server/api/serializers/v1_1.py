@@ -17,6 +17,7 @@ from anthias_common.utils import (
     url_fails,
 )
 from anthias_common.youtube import is_youtube_url, youtube_destination_path
+from anthias_server.api.errors import AssetCreationError
 from anthias_server.app.models import DURATION_S_MAX, clamp_duration
 from anthias_server.settings import settings
 
@@ -206,7 +207,12 @@ class CreateAssetSerializerV1_1(Serializer[dict[str, Any]]):
             and not asset['skip_asset_check']
             and url_fails(asset['uri'])
         ):
-            raise RuntimeError('Could not retrieve file. Check the asset URL.')
+            # AssetCreationError, not RuntimeError: the create views
+            # answer it with a 400. A RuntimeError reached the generic
+            # handler and came back as a 500 for a client mistake.
+            raise AssetCreationError(
+                {'error': 'Could not retrieve file. Check the asset URL.'}
+            )
 
         # Flag the freshly-uploaded local video for the
         # normalisation pipeline. Fixes GH #2870: pre-fix, v1 / v1.1
