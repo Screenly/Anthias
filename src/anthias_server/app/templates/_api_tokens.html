@@ -1,0 +1,108 @@
+{% load humanize %}
+{% comment %}
+  API tokens section of the settings page. Rendered in full on GET and
+  swapped in place (hx-swap="outerHTML") after a create or revoke. The
+  plaintext of a new token only ever exists in that one response.
+{% endcomment %}
+<section class="settings-section mt-4" id="api-tokens">
+  <header>
+    <div>
+      <h2>API tokens</h2>
+      <p class="settings-section__lede">Let scripts and other devices use the REST API without your password. Send the token as <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+    </div>
+  </header>
+
+  {% if not api_tokens_enabled %}
+  <p class="api-tokens__notice" role="status">
+    <i class="ti ti-lock-open" aria-hidden="true"></i>
+    <span>Authentication is disabled, so the API is open to anyone on the network and tokens have no effect. Turn on authentication above to create and use tokens.{% if api_tokens %} Existing tokens are inactive until you do.{% endif %}</span>
+  </p>
+  {% endif %}
+
+  {% if api_token_error %}
+  <p class="api-tokens__error" role="alert">{{ api_token_error }}</p>
+  {% endif %}
+
+  {% if new_api_token %}
+  <div
+    class="api-tokens__new"
+    x-data="{
+      copied: false,
+      copy() {
+        const field = this.$refs.token;
+        const flash = () => { this.copied = true; setTimeout(() => { this.copied = false }, 2000); };
+        if (window.isSecureContext && navigator.clipboard) {
+          navigator.clipboard.writeText(field.value).then(flash);
+        } else {
+          field.select();
+          if (document.execCommand('copy')) flash();
+        }
+      }
+    }"
+  >
+    <p class="api-tokens__new-title"><strong>Copy your new token now.</strong> It won't be shown again.</p>
+    <div class="api-tokens__new-row">
+      <input type="text" class="app-input api-tokens__value" id="new-api-token" x-ref="token" value="{{ new_api_token }}" readonly aria-label="New API token" @focus="$event.target.select()">
+      <button type="button" class="app-btn app-btn-outline-dark" @click="copy()">
+        <i class="ti" :class="copied ? 'ti-check' : 'ti-copy'" aria-hidden="true"></i>
+        <span x-text="copied ? 'Copied' : 'Copy'">Copy</span>
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if api_tokens_enabled %}
+  <form
+    method="post"
+    action="{% url 'anthias_app:settings_api_tokens_create' %}"
+    hx-post="{% url 'anthias_app:settings_api_tokens_create' %}"
+    hx-target="#api-tokens"
+    hx-swap="outerHTML"
+    class="api-tokens__create"
+  >
+    {% csrf_token %}
+    <div class="app-floating">
+      <input type="text" class="app-input" id="api-token-name" name="name" placeholder=" " maxlength="{{ api_token_name_max }}" required autocomplete="off">
+      <label for="api-token-name">Token name, e.g. "Lobby controller"</label>
+    </div>
+    <button type="submit" id="btn-create-api-token" class="app-btn app-btn-primary">
+      <i class="ti ti-key" aria-hidden="true"></i><span>Create token</span>
+    </button>
+  </form>
+  {% endif %}
+
+  {% if api_tokens %}
+  <ul class="api-tokens__list">
+    {% for token in api_tokens %}
+    <li class="settings-section__row api-tokens__item">
+      <div>
+        <strong>{{ token.name }}</strong>
+        <p class="settings-section__lede">
+          <code>{{ token.prefix }}…</code>
+          · created {{ token.created_at|naturaltime }}
+          · {% if token.last_used_at %}last used {{ token.last_used_at|naturaltime }}{% else %}never used{% endif %}
+        </p>
+      </div>
+      <div class="settings-section__actions">
+        <form
+          method="post"
+          action="{% url 'anthias_app:settings_api_tokens_revoke' token.pk %}"
+          hx-post="{% url 'anthias_app:settings_api_tokens_revoke' token.pk %}"
+          hx-target="#api-tokens"
+          hx-swap="outerHTML"
+          hx-confirm="Revoke the token &quot;{{ token.name }}&quot;? Anything using it loses API access immediately."
+          class="inline m-0"
+        >
+          {% csrf_token %}
+          <button type="submit" class="app-btn app-btn-outline-dark" aria-label="Revoke token {{ token.name }}">
+            <i class="ti ti-trash" aria-hidden="true"></i><span>Revoke</span>
+          </button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif api_tokens_enabled %}
+  <p class="settings-section__lede api-tokens__empty">No tokens yet.</p>
+  {% endif %}
+</section>

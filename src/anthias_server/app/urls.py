@@ -23,6 +23,16 @@ urlpatterns = [
     path('integrations/', views.integrations, name='integrations'),
     path('settings/', views.settings_view, name='settings'),
     path('settings/save/', views.settings_save, name='settings_save'),
+    path(
+        'settings/api-tokens/',
+        views.settings_api_tokens_create,
+        name='settings_api_tokens_create',
+    ),
+    path(
+        'settings/api-tokens/<int:token_id>/revoke/',
+        views.settings_api_tokens_revoke,
+        name='settings_api_tokens_revoke',
+    ),
     path('settings/backup/', views.settings_backup, name='settings_backup'),
     path('settings/recover/', views.settings_recover, name='settings_recover'),
     path('settings/reboot/', views.settings_reboot, name='settings_reboot'),

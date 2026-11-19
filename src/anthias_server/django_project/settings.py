@@ -1257,7 +1257,7 @@ APP_STORE_ALLOWED_HOST_SUFFIXES = [
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'anthias_server.api.helpers.custom_exception_handler',
-    # Two auth paths for the JSON API.
+    # Three auth paths for the JSON API.
     #
     # Ordering matters: DRF tries authenticators in sequence and the
     # first one that recognises the request short-circuits the rest.
@@ -1284,11 +1284,17 @@ REST_FRAMEWORK = {
     #     open" contract holds even for clients that happen to carry
     #     a session cookie or a malformed Authorization header.
     #
-    # New integrations should use the bearer-token path coming in a
-    # follow-up PR (UI-managed personal tokens, not
-    # username/password exchange).
+    #   * BearerTokenAuthentication — ``Authorization: Bearer
+    #     <token>`` against the hashed, revocable tokens the operator
+    #     manages on the settings page. The path new integrations
+    #     should use. Same ``auth_backend`` gate. Listed after Basic
+    #     so the ``WWW-Authenticate`` challenge on a 401 (DRF takes
+    #     it from the first class) stays ``Basic`` for existing
+    #     clients, and before Session so an explicit header still
+    #     beats an incidental cookie.
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'anthias_server.lib.auth.DeprecatedBasicAuthentication',
+        'anthias_server.lib.auth.BearerTokenAuthentication',
         'anthias_server.lib.auth.GatedSessionAuthentication',
     ],
 }
