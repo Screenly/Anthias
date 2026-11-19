@@ -33,6 +33,7 @@ from django.utils.http import (
 )
 from django.views.decorators.http import require_http_methods
 
+from anthias_common.paths import PathOutsideBaseError, resolve_within
 from anthias_common.utils import (
     DISK_FULL_ERROR,
     STAGED_UPLOAD_DIR,
@@ -94,9 +95,45 @@ _CONTENT_RANGE_RE = re.compile(r'bytes (\d{1,19})-(\d{1,19})/(\d{1,19})')
 
 
 def _staged_upload_path(upload_id: str) -> str:
-    """Absolute path of the partial file for ``upload_id``."""
-    staged = path.join(settings['assetdir'], STAGED_UPLOAD_DIR)
-    return path.join(staged, f'{upload_id}.part')
+    """Absolute path of the partial file for ``upload_id``.
+
+    ``upload_id`` is already held to 32 hex characters by the caller;
+    the containment check is the second line of defence, so a future
+    change to the id format cannot turn the header into a path.
+    """
+    return resolve_within(
+        settings['assetdir'], STAGED_UPLOAD_DIR, f'{upload_id}.part'
+    )
+
+
+# Every message a ranged upload can answer with, and its status. The
+# response is looked up here by key rather than rendered from the
+# exception, so nothing but these fixed strings can reach the client.
+_CHUNKED_UPLOAD_ERRORS: dict[str, tuple[str, int]] = {
+    'malformed_id': ('Malformed upload id. Please try again.', 400),
+    'malformed_range': ('Malformed upload range. Please try again.', 400),
+    'empty': (
+        'Cannot upload an empty file in chunks. Please try again.',
+        400,
+    ),
+    'invalid_range': ('Invalid upload range. Please try again.', 400),
+    'size_mismatch': (
+        'Upload chunk did not match its range. Please try again.',
+        400,
+    ),
+    # Not "try again": one way here is the sweep taking a partial that
+    # went an hour without a chunk. Another is a client resending a
+    # commit — ours does not, precisely because os.replace may already
+    # have moved the partial away and created the asset.
+    'not_resumable': (
+        (
+            'This upload could not be resumed. Check whether it already '
+            'appears in the asset list before uploading it again.'
+        ),
+        409,
+    ),
+    'disk_full': (DISK_FULL_ERROR, 507),
+}
 
 
 class _ChunkedUploadError(Exception):
@@ -104,12 +141,13 @@ class _ChunkedUploadError(Exception):
 
     Every case means starting over, and the uploader is JavaScript
     reading a response rather than a browser following a form post, so
-    these answer with a real status code.
+    these answer with a real status code. ``code`` is a key of
+    ``_CHUNKED_UPLOAD_ERRORS``.
     """
 
-    def __init__(self, message: str, status_code: int = 400) -> None:
-        super().__init__(message)
-        self.status_code = status_code
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 def _stage_upload_chunk(
@@ -142,35 +180,30 @@ def _stage_upload_chunk(
         if not _UPLOAD_ID_RE.fullmatch(upload_id):
             # Nothing to drop: without a well-formed id there is no
             # partial whose name we could derive.
-            raise _ChunkedUploadError('Malformed upload id. Please try again.')
+            raise _ChunkedUploadError('malformed_id')
 
     staged_dir = path.join(settings['assetdir'], STAGED_UPLOAD_DIR)
-    staged_path = _staged_upload_path(upload_id)
+    try:
+        staged_path = _staged_upload_path(upload_id)
+    except PathOutsideBaseError as exc:
+        raise _ChunkedUploadError('malformed_id') from exc
 
     try:
         match = _CONTENT_RANGE_RE.fullmatch(
             request.headers['Content-Range'].strip()
         )
         if match is None:
-            raise _ChunkedUploadError(
-                'Malformed upload range. Please try again.'
-            )
+            raise _ChunkedUploadError('malformed_range')
 
         start_bytes, end_bytes, total_bytes = (int(g) for g in match.groups())
         if total_bytes == 0:
             # No range describes an empty file (0-0/0 claims one byte),
             # and nothing that size needs chunking anyway.
-            raise _ChunkedUploadError(
-                'Cannot upload an empty file in chunks. Please try again.'
-            )
+            raise _ChunkedUploadError('empty')
         if end_bytes < start_bytes or end_bytes >= total_bytes:
-            raise _ChunkedUploadError(
-                'Invalid upload range. Please try again.'
-            )
+            raise _ChunkedUploadError('invalid_range')
         if file_upload.size != end_bytes - start_bytes + 1:
-            raise _ChunkedUploadError(
-                'Upload chunk did not match its range. Please try again.'
-            )
+            raise _ChunkedUploadError('size_mismatch')
         is_final = end_bytes + 1 == total_bytes
 
         os.makedirs(staged_dir, exist_ok=True)
@@ -199,20 +232,11 @@ def _stage_upload_chunk(
             except OSError:
                 free = None
             if free is not None and total_bytes - held > free:
-                raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507)
+                raise _ChunkedUploadError('disk_full')
             # Never seek past what we hold; see the docstring.
             if start_bytes > held:
-                # Not "try again": one way here is the sweep taking
-                # a partial that went an hour without a chunk. Another
-                # is a client resending a commit — ours does not,
-                # precisely because os.replace may already have moved
-                # the partial away and created the asset.
-                raise _ChunkedUploadError(
-                    'This upload could not be resumed. Check whether it '
-                    'already appears in the asset list before uploading '
-                    'it again.',
-                    status_code=409,
-                )
+                # See 'not_resumable' in _CHUNKED_UPLOAD_ERRORS.
+                raise _ChunkedUploadError('not_resumable')
             f.seek(start_bytes)
             for piece in file_upload.chunks():
                 f.write(piece)
@@ -234,7 +258,7 @@ def _stage_upload_chunk(
         # surface ENOSPC rather than raising.
         with suppress(OSError):
             remove(staged_path)
-        raise _ChunkedUploadError(DISK_FULL_ERROR, status_code=507) from exc
+        raise _ChunkedUploadError('disk_full') from exc
 
     return upload_id, staged_path, is_final
 
@@ -840,7 +864,7 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
     # uploaded with the same name (different content), silently
     # overwriting the older one.
     final_name = uuid.uuid4().hex
-    final_path = path.join(settings['assetdir'], f'{final_name}{src_ext}')
+    final_path = resolve_within(settings['assetdir'], f'{final_name}{src_ext}')
 
     # A ranged upload arrives as several requests: each stages its
     # bytes and returns early, and only the one carrying the final byte
@@ -859,7 +883,8 @@ def assets_upload(request: HttpRequest) -> HttpResponse:
                 request, file_upload
             )
         except _ChunkedUploadError as exc:
-            return JsonResponse({'error': str(exc)}, status=exc.status_code)
+            message, status = _CHUNKED_UPLOAD_ERRORS[exc.code]
+            return JsonResponse({'error': message}, status=status)
         if not is_final:
             return JsonResponse({'upload_id': upload_id})
 
@@ -2181,19 +2206,17 @@ def login(request: HttpRequest) -> HttpResponse:
         user = authenticate(request, username=username, password=password)
         if user is not None:
             django_login(request, user)
-            # Run the host/scheme allow-list inline so CodeQL's
-            # py/url-redirection sees the sanitiser guarding the
-            # redirect target (it doesn't propagate sanitisers
-            # through a helper). reverse() also rebuilds the
-            # fallback so none of the inbound string survives.
-            redirect_target = reverse('anthias_app:home')
+            # The host/scheme allow-list guards the redirect directly:
+            # only a `next` that passes it is ever redirected to, and
+            # everything else gets a target rebuilt by reverse(), with
+            # none of the inbound string in it.
             if next_url and url_has_allowed_host_and_scheme(
                 url=next_url,
                 allowed_hosts={request.get_host()},
                 require_https=request.is_secure(),
             ):
-                redirect_target = next_url
-            return redirect(redirect_target)
+                return redirect(next_url)
+            return redirect(reverse('anthias_app:home'))
         else:
             messages.error(request, 'Invalid username or password')
             return template(request, 'login.html', {'next': next_url})
