@@ -1,0 +1,57 @@
+---
+# Point systemd at system_watchdog_device and ask PID 1 whether it
+# actually took it. Included from resilience.yml, twice when the first
+# pick is a hardware device systemd cannot arm: once for that device,
+# once more for the softdog fallback.
+
+- name: Keep softdog across reboots
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/anthias-softdog.conf
+    content: |
+      # Managed by Anthias: this board has no watchdog driver measured
+      # to reset it, so the kernel's software watchdog backs the reset
+      # instead. See ansible/roles/system/tasks/resilience.yml.
+      softdog
+    mode: "0644"  # NOSONAR - modules-load.d entries are world-readable
+    owner: root
+    group: root
+  when: system_watchdog_kind == 'soft'
+
+# Written on every host, with no `when`: on a board whose only
+# watchdog halts, the file's job is to keep systemd from arming it —
+# including Raspberry Pi OS's stock RuntimeWatchdogSec=1m — which is
+# the opposite of the usual "only write it when we have something".
+- name: Configure systemd's watchdog
+  ansible.builtin.template:
+    src: anthias-watchdog.conf
+    dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
+    mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
+    owner: root
+    group: root
+  notify: Re-execute systemd to apply the watchdog settings
+
+# The handler would otherwise run at the end of the play, after the
+# check below has already looked.
+- name: Apply the watchdog settings before checking them
+  ansible.builtin.meta: flush_handlers
+
+# Ask the manager what it actually did rather than trusting the file
+# on disk: RuntimeWatchdogUSec reports the configured value even when
+# PID 1 could not open or program the device, so the open fd is the
+# only real evidence. Not fatal here — resilience.yml decides what a
+# miss means (fall back to softdog, or fail).
+- name: Ask systemd whether it holds the watchdog device
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    systemctl show --property=RuntimeWatchdogUSec --value | grep -qv '^0$'
+    && ls -l /proc/1/fd | grep -c -- '-> {{ system_watchdog_device }}$'
+  args:
+    executable: /bin/bash
+  register: system_watchdog_check
+  changed_when: false
+  failed_when: false
+  when: system_watchdog_device != ''
+
+- name: Record whether the watchdog is armed
+  ansible.builtin.set_fact:
+    system_watchdog_armed: "{{ system_watchdog_device != '' and (system_watchdog_check.stdout | default('0') | trim | int) >= 1 }}"

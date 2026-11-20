@@ -9,12 +9,15 @@
 # cannot be exercised on our rig, whose only x86 box has its iTCO
 # locked off by firmware.
 #
-# The three env vars exist so those tests can vary the inputs; nothing
-# sets them in production.
+# WD_SYSFS, WD_ARCH and WD_SOC_ALLOWLIST exist so those tests can vary
+# the inputs. WD_SOFT_ONLY=1 skips hardware entirely; resilience.yml
+# sets it to fall back to softdog when systemd could not arm the
+# hardware device picked first.
 set -u
 root=${WD_SYSFS:-/sys/class/watchdog}
 arch=${WD_ARCH:-$(uname -m)}
 soc_allowlist=${WD_SOC_ALLOWLIST:-}
+soft_only=${WD_SOFT_ONLY:-}
 
 # Never treats softdog as hardware: it is the fallback, not a device
 # this machine came with.
@@ -56,7 +59,7 @@ case "$arch" in
   *) hw_pattern=$soc_allowlist ;;
 esac
 
-[ -n "$hw_pattern" ] && pick_hw "$hw_pattern" && exit 0
+[ -z "$soft_only" ] && [ -n "$hw_pattern" ] && pick_hw "$hw_pattern" && exit 0
 
 # Already loaded is fine, and skipping the modprobe keeps this
 # side-effect free when there is nothing to do.
