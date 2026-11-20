@@ -29,6 +29,7 @@ from anthias_common.utils import (
     connect_to_redis,
     get_node_mac_address,
     is_balena_app,
+    memory_cache_mib,
 )
 from anthias_server.lib import diagnostics, display_power
 from anthias_server.lib.github import is_up_to_date
@@ -367,15 +368,14 @@ def system_info() -> dict[str, Any]:
     anthias_version_head = diagnostics.get_anthias_version_head()
     anthias_version_meta = diagnostics.get_anthias_version_meta()
 
-    # Pie-friendly breakdown — three slices that sum to total. psutil's
-    # `used` already excludes buffers/cache on Linux (matches `free -m`),
+    # Pie-friendly breakdown — three slices that sum to total.
     # `available` is what new processes can claim before swapping.
-    # Cache estimate = total − used − free; clamped to ≥0 so kernels
-    # that report differently still produce sane geometry.
+    # The cache slice is shared with /api/v2/info via memory_cache_mib
+    # so the two surfaces report the same quantity.
     mem_total = virtual_memory.total >> 20
     mem_used = virtual_memory.used >> 20
     mem_free = virtual_memory.free >> 20
-    mem_cache = max(0, mem_total - mem_used - mem_free)
+    mem_cache = memory_cache_mib(virtual_memory)
 
     def _pct(n: int, total: int) -> float:
         return round((n / total) * 100, 1) if total else 0.0
