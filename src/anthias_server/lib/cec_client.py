@@ -67,6 +67,11 @@ _BUS_SLACK_S = 3
 #: Typical is nowhere near it: 79 ms on a board with no live link,
 #: 430 ms for a real transmit, 3.2 s for the slowest measured query
 #: (Pi 2, Cortex-A7). The budget only bites when an adapter wedges.
+#:
+#: This is a real bound only because ``ReplyCollector`` carries the pop
+#: on a connection sized for it. On redis-py's defaults the same 15s
+#: budget took 58.0s — see ``settings.ReplyCollector._blocking_connection``
+#: for how that ran ``get_display_power`` into its hard time limit.
 REPLY_TIMEOUT_MS = int((cec.MAX_OPERATION_S + _BUS_SLACK_S) * 1000)
 
 # Queries and commands share a budget: both fan out across every live
