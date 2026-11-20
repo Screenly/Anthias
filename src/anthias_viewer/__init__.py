@@ -953,6 +953,11 @@ WAYLAND_SOCKET_PROBE_TIMEOUT_SECONDS = 0.2
 WEBVIEW_OUTPUT_DRAIN_TIMEOUT_SECONDS = 1.0
 WEBVIEW_OUTPUT_DRAIN_POLL_SECONDS = 0.05
 
+# How much of a hung webview's output the handshake-timeout error
+# quotes. Sentry cuts long messages off at the end, which is exactly
+# where the useful lines are, so stay well under its limit.
+WEBVIEW_TIMEOUT_TAIL_CHARS = 2000
+
 # The well-known bus name AnthiasViewer registers on the session bus.
 # Must stay in lockstep with registerService("anthias.viewer") in
 # src/anthias_webview/src/main.cpp.
@@ -1621,7 +1626,27 @@ def _spawn_webview_once(startup_timeout: float) -> Any:
             if survived
             else ''
         )
+        + '; '
+        + _webview_output_tail(_drain_webview_output(output))
     )
+
+
+def _webview_output_tail(text: str) -> str:
+    """Quote the end of a hung webview's output for the launch error.
+
+    A webview that never handshakes is otherwise reported with no
+    evidence at all, so a stall in Qt platform init, a wait on the
+    compositor and a hang in WebEngine startup all read the same in
+    Sentry. The tail is where Qt stopped, and keeping only the tail
+    stops a chatty launch from pushing it past Sentry's message cap.
+    An empty sink is named too: a process that printed nothing never
+    reached Qt at all.
+    """
+    if not text.strip():
+        return 'it printed no output'
+    if len(text) <= WEBVIEW_TIMEOUT_TAIL_CHARS:
+        return 'stdout: ' + text
+    return 'stdout tail: ...' + text[-WEBVIEW_TIMEOUT_TAIL_CHARS:]
 
 
 def load_browser(
