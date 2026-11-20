@@ -125,13 +125,29 @@
 # A typo'd device leaves systemd running with the watchdog silently
 # off, so ask the manager what it actually did rather than trusting
 # the file on disk.
+#
+# Watchdog 0 has two device nodes: /dev/watchdog0 and the legacy
+# /dev/watchdog, which the kernel registers first
+# (watchdog_cdev_register() calls misc_register() before
+# cdev_device_add()). Asked for /dev/watchdog0, systemd falls back to
+# /dev/watchdog when watchdog0 isn't there yet. At boot that happens
+# when PID 1 retries the open while the driver is still loading, and
+# PID 1 then keeps holding /dev/watchdog. Seen on a Debian 13 PC
+# (forums.screenly.io topic 6909): `fuser` showed systemd on
+# /dev/watchdog, and a re-run of the installer failed here because
+# nothing changed to trigger the re-exec that would have reopened it
+# as watchdog0. It is the same device, so accept either name.
 - name: Confirm systemd armed the device we picked
   ansible.builtin.shell: >-
     set -o pipefail;
     systemctl show --property=RuntimeWatchdogUSec --value | grep -qv '^0$'
-    && ls -l /proc/1/fd | grep -c -- '-> {{ system_watchdog_device }}$'
+    && ls -l /proc/1/fd | grep -cE -- '-> ({{ system_watchdog_device_names | join("|") }})$'
   args:
     executable: /bin/bash
+  vars:
+    system_watchdog_device_names: >-
+      {{ [system_watchdog_device]
+         + (['/dev/watchdog'] if system_watchdog_device == '/dev/watchdog0' else []) }}
   register: system_watchdog_armed
   changed_when: false
   failed_when: system_watchdog_armed.stdout | trim | int < 1
