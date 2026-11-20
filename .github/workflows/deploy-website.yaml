@@ -201,16 +201,24 @@ jobs:
       # Hugo partial enumerates *.png entries from
       # website/assets/images/screenshots/ — the files are
       # gitignored, so this step is the canonical source on every
-      # deploy. We resolve the latest *successful* run on master
-      # (not by ref of the current deploy, because deploy-website is
-      # triggered on master pushes and we want the most recent green
-      # capture set regardless of which commit shipped it last).
+      # deploy. We resolve the newest *unexpired* marketing-screenshots
+      # artifact from a master run (not by ref of the current deploy,
+      # because deploy-website is triggered on master pushes and we
+      # want the most recent capture set regardless of which commit
+      # shipped it last).
       #
-      # Missing run is a soft fail: the site builds with an empty
-      # screenshots/ dir and the layout falls back gracefully (no
-      # slider section, OG image falls back to logo.svg). That keeps
-      # the first deploy after this change from being blocked by an
-      # ordering chicken-and-egg.
+      # Asked of the artifacts API rather than `gh run list`: the
+      # artifact has a finite retention, so the latest successful run
+      # can outlive its artifact. Picking that run and then calling
+      # `gh run download` fails with "no valid artifacts found", which
+      # is exactly how every deploy broke once the 17 Aug 2026 capture
+      # aged out. marketing-screenshots.yaml now also runs on a
+      # schedule so a fresh artifact normally exists.
+      #
+      # No usable artifact is a soft fail: the site builds with an
+      # empty screenshots/ dir and the layout falls back gracefully
+      # (no slider section, OG image falls back to logo.svg). A stale
+      # slider should never block shipping the rest of the site.
       - name: Fetch marketing screenshots
         env:
           GH_TOKEN: ${{ github.token }}
@@ -218,15 +226,22 @@ jobs:
           set -euo pipefail
           dest=website/assets/images/screenshots
           mkdir -p "$dest"
-          run_id=$(gh run list \
-            --workflow=marketing-screenshots.yaml \
-            --branch=master \
-            --status=success \
-            --limit=1 \
-            --json databaseId \
-            --jq '.[0].databaseId // empty')
+          # The endpoint returns newest first; 100 is far more than the
+          # handful of capture runs that exist inside any retention
+          # window. Artifacts are keyed by name only, and a fork PR's
+          # workflow can upload one under any name into this repo, so
+          # require the run's head to be this repo's master — not just
+          # a branch that happens to be called master.
+          run_id=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=marketing-screenshots&per_page=100" \
+            --jq '[.artifacts[]
+                   | select(.expired | not)
+                   | select(.workflow_run.head_branch == "master")
+                   | select(.workflow_run.head_repository_id
+                            == .workflow_run.repository_id)]
+                  | .[0].workflow_run.id // empty')
           if [ -z "$run_id" ]; then
-            echo "::warning::No successful marketing-screenshots run found on master; building without slider."
+            echo "::warning::No unexpired marketing-screenshots artifact found on master; building without slider. Re-run the Marketing Screenshots workflow to restore it."
             exit 0
           fi
           echo "Fetching marketing-screenshots artifact from run $run_id"

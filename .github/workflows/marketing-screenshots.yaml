@@ -1,7 +1,8 @@
 name: Marketing Screenshots
 
-# Manually triggered: produces high-DPI marketing artwork from the
-# existing Playwright integration suite by re-running it with
+# Manually triggered (and refreshed monthly): produces high-DPI
+# marketing artwork from the existing Playwright integration suite by
+# re-running it with
 # MARKETING_SCREENSHOTS=1. The fixture in tests/conftest.py reads that
 # env var, bumps the browser context to 3× device scale, and emits a
 # base <name>.png plus retina <name>@2x.png and <name>@3x.png siblings
@@ -17,6 +18,13 @@ name: Marketing Screenshots
 
 on:
   workflow_dispatch:
+  # The upload below keeps the artifact for 90 days, and
+  # deploy-website.yaml pulls it on every deploy. Recapturing monthly
+  # keeps a live artifact around (and the slider current with UI
+  # changes) without anyone having to remember to dispatch this. A
+  # scheduled run always uses the default branch.
+  schedule:
+    - cron: '17 4 1 * *'
 
 # workflow_dispatch lets an operator run this against any ref, so the
 # job token must not inherit write-level scopes from the repo default.
