@@ -38,6 +38,16 @@
         devices:
           - {node: watchdog0, identity: "Software Watchdog"}
         expect: "/dev/watchdog0 soft"
+      # The fallback resilience.yml takes when systemd cannot arm the
+      # chipset device (held open by something else, or the driver
+      # rejects the timeout): same machine, softdog this time.
+      - name: PC whose chipset watchdog systemd refused falls back to softdog
+        arch: x86_64
+        soft_only: "1"
+        devices:
+          - {node: watchdog0, identity: "iTCO_wdt"}
+          - {node: watchdog1, identity: "Software Watchdog"}
+        expect: "/dev/watchdog1 soft"
       - name: SoC on the allowlist uses its hardware watchdog
         arch: aarch64
         devices:
@@ -94,6 +104,7 @@
         WD_SYSFS: "{{ wd_fixtures.path }}/{{ item.name | replace(' ', '_') }}"
         WD_ARCH: "{{ item.arch }}"
         WD_SOC_ALLOWLIST: "{{ soc_allowlist }}"
+        WD_SOFT_ONLY: "{{ item.soft_only | default('') }}"
       register: probed
       changed_when: false
       loop: "{{ cases }}"
