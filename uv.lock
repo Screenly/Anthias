@@ -164,6 +164,7 @@ mypy = [
     { name = "types-python-dateutil" },
     { name = "types-pytz" },
     { name = "types-pyyaml" },
+    { name = "websockets" },
     { name = "whitenoise" },
 ]
 server = [
@@ -193,6 +194,7 @@ server = [
     { name = "tenacity" },
     { name = "urllib3" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
     { name = "whitenoise" },
     { name = "yt-dlp" },
 ]
@@ -231,6 +233,7 @@ test = [
     { name = "time-machine" },
     { name = "urllib3" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
     { name = "whitenoise" },
     { name = "yt-dlp" },
 ]
@@ -327,6 +330,7 @@ mypy = [
     { name = "types-python-dateutil", specifier = "==2.9.0.20261104" },
     { name = "types-pytz", specifier = "==2026.6.0.20261031" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260518" },
+    { name = "websockets", specifier = "==16.0" },
     { name = "whitenoise", specifier = "==6.12.0" },
 ]
 server = [
@@ -356,6 +360,7 @@ server = [
     { name = "tenacity", specifier = "==9.2.1" },
     { name = "urllib3", specifier = "==2.8.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.54.0" },
+    { name = "websockets", specifier = "==16.0" },
     { name = "whitenoise", specifier = "==6.12.0" },
     { name = "yt-dlp", specifier = ">=2026.7.4" },
 ]
@@ -394,6 +399,7 @@ test = [
     { name = "time-machine", specifier = "==3.6.0" },
     { name = "urllib3", specifier = "==2.8.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.54.0" },
+    { name = "websockets", specifier = "==16.0" },
     { name = "whitenoise", specifier = "==6.12.0" },
     { name = "yt-dlp", specifier = ">=2026.7.4" },
 ]
