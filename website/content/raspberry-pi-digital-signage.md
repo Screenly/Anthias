@@ -85,9 +85,9 @@ A single backup file holds your settings and asset list, so you can restore it l
 
 ## More than one screen
 
-Anthias manages content per device, each with its own dashboard. Several screens means several Pis, and there is no single dashboard where you change tomorrow's playlist for all of them at once.
+Several screens means several Pis, but you can manage them from one. With [multi-screen management](/docs/multi-screen/), one device is the controller: you change tomorrow's playlist there and publish it to every screen on your network, and the controller shows which screens are online and healthy. For the controller, use a Raspberry Pi 4 with at least 2 GB of RAM, a Pi 5 or a PC; the screens can be any supported board.
 
-Two things make a small estate practical: a fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you clone a configured device onto the next one. For a shop, a building or a floor that works well. For a large multi-site estate managed centrally, it is the wrong tool.
+A fleet can also be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you clone a configured device onto the next one. For a shop, a building or a floor that works well. Every managed screen shows the same playlist, though, and the controller has to be on the same network. For different content per screen or a large multi-site estate managed centrally, it is the wrong tool.
 
 ## Automating it
 

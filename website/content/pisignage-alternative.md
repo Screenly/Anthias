@@ -188,11 +188,13 @@ means reflashing the card.
 
 ### How do I manage several Anthias screens?
 
-Each device runs its own dashboard, and two features keep that from being
-repetitive: deploy and update a whole fleet over the air through
-[Balena](/docs/balena/), and use the backup file to configure
-one device then restore that setup onto the rest. What Anthias does not offer is
-one dashboard that changes every screen's playlist at once.
+Make one device the controller with [multi-screen management](/docs/multi-screen/): it publishes its
+playlist to the other screens on the same network and shows which ones are
+online and healthy. You can also deploy and update a whole fleet over the air
+through [Balena](/docs/balena/), and use the backup file to configure one
+device then restore that setup onto the rest. What Anthias does not offer is
+different playlists for different screens from one dashboard, or managing
+screens across sites over the internet.
 
 ### Does Anthias run on the same hardware?
 
