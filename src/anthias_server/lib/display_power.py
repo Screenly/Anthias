@@ -23,6 +23,7 @@ worker, a clock, or hardware.
 """
 
 import logging
+from collections.abc import Mapping
 from datetime import datetime, time
 
 from anthias_server.lib import cec_client
@@ -32,6 +33,9 @@ logger = logging.getLogger(__name__)
 #: ``settings`` stores the selected weekdays as a comma-separated list
 #: of Python weekday numbers (Monday=0 ... Sunday=6).
 ALL_DAYS = '0,1,2,3,4,5,6'
+
+#: An on-period for one weekday: ``(turn on at, turn off at)``.
+Window = tuple[time, time]
 
 
 def parse_hhmm(value: str | None) -> time | None:
@@ -90,11 +94,80 @@ def parse_days(value: str | None) -> set[int]:
     return days or set(range(7))
 
 
+def parse_day_time(token: str) -> tuple[int, Window]:
+    """Parse one ``D=HH:MM-HH:MM`` per-weekday entry.
+
+    Raises ``ValueError`` with an operator-readable message. The v2
+    serializer surfaces that message as a 400; ``parse_day_times`` (the
+    lenient reader the beat uses) skips the entry instead.
+    """
+    day_part, sep, span = token.strip().partition('=')
+    on_part, dash, off_part = span.partition('-')
+    if not sep or not dash or not day_part.strip().isdigit():
+        raise ValueError(
+            f'Invalid per-day hours {token.strip()!r}: expected '
+            'D=HH:MM-HH:MM (Monday=0).'
+        )
+    day = int(day_part)
+    if not 0 <= day <= 6:
+        raise ValueError(
+            f'Invalid weekday {day_part.strip()!r}: expected 0-6 (Monday=0).'
+        )
+    on_time, off_time = parse_hhmm(on_part), parse_hhmm(off_part)
+    if on_time is None or off_time is None:
+        raise ValueError(
+            f'Invalid time in per-day hours {token.strip()!r}: expected HH:MM.'
+        )
+    if on_time == off_time:
+        # Same rule as the shared times: identical on/off describes
+        # neither an on-period nor an off-period. Deselecting the day is
+        # how an operator keeps the screen off all day.
+        raise ValueError(
+            f'Per-day hours {token.strip()!r} turn on and off at the '
+            'same time.'
+        )
+    return day, (on_time, off_time)
+
+
+def parse_day_times(value: str | None) -> dict[int, Window]:
+    """Parse the per-weekday hours into ``{weekday: (on, off)}``.
+
+    The stored form is a comma-separated list of ``D=HH:MM-HH:MM``
+    entries (``'0=07:30-18:00,5=10:00-14:00'``). A weekday without an
+    entry uses the shared on/off times, so the empty default leaves
+    every pre-existing schedule exactly as it was.
+
+    Lenient like ``parse_hhmm``: a malformed entry is logged and
+    dropped (that day falls back to the shared times) rather than
+    crashing the beat over a hand-edited config file.
+    """
+    windows: dict[int, Window] = {}
+    for token in str(value or '').split(','):
+        if not token.strip():
+            continue
+        try:
+            day, window = parse_day_time(token)
+        except ValueError as exc:
+            logger.warning('Ignoring display-power day hours: %s', exc)
+            continue
+        windows[day] = window
+    return windows
+
+
+def format_day_times(windows: Mapping[int, Window]) -> str:
+    """Serialise ``{weekday: (on, off)}`` into the stored string form."""
+    return ','.join(
+        f'{day}={on:%H:%M}-{off:%H:%M}'
+        for day, (on, off) in sorted(windows.items())
+    )
+
+
 def should_be_on(
     now: datetime,
     on_time: time | None,
     off_time: time | None,
     days: set[int],
+    day_times: Mapping[int, Window] | None = None,
 ) -> bool | None:
     """Whether the display should be powered on at ``now``.
 
@@ -102,30 +175,45 @@ def should_be_on(
     the schedule is not usable (a missing time, or identical on/off
     times, which describes neither an on-period nor an off-period).
 
+    ``day_times`` overrides the shared ``on_time``/``off_time`` for
+    individual weekdays; a weekday without an entry uses the shared
+    times.
+
     ``days`` selects the weekdays on which an on-period *begins*. That
     distinction matters for a schedule that wraps past midnight (on
     18:00, off 06:00): the small hours of Tuesday belong to Monday's
-    on-period, so they are governed by Monday's checkbox, not Tuesday's.
-    Getting this wrong would cut the display at midnight every night a
-    following day was deselected.
+    on-period, so they are governed by Monday's checkbox (and Monday's
+    hours), not Tuesday's. Getting this wrong would cut the display at
+    midnight every night a following day was deselected.
     """
-    if on_time is None or off_time is None or on_time == off_time:
-        return None
+    shared: Window | None = None
+    if on_time is not None and off_time is not None and on_time != off_time:
+        shared = (on_time, off_time)
+    overrides = day_times or {}
 
     today = now.weekday()
     yesterday = (today - 1) % 7
+    today_window = overrides.get(today, shared)
+    yesterday_window = overrides.get(yesterday, shared)
+    if today_window is None or yesterday_window is None:
+        return None
+
     current = now.time()
 
-    if on_time < off_time:
-        # Ordinary same-day window, e.g. 08:00 -> 18:00.
-        return today in days and on_time <= current < off_time
+    # The tail of yesterday's on-period, if it wrapped past midnight
+    # (e.g. Friday 18:00 -> 02:00 is still on at Saturday 01:00).
+    y_on, y_off = yesterday_window
+    if yesterday in days and y_on > y_off and current < y_off:
+        return True
 
-    # Wraps past midnight, e.g. 18:00 -> 06:00.
-    if current >= on_time:
-        return today in days
-    if current < off_time:
-        return yesterday in days
-    return False
+    if today not in days:
+        return False
+    t_on, t_off = today_window
+    if t_on < t_off:
+        # Ordinary same-day window, e.g. 08:00 -> 18:00.
+        return t_on <= current < t_off
+    # Wraps past midnight, e.g. 18:00 -> 06:00: today owns the evening.
+    return current >= t_on
 
 
 def apply_power(on: bool) -> str:

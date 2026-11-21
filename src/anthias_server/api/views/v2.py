@@ -756,6 +756,7 @@ class DeviceSettingsViewV2(APIView):
                 'display_power_on_time': settings['display_power_on_time'],
                 'display_power_off_time': settings['display_power_off_time'],
                 'display_power_days': settings['display_power_days'],
+                'display_power_day_times': settings['display_power_day_times'],
             }
         )
 
@@ -845,6 +846,7 @@ class DeviceSettingsViewV2(APIView):
                 'display_power_on_time',
                 'display_power_off_time',
                 'display_power_days',
+                'display_power_day_times',
             ):
                 if field in data:
                     settings[field] = data[field]
