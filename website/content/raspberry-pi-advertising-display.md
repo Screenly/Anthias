@@ -77,13 +77,13 @@ The screen is usually seen in passing, from across a room, by someone who did no
 
 ## Running more than one screen
 
-Anthias manages content per device, each with its own dashboard, so several screens means several Pis. That is less work than it sounds:
+Each screen is its own Pi, but you don't have to update them one by one. With [multi-screen management](/docs/multi-screen/), one device acts as the controller: you build the loop there and publish it to every screen on the same network, and you can see which screens are online and healthy from one page. A few more things help:
 
 - **Clone a configured device.** Download a backup file holding your settings and asset list, then restore it onto a new device instead of setting it up from scratch.
 - **Deploy and update a fleet over the air** through [Balena](/docs/balena/), so you are not carrying cards around to push an update.
 - **Bring a library in from another platform** with the [built-in importer](/docs/import-content/), which supports Yodeck, ScreenCloud, piSignage and Xibo.
 
-What you do not get is one dashboard where you change tomorrow's loop for every screen at once. For a window bank or a handful of sites that is rarely the blocker; for a large estate it will be.
+Every screen managed this way shows the same loop, and the controller has to be on the same network as its screens. For a window bank or a single shop that fits well. Different content on different screens, several sites, or remote management over the internet is what [Screenly](https://www.screenly.io) is for.
 
 ## Getting started
 

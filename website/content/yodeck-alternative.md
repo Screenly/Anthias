@@ -15,7 +15,7 @@ Neither is universally better, so here is a straight comparison rather than a sa
 | Cost, one screen | free | free |
 | Cost, more screens | free | from $8 per screen per month |
 | Where it runs | your hardware and network | Yodeck cloud |
-| Central dashboard for all content | no, one per device | yes |
+| Central dashboard for all content | one playlist for all screens on one network | yes |
 | Over-the-air updates | atomic, with rollback | in place, no rollback |
 | Base OS updated over the air | yes, whole image | reflash to change OS |
 | Import from your current platform | built-in Yodeck importer | n/a |
@@ -111,6 +111,6 @@ Not built in. Anthias plays images, videos and web pages, so anything you can bu
 
 ### How does Anthias handle several screens?
 
-Content is managed per device, each with its own dashboard. Two features keep that from becoming repetitive work: a whole fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you configure one device and restore that setup onto the rest.
+With [multi-screen management](/docs/multi-screen/), one Anthias device acts as the controller for the other screens on your network: you change the playlist there, publish it to every screen, and see which screens are online and healthy. A whole fleet can also be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you configure one device and restore that setup onto the rest.
 
-What Anthias does not offer is a single dashboard where you change tomorrow's playlist for every screen at once. If that specific workflow is what you need, a cloud platform priced per screen is the trade on offer.
+What Anthias does not offer is different playlists for different screens from one dashboard, or managing screens across sites over the internet. If that is the workflow you need, a cloud platform priced per screen is the trade on offer.
