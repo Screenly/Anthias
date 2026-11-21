@@ -13,7 +13,7 @@
   @keydown.escape.window="closeModal()"
   @click.self="closeModal()"
 >
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="asset-modal-title">
+  <div class="modal-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="asset-modal-title">
     <div class="modal-card__header">
       <h2 id="asset-modal-title" x-text="mode === 'edit' ? 'Edit asset' : 'Add asset'">Add asset</h2>
       <button type="button" class="modal-card__close" @click="closeModal()" aria-label="Close">
