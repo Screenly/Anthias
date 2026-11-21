@@ -178,13 +178,20 @@ def test_node_identity_replaces_a_key_that_does_not_match() -> None:
     assert certificate.public_key() == key.public_key()
 
 
-def test_node_common_name_fits_rfc5280_limit() -> None:
-    with mock.patch('socket.gethostname', return_value='x' * 200):
-        cert_pem, _ = node_identity.generate()
-    certificate = x509.load_pem_x509_certificate(cert_pem)
-    cn = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+def test_node_common_name_is_stable_per_certificate_not_hostname() -> None:
+    first, _ = node_identity.generate()
+    second, _ = node_identity.generate()
+    names = [
+        str(
+            x509.load_pem_x509_certificate(pem)
+            .subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0]
+            .value
+        )
+        for pem in (first, second)
+    ]
 
-    assert len(str(cn[0].value)) == 64
+    assert all(name.startswith('Anthias node ') for name in names)
+    assert names[0] != names[1]
 
 
 def test_ssl_directory_is_never_part_of_a_backup() -> None:

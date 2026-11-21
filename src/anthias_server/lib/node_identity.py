@@ -23,7 +23,7 @@ import datetime
 import hashlib
 import logging
 import os
-import socket
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,16 +80,19 @@ def fingerprint() -> str:
 
 
 def _common_name() -> str:
-    host = socket.gethostname().strip() or 'screen'
-    # A CN is capped at 64 characters by RFC 5280.
-    return f'anthias-{host}'[:64]
+    # Not the hostname: inside the container that is the container ID,
+    # which changes on every recreate and means nothing to anyone. The
+    # name is cosmetic (peers pin the fingerprint), so a random suffix
+    # fixed at generation time just tells two screens' certs apart.
+    return f'Anthias node {secrets.token_hex(4)}'
 
 
 def generate(now: datetime.datetime | None = None) -> tuple[bytes, bytes]:
     """Return a fresh (cert_pem, key_pem) pair."""
     now = now or datetime.datetime.now(datetime.UTC)
     key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, _common_name())])
+    common_name = _common_name()
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
     certificate = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -99,7 +102,9 @@ def generate(now: datetime.datetime | None = None) -> tuple[bytes, bytes]:
         .not_valid_before(now - datetime.timedelta(minutes=5))
         .not_valid_after(now + datetime.timedelta(days=VALIDITY_DAYS))
         .add_extension(
-            x509.SubjectAlternativeName([x509.DNSName(_common_name())]),
+            x509.SubjectAlternativeName(
+                [x509.DNSName(common_name.lower().replace(' ', '-'))]
+            ),
             critical=False,
         )
         .add_extension(
