@@ -223,3 +223,17 @@ def test_settings_recover_reports_skipped_keys(
         )
     text = response.content.decode()
     assert 'were not restored' in text
+
+
+@pytest.mark.django_db
+def test_restore_asks_before_replacing_anything(
+    home: Path, operator_client: Client
+) -> None:
+    html = operator_client.get(reverse('anthias_app:settings')).content
+    text = html.decode()
+    # Picking a file only opens the confirmation step.
+    assert 'id="btn-restore-confirm"' in text
+    assert 'id="btn-restore-cancel"' in text
+    form = text.split('id="recover-form"')[1].split('</form>')[0]
+    assert 'name="keys_password"' in form
+    assert 'requestSubmit' not in text.split('id="backup"')[1]

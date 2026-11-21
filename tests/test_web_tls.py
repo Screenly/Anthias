@@ -926,7 +926,9 @@ def test_settings_upload_installs_and_applies() -> None:
     assert info is not None
     assert info.sans == ['screen.example.com']
     body = response.content.decode()
-    assert f'<strong>{info.subject}</strong>' in body
+    # Headed by the name people type, with the subject underneath.
+    assert f'<strong>{info.sans[0]}</strong>' in body
+    assert f'Subject: {info.subject}' in body
     assert 'Revert to default' in body
 
 

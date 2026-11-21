@@ -148,7 +148,9 @@
    * so all three rungs are one ink at three alphas rather than three
    * separate colours. The drawer is near-opaque because page content
    * scrolls under it and must not read through. */
-  --color-chrome: rgb(15 0 25 / 0.7);
+  /* 0.8, not lower: over a white card scrolled under the navbar, the
+   * muted tab labels must still clear 4.5:1. */
+  --color-chrome: rgb(15 0 25 / 0.8);
   --color-chrome-soft: rgb(15 0 25 / 0.5);
   --color-chrome-scrim: rgb(15 0 25 / 0.97);
   --color-on-chrome: #ffffff;

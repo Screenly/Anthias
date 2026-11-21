@@ -8,6 +8,9 @@ class NodeStatus(models.TextChoices):
     UNKNOWN = 'unknown', 'Not checked yet'
     ONLINE = 'online', 'Online'
     OFFLINE = 'offline', 'Offline'
+    # Its push connection is up, but the controller can't call it (port
+    # 8443 closed or filtered): it reports in, yet can't be published to.
+    UNREACHABLE = 'unreachable', 'Connected, not reachable'
     UNAUTHORIZED = 'unauthorized', 'Left management'
     WRONG_CERT = 'wrong_cert', 'Certificate changed'
 
@@ -171,6 +174,13 @@ class AuditEntry(models.Model):
 
     def __str__(self) -> str:
         return f'{self.action} {self.node_name}: {self.outcome}'
+
+    @property
+    def display_outcome(self) -> str:
+        """The outcome as shown: a join request is pending, not "ok"."""
+        if self.action == 'join request' and self.outcome == 'ok':
+            return 'pending'
+        return self.outcome
 
 
 class JoinSecret(models.Model):

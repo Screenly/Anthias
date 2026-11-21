@@ -2113,7 +2113,21 @@ def _management_context(
     error: str | None = None,
     form: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    controller_mode = bool(settings['controller_mode'])
+    screens = pending = 0
+    if controller_mode:
+        from django.utils import timezone
+
+        from anthias_server.controller.models import JoinRequest, Node
+
+        screens = Node.objects.count()
+        pending = JoinRequest.objects.filter(
+            expires_at__gte=timezone.now()
+        ).count()
     return {
+        'management_controller_mode': controller_mode,
+        'management_screen_count': screens,
+        'management_request_count': pending,
         'management_auth_enabled': management.auth_enabled(),
         'management_controller': management.current_controller(),
         'management_pending': management.pending_controller(),
@@ -2174,9 +2188,59 @@ def settings_management_join(request: HttpRequest) -> HttpResponse:
 
 @authorized
 @require_http_methods(['POST'])
+def settings_management_controller(request: HttpRequest) -> HttpResponse:
+    """Turn controller mode on (then go to Screens) or off."""
+    settings.load()
+    if request.POST.get('enable') != '1':
+        if settings['controller_mode']:
+            settings['controller_mode'] = False
+            settings.save()
+            management.sync_state()
+            logger.info('Controller mode turned off')
+        return _management_response(request)
+    error = None
+    if not settings['auth_backend']:
+        error = 'Turn on authentication first: a controller holds access to every screen it manages.'
+    elif management.is_managed() or management.pending_controller():
+        error = 'This screen is managed by (or waiting to join) a controller, so it cannot be one. Leave management first.'
+    if error:
+        return _management_response(request, error=error)
+    settings['controller_mode'] = True
+    settings.save()
+    management.sync_state()
+    logger.info('Controller mode turned on')
+    messages.success(
+        request, 'This screen is now a controller. Add screens from here.'
+    )
+    target = reverse('controller:screens')
+    if request.headers.get('HX-Request'):
+        response = HttpResponse(status=204)
+        response['HX-Redirect'] = target
+        return response
+    return redirect(target)
+
+
+@authorized
+@require_http_methods(['POST'])
 def settings_management_leave(request: HttpRequest) -> HttpResponse:
     management.leave_management()
     return _management_response(request)
+
+
+def _login_context(next_url: str) -> dict[str, Any]:
+    """Sign-in page context; on a managed screen, who manages it."""
+    context: dict[str, Any] = {'next': next_url}
+    try:
+        if management.ui_locked():
+            controller = management.current_controller()
+            if controller is not None:
+                context['managed_by'] = controller.name
+                context['controller_web_url'] = management.controller_web_url(
+                    controller
+                )
+    except Exception:
+        logger.exception('Could not read the management state')
+    return context
 
 
 @authorized
@@ -2191,6 +2255,7 @@ def managed(request: HttpRequest) -> HttpResponse:
         'managed.html',
         {
             'controller': controller,
+            'controller_web_url': management.controller_web_url(controller),
             'player_name': settings['player_name'],
         },
     )
@@ -2207,33 +2272,6 @@ def managed_leave(request: HttpRequest) -> HttpResponse:
             'This screen left management. Its web interface is back.',
         )
     return redirect(reverse('anthias_app:home'))
-
-
-def _allowed_controller_mode(
-    request: HttpRequest, wanted: bool, auth_backend: str
-) -> bool:
-    """Controller mode as requested, unless it is refused here.
-
-    It holds access to every managed screen, so it needs auth; and a
-    screen that is (or is asking to be) managed cannot also manage.
-    """
-    if not wanted:
-        return False
-    if not auth_backend:
-        messages.warning(
-            request,
-            'Controller mode needs authentication. Turn on '
-            'authentication first.',
-        )
-        return False
-    if management.is_managed() or management.pending_controller():
-        messages.warning(
-            request,
-            'This screen is managed by (or waiting to join) a '
-            'controller, so it cannot be one. Leave management first.',
-        )
-        return False
-    return True
 
 
 @authorized
@@ -2306,16 +2344,17 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
         settings['verify_ssl'] = _checkbox(request, 'verify_ssl')
 
-        # Controller mode holds access to every managed screen, so it
-        # is refused while the UI is open to anyone on the network.
-        controller_mode = _checkbox(request, 'controller_mode')
-        controller_mode_changed = controller_mode != bool(
-            settings['controller_mode']
-        )
-        controller_mode = _allowed_controller_mode(
-            request, controller_mode, auth_backend
-        )
-        settings['controller_mode'] = controller_mode
+        # Controller mode is switched in the Multi-screen section, not
+        # here; but it holds access to every managed screen, so turning
+        # authentication off turns it off too.
+        controller_mode_changed = False
+        if settings['controller_mode'] and not auth_backend:
+            settings['controller_mode'] = False
+            controller_mode_changed = True
+            messages.warning(
+                request,
+                'Controller mode was turned off: it needs authentication.',
+            )
 
         # Restrict to the four cardinal angles via the shared
         # clamp_screen_rotation() helper. The Qt linuxfb plugin only
@@ -2593,9 +2632,9 @@ def login(request: HttpRequest) -> HttpResponse:
             return redirect(reverse('anthias_app:home'))
         else:
             messages.error(request, 'Invalid username or password')
-            return template(request, 'login.html', {'next': next_url})
+            return template(request, 'login.html', _login_context(next_url))
 
-    return template(request, 'login.html', {'next': next_url})
+    return template(request, 'login.html', _login_context(next_url))
 
 
 @require_http_methods(['GET'])

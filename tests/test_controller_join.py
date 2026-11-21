@@ -585,17 +585,33 @@ def test_regenerate_changes_the_secret(
 
 
 @pytest.mark.django_db
-def test_settings_refuse_controller_mode_without_auth(
-    operator_client: Client, _isolated_settings_conf: None
+def test_turning_auth_off_turns_controller_mode_off(
+    operator_client: Client, controller_on: None
 ) -> None:
     from anthias_server.settings import settings
 
     operator_client.post(
         reverse('anthias_app:settings_save'),
-        {'controller_mode': 'true', 'auth_backend': ''},
+        {'auth_backend': '', 'current_password': _PWD},
     )
     settings.load()
+    assert settings['auth_backend'] == ''
     assert settings['controller_mode'] is False
+
+
+@pytest.mark.django_db
+def test_saving_settings_leaves_controller_mode_alone(
+    operator_client: Client, controller_on: None
+) -> None:
+    from anthias_server.settings import settings
+
+    # Controller mode is no longer a field of the main settings form.
+    operator_client.post(
+        reverse('anthias_app:settings_save'),
+        {'auth_backend': 'auth_basic', 'current_password': _PWD},
+    )
+    settings.load()
+    assert settings['controller_mode'] is True
 
 
 @pytest.mark.django_db
@@ -991,3 +1007,245 @@ def test_unreadable_pem_is_a_pki_error(pem: str) -> None:
     for load in (pki.load_cert, pki.load_csr, pki.load_crl):
         with pytest.raises(pki.PkiError):
             load(pem)
+
+
+# ---------------------------------------------------------------------------
+# UX: Settings → Multi-screen management, Screens page
+
+
+@pytest.fixture
+def auth_only(_isolated_settings_conf: None) -> None:
+    from anthias_server.settings import settings
+
+    settings['auth_backend'] = 'auth_basic'
+    settings['controller_mode'] = False
+    settings.save()
+
+
+@pytest.mark.django_db
+def test_settings_offers_both_roles_on_a_standalone_screen(
+    operator_client: Client, auth_only: None
+) -> None:
+    html = operator_client.get(reverse('anthias_app:settings')).content
+    assert b'id="btn-join-controller"' in html
+    assert b'id="btn-controller-on"' in html
+    assert b'web interface turns off' in html
+    assert b'id="controller_mode"' not in html
+
+
+@pytest.mark.django_db
+def test_making_this_a_controller_goes_to_screens(
+    operator_client: Client, auth_only: None
+) -> None:
+    from anthias_server.settings import settings
+
+    response = operator_client.post(
+        reverse('anthias_app:settings_management_controller'),
+        {'enable': '1'},
+        headers={'HX-Request': 'true'},
+    )
+    assert response['HX-Redirect'] == reverse('controller:screens')
+    settings.load()
+    assert settings['controller_mode'] is True
+    html = operator_client.get(reverse('anthias_app:settings')).content
+    assert b'This screen is a controller' in html
+    assert b'id="btn-join-controller"' not in html
+
+    operator_client.post(
+        reverse('anthias_app:settings_management_controller'),
+        {'enable': '0'},
+        headers={'HX-Request': 'true'},
+    )
+    settings.load()
+    assert settings['controller_mode'] is False
+
+
+@pytest.mark.django_db
+def test_controller_mode_needs_auth(
+    operator_client: Client, _isolated_settings_conf: None
+) -> None:
+    from anthias_server.settings import settings
+
+    settings['auth_backend'] = ''
+    settings.save()
+    response = operator_client.post(
+        reverse('anthias_app:settings_management_controller'),
+        {'enable': '1'},
+        headers={'HX-Request': 'true'},
+    )
+    assert b'Turn on authentication first' in response.content
+    settings.load()
+    assert settings['controller_mode'] is False
+
+
+def _screens(client: Client) -> str:
+    return str(client.get(reverse('controller:screens')).content.decode())
+
+
+@pytest.mark.django_db
+def test_screens_page_guides_the_first_join(
+    operator_client: Client, controller_on: None
+) -> None:
+    html = _screens(operator_client)
+    assert 'id="screens-empty"' in html
+    assert 'Add your first screen' in html
+    # No bulk controls without screens; join information unfolded.
+    assert 'id="btn-publish-all"' not in html
+    assert 'id="join-information" open' in html
+
+
+@pytest.mark.django_db
+def test_screens_page_puts_requests_first_and_badges_the_tab(
+    operator_client: Client, controller_on: None, screen_ok: list[Any]
+) -> None:
+    _pending()
+    Node.objects.create(
+        name='Hall',
+        host='10.0.0.8',
+        fingerprint='1' * 64,
+        token_ciphertext=vault.encrypt('anthias_x'),
+    )
+    html = _screens(operator_client)
+    order = [
+        html.index(marker)
+        for marker in (
+            'id="join-requests"',
+            'data-screen="self"',
+            'id="publish"',
+            'id="join-information"',
+            'id="screens-activity"',
+        )
+    ]
+    assert order == sorted(order)
+    # Requests waiting: no "add your first screen" card on top of them.
+    assert 'id="screens-empty"' not in html
+    assert 'id="join-information" open' not in html
+    assert 'class="app-tab-badge"' in html
+    assert 'Waiting for approval' in html
+
+
+@pytest.mark.django_db
+def test_publishing_and_rebooting_ask_first(
+    operator_client: Client, controller_on: None
+) -> None:
+    node = Node.objects.create(
+        name='Hall',
+        host='10.0.0.8',
+        port=8443,
+        fingerprint='1' * 64,
+        token_ciphertext=vault.encrypt('anthias_x'),
+    )
+    html = _screens(operator_client)
+    publish_all = html.split('id="btn-publish-all"')[0].rsplit('<form', 1)[1]
+    assert 'confirm(' in publish_all and 'are removed' in publish_all
+    one = html.split(f'id="btn-publish-{node.pk}"')[0].rsplit('<form', 1)[1]
+    assert 'confirm(' in one
+    reboot_all = html.split('id="btn-all-reboot"')[0].rsplit('<form', 1)[1]
+    assert 'confirm(' in reboot_all
+    # The default port is not shown; the certificate is not in the row.
+    assert '10.0.0.8:8443' not in html
+    assert f'id="btn-remove-{node.pk}"' in html
+
+
+@pytest.mark.django_db
+def test_activity_marks_join_requests_pending(
+    operator_client: Client, controller_on: None, screen_ok: list[Any]
+) -> None:
+    _pending()
+    html = operator_client.get(
+        reverse('controller:screens_activity')
+    ).content.decode()
+    assert 'screens__outcome--pending' in html
+    assert 'screens__outcome--ok' not in html
+
+
+# --- reachable or not
+
+
+def _live_node(**fields: Any) -> Node:
+    fields.setdefault('status', NodeStatus.ONLINE)
+    return Node.objects.create(
+        name='Hall',
+        host='10.0.0.8',
+        fingerprint='1' * 64,
+        token_ciphertext=vault.encrypt('anthias_x'),
+        push_connection='abc',
+        push_seen_at=timezone.now(),
+        **fields,
+    )
+
+
+@pytest.mark.django_db
+def test_a_pushing_screen_the_controller_cannot_call_is_unreachable(
+    controller_on: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.controller import client as client_mod
+    from anthias_server.controller import push
+
+    node = _live_node()
+
+    def offline(*_a: Any, **_k: Any) -> Any:
+        raise NodeOfflineError('Connection refused')
+
+    monkeypatch.setattr(client_mod.NodeClient, 'json', offline)
+    service.check_node(node)
+    node.refresh_from_db()
+    assert node.status == NodeStatus.UNREACHABLE
+    assert 'cannot reach it on port 8443' in node.status_detail
+
+    # A heartbeat does not hide it again.
+    assert push._record(node.pk, 'abc', {'type': 'heartbeat'})
+    node.refresh_from_db()
+    assert node.status == NodeStatus.UNREACHABLE
+
+    # The status poll keeps checking it, and a working call clears it.
+    calls: list[int] = []
+
+    def fake_check(checked: Node) -> Node:
+        calls.append(checked.pk)
+        return checked
+
+    monkeypatch.setattr(service, 'check_node', fake_check)
+    Node.objects.filter(pk=node.pk).update(last_checked_at=None)
+    tasks.refresh_nodes()
+    assert calls == [node.pk]
+
+
+@pytest.mark.django_db
+def test_a_pushing_screen_that_answers_is_online(
+    controller_on: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    node = _live_node(status=NodeStatus.UNREACHABLE)
+    monkeypatch.setattr(
+        client_mod.NodeClient, 'json', lambda *_a, **_k: {'device_model': 'x'}
+    )
+    service.check_node(node)
+    node.refresh_from_db()
+    assert node.status == NodeStatus.ONLINE
+
+
+@pytest.mark.django_db
+def test_screens_page_keeps_headings_and_fingerprints_reachable(
+    operator_client: Client, controller_on: None
+) -> None:
+    Node.objects.create(
+        name='Hall',
+        host='10.0.0.8',
+        fingerprint='1' * 64,
+        token_ciphertext=vault.encrypt('anthias_x'),
+    )
+    html = _screens(operator_client)
+    # A heading inside <summary> is flattened into its button role, so
+    # the section heading sits outside it.
+    assert '<h2 class="sr-only" id="join-information-title">' in html
+    assert '<summary class="screens__join-summary"><h2>' not in html
+    assert 'The visible title lives in the summary' not in html
+    # The certificate is visible text, not only a hover title.
+    assert 'Certificate 1111111111111111…' in html
+    # Every per-screen menu closes on Escape and on an outside click.
+    menus = html.count('<details class="screens__menu"')
+    assert menus
+    assert html.count('@keydown.escape=') == menus
+    assert html.count('@click.outside=') == menus

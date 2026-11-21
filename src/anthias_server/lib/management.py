@@ -882,6 +882,20 @@ def request_via_ui(request: Any) -> bool:
 # Settings to see the check code or cancel the request.
 
 
+def controller_web_url(controller: Any) -> str:
+    """Where a person manages this screen: the controller's Screens page.
+
+    The stored URL is the controller's machine-to-machine port (8443);
+    people use its web interface on 443.
+    """
+    from urllib.parse import urlsplit
+
+    host = urlsplit(controller.url).hostname or ''
+    if ':' in host:
+        host = f'[{host}]'
+    return f'https://{host}/screens/' if host else ''
+
+
 def ui_locked() -> bool:
     """Whether this screen's web interface is shut (it is managed)."""
     if _settings()['controller_mode']:

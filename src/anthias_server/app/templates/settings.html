@@ -232,21 +232,6 @@
       </div>
     </section>
 
-    {# ===== Controller mode ===== #}
-    <section class="settings-section" id="controller-mode">
-      <header>
-        <div>
-          <h2>Controller mode</h2>
-          <p class="settings-section__lede">
-            Manage other Anthias screens from this one: publish this screen's
-            schedule to all of them and control them in bulk from the
-            <strong>Screens</strong> page. Requires authentication.
-          </p>
-        </div>
-      </header>
-      {% include "_settings_toggle.html" with name="controller_mode" label="Controller mode" hint="Adds the Screens page and accepts screens that join with this device's join information." checked=controller_mode %}
-    </section>
-
     <div class="flex justify-end">
       <button type="submit" class="app-btn app-btn-primary">
         <i class="ti ti-check"></i><span>Save settings</span>
@@ -340,9 +325,11 @@
     {% if web_tls.certificate %}
     <div class="settings-section__row" id="web-certificate-details">
       <div>
-        <strong>{{ web_tls.certificate.subject }}</strong>
+        <strong>{{ web_tls.certificate.sans.0|default:web_tls.certificate.subject }}</strong>
+        {% if web_tls.certificate.self_signed %}<span class="settings-section__badge settings-section__badge--muted">Self-signed</span>{% endif %}
         <p class="settings-section__lede">
           Names: {{ web_tls.certificate.sans|join:", "|default:"none" }}<br>
+          Subject: {{ web_tls.certificate.subject }}<br>
           Issued by: {% if web_tls.certificate.self_signed %}itself (self-signed){% else %}{{ web_tls.certificate.issuer }}{% endif %}<br>
           Expires: {{ web_tls.certificate.not_after|date:"Y-m-d" }}
         </p>
@@ -350,13 +337,20 @@
     </div>
     {% endif %}
 
-    <div class="settings-section__row">
+    <div class="settings-section__row" x-data="{ copied: false }">
       <div>
         <strong>Screen identity</strong>
         <p class="settings-section__lede">
           SHA-256 fingerprint of this player's own certificate. Other Anthias players use it to recognize this one. Uploading a web certificate never changes it.<br>
           <code id="node-fingerprint" class="break-all">{{ web_tls.node_fingerprint }}</code>
         </p>
+      </div>
+      <div class="settings-section__actions">
+        <button type="button" class="app-btn app-btn-outline-dark" id="btn-copy-fingerprint"
+          @click="const v = document.getElementById('node-fingerprint').textContent.trim(); const done = () => { copied = true; setTimeout(() => copied = false, 2000) }; if (window.isSecureContext && navigator.clipboard) { navigator.clipboard.writeText(v).then(done) } else { const r = document.createRange(); r.selectNodeContents(document.getElementById('node-fingerprint')); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); if (document.execCommand('copy')) done() }">
+          <i class="ti" :class="copied ? 'ti-check' : 'ti-copy'" aria-hidden="true"></i>
+          <span x-text="copied ? 'Copied' : 'Copy'">Copy</span>
+        </button>
       </div>
     </div>
 
@@ -388,7 +382,7 @@
   </section>
 
   {# ===== Backup & restore ===== #}
-  <section class="settings-section mt-4" id="backup" x-data="{ keys: false }">
+  <section class="settings-section mt-4" id="backup" x-data="{ keys: false, restoreFile: '' }">
     <header>
       <div>
         <h2>Backup & restore</h2>
@@ -401,21 +395,10 @@
             <i class="ti ti-download"></i><span>Get backup</span>
           </button>
         </form>
-        <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="inline m-0" id="recover-form">
-          {% csrf_token %}
-          <input
-            type="file"
-            name="backup_upload"
-            id="backup_upload"
-            accept=".tar.gz,.tgz,application/x-tar,application/gzip"
-            hidden
-            @change="if ($event.target.files.length) $event.target.form.requestSubmit()"
-          >
-          <button type="button" id="btn-upload" class="app-btn app-btn-primary"
-            @click="document.getElementById('backup_upload').click()">
-            <i class="ti ti-upload"></i><span>Upload &amp; recover</span>
-          </button>
-        </form>
+        <button type="button" id="btn-upload" class="app-btn app-btn-primary"
+          @click="$refs.backupUpload.click()">
+          <i class="ti ti-upload"></i><span>Upload &amp; recover</span>
+        </button>
       </div>
     </header>
 
@@ -447,10 +430,37 @@
         <label for="keys_password_2">Confirm keys password</label>
       </div>
     </div>
-    <div class="app-floating mt-3">
-      <input type="password" class="app-input" id="recover_keys_password" name="keys_password" form="recover-form" placeholder=" " autocomplete="off">
-      <label for="recover_keys_password">Keys password, to restore a backup that has device keys</label>
-    </div>
+    {% comment %}
+    Restoring replaces this device's settings and content, so picking a
+    file only opens this confirmation step; nothing is uploaded until
+    "Restore" is clicked.
+    {% endcomment %}
+    <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data"
+      id="recover-form" class="backup__restore" x-show="restoreFile" x-cloak>
+      {% csrf_token %}
+      <input
+        type="file"
+        name="backup_upload"
+        id="backup_upload"
+        x-ref="backupUpload"
+        accept=".tar.gz,.tgz,application/x-tar,application/gzip"
+        hidden
+        @change="restoreFile = $event.target.files.length ? $event.target.files[0].name : ''"
+      >
+      <p class="backup__restore-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Restore <strong x-text="restoreFile"></strong>?</p>
+      <p class="settings-section__lede m-0">This replaces this device's settings, schedule and content with the ones in the backup.</p>
+      <div class="app-floating">
+        <input type="password" class="app-input" id="recover_keys_password" name="keys_password" placeholder=" " autocomplete="off">
+        <label for="recover_keys_password">Keys password (only if the backup includes device keys)</label>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" id="btn-restore-confirm" class="app-btn app-btn-primary">
+          <i class="ti ti-upload" aria-hidden="true"></i><span>Restore</span>
+        </button>
+        <button type="button" class="app-btn app-btn-outline-dark" id="btn-restore-cancel"
+          @click="restoreFile = ''; $refs.backupUpload.value = ''">Cancel</button>
+      </div>
+    </form>
   </section>
 
   {# ===== System controls ===== #}
