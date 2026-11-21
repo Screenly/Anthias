@@ -12,8 +12,8 @@ The view now renders immediately with no IPs and the page polls
 /api/v2/network/ip-addresses to populate them.
 
 The polling endpoint must stay fast — get_node_ip() can block up to
-~80s on a fresh non-Balena boot waiting for host_agent to populate
-Redis, and a single slow first call would tail-back every subsequent
+~80s (~60s without host agent) on a fresh non-Balena boot waiting for
+host_agent to populate Redis, and a single slow first call would tail-back every subsequent
 poll. The endpoint reads the Redis cache directly on bare metal and
 calls the Balena supervisor with a tight HTTP timeout on Balena.
 
@@ -91,8 +91,8 @@ def test_format_drops_garbage_tokens() -> None:
 # _resolve_node_ip on bare metal (Redis cache fast path)
 # ---------------------------------------------------------------------------
 #
-# Must never invoke ``anthias_common.utils.get_node_ip()``, which has a ~80s
-# blocking readiness loop that would tail-back every poll.
+# Must never invoke ``anthias_common.utils.get_node_ip()``, which has a
+# ~60-80s blocking readiness loop that would tail-back every poll.
 
 
 @pytest.fixture
