@@ -170,7 +170,7 @@ def client_context(target: Target) -> ssl.SSLContext:
     self-signed; :func:`check_pin` is the check that matters, and it
     runs before any message is sent.
     """
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)  # NOSONAR
     # The pin replaces chain and name checks; see check_pin().
     context.check_hostname = False  # NOSONAR
     context.verify_mode = ssl.CERT_NONE  # NOSONAR
