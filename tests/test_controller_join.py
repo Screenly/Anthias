@@ -191,6 +191,26 @@ def test_join_defaults_the_host_to_the_caller_address(
 
 
 @pytest.mark.django_db
+def test_screen_without_a_name_is_listed_by_address(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_name='02706ec0e872'),
+        content_type='application/json',
+        headers=M2M,
+        REMOTE_ADDR='192.168.1.51',
+    )
+    assert Node.objects.get().name == '192.168.1.51'
+
+
+def test_controller_name_falls_back_to_its_address(
+    _isolated_settings_conf: None,
+) -> None:
+    assert service.controller_name('192.168.1.10') == 'Anthias at 192.168.1.10'
+
+
+@pytest.mark.django_db
 def test_join_with_wrong_secret_is_refused(
     controller_on: None, screen_ok: list[Any]
 ) -> None:

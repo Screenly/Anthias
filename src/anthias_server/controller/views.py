@@ -67,8 +67,9 @@ def _page_context(request: HttpRequest) -> dict[str, Any]:
     if not context['controller_enabled']:
         return context
     try:
+        host = _snippet_host(request)
         context['join_snippet'] = join.build_snippet(
-            _snippet_host(request), service.controller_name()
+            host, service.controller_name(host)
         )
     except management.ManagementError as exc:
         logger.warning('Join information unavailable: %s', exc)

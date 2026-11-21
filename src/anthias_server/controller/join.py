@@ -52,6 +52,7 @@ SNIPPET_VERSION = 1
 CONTROLLER_PORT = M2M_PORT
 _SECRET_BYTES = 32
 _FP_RE = re.compile(r'^[0-9a-f]{64}$')
+_CONTAINER_ID_RE = re.compile(r'^[0-9a-f]{12}$')
 _HOST_RE = re.compile(r'^[A-Za-z0-9.\-]{1,253}$')
 CALLBACK_READ_TIMEOUT_S = 15
 
@@ -170,7 +171,11 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
     host = text('screen_host', 253) or client_ip
     if not host or not _valid_host(host):
         raise JoinError(400, 'The join request has no usable screen address.')
-    name = text('screen_name', 100) or host
+    name = text('screen_name', 100)
+    if not name or _CONTAINER_ID_RE.match(name):
+        # No player name on the screen: its hostname inside the
+        # container is a bare container id. Its address is more useful.
+        name = host
     return JoinRequest(
         secret=secret,
         token=token,

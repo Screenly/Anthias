@@ -48,12 +48,19 @@ def controller_enabled() -> bool:
     return bool(settings['controller_mode']) and bool(settings['auth_backend'])
 
 
-def controller_name() -> str:
-    import socket
+def controller_name(host: str = '') -> str:
+    """The name screens show for this controller.
 
+    The player name when set. Otherwise the address the operator used
+    to reach it: inside the container ``gethostname()`` is only the
+    container id, which means nothing to anyone.
+    """
     from anthias_server.settings import settings
 
-    return (settings['player_name'] or socket.gethostname())[:100]
+    name = str(settings['player_name'] or '').strip()
+    if not name:
+        name = f'Anthias at {host}' if host else 'Anthias controller'
+    return name[:100]
 
 
 def audit(
