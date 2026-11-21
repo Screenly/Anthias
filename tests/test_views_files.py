@@ -377,3 +377,122 @@ def test_static_with_mime_directory_request_404(
     request = factory.get('/static_with_mime/subdir', REMOTE_ADDR=LAN_IP_10)
     with pytest.raises(Http404):
         views_files.static_with_mime(request, filename='subdir')
+
+
+# ---------------------------------------------------------------------------
+# backup archives: authentication and expiry
+
+
+@pytest.fixture
+def auth_on_static(_isolated_settings_conf: None) -> Iterator[None]:
+    from anthias_server.settings import settings
+
+    settings['auth_backend'] = 'auth_basic'
+    settings.save()
+    yield
+
+
+def _basic(username: str, password: str) -> str:
+    import base64
+
+    raw = base64.b64encode(f'{username}:{password}'.encode()).decode()
+    return f'Basic {raw}'
+
+
+@pytest.mark.django_db
+def test_backup_download_needs_authentication(
+    factory: RequestFactory, static_root: Path, auth_on_static: None
+) -> None:
+    from django.contrib.auth.models import AnonymousUser, User
+
+    User.objects.create_user(username='op', password='pw-for-tests')  # NOSONAR
+    (static_root / 'b.tar.gz').write_bytes(b'secret')
+
+    request = factory.get('/static_with_mime/b.tar.gz', REMOTE_ADDR=LAN_IP_10)
+    request.user = AnonymousUser()
+    response = views_files.static_with_mime(request, filename='b.tar.gz')
+    assert response.status_code == 401
+    assert response['WWW-Authenticate'].startswith('Basic')
+
+    request = factory.get(
+        '/static_with_mime/b.tar.gz',
+        REMOTE_ADDR=LAN_IP_10,
+        HTTP_AUTHORIZATION=_basic('op', 'wrong'),
+    )
+    request.user = AnonymousUser()
+    assert (
+        views_files.static_with_mime(request, filename='b.tar.gz').status_code
+        == 401
+    )
+
+    request = factory.get(
+        '/static_with_mime/b.tar.gz',
+        REMOTE_ADDR=LAN_IP_10,
+        HTTP_AUTHORIZATION=_basic('op', 'pw-for-tests'),
+    )
+    request.user = AnonymousUser()
+    response = views_files.static_with_mime(request, filename='b.tar.gz')
+    assert response.status_code == 200
+    assert response['Cache-Control'] == 'no-store'
+
+    request = factory.get(
+        '/static_with_mime/b.tar.gz',
+        REMOTE_ADDR=LAN_IP_10,
+        HTTP_AUTHORIZATION='Bearer anthias_whatever',
+    )
+    request.user = AnonymousUser()
+    assert (
+        views_files.static_with_mime(request, filename='b.tar.gz').status_code
+        == 401
+    )
+
+
+@pytest.mark.django_db
+def test_backup_download_for_a_signed_in_operator(
+    factory: RequestFactory, static_root: Path, auth_on_static: None
+) -> None:
+    from django.contrib.auth.models import User
+
+    user = User.objects.create_user(
+        username='op', password='pw-for-tests'
+    )  # NOSONAR
+    (static_root / 'b.tar.gz').write_bytes(b'secret')
+    request = factory.get('/static_with_mime/b.tar.gz', REMOTE_ADDR=LAN_IP_10)
+    request.user = user
+    response = views_files.static_with_mime(request, filename='b.tar.gz')
+    assert response.status_code == 200
+
+
+def test_expired_backup_is_not_served(
+    factory: RequestFactory, static_root: Path
+) -> None:
+    import os
+    import time
+
+    from anthias_server.lib import backup_helper
+
+    old = static_root / 'old.tar.gz'
+    old.write_bytes(b'secret')
+    stale = time.time() - backup_helper.BACKUP_ARCHIVE_TTL_S - 10
+    os.utime(old, (stale, stale))
+    with pytest.raises(Http404):
+        _call_static(factory, 'old.tar.gz', LAN_IP_10)
+
+
+def test_prune_archives_removes_only_expired_archives(tmp_path: Path) -> None:
+    import os
+    import time
+
+    from anthias_server.lib import backup_helper
+
+    old = tmp_path / 'old.tar.gz'
+    new = tmp_path / 'new.tar.gz'
+    other = tmp_path / 'app.css'
+    for f in (old, new, other):
+        f.write_bytes(b'x')
+    stale = time.time() - backup_helper.BACKUP_ARCHIVE_TTL_S - 10
+    os.utime(old, (stale, stale))
+    os.utime(other, (stale, stale))
+    assert backup_helper.prune_archives(str(tmp_path)) == 1
+    assert not old.exists()
+    assert new.exists() and other.exists()

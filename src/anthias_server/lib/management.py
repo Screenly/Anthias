@@ -58,6 +58,7 @@ import base64
 import binascii
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -82,6 +83,12 @@ M2M_LISTENER_VALUE = 'm2m'
 JOIN_PREFIX = 'anthias-join:'
 JOIN_PATH = '/api/v2/controller/join'
 JOIN_TIMEOUT = (10, 60)
+# Caddy body caps on the m2m site. A join request is a few hundred
+# bytes of JSON; the largest thing a controller sends is one upload
+# chunk (controller.client.UPLOAD_CHUNK_BYTES, 8 MiB) plus multipart
+# overhead.
+JOIN_MAX_BODY_BYTES = 16 * 1024
+M2M_MAX_BODY_BYTES = 16 * 1024 * 1024
 CONTROLLER_TOKEN_PREFIX = 'Controller: '
 MAX_CONTROLLER_NAME_LEN = 80
 MAX_HOST_LEN = 253
@@ -459,22 +466,74 @@ def sync_state() -> None:
 # --- Caddy -----------------------------------------------------------------
 
 
+_LISTENER_SECRET_NAME = 'm2m-listener.secret'
+_listener_lock = threading.Lock()
+_listener_cache: dict[str, str] = {}
+
+
+def listener_value() -> str:
+    """The value Caddy's :8443 site puts in ``X-Anthias-Listener``.
+
+    A random secret kept in the Caddy run volume, which only
+    anthias-server and anthias-caddy mount. A fixed value would let
+    any container on the Docker network (viewer, webview, celery) that
+    can reach ``anthias-server:8080`` directly claim to have come in on
+    :8443. Without the run directory (development, tests) there is no
+    Caddy and no other container, and the plain marker is used.
+    """
+    from anthias_server.lib import caddy
+
+    if not caddy.RUN_DIR.is_dir():
+        return M2M_LISTENER_VALUE
+    path = caddy.RUN_DIR / _LISTENER_SECRET_NAME
+    key = str(path)
+    with _listener_lock:
+        cached = _listener_cache.get(key)
+        if cached:
+            return cached
+        try:
+            secret = path.read_text().strip()
+        except FileNotFoundError:
+            secret = ''
+        if not secret:
+            import secrets as _secrets
+
+            secret = _secrets.token_urlsafe(32)
+            tmp = path.with_name(f'.{path.name}.tmp')
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as f:
+                f.write(secret)
+            os.replace(tmp, path)
+        value = f'{M2M_LISTENER_VALUE}:{secret}'
+        _listener_cache[key] = value
+        return value
+
+
+def reset_listener_cache() -> None:
+    _listener_cache.clear()
+
+
 def m2m_server() -> dict[str, Any]:
     """Caddy JSON for the :8443 API-only site with the node cert.
 
     Caddy's reverse_proxy sets X-Forwarded-For to the peer address,
     which the controller uses as a joining screen's host when the
     operator gave none. The connection limits match the UI sites.
+    Request bodies are capped: the join endpoint is unauthenticated
+    and only ever takes a small JSON object, and nothing else a
+    controller sends is larger than one upload chunk.
     """
     from anthias_server.lib import caddy
 
-    proxy = {
-        'handler': 'reverse_proxy',
-        'upstreams': [{'dial': caddy.UPSTREAM}],
-        'headers': {
-            'request': {'set': {caddy.LISTENER_HEADER: [M2M_LISTENER_VALUE]}}
-        },
-    }
+    def proxy() -> dict[str, Any]:
+        return {
+            'handler': 'reverse_proxy',
+            'upstreams': [{'dial': caddy.UPSTREAM}],
+            'headers': {
+                'request': {'set': {caddy.LISTENER_HEADER: [listener_value()]}}
+            },
+        }
+
     return {
         'listen': [f':{M2M_PORT}'],
         'automatic_https': {'disable': True},
@@ -483,8 +542,13 @@ def m2m_server() -> dict[str, Any]:
         ],
         'routes': [
             {
+                'match': [{'path': [JOIN_PATH]}],
+                'handle': [caddy.body_limit(JOIN_MAX_BODY_BYTES), proxy()],
+                'terminal': True,
+            },
+            {
                 'match': [{'path': ['/api/v2/*']}],
-                'handle': [proxy],
+                'handle': [caddy.body_limit(M2M_MAX_BODY_BYTES), proxy()],
                 'terminal': True,
             },
             {'handle': [{'handler': 'static_response', 'status_code': 404}]},
@@ -515,4 +579,4 @@ def request_via_m2m(request: Any) -> bool:
     from anthias_server.lib import caddy
 
     value = request.headers.get(caddy.LISTENER_HEADER, '')
-    return hmac.compare_digest(value, M2M_LISTENER_VALUE)
+    return hmac.compare_digest(value.encode(), listener_value().encode())

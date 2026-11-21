@@ -270,3 +270,49 @@ def test_key_file_is_not_in_backups() -> None:
     from anthias_server.lib import backup_helper
 
     assert vault.KEY_FILENAME not in backup_helper._CONFIG_FILES
+
+
+def test_oversized_response_is_refused(
+    screen: tuple[str, str, _Recorder], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    url, fingerprint, recorder = screen
+    monkeypatch.setattr(client_mod, 'MAX_RESPONSE_BYTES', 1024)
+    recorder.body = {'detail': 'x' * 4096}
+    with (
+        NodeClient(url, fingerprint) as client,
+        pytest.raises(NodeOfflineError, match='too large'),
+    ):
+        client.info()
+
+
+def test_slow_response_hits_the_overall_deadline(
+    screen: tuple[str, str, _Recorder], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    url, fingerprint, _ = screen
+    clock = iter([0.0, 1000.0, 1000.0, 1000.0])
+    monkeypatch.setattr(client_mod, '_monotonic', lambda: next(clock))
+    with (
+        NodeClient(url, fingerprint) as client,
+        pytest.raises(NodeOfflineError, match='too long'),
+    ):
+        client.info()
+
+
+def test_error_detail_from_a_screen_is_one_short_line(
+    screen: tuple[str, str, _Recorder],
+) -> None:
+    url, fingerprint, recorder = screen
+    recorder.status = 500
+    recorder.body = {'detail': 'line one\nFORGED log line\x1b[31m' + 'y' * 500}
+    with (
+        NodeClient(url, fingerprint) as client,
+        pytest.raises(NodeRequestError) as excinfo,
+    ):
+        client.info()
+    message = str(excinfo.value)
+    assert '\n' not in message and '\x1b' not in message
+    assert len(message) < 300

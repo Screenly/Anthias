@@ -26,6 +26,7 @@ separate credentials, revoked one by one from the settings page.
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 from datetime import timedelta
 from typing import TYPE_CHECKING, cast
@@ -156,3 +157,65 @@ def authenticate_token(plaintext: str) -> ApiToken | None:
         if updated:
             token.last_used_at = now
     return token
+
+
+# --- what a token may do ---------------------------------------------------
+#
+# A token is a headless credential, not the operator. It must not be
+# able to turn itself into the operator's password or into a copy of
+# the device: a backup carries the Django secret key and the password
+# hash, and a restore replaces the database (and so can plant new
+# credentials that outlive revoking the token). Those stay with the
+# logged-in operator.
+_TOKEN_DENIED_PATH_RE = re.compile(r'^/api/v[0-9.]+/(backup|recover)/?$')
+
+# The controller's token (one that pairs a ManagementController) is
+# narrower still: only the calls controller.client makes, and only
+# through the :8443 machine-to-machine listener.
+_CONTROLLER_ALLOWED: tuple[tuple[re.Pattern[str], frozenset[str]], ...] = (
+    (re.compile(r'^/api/v2/info$'), frozenset({'GET', 'HEAD'})),
+    (re.compile(r'^/api/v2/pairing$'), frozenset({'GET', 'HEAD', 'DELETE'})),
+    (re.compile(r'^/api/v2/assets$'), frozenset({'GET', 'HEAD', 'POST'})),
+    (re.compile(r'^/api/v2/assets/order$'), frozenset({'POST'})),
+    (
+        re.compile(r'^/api/v2/assets/control/[^/]+$'),
+        frozenset({'GET', 'HEAD'}),
+    ),
+    (
+        re.compile(r'^/api/v2/assets/[^/]+$'),
+        frozenset({'GET', 'HEAD', 'PATCH', 'PUT', 'DELETE'}),
+    ),
+    (re.compile(r'^/api/v2/file_asset$'), frozenset({'POST'})),
+    (re.compile(r'^/api/v2/reboot$'), frozenset({'POST'})),
+    (re.compile(r'^/api/v2/display/[^/]+$'), frozenset({'POST'})),
+)
+
+
+def is_controller_token(token: ApiToken) -> bool:
+    from anthias_server.app.models import ManagementController
+
+    return ManagementController.objects.filter(token_id=token.pk).exists()
+
+
+def token_refusal(
+    token: ApiToken, method: str, path: str, via_m2m: bool
+) -> str:
+    """Why ``token`` may not make this request, or ``''`` if it may."""
+    if _TOKEN_DENIED_PATH_RE.match(path):
+        return (
+            'API tokens cannot create or restore backups. Sign in to the '
+            'web interface to do that.'
+        )
+    if is_controller_token(token):
+        if not via_m2m:
+            return (
+                "The controller's token is only accepted on the "
+                'management port.'
+            )
+        method = method.upper()
+        if not any(
+            pattern.match(path) and method in methods
+            for pattern, methods in _CONTROLLER_ALLOWED
+        ):
+            return "The controller's token does not allow this request."
+    return ''

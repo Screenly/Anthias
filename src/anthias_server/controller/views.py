@@ -76,6 +76,7 @@ def _page_context(request: HttpRequest) -> dict[str, Any]:
         context['join_snippet'] = join.build_snippet(
             host, service.controller_name(host)
         )
+        context['join_expires_at'] = join.current_expiry()
     except management.ManagementError as exc:
         logger.warning('Join information unavailable: %s', exc)
         context['join_error'] = (

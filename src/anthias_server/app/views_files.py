@@ -10,22 +10,17 @@ from django.http import (
     FileResponse,
     Http404,
     HttpRequest,
+    HttpResponse,
     HttpResponseForbidden,
 )
 from django.http.response import HttpResponseBase
 from django.views.decorators.http import require_GET
 
-# Defense-in-depth, not the real perimeter:
-#   * In the default no-SSL install, anthias-server is published as
-#     `80:8080`, so requests arrive with REMOTE_ADDR set to the docker
-#     bridge gateway (172.x) — that IP falls inside DOCKER_BRIDGE_CIDR,
-#     so LAN clients are not actually excluded. Mirrors the original
-#     nginx posture; trying to plug the gap with auth would be theatre
-#     anyway since plain-HTTP credentials are sniffable on the LAN.
-#   * With `bin/enable_ssl.sh` the Caddy sidecar terminates TLS and
-#     rewrites X-Forwarded-For with the real client IP; uvicorn honours
-#     that header (FORWARDED_ALLOW_IPS=* in the override) and the check
-#     below sees the LAN IP, so the bypass is closed for SSL deployments.
+# Defense-in-depth, not the real perimeter. Caddy fronts every install
+# and rewrites X-Forwarded-For with the real client address, which
+# uvicorn honours (FORWARDED_ALLOW_IPS=*), so the checks below see the
+# LAN client. The RFC1918 gate therefore admits the whole LAN, which is
+# why static_with_mime also requires authentication.
 # IPs below are the standard RFC1918 / Docker-bridge ranges, hardcoded
 # on purpose — Sonar's S1313 ("don't hardcode IPs") doesn't apply.
 ANTHIAS_ASSETS_ROOT = Path('/data/anthias_assets')
@@ -123,12 +118,72 @@ def anthias_assets(request: HttpRequest, filename: str) -> HttpResponseBase:
         raise Http404
 
 
+def _basic_auth_user(request: HttpRequest) -> Any:
+    """The user named by a valid ``Authorization: Basic`` header, if any.
+
+    ``POST /api/v2/backup`` hands a Basic-auth client a filename to
+    fetch from here, so Basic keeps working for that download. Bearer
+    tokens are not accepted: a token may not take backups at all
+    (lib.api_tokens.token_refusal).
+    """
+    import base64
+    import binascii
+
+    from django.contrib.auth import authenticate
+
+    header = request.headers.get('Authorization', '')
+    scheme, _, encoded = header.partition(' ')
+    if scheme.lower() != 'basic' or not encoded:
+        return None
+    try:
+        decoded = base64.b64decode(encoded.strip(), validate=True).decode()
+    except (binascii.Error, UnicodeDecodeError):
+        return None
+    username, sep, password = decoded.partition(':')
+    if not sep:
+        return None
+    user = authenticate(request, username=username, password=password)
+    return user if user is not None and user.is_active else None
+
+
+def _download_allowed(request: HttpRequest) -> bool:
+    from anthias_server.settings import settings
+
+    if not settings['auth_backend']:
+        # Authentication off: the whole device is open by contract.
+        return True
+    user = getattr(request, 'user', None)
+    if user is not None and user.is_authenticated:
+        return True
+    return _basic_auth_user(request) is not None
+
+
+def _is_backup_archive(target: str) -> bool:
+    return target.endswith('.tar.gz')
+
+
 @require_GET
 @require_client_in(*RFC1918_CIDRS)
 def static_with_mime(request: HttpRequest, filename: str) -> HttpResponseBase:
+    """Files the server stages for download: today, backup archives.
+
+    A backup holds the Django secret key, the operator's password hash
+    and the API-token table, so the RFC1918 gate alone (which admits
+    the whole LAN) is not enough: the caller must be signed in, or
+    send the operator's Basic credentials. Archives are also only kept
+    for BACKUP_ARCHIVE_TTL_S (see lib.backup_helper).
+    """
+    from anthias_server.lib.backup_helper import archive_expired
+
+    if not _download_allowed(request):
+        response = HttpResponse('Authentication required.', status=401)
+        response['WWW-Authenticate'] = 'Basic realm="Anthias"'
+        return response
     base = os.path.realpath(STATIC_FILES_ROOT) + os.sep
     target = os.path.realpath(os.path.join(base, filename))
     if not target.startswith(base):
+        raise Http404
+    if _is_backup_archive(target) and archive_expired(target):
         raise Http404
     requested_mime = request.GET.get('mime')
     if requested_mime in STATIC_WITH_MIME_ALLOWED_TYPES:
@@ -138,6 +193,13 @@ def static_with_mime(request: HttpRequest, filename: str) -> HttpResponseBase:
             mimetypes.guess_type(target)[0] or 'application/octet-stream'
         )
     try:
-        return FileResponse(open(target, 'rb'), content_type=content_type)
+        return _no_store(
+            FileResponse(open(target, 'rb'), content_type=content_type)
+        )
     except (FileNotFoundError, IsADirectoryError):
         raise Http404
+
+
+def _no_store(response: FileResponse) -> FileResponse:
+    response['Cache-Control'] = 'no-store'
+    return response

@@ -1130,8 +1130,16 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 26_214_400
 # deploy and flip request.is_secure() — secure-cookied sessions would
 # then drop on the next plain-HTTP request, and redirects would point
 # at https:// URLs that don't exist.
-if getenv('FORWARDED_ALLOW_IPS'):
+BEHIND_TLS_PROXY = bool(getenv('FORWARDED_ALLOW_IPS'))
+if BEHIND_TLS_PROXY:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # Behind Caddy the UI is HTTPS-only (:80 redirects everything but
+    # /api/*), so the session and CSRF cookies never need to cross the
+    # LAN in clear text. Without the flag the browser sends them on the
+    # first http://screen/ request, before the redirect, where anyone
+    # sniffing the network can lift the session.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -20,10 +20,15 @@ asks for them through :func:`ensure_node_identity`.
 """
 
 import datetime
+import fcntl
 import hashlib
 import logging
 import os
 import secrets
+import tempfile
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -125,25 +130,68 @@ def generate(now: datetime.datetime | None = None) -> tuple[bytes, bytes]:
 
 
 def _write_private(target: Path, data: bytes, mode: int) -> None:
-    tmp = target.with_name(f'.{target.name}.tmp')
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    # A unique temp name, so two writers never share (and truncate)
+    # one temp file; the lock in ensure_node_identity() keeps them from
+    # running at once anyway.
+    fd, tmp = tempfile.mkstemp(prefix=f'.{target.name}.', dir=target.parent)
     try:
+        os.fchmod(fd, mode)
         os.write(fd, data)
         os.fsync(fd)
-    finally:
+    except BaseException:
         os.close(fd)
+        os.unlink(tmp)
+        raise
+    os.close(fd)
     os.replace(tmp, target)
 
 
-def _is_usable() -> bool:
+_MISSING = 'missing'
+_INVALID = 'invalid'
+_USABLE = 'usable'
+
+
+def _state() -> str:
+    """Whether the pair on disk is usable, missing, or damaged.
+
+    Only a missing file or contents that do not parse count against
+    the pair. Any other OSError (EIO on a failing SD card, EACCES)
+    propagates: regenerating then would silently replace the identity
+    every controller has pinned, over what may be a transient read
+    error.
+    """
     try:
-        certificate = x509.load_pem_x509_certificate(cert_pem())
-        key = serialization.load_pem_private_key(
-            key_path().read_bytes(), password=None
-        )
-    except (OSError, ValueError, TypeError):
-        return False
-    return certificate.public_key() == key.public_key()
+        cert_bytes = cert_pem()
+        key_bytes = key_path().read_bytes()
+    except FileNotFoundError:
+        return _MISSING
+    try:
+        certificate = x509.load_pem_x509_certificate(cert_bytes)
+        key = serialization.load_pem_private_key(key_bytes, password=None)
+    except (ValueError, TypeError):
+        return _INVALID
+    if certificate.public_key() != key.public_key():
+        return _INVALID
+    return _USABLE
+
+
+_thread_lock = threading.Lock()
+
+
+@contextmanager
+def _generation_lock(directory: Path) -> Iterator[None]:
+    """Serialise generation across threads and processes.
+
+    The ASGI startup thread, a settings page and the CLI can all ask
+    for the identity on first boot.
+    """
+    with _thread_lock:
+        fd = os.open(directory / '.lock', os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(fd)
 
 
 def ensure_node_identity() -> NodeIdentity:
@@ -151,24 +199,28 @@ def ensure_node_identity() -> NodeIdentity:
 
     An existing, readable pair is never regenerated, even when it is
     close to expiry: replacing it would break every controller that
-    pinned it. A pair that cannot be read back (a half-written file,
-    a key that does not belong to the certificate) is replaced, since
-    nothing can be pinned to a certificate the screen cannot serve.
+    pinned it. A pair whose contents cannot be parsed (a half-written
+    file, a key that does not belong to the certificate) is replaced,
+    since nothing can be pinned to a certificate the screen cannot
+    serve. A pair that cannot be *read* raises instead.
     """
     directory = node_dir()
-    if not _is_usable():
-        if cert_path().exists() or key_path().exists():
-            logger.warning(
-                'The node certificate under %s is unreadable or does not '
-                'match its key; generating a new one.',
-                directory,
-            )
+    if _state() != _USABLE:
         directory.mkdir(parents=True, exist_ok=True)
         os.chmod(directory, 0o700)
-        new_cert, new_key = generate()
-        _write_private(key_path(), new_key, 0o600)
-        _write_private(cert_path(), new_cert, 0o644)
-        logger.info('Generated the node certificate in %s', directory)
+        with _generation_lock(directory):
+            state = _state()
+            if state != _USABLE:
+                if state == _INVALID:
+                    logger.warning(
+                        'The node certificate under %s is damaged or does '
+                        'not match its key; generating a new one.',
+                        directory,
+                    )
+                new_cert, new_key = generate()
+                _write_private(key_path(), new_key, 0o600)
+                _write_private(cert_path(), new_cert, 0o644)
+                logger.info('Generated the node certificate in %s', directory)
     return NodeIdentity(
         cert_path=cert_path(), key_path=key_path(), fingerprint=fingerprint()
     )

@@ -481,3 +481,111 @@ def test_token_cannot_reach_settings_ui(operator: User, auth_on: None) -> None:
 
     assert response.status_code == 302
     assert ApiToken.objects.count() == 1
+
+
+# ---------------------------------------------------------------------------
+# transport and scope
+
+
+@pytest.mark.django_db
+def test_bearer_refused_over_plain_http_behind_caddy(
+    operator: User, auth_on: None
+) -> None:
+    from django.conf import settings as django_settings
+
+    _, plaintext = api_tokens.create_token(operator, 'c')
+    with patch.object(django_settings, 'BEHIND_TLS_PROXY', True, create=True):
+        plain = Client().get('/api/v2/assets', headers=_bearer(plaintext))
+        secure = Client().get(
+            '/api/v2/assets', headers=_bearer(plaintext), secure=True
+        )
+    assert plain.status_code == 401
+    assert 'HTTPS' in plain.json()['detail']
+    assert secure.status_code == 200
+    # Refused before the lookup, so the token is not marked used.
+    token = ApiToken.objects.get()
+    assert token.last_used_at is not None  # set by the secure call only
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('path', ['/api/v2/backup', '/api/v1/backup'])
+def test_token_cannot_take_a_backup(
+    operator: User, auth_on: None, path: str
+) -> None:
+    _, plaintext = api_tokens.create_token(operator, 'c')
+    with patch(
+        'anthias_server.lib.backup_helper.create_backup'
+    ) as create_backup:
+        response = Client().post(path, headers=_bearer(plaintext))
+    assert response.status_code == 403
+    assert 'backup' in response.json()['detail']
+    create_backup.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_token_cannot_restore_a_backup(operator: User, auth_on: None) -> None:
+    _, plaintext = api_tokens.create_token(operator, 'c')
+    response = Client().post('/api/v2/recover', headers=_bearer(plaintext))
+    assert response.status_code == 403
+
+
+def _controller_token(operator: User) -> str:
+    from anthias_server.app.models import ManagementController
+
+    token, plaintext = api_tokens.create_token(operator, 'Controller: Lobby')
+    ManagementController.objects.create(
+        name='Lobby', url='https://c:8443', fingerprint='c' * 64, token=token
+    )
+    return plaintext
+
+
+@pytest.mark.django_db
+def test_controller_token_only_on_the_m2m_listener(
+    operator: User, auth_on: None
+) -> None:
+    plaintext = _controller_token(operator)
+    headers = _bearer(plaintext)
+    assert Client().get('/api/v2/assets', headers=headers).status_code == 403
+    headers['X-Anthias-Listener'] = 'm2m'
+    assert Client().get('/api/v2/assets', headers=headers).status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('method', 'path'),
+    [
+        ('get', '/api/v2/device_settings'),
+        ('patch', '/api/v2/device_settings'),
+        ('get', '/api/v2/network/ip-addresses'),
+        ('post', '/api/v2/shutdown'),
+        ('get', '/api/v1/assets'),
+    ],
+)
+def test_controller_token_is_limited_to_what_the_controller_calls(
+    operator: User, auth_on: None, method: str, path: str
+) -> None:
+    headers = {
+        **_bearer(_controller_token(operator)),
+        'X-Anthias-Listener': 'm2m',
+    }
+    response = getattr(Client(), method)(path, headers=headers)
+    assert response.status_code == 403
+
+
+def test_token_refusal_allowlist_covers_the_client_calls() -> None:
+    token = ApiToken(pk=1)
+    with patch.object(api_tokens, 'is_controller_token', return_value=True):
+        for method, path in (
+            ('GET', '/api/v2/info'),
+            ('DELETE', '/api/v2/pairing'),
+            ('POST', '/api/v2/assets'),
+            ('PATCH', '/api/v2/assets/abc'),
+            ('DELETE', '/api/v2/assets/abc'),
+            ('POST', '/api/v2/assets/order'),
+            ('GET', '/api/v2/assets/control/next'),
+            ('POST', '/api/v2/file_asset'),
+            ('POST', '/api/v2/reboot'),
+            ('POST', '/api/v2/display/on'),
+        ):
+            assert api_tokens.token_refusal(token, method, path, True) == ''
+            assert api_tokens.token_refusal(token, method, path, False)
