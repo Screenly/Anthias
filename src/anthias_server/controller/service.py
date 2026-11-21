@@ -31,11 +31,19 @@ logger = logging.getLogger(__name__)
 STATUS_READ_TIMEOUT_S = 15
 
 COMMANDS = {
-    'reboot': 'Reboot',
+    'previous': 'Previous asset',
+    'next': 'Next asset',
     'display_on': 'Display on',
     'display_off': 'Display off',
-    'next': 'Next asset',
-    'previous': 'Previous asset',
+    'reboot': 'Reboot',
+}
+# Tabler icons for the compact per-screen buttons.
+COMMAND_ICONS = {
+    'previous': 'ti-player-skip-back',
+    'next': 'ti-player-skip-forward',
+    'display_on': 'ti-device-tv',
+    'display_off': 'ti-device-tv-off',
+    'reboot': 'ti-refresh',
 }
 
 

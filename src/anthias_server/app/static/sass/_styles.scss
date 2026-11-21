@@ -2104,7 +2104,16 @@ label { text-align: left; }
   flex-wrap: wrap;
   gap: calc(var(--spacing) * 2);
 }
-.screens__row-actions { justify-content: flex-end; }
+.screens__row-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: calc(var(--spacing) * 1);
+}
+.screens__actions-col { white-space: nowrap; }
+.screens__icon-btn {
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 1.5);
+  > .ti { margin: 0; }
+}
 .app-btn-sm {
   padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
   font-size: 0.8125rem;
@@ -2113,8 +2122,11 @@ label { text-align: left; }
   font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
 }
 .screens__detail {
-  max-width: 28rem;
   overflow-wrap: anywhere;
+}
+.screens-table {
+  td { vertical-align: top; }
+  td:nth-child(3) { min-width: 12rem; }
 }
 .screens__status,
 .screens__publish,
