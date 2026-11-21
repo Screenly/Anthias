@@ -152,6 +152,20 @@ Tokens only apply while authentication is on:
 
 HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is deprecated in favor of tokens.
 
+### Managing several screens from one (multi-screen)
+
+One Anthias screen (the controller) can publish the same playlist to other screens on your network. Joining a screen to a controller works like joining a Proxmox cluster:
+
+1. On the controller, open **Screens** and copy the **Join information**. It starts with `anthias-join:`.
+2. On the screen you want to add, turn on **Authentication** in Settings if it isn't on yet. Joining is refused while authentication is disabled, because the API would be open to anyone on the network.
+3. Go to **Settings → Multi-screen management**, paste the join information and click **Join controller**. If the controller can't reach the screen at the address it connected from (for example, across a NAT), also enter the screen's IP address or DNS name.
+
+The screen then shows a **Managed by …** banner on every page. Content you change locally is replaced the next time the controller publishes.
+
+**How it stays secure:** every Anthias screen has its own long-lived, self-signed certificate, created on first start. The join information carries the controller's certificate fingerprint, so the screen's very first connection is pinned to it and nobody else can stand in for the controller. The screen sends its own fingerprint and an API token in return; the controller pins that fingerprint for everything it does afterwards. Controller traffic uses a separate port, **8443**, that always presents the screen's own certificate and only serves `/api/v2/`. Replacing the certificate for the web interface doesn't affect pairings. Port 8443 is only open while the screen is managed (or is a controller), and never while authentication is disabled.
+
+The screen keeps only a hash of the controller's token, like any API token. To stop being managed, click **Leave management** in Settings: the token is revoked at once, port 8443 closes, and the controller shows the screen as having left. Revoking the `Controller: …` token under **API tokens** has the same effect. The screen's identity certificate is not part of backups, so restoring a backup on another device doesn't clone a screen's identity.
+
 ## TLS / SSL
 
 Anthias supports two independent SSL features:
