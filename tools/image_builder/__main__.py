@@ -7,6 +7,7 @@ from python_on_whales import docker
 
 from tools.image_builder.constants import (
     BUILD_TARGET_OPTIONS,
+    CADDY_BASE_IMAGE,
     SERVICES,
     SHORT_HASH_LENGTH,
 )
@@ -139,6 +140,8 @@ def build_image(
         context.update(get_viewer_context(board, target_platform))
     elif service == 'test':
         context.update(get_test_context())
+    elif service == 'caddy':
+        context['caddy_base_image'] = CADDY_BASE_IMAGE
 
     context.update(get_uv_builder_context(service, board))
 
@@ -377,6 +380,11 @@ def main(
         # `latest-*` mirroring (one of two reasons d568602 hit Docker
         # Hub's 429) gives no real back-compat in exchange.
         namespaces = ['ghcr.io/screenly/anthias', 'screenly/anthias']
+        # anthias-caddy is new and only ever pulled from GHCR (every
+        # template that runs it already points there), so it has no
+        # Docker Hub migration window to serve.
+        if service_name == 'caddy':
+            namespaces = ['ghcr.io/screenly/anthias']
 
         # Generate all tags
         docker_tags = []

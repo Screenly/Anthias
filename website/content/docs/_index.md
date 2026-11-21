@@ -51,10 +51,7 @@ of the container in the command above. Here's a table of the available container
 | `anthias-anthias-celery-1` | Celery worker (async tasks) |
 | `anthias-anthias-viewer-1` | Viewer service driving the screen |
 | `anthias-redis-1` | Redis (Celery broker + Channels layer) |
-
-> **Note**
->
-> If TLS is enabled via `bin/enable_ssl.sh`, an additional `anthias-anthias-caddy-1` container runs as a reverse-proxy sidecar.
+| `anthias-anthias-caddy-1` | Caddy, the web front end on ports 80 and 443 (TLS, routing) |
 
 ### Using `docker compose logs`
 
@@ -159,33 +156,55 @@ HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is d
 
 Anthias supports two independent SSL features:
 
-### 1. Serving HTTPS (Caddy sidecar)
+### 1. Serving HTTPS
 
-`bin/enable_ssl.sh` writes a `docker-compose.ssl.override.yml` that
-adds a `caddy:2-alpine` sidecar in front of `anthias-server`. Caddy
-terminates TLS on host ports 80 (redirected to HTTPS) and 443, and
-reverse-proxies plain HTTP to `anthias-server:8080`. There are three
-modes:
+Every install runs Caddy (`anthias-caddy`) in front of `anthias-server`.
+Caddy owns host ports 80 and 443; `anthias-server` has no host port.
+
+- **Port 443** serves the web interface and the API over HTTPS.
+- **Port 80** redirects the web interface to HTTPS. For one more
+  release it still answers `/api/*` over plain HTTP, so scripts that
+  POST to `http://<device>/api/...` keep working while you move them to
+  `https://`. A redirect would break them, because clients turn a
+  redirected POST into a GET.
+
+Out of the box the web interface uses the screen's own self-signed
+certificate, so browsers show a warning. To remove the warning, give the
+screen a certificate for a name that points at it:
+
+- **In the web interface:** **Settings → HTTPS certificate → Upload
+  certificate**. Choose the certificate, its private key and, if it is
+  not already included in the certificate file, the chain. Anthias
+  checks them before switching (the key must match, the certificate must
+  not be expired, the chain must be in order) and shows the subject,
+  names and expiry. **Revert to default** goes back to the screen's own
+  certificate.
+- **From a shell**, which ends in exactly the same state:
 
 ```bash
-# Default: Caddy issues a cert from its built-in local CA. Good for
-# IP-based LAN access; browsers will warn that the CA is untrusted.
-$ ./bin/enable_ssl.sh
+# Bring your own certificate (optionally --chain chain.pem).
+$ ./bin/enable_ssl.sh --cert /path/to/cert.pem --key /path/to/key.pem
 
-# Auto Let's Encrypt: needs the domain to resolve to this host and
-# port 80 to be reachable from the internet for the HTTP-01 challenge.
+# Let's Encrypt: the domain must resolve to this screen, and port 80 or
+# 443 must be reachable from the internet.
 $ ./bin/enable_ssl.sh --domain example.com --email <your-email>
 $ ./bin/enable_ssl.sh --domain example.com --staging   # ACME staging
 
-# Bring your own certificate.
-$ ./bin/enable_ssl.sh --cert /path/to/cert.pem --key /path/to/key.pem
-
-# Turn it back off (Caddy + override removed; cert files are kept).
+# Back to the screen's own certificate.
 $ ./bin/disable_ssl.sh
 ```
 
-When SSL is *not* enabled, no Caddy container is pulled or run. The
-default install is unchanged.
+The screen's own certificate also identifies it to other Anthias
+screens, which recognize it by its fingerprint (shown under **Settings →
+HTTPS certificate → Screen identity**). Uploading a web certificate never
+changes it. It lives in `~/.anthias/ssl/node/` and is deliberately left
+out of backups, so restoring one screen's backup onto another does not
+give both the same identity.
+
+Upgrading from an older `bin/enable_ssl.sh` setup is automatic: a
+bring-your-own certificate becomes the uploaded web certificate, a
+`--domain` setup keeps Let's Encrypt for the same domain, and the old
+local-CA mode is replaced by the screen's own certificate.
 
 ### 2. Trusting a custom CA for outbound requests
 

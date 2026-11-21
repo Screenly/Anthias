@@ -50,3 +50,12 @@ application = ProtocolTypeRouter(
         ),
     }
 )
+
+# Push the Caddy config (web certificate + any extra sites) once the
+# app is importable. Runs in a daemon thread with retries because Caddy
+# may still be starting; a no-op where no Caddy admin volume is mounted
+# (development, tests). Only uvicorn imports this module, so the celery
+# worker and the viewer never touch Caddy.
+from anthias_server.lib.caddy import start_background_apply
+
+start_background_apply()

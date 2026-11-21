@@ -37,6 +37,16 @@ urlpatterns = [
     path('settings/recover/', views.settings_recover, name='settings_recover'),
     path('settings/reboot/', views.settings_reboot, name='settings_reboot'),
     path(
+        'settings/certificate/upload/',
+        views.settings_certificate_upload,
+        name='settings_certificate_upload',
+    ),
+    path(
+        'settings/certificate/revert/',
+        views.settings_certificate_revert,
+        name='settings_certificate_revert',
+    ),
+    path(
         'settings/shutdown/',
         views.settings_shutdown,
         name='settings_shutdown',

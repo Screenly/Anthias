@@ -1929,10 +1929,115 @@ def _settings_page(
     # Data-driven so a newly registered provider appears in Settings with
     # no template edit.
     context['import_providers'] = list_provider_meta()
+    context['web_tls'] = _web_tls_context()
     context.update(_api_tokens_context())
     if extra:
         context.update(extra)
     return template(request, 'settings.html', context)
+
+
+def _web_tls_context() -> dict[str, Any]:
+    from anthias_server.lib import node_identity, web_certificate
+
+    state = web_certificate.load_state()
+    context: dict[str, Any] = {
+        'mode': state.mode,
+        'domain': state.domain,
+        'certificate': None,
+        'node_fingerprint': '',
+    }
+    try:
+        identity = node_identity.ensure_node_identity()
+        node_cert = node_identity.certificate()
+    except (OSError, ValueError):
+        logger.warning('Cannot read the node certificate', exc_info=True)
+        return context
+    context['node_fingerprint'] = ':'.join(
+        identity.fingerprint[i : i + 2].upper()
+        for i in range(0, len(identity.fingerprint), 2)
+    )
+    if state.mode == web_certificate.MODE_CUSTOM:
+        context['certificate'] = web_certificate.current_custom_info()
+    elif state.mode == web_certificate.MODE_DEFAULT:
+        context['certificate'] = web_certificate.describe(node_cert)
+    return context
+
+
+def _read_upload(request: HttpRequest, field: str) -> bytes | None:
+    from anthias_server.lib import web_certificate
+
+    upload = request.FILES.get(field)
+    if upload is None or not upload.name:
+        return None
+    if upload.size is not None and upload.size > (
+        web_certificate.MAX_PEM_BYTES
+    ):
+        raise web_certificate.CertificateError(
+            f'The {field.replace("_", " ")} file is too large.'
+        )
+    return bytes(upload.read())
+
+
+@authorized
+@require_http_methods(['POST'])
+def settings_certificate_upload(request: HttpRequest) -> HttpResponse:
+    from anthias_server.lib import caddy, web_certificate
+
+    try:
+        cert_pem = _read_upload(request, 'certificate')
+        key_pem = _read_upload(request, 'private_key')
+        chain_pem = _read_upload(request, 'chain')
+        if not cert_pem or not key_pem:
+            raise web_certificate.CertificateError(
+                'Choose both a certificate and its private key.'
+            )
+        validated = web_certificate.validate(cert_pem, key_pem, chain_pem)
+        caddy.apply_change(lambda: web_certificate.install_custom(validated))
+    except web_certificate.CertificateError as exc:
+        logger.warning('Web certificate upload rejected: %s', exc)
+        messages.error(request, str(exc))
+    except caddy.CaddyConfigError as exc:
+        logger.warning('Caddy rejected the uploaded certificate: %s', exc)
+        messages.error(
+            request,
+            'The web server rejected this certificate; nothing was changed.',
+        )
+    except caddy.CaddyError as exc:
+        logger.warning('Cannot apply the uploaded certificate: %s', exc)
+        messages.error(
+            request,
+            'The web server is not reachable right now; nothing was changed.',
+        )
+    else:
+        info = validated.info
+        messages.success(
+            request,
+            f'Certificate for {", ".join(info.sans) or info.subject} '
+            f'installed. It expires on {info.not_after:%Y-%m-%d}. '
+            'Reload the page to see it.',
+        )
+    return redirect(reverse('anthias_app:settings'))
+
+
+@authorized
+@require_http_methods(['POST'])
+def settings_certificate_revert(request: HttpRequest) -> HttpResponse:
+    from anthias_server.lib import caddy, web_certificate
+
+    try:
+        caddy.apply_change(web_certificate.revert_to_default)
+    except caddy.CaddyError as exc:
+        logger.warning('Cannot revert the web certificate: %s', exc)
+        messages.error(
+            request,
+            'Could not switch back to the default certificate; '
+            'nothing was changed.',
+        )
+    else:
+        messages.success(
+            request, "Switched back to the screen's own certificate."
+        )
+    return redirect(reverse('anthias_app:settings'))
 
 
 @authorized

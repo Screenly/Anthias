@@ -1,0 +1,30 @@
+{
+  "admin": {
+    "listen": "unix//run/anthias-caddy/admin.sock|0600",
+    "config": {"persist": true}
+  },
+  "logging": {"logs": {"default": {"level": "WARN"}}},
+  "apps": {
+    "http": {
+      "servers": {
+        "anthias_bootstrap": {
+          "listen": [":80"],
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [{"dial": "anthias-server:8080"}],
+                  "headers": {"request": {"delete": ["X-Anthias-Listener"]}}
+                }
+              ]
+            }
+          ],
+          "automatic_https": {"disable": true},
+          "read_header_timeout": "10s",
+          "idle_timeout": "30s"
+        }
+      }
+    }
+  }
+}

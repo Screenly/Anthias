@@ -37,11 +37,10 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.server
-    ports:
-      - 80:8080
     environment:
       - HOME=/data
       - LISTEN=0.0.0.0
+      - FORWARDED_ALLOW_IPS=*
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
@@ -60,8 +59,26 @@ services:
     restart: always
     volumes:
       - resin-data:/data
+      - anthias-caddy-run:/run/anthias-caddy
     labels:
       io.balena.features.supervisor-api: '1'
+
+  anthias-caddy:
+    image: ghcr.io/screenly/anthias-caddy:${GIT_SHORT_HASH}-${BOARD}
+    ulimits: *no-core-dumps
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.caddy
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - anthias-server
+    restart: always
+    volumes:
+      - anthias-caddy-run:/run/anthias-caddy
+      - anthias-caddy-data:/data
+      - anthias-caddy-state:/config
 
   anthias-viewer:
     image: ghcr.io/screenly/anthias-viewer:${GIT_SHORT_HASH}-${BOARD}
@@ -226,7 +243,7 @@ services:
       - WIFI_CONNECT_BRAND_CSS=/data/hotspot/brand/brand.css
       - WIFI_CONNECT_BRAND_LOGO=/data/hotspot/brand/logo.svg
       - WIFI_CONNECT_DEFAULT_THEME=dark
-      # NOT 80: anthias-server publishes 80:8080 on the host.
+      # NOT 80: anthias-caddy publishes port 80 on the host.
       - PORTAL_LISTENING_PORT=8000
       - WIFI_CONNECT_QR_OUTPUT=/data/hotspot
       # How anthias-server learns the SSID, passphrase and portal
@@ -265,3 +282,6 @@ services:
 volumes:
   resin-data:
   redis-data:
+  anthias-caddy-run:
+  anthias-caddy-data:
+  anthias-caddy-state:

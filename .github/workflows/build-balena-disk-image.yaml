@@ -113,7 +113,7 @@ jobs:
           # `arm64` has no fleet of its own but the rockpi4 fleet
           # deploys the <short-hash>-arm64 images, so they must exist.
           for board in pi2 pi3 pi3-64 pi4-64 pi5 x86 arm64; do
-            for service in server viewer redis; do
+            for service in server viewer redis caddy; do
               ref="ghcr.io/screenly/anthias-${service}:${SHORT_HASH}-${board}"
               if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
                 missing+=("$ref")

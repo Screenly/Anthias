@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Keyless-sign the server, viewer and redis images this board's buildx
+# Keyless-sign the server, viewer, redis and caddy images this board's buildx
 # job just pushed. Called twice from .github/workflows/docker-build.yaml
 # — once for GHCR (hard-fail) and once for Docker Hub (soft-fail via
 # continue-on-error).
 #
 # Reads NAMESPACE (e.g. ghcr.io/screenly/anthias or
 # docker.io/screenly/anthias) and SERVER_DIGEST / VIEWER_DIGEST /
-# REDIS_DIGEST from env. Signs "${NAMESPACE}-${service}@${digest}",
+# REDIS_DIGEST from env, plus CADDY_DIGEST when set (anthias-caddy
+# is published to GHCR only, so the Docker Hub call leaves it unset). Signs "${NAMESPACE}-${service}@${digest}",
 # never a tag, so the signature covers exactly the manifest that was
 # pushed and every tag later pointed at it.
 #
@@ -43,8 +44,13 @@ declare -A DIGESTS=(
   [viewer]="${VIEWER_DIGEST}"
   [redis]="${REDIS_DIGEST}"
 )
+SERVICES=(server viewer redis)
+if [[ -n "${CADDY_DIGEST:-}" ]]; then
+  DIGESTS[caddy]="${CADDY_DIGEST}"
+  SERVICES+=(caddy)
+fi
 
-for service in server viewer redis; do
+for service in "${SERVICES[@]}"; do
   ref="${NAMESPACE}-${service}@${DIGESTS[${service}]}"
   echo "Signing ${ref}"
   retry cosign sign --yes "${ref}"

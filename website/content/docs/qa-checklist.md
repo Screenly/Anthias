@@ -54,7 +54,7 @@ Running unit tests is a good way to make sure that the code is working as expect
 15. Try to reboot or shutdown the device by clicking on the **Reboot** or **Shutdown** buttons, respectively. Make sure that the device does the corresponding action.
 16. Go to the **System Info** page and make sure that all information are correct.
 17. Make sure that all the footer links are being displayed correctly.
-18. Connect to the device by ssh. Run `./bin/enable_ssl.sh` script. Make sure the site URL uses SSL.
+18. Open `http://<device-ip>/` and make sure it redirects to `https://`. In **Settings → HTTPS certificate**, upload a certificate and key, reload, and make sure the browser shows the uploaded certificate and the **Screen identity** fingerprint did not change. Click **Revert to default** and make sure the screen's own certificate is back.
 
 ## WiFi setup (captive portal)
 
