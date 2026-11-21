@@ -6,6 +6,9 @@ from anthias_server.api.urls.v1_2 import (
     get_url_patterns as get_url_patterns_v1_2,
 )
 from anthias_server.api.urls.v2 import get_url_patterns as get_url_patterns_v2
+from anthias_server.controller.urls_api import (
+    get_url_patterns as get_url_patterns_controller,
+)
 
 app_name = 'api'
 
@@ -14,4 +17,5 @@ urlpatterns = [
     *get_url_patterns_v1_1(),
     *get_url_patterns_v1_2(),
     *get_url_patterns_v2(),
+    *get_url_patterns_controller(),
 ]

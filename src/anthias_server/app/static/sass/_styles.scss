@@ -2196,6 +2196,91 @@ label { text-align: left; }
   margin-top: calc(var(--spacing) * 4);
 }
 
+// Controller mode: Screens page.
+.screens__snippet {
+  flex: 1;
+  min-height: 4.5rem;
+  resize: vertical;
+  word-break: break-all;
+}
+.screens__actions,
+.screens__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--spacing) * 2);
+}
+.screens__row-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: calc(var(--spacing) * 1);
+}
+.screens__actions-col { white-space: nowrap; }
+.screens__icon-btn {
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 1.5);
+  > .ti { margin: 0; }
+}
+.app-btn-sm {
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
+  font-size: 0.8125rem;
+}
+.screens__fp {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
+}
+.screens__detail {
+  overflow-wrap: anywhere;
+}
+.screens-table {
+  td { vertical-align: top; }
+  td:nth-child(3) { min-width: 12rem; }
+}
+.screens__status,
+.screens__publish,
+.screens__outcome {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--color-scrim-5);
+  color: var(--color-fg-muted);
+}
+.screens__status--online,
+.screens__publish--ok,
+.screens__outcome--ok {
+  background: var(--color-success-wash);
+  color: var(--color-success-on-wash);
+}
+.screens__status--offline,
+.screens__status--wrong_cert,
+.screens__publish--failed,
+.screens__outcome--failed {
+  background: var(--color-danger-wash);
+  color: var(--color-danger-on-wash);
+}
+.screens__warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0.25rem 0 0;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--color-warning-wash);
+  color: var(--color-warning-on-wash);
+}
+.screens__attention {
+  color: var(--color-warning-on-wash);
+  font-weight: 600;
+}
+.screens__status--unauthorized,
+.screens__publish--queued,
+.screens__publish--running,
+.screens__outcome--partial {
+  background: var(--color-warning-wash);
+  color: var(--color-warning-on-wash);
+}
+
 .toggle-row {
   display: flex;
   align-items: center;

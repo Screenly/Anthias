@@ -1,0 +1,144 @@
+{% load humanize %}
+{% comment %}
+  Screens table and activity log. Polls itself every 5 s so publish
+  progress and online/offline changes show up without a reload.
+{% endcomment %}
+<div
+  id="screens-table"
+  hx-get="{% url 'controller:screens_table' %}"
+  hx-trigger="every 5s"
+  hx-swap="outerHTML"
+  class="flex flex-col gap-4"
+>
+  <section class="surface">
+    <header class="surface__header">
+      <h2><i class="ti ti-devices mr-2"></i>Screens</h2>
+      <span class="surface__count">{{ online_count }} of {{ node_count }} online{% if attention_count %} · <span class="screens__attention">{{ attention_count }} need{{ attention_count|pluralize:"s," }} attention</span>{% endif %}</span>
+    </header>
+    <table class="asset-table screens-table">
+      <thead>
+        <tr>
+          <th scope="col">Screen</th>
+          <th scope="col">Status</th>
+          <th scope="col">Last publish</th>
+          <th scope="col" class="text-right screens__actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr data-screen="self">
+          <td>
+            <strong>This screen</strong>
+            <div class="muted-label">Controller · the source of every publish</div>
+          </td>
+          <td><span class="screens__status screens__status--online">Online</span></td>
+          <td class="muted-label">Source</td>
+          <td class="text-right">
+            <div class="screens__row-actions">
+              {% for command, label, icon in command_buttons %}
+              <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0"
+                {% if command == 'reboot' %}onsubmit="return confirm('Reboot this screen (the controller)?');"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="target" value="self">
+                <input type="hidden" name="command" value="{{ command }}">
+                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark screens__icon-btn" title="{{ label }}" aria-label="{{ label }} on this screen"><i class="ti {{ icon }}" aria-hidden="true"></i></button>
+              </form>
+              {% endfor %}
+            </div>
+          </td>
+        </tr>
+        {% for node in nodes %}
+        <tr data-screen="{{ node.pk }}" data-status="{{ node.status }}">
+          <td>
+            <strong>{{ node.name }}</strong>
+            <div class="muted-label">
+              {{ node.host }}:{{ node.port }}{% if node.device_model %} · {{ node.device_model }}{% endif %}{% if node.version %} · {{ node.version }}{% endif %}
+            </div>
+            <div class="muted-label screens__fp" title="{{ node.fingerprint }}">Certificate {{ node.fingerprint|slice:":16" }}…</div>
+          </td>
+          <td>
+            <span class="screens__status screens__status--{{ node.status }}">{{ node.get_status_display }}</span>
+            <div class="muted-label">
+              {% if node.last_seen_at %}seen {{ node.last_seen_at|naturaltime }}{% else %}not seen yet{% endif %}
+            </div>
+            {% if node.health_summary %}
+            <div class="muted-label screens__health">{{ node.health_summary }}</div>
+            {% endif %}
+            {% for label in node.health_problems %}
+            <span class="screens__warn" role="status"><i class="ti ti-alert-triangle" aria-hidden="true"></i>{{ label }}</span>
+            {% endfor %}
+            {% if node.status != 'online' and node.status_detail %}
+            <div class="muted-label screens__detail">{{ node.status_detail|truncatechars:160 }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="screens__publish screens__publish--{{ node.publish_state|default:'never' }}">{{ node.get_publish_state_display }}</span>
+            {% if node.published_at %}<div class="muted-label">{{ node.published_at|naturaltime }}</div>{% endif %}
+            {% if node.publish_detail %}<div class="muted-label screens__detail">{{ node.publish_detail|truncatechars:240 }}</div>{% endif %}
+          </td>
+          <td class="text-right">
+            <div class="screens__row-actions">
+              {% if node.status != 'unauthorized' %}
+              <form method="post" action="{% url 'controller:screens_publish' %}" class="inline m-0">
+                {% csrf_token %}
+                <input type="hidden" name="target" value="{{ node.pk }}">
+                <button type="submit" class="app-btn app-btn-sm app-btn-primary">Publish</button>
+              </form>
+              {% for command, label, icon in command_buttons %}
+              <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0"
+                {% if command == 'reboot' %}onsubmit="return confirm('Reboot {{ node.name|escapejs }}?');"{% endif %}>
+                {% csrf_token %}
+                <input type="hidden" name="target" value="{{ node.pk }}">
+                <input type="hidden" name="command" value="{{ command }}">
+                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark screens__icon-btn" title="{{ label }}" aria-label="{{ label }} on {{ node.name }}"><i class="ti {{ icon }}" aria-hidden="true"></i></button>
+              </form>
+              {% endfor %}
+              {% endif %}
+              <form method="post" action="{% url 'controller:screens_remove' node.pk %}" class="inline m-0"
+                onsubmit="return confirm('Remove {{ node.name|escapejs }}? Its access token is revoked and it keeps playing what it has.');">
+                {% csrf_token %}
+                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark screens__icon-btn" title="Remove" aria-label="Remove {{ node.name }}">
+                  <i class="ti ti-trash" aria-hidden="true"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="muted-label">No screens yet. Paste the join information above into a screen's settings to add it.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="surface">
+    <header class="surface__header">
+      <h2><i class="ti ti-list-details mr-2"></i>Activity</h2>
+    </header>
+    {% if audit_entries %}
+    <table class="asset-table screens-audit">
+      <thead>
+        <tr>
+          <th scope="col">When</th>
+          <th scope="col">Screen</th>
+          <th scope="col">Action</th>
+          <th scope="col">Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in audit_entries %}
+        <tr>
+          <td title="{{ entry.created_at|date:'c' }}">{{ entry.created_at|naturaltime }}</td>
+          <td>{{ entry.node_name|default:"-" }}</td>
+          <td>{{ entry.action }}{% if entry.actor %} <span class="muted-label">by {{ entry.actor }}</span>{% endif %}</td>
+          <td><span class="screens__outcome screens__outcome--{{ entry.outcome }}">{{ entry.outcome }}</span> <span class="muted-label">{{ entry.detail|truncatechars:200 }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted-label p-4">Nothing yet.</p>
+    {% endif %}
+  </section>
+</div>
