@@ -918,8 +918,11 @@ def test_settings_upload_installs_and_applies() -> None:
 
     apply.assert_called_once_with()
     assert web_certificate.load_state().mode == web_certificate.MODE_CUSTOM
+    info = web_certificate.current_custom_info()
+    assert info is not None
+    assert info.sans == ['screen.example.com']
     body = response.content.decode()
-    assert 'screen.example.com' in body
+    assert f'<strong>{info.subject}</strong>' in body
     assert 'Revert to default' in body
 
 
