@@ -71,6 +71,10 @@ def controller_name(host: str = '') -> str:
     return name[:100]
 
 
+AUDIT_MAX_ENTRIES = 1000
+AUDIT_DETAIL_MAX = 500
+
+
 def audit(
     action: str,
     outcome: str,
@@ -80,12 +84,13 @@ def audit(
     detail: str = '',
     actor: str = '',
 ) -> AuditEntry:
+    detail = clean_text(detail, AUDIT_DETAIL_MAX)
     entry = AuditEntry.objects.create(
         action=action,
         outcome=outcome,
         node=node,
-        node_name=(node.name if node else node_name)[:100],
-        detail=detail[:2000],
+        node_name=clean_text(node.name if node else node_name, 100),
+        detail=detail,
         actor=actor[:150],
     )
     log = logger.info if outcome == 'ok' else logger.warning
@@ -96,7 +101,27 @@ def audit(
         outcome,
         detail,
     )
+    _prune_audit()
     return entry
+
+
+def clean_text(value: str, limit: int) -> str:
+    """One line of printable text, at most ``limit`` characters.
+
+    Audit details carry text a screen sent back, so a hostile screen
+    must not be able to forge extra log lines or flood the log.
+    """
+    flat = ''.join(c if c.isprintable() else ' ' for c in str(value or ''))
+    return ' '.join(flat.split())[:limit]
+
+
+def _prune_audit() -> None:
+    """Keep the newest AUDIT_MAX_ENTRIES rows; the table must not grow
+    without bound on an SD card."""
+    newest = AuditEntry.objects.order_by('-id').values_list('id', flat=True)
+    beyond = list(newest[AUDIT_MAX_ENTRIES : AUDIT_MAX_ENTRIES + 1])
+    if beyond:
+        AuditEntry.objects.filter(id__lte=beyond[0]).delete()
 
 
 def client_for(node: Node) -> NodeClient:

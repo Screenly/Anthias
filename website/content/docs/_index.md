@@ -140,17 +140,17 @@ When **Authentication** is turned on in Settings, scripts and other devices shou
 3. Send it in the `Authorization` header:
 
 ```bash
-$ curl -H 'Authorization: Bearer anthias_…' http://<device-ip>/api/v2/info
+$ curl -H 'Authorization: Bearer anthias_…' https://<device-ip>/api/v2/info
 ```
 
-A token gives full access to the API, the same as the operator account. It can't be used to sign in to the web interface or to create more tokens. To cut off access, click **Revoke** next to the token; anything still using it gets `401 Unauthorized` from then on. Changing your password does not revoke tokens.
+Tokens are only accepted over HTTPS. A request that sends one over plain `http://` gets `401 Unauthorized`; if that happened on a network you don't trust, revoke the token. A token can manage content, playback and the screen through the API, but it can't sign in to the web interface, create more tokens, or create or restore backups (a backup holds the device's secret key and your password hash). Use the web interface for backups. To cut off access, click **Revoke** next to the token; anything still using it gets `401 Unauthorized` from then on. Changing your password does not revoke tokens. Restoring a backup revokes every token and ends multi-screen management, so create the tokens you need again afterwards.
 
 Tokens only apply while authentication is on:
 
 * With **Authentication** set to **Disabled**, the API is open to anyone on your network. You can't create tokens in that mode, because they would not protect anything, and a token sent in a request is ignored.
 * Tokens you created earlier stay listed (and can still be revoked) but are inactive until you turn authentication back on.
 
-HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is deprecated in favor of tokens.
+HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is deprecated in favor of tokens. A backup created through `POST /api/v2/backup` can be downloaded for one hour, by a signed-in operator or with Basic auth.
 
 ### Managing several screens from one (multi-screen)
 
@@ -164,12 +164,12 @@ The screen then shows a **Managed by …** banner on every page. Content you cha
 
 **How it stays secure:** every Anthias screen has its own long-lived, self-signed certificate, created on first start. The join information carries the controller's certificate fingerprint, so the screen's very first connection is pinned to it and nobody else can stand in for the controller. The screen sends its own fingerprint and an API token in return; the controller pins that fingerprint for everything it does afterwards. Controller traffic uses a separate port, **8443**, that always presents the screen's own certificate and only serves `/api/v2/`. Replacing the certificate for the web interface doesn't affect pairings. Port 8443 is only open while the screen is managed (or is a controller), and never while authentication is disabled.
 
-The screen keeps only a hash of the controller's token, like any API token. To stop being managed, click **Leave management** in Settings: the token is revoked at once, port 8443 closes, and the controller shows the screen as having left. Revoking the `Controller: …` token under **API tokens** has the same effect. The screen's identity certificate is not part of backups, so restoring a backup on another device doesn't clone a screen's identity.
+The screen keeps only a hash of the controller's token, like any API token. That token is narrower than one you create yourself: the screen accepts it only on port 8443 and only for the calls the controller makes (assets, playlist order, playback, display power, reboot and pairing). To stop being managed, click **Leave management** in Settings: the token is revoked at once, port 8443 closes, and the controller shows the screen as having left. Revoking the `Controller: …` token under **API tokens** has the same effect. The screen's identity certificate is not part of backups, so restoring a backup on another device doesn't clone a screen's identity.
 
 #### The controller side (controller mode)
 
 1. On the device that will manage the others, turn on **Authentication**, then turn on **Settings → Controller mode** and save. A **Screens** tab appears, and port 8443 opens so screens can join.
-2. The **Screens** page shows the **Join information** with a **Copy** button. It can be reused for any number of screens. **Regenerate** makes the old one stop working; screens that already joined are not affected.
+2. The **Screens** page shows the **Join information** with a **Copy** button. It can be reused for any number of screens for one hour, then stops working so a copy left in a chat or a screenshot can't be used to add a device later; reload the page for new join information. **Regenerate** makes the current one stop working at once; screens that already joined are not affected. The controller only calls a joining screen back on port 8443, never on its own loopback or internal Docker addresses.
 
 From the **Screens** page you can:
 

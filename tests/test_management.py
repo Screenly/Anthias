@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, Self
 from unittest.mock import MagicMock
 
@@ -407,9 +408,18 @@ def test_m2m_server_shape() -> None:
     assert server['tls_connection_policies'] == [
         {'certificate_selection': {'any_tag': ['anthias-node']}}
     ]
-    api_route, fallback = server['routes']
+    join_route, api_route, fallback = server['routes']
+    assert join_route['match'] == [{'path': ['/api/v2/controller/join']}]
+    assert join_route['handle'][0] == {
+        'handler': 'request_body',
+        'max_size': management.JOIN_MAX_BODY_BYTES,
+    }
     assert api_route['match'] == [{'path': ['/api/v2/*']}]
-    (proxy,) = api_route['handle']
+    limit, proxy = api_route['handle']
+    assert limit == {
+        'handler': 'request_body',
+        'max_size': management.M2M_MAX_BODY_BYTES,
+    }
     assert proxy['handler'] == 'reverse_proxy'
     assert proxy['upstreams'] == [{'dial': 'anthias-server:8080'}]
     assert proxy['headers']['request']['set'] == {
@@ -418,6 +428,34 @@ def test_m2m_server_shape() -> None:
     assert fallback == {
         'handle': [{'handler': 'static_response', 'status_code': 404}]
     }
+
+
+def test_listener_value_is_a_secret_in_the_run_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.lib import caddy
+
+    monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path)
+    management.reset_listener_cache()
+    try:
+        value = management.listener_value()
+        assert value.startswith('m2m:') and len(value) > 30
+        secret_file = tmp_path / 'm2m-listener.secret'
+        assert secret_file.stat().st_mode & 0o777 == 0o600
+        # Stable across calls and restarts (re-read from the file).
+        management.reset_listener_cache()
+        assert management.listener_value() == value
+        proxy = management.m2m_server()['routes'][1]['handle'][1]
+        assert proxy['headers']['request']['set'] == {
+            'X-Anthias-Listener': [value]
+        }
+        request = MagicMock()
+        request.headers = {'X-Anthias-Listener': 'm2m'}
+        assert not management.request_via_m2m(request)
+        request.headers = {'X-Anthias-Listener': value}
+        assert management.request_via_m2m(request)
+    finally:
+        management.reset_listener_cache()
 
 
 @pytest.mark.django_db
@@ -474,6 +512,10 @@ def test_api_pairing_get_and_controller_delete(
     client = Client()
     auth = {'Authorization': f'Bearer {plaintext}'}
     url = reverse('api:pairing_v2')
+
+    # The controller's token only works through the :8443 listener.
+    assert client.get(url, headers=auth).status_code == 403
+    auth['X-Anthias-Listener'] = 'm2m'
 
     response = client.get(url, headers=auth)
     assert response.status_code == 200
