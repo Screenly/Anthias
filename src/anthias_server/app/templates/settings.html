@@ -388,20 +388,20 @@
   </section>
 
   {# ===== Backup & restore ===== #}
-  <section class="settings-section mt-4">
+  <section class="settings-section mt-4" id="backup" x-data="{ keys: false }">
     <header>
       <div>
         <h2>Backup & restore</h2>
         <p class="settings-section__lede">Download a tarball of your settings and asset metadata, or recover from one.</p>
       </div>
-      <div class="settings-section__actions" x-data>
-        <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="inline m-0">
+      <div class="settings-section__actions">
+        <form method="post" action="{% url 'anthias_app:settings_backup' %}" class="inline m-0" id="backup-form">
           {% csrf_token %}
           <button type="submit" id="btn-backup" class="app-btn app-btn-outline-dark">
             <i class="ti ti-download"></i><span>Get backup</span>
           </button>
         </form>
-        <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="inline m-0">
+        <form method="post" action="{% url 'anthias_app:settings_recover' %}" enctype="multipart/form-data" class="inline m-0" id="recover-form">
           {% csrf_token %}
           <input
             type="file"
@@ -418,6 +418,39 @@
         </form>
       </div>
     </header>
+
+    {% comment %}
+    Device keys (lib/identity_backup.py): opt-in and always encrypted,
+    like pfSense's / OPNsense's encrypted configuration backups. The
+    fields belong to the two forms above through their form= attribute.
+    {% endcomment %}
+    <div class="flex justify-between items-center gap-4 py-2 border-t border-divider">
+      <div class="min-w-0">
+        <label class="block font-semibold text-sm" for="include_keys">Include this device's keys</label>
+        <p class="text-xs text-fg-muted mt-1 mb-0">
+          Its certificate{% if controller_mode %}, the multi-screen CA{% endif %} and the key that protects stored tokens, encrypted with a password you choose.
+          Restoring them on new hardware keeps {% if controller_mode %}your screens connected without joining again{% else %}this device's identity{% endif %}.
+          Keep that backup safe: it can stand in for this device.
+        </p>
+      </div>
+      <div class="app-check app-switch m-0 flex-none">
+        <input type="checkbox" class="app-check-input" id="include_keys" name="include_keys" value="true" form="backup-form" x-model="keys">
+      </div>
+    </div>
+    <div class="app-form-grid mt-2" x-show="keys" x-cloak>
+      <div class="app-floating">
+        <input type="password" class="app-input" id="keys_password" name="keys_password" form="backup-form" placeholder=" " autocomplete="new-password" minlength="8" :required="keys">
+        <label for="keys_password">Keys password (8+ characters)</label>
+      </div>
+      <div class="app-floating">
+        <input type="password" class="app-input" id="keys_password_2" name="keys_password_2" form="backup-form" placeholder=" " autocomplete="new-password" minlength="8" :required="keys">
+        <label for="keys_password_2">Confirm keys password</label>
+      </div>
+    </div>
+    <div class="app-floating mt-3">
+      <input type="password" class="app-input" id="recover_keys_password" name="keys_password" form="recover-form" placeholder=" " autocomplete="off">
+      <label for="recover_keys_password">Keys password, to restore a backup that has device keys</label>
+    </div>
   </section>
 
   {# ===== System controls ===== #}

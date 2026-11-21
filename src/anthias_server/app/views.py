@@ -2402,9 +2402,23 @@ def settings_backup(request: HttpRequest) -> HttpResponseBase:
     *sync* generator under ASGI (builds the whole archive before the
     first byte), which silently brought the timeout back — issue #3073.
     """
+    device_keys = None
+    if _checkbox(request, 'include_keys'):
+        # Opt-in and always encrypted: see lib.identity_backup.
+        from anthias_server.lib import identity_backup
+
+        try:
+            device_keys = identity_backup.pack_checked(
+                request.POST.get('keys_password', ''),
+                request.POST.get('keys_password_2', ''),
+            )
+        except identity_backup.IdentityBackupError as exc:
+            messages.error(request, f'Backup not created: {exc}')
+            return redirect(reverse('anthias_app:settings') + '#backup')
+        logger.info('Backup includes the device keys (encrypted)')
     filename = backup_helper.backup_archive_name(settings['player_name'])
     response = StreamingHttpResponse(
-        backup_helper.astream_backup(),
+        backup_helper.astream_backup(device_keys),
         content_type='application/x-tgz',
     )
     # content_disposition_header() RFC-8187-escapes the filename —
@@ -2414,6 +2428,26 @@ def settings_backup(request: HttpRequest) -> HttpResponseBase:
         as_attachment=True, filename=filename
     )
     return response
+
+
+def _report_recovery(
+    request: HttpRequest, keys: backup_helper.KeysRestore
+) -> None:
+    if keys == backup_helper.KeysRestore.RESTORED:
+        # New node certificate / CA: Caddy must serve and trust them.
+        management.sync_state()
+        messages.success(
+            request, "Recovery successful, including this device's keys."
+        )
+    elif keys == backup_helper.KeysRestore.SKIPPED:
+        messages.warning(
+            request,
+            'Recovery successful. The backup also holds device keys, '
+            'which were not restored: upload it again with its keys '
+            'password to restore them.',
+        )
+    else:
+        messages.success(request, 'Recovery successful.')
 
 
 @authorized
@@ -2437,8 +2471,13 @@ def settings_recover(request: HttpRequest) -> HttpResponse:
         with open(location, 'wb') as f:
             f.writelines(file_upload.chunks())
         try:
-            backup_helper.recover(location)
-            messages.success(request, 'Recovery successful.')
+            keys = backup_helper.recover(
+                location, request.POST.get('keys_password') or None
+            )
+            _report_recovery(request, keys)
+        except backup_helper.DeviceKeysError as exc:
+            logger.warning('Backup restore rejected: %s', exc)
+            messages.error(request, f'Nothing was restored: {exc}')
         except backup_helper.IncompatibleBackupError as exc:
             # Version mismatch is operator-actionable ("upgrade first"),
             # so surface the specific message rather than the generic one.

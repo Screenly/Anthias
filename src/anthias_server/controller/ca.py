@@ -2,10 +2,11 @@
 
 Created the first time it is needed in controller mode, under
 ``~/.anthias/ssl/controller/`` next to the node certificate. Like the
-node certificate and the vault key it is **not** part of backups: a
-restored backup must not clone the authority that vouches for this
-controller's screens onto another device. Replacing a controller
-therefore means its screens join again.
+node certificate and the vault key it is not part of a normal backup:
+a copied backup must not clone the authority that vouches for this
+controller's screens. The operator can add all three, encrypted with
+a password, to move a controller to new hardware without its screens
+joining again (``lib.identity_backup``).
 
 What it signs (see :mod:`anthias_server.lib.pki`):
 
