@@ -1,7 +1,8 @@
 """Health of managed screens, from the ``/api/v2/info`` the controller polls.
 
-The status poll (``service.check_node``, every five minutes) fetches
-each screen's ``/api/v2/info``. This module keeps the parts an operator
+Screens push their ``/api/v2/info`` health over their connection to
+the controller (``push``); the status poll (``service.check_node``)
+fetches it from screens that can't. This module keeps the parts an operator
 acts on: free disk space, storage health, under-voltage, available
 memory, load and uptime. It turns them into short warnings for the
 Screens page, and into anonymous counts for the daily analytics event
@@ -37,10 +38,15 @@ STORAGE_PROBLEMS = {
     'full': 'Storage full',
     'failing': 'Storage failing',
 }
-# The poll runs every five minutes (controller.tasks.STATUS_INTERVAL_S),
-# so a reading older than three polls belongs to a screen that has
-# stopped answering.
-HEALTH_MAX_AGE = timedelta(minutes=15)
+# A reading is renewed at least every 15 minutes: a pushing screen
+# sends its health that often even when nothing changed
+# (push.HEALTH_PUSH_MAX_S, checked on its one-minute heartbeat), and a
+# screen that can't push is polled once its last check is 15 minutes
+# old (tasks.FALLBACK_POLL_S), by a run every five minutes that may
+# itself take a few. Older than this, the reading belongs to a screen
+# that has stopped answering; any shorter and a healthy screen would
+# flicker to "unknown" between two readings.
+HEALTH_MAX_AGE = timedelta(minutes=25)
 
 _SIZE_RE = re.compile(r'^([0-9]+(?:[.,][0-9]+)?)\s*([a-z]+)$')
 _UNITS = {

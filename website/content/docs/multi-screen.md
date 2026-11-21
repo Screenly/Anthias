@@ -161,8 +161,12 @@ From there:
   because assets added directly on a screen are removed. Each screen's
   playlist is made to match the controller's: the same assets, schedules
   and order. Files that haven't changed are not uploaded again, so
-  publishing an unchanged playlist takes about a second. The result
-  shows per screen.
+  publishing an unchanged playlist takes about a second. Two screens
+  are published to at a time (one on a single-core board) and the rest
+  wait their turn, so the controller's own display schedule and
+  content checks are never held up. An asset that is still being
+  processed, or whose file is missing, is left out of that publish, and
+  screens keep the copy they already have. The result shows per screen.
 * **Previous asset**, **Next asset**, **Display on** and **Display off**
   on every screen, or on one from its **⋯** menu. Display on/off needs a display that
   supports HDMI-CEC.
@@ -193,12 +197,14 @@ something happens:
 | What happened | When the controller shows it |
 |---|---|
 | A screen shuts down, restarts or its Anthias stops | Offline within a couple of seconds |
-| A screen's network drops without warning | Offline within about 30 to 60 seconds |
-| The screen or the controller comes back | Online again within about 10 to 30 seconds |
+| A screen's network drops without warning | Offline within about 20 to 40 seconds |
+| A screen comes back | Online again within about 10 seconds of Anthias starting on it |
+| The controller restarts | Screens are online again within about 30 seconds of it coming back |
 
 If a screen can't keep that connection open (for example, a firewall
 blocks it), the controller falls back to checking that screen itself
-every 15 minutes. **Check now** checks every screen right away.
+about every 15 to 20 minutes. **Check now** checks every screen right
+away.
 
 For each online screen, the **Screens** page shows free disk space, free
 memory and uptime, and flags anything that needs attention:
@@ -304,7 +310,11 @@ controller's backup onto new hardware, every screen has to join again.
 
 To move a controller (or a screen) to new hardware without that, turn
 on **Include this device's keys** under **Settings → Backup &
-restore** and choose a password before clicking **Get backup**. The
+restore** and choose a password before clicking **Get backup**.
+Authentication must be on, and you confirm your current sign-in
+password: anyone holding these keys can stand in for the device. Every
+export, and every refused attempt, is logged, and on a controller it
+also shows under **Activity** on the **Screens** page. The
 keys are added to the backup encrypted with that password
 (AES-256-GCM, with the key derived from your password by scrypt), the
 same idea as the encrypted configuration backups in pfSense and

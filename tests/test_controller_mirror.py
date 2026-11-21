@@ -502,3 +502,119 @@ def test_publish_task_is_single_flight(
     tasks.publish_to_node(node.pk)
     assert len(calls) == 1
     assert r.get(tasks.publish_lock_key(node.pk)) is None
+
+
+@pytest.mark.django_db
+def test_publishes_are_capped_so_the_worker_keeps_a_free_process(
+    node: Node, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.celery_tasks import r
+    from anthias_server.controller import tasks
+
+    monkeypatch.setattr(tasks, '_pool_size', lambda: 4)
+    assert tasks.publish_slots() == 2
+    calls: list[Any] = []
+    monkeypatch.setattr(service, 'publish', lambda n, a: calls.append(n))
+    requeued: list[Any] = []
+    monkeypatch.setattr(
+        tasks.publish_to_node,
+        'apply_async',
+        lambda args, countdown: requeued.append((args, countdown)),
+    )
+    r.delete(tasks.PUBLISH_SLOTS_KEY)
+    assert tasks._take_publish_slot('other-1')
+    assert tasks._take_publish_slot('other-2')
+
+    assert tasks.publish_to_node(node.pk) == 'waiting for a publish slot'
+    assert calls == []
+    assert requeued == [((node.pk, ''), tasks.PUBLISH_SLOT_RETRY_S)]
+    # Waiting for a slot doesn't hold the screen's publish lock.
+    assert r.get(tasks.publish_lock_key(node.pk)) is None
+
+    tasks._release_publish_slot('other-1')
+    tasks.publish_to_node(node.pk)
+    assert len(calls) == 1
+    # The slot is given back when the publish ends.
+    assert r.zcard(tasks.PUBLISH_SLOTS_KEY) == 1
+    r.delete(tasks.PUBLISH_SLOTS_KEY)
+
+
+def test_publish_slots_leave_one_process_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_server.controller import tasks
+
+    for pool, slots in ((1, 1), (2, 1), (3, 2), (4, 2), (8, 2)):
+        monkeypatch.setattr(tasks, '_pool_size', lambda size=pool: size)
+        assert tasks.publish_slots() == slots
+
+
+@pytest.mark.django_db
+def test_an_expired_slot_is_taken_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A worker killed mid-publish never releases its slot.
+    from anthias_server.celery_tasks import r
+    from anthias_server.controller import tasks
+
+    monkeypatch.setattr(tasks, '_pool_size', lambda: 2)
+    r.delete(tasks.PUBLISH_SLOTS_KEY)
+    r.zadd(tasks.PUBLISH_SLOTS_KEY, {'killed': 1})
+
+    assert tasks._take_publish_slot('next')
+    assert r.zrange(tasks.PUBLISH_SLOTS_KEY, 0, -1) == ['next']
+    r.delete(tasks.PUBLISH_SLOTS_KEY)
+
+
+@pytest.mark.django_db
+def test_skipped_asset_keeps_its_copy_and_place_on_the_screen(
+    node: Node,
+) -> None:
+    first = _asset('first', 0)
+    busy = _asset('busy', 1)
+    _asset('last', 2)
+    screen = FakeScreen()
+    mirror.sync_node(node, screen, mirror.build_manifest())
+    copy = NodeAsset.objects.get(source_asset_id=busy.asset_id)
+
+    # Re-encoding (or a file briefly missing) skips it for now.
+    busy.is_processing = True
+    busy.save()
+    manifest = mirror.build_manifest()
+    assert busy.asset_id in manifest.skipped_ids
+    result = mirror.sync_node(node, screen, manifest)
+
+    assert result.ok, result.errors
+    assert result.deleted == 0
+    assert copy.remote_asset_id in screen.assets
+    assert NodeAsset.objects.filter(source_asset_id=busy.asset_id).exists()
+    names = [screen.assets[i]['name'] for i in screen.order]
+    assert names == ['first', 'busy', 'last']
+
+    # Deleted for good: the copy goes too.
+    busy.delete()
+    result = mirror.sync_node(node, screen, mirror.build_manifest())
+    assert copy.remote_asset_id not in screen.assets
+    assert [screen.assets[i]['name'] for i in screen.order] == [
+        'first',
+        'last',
+    ]
+    assert first.asset_id in {
+        m.source_asset_id for m in NodeAsset.objects.all()
+    }
+
+
+@pytest.mark.django_db
+def test_screens_page_does_not_hash_asset_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _file_asset('img', 0, b'png-bytes')
+
+    def no_hashing(*args: Any) -> str:
+        raise AssertionError('hashed an asset file')
+
+    monkeypatch.setattr(mirror, 'file_sha256', no_hashing)
+    manifest = mirror.build_manifest(hash_files=False)
+
+    assert [i.name for i in manifest.items] == ['img']
+    assert manifest.items[0].content_sha256 == ''

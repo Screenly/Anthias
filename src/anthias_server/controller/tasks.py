@@ -7,7 +7,9 @@ task and never the web UI or the other screens.
 from __future__ import annotations
 
 import logging
+import os
 import secrets
+import time
 from datetime import datetime, timedelta
 
 from django.db.models import F, Q
@@ -56,6 +58,68 @@ STATUS_LOCK_KEY = 'controller:status:lock'
 PUBLISH_RETRY_S = 15
 
 
+# Publishes share the one Celery worker with the display on/off
+# schedule, the asset probes and the rest; its pool is a process per
+# core, so four on a Pi 2/3. "Publish to all" queues one long upload
+# per screen, and without a cap they would take every process and hold
+# the display schedule back by minutes. At most this many publishes
+# run at once (never the whole pool); the others wait in the queue,
+# re-checking every PUBLISH_SLOT_RETRY_S, without holding a process.
+#
+# A cap rather than a queue of their own: a second queue needs a
+# second worker (another process tree on a 1 GB Pi) and a change to
+# the worker command in every compose file, Balena and dev included.
+PUBLISH_MAX_CONCURRENT = 2
+PUBLISH_SLOT_RETRY_S = 20
+PUBLISH_SLOTS_KEY = 'controller:publish:slots'
+
+# Take a slot if fewer than ARGV[2] are held. Slots are members of a
+# sorted set scored by their expiry, so a worker killed mid-publish
+# frees its slot when the task's hard time limit has passed.
+_SLOT_ACQUIRE_LUA = """
+local now = tonumber(ARGV[1])
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
+if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+  return 0
+end
+redis.call('ZADD', KEYS[1], now + tonumber(ARGV[3]), ARGV[4])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+return 1
+"""
+
+
+def _pool_size() -> int:
+    """The worker's process count: Celery's default is one per core."""
+    configured = celery.conf.get('worker_concurrency')
+    return int(configured or os.cpu_count() or 1)
+
+
+def publish_slots() -> int:
+    """How many publishes may run at once on this worker."""
+    pool = _pool_size()
+    # Leave at least one process for everything else.
+    return max(1, min(PUBLISH_MAX_CONCURRENT, pool - 1))
+
+
+def _take_publish_slot(holder: str) -> bool:
+    now = int(time.time())
+    return bool(
+        celery_tasks.r.eval(
+            _SLOT_ACQUIRE_LUA,
+            1,
+            PUBLISH_SLOTS_KEY,
+            now,
+            publish_slots(),
+            PUBLISH_TIME_LIMIT_S,
+            holder,
+        )
+    )
+
+
+def _release_publish_slot(holder: str) -> None:
+    celery_tasks.r.zrem(PUBLISH_SLOTS_KEY, holder)
+
+
 def publish_lock_key(node_id: int) -> str:
     return f'controller:publish:{node_id}:lock'
 
@@ -69,10 +133,16 @@ def publish_to_node(node_id: int, actor: str = '') -> str:
     if node is None:
         return 'screen removed'
     lock_value = secrets.token_hex(8)
+    if not _take_publish_slot(lock_value):
+        publish_to_node.apply_async(
+            (node_id, actor), countdown=PUBLISH_SLOT_RETRY_S
+        )
+        return 'waiting for a publish slot'
     key = publish_lock_key(node_id)
     if not celery_tasks.r.set(
         key, lock_value, nx=True, ex=PUBLISH_TIME_LIMIT_S
     ):
+        _release_publish_slot(lock_value)
         publish_to_node.apply_async(
             (node_id, actor), countdown=PUBLISH_RETRY_S
         )
@@ -90,6 +160,7 @@ def publish_to_node(node_id: int, actor: str = '') -> str:
         raise
     finally:
         celery_tasks.r.eval(celery_tasks._LOCK_RELEASE_LUA, 1, key, lock_value)
+        _release_publish_slot(lock_value)
 
 
 @celery.task(

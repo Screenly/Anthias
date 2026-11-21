@@ -273,3 +273,21 @@ def test_status_poll_timing_holds_together() -> None:
     )
     # One missed poll doesn't make a reading stale.
     assert health.HEALTH_MAX_AGE.total_seconds() >= 2 * tasks.STATUS_INTERVAL_S
+
+
+def test_health_stays_fresh_between_two_readings() -> None:
+    from anthias_server.controller import push, tasks
+
+    max_age = health.HEALTH_MAX_AGE.total_seconds()
+    # A pushing screen resends its health every HEALTH_PUSH_MAX_S, on
+    # the next heartbeat after it is due.
+    assert max_age > push.HEALTH_PUSH_MAX_S + 2 * push.HEARTBEAT_S
+    # A polled screen is due after FALLBACK_POLL_S, and the run that
+    # polls it starts up to one interval later and may take its limit.
+    assert max_age > (
+        tasks.FALLBACK_POLL_S
+        + tasks.STATUS_INTERVAL_S
+        + tasks.STATUS_TIME_LIMIT_S
+    )
+    # Still well short of an hour: a quiet screen stops counting soon.
+    assert max_age <= 30 * 60

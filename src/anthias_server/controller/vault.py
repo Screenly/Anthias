@@ -6,7 +6,9 @@ plus HMAC-SHA256). The key lives in its own file,
 
 The backup archive is a whitelist that ships only the settings file,
 the database and the asset store (see ``lib/backup_helper``), so the
-key is never in a backup. A backup leaked or restored onto another
+key is only in a backup when the operator opts in to the encrypted
+device keys (``lib/identity_backup``). A plain backup leaked or
+restored onto another
 device therefore carries no usable screen tokens: those screens show
 "Needs pairing again" there. That is deliberate. Restoring a
 controller's backup must not clone its access to every screen.
@@ -17,7 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from functools import cache
+import threading
 
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -101,9 +103,38 @@ def _read_or_create_key(path: str) -> bytes:
     raise VaultError('The controller key could not be created.')
 
 
-@cache
+# path -> (the key file's identity when it was read, its Fernet).
+_cache: dict[str, tuple[tuple[int, int, int, int], Fernet]] = {}
+_cache_lock = threading.Lock()
+
+
+def _file_identity(path: str) -> tuple[int, int, int, int] | None:
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return (st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size)
+
+
 def _fernet_for(path: str) -> Fernet:
-    return Fernet(_read_or_create_key(path))
+    """The Fernet for the key at ``path``, re-read when the file changes.
+
+    Restoring a backup with the device keys replaces the key file in
+    the web process; Celery is a separate process with its own cache,
+    so the cache is keyed on the file's inode, mtime and size rather
+    than living for the life of the process. A stat per use is cheap
+    next to the HTTPS call each use goes with.
+    """
+    with _cache_lock:
+        identity = _file_identity(path)
+        cached = _cache.get(path)
+        if identity is not None and cached and cached[0] == identity:
+            return cached[1]
+        fernet = Fernet(_read_or_create_key(path))
+        identity = _file_identity(path)
+        if identity is not None:
+            _cache[path] = (identity, fernet)
+        return fernet
 
 
 def _fernet() -> Fernet:
@@ -126,4 +157,5 @@ def decrypt(ciphertext: str) -> str:
 
 def reset_cache() -> None:
     """Forget the cached key (tests, or after the key file changes)."""
-    _fernet_for.cache_clear()
+    with _cache_lock:
+        _cache.clear()

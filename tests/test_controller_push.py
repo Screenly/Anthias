@@ -1006,3 +1006,73 @@ def test_push_accepts_a_renewed_certificate_for_the_joined_key(
     found = controller_push._screen_for(renewed)
     assert found is not None
     assert found.pk == node.pk
+
+
+def _run_forever_delays(
+    monkeypatch: pytest.MonkeyPatch, sessions: list[bool]
+) -> list[float]:
+    """The sleeps run_forever does between sessions; each entry of
+    ``sessions`` says whether that session opened before it dropped."""
+    target = screen_push.Target(
+        controller_id=1,
+        uri='wss://controller.example.com/x',
+        fingerprint='a' * 64,
+        cert_path='c',
+        key_path='k',
+    )
+    monkeypatch.setattr(screen_push, 'current_target', lambda: target)
+    monkeypatch.setattr('random.uniform', lambda a, b: 1.0)
+    outcomes = iter(sessions)
+
+    async def session(
+        _target: screen_push.Target, on_open: Any = None
+    ) -> None:
+        if next(outcomes):
+            on_open()
+        raise ConnectionError('dropped')
+
+    monkeypatch.setattr(screen_push, 'run_session', session)
+    delays: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        delays.append(seconds)
+        if len(delays) == len(sessions):
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr('asyncio.sleep', fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(screen_push.run_forever())
+    return delays
+
+
+def test_reconnect_backoff_resets_after_a_session_opened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Five failed attempts back off; then a session runs and drops (a
+    # controller restart): the next attempt is quick again.
+    delays = _run_forever_delays(
+        monkeypatch, [False] * 5 + [True, False, False, False]
+    )
+
+    assert delays[:5] == [5, 10, 20, 40, 80]
+    assert delays[5] == screen_push.RETRY_MIN_S
+    # Soon after a session dropped, retries stay frequent, so screens
+    # are back within about half a minute of a restarted controller.
+    assert max(delays[6:]) <= screen_push.FAST_RETRY_MAX_S
+
+
+def test_reconnect_backoff_grows_to_the_cap_without_a_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays = _run_forever_delays(monkeypatch, [False] * 9)
+
+    assert delays[-1] == screen_push.RETRY_MAX_S
+
+
+def test_fast_retries_end_after_the_window() -> None:
+    assert screen_push.next_delay(20, fast_until=100, now=50) == (
+        screen_push.FAST_RETRY_MAX_S
+    )
+    assert screen_push.next_delay(200, fast_until=100, now=150) == (
+        screen_push.RETRY_MAX_S
+    )

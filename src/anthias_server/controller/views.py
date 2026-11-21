@@ -92,7 +92,8 @@ def _page_context(request: HttpRequest) -> dict[str, Any]:
             f'Join information is not available yet. {exc} Check the '
             'server log.'
         )
-    manifest = build_manifest()
+    # Counts only: no file hashing in the web request.
+    manifest = build_manifest(hash_files=False)
     context['manifest_count'] = len(manifest.items)
     context['manifest_skipped'] = manifest.skipped
     context.update(_nodes_context())

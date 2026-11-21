@@ -133,6 +133,11 @@ class AssetApi(Protocol):
 class Manifest:
     items: list[ManifestItem] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    #: Assets left out of this publish for now (still processing, file
+    #: missing): screens keep the copy they already have.
+    skipped_ids: list[str] = field(default_factory=list)
+    #: Every asset id, items and skipped, in play order.
+    order: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -197,8 +202,14 @@ def _local_file(uri: str, assetdir: str) -> str | None:
     return real
 
 
-def build_manifest() -> Manifest:
-    """This controller's playlist, in play order."""
+def build_manifest(*, hash_files: bool = True) -> Manifest:
+    """This controller's playlist, in play order.
+
+    ``hash_files=False`` leaves ``content_sha256`` empty: the Screens
+    page only counts the items, and hashing every asset file in a web
+    request takes tens of seconds after a large upload on a Pi. The
+    publish task, which needs the hashes, builds its own manifest.
+    """
     from anthias_server.app.models import (
         Asset,
         clamp_duration,
@@ -209,14 +220,20 @@ def build_manifest() -> Manifest:
 
     manifest = Manifest()
     assets = Asset.objects.order_by('play_order', 'name', 'asset_id')
+
+    def skip(asset_id: str, reason: str) -> None:
+        manifest.skipped.append(reason)
+        manifest.skipped_ids.append(asset_id)
+
     for asset in assets:
         name = asset.name or asset.asset_id
         uri = asset.uri or ''
+        manifest.order.append(asset.asset_id)
         if asset.is_processing:
-            manifest.skipped.append(f'{name} (still processing)')
+            skip(asset.asset_id, f'{name} (still processing)')
             continue
         if not uri:
-            manifest.skipped.append(f'{name} (no content)')
+            skip(asset.asset_id, f'{name} (no content)')
             continue
         metadata = asset.metadata or {}
         spec: dict[str, Any] = {
@@ -241,12 +258,13 @@ def build_manifest() -> Manifest:
         file_path = _local_file(uri, settings['assetdir'])
         if file_path is not None:
             if not os.path.isfile(file_path):
-                manifest.skipped.append(f'{name} (file missing)')
+                skip(asset.asset_id, f'{name} (file missing)')
                 continue
             item.file_path = file_path
-            item.content_sha256 = file_sha256(file_path)
+            if hash_files:
+                item.content_sha256 = file_sha256(file_path)
         elif uri.startswith('/'):
-            manifest.skipped.append(f'{name} (file outside the asset store)')
+            skip(asset.asset_id, f'{name} (file outside the asset store)')
             continue
         else:
             spec['uri'] = uri
@@ -307,8 +325,18 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
     result = SyncResult()
     remote = {str(a.get('asset_id')): a for a in client.list_assets()}
     mappings = {m.source_asset_id: m for m in node.assets.all()}
-    ordered: list[str] = []
+    # source asset id -> the screen's copy, for the final play order.
+    placed: dict[str, str] = {}
     keep: set[str] = set()
+
+    # An asset skipped for now (still processing, file missing) keeps
+    # the copy the screen already has, in its place in the playlist,
+    # until a later publish can send it again.
+    for source_id in manifest.skipped_ids:
+        mapping = mappings.get(source_id)
+        if mapping is not None and mapping.remote_asset_id in remote:
+            keep.add(mapping.remote_asset_id)
+            placed[source_id] = mapping.remote_asset_id
 
     # Remove what is not part of the mirror first. The screen renames a
     # new asset whose name is already taken ("name-1"), so creating
@@ -317,7 +345,7 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
         mappings[item.asset_id].remote_asset_id
         for item in manifest.items
         if item.asset_id in mappings
-    }
+    } | keep
     for remote_id in [r for r in remote if r not in mapped]:
         try:
             client.delete_asset(remote_id)
@@ -359,7 +387,7 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
             result.errors.append(f'{item.name}: {exc}')
             if mapping and mapping.remote_asset_id in remote:
                 keep.add(mapping.remote_asset_id)
-                ordered.append(mapping.remote_asset_id)
+                placed[item.asset_id] = mapping.remote_asset_id
             continue
         NodeAsset.objects.update_or_create(
             node=node,
@@ -372,7 +400,7 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
             },
         )
         keep.add(remote_id)
-        ordered.append(remote_id)
+        placed[item.asset_id] = remote_id
 
     for remote_id in list(remote):
         if remote_id in keep:
@@ -384,7 +412,9 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
             result.errors.append(f'remove {remote_id}: {exc}')
 
     wanted = {item.asset_id for item in manifest.items}
+    wanted.update(manifest.skipped_ids)
     node.assets.exclude(source_asset_id__in=wanted).delete()
 
-    client.set_order(ordered)
+    order = manifest.order or [item.asset_id for item in manifest.items]
+    client.set_order([placed[s] for s in order if s in placed])
     return result

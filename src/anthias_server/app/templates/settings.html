@@ -421,6 +421,14 @@
       </div>
     </div>
     <div class="app-form-grid mt-2" x-show="keys" x-cloak>
+      {% if auth_backend %}
+      <div class="app-floating">
+        <input type="password" class="app-input" id="keys_current_password" name="current_password" form="backup-form" placeholder=" " autocomplete="current-password" :required="keys">
+        <label for="keys_current_password">Your current sign-in password</label>
+      </div>
+      {% else %}
+      <p class="text-xs text-fg-muted m-0" id="keys-auth-off">Turn on authentication to export the device keys.</p>
+      {% endif %}
       <div class="app-floating">
         <input type="password" class="app-input" id="keys_password" name="keys_password" form="backup-form" placeholder=" " autocomplete="new-password" minlength="8" :required="keys">
         <label for="keys_password">Keys password (8+ characters)</label>

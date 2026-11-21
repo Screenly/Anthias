@@ -137,6 +137,16 @@ installation.
 >
 > During ideal conditions (Raspberry Pi 3 Model B+, class 10 SD card and fast internet connection), the installation normally takes 15-30 minutes.
 
+#### Ports Anthias uses
+
+Anthias's web front end listens on these TCP ports on the device:
+
+* **80**: the web interface over HTTP, which sends you on to HTTPS;
+* **443**: the web interface over HTTPS;
+* **8443**: [multi-screen management](/docs/multi-screen/). Nothing answers here unless the device is a controller or is managed by one.
+
+On a PC that already runs a web server, a VPN or anything else on one of these ports, Anthias's web interface can't start. The installer and the upgrade script warn you when a port is already in use. Stop or move the other service, then run the upgrade again. To see what holds a port, run `sudo ss -ltnp 'sport = :443'` (or `:8443`).
+
 #### Prompt: Network Management
 
 Opting for network management will enable and configure the [NetworkManager](https://wiki.debian.org/NetworkManager) service on your device.

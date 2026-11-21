@@ -761,6 +761,36 @@ def test_bootstrap_config_matches_the_generated_admin_listener() -> None:
     assert bootstrap['admin']['config'] == {'persist': True}
 
 
+def test_bootstrap_proxy_tags_the_ui_like_the_generated_config() -> None:
+    # Caddy runs bootstrap.json until anthias-server pushes its own
+    # config. If the bootstrap proxy didn't tag requests as the UI, the
+    # managed-screen lockdown wouldn't recognise them and would let them
+    # through, and a client could send its own X-Anthias-Client-Cert.
+    bootstrap = json.loads(
+        (
+            Path(__file__).resolve().parent.parent
+            / 'docker'
+            / 'caddy'
+            / 'bootstrap.json'
+        ).read_text()
+    )
+    servers = bootstrap['apps']['http']['servers']
+    proxies = [
+        handler
+        for server in servers.values()
+        for route in server['routes']
+        for handler in route['handle']
+        if handler['handler'] == 'reverse_proxy'
+    ]
+
+    assert proxies
+    expected = caddy.proxy_handler()['headers']
+    for proxy in proxies:
+        assert proxy['headers'] == expected
+        tagged = proxy['headers']['request']['set']
+        assert tagged[caddy.LISTENER_HEADER] == [caddy.UI_LISTENER_VALUE]
+
+
 def test_stage_certificates() -> None:
     cert_pem, key_pem = _self_signed()
     web_certificate.install_custom(web_certificate.validate(cert_pem, key_pem))

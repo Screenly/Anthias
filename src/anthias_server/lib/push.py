@@ -35,6 +35,7 @@ import logging
 import random
 import ssl
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
@@ -49,6 +50,12 @@ HEALTH_PUSH_MAX_S = 15 * 60
 IDLE_CHECK_S = 30
 RETRY_MIN_S = 5
 RETRY_MAX_S = 300
+# After a session that was open, the controller has most likely just
+# restarted: retry at least this often for FAST_RETRY_WINDOW_S, so the
+# screen is back within about half a minute of the controller, instead
+# of backing off to RETRY_MAX_S as for a controller that is gone.
+FAST_RETRY_MAX_S = 20
+FAST_RETRY_WINDOW_S = 10 * 60
 OPEN_TIMEOUT_S = 20
 PING_INTERVAL_S = 30
 PING_TIMEOUT_S = 30
@@ -203,8 +210,15 @@ def learn_pin(der: bytes) -> None:
         logger.exception("Could not record the controller's key pin")
 
 
-async def run_session(target: Target) -> None:
-    """One connection, until it drops or this screen stops being managed."""
+async def run_session(
+    target: Target, on_open: Callable[[], None] | None = None
+) -> None:
+    """One connection, until it drops or this screen stops being managed.
+
+    ``on_open`` is called once the controller has accepted the hello,
+    so the caller can tell a session that ran from one that never
+    connected, whichever way it ends.
+    """
     from websockets.asyncio.client import connect
 
     async with connect(
@@ -225,6 +239,8 @@ async def run_session(target: Target) -> None:
         await asyncio.to_thread(learn_pin, der)
         health = await asyncio.to_thread(collect_health)
         await ws.send(json.dumps({'type': 'hello', 'health': health}))
+        if on_open is not None:
+            on_open()
         sent_flags, sent_at = warning_flags(health), monotonic()
         renewal_sent = False
         logger.info('Pushing status to the controller at %s', target.uri)
@@ -268,8 +284,15 @@ async def run_session(target: Target) -> None:
                 await ws.send(json.dumps({'type': 'heartbeat'}))
 
 
+def next_delay(delay: float, fast_until: float, now: float) -> float:
+    """The retry delay after ``delay``: doubled, up to the cap."""
+    cap = FAST_RETRY_MAX_S if now < fast_until else RETRY_MAX_S
+    return min(delay * 2, cap)
+
+
 async def run_forever() -> None:
-    delay = RETRY_MIN_S
+    delay: float = RETRY_MIN_S
+    fast_until = 0.0
     while True:
         try:
             target = await asyncio.to_thread(current_target)
@@ -280,24 +303,35 @@ async def run_forever() -> None:
             delay = RETRY_MIN_S
             await asyncio.sleep(IDLE_CHECK_S)
             continue
+        opened = False
+
+        def mark_open() -> None:
+            nonlocal opened
+            opened = True
+
         try:
-            await run_session(target)
-            delay = RETRY_MIN_S
+            await run_session(target, on_open=mark_open)
         except asyncio.CancelledError:
             raise
         except PinMismatchError as exc:
             logger.warning('Push connection refused: %s', exc)
         except Exception as exc:
             logger.info(
-                'Push connection to %s ended: %s (retrying in ~%ss)',
+                'Push connection to %s ended: %s',
                 target.uri,
                 exc,
-                delay,
             )
+        if opened:
+            # A session ran, however it ended: start the backoff over,
+            # so blips spread over days don't add up to minutes offline
+            # after the next controller restart.
+            delay = RETRY_MIN_S
+            fast_until = monotonic() + FAST_RETRY_WINDOW_S
+        logger.debug('Reconnecting to the controller in ~%ss', delay)
         await asyncio.sleep(
             delay * random.uniform(0.8, 1.2)
         )  # NOSONAR: jitter, not security
-        delay = min(delay * 2, RETRY_MAX_S)
+        delay = next_delay(delay, fast_until, monotonic())
 
 
 def start_background_push() -> threading.Thread | None:
