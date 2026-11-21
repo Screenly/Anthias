@@ -2116,10 +2116,28 @@ def _management_context(
     return {
         'management_auth_enabled': management.auth_enabled(),
         'management_controller': management.current_controller(),
+        'management_pending': management.pending_controller(),
+        'management_check_code': _safe_check_code(),
         'management_error': error,
         'management_form': form or {},
         'management_port': management.M2M_PORT,
     }
+
+
+def _safe_check_code() -> str:
+    try:
+        return management.check_code()
+    except management.ManagementError:
+        return ''
+
+
+@authorized
+@require_http_methods(['GET'])
+def settings_management_section(request: HttpRequest) -> HttpResponse:
+    """The management section alone; polled while a join is pending."""
+    response = template(request, '_management.html', _management_context())
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 def _management_response(
@@ -2150,7 +2168,7 @@ def settings_management_join(request: HttpRequest) -> HttpResponse:
             error=str(exc),
             form={'join_info': snippet, 'screen_host': screen_host},
         )
-    logger.info('Joined controller %r', controller.name)
+    logger.info('Asked to join controller %r', controller.name)
     return _management_response(request)
 
 
@@ -2243,6 +2261,16 @@ def settings_save(request: HttpRequest) -> HttpResponse:
                 request,
                 'Controller mode needs authentication. Turn on '
                 'authentication first.',
+            )
+        elif controller_mode and (
+            management.is_managed()
+            or management.pending_controller() is not None
+        ):
+            controller_mode = False
+            messages.warning(
+                request,
+                'This screen is managed by (or waiting to join) a '
+                'controller, so it cannot be one. Leave management first.',
             )
         settings['controller_mode'] = controller_mode
 

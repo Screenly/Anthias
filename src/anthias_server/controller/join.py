@@ -28,6 +28,7 @@ import logging
 import re
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from django.db import transaction
@@ -46,6 +47,8 @@ from anthias_server.controller.models import (
     Node,
     NodeStatus,
 )
+from anthias_server.controller.models import JoinRequest as PendingJoin
+from anthias_server.lib import pki
 from anthias_server.lib.management import JOIN_PREFIX, M2M_PORT
 
 SNIPPET_PREFIX = JOIN_PREFIX
@@ -81,6 +84,15 @@ class JoinRequest:
     screen_fp: str
     screen_port: int
     screen_host: str
+    # The screen's node certificate (its fingerprint is screen_fp) and a
+    # CSR for the same key: approving the request signs the CSR.
+    screen_cert: str = ''
+    csr: str = ''
+
+
+# How long a join request waits for the operator, and how many can.
+REQUEST_TTL = timedelta(hours=24)
+MAX_PENDING = 50
 
 
 def controller_fingerprint() -> str:
@@ -189,6 +201,30 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
         # No player name on the screen: its hostname inside the
         # container is a bare container id. Its address is more useful.
         name = host
+    screen_cert = text('screen_cert', pki.MAX_PEM_BYTES)
+    csr = text('csr', pki.MAX_PEM_BYTES)
+    if not screen_cert or not csr:
+        raise JoinError(
+            400,
+            'The join request has no certificate or signing request. '
+            'Update the screen to the same Anthias version as this '
+            'controller.',
+        )
+    try:
+        cert = pki.load_cert(screen_cert)
+        signing_request = pki.load_csr(csr)
+    except pki.PkiError as exc:
+        raise JoinError(400, str(exc)) from exc
+    if pki.fingerprint(cert) != screen_fp:
+        raise JoinError(
+            400, 'The certificate does not match the screen fingerprint.'
+        )
+    if not pki.same_public_key(
+        signing_request.public_key(), cert.public_key()
+    ):
+        raise JoinError(
+            400, "The signing request is not for the screen's own key."
+        )
     return JoinRequest(
         secret=secret,
         token=token,
@@ -196,6 +232,8 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
         screen_fp=screen_fp,
         screen_port=port,
         screen_host=host,
+        screen_cert=screen_cert,
+        csr=csr,
     )
 
 
@@ -242,8 +280,15 @@ def verify_screen(request: JoinRequest) -> dict[str, Any]:
         else request.screen_host
     )
     base_url = f'https://{host}:{request.screen_port}'
+    from anthias_server.controller import service
+
     try:
-        with NodeClient(base_url, request.screen_fp, request.token) as client:
+        with NodeClient(
+            base_url,
+            request.screen_fp,
+            request.token,
+            client_cert=service.controller_client_cert(),
+        ) as client:
             info = client.json(
                 'GET',
                 '/info',
@@ -260,12 +305,12 @@ def verify_screen(request: JoinRequest) -> dict[str, Any]:
     return info if isinstance(info, dict) else {}
 
 
-def join(request: JoinRequest) -> tuple[Node, bool]:
-    """Verify and store a joining screen. Returns (node, created).
+def request_join(request: JoinRequest) -> tuple[PendingJoin, bool]:
+    """Check and store a join request for the operator to approve.
 
-    A screen that is already listed (same certificate) gets its token
-    and address replaced, so a screen that left and joins again just
-    works.
+    Returns (request, created). Nothing is trusted yet: the screen is
+    only listed under "Waiting for approval". A screen that asks again
+    replaces its earlier request (new token, new CSR, new expiry).
     """
     if not check_secret(request.secret):
         raise JoinError(
@@ -273,26 +318,150 @@ def join(request: JoinRequest) -> tuple[Node, bool]:
             'The join information is wrong or was regenerated on the '
             "controller. Copy it again from the controller's Screens page.",
         )
+    expire_requests()
+    if (
+        PendingJoin.objects.exclude(fingerprint=request.screen_fp).count()
+        >= MAX_PENDING
+    ):
+        raise JoinError(
+            429,
+            'Too many screens are waiting for approval on this '
+            'controller. Approve or reject some first.',
+        )
     info = verify_screen(request)
+    now = timezone.now()
+    with transaction.atomic():
+        pending, created = (
+            PendingJoin.objects.select_for_update().get_or_create(
+                fingerprint=request.screen_fp,
+                defaults={
+                    'request_id': pki.random_request_id(),
+                    'expires_at': now + REQUEST_TTL,
+                    'token_ciphertext': '',
+                    'csr_pem': '',
+                },
+            )
+        )
+        pending.request_id = pki.random_request_id()
+        pending.name = request.screen_name
+        pending.host = request.screen_host
+        pending.port = request.screen_port
+        pending.token_ciphertext = vault.encrypt(request.token)
+        pending.csr_pem = request.csr
+        pending.version = str(info.get('anthias_version') or '')[:100]
+        pending.device_model = str(info.get('device_model') or '')[:200]
+        pending.created_at = now
+        pending.expires_at = now + REQUEST_TTL
+        pending.save()
+    return pending, created
+
+
+def _client_for_request(pending: PendingJoin) -> NodeClient:
+    from anthias_server.controller import service
+
+    return NodeClient(
+        pending.base_url,
+        pending.fingerprint,
+        vault.decrypt(pending.token_ciphertext),
+        client_cert=service.controller_client_cert(),
+    )
+
+
+def approve(pending: PendingJoin) -> Node:
+    """Sign the screen's CSR, hand it the certificate, then store it.
+
+    The screen is only added once it has accepted the certificate;
+    if it cannot be reached, the request stays listed and the
+    certificate just issued is revoked.
+    """
+    from anthias_server.controller import ca, service
+
+    csr = pki.load_csr(pending.csr_pem)
+    try:
+        issued = ca.sign_screen_csr(
+            pending.csr_pem, csr.public_key(), pending.fingerprint
+        )
+    except pki.PkiError as exc:
+        raise JoinError(400, str(exc)) from exc
+    serial = pki.serial_hex(issued.serial_number)
+    try:
+        with _client_for_request(pending) as client:
+            client.request(
+                'POST',
+                '/pairing/certificate',
+                json={
+                    'certificate': pki.cert_pem(issued),
+                    'ca_certificate': ca.ca_pem(),
+                    'crl': ca.crl_pem(),
+                    'controller_name': service.controller_name(),
+                },
+                timeout=(CONNECT_TIMEOUT_S, CALLBACK_READ_TIMEOUT_S),
+                expected=(200, 204),
+            )
+    except (NodeError, vault.VaultError) as exc:
+        ca.revoke(
+            serial,
+            pending.name,
+            'approval not delivered',
+            issued.not_valid_after_utc,
+        )
+        raise JoinError(
+            502,
+            f'Could not deliver the approval to {pending.name} '
+            f'({exc}). It may have withdrawn its request; ask it to '
+            'join again.',
+        ) from exc
     with transaction.atomic():
         node, created = Node.objects.select_for_update().get_or_create(
-            fingerprint=request.screen_fp,
+            fingerprint=pending.fingerprint,
             defaults={
-                'name': request.screen_name,
-                'host': request.screen_host,
-                'port': request.screen_port,
-                'token_ciphertext': vault.encrypt(request.token),
+                'name': pending.name,
+                'host': pending.host,
+                'port': pending.port,
+                'token_ciphertext': pending.token_ciphertext,
             },
         )
-        if not created:
-            node.name = request.screen_name
-            node.host = request.screen_host
-            node.port = request.screen_port
-            node.token_ciphertext = vault.encrypt(request.token)
-        node.version = str(info.get('anthias_version') or '')[:100]
-        node.device_model = str(info.get('device_model') or '')[:200]
+        previous = (node.client_serial, node.client_not_after)
+        node.name = pending.name
+        node.host = pending.host
+        node.port = pending.port
+        node.token_ciphertext = pending.token_ciphertext
+        node.version = pending.version
+        node.device_model = pending.device_model
+        node.public_key_pem = pki.public_key_pem(csr.public_key())
+        node.client_serial = serial
+        node.client_fingerprint = pki.fingerprint(issued)
+        node.client_not_after = issued.not_valid_after_utc
         node.status = NodeStatus.ONLINE
         node.status_detail = ''
         node.last_seen_at = timezone.now()
         node.save()
-    return node, created
+        pending.delete()
+    if not created and previous[0] and previous[0] != serial:
+        ca.revoke(
+            previous[0], node.name, 'replaced by a new join', previous[1]
+        )
+    return node
+
+
+def reject(pending: PendingJoin) -> None:
+    """Drop a request and tell the screen (best effort)."""
+    try:
+        with _client_for_request(pending) as client:
+            client.request(
+                'DELETE',
+                '/pairing',
+                timeout=(CONNECT_TIMEOUT_S, CALLBACK_READ_TIMEOUT_S),
+                expected=(204, 403, 404),
+            )
+    except (NodeError, vault.VaultError) as exc:
+        logger.info('Could not tell %s it was rejected: %s', pending.name, exc)
+    pending.delete()
+
+
+def expire_requests() -> int:
+    """Drop requests nobody approved in time. Returns how many."""
+    expired = list(PendingJoin.objects.filter(expires_at__lt=timezone.now()))
+    for pending in expired:
+        reject(pending)
+    return len(expired)

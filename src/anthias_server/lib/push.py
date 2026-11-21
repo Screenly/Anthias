@@ -9,10 +9,12 @@ the message format, are in ``anthias_server.controller.push``).
 * **Pinned.** The connection is checked against the controller
   fingerprint from the join information before anything is sent; a
   different certificate ends the session and the thread retries later.
-* **No secret.** The screen presents its node certificate as the TLS
-  client certificate. The controller pinned that certificate's
-  fingerprint at join, so it knows which screen is calling without a
-  token.
+* **No secret.** The screen presents the client certificate the
+  controller's CA issued it at approval (with its node key), so the
+  controller knows which screen is calling without a token.
+* **Two-way.** The controller sends each new revocation list, and a
+  renewed certificate when this screen asks for one (once per
+  connection, when fewer than 30 days of validity are left).
 * **Cheap.** A heartbeat every minute, health only when a warning
   appears or clears, and at least every 15 minutes. uvicorn on the
   controller and ``websockets`` here exchange pings, so a dead peer is
@@ -34,6 +36,7 @@ import random
 import ssl
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit
@@ -82,16 +85,65 @@ def current_target() -> Target | None:
     if not management.auth_enabled():
         return None
     controller = management.current_controller()
-    if controller is None:
+    if controller is None or not management.client_cert_path().exists():
         return None
     identity = node_identity.ensure_node_identity()
     return Target(
         controller_id=controller.pk,
         uri=push_uri(controller.url),
         fingerprint=controller.fingerprint,
-        cert_path=str(identity.cert_path),
+        # The client certificate the controller's CA issued at approval
+        # (renewed over this connection), with the node key.
+        cert_path=str(management.client_cert_path()),
         key_path=str(identity.key_path),
     )
+
+
+def renewal_request(target: Target) -> dict[str, Any] | None:
+    """A renewal message if the client certificate is close to expiry."""
+    from anthias_server.lib import pki
+
+    try:
+        cert = pki.load_cert(Path(target.cert_path).read_bytes())
+        key = pki.load_key(Path(target.key_path).read_bytes())
+    except (OSError, pki.PkiError):
+        return None
+    if not pki.needs_renewal(cert):
+        return None
+    common_name = pki.fingerprint(cert)
+    from anthias_server.lib import node_identity
+
+    try:
+        common_name = node_identity.ensure_node_identity().fingerprint
+    except (OSError, ValueError):
+        pass
+    return {
+        'type': 'renew',
+        'csr': pki.make_csr(key, common_name, pki.ROLE_SCREEN),
+    }
+
+
+def handle_message(raw: str | bytes) -> str:
+    """Apply a message from the controller. Returns its type."""
+    from anthias_server.lib import management
+
+    try:
+        message = json.loads(raw)
+    except ValueError:
+        return ''
+    if not isinstance(message, dict):
+        return ''
+    kind = str(message.get('type') or '')
+    crl, certificate = message.get('crl'), message.get('certificate')
+    if kind == 'crl' and isinstance(crl, str) and management.store_crl(crl):
+        logger.info('Stored a new revocation list from the controller')
+    if (
+        kind == 'certificate'
+        and isinstance(certificate, str)
+        and management.store_client_cert(certificate)
+    ):
+        logger.info('Stored a renewed client certificate')
+    return kind
 
 
 def collect_health() -> dict[str, Any]:
@@ -155,15 +207,27 @@ async def run_session(target: Target) -> None:
         health = await asyncio.to_thread(collect_health)
         await ws.send(json.dumps({'type': 'hello', 'health': health}))
         sent_flags, sent_at = warning_flags(health), monotonic()
+        renewal_sent = False
         logger.info('Pushing status to the controller at %s', target.uri)
+        next_beat = monotonic() + HEARTBEAT_S
         while True:
             try:
-                # Nothing is expected from the controller; reading keeps
-                # the connection's close and ping handling running.
-                await asyncio.wait_for(ws.recv(), HEARTBEAT_S)
+                # The controller sends CRL updates and renewed
+                # certificates; reading also keeps close and ping
+                # handling running. Heartbeats keep their own schedule.
+                raw = await asyncio.wait_for(
+                    ws.recv(), max(0.0, next_beat - monotonic())
+                )
+                await asyncio.to_thread(handle_message, raw)
                 continue
             except TimeoutError:
                 pass
+            next_beat = monotonic() + HEARTBEAT_S
+            if not renewal_sent:
+                renewal = await asyncio.to_thread(renewal_request, target)
+                if renewal is not None:
+                    await ws.send(json.dumps(renewal))
+                    renewal_sent = True
             still = await asyncio.to_thread(current_target)
             if still != target:
                 await ws.close()

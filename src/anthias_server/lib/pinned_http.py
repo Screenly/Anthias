@@ -62,12 +62,18 @@ class FingerprintAdapter(HTTPAdapter):
         conn.assert_hostname = False
 
 
-def pinned_session(fingerprint: str) -> requests.Session:
+def pinned_session(
+    fingerprint: str, client_cert: tuple[str, str] | None = None
+) -> requests.Session:
     """A session whose https:// requests only reach ``fingerprint``.
 
     Plain http:// is refused outright: a pin means nothing without TLS.
+    ``client_cert`` is a (certificate, key) file pair to present as the
+    TLS client certificate (mutual TLS; see ``lib.pki``).
     """
     session = requests.Session()
+    if client_cert is not None:
+        session.cert = client_cert
     session.trust_env = False
     session.mount('https://', FingerprintAdapter(fingerprint))
     session.mount('http://', _RefuseAdapter())

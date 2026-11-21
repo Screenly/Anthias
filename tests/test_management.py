@@ -120,13 +120,21 @@ def controller_reply(
     """Configure what the (pinned) controller answers to the join."""
     state: dict[str, Any] = {
         'outcome': _FakeResponse(
-            201, {'controller_name': 'Lobby', 'screen_id': 7}
+            202,
+            {
+                'status': 'pending',
+                'request_id': 'rq-1',
+                'check_code': 'ABCD-1234',
+                'controller_name': 'Lobby',
+            },
         ),
         'calls': [],
         'pins': [],
     }
 
-    def fake_pinned_session(fingerprint: str) -> _FakeSession:
+    def fake_pinned_session(
+        fingerprint: str, client_cert: Any = None
+    ) -> _FakeSession:
         state['pins'].append(fingerprint)
         return _FakeSession(state['outcome'], state['calls'])
 
@@ -134,6 +142,40 @@ def controller_reply(
         'anthias_server.lib.pinned_http.pinned_session', fake_pinned_session
     )
     return state
+
+
+def _approve(controller: ManagementController) -> tuple[Any, Any]:
+    """What the controller does when the operator approves: a real
+    certificate from a (test) CA, for this screen's node key."""
+    from anthias_server.lib import node_identity, pki
+
+    ca_key = pki.new_key()
+    ca_cert = pki.make_ca(ca_key, 'Test controller CA')
+    identity = node_identity.ensure_node_identity()
+    node_key = pki.load_key(identity.key_path.read_bytes())
+    cert = pki.issue_client_cert(
+        ca_cert,
+        ca_key,
+        node_key.public_key(),
+        identity.fingerprint,
+        pki.ROLE_SCREEN,
+    )
+    crl = pki.make_crl(ca_cert, ca_key, [], 1)
+    management.install_approval(
+        controller.token_id,
+        pki.cert_pem(cert),
+        pki.cert_pem(ca_cert),
+        pki.crl_pem(crl),
+        'Lobby',
+    )
+    return ca_cert, ca_key
+
+
+def _join_and_approve(**overrides: Any) -> ManagementController:
+    controller = management.join(_snippet(**overrides))
+    _approve(controller)
+    controller.refresh_from_db()
+    return controller
 
 
 # ---------------------------------------------------------------------------
@@ -222,10 +264,33 @@ def test_join_success_pins_records_and_enables_site(
     assert controller.url == 'https://controller.lan:8443'
     assert controller.fingerprint == CONTROLLER_FP
 
+    # The request carries the node certificate and a CSR for its key.
+    from anthias_server.lib import node_identity, pki
+
+    cert = pki.load_cert(body['screen_cert'])
+    assert pki.fingerprint(cert) == node_fp
+    csr = pki.load_csr(body['csr'])
+    assert pki.same_public_key(csr.public_key(), cert.public_key())
+    assert node_identity.key_path().exists()
+
+    # Waiting for approval: not managed yet, but the site is open so
+    # the controller can call back.
+    assert not controller.approved
+    assert controller.request_id == 'rq-1'
+    assert not management.is_managed()
+    assert management.pending_controller() == controller
     assert settings['management_enabled'] is True
-    assert management.is_managed()
     assert management.m2m_site_active()
     assert stub_node_and_caddy.called
+
+    _approve(controller)
+    controller.refresh_from_db()
+    assert controller.approved
+    assert management.is_managed()
+    assert management.pending_controller() is None
+    assert management.client_cert_path().exists()
+    assert management.controller_ca_path().exists()
+    assert management.crl_path().exists()
 
 
 @pytest.mark.django_db
@@ -238,7 +303,7 @@ def test_join_enables_site_before_contacting_controller(
 
     def reply() -> _FakeResponse:
         seen.append(management.caddy_extra_servers())
-        return _FakeResponse(201, {'controller_name': 'Lobby'})
+        return _FakeResponse(202, {'controller_name': 'Lobby'})
 
     controller_reply['outcome'] = reply
     management.join(_snippet())
@@ -272,7 +337,7 @@ def test_join_refused_without_auth(
 def test_join_refused_while_already_managed(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    management.join(_snippet())
+    _join_and_approve()
     with pytest.raises(management.ManagementError, match='Leave management'):
         management.join(_snippet(name='Other'))
     assert len(controller_reply['calls']) == 1
@@ -314,13 +379,14 @@ def test_join_failure_rolls_back(
 
 
 @pytest.mark.django_db
-def test_join_keeps_pairing_when_201_body_unreadable(
+def test_join_keeps_request_when_202_body_unreadable(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    controller_reply['outcome'] = _FakeResponse(201)
+    controller_reply['outcome'] = _FakeResponse(202)
     controller = management.join(_snippet())
     assert controller.name == 'Lobby controller'
-    assert management.is_managed()
+    assert management.pending_controller() == controller
+    assert not management.is_managed()
 
 
 @pytest.mark.django_db
@@ -344,7 +410,7 @@ def test_join_rejects_bad_screen_host(
 def test_revoking_controller_token_ends_management(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    controller = management.join(_snippet())
+    controller = _join_and_approve()
     api_tokens.revoke_token(controller.token.pk)
     assert not management.is_managed()
 
@@ -358,11 +424,15 @@ def test_leave_management_revokes_and_withdraws_site(
 ) -> None:
     from anthias_server.settings import settings
 
-    management.join(_snippet())
+    _join_and_approve()
     plaintext = controller_reply['calls'][0]['json']['token']
     stub_node_and_caddy.reset_mock()
 
     assert management.leave_management() is True
+    # The certificates from the controller go with it.
+    assert not management.client_cert_path().exists()
+    assert not management.controller_ca_path().exists()
+    assert not management.crl_path().exists()
 
     assert api_tokens.authenticate_token(plaintext) is None
     assert not ManagementController.objects.exists()
@@ -400,6 +470,7 @@ def test_site_follows_auth_and_controller_mode(
     assert management.M2M_SERVER_NAME in management.caddy_extra_servers()
 
 
+@pytest.mark.django_db
 def test_m2m_server_shape() -> None:
     server = management.m2m_server()
     assert server['listen'] == [':8443']
@@ -407,7 +478,7 @@ def test_m2m_server_shape() -> None:
     assert server['tls_connection_policies'] == [
         {
             'certificate_selection': {'any_tag': ['anthias-node']},
-            # Pushing screens identify with their node certificate.
+            # Not managed yet: only ask for a client certificate.
             'client_authentication': {'mode': 'request'},
         }
     ]
@@ -418,8 +489,8 @@ def test_m2m_server_shape() -> None:
     assert proxy['upstreams'] == [{'dial': 'anthias-server:8080'}]
     assert proxy['headers']['request']['set'] == {
         'X-Anthias-Listener': ['m2m'],
-        'X-Anthias-Client-Fingerprint': [
-            '{http.request.tls.client.fingerprint}'
+        'X-Anthias-Client-Cert': [
+            '{http.request.tls.client.certificate_der_base64}'
         ],
     }
     assert fallback == {
@@ -454,7 +525,7 @@ def test_m2m_listener_header_is_stripped_on_ui_sites() -> None:
 
     assert caddy.proxy_handler()['headers']['request']['delete'] == [
         caddy.LISTENER_HEADER,
-        caddy.CLIENT_FINGERPRINT_HEADER,
+        caddy.CLIENT_CERT_HEADER,
     ]
 
 
@@ -476,7 +547,7 @@ def test_request_via_m2m() -> None:
 def test_api_pairing_get_and_controller_delete(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    management.join(_snippet())
+    _join_and_approve()
     plaintext = controller_reply['calls'][0]['json']['token']
     client = Client()
     auth = {'Authorization': f'Bearer {plaintext}'}
@@ -506,7 +577,7 @@ def test_api_pairing_get_unauthenticated_is_refused(auth_on: None) -> None:
 def test_api_pairing_delete_with_unrelated_token_is_refused(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    management.join(_snippet())
+    _join_and_approve()
     _, other = api_tokens.create_token(operator, 'Script')
     response = Client().delete(
         reverse('api:pairing_v2'), HTTP_AUTHORIZATION=f'Bearer {other}'
@@ -561,6 +632,16 @@ def test_settings_join_and_leave_flow(
         HTTP_HX_REQUEST='true',
     )
     assert response.status_code == 200
+    assert b'Waiting for approval on Lobby' in response.content
+    assert management.check_code().encode() in response.content
+    assert b'btn-cancel-join' in response.content
+    # The pending section refreshes itself until approved.
+    assert b'hx-trigger="every 5s"' in response.content
+
+    pending = management.pending_controller()
+    assert pending is not None
+    _approve(pending)
+    response = client.get(reverse('anthias_app:settings_management_section'))
     assert b'Managed by Lobby' in response.content
     assert b'btn-leave-management' in response.content
 
@@ -604,7 +685,7 @@ def test_disabling_auth_withdraws_site(
     controller_reply: dict[str, Any],
     stub_node_and_caddy: MagicMock,
 ) -> None:
-    management.join(_snippet())
+    _join_and_approve()
     stub_node_and_caddy.reset_mock()
     client = Client()
     client.force_login(operator)
@@ -659,7 +740,7 @@ def test_revoking_controller_token_in_settings_leaves_management(
 ) -> None:
     from anthias_server.settings import settings
 
-    controller = management.join(_snippet())
+    controller = _join_and_approve()
     stub_node_and_caddy.reset_mock()
     client = Client()
     client.force_login(operator)
@@ -746,3 +827,261 @@ def test_leaving_rewrites_flag_changed_by_another_process(
     parser = configparser.ConfigParser()
     parser.read(settings.conf_file)
     assert parser['main'].getboolean('management_enabled') is False
+
+
+# ---------------------------------------------------------------------------
+# approval, certificates and revocation (screen side)
+
+
+def _controller_cert(
+    ca_cert: Any, ca_key: Any, role: str = 'anthias-controller'
+) -> Any:
+    from anthias_server.lib import pki
+
+    return pki.issue_client_cert(
+        ca_cert, ca_key, pki.new_key().public_key(), 'controller', role
+    )
+
+
+def _der_header(cert: Any) -> dict[str, str]:
+    from cryptography.hazmat.primitives import serialization
+
+    der = cert.public_bytes(serialization.Encoding.DER)
+    return {
+        'X-Anthias-Listener': 'm2m',
+        'X-Anthias-Client-Cert': base64.b64encode(der).decode(),
+    }
+
+
+@pytest.mark.django_db
+def test_settings_show_the_check_code_while_waiting(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    management.join(_snippet())
+    client = Client()
+    client.force_login(operator)
+    html = client.get(
+        reverse('anthias_app:settings_management_section')
+    ).content.decode()
+    assert 'Waiting for approval' in html
+    assert management.check_code() in html
+    assert 'btn-cancel-join' in html
+
+
+@pytest.mark.django_db
+def test_controller_delivers_the_certificate_over_the_api(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import node_identity, pki
+
+    controller = management.join(_snippet())
+    plaintext = controller_reply['calls'][0]['json']['token']
+    ca_key = pki.new_key()
+    ca_cert = pki.make_ca(ca_key, 'Test controller CA')
+    node_key = pki.load_key(
+        node_identity.ensure_node_identity().key_path.read_bytes()
+    )
+    cert = pki.issue_client_cert(
+        ca_cert, ca_key, node_key.public_key(), 'screen', pki.ROLE_SCREEN
+    )
+    body = {
+        'certificate': pki.cert_pem(cert),
+        'ca_certificate': pki.cert_pem(ca_cert),
+        'crl': pki.crl_pem(pki.make_crl(ca_cert, ca_key, [], 1)),
+        'controller_name': 'Head office',
+    }
+    url = reverse('api:pairing_certificate_v2')
+    auth = {'Authorization': f'Bearer {plaintext}'}
+    client = Client()
+
+    # Only on the management port, and only with the controller token.
+    assert (
+        client.post(
+            url, body, content_type='application/json', headers=auth
+        ).status_code
+        == 404
+    )
+    session = Client()
+    session.force_login(operator)
+    assert (
+        session.post(
+            url,
+            body,
+            content_type='application/json',
+            headers={'X-Anthias-Listener': 'm2m'},
+        ).status_code
+        == 403
+    )
+    bad = {**body, 'certificate': pki.cert_pem(ca_cert)}
+    response = client.post(
+        url,
+        bad,
+        content_type='application/json',
+        headers={**auth, 'X-Anthias-Listener': 'm2m'},
+    )
+    assert response.status_code == 400
+    assert not management.is_managed()
+
+    response = client.post(
+        url,
+        body,
+        content_type='application/json',
+        headers={**auth, 'X-Anthias-Listener': 'm2m'},
+    )
+    assert response.status_code == 204, response.content
+    controller.refresh_from_db()
+    assert controller.approved
+    assert controller.name == 'Head office'
+    assert management.is_managed()
+
+
+@pytest.mark.django_db
+def test_install_approval_refuses_what_does_not_check_out(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import node_identity, pki
+
+    controller = management.join(_snippet())
+    ca_key = pki.new_key()
+    ca_cert = pki.make_ca(ca_key, 'CA')
+    node_key = pki.load_key(
+        node_identity.ensure_node_identity().key_path.read_bytes()
+    )
+    good = pki.issue_client_cert(
+        ca_cert, ca_key, node_key.public_key(), 'screen', pki.ROLE_SCREEN
+    )
+    empty_crl = pki.make_crl(ca_cert, ca_key, [], 1)
+    cases = {
+        'another key': (
+            pki.issue_client_cert(
+                ca_cert,
+                ca_key,
+                pki.new_key().public_key(),
+                'screen',
+                pki.ROLE_SCREEN,
+            ),
+            ca_cert,
+            empty_crl,
+        ),
+        'controller role': (
+            _controller_cert(ca_cert, ca_key),
+            ca_cert,
+            empty_crl,
+        ),
+        'not a CA': (good, good, empty_crl),
+        'already revoked': (
+            good,
+            ca_cert,
+            pki.make_crl(
+                ca_cert, ca_key, [(good.serial_number, pki.now())], 2
+            ),
+        ),
+    }
+    for name, (cert, authority, crl) in cases.items():
+        with pytest.raises(management.ManagementError):
+            management.install_approval(
+                controller.token_id,
+                pki.cert_pem(cert),
+                pki.cert_pem(authority),
+                pki.crl_pem(crl),
+            )
+        assert not management.is_managed(), name
+    with pytest.raises(management.ManagementError):
+        management.install_approval(
+            controller.token_id + 1000,
+            pki.cert_pem(good),
+            pki.cert_pem(ca_cert),
+            pki.crl_pem(empty_crl),
+        )
+
+
+@pytest.mark.django_db
+def test_a_managed_screen_accepts_m2m_calls_only_from_its_controller(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import pki
+
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
+    plaintext = controller_reply['calls'][0]['json']['token']
+    auth = {'Authorization': f'Bearer {plaintext}'}
+    url = reverse('api:pairing_v2')
+    good = _controller_cert(ca_cert, ca_key)
+
+    def status(headers: dict[str, str]) -> int:
+        return int(Client().get(url, headers={**auth, **headers}).status_code)
+
+    assert status(_der_header(good)) == 200
+    # The UI port is not affected (no listener tag).
+    assert status({}) == 200
+    assert status({'X-Anthias-Listener': 'm2m'}) == 403
+    assert status({**_der_header(good), 'X-Anthias-Client-Cert': '!!'}) == 403
+    assert (
+        status(_der_header(_controller_cert(ca_cert, ca_key, pki.ROLE_SCREEN)))
+        == 403
+    )
+    other_key = pki.new_key()
+    other = pki.make_ca(other_key, 'Other')
+    assert status(_der_header(_controller_cert(other, other_key))) == 403
+
+    # Revoked: a newer CRL from the controller lists it.
+    crl = pki.make_crl(ca_cert, ca_key, [(good.serial_number, pki.now())], 5)
+    assert management.store_crl(pki.crl_pem(crl))
+    assert status(_der_header(good)) == 403
+    # An older CRL does not undo that; one from another CA is ignored.
+    stale = pki.make_crl(ca_cert, ca_key, [], 4)
+    assert not management.store_crl(pki.crl_pem(stale))
+    foreign = pki.make_crl(other, other_key, [], 9)
+    assert not management.store_crl(pki.crl_pem(foreign))
+    assert status(_der_header(good)) == 403
+
+
+@pytest.mark.django_db
+def test_a_renewed_certificate_is_kept_only_if_it_is_ours(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import node_identity, pki
+
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
+    node_key = pki.load_key(
+        node_identity.ensure_node_identity().key_path.read_bytes()
+    )
+    before = management.client_cert_path().read_text()
+    foreign = pki.issue_client_cert(
+        ca_cert, ca_key, pki.new_key().public_key(), 's', pki.ROLE_SCREEN
+    )
+    assert not management.store_client_cert(pki.cert_pem(foreign))
+    assert management.client_cert_path().read_text() == before
+    renewed = pki.issue_client_cert(
+        ca_cert, ca_key, node_key.public_key(), 's', pki.ROLE_SCREEN
+    )
+    assert management.store_client_cert(pki.cert_pem(renewed))
+    assert management.client_cert_path().read_text() == pki.cert_pem(renewed)
+
+
+@pytest.mark.django_db
+def test_leaving_deletes_the_controller_certificates(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    management.leave_management()
+    for path in (
+        management.client_cert_path(),
+        management.controller_ca_path(),
+        management.crl_path(),
+    ):
+        assert not path.exists()
+
+
+@pytest.mark.django_db
+def test_a_controller_cannot_join_another_controller(
+    auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.settings import settings
+
+    settings['controller_mode'] = True
+    settings.save()
+    with pytest.raises(management.ManagementError):
+        management.join(_snippet())
+    assert controller_reply['calls'] == []

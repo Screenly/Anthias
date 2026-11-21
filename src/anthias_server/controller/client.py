@@ -113,11 +113,12 @@ class NodeClient:
         fingerprint: str,
         token: str | None = None,
         session: requests.Session | None = None,
+        client_cert: tuple[str, str] | None = None,
     ) -> None:
         self.base_url = base_url.rstrip('/')
         if session is None:
             try:
-                session = pinned_http.pinned_session(fingerprint)
+                session = pinned_http.pinned_session(fingerprint, client_cert)
             except pinned_http.PinnedFingerprintError as exc:
                 raise NodeCertificateError(
                     'No valid certificate fingerprint is stored for this '

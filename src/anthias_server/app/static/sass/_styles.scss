@@ -2164,6 +2164,18 @@ label { text-align: left; }
   background: var(--color-warning-wash);
   color: var(--color-warning-on-wash);
 }
+.management__check-code {
+  margin: 0.5rem 0;
+  font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.screens__check-code {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
 .screens__attention {
   color: var(--color-warning-on-wash);
   font-weight: 600;

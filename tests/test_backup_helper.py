@@ -555,6 +555,11 @@ def test_backup_ships_only_runtime_files(backup_home: str) -> None:
         path.join(a, 'anthias.db-shm'): b'SHM',
         path.join(a, 'anthias.db-journal'): b'JOURNAL',
         path.join(a, 'ssl', 'key.pem'): b'PRIVKEY',
+        # A multi-screen controller's CA, and a managed screen's
+        # certificates: tied to this device, never in a backup.
+        path.join(a, 'ssl', 'controller', 'ca.key'): b'CAKEY',
+        path.join(a, 'ssl', 'controller', 'ca.crt'): b'CA',
+        path.join(a, 'ssl', 'node', 'managed-client.crt'): b'CERT',
         path.join(a, 'playback-stats.log'): b'log',
         path.join(a, 'id_ed25519'): b'PRIVKEY',
         path.join(a, 'anthias.conf.tmp'): b'sidecar',

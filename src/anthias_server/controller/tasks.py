@@ -110,6 +110,19 @@ def refresh_node(node_id: int) -> str:
     return service.check_node(node).status
 
 
+def _housekeeping() -> None:
+    """Expire unanswered join requests; keep the CRL current."""
+    from anthias_server.controller import ca, join
+
+    try:
+        expired = join.expire_requests()
+        if expired:
+            logger.info('Expired %s join request(s)', expired)
+        ca.refresh_crl()
+    except Exception:
+        logger.exception('Controller housekeeping failed')
+
+
 @celery.task(
     soft_time_limit=STATUS_SOFT_TIME_LIMIT_S,
     time_limit=STATUS_TIME_LIMIT_S,
@@ -129,6 +142,7 @@ def refresh_nodes() -> int:
         STATUS_LOCK_KEY, lock_value, nx=True, ex=STATUS_TIME_LIMIT_S
     ):
         return 0
+    _housekeeping()
     checked = 0
     try:
         now = timezone.now()

@@ -626,7 +626,7 @@ def test_ui_proxies_strip_the_listener_header() -> None:
     assert handler['upstreams'] == [{'dial': 'anthias-server:8080'}]
     assert handler['headers']['request']['delete'] == [
         'X-Anthias-Listener',
-        'X-Anthias-Client-Fingerprint',
+        'X-Anthias-Client-Cert',
     ]
 
 
