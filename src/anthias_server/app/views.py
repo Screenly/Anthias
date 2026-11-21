@@ -2095,6 +2095,12 @@ def settings_api_tokens_create(request: HttpRequest) -> HttpResponse:
 def settings_api_tokens_revoke(
     request: HttpRequest, token_id: int
 ) -> HttpResponse:
+    # A controller's token is revoked by leaving management, so the
+    # :8443 site closes along with it rather than staying open for a
+    # controller that can no longer authenticate.
+    if management.unpair_token(token_id):
+        logger.info('API token %d revoked; left management', token_id)
+        return _api_tokens_response(request)
     if not api_tokens.revoke_token(token_id):
         return _api_tokens_response(
             request, token_error='That token was already revoked.'

@@ -624,3 +624,31 @@ def test_device_name_prefers_player_name(auth_on: None, node_fp: str) -> None:
     assert management.device_name() == f'Anthias {node_fp[:8]}'
     settings['player_name'] = '  Lobby left  '
     assert management.device_name() == 'Lobby left'
+
+
+@pytest.mark.django_db
+def test_revoking_controller_token_in_settings_leaves_management(
+    operator: User,
+    auth_on: None,
+    controller_reply: dict[str, Any],
+    stub_node_and_caddy: MagicMock,
+) -> None:
+    from anthias_server.settings import settings
+
+    controller = management.join(_snippet())
+    stub_node_and_caddy.reset_mock()
+    client = Client()
+    client.force_login(operator)
+    response = client.post(
+        reverse(
+            'anthias_app:settings_api_tokens_revoke',
+            args=[controller.token.pk],
+        ),
+        HTTP_HX_REQUEST='true',
+    )
+    assert response.status_code == 200
+    assert not management.is_managed()
+    assert not ManagementController.objects.exists()
+    assert settings['management_enabled'] is False
+    assert management.caddy_extra_servers() == {}
+    stub_node_and_caddy.assert_called()
