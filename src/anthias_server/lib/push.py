@@ -73,6 +73,18 @@ class Target:
     fingerprint: str
     cert_path: str
     key_path: str
+    # SHA-256 of the client certificate file. A certificate renewed
+    # outside this connection (over REST by the controller) changes it,
+    # so the session reconnects with the new certificate instead of
+    # running on, possibly with a revoked one.
+    cert_digest: str = ''
+
+
+def cert_digest(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return ''
 
 
 def push_uri(controller_url: str) -> str:
@@ -103,6 +115,7 @@ def current_target() -> Target | None:
         # (renewed over this connection), with the node key.
         cert_path=str(management.client_cert_path()),
         key_path=str(identity.key_path),
+        cert_digest=cert_digest(management.client_cert_path()),
     )
 
 
@@ -263,15 +276,17 @@ async def run_session(
             except TimeoutError:
                 pass
             next_beat = monotonic() + HEARTBEAT_S
+            # Before any renewal: a certificate replaced over REST must
+            # not be renewed on a connection made with the old one.
+            still = await asyncio.to_thread(current_target)
+            if still != target:
+                await ws.close()
+                return
             if not renewal_sent:
                 renewal = await asyncio.to_thread(renewal_request, target)
                 if renewal is not None:
                     await ws.send(json.dumps(renewal))
                     renewal_sent = True
-            still = await asyncio.to_thread(current_target)
-            if still != target:
-                await ws.close()
-                return
             health = await asyncio.to_thread(collect_health)
             flags = warning_flags(health)
             if (

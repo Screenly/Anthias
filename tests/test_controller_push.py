@@ -889,6 +889,58 @@ def test_screen_asks_to_renew_a_certificate_close_to_expiry(
     assert stored == ['NEW']
 
 
+def test_screen_reconnects_when_its_certificate_is_replaced_over_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A certificate renewed over REST mid-session (the old one is now
+    revoked) makes the screen reconnect with it, without asking to renew
+    on a connection made with the old certificate."""
+    import dataclasses
+
+    from websockets.asyncio.server import serve
+
+    ctl_cert, ctl_key, ctl_fp = _make_cert(tmp_path, 'controller')
+    scr_cert, scr_key, _ = _make_cert(tmp_path, 'screen', days=10)
+    controller = _Controller(ctl_cert, ctl_key)
+    controller.trust(scr_cert)
+    monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    monkeypatch.setattr(screen_push, 'learn_pin', lambda der: None)
+    monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
+
+    async def body() -> None:
+        async with serve(
+            controller.handler, '127.0.0.1', 0, ssl=controller.context
+        ) as server:
+            port = server.sockets[0].getsockname()[1]
+            target = screen_push.Target(
+                1,
+                f'wss://127.0.0.1:{port}{screen_push.PATH}',
+                ctl_fp,
+                scr_cert,
+                scr_key,
+                screen_push.cert_digest(Path(scr_cert)),
+            )
+            replaced = dataclasses.replace(target, cert_digest='renewed')
+            monkeypatch.setattr(
+                screen_push, 'current_target', lambda: replaced
+            )
+            await asyncio.wait_for(screen_push.run_session(target), 5)
+            await asyncio.sleep(0.1)
+
+    asyncio.run(body())
+
+    assert [m['type'] for m in controller.messages] == ['hello']
+
+
+def test_cert_digest_follows_the_file(tmp_path: Path) -> None:
+    path = tmp_path / 'client.crt'
+    assert screen_push.cert_digest(path) == ''
+    path.write_text('one')
+    first = screen_push.cert_digest(path)
+    path.write_text('two')
+    assert screen_push.cert_digest(path) not in ('', first)
+
+
 def test_screen_stores_a_pushed_revocation_list(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
