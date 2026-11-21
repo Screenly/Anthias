@@ -7,7 +7,7 @@
   @keydown.escape.window="closePreview()"
   @click.self="closePreview()"
 >
-  <div class="modal-card modal-card--preview" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
+  <div class="modal-card modal-card--preview" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="preview-modal-title">
     <div class="modal-card__header">
       <h2 id="preview-modal-title" x-text="previewAsset && previewAsset.name ? previewAsset.name : 'Preview'">Preview</h2>
       <button type="button" class="modal-card__close" @click="closePreview()" aria-label="Close">
