@@ -35,7 +35,7 @@
 
     - question: Can I manage multiple screens?
       answer: |
-        Yes, on a small scale. One Anthias device can act as a **controller** for the other Anthias screens on your local network: you build the playlist once, publish it to every screen, and see which screens are online and healthy from one page. Every screen shows the same playlist, and everything stays on your network. See [multi-screen management](/docs/multi-screen/) for the recommended hardware and setup.
+        Yes, on a small scale. One Anthias device can act as a **controller** for the other Anthias screens on your local network: you build the playlist once, publish it to every screen, and see which screens are online and healthy from one page. Every screen shows the same playlist, and everything stays on your network. Every device, the controller and each screen, must have an accurate clock, either from NTP (network time) or a real-time clock (RTC); without it, multi-screen management does not work. See [multi-screen management](/docs/multi-screen/) for the recommended hardware and setup.
 
         If you need different content on different screens, screens in several locations, or remote management over the internet, [Screenly](https://www.screenly.io) is designed for that.
 
