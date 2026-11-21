@@ -10,6 +10,9 @@
   --color-brand-yellow-bullet: #ffe019;
   --color-brand-near-black: #08000b;
   --color-bg-light: #f8f6f9;
+  /* Tailwind's zinc-500 (#71717b) is 4.49:1 on bg-light, a hair under
+     WCAG AA. One step darker keeps the same grey and clears it. */
+  --color-zinc-500: #67676f;
   --font-sans: "Plus Jakarta Sans", Arial, Helvetica, sans-serif;
 }
 
@@ -26,6 +29,11 @@ html {
 :focus-visible {
   outline: 2px solid var(--color-brand-purple);
   outline-offset: 2px;
+}
+
+/* Brand purple is 2.3:1 on the dark plum hero, nav and footer. */
+.bg-brand-dark :focus-visible {
+  outline-color: var(--color-brand-yellow);
 }
 
 /* Hero screenshot slider — framed as a stylised browser window so
