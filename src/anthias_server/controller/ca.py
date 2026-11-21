@@ -103,7 +103,12 @@ def _fsync_dir(directory: Path) -> None:
 def _write(target: Path, data: bytes, mode: int) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(target.parent, 0o700)
-    tmp = target.with_name(f'.{target.name}.tmp')
+    # Unique per process and thread: the web server, Celery and the
+    # push consumer all re-sign the CRL, and a shared temporary name
+    # lets one writer rename the other's file away mid-write.
+    tmp = target.with_name(
+        f'.{target.name}.{os.getpid()}.{threading.get_ident()}.tmp'
+    )
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     try:
         os.write(fd, data)
@@ -455,8 +460,10 @@ def _revocation_digest(serials: Iterable[int]) -> str:
 
 def crl_pem() -> str:
     """The current signed CRL, re-signed when stale or changed."""
-    with _lock:
-        cert, key = ensure_ca()
+    # ensure_ca() first: it takes the file lock itself when it creates
+    # the CA, and flock does not nest across descriptors.
+    cert, key = ensure_ca()
+    with _lock, _file_lock():
         rows = _revoked_rows()
         digest = _revocation_digest(serial for serial, _ in rows)
         current = 0

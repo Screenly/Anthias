@@ -141,6 +141,34 @@ def test_processes_racing_to_create_it_get_the_same_ca() -> None:
     assert fingerprints == {ca.ca_fingerprint()}
 
 
+def _write_in_child(target: Path, data: bytes) -> None:
+    for _ in range(200):
+        ca._write(target, data, 0o644)
+
+
+def test_processes_writing_the_same_file_do_not_collide(
+    tmp_path: Path,
+) -> None:
+    """Web, Celery and the push consumer all re-sign the CRL; their
+    temporary files must not share a name, or one renames the other's
+    away (FileNotFoundError, seen on a controller)."""
+    context = multiprocessing.get_context('fork')
+    target = tmp_path / 'crl.pem'
+    workers = [
+        context.Process(
+            target=_write_in_child, args=(target, f'{n}'.encode() * 64)
+        )
+        for n in range(4)
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(60)
+        assert worker.exitcode == 0
+    assert len(set(target.read_bytes())) == 1
+    assert [p.name for p in tmp_path.iterdir()] == ['crl.pem']
+
+
 @pytest.mark.django_db
 def test_the_screens_page_shows_an_unusable_ca(controller_on: None) -> None:
     ca.ensure_ca()
