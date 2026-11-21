@@ -10,9 +10,11 @@ the TLS handshake, before the bearer token leaves this device.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 from mimetypes import guess_type
 from typing import Any, Self
+from urllib.parse import urlsplit
 
 import requests
 
@@ -66,6 +68,21 @@ def normalize_fingerprint(value: str) -> str:
         return pinned_http.normalize_fingerprint(value)
     except pinned_http.PinnedFingerprintError:
         return ''
+
+
+_ERRNO_RE = re.compile(r'\[Errno -?\d+\] ([^\'"\)\]]+)')
+
+
+def _offline_reason(url: str, exc: Exception) -> str:
+    """A one-line reason instead of urllib3's nested repr."""
+    where = urlsplit(url).netloc
+    if isinstance(exc, requests.exceptions.Timeout):
+        return f'{where} did not answer in time.'
+    if isinstance(exc, requests.exceptions.InvalidSchema):
+        return 'Plain HTTP is never used for screens.'
+    match = _ERRNO_RE.search(str(exc))
+    reason = match.group(1).strip() if match else 'connection failed'
+    return f'Cannot reach {where}: {reason}.'
 
 
 def _error_message(response: requests.Response) -> str:
@@ -143,7 +160,7 @@ class NodeClient:
             requests.exceptions.Timeout,
             requests.exceptions.InvalidSchema,
         ) as exc:
-            raise NodeOfflineError(str(exc) or 'Connection failed.') from exc
+            raise NodeOfflineError(_offline_reason(url, exc)) from exc
         if response.status_code in (401, 403) and self.token:
             raise NodeUnauthorizedError(
                 "The screen did not accept this controller's token."
