@@ -13,13 +13,14 @@
 <div
   x-show="bulkEditOpen"
   x-cloak
+  x-trap="bulkEditOpen"
   class="modal-overlay"
   @keydown.escape.window="closeBulkEdit()"
   @click.self="closeBulkEdit()"
 >
-  <div class="modal-card">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="bulk-edit-modal-title">
     <div class="modal-card__header">
-      <h2>Edit
+      <h2 id="bulk-edit-modal-title">Edit
         <span x-text="selectedIds.length"></span>
         <span x-text="selectedIds.length === 1 ? 'asset' : 'assets'"></span>
       </h2>
