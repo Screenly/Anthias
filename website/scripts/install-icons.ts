@@ -22,6 +22,7 @@ const ICONS: ReadonlyArray<{ name: string; pack: 'brands' | 'solid' }> = [
   { name: 'linkedin', pack: 'brands' },
   { name: 'youtube', pack: 'brands' },
   { name: 'heart', pack: 'solid' },
+  { name: 'universal-access', pack: 'solid' },
   // Page tools (layouts/partials/page-tools.html).
   { name: 'copy', pack: 'solid' },
   { name: 'markdown', pack: 'brands' },
