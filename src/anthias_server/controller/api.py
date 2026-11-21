@@ -65,6 +65,7 @@ class ControllerJoinView(APIView):
                     'request_id': {'type': 'string'},
                     'check_code': {'type': 'string'},
                     'controller_name': {'type': 'string'},
+                    'controller_certificate': {'type': 'string'},
                     'expires_at': {'type': 'string', 'format': 'date-time'},
                 },
             }
@@ -146,6 +147,9 @@ class ControllerJoinView(APIView):
                 'request_id': pending.request_id,
                 'check_code': pending.check_code,
                 'controller_name': service.controller_name(),
+                # Its key is the pin the screen keeps for this
+                # controller's client certificate.
+                'controller_certificate': join.controller_certificate(),
                 'expires_at': pending.expires_at.isoformat(),
             },
             status=status.HTTP_202_ACCEPTED,

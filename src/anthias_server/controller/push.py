@@ -121,9 +121,12 @@ def _screen_for(cert: x509.Certificate | None) -> Node | None:
     """The managed screen this client certificate currently belongs to.
 
     It must be a screen certificate from this controller's CA, valid
-    now, not revoked, and the one most recently issued to that screen
-    (or the one a renewal just replaced, until the screen has used the
-    new one).
+    now, not revoked, the one most recently issued to that screen (or
+    the one a renewal just replaced, until the screen has used the new
+    one), and for the key the screen proved it holds when it joined
+    (``Node.public_key_pem``). The last check is the key pin on top of
+    the CA: a certificate minted for another key, even with this CA's
+    key, is refused.
     """
     from . import ca
 
@@ -136,7 +139,7 @@ def _screen_for(cert: x509.Certificate | None) -> Node | None:
     if ca.is_revoked(pki.serial_hex(cert.serial_number)):
         return None
     fingerprint = pki.fingerprint(cert)
-    return (
+    node = (
         Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
         .filter(
             Q(client_fingerprint=fingerprint)
@@ -144,6 +147,20 @@ def _screen_for(cert: x509.Certificate | None) -> Node | None:
         )
         .first()
     )
+    if node is None:
+        return None
+    try:
+        pin = pki.spki_sha256(node.public_key_pem)
+    except pki.PkiError:
+        logger.warning('Screen %s has no usable key on record', node.pk)
+        return None
+    if not pki.spki_matches(cert, pin):
+        logger.warning(
+            'Refused a certificate for screen %s: not for its joined key',
+            node.pk,
+        )
+        return None
+    return node
 
 
 def retire_previous(node: Node) -> None:

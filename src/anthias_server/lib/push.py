@@ -181,13 +181,26 @@ def client_context(target: Target) -> ssl.SSLContext:
     return context
 
 
-def check_pin(ssl_object: Any, fingerprint: str) -> None:
+def check_pin(ssl_object: Any, fingerprint: str) -> bytes:
+    """The controller's certificate (DER), if it is the pinned one."""
     der = ssl_object.getpeercert(binary_form=True) if ssl_object else None
     if not der or hashlib.sha256(der).hexdigest() != fingerprint.lower():
         raise PinMismatchError(
             "The controller's certificate does not match the one this "
             'screen joined.'
         )
+    return bytes(der)
+
+
+def learn_pin(der: bytes) -> None:
+    """Record the controller's key pin if this screen has none yet."""
+    from anthias_server.lib import management
+
+    try:
+        management.learn_controller_pin(der)
+    except Exception:
+        # Best effort: the next connection tries again.
+        logger.exception("Could not record the controller's key pin")
 
 
 async def run_session(target: Target) -> None:
@@ -204,9 +217,12 @@ async def run_session(target: Target) -> None:
         max_size=MAX_MESSAGE_BYTES,
         user_agent_header='Anthias screen push',
     ) as ws:
-        check_pin(
+        der = check_pin(
             ws.transport.get_extra_info('ssl_object'), target.fingerprint
         )
+        # Screens approved before key pins existed learn the
+        # controller's key here, from the pinned handshake.
+        await asyncio.to_thread(learn_pin, der)
         health = await asyncio.to_thread(collect_health)
         await ws.send(json.dumps({'type': 'hello', 'health': health}))
         sent_flags, sent_at = warning_flags(health), monotonic()

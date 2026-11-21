@@ -28,6 +28,7 @@ from __future__ import annotations
 import base64
 import datetime as dt
 import hashlib
+import hmac
 import secrets
 from collections.abc import Iterable
 
@@ -174,6 +175,35 @@ def same_public_key(a: object, b: object) -> bool:
         return public_key_bytes(a) == public_key_bytes(b)
     except PkiError:
         return False
+
+
+def spki_sha256(value: object) -> str:
+    """The key pin: lowercase hex SHA-256 of the SubjectPublicKeyInfo DER.
+
+    ``value`` is a certificate, a public or private key, or a PEM
+    public key. Pinning the key rather than the certificate keeps a
+    renewal (same key, new certificate) working, and still refuses a
+    certificate minted for another key, even by the right CA.
+    """
+    if isinstance(value, x509.Certificate):
+        value = value.public_key()
+    elif isinstance(value, str):
+        value = load_public_key(value)
+    return hashlib.sha256(public_key_bytes(value)).hexdigest()
+
+
+def spki_matches(value: object, pin: str) -> bool:
+    """Whether ``value``'s key has the pin ``pin`` (constant time).
+
+    An empty pin never matches: no pin recorded means no trust yet.
+    """
+    if not pin:
+        return False
+    try:
+        actual = spki_sha256(value)
+    except PkiError:
+        return False
+    return hmac.compare_digest(actual, pin.strip().lower())
 
 
 # --- subjects ---------------------------------------------------------------

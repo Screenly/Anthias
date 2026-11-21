@@ -245,6 +245,19 @@ Management traffic never uses passwords and never leaves your network:
   certificate. The controller in turn knows screens by the certificate
   it issued them, for example on the status connection. Both sides
   still pin each other's identity certificate as before.
+* **Certificate authority and key pinning, together.** Every
+  management connection has to pass two separate checks. The
+  certificate must come from the controller's certificate authority
+  and not be revoked. It must also be for the device key that was
+  recorded when the screen joined. The screen records the controller's
+  key from the certificate it already pinned in the join information,
+  and the controller records the screen's key from the certificate it
+  reached the screen on. A certificate made for any other key is
+  refused, even one signed by the controller's own authority, for
+  example with a stolen authority key. Renewed certificates are for the
+  same keys, so renewals keep working without anything to re-pin.
+  The controller also only signs a screen's request for the key it
+  recorded when that screen asked to join.
 * **Certificates renew themselves.** Client certificates are valid for
   a year. A screen asks for a new one over its status connection when
   less than 30 days are left (once per connection), and the controller
@@ -363,6 +376,16 @@ again.
 **"Could not deliver the approval."** The controller couldn't reach the
 screen on port 8443 when you approved. The request stays listed;
 check the network and approve again.
+
+**"The request does not record its key."** The request was made
+before an update. Reject it and join the screen again.
+
+**Right after an update, a managed screen refuses the controller for a
+moment.** Screens that were approved before an update record the
+controller's key the next time they connect to it, which is normally
+within a minute. Until then the screen refuses the controller's calls
+on port 8443 rather than trust a certificate it can't check. If it
+lasts, check that the screen can reach the controller on port 8443.
 
 **"Could not reach the controller."** Check that the screen can reach
 the controller's address on port 8443, and that controller mode is on.

@@ -194,6 +194,12 @@ def test_join_stores_the_screen_after_calling_it_back(
     assert 'anthias_screen_token' not in pending.token_ciphertext
     assert vault.decrypt(pending.token_ciphertext) == 'anthias_screen_token'
     assert pending.csr_pem == _SCREEN_CSR.strip()
+    # The key approval will bind the CSR to: from the pinned certificate.
+    assert pki.same_public_key(
+        pki.load_public_key(pending.public_key_pem), _SCREEN_KEY
+    )
+    # And the controller's certificate, whose key the screen pins.
+    assert body['controller_certificate'] == join.controller_certificate()
     assert screen_ok[0].screen_fp == SCREEN_FP
     assert AuditEntry.objects.get(action='join request').outcome == 'ok'
 
@@ -741,6 +747,10 @@ def test_approving_issues_a_certificate_for_the_screen_key(
     )
     pki.check_crl(pki.load_crl(call['json']['crl']), authority)
     assert call['json']['controller_name'] == 'Head office'
+    # The screen pins this certificate's key for our client certificate.
+    assert call['json']['controller_certificate'] == (
+        join.controller_certificate()
+    )
     assert node.client_serial == pki.serial_hex(issued.serial_number)
     assert node.client_fingerprint == pki.fingerprint(issued)
     assert pki.same_public_key(
@@ -1601,3 +1611,42 @@ def test_vault_creates_a_key_atomically(tmp_path: Path) -> None:
     Fernet(key)
     assert path.stat().st_mode & 0o777 == 0o600
     assert [p.name for p in tmp_path.iterdir()] == ['new.key']
+
+
+@pytest.mark.django_db
+def test_approval_refuses_a_csr_for_another_key_than_the_joined_one(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    """The CSR is bound to the key recorded at join, not to itself."""
+    pending = _pending()
+    other = pki.new_key()
+    pending.csr_pem = pki.make_csr(other, SCREEN_FP, pki.ROLE_SCREEN)
+    pending.save()
+
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+
+    assert caught.value.status == 400
+    assert screen_calls == []
+    assert not Node.objects.exists()
+    assert JoinRequest.objects.filter(pk=pending.pk).exists()
+
+
+@pytest.mark.django_db
+def test_approval_refuses_a_request_without_a_recorded_key(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    JoinRequest.objects.filter(pk=pending.pk).update(public_key_pem='')
+    pending.refresh_from_db()
+
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+
+    assert caught.value.status == 409
+    assert screen_calls == []
+    assert not Node.objects.exists()

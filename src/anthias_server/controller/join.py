@@ -114,6 +114,18 @@ def controller_fingerprint() -> str:
     return management.node_fingerprint()
 
 
+def controller_certificate() -> str:
+    """This device's node certificate (PEM), the one 8443 serves.
+
+    Screens record its key as the pin for this controller's client
+    certificate (``ManagementController.controller_spki``); it is the
+    same key, so a renewed client certificate keeps matching.
+    """
+    from anthias_server.lib import node_identity
+
+    return node_identity.ensure_node_identity().cert_path.read_text()
+
+
 def current_secret() -> str:
     """The join secret, created on first use or after a foreign restore."""
     with transaction.atomic():
@@ -487,6 +499,12 @@ def request_join(request: JoinRequest) -> tuple[PendingJoin, bool]:
         pending.port = request.screen_port
         pending.token_ciphertext = vault.encrypt(request.token)
         pending.csr_pem = request.csr
+        # The key the CSR must be for at approval: from the certificate
+        # that hashes to the fingerprint (checked when the request was
+        # parsed) and that the callback above reached the screen on.
+        pending.public_key_pem = pki.public_key_pem(
+            pki.load_cert(request.screen_cert).public_key()
+        )
         pending.check_code = code
         pending.approving_until = None
         pending.version = str(info.get('anthias_version') or '')[:100]
@@ -576,10 +594,25 @@ def approve(pending: PendingJoin) -> Node:
 def _approve(pending: PendingJoin) -> Node:
     from anthias_server.controller import ca, service
 
-    csr = pki.load_csr(pending.csr_pem)
     try:
+        controller_cert = controller_certificate()
+    except OSError as exc:
+        raise JoinError(
+            503, f"Could not read this controller's certificate: {exc}"
+        ) from exc
+    if not pending.public_key_pem:
+        # A request stored before keys were recorded at join time.
+        raise JoinError(
+            409,
+            f'The request from {pending.name} does not record its key. '
+            'Reject it and ask the screen to join again.',
+        )
+    try:
+        # Bound to the key recorded when the request arrived, not the
+        # CSR's own key: a CSR for any other key is refused.
+        bound_key = pki.load_public_key(pending.public_key_pem)
         issued = ca.sign_screen_csr(
-            pending.csr_pem, csr.public_key(), pending.fingerprint
+            pending.csr_pem, bound_key, pending.fingerprint
         )
         ca_certificate = ca.ca_pem()
         crl = ca.crl_pem()
@@ -598,6 +631,7 @@ def _approve(pending: PendingJoin) -> Node:
                     'ca_certificate': ca_certificate,
                     'crl': crl,
                     'controller_name': service.controller_name(),
+                    'controller_certificate': controller_cert,
                 },
                 timeout=(CONNECT_TIMEOUT_S, CALLBACK_READ_TIMEOUT_S),
                 expected=(200, 204),
@@ -635,7 +669,7 @@ def _approve(pending: PendingJoin) -> Node:
         node.token_ciphertext = pending.token_ciphertext
         node.version = pending.version
         node.device_model = pending.device_model
-        node.public_key_pem = pki.public_key_pem(csr.public_key())
+        node.public_key_pem = pki.public_key_pem(bound_key)
         node.client_serial = serial
         node.client_fingerprint = pki.fingerprint(issued)
         node.client_not_after = issued.not_valid_after_utc

@@ -756,6 +756,8 @@ def test_screen_pushes_hello_then_heartbeat_with_its_client_certificate(
     controller = _Controller(ctl_cert, ctl_key)
     controller.trust(scr_cert)
     monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    learned: list[bytes] = []
+    monkeypatch.setattr(screen_push, 'learn_pin', learned.append)
     monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
     checks = iter([None])
 
@@ -785,6 +787,9 @@ def test_screen_pushes_hello_then_heartbeat_with_its_client_certificate(
     asyncio.run(body())
 
     assert controller.client_fingerprints == [scr_fp]
+    # The screen hands the pinned controller certificate on, so a screen
+    # approved before key pins existed can learn the controller's key.
+    assert [hashlib.sha256(der).hexdigest() for der in learned] == [ctl_fp]
     assert [m['type'] for m in controller.messages] == ['hello', 'heartbeat']
     assert controller.messages[0]['health']['free_space'] == INFO['free_space']
 
@@ -799,6 +804,8 @@ def test_screen_pushes_health_when_a_warning_appears(
     controller = _Controller(ctl_cert, ctl_key)
     controller.trust(scr_cert)
     monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    learned: list[bytes] = []
+    monkeypatch.setattr(screen_push, 'learn_pin', learned.append)
     readings = iter([INFO, {**INFO, 'free_space': '100.0\xa0MB'}])
     monkeypatch.setattr(
         screen_push, 'collect_health', lambda: dict(next(readings))
@@ -843,6 +850,8 @@ def test_screen_asks_to_renew_a_certificate_close_to_expiry(
     controller.renewed = 'NEW'
     stored: list[str] = []
     monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    learned: list[bytes] = []
+    monkeypatch.setattr(screen_push, 'learn_pin', learned.append)
     monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
 
     def store(pem: str) -> bool:
@@ -945,3 +954,55 @@ def test_push_thread_is_not_started_without_caddy(
 ) -> None:
     monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path / 'missing')
     assert screen_push.start_background_push() is None
+
+
+@pytest.mark.django_db
+def test_push_refuses_a_ca_valid_certificate_for_another_key(
+    controller_on: None,
+) -> None:
+    """The key pin on top of the CA: a certificate from our own CA that
+    the records point at, but for a key the screen never joined with
+    (as a stolen CA key would mint), is refused."""
+    from anthias_server.controller import ca
+
+    node = _node()
+    issuer, issuer_key = ca.ensure_ca()
+    forged = pki.issue_client_cert(
+        issuer,
+        issuer_key,
+        pki.new_key().public_key(),
+        node.fingerprint,
+        pki.ROLE_SCREEN,
+    )
+    Node.objects.filter(pk=node.pk).update(
+        client_serial=pki.serial_hex(forged.serial_number),
+        client_fingerprint=pki.fingerprint(forged),
+    )
+
+    assert controller_push._screen_for(forged) is None
+
+    async def body() -> None:
+        verdict = await _connect(_communicator(_headers(cert=forged)))
+        assert verdict == {
+            'type': 'websocket.close',
+            'code': controller_push.CLOSE_UNKNOWN_SCREEN,
+        }
+
+    _run(body)
+    assert Node.objects.get().push_connection == ''
+
+
+@pytest.mark.django_db
+def test_push_accepts_a_renewed_certificate_for_the_joined_key(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller import ca
+
+    node = _node()
+    renewed = ca.issue_for_screen(node.public_key_pem, node.fingerprint)
+    controller_push.replace_certificate(node, renewed)
+
+    assert pki.fingerprint(renewed) != pki.fingerprint(_LAST['cert'])
+    found = controller_push._screen_for(renewed)
+    assert found is not None
+    assert found.pk == node.pk

@@ -220,7 +220,7 @@ def renew_certificate(node: Node, actor: str = '') -> str:
     the delivery fails nothing changes here; the new certificate is
     referenced nowhere and so is accepted nowhere.
     """
-    from anthias_server.controller import ca
+    from anthias_server.controller import ca, join
     from anthias_server.controller.push import (
         replace_certificate,
         retire_previous,
@@ -236,8 +236,9 @@ def renew_certificate(node: Node, actor: str = '') -> str:
             'ca_certificate': ca.ca_pem(),
             'crl': ca.crl_pem(),
             'controller_name': controller_name(),
+            'controller_certificate': join.controller_certificate(),
         }
-    except (pki.PkiError, ca.CaError) as exc:
+    except (pki.PkiError, ca.CaError, OSError) as exc:
         audit('renew', 'failed', node=node, detail=str(exc), actor=actor)
         return f'not renewed: {exc}'
     try:

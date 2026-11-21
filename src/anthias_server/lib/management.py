@@ -460,6 +460,9 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
         logger.warning(
             'Join %s: the controller shows a different check code', info.url
         )
+    pin = controller_pin(
+        confirmed.get('controller_certificate'), info.fingerprint
+    )
     try:
         controller = ManagementController.objects.create(
             name=(name or info.name)[:MAX_CONTROLLER_NAME_LEN],
@@ -469,6 +472,7 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             approved=False,
             request_id=str(confirmed.get('request_id') or '')[:64],
             check_code=code,
+            controller_spki=pin,
         )
     finally:
         _join_in_progress.clear()
@@ -541,6 +545,63 @@ def _node_public_key() -> Any:
     return pki.load_key(identity.key_path.read_bytes()).public_key()
 
 
+def controller_pin(certificate: Any, fingerprint: str) -> str:
+    """The key pin of the controller certificate ``certificate``.
+
+    ``certificate`` is PEM text or DER bytes of the controller's node
+    certificate. It only counts if it hashes to ``fingerprint``, the
+    one this screen pinned from the join information, so whoever
+    delivers it cannot choose the key. Returns '' otherwise.
+    """
+    from cryptography import x509
+
+    from anthias_server.lib import pki
+
+    try:
+        if isinstance(certificate, bytes):
+            cert = x509.load_der_x509_certificate(certificate)
+        elif isinstance(certificate, str) and certificate:
+            cert = pki.load_cert(certificate)
+        else:
+            return ''
+        if pki.fingerprint(cert) != fingerprint.lower():
+            logger.warning(
+                "Ignoring a controller certificate that isn't the pinned one"
+            )
+            return ''
+        return pki.spki_sha256(cert)
+    except ValueError:  # PkiError is a ValueError
+        return ''
+
+
+def learn_controller_pin(certificate: Any) -> bool:
+    """Record the controller's key pin if it is still missing.
+
+    For a screen approved before key pins were recorded: its push
+    connection hands over the certificate the controller presented in
+    a handshake already pinned to the joined fingerprint. Until then,
+    m2m calls from the controller are refused. True if a pin was stored.
+    """
+    from anthias_server.app.models import ManagementController
+
+    controller = current_controller() or pending_controller()
+    if controller is None or controller.controller_spki:
+        return False
+    pin = controller_pin(certificate, controller.fingerprint)
+    if not pin:
+        return False
+    updated = ManagementController.objects.filter(
+        pk=controller.pk, controller_spki=''
+    ).update(controller_spki=pin)
+    if updated:
+        logger.warning(
+            'Pinned the key of controller %r from its pinned certificate; '
+            'its m2m calls are accepted again',
+            controller.name,
+        )
+    return bool(updated)
+
+
 def controller_ca() -> Any:
     from anthias_server.lib import pki
 
@@ -556,6 +617,7 @@ def install_approval(
     ca_certificate: str,
     crl: str,
     controller_name: str = '',
+    controller_certificate: str = '',
 ) -> ManagementController:
     """Accept the controller's approval: this screen's certificate.
 
@@ -587,6 +649,16 @@ def install_approval(
         raise ManagementError(f'The approval was not valid: {exc}') from exc
     if cert.serial_number in pki.revoked_serials(revocations):
         raise ManagementError('The certificate delivered is already revoked.')
+    pin = controller_pin(controller_certificate, controller.fingerprint)
+    if pin and not controller.controller_spki:
+        controller.controller_spki = pin
+        controller.save(update_fields=['controller_spki'])
+    if not controller.controller_spki:
+        raise ManagementError(
+            "The approval did not include the controller's pinned "
+            'certificate. Update the controller to the same Anthias '
+            'version as this screen.'
+        )
     if controller.approved:
         installed = controller_ca()
         if installed is None or pki.fingerprint(installed) != (
@@ -667,7 +739,8 @@ def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
 
     Only enforced once this screen is managed: the caller must present
     a controller certificate from its controller's CA (Caddy already
-    checked the chain) that is valid and not on the CRL. Before that
+    checked the chain) that is valid, not on the CRL, and for the
+    controller key pinned at join (``controller_spki``). Before that
     (joining, waiting for approval) the bearer token is the gate, as
     for any API client. A controller's own :8443 site is not checked
     here; the join endpoint and the push consumer check their callers.
@@ -696,6 +769,18 @@ def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
         return False, 'This screen has no revocation list from its controller.'
     if cert.serial_number in pki.revoked_serials(revocations):
         return False, 'That controller certificate has been revoked.'
+    # Defence in depth on top of the CA: the certificate must also be
+    # for the controller's own key, pinned at join. A certificate made
+    # with a stolen CA key, but for another key pair, is refused.
+    controller = current_controller()
+    pin = controller.controller_spki if controller is not None else ''
+    if not pin:
+        return False, (
+            "This screen has not pinned its controller's key yet. It does "
+            'so the next time it connects to the controller.'
+        )
+    if not pki.spki_matches(cert, pin):
+        return False, "That certificate is not for this screen's controller."
     return True, ''
 
 

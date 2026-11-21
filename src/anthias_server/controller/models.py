@@ -228,6 +228,10 @@ class JoinRequest(models.Model):
     fingerprint = models.CharField(max_length=64, unique=True)
     token_ciphertext = models.TextField()
     csr_pem = models.TextField()
+    # The screen's node public key (PEM SubjectPublicKeyInfo), taken
+    # from the certificate that hashes to ``fingerprint`` when the
+    # request arrived. Approval only signs a CSR for this key.
+    public_key_pem = models.TextField(blank=True, default='')
     version = models.CharField(max_length=100, blank=True, default='')
     device_model = models.CharField(max_length=200, blank=True, default='')
     # Derived from the join secret and both fingerprints when the

@@ -26,15 +26,27 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
+from cryptography.hazmat.primitives import serialization
 from django.contrib.auth.models import User
 from django.test import Client
 from django.urls import reverse
 
 from anthias_server.app.models import ApiToken, ManagementController
-from anthias_server.lib import api_tokens, management
+from anthias_server.lib import api_tokens, management, node_identity, pki
 
 _PWD = 'fixture-management-operator-pwd'  # NOSONAR
-CONTROLLER_FP = 'cd' * 32
+
+
+def _controller_identity() -> tuple[str, Any]:
+    cert_pem, key_pem = node_identity.generate()
+    return cert_pem.decode(), pki.load_key(key_pem)
+
+
+# The controller's node certificate (what its 8443 serves and the join
+# information pins) and key, which its client certificates are for.
+CONTROLLER_CERT, CONTROLLER_KEY = _controller_identity()
+CONTROLLER_FP = pki.fingerprint(pki.load_cert(CONTROLLER_CERT))
+_DER = serialization.Encoding.DER
 
 
 @pytest.fixture
@@ -127,6 +139,7 @@ def controller_reply(
                 'request_id': 'rq-1',
                 'check_code': 'ABCD-1234',
                 'controller_name': 'Lobby',
+                'controller_certificate': CONTROLLER_CERT,
             },
         ),
         'calls': [],
@@ -145,7 +158,9 @@ def controller_reply(
     return state
 
 
-def _approve(controller: ManagementController) -> tuple[Any, Any]:
+def _approve(
+    controller: ManagementController, controller_certificate: str = ''
+) -> tuple[Any, Any]:
     """What the controller does when the operator approves: a real
     certificate from a (test) CA, for this screen's node key."""
     from anthias_server.lib import node_identity, pki
@@ -168,6 +183,7 @@ def _approve(controller: ManagementController) -> tuple[Any, Any]:
         pki.cert_pem(ca_cert),
         pki.crl_pem(crl),
         'Lobby',
+        controller_certificate,
     )
     return ca_cert, ca_key
 
@@ -192,7 +208,9 @@ def test_parse_join_info_roundtrip() -> None:
 
 
 def test_parse_join_info_accepts_colon_fingerprint_and_padding() -> None:
-    colon_fp = ':'.join(['CD'] * 32)
+    colon_fp = ':'.join(
+        CONTROLLER_FP[i : i + 2].upper() for i in range(0, 64, 2)
+    )
     data = json.dumps(
         {
             'v': 1,
@@ -880,12 +898,18 @@ def test_leaving_rewrites_flag_changed_by_another_process(
 
 
 def _controller_cert(
-    ca_cert: Any, ca_key: Any, role: str = 'anthias-controller'
+    ca_cert: Any,
+    ca_key: Any,
+    role: str = 'anthias-controller',
+    key: Any = None,
 ) -> Any:
+    """A client certificate from ``ca``, for the controller's key
+    unless ``key`` says otherwise."""
     from anthias_server.lib import pki
 
+    subject = CONTROLLER_KEY if key is None else key
     return pki.issue_client_cert(
-        ca_cert, ca_key, pki.new_key().public_key(), 'controller', role
+        ca_cert, ca_key, subject.public_key(), CONTROLLER_FP, role
     )
 
 
@@ -1124,6 +1148,12 @@ def test_a_managed_screen_accepts_m2m_calls_only_from_its_controller(
         return int(Client().get(url, headers={**auth, **headers}).status_code)
 
     assert status(_der_header(good)) == 200
+    # A renewed controller certificate (same key, new serial) works.
+    assert status(_der_header(_controller_cert(ca_cert, ca_key))) == 200
+    # The right CA and role, valid and not revoked, but for another key
+    # than the controller's pinned one: refused.
+    forged = _controller_cert(ca_cert, ca_key, key=pki.new_key())
+    assert status(_der_header(forged)) == 403
     # Off the management port the controller's token is refused outright.
     assert status({}) == 403
     assert status({'X-Anthias-Listener': 'm2m'}) == 403
@@ -1376,3 +1406,74 @@ def test_leaving_from_the_managed_page_asks_first(
     ).content.decode()
     form = html.split('id="btn-managed-leave"')[0].rsplit('<form', 1)[1]
     assert 'confirm(' in form
+
+
+@pytest.mark.django_db
+def test_join_pins_the_controller_key_from_its_pinned_certificate(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    controller = management.join(_snippet())
+    assert controller.controller_spki == pki.spki_sha256(CONTROLLER_KEY)
+
+
+@pytest.mark.django_db
+def test_a_controller_certificate_other_than_the_pinned_one_is_ignored(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    other_cert, _ = _controller_identity()
+    controller_reply['outcome'] = _FakeResponse(
+        202, {'request_id': 'rq-1', 'controller_certificate': other_cert}
+    )
+    controller = management.join(_snippet())
+    assert controller.controller_spki == ''
+
+    # Approval then needs the pinned certificate to come with it.
+    with pytest.raises(management.ManagementError):
+        _approve(controller)
+    controller.refresh_from_db()
+    assert not controller.approved
+    _approve(controller, controller_certificate=CONTROLLER_CERT)
+    controller.refresh_from_db()
+    assert controller.approved
+    assert controller.controller_spki == pki.spki_sha256(CONTROLLER_KEY)
+
+
+@pytest.mark.django_db
+def test_a_screen_without_a_pin_refuses_m2m_until_it_learns_it(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    """A screen approved before key pins: fail closed, then learn the
+    pin from a certificate that hashes to the joined fingerprint."""
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
+    ManagementController.objects.filter(pk=controller.pk).update(
+        controller_spki=''
+    )
+    plaintext = controller_reply['calls'][0]['json']['token']
+    good = _controller_cert(ca_cert, ca_key)
+
+    def status() -> int:
+        return int(
+            Client()
+            .get(
+                reverse('api:pairing_v2'),
+                headers={
+                    'Authorization': f'Bearer {plaintext}',
+                    **_der_header(good),
+                },
+            )
+            .status_code
+        )
+
+    assert status() == 403
+    # Not from a certificate other than the pinned one.
+    other_cert, _ = _controller_identity()
+    assert not management.learn_controller_pin(
+        pki.load_cert(other_cert).public_bytes(_DER)
+    )
+    assert status() == 403
+    der = pki.load_cert(CONTROLLER_CERT).public_bytes(_DER)
+    assert management.learn_controller_pin(der)
+    assert status() == 200
+    # Learned once; a pin already there is never replaced.
+    assert not management.learn_controller_pin(der)
