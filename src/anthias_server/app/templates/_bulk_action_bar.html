@@ -82,7 +82,7 @@
   @keydown.escape.window="closeBulkDelete()"
   @click.self="closeBulkDelete()"
 >
-  <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-modal-title">
+  <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="bulk-delete-modal-title">
     <div class="modal-card__header">
       <h2 id="bulk-delete-modal-title">Delete selected assets?</h2>
       <button type="button" class="modal-card__close" @click="closeBulkDelete()" aria-label="Close">
