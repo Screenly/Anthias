@@ -1199,6 +1199,62 @@ function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
   })
 }
 
+// The keyboard path to the same reorder: ArrowUp / ArrowDown on a
+// focused .drag-handle moves its row one place. Dragging is pointer
+// only, so without this a keyboard or switch user had no way to change
+// the play order at all (WCAG 2.1.1).
+//
+// The POST is debounced so holding an arrow key sends one request, not
+// one per step, and the refresh that follows does not land halfway
+// through a run of presses. The refresh replaces the whole table, so
+// focus is handed back to the moved row's new handle once it lands.
+let reorderFocusId: string | null = null
+const REORDER_POST_DELAY_MS = 500
+
+function announceReorder(row: HTMLTableRowElement, tbody: HTMLElement): void {
+  const status = document.getElementById('reorder-status')
+  if (!status) return
+  const position = Array.from(tbody.children).indexOf(row) + 1
+  const name = row.dataset.name || 'Asset'
+  status.textContent = `${name} moved to position ${position} of ${tbody.children.length}.`
+}
+
+function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
+  if (tbody.dataset.keysBound === '1') return
+  tbody.dataset.keysBound = '1'
+
+  let timer: number | undefined
+
+  tbody.addEventListener('keydown', (ev: KeyboardEvent) => {
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return
+    const handle = (ev.target as HTMLElement).closest('.drag-handle')
+    if (!handle) return
+    const row = handle.closest('tr') as HTMLTableRowElement | null
+    if (!row || row.parentElement !== tbody) return
+    ev.preventDefault()
+
+    const sibling =
+      ev.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling
+    if (!sibling) return
+    tbody.insertBefore(row, ev.key === 'ArrowUp' ? sibling : sibling.nextSibling)
+    ;(handle as HTMLElement).focus()
+    announceReorder(row, tbody)
+
+    reorderFocusId = row.dataset.assetId ?? null
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => postOrder(orderUrl, tbody), REORDER_POST_DELAY_MS)
+  })
+}
+
+function restoreReorderFocus(): void {
+  if (!reorderFocusId) return
+  const handle = document.querySelector<HTMLElement>(
+    `tr[data-asset-id="${CSS.escape(reorderFocusId)}"] .drag-handle`,
+  )
+  reorderFocusId = null
+  handle?.focus()
+}
+
 function setupActiveRowsDrag(): void {
   const wrapper = document.getElementById('asset-table')
   if (!wrapper) return
@@ -1207,6 +1263,7 @@ function setupActiveRowsDrag(): void {
   const tbody = document.getElementById('active-rows')
   if (!tbody) return
   bindActiveRowsDrag(tbody, orderUrl)
+  bindActiveRowsKeyboard(tbody, orderUrl)
 }
 
 // Plain-HTTP clipboard fallback. navigator.clipboard.writeText only
@@ -1275,6 +1332,7 @@ function bootHomePage(): void {
     if (!target) return
     if (target instanceof Element && target.querySelector('#active-rows')) {
       setupActiveRowsDrag()
+      restoreReorderFocus()
     }
   })
 }

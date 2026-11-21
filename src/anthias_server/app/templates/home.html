@@ -50,6 +50,12 @@
 
   {% include "_asset_table.html" %}
 
+  {% comment %} Outside #asset-table on purpose: every reorder swaps the
+     table, and a live region that is replaced along with it never
+     announces. Read by the keyboard reorder in home.ts. {% endcomment %}
+  <p id="reorder-help" class="sr-only">Press the up or down arrow key to move this asset in the playlist.</p>
+  <p id="reorder-status" class="sr-only" role="status"></p>
+
   {% comment %} _asset_modal stays the first .modal-card in the DOM —
      the add-asset layering integration test grabs .modal-card.first.
      The bulk modals/bar (which also carry a .modal-card) are included
@@ -67,13 +73,14 @@
   <div
     x-show="pendingDeleteId"
     x-cloak
+    x-trap="pendingDeleteId"
     class="modal-overlay modal-overlay--nested"
     @keydown.escape.window="closeDelete()"
     @click.self="closeDelete()"
   >
-    <div class="modal-card modal-card--sm">
+    <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
       <div class="modal-card__header">
-        <h2>Delete asset?</h2>
+        <h2 id="delete-modal-title">Delete asset?</h2>
         <button type="button" class="modal-card__close" @click="closeDelete()" aria-label="Close">
           <i class="ti ti-x"></i>
         </button>

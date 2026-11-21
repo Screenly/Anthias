@@ -11,7 +11,7 @@
   </td>
   <td data-label="Name" data-no-label>
     <div class="asset-cell-name">
-      {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
+      {% if is_active %}<button type="button" class="drag-handle" aria-label="Reorder {{ asset.name|default:'asset' }}" aria-describedby="reorder-help" title="Drag, or use the arrow keys, to reorder"><i class="ti ti-grip-vertical" aria-hidden="true"></i></button>{% endif %}
       <span class="asset-cell-name__icon">
         {% if asset.mimetype == 'image' %}<i class="ti ti-photo"></i>
         {% elif asset.mimetype == 'video' %}<i class="ti ti-video"></i>
@@ -73,7 +73,7 @@
           type="checkbox"
           class="app-check-input"
           {% if asset.is_enabled %}checked{% endif %}
-          aria-label="Toggle active"
+          aria-label="Enable {{ asset.name|default:'asset' }}"
           onchange="this.form.requestSubmit()"
         >
       </div>
@@ -86,23 +86,27 @@
         type="button"
         class="app-btn app-btn-icon"
         title="Preview"
+        aria-label="Preview {{ asset.name|default:'asset' }}"
         @click='openPreview({{ asset|to_json }})'
       ><i class="ti ti-eye"></i></button>
       <a
         href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
         class="app-btn app-btn-icon"
         title="Download"
+        aria-label="Download {{ asset.name|default:'asset' }}"
       ><i class="ti ti-download"></i></a>
       <button
         type="button"
         class="app-btn app-btn-icon"
         title="Edit"
+        aria-label="Edit {{ asset.name|default:'asset' }}"
         @click='openEdit({{ asset|to_json }})'
       ><i class="ti ti-pencil"></i></button>
       <button
         type="button"
         class="app-btn app-btn-icon"
         title="Delete"
+        aria-label="Delete {{ asset.name|default:'asset' }}"
         @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
       ><i class="ti ti-trash"></i></button>
     </div>

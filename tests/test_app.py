@@ -688,7 +688,7 @@ def test_add_modal_reopens_on_the_url_tab(
     page.locator('#add-asset-button').click()
     _wait_alpine(page, 'state.mode', 'add')
 
-    page.get_by_role('button', name='Upload file').click()
+    page.get_by_role('tab', name='Upload file').click()
     _wait_alpine(page, 'state.tab', 'file')
     # Escape over the Cancel button: every pane renders its own footer,
     # so several "Cancel" buttons live in this DOM at once.
@@ -708,7 +708,7 @@ def test_add_asset_via_image_upload(reset_assets: None, page: Page) -> None:
     _wait_alpine(page, 'state.mode', 'add')
 
     # Switch to the Upload File tab inside the add-asset modal.
-    page.get_by_role('button', name='Upload file').click()
+    page.get_by_role('tab', name='Upload file').click()
     page.locator('input[name="file_upload"]').set_input_files(image_file)
 
     _wait_db(
@@ -731,7 +731,7 @@ def test_add_asset_via_video_upload(reset_assets: None, page: Page) -> None:
         page.goto(BASE_URL)
         page.locator('#add-asset-button').click()
         _wait_alpine(page, 'state.mode', 'add')
-        page.get_by_role('button', name='Upload file').click()
+        page.get_by_role('tab', name='Upload file').click()
         page.locator('input[name="file_upload"]').set_input_files(video)
 
         _wait_db(
@@ -783,7 +783,7 @@ def test_add_two_uploads_in_one_modal_session(
         page.goto(BASE_URL)
         page.locator('#add-asset-button').click()
         _wait_alpine(page, 'state.mode', 'add')
-        page.get_by_role('button', name='Upload file').click()
+        page.get_by_role('tab', name='Upload file').click()
         page.locator('input[name="file_upload"]').set_input_files(image)
         expect(
             page.locator('.asset-cell-name__primary', has_text='Standby')
@@ -817,7 +817,7 @@ def test_add_multiple_uploads_at_once(reset_assets: None, page: Page) -> None:
         page.goto(BASE_URL)
         page.locator('#add-asset-button').click()
         _wait_alpine(page, 'state.mode', 'add')
-        page.get_by_role('button', name='Upload file').click()
+        page.get_by_role('tab', name='Upload file').click()
 
         # The picker only allows multi-select because the input has the
         # `multiple` attribute — set_input_files with a list asserts it
@@ -857,7 +857,7 @@ def test_multi_upload_skips_rejected_file_and_continues(
             page.goto(BASE_URL)
             page.locator('#add-asset-button').click()
             _wait_alpine(page, 'state.mode', 'add')
-            page.get_by_role('button', name='Upload file').click()
+            page.get_by_role('tab', name='Upload file').click()
 
             # Playwright can't mix buffers with paths in one
             # set_input_files call, so the junk file is written to disk
