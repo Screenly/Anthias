@@ -850,3 +850,77 @@ def request_via_m2m(request: Any) -> bool:
 
     value = request.headers.get(caddy.LISTENER_HEADER, '')
     return hmac.compare_digest(value, M2M_LISTENER_VALUE)
+
+
+def request_via_ui(request: Any) -> bool:
+    """True when the request came in through the web interface (80/443)."""
+    import hmac
+
+    from anthias_server.lib import caddy
+
+    value = request.headers.get(caddy.LISTENER_HEADER, '')
+    return hmac.compare_digest(value, caddy.UI_LISTENER_VALUE)
+
+
+# --- the web interface of a managed screen ----------------------------------
+#
+# Once a screen is managed, its controller is the only place to change
+# it: anything edited locally is replaced on the next publish, and
+# every open web interface is one more way in. So the web interface
+# (ports 80/443) is shut: every page leads to a single "Managed by …"
+# page, and the local REST API answers 403. What stays:
+#
+# * signing in, and that page, which lets a signed-in operator leave
+#   management if the controller is gone (there is no other way back
+#   without a shell);
+# * static files, for those two pages;
+# * everything on 8443 (the controller) and everything that reaches
+#   anthias-server inside the Docker network (the viewer, the webview).
+#
+# Waiting for approval does not count: the operator still needs
+# Settings to see the check code or cancel the request.
+
+
+def ui_locked() -> bool:
+    """Whether this screen's web interface is shut (it is managed)."""
+    if _settings()['controller_mode']:
+        return False
+    return current_controller() is not None
+
+
+def _lockdown_open_paths() -> frozenset[str]:
+    from django.urls import reverse
+
+    return frozenset(
+        reverse(f'anthias_app:{name}')
+        for name in ('login', 'managed', 'managed_leave')
+    )
+
+
+class ManagedUILockdownMiddleware:
+    """Shut the web interface of a managed screen (see above)."""
+
+    def __init__(self, get_response: Any) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: Any) -> Any:
+        from django.http import JsonResponse
+        from django.shortcuts import redirect
+        from django.urls import reverse
+
+        if (
+            not request_via_ui(request)
+            or request.path in _lockdown_open_paths()
+            or request.path.startswith('/static/')
+            or not ui_locked()
+        ):
+            return self.get_response(request)
+        if request.path.startswith('/api/'):
+            return JsonResponse(
+                {
+                    'detail': 'This screen is managed by a multi-screen '
+                    'controller. Use the controller to change it.'
+                },
+                status=403,
+            )
+        return redirect(reverse('anthias_app:managed'))

@@ -1,0 +1,62 @@
+{% load static humanize %}
+{% comment %}
+  What the web interface of a managed screen shows instead of the app
+  (lib/management.ManagedUILockdownMiddleware). Standalone like
+  login.html: no vendor.js, no /ws, no JS at all.
+
+  Leaving is offered here on purpose: if the controller is gone (it
+  was replaced, or its CA was not in the backup it was restored from),
+  this is the only way back short of a shell on the device.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Managed by {{ controller.name }} · Anthias</title>
+  <link href="{% static 'dist/css/tailwind.css' %}" rel="stylesheet"/>
+  <link href="{% static 'dist/css/tabler-icons.css' %}" rel="stylesheet"/>
+  <link href="{% static 'dist/css/anthias.css' %}" rel="stylesheet"/>
+  <link rel="icon" href="/static/favicons/favicon.ico"/>
+</head>
+<body class="auth-body">
+<div class="auth-page">
+  <main class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-card__brand">
+        <img src="{% static 'img/dark.svg' %}" alt="Anthias" class="auth-logo"/>
+      </div>
+
+      <h1 class="auth-headline" id="managed-title">Managed by {{ controller.name }}</h1>
+      <p class="auth-subhead">
+        {% if player_name %}{{ player_name }}{% else %}This screen{% endif %}
+        gets its content and settings from
+        <strong>{{ controller.name }}</strong>, so its own web interface is
+        turned off. Open the controller's <strong>Screens</strong> page to
+        change what plays here.
+      </p>
+      <p class="managed-page__meta">
+        Controller <code>{{ controller.url }}</code><br>
+        Joined {{ controller.paired_at|naturaltime }}
+      </p>
+
+      <details class="managed-page__leave">
+        <summary>The controller is gone?</summary>
+        <p>
+          If the controller was replaced or no longer exists, take this
+          screen back. It stops following the controller, forgets its
+          certificate, and its web interface comes back. The controller
+          can't manage it again until it joins again.
+        </p>
+        <form method="post" action="{% url 'anthias_app:managed_leave' %}">
+          {% csrf_token %}
+          <button type="submit" id="btn-managed-leave" class="app-btn app-btn-outline-dark">
+            <i class="ti ti-plug-connected-x" aria-hidden="true"></i><span>Leave management</span>
+          </button>
+        </form>
+      </details>
+    </div>
+  </main>
+</div>
+</body>
+</html>

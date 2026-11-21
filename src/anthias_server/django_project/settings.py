@@ -831,6 +831,10 @@ MIDDLEWARE = [
     # card raising EUCLEAN bricked a device into a uvicorn crash-loop
     # — Sentry ANTHIAS-Y). See anthias_server/lib/whitenoise.py.
     'anthias_server.lib.whitenoise.ResilientWhiteNoiseMiddleware',
+    # Multi-screen: a managed screen's web interface (80/443) only
+    # shows "Managed by …" (and sign-in); its controller manages it.
+    # After WhiteNoise so that page still gets its stylesheets.
+    'anthias_server.lib.management.ManagedUILockdownMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     # Re-resolve + activate the operator-selected timezone per request
     # so a Settings change is live without a restart. After sessions so

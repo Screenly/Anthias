@@ -1,0 +1,23 @@
+{% comment %}
+Shown on every page while authentication is off. Anyone who can reach
+this screen on the network can then change its content and settings,
+and multi-screen management stays unavailable. A warning (amber), not
+a fault: some installs on a closed network run this way on purpose,
+and the banner says how to fix it rather than nagging.
+{% endcomment %}
+{% if auth_off %}
+<section class="device-alert device-alert--warning" id="auth-warning" aria-labelledby="auth-alert-title">
+  <div class="device-alert__icon" aria-hidden="true">
+    <i class="ti ti-lock-open"></i>
+  </div>
+  <div class="device-alert__body">
+    <h2 class="device-alert__title" id="auth-alert-title">Anyone on your network can change this screen</h2>
+    <p class="device-alert__lede">
+      Authentication is off, so this web interface and its API are open
+      to every device that can reach this screen. Turn it on under
+      <a href="{% url 'anthias_app:settings' %}#authentication">Settings → Authentication</a>
+      to require a username and password.
+    </p>
+  </div>
+</section>
+{% endif %}

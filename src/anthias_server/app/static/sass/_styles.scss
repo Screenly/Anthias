@@ -3604,3 +3604,29 @@ body.auth-body {
   font-size: 0.8125rem;
   word-break: break-all;
 }
+
+// The page a managed screen's web interface shows instead of the app
+// (managed.html), inside the same card as the login page.
+.managed-page__meta {
+  margin: calc(var(--spacing) * 4) 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-fg-muted);
+
+  code { font-size: 0.8125rem; }
+}
+
+.managed-page__leave {
+  margin-top: calc(var(--spacing) * 6);
+  padding-top: calc(var(--spacing) * 4);
+  border-top: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  line-height: 1.5;
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  p { margin: calc(var(--spacing) * 3) 0; }
+}
