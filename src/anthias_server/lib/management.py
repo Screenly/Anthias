@@ -56,10 +56,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
+import fcntl
 import json
 import logging
 import os
+import tempfile
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -530,12 +534,37 @@ def _managed_files() -> tuple[Path, Path, Path]:
     return client_cert_path(), controller_ca_path(), crl_path()
 
 
+_crl_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _crl_file_lock() -> Iterator[None]:
+    """Serialize CRL comparison and replacement across REST/WS workers."""
+    directory = managed_dir()
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with _crl_lock, (directory / '.managed-crl.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def _write_public(target: Path, text: str) -> None:
-    tmp = target.with_name(f'.{target.name}.tmp')
-    tmp.write_text(text)
-    # Public material only (certificates, CRL); the key never goes here.
-    os.chmod(tmp, 0o644)  # NOSONAR: world-readable is intended
-    os.replace(tmp, target)
+    # Certificate renewal writers also need distinct temporary files.
+    with tempfile.NamedTemporaryFile(
+        mode='w', dir=target.parent, prefix=f'.{target.name}.', delete=False
+    ) as handle:
+        tmp = Path(handle.name)
+        try:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+            # Public material only; the private key never goes here.
+            os.chmod(tmp, 0o644)  # NOSONAR: world-readable is intended
+            os.replace(tmp, target)
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def _node_public_key() -> Any:
@@ -611,6 +640,7 @@ def controller_ca() -> Any:
         return None
 
 
+@_crl_file_lock()
 def install_approval(
     token_id: int,
     certificate: str,
@@ -668,7 +698,7 @@ def install_approval(
                 'The renewed certificate is from a different CA than the '
                 'one this screen was approved with.'
             )
-        store_crl(crl)
+        _store_crl(crl)
         _write_public(client_cert_path(), pki.cert_pem(cert))
         logger.info('Stored a renewed client certificate (REST)')
         return controller
@@ -688,6 +718,12 @@ def install_approval(
 
 def store_crl(text: str) -> bool:
     """Keep a newer CRL from the controller. True if it was stored."""
+    with _crl_file_lock():
+        return _store_crl(text)
+
+
+def _store_crl(text: str) -> bool:
+    """Validate and replace while the caller holds the CRL lock."""
     from anthias_server.lib import pki
 
     ca = controller_ca()

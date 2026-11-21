@@ -18,8 +18,12 @@ The contract under test (see ``anthias_server.lib.management``):
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
+import os
+import threading
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Self
 from unittest.mock import MagicMock
@@ -1477,3 +1481,111 @@ def test_a_screen_without_a_pin_refuses_m2m_until_it_learns_it(
     assert status() == 200
     # Learned once; a pin already there is never replaced.
     assert not management.learn_controller_pin(der)
+
+
+@pytest.mark.parametrize('first_number', [2, 3])
+def test_concurrent_crl_updates_preserve_the_newest_revocations(
+    monkeypatch: pytest.MonkeyPatch, first_number: int
+) -> None:
+    key = pki.new_key()
+    ca = pki.make_ca(key, 'Concurrent CRL fixture')
+    monkeypatch.setattr(management, 'controller_ca', lambda: ca)
+    target = management.crl_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(pki.crl_pem(pki.make_crl(ca, key, [], 1)))
+    texts = {
+        2: pki.crl_pem(pki.make_crl(ca, key, [], 2)),
+        3: pki.crl_pem(pki.make_crl(ca, key, [(123, pki.now())], 3)),
+    }
+    writing = threading.Event()
+    release = threading.Event()
+    attempted = threading.Event()
+    finished = threading.Event()
+    write = management._write_public
+
+    def held_write(path: Path, text: str) -> None:
+        if text == texts[first_number]:
+            writing.set()
+            assert release.wait(3)
+        write(path, text)
+
+    def second_update() -> bool:
+        attempted.set()
+        try:
+            return management.store_crl(texts[5 - first_number])
+        finally:
+            # Without the lock the second update finishes while the first
+            # still holds an obsolete comparison result.
+            finished.set()
+            release.set()
+
+    monkeypatch.setattr(management, '_write_public', held_write)
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(management.store_crl, texts[first_number])
+        assert writing.wait(3)
+        second = pool.submit(second_update)
+        assert attempted.wait(3)
+        # A competing unlocked writer would finish and release the first
+        # here, deterministically rolling back one of these two orders.
+        finished.wait(0.2)
+        release.set()
+        assert first.result(timeout=3)
+        assert second.result(timeout=3) == (first_number == 2)
+    stored = management._load_crl()
+    assert pki.crl_number(stored) == 3
+    assert 123 in pki.revoked_serials(stored)
+
+
+def test_concurrent_certificate_writes_use_distinct_temporary_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = management.client_cert_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    replace = os.replace
+    barrier = threading.Barrier(2)
+    sources: list[Path] = []
+
+    def synchronized(source: Path, dest: Path) -> None:
+        sources.append(source)
+        barrier.wait(timeout=3)
+        replace(source, dest)
+
+    monkeypatch.setattr(os, 'replace', synchronized)
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(management._write_public, target, 'first')
+        second = pool.submit(management._write_public, target, 'second')
+        first.result(timeout=3)
+        second.result(timeout=3)
+    assert len(set(sources)) == 2
+    assert target.read_text() in {'first', 'second'}
+    assert all(not source.exists() for source in sources)
+
+
+def test_crl_update_waits_for_an_independent_file_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A separate open-file description models another process's flock."""
+    key = pki.new_key()
+    ca = pki.make_ca(key, 'File lock fixture')
+    monkeypatch.setattr(management, 'controller_ca', lambda: ca)
+    directory = management.managed_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    read = threading.Event()
+    load = management._load_crl
+
+    def observed_load() -> Any:
+        read.set()
+        return load()
+
+    monkeypatch.setattr(management, '_load_crl', observed_load)
+    text = pki.crl_pem(pki.make_crl(ca, key, [], 1))
+    with (directory / '.managed-crl.lock').open('a') as other_process:
+        fcntl.flock(other_process, fcntl.LOCK_EX)
+        with ThreadPoolExecutor(1) as pool:
+            future = pool.submit(management.store_crl, text)
+            try:
+                assert not read.wait(0.2)
+            finally:
+                fcntl.flock(other_process, fcntl.LOCK_UN)
+            assert future.result(timeout=3)
+    assert read.is_set()
