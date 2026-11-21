@@ -389,6 +389,11 @@ class ManagementController(models.Model):
         related_name='management_controller',
     )
     paired_at = models.DateTimeField(default=timezone.now)
+    # False while the join request waits for the operator to approve
+    # it on the controller; True once the controller has delivered this
+    # screen's client certificate (see lib.management.install_approval).
+    approved = models.BooleanField(default=False)
+    request_id = models.CharField(max_length=64, blank=True, default='')
 
     class Meta:
         db_table = 'management_controllers'

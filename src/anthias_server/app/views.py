@@ -2116,10 +2116,28 @@ def _management_context(
     return {
         'management_auth_enabled': management.auth_enabled(),
         'management_controller': management.current_controller(),
+        'management_pending': management.pending_controller(),
+        'management_check_code': _safe_check_code(),
         'management_error': error,
         'management_form': form or {},
         'management_port': management.M2M_PORT,
     }
+
+
+def _safe_check_code() -> str:
+    try:
+        return management.check_code()
+    except management.ManagementError:
+        return ''
+
+
+@authorized
+@require_http_methods(['GET'])
+def settings_management_section(request: HttpRequest) -> HttpResponse:
+    """The management section alone; polled while a join is pending."""
+    response = template(request, '_management.html', _management_context())
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 def _management_response(
@@ -2150,7 +2168,7 @@ def settings_management_join(request: HttpRequest) -> HttpResponse:
             error=str(exc),
             form={'join_info': snippet, 'screen_host': screen_host},
         )
-    logger.info('Joined controller %r', controller.name)
+    logger.info('Asked to join controller %r', controller.name)
     return _management_response(request)
 
 
@@ -2159,6 +2177,33 @@ def settings_management_join(request: HttpRequest) -> HttpResponse:
 def settings_management_leave(request: HttpRequest) -> HttpResponse:
     management.leave_management()
     return _management_response(request)
+
+
+def _allowed_controller_mode(
+    request: HttpRequest, wanted: bool, auth_backend: str
+) -> bool:
+    """Controller mode as requested, unless it is refused here.
+
+    It holds access to every managed screen, so it needs auth; and a
+    screen that is (or is asking to be) managed cannot also manage.
+    """
+    if not wanted:
+        return False
+    if not auth_backend:
+        messages.warning(
+            request,
+            'Controller mode needs authentication. Turn on '
+            'authentication first.',
+        )
+        return False
+    if management.is_managed() or management.pending_controller():
+        messages.warning(
+            request,
+            'This screen is managed by (or waiting to join) a '
+            'controller, so it cannot be one. Leave management first.',
+        )
+        return False
+    return True
 
 
 @authorized
@@ -2237,13 +2282,9 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         controller_mode_changed = controller_mode != bool(
             settings['controller_mode']
         )
-        if controller_mode and not auth_backend:
-            controller_mode = False
-            messages.warning(
-                request,
-                'Controller mode needs authentication. Turn on '
-                'authentication first.',
-            )
+        controller_mode = _allowed_controller_mode(
+            request, controller_mode, auth_backend
+        )
         settings['controller_mode'] = controller_mode
 
         # Restrict to the four cardinal angles via the shared

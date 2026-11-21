@@ -10,6 +10,52 @@
   hx-swap="outerHTML"
   class="flex flex-col gap-4"
 >
+  {% if join_requests %}
+  <section class="surface screens__requests" id="join-requests">
+    <header class="surface__header">
+      <h2><i class="ti ti-user-question mr-2"></i>Waiting for approval</h2>
+      <span class="surface__count">{{ join_requests|length }}</span>
+    </header>
+    <p class="muted-label px-4">Check that the code matches the one shown on the screen before you approve it. Requests expire after 24 hours.</p>
+    <table class="asset-table screens-table">
+      <thead>
+        <tr>
+          <th scope="col">Screen</th>
+          <th scope="col">Check code</th>
+          <th scope="col">Asked</th>
+          <th scope="col" class="text-right screens__actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pending in join_requests %}
+        <tr data-request="{{ pending.pk }}">
+          <td>
+            <strong>{{ pending.name }}</strong>
+            <div class="muted-label">
+              {{ pending.host }}:{{ pending.port }}{% if pending.device_model %} · {{ pending.device_model }}{% endif %}{% if pending.version %} · {{ pending.version }}{% endif %}
+            </div>
+          </td>
+          <td><span class="screens__check-code">{{ pending.check_code }}</span></td>
+          <td class="muted-label">{{ pending.created_at|naturaltime }}</td>
+          <td class="text-right">
+            <div class="screens__row-actions">
+              <form method="post" action="{% url 'controller:screens_approve' pending.pk %}" class="inline m-0">
+                {% csrf_token %}
+                <button type="submit" class="app-btn app-btn-sm app-btn-primary" id="btn-approve-{{ pending.pk }}">Approve</button>
+              </form>
+              <form method="post" action="{% url 'controller:screens_reject' pending.pk %}" class="inline m-0"
+                onsubmit="return confirm('Reject the request from {{ pending.name|escapejs }}?');">
+                {% csrf_token %}
+                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark" id="btn-reject-{{ pending.pk }}">Reject</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
   <section class="surface">
     <header class="surface__header">
       <h2><i class="ti ti-devices mr-2"></i>Screens</h2>

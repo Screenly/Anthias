@@ -63,3 +63,61 @@ class PairingViewV2(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PairingCertificateViewV2(APIView):
+    """The controller delivers this screen's approved certificate."""
+
+    @extend_schema(
+        summary='Deliver the approved client certificate (controller)',
+        description=(
+            'Called by the controller once the operator approves this '
+            "screen's join request, with the bearer token from that "
+            'request, on the management port only.'
+        ),
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'certificate': {'type': 'string'},
+                    'ca_certificate': {'type': 'string'},
+                    'crl': {'type': 'string'},
+                    'controller_name': {'type': 'string'},
+                },
+                'required': ['certificate', 'ca_certificate', 'crl'],
+            }
+        },
+        responses={204: None, 400: _DETAIL, 403: _DETAIL, 404: _DETAIL},
+    )
+    @authorized
+    def post(self, request: Request) -> Response:
+        if not management.request_via_m2m(request):
+            return Response(
+                {'detail': 'Not available on this port.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        token = request.auth
+        if not isinstance(token, ApiToken):
+            return Response(
+                {'detail': "Call this with the controller's bearer token."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        data = request.data if isinstance(request.data, dict) else {}
+
+        def field(name: str) -> str:
+            value = data.get(name, '')
+            return value if isinstance(value, str) else ''
+
+        try:
+            management.install_approval(
+                token.pk,
+                field('certificate'),
+                field('ca_certificate'),
+                field('crl'),
+                field('controller_name'),
+            )
+        except management.ManagementError as exc:
+            return Response(
+                {'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)

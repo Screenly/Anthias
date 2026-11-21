@@ -16,6 +16,16 @@ urlpatterns = [
         name='screens_regenerate',
     ),
     path(
+        'requests/<int:request_pk>/approve/',
+        views.screens_approve,
+        name='screens_approve',
+    ),
+    path(
+        'requests/<int:request_pk>/reject/',
+        views.screens_reject,
+        name='screens_reject',
+    ),
+    path(
         '<int:node_id>/remove/',
         views.screens_remove,
         name='screens_remove',
