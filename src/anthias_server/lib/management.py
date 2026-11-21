@@ -513,7 +513,8 @@ def _write_public(target: Path, text: str) -> None:
     tmp = target.with_name(f'.{target.name}.tmp')
     tmp.write_text(text)
     # Public material only (certificates, CRL); the key never goes here.
-    os.chmod(tmp, 0o644)  # NOSONAR: world-readable is intended
+    # World-readable is intended: no secrets in these files.
+    os.chmod(tmp, 0o644)  # NOSONAR(S2612)
     os.replace(tmp, target)
 
 
