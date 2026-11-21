@@ -18,6 +18,7 @@ from anthias_server.controller.client import (
     NodeError,
     NodeUnauthorizedError,
 )
+from anthias_server.controller.health import health_from_info
 from anthias_server.controller.mirror import build_manifest, sync_node
 from anthias_server.controller.models import (
     AuditEntry,
@@ -158,7 +159,9 @@ def check_node(node: Node) -> Node:
     info = info if isinstance(info, dict) else {}
     node.version = str(info.get('anthias_version') or '')[:100]
     node.device_model = str(info.get('device_model') or '')[:200]
-    node.save(update_fields=['version', 'device_model'])
+    node.health = health_from_info(info)
+    node.health_at = timezone.now()
+    node.save(update_fields=['version', 'device_model', 'health', 'health_at'])
     _set_status(node, NodeStatus.ONLINE)
     return node
 

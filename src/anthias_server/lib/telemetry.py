@@ -79,6 +79,46 @@ def _get_asset_counts() -> dict[str, int]:
     return result
 
 
+def _multi_screen_role() -> tuple[bool, bool]:
+    """``(is_controller, is_managed)`` for this device.
+
+    Degrades to ``(False, False)`` on any fault, like the asset counts:
+    telemetry must never crash the worker.
+    """
+    try:
+        from anthias_server.controller.service import controller_enabled
+        from anthias_server.lib.management import is_managed
+
+        return controller_enabled(), is_managed()
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception as exc:
+        logger.debug('multi-screen role lookup failed: %s', exc)
+        return False, False
+
+
+def _controller_health_event() -> dict[str, object] | None:
+    """Anonymous health counts for the screens this controller manages.
+
+    Built from what the status poll already stored, so it costs no
+    request to any screen. Only counts are sent: no screen names,
+    addresses, fingerprints or versions. ``None`` on any fault.
+    """
+    try:
+        from django.utils import timezone
+
+        from anthias_server.controller.health import cluster_summary
+        from anthias_server.controller.models import Node
+
+        params = cluster_summary(Node.objects.all(), timezone.now())
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception as exc:
+        logger.debug('controller health summary failed: %s', exc)
+        return None
+    return {'name': 'controller_health', 'params': params}
+
+
 def _build_payload() -> dict[str, object]:
     # GA4 conventions: lowercase snake_case event + param names, boolean
     # values for `is_*` flags. Names are device-neutral now that x86 is
@@ -114,15 +154,31 @@ def _build_payload() -> dict[str, object]:
         'tls_enabled': bool(settings['use_ssl']),
     }
     params.update(_get_asset_counts())
+    # Multi-screen adoption: how many devices are controllers, and how
+    # many are screens managed by one.
+    is_controller, is_managed = _multi_screen_role()
+    params['is_controller'] = is_controller
+    params['is_managed'] = is_managed
+    events: list[dict[str, object]] = [
+        {'name': 'device_active', 'params': params}
+    ]
+    # A controller also reports the health of the screens it manages,
+    # as a separate event so device_active stays under GA4's
+    # 25-parameter limit.
+    if is_controller:
+        health_event = _controller_health_event()
+        if health_event is not None:
+            events.append(health_event)
     return {
         'client_id': _get_device_id(),
-        'events': [{'name': 'device_active', 'params': params}],
+        'events': events,
     }
 
 
 def send_telemetry() -> bool:
     """
-    Emit a single GA4 ``device_active`` event for this device.
+    Emit the GA4 ``device_active`` event for this device, plus a
+    ``controller_health`` event when it is a multi-screen controller.
     Rate-limited to once per TELEMETRY_COOLDOWN_TTL via Redis so
     frequent celery restarts don't multiply traffic. Returns True if an
     event was sent.

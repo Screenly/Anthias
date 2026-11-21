@@ -264,3 +264,122 @@ def test_asset_counts_let_a_soft_time_limit_through() -> None:
 def test_asset_counts_still_degrade_to_zeros_on_a_db_fault() -> None:
     with patch.object(Asset.objects, 'filter', side_effect=OSError('no db')):
         assert telemetry._get_asset_counts()['asset_count'] == 0
+
+
+@patch.object(telemetry, 'requests_post')
+def test_device_active_reports_multi_screen_role(
+    mock_post: Any, telemetry_env: None
+) -> None:
+    with patch.object(
+        telemetry, '_multi_screen_role', return_value=(False, True)
+    ):
+        assert telemetry.send_telemetry() is True
+    payload = json.loads(mock_post.call_args.kwargs['data'])
+    assert [e['name'] for e in payload['events']] == ['device_active']
+    params = payload['events'][0]['params']
+    assert params['is_controller'] is False
+    assert params['is_managed'] is True
+    # GA4 drops events with more than 25 parameters.
+    assert len(params) <= 25
+
+
+@patch.object(telemetry, 'requests_post')
+def test_controller_adds_an_anonymous_controller_health_event(
+    mock_post: Any, telemetry_env: None
+) -> None:
+    counts = {'screens_total': 3, 'screens_online': 2, 'screens_low_disk': 1}
+    with (
+        patch.object(
+            telemetry, '_multi_screen_role', return_value=(True, False)
+        ),
+        patch(
+            'anthias_server.controller.health.cluster_summary',
+            return_value=counts,
+        ),
+        patch('anthias_server.controller.models.Node.objects'),
+    ):
+        assert telemetry.send_telemetry() is True
+    payload = json.loads(mock_post.call_args.kwargs['data'])
+    names = [e['name'] for e in payload['events']]
+    assert names == ['device_active', 'controller_health']
+    assert payload['events'][0]['params']['is_controller'] is True
+    assert payload['events'][1]['params'] == counts
+
+
+@patch.object(telemetry, 'requests_post')
+def test_controller_health_failure_still_sends_device_active(
+    mock_post: Any, telemetry_env: None
+) -> None:
+    with (
+        patch.object(
+            telemetry, '_multi_screen_role', return_value=(True, False)
+        ),
+        patch(
+            'anthias_server.controller.health.cluster_summary',
+            side_effect=RuntimeError('db gone'),
+        ),
+        patch('anthias_server.controller.models.Node.objects'),
+    ):
+        assert telemetry.send_telemetry() is True
+    payload = json.loads(mock_post.call_args.kwargs['data'])
+    assert [e['name'] for e in payload['events']] == ['device_active']
+
+
+@patch.object(telemetry, 'requests_post')
+def test_opt_out_sends_no_controller_health_either(
+    mock_post: Any, telemetry_env: None, settings_data: dict[str, Any]
+) -> None:
+    settings_data['analytics_opt_out'] = True
+    with patch.object(
+        telemetry, '_multi_screen_role', return_value=(True, False)
+    ):
+        assert telemetry.send_telemetry() is False
+    mock_post.assert_not_called()
+
+
+def test_multi_screen_role_degrades_to_false_on_a_fault() -> None:
+    with patch(
+        'anthias_server.lib.management.is_managed',
+        side_effect=RuntimeError('db gone'),
+    ):
+        assert telemetry._multi_screen_role() == (False, False)
+
+
+def test_multi_screen_role_lets_a_soft_time_limit_through() -> None:
+    with (
+        patch(
+            'anthias_server.lib.management.is_managed',
+            side_effect=SoftTimeLimitExceeded(),
+        ),
+        pytest.raises(SoftTimeLimitExceeded),
+    ):
+        telemetry._multi_screen_role()
+
+
+@pytest.mark.django_db
+def test_controller_health_event_reads_stored_readings() -> None:
+    from django.utils import timezone
+
+    from anthias_server.controller import health
+    from anthias_server.controller.models import Node, NodeStatus
+
+    Node.objects.create(
+        name='Lobby',
+        host='lobby.lan',
+        fingerprint='a' * 64,
+        token_ciphertext='x',
+        status=NodeStatus.ONLINE,
+        health=health.health_from_info(
+            {'free_space': '200.0\xa0MB', 'storage': {'status': 'ok'}}
+        ),
+        health_at=timezone.now(),
+    )
+    event = telemetry._controller_health_event()
+    assert event is not None
+    params = event['params']
+    assert isinstance(params, dict)
+    assert params['screens_total'] == 1
+    assert params['screens_low_disk'] == 1
+    # Counts only: nothing that identifies a screen.
+    assert all(isinstance(v, int) for v in params.values())
+    assert 'lobby' not in json.dumps(event).lower()

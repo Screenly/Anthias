@@ -50,6 +50,11 @@ class Node(models.Model):
     last_checked_at = models.DateTimeField(blank=True, null=True)
     version = models.CharField(max_length=100, blank=True, default='')
     device_model = models.CharField(max_length=200, blank=True, default='')
+    # Last reading of the screen's /api/v2/info health fields (see
+    # .health). Kept when the screen goes offline, but only counted
+    # while it is fresh.
+    health = models.JSONField(default=dict, blank=True)
+    health_at = models.DateTimeField(blank=True, null=True)
 
     publish_state = models.CharField(
         max_length=16,
@@ -66,6 +71,26 @@ class Node(models.Model):
 
     def __str__(self) -> str:
         return f'{self.name} ({self.host})'
+
+    @property
+    def health_fresh(self) -> bool:
+        from .health import is_fresh
+
+        return is_fresh(self, timezone.now())
+
+    @property
+    def health_problems(self) -> list[str]:
+        from .health import problems
+
+        if not self.health_fresh:
+            return []
+        return [label for _key, label in problems(self.health)]
+
+    @property
+    def health_summary(self) -> str:
+        from .health import summary_line
+
+        return summary_line(self.health) if self.health_fresh else ''
 
     @property
     def base_url(self) -> str:

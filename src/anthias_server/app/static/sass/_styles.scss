@@ -2152,6 +2152,22 @@ label { text-align: left; }
   background: var(--color-danger-wash);
   color: var(--color-danger-on-wash);
 }
+.screens__warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0.25rem 0 0;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--color-warning-wash);
+  color: var(--color-warning-on-wash);
+}
+.screens__attention {
+  color: var(--color-warning-on-wash);
+  font-weight: 600;
+}
 .screens__status--unauthorized,
 .screens__publish--queued,
 .screens__publish--running,

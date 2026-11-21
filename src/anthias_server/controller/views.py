@@ -50,6 +50,7 @@ def _nodes_context() -> dict[str, Any]:
         'nodes': nodes,
         'node_count': len(nodes),
         'online_count': sum(n.status == NodeStatus.ONLINE for n in nodes),
+        'attention_count': sum(bool(n.health_problems) for n in nodes),
         'audit_entries': list(AuditEntry.objects.all()[:AUDIT_ROWS]),
         'commands': service.COMMANDS,
         'command_buttons': [

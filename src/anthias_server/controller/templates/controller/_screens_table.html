@@ -13,7 +13,7 @@
   <section class="surface">
     <header class="surface__header">
       <h2><i class="ti ti-devices mr-2"></i>Screens</h2>
-      <span class="surface__count">{{ online_count }} of {{ node_count }} online</span>
+      <span class="surface__count">{{ online_count }} of {{ node_count }} online{% if attention_count %} · <span class="screens__attention">{{ attention_count }} need{{ attention_count|pluralize:"s," }} attention</span>{% endif %}</span>
     </header>
     <table class="asset-table screens-table">
       <thead>
@@ -60,6 +60,12 @@
             <div class="muted-label">
               {% if node.last_seen_at %}seen {{ node.last_seen_at|naturaltime }}{% else %}not seen yet{% endif %}
             </div>
+            {% if node.health_summary %}
+            <div class="muted-label screens__health">{{ node.health_summary }}</div>
+            {% endif %}
+            {% for label in node.health_problems %}
+            <span class="screens__warn" role="status"><i class="ti ti-alert-triangle" aria-hidden="true"></i>{{ label }}</span>
+            {% endfor %}
             {% if node.status != 'online' and node.status_detail %}
             <div class="muted-label screens__detail">{{ node.status_detail|truncatechars:160 }}</div>
             {% endif %}
