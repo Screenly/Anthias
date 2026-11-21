@@ -441,3 +441,26 @@ def _isolated_settings_conf(tmp_path: Any) -> Any:
         # in-memory state is restored for any later test.
         settings.conf_file = original_conf_file
         settings.load()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_tls_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Keep the node / web certificates out of the developer's $HOME.
+
+    Rendering Settings generates the node certificate on first use, and
+    ``lib.web_certificate`` keeps its files next to it. Point both at a
+    per-test directory, along with Caddy's run directory, so no test
+    ever writes to ``~/.anthias/ssl`` or talks to a real Caddy.
+    """
+    if not _APP_AVAILABLE:
+        return
+    root = tmp_path_factory.mktemp('tls')
+    monkeypatch.setattr(
+        'anthias_server.lib.node_identity.node_dir',
+        lambda: root / 'ssl' / 'node',
+    )
+    monkeypatch.setattr(
+        'anthias_server.lib.caddy.RUN_DIR', root / 'run-anthias-caddy'
+    )

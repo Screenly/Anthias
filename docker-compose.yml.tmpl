@@ -21,13 +21,22 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.server
-    ports:
-      - 80:8080
+    # No `ports:`. Every web request from outside enters through
+    # anthias-caddy (below), which owns :80 and :443. The viewer,
+    # webview and celery still reach anthias-server:8080 over the
+    # Docker network on plain HTTP.
     environment:
       - MAC_ADDRESS=${MAC_ADDRESS}
       - HOST_USER=${USER}
       - HOME=/data
       - LISTEN=0.0.0.0
+      # Trust Caddy's X-Forwarded-For/-Proto so the IP allowlists in
+      # views_files.py see the real LAN client and request.is_secure()
+      # is right on :443. Only safe because this service publishes no
+      # host port: only containers on the Docker network can reach it.
+      # Re-adding a host port mapping here would let any client spoof
+      # those headers.
+      - FORWARDED_ALLOW_IPS=*
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       # HTTP proxy support (GH #3239). upgrade_containers.sh sources
@@ -74,12 +83,51 @@ services:
       - /home/${USER}/anthias_assets:/data/anthias_assets
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      # Caddy's admin socket and the certificates it serves. Mounted
+      # here and in anthias-caddy only: whoever can reach the socket
+      # can reconfigure the web front end.
+      - anthias-caddy-run:/run/anthias-caddy
     labels:
       io.balena.features.supervisor-api: '1'
     logging:
       driver: journald
       options:
         tag: anthias-server
+
+  anthias-caddy:
+    # The web front end for every install: TLS on :443 with the web
+    # certificate chosen in Settings (the screen's own node certificate
+    # by default), :80 redirecting the UI to HTTPS while still serving
+    # /api/* for one deprecation release. anthias-server generates the
+    # config and loads it through the admin socket in anthias-caddy-run
+    # (src/anthias_server/lib/caddy.py); the image starts from a
+    # bootstrap config and resumes the last good one on restart.
+    image: ghcr.io/screenly/anthias-caddy:${DOCKER_TAG}-${DEVICE_TYPE}
+    ulimits: *no-core-dumps
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.caddy
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      - anthias-server
+    restart: always
+    volumes:
+      - anthias-caddy-run:/run/anthias-caddy
+      # Let's Encrypt certificates and ACME account (--domain mode).
+      # Same volume name the old bin/enable_ssl.sh override used, so an
+      # existing --domain install keeps its certificate.
+      - anthias-caddy-data:/data
+      # Caddy's autosaved last-good config, read by --resume. A new
+      # name on purpose: the old override's anthias-caddy-config holds
+      # an autosave of its Caddyfile, which mounted files this service
+      # no longer has.
+      - anthias-caddy-state:/config
+    logging:
+      driver: journald
+      options:
+        tag: anthias-caddy
 
   anthias-viewer:
     image: ghcr.io/screenly/anthias-viewer:${DOCKER_TAG}-${DEVICE_TYPE}
@@ -283,7 +331,7 @@ services:
       # trying to get a screen online. Needs wifi-connect >= 2026.10.2,
       # where --default-theme is actually read.
       - WIFI_CONNECT_DEFAULT_THEME=dark
-      # NOT port 80: anthias-server publishes 80:8080 on the host, so
+      # NOT port 80: anthias-caddy publishes port 80 on the host, so
       # binding the portal there fails outright (upstream reports it as
       # PortalUnavailable). 8000 matches the port the previous Anthias
       # integration used. The cost is that an OS connectivity probe,
@@ -399,3 +447,6 @@ services:
 volumes:
   resin-data:
   redis-data:
+  anthias-caddy-run:
+  anthias-caddy-data:
+  anthias-caddy-state:
