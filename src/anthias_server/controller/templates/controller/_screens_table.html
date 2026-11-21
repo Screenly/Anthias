@@ -97,7 +97,7 @@
           <td class="muted-label">Source</td>
           <td class="text-right">
             <div class="screens__row-actions">
-              <details class="screens__menu">
+              <details class="screens__menu" x-data @keydown.escape="if ($el.open) { $el.open = false; $el.querySelector('summary').focus() }" @click.outside="$el.open = false">
                 <summary class="app-btn app-btn-outline-dark screens__menu-toggle" aria-label="Actions for this screen">
                   <i class="ti ti-dots" aria-hidden="true"></i><span class="screens__menu-label">More</span>
                 </summary>
@@ -119,10 +119,11 @@
         {% for node in nodes %}
         <tr data-screen="{{ node.pk }}" data-status="{{ node.status }}">
           <td>
-            <strong title="Certificate {{ node.fingerprint }}">{{ node.name }}</strong>
+            <strong>{{ node.name }}</strong>
             <div class="muted-label">
               {{ node.host }}{% if node.port != management_port %}:{{ node.port }}{% endif %}{% if node.device_model %} · {{ node.device_model }}{% endif %}{% if node.version %} · {{ node.version }}{% endif %}
             </div>
+            <div class="muted-label screens__fp" title="{{ node.fingerprint }}">Certificate {{ node.fingerprint|slice:":16" }}…</div>
           </td>
           <td>
             <span class="screens__status screens__status--{{ node.status }}">{{ node.get_status_display }}</span>
@@ -154,7 +155,7 @@
                 <button type="submit" class="app-btn app-btn-primary" id="btn-publish-{{ node.pk }}">Publish</button>
               </form>
               {% endif %}
-              <details class="screens__menu">
+              <details class="screens__menu" x-data @keydown.escape="if ($el.open) { $el.open = false; $el.querySelector('summary').focus() }" @click.outside="$el.open = false">
                 <summary class="app-btn app-btn-outline-dark screens__menu-toggle" aria-label="More actions for {{ node.name }}">
                   <i class="ti ti-dots" aria-hidden="true"></i><span class="screens__menu-label">More</span>
                 </summary>
