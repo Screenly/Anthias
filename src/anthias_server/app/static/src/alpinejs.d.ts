@@ -18,6 +18,7 @@ declare module 'alpinejs' {
     data(name: string, callback: (...args: unknown[]) => unknown): void
     magic(name: string, callback: (...args: unknown[]) => unknown): void
     directive(name: string, callback: (...args: unknown[]) => unknown): void
+    plugin(callback: (alpine: Alpine) => void): void
     start(): void
     // The reactive data object bound to the nearest x-data ancestor of
     // `el`. Tests read component state off a mounted tree with it.
@@ -31,4 +32,11 @@ declare module 'alpinejs' {
 
   const Alpine: Alpine
   export default Alpine
+}
+
+// Same story for the official focus plugin: no bundled declarations.
+// Its only export is the plugin callback handed to Alpine.plugin().
+declare module '@alpinejs/focus' {
+  const focus: (alpine: typeof import('alpinejs').default) => void
+  export default focus
 }

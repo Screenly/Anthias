@@ -40,6 +40,7 @@
   --color-fg-faint: #9a8fa6;
   --color-border: var(--color-paper-12);
   --color-divider: var(--color-paper-8);
+  --color-control-edge: #8d7f9b;
 
   /* The feature card lifts further off the canvas here, because the
    * canvas has deepened. It is lighter than the canvas in both themes,
@@ -73,7 +74,8 @@
 
   --color-success-on-wash: var(--color-green-50);
 
-  --color-focus-ring: rgb(201 164 240 / 0.45);
+  --color-focus-ring: #c9a4f0;
+  --color-focus-gap: var(--color-plum-950);
 
   /* Overlays flip from ink to paper. This single swap is why no
    * component needs a [data-theme] override of its own. */
