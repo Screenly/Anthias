@@ -119,6 +119,10 @@ def _server_limits() -> dict[str, Any]:
         'read_header_timeout': READ_HEADER_TIMEOUT,
         'idle_timeout': IDLE_TIMEOUT,
         'max_header_bytes': MAX_HEADER_BYTES,
+        # No HTTP/3: the compose files publish TCP only, so advertising
+        # h3 (Alt-Svc) would send browsers to a UDP port nobody can
+        # reach before they fall back.
+        'protocols': ['h1', 'h2'],
     }
 
 

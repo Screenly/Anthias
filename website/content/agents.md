@@ -134,11 +134,12 @@ Three things worth knowing before you write the client:
   request into a `200` with an HTML login page, which is a confusing way to find
   out your credentials were missing. Disable redirect-following and treat anything
   that is not a `2xx` as a failure. Wrong credentials give a clean `401`.
-- **Basic auth is served over plain HTTP by default**, so the credentials cross
-  the network in reversible encoding. Keep the device on a trusted LAN or VPN,
-  never expose port 80 to the internet, and run `./bin/enable_ssl.sh` on the
-  device if you want TLS, after which use `https://` and the hostname on the
-  certificate.
+- **Use `https://`.** Every device serves the API over HTTPS on port 443.
+  Plain HTTP on port 80 still answers `/api/*` for one more release, but Basic
+  auth there crosses the network in reversible encoding. By default the device
+  uses its own self-signed certificate, so either pin it or upload a trusted
+  certificate (Settings → HTTPS certificate, or `./bin/enable_ssl.sh`) and use
+  the hostname on it.
 - **Basic is the supported headless path today, and the server logs a deprecation
   warning each time it is used** (throttled, so a polling client does not flood
   the log). It keeps working; a token-based scheme is intended to replace it

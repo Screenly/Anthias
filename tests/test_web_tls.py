@@ -624,6 +624,7 @@ def test_edge_limits_leave_bodies_unbounded() -> None:
     for server in _servers(caddy.build_config()).values():
         assert server['read_header_timeout'] == '10s'
         assert server['idle_timeout'] == '30s'
+        assert server['protocols'] == ['h1', 'h2']
         assert 'read_timeout' not in server
         assert 'write_timeout' not in server
     assert 'request_body' not in json.dumps(caddy.build_config())

@@ -214,7 +214,7 @@
 
     - question: How do I enable HTTPS?
       answer: |
-        From `~/anthias/`, run `./bin/enable_ssl.sh`. The default mode uses Caddy's built-in local CA, which is fine for IP-based LAN access. For Let's Encrypt or bring-your-own certificate, see the [TLS / SSL section in the docs](/docs/#tls--ssl).
+        It is already on: open `https://<your-device-ip>/`. By default the screen uses its own self-signed certificate, so your browser shows a warning. To get rid of it, upload a certificate for a name that points at the screen under **Settings → HTTPS certificate**, or run `./bin/enable_ssl.sh --domain example.com` for Let's Encrypt. See the [TLS / SSL section in the docs](/docs/#tls--ssl).
 
     - question: Is there a software bill of materials (SBOM) for Anthias?
       answer: |
@@ -266,7 +266,7 @@
 
         Values are clamped to 1–24 MB. The ceiling keeps each chunk inside the server's in-memory upload buffer, which matters on a 512 MB board; below 1 MB a large video turns into thousands of requests.
 
-        The bundled `./bin/enable_ssl.sh` Caddy sidecar handles all of this for you. The above is only relevant if you're terminating TLS or proxying with something else.
+        The Caddy front end every install runs handles all of this for you. The above is only relevant if you're terminating TLS or proxying with something else.
 
     - question: Where is the API reference?
       answer: |
