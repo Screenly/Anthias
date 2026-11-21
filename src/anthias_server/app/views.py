@@ -24,7 +24,7 @@ from django.http import (
     StreamingHttpResponse,
 )
 from django.http.response import HttpResponseBase
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import (
@@ -2177,6 +2177,36 @@ def settings_management_join(request: HttpRequest) -> HttpResponse:
 def settings_management_leave(request: HttpRequest) -> HttpResponse:
     management.leave_management()
     return _management_response(request)
+
+
+@authorized
+@require_http_methods(['GET'])
+def managed(request: HttpRequest) -> HttpResponse:
+    """What the web interface of a managed screen shows instead."""
+    controller = management.current_controller()
+    if controller is None or not management.ui_locked():
+        return redirect(reverse('anthias_app:home'))
+    return render(
+        request,
+        'managed.html',
+        {
+            'controller': controller,
+            'player_name': settings['player_name'],
+        },
+    )
+
+
+@authorized
+@require_http_methods(['POST'])
+def managed_leave(request: HttpRequest) -> HttpResponse:
+    """Take a managed screen back, e.g. when its controller is gone."""
+    if management.leave_management():
+        logger.info('Left management from the managed page')
+        messages.success(
+            request,
+            'This screen left management. Its web interface is back.',
+        )
+    return redirect(reverse('anthias_app:home'))
 
 
 def _allowed_controller_mode(

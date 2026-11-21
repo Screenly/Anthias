@@ -620,14 +620,15 @@ def test_http_server_keeps_api_and_redirects_ui() -> None:
     ]
 
 
-def test_ui_proxies_strip_the_listener_header() -> None:
+def test_ui_proxies_tag_the_listener_and_strip_the_client_cert() -> None:
     handler = caddy.proxy_handler()
 
     assert handler['upstreams'] == [{'dial': 'anthias-server:8080'}]
-    assert handler['headers']['request']['delete'] == [
-        'X-Anthias-Listener',
-        'X-Anthias-Client-Cert',
-    ]
+    # "set" overwrites whatever a client sent, so it can't claim m2m.
+    assert handler['headers']['request'] == {
+        'set': {'X-Anthias-Listener': ['ui']},
+        'delete': ['X-Anthias-Client-Cert'],
+    }
 
 
 def test_edge_limits_leave_bodies_unbounded() -> None:
