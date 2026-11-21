@@ -77,6 +77,9 @@ def _page_context(request: HttpRequest) -> dict[str, Any]:
     }
     if not context['controller_enabled']:
         return context
+    from anthias_server.controller import ca
+
+    context['ca_problem'] = ca.problem()
     try:
         host = _snippet_host(request)
         context['join_snippet'] = join.build_snippet(

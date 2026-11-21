@@ -34,6 +34,13 @@
   </section>
   {% else %}
 
+  {% if ca_problem %}
+  <section class="settings-section" id="ca-problem" aria-labelledby="ca-problem-title">
+    <h2 id="ca-problem-title"><i class="ti ti-alert-triangle mr-2" aria-hidden="true"></i>This controller's certificate authority is unusable</h2>
+    <p class="api-tokens__error" role="alert">{{ ca_problem }}</p>
+  </section>
+  {% endif %}
+
   {% include "controller/_screens_table.html" %}
 
   {% if node_count %}

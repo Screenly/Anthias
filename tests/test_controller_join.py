@@ -179,7 +179,10 @@ def test_join_stores_the_screen_after_calling_it_back(
     body = response.json()
     assert body['status'] == 'pending'
     assert body['request_id'] == pending.request_id
-    assert body['check_code'] == pki.check_code(SCREEN_FP)
+    assert body['check_code'] == pki.check_code(
+        secret, CONTROLLER_FP, SCREEN_FP
+    )
+    assert pending.check_code == body['check_code']
     assert body['controller_name'] == 'Head office'
     assert (pending.name, pending.host, pending.port) == (
         'Lobby',
@@ -703,7 +706,8 @@ def test_screens_page_lists_requests_with_their_check_code(
     pending = _pending()
     html = operator_client.get(reverse('controller:screens')).content.decode()
     assert 'Waiting for approval' in html
-    assert pki.check_code(SCREEN_FP) in html
+    assert pending.check_code
+    assert pending.check_code in html
     assert f'btn-approve-{pending.pk}' in html
     assert f'btn-reject-{pending.pk}' in html
 
@@ -822,9 +826,141 @@ def test_unanswered_requests_expire_in_housekeeping(
     JoinRequest.objects.filter(pk=pending.pk).update(
         expires_at=timezone.now() - timedelta(minutes=1)
     )
-    tasks._housekeeping()
+    tasks.controller_housekeeping()
     assert not JoinRequest.objects.exists()
     assert [c['path'] for c in screen_calls] == ['/pairing']
+
+
+@pytest.mark.django_db
+def test_a_join_request_never_expires_other_requests(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    """Rejecting an expired request calls that screen back; an
+    anonymous join must not wait on that."""
+    JoinRequest.objects.create(
+        request_id='old',
+        name='Old',
+        host='10.0.0.9',
+        fingerprint='e' * 64,
+        token_ciphertext=vault.encrypt('t'),
+        csr_pem='',
+        expires_at=timezone.now() - timedelta(minutes=1),
+    )
+    _pending_count_before = JoinRequest.objects.count()
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.7'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 202
+    assert screen_calls == []
+    assert JoinRequest.objects.count() == _pending_count_before + 1
+
+
+@pytest.mark.django_db
+def test_expired_requests_do_not_count_against_the_cap(
+    controller_on: None,
+    screen_ok: list[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(join, 'MAX_PENDING', 1)
+    JoinRequest.objects.create(
+        request_id='old',
+        name='Old',
+        host='h',
+        fingerprint='e' * 64,
+        token_ciphertext='',
+        csr_pem='',
+        expires_at=timezone.now() - timedelta(minutes=1),
+    )
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.7'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 202
+
+
+@pytest.mark.django_db
+def test_an_expired_request_cannot_be_approved(
+    operator_client: Client,
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        expires_at=timezone.now() - timedelta(minutes=1)
+    )
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+    assert caught.value.status == 410
+    assert screen_calls == []
+    assert not Node.objects.exists()
+
+
+@pytest.mark.django_db
+def test_a_request_is_approved_only_once(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    # Another approval holds it (a double click, a second tab).
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        approving_until=timezone.now() + timedelta(minutes=1)
+    )
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+    assert caught.value.status == 409
+    assert screen_calls == []
+    # A claim left by a crashed approval runs out.
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        approving_until=timezone.now() - timedelta(seconds=1)
+    )
+    join.approve(pending)
+    assert Node.objects.count() == 1
+    with pytest.raises(join.JoinError) as gone:
+        join.approve(pending)
+    assert gone.value.status == 404
+
+
+@pytest.mark.django_db
+def test_a_failed_approval_releases_the_request(
+    controller_on: None,
+    screen_ok: list[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    pending = _pending()
+
+    def unreachable(self: Any, *_a: Any, **_k: Any) -> Any:
+        raise NodeOfflineError('refused')
+
+    monkeypatch.setattr(client_mod.NodeClient, 'request', unreachable)
+    with pytest.raises(join.JoinError):
+        join.approve(pending)
+    assert JoinRequest.objects.get().approving_until is None
+
+
+@pytest.mark.django_db
+def test_housekeeping_leaves_a_request_being_approved(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        expires_at=timezone.now() - timedelta(minutes=1),
+        approving_until=timezone.now() + timedelta(minutes=1),
+    )
+    assert join.expire_requests() == 0
+    assert JoinRequest.objects.exists()
 
 
 @pytest.mark.django_db
@@ -996,8 +1132,22 @@ def test_the_subject_and_role_come_from_the_ca_not_the_csr() -> None:
     )
 
 
-def test_check_code_is_short_and_readable() -> None:
-    assert pki.check_code('abcd1234' + '0' * 56) == 'ABCD-1234'
+def test_check_code_binds_the_secret_and_both_fingerprints() -> None:
+    import re
+
+    code = pki.check_code('secret', 'a' * 64, 'b' * 64)
+    # 12 base32 characters in groups of four.
+    assert re.fullmatch(r'[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}', code)
+    assert pki.check_code('secret', 'A' * 64, 'B' * 64) == code
+    others = {
+        pki.check_code('other', 'a' * 64, 'b' * 64),
+        pki.check_code('secret', 'c' * 64, 'b' * 64),
+        pki.check_code('secret', 'a' * 64, 'c' * 64),
+        # The fields cannot be shifted into each other.
+        pki.check_code('secret' + 'a', 'a' * 63, 'b' * 64),
+    }
+    assert code not in others
+    assert len(others) == 4
 
 
 @pytest.mark.parametrize(

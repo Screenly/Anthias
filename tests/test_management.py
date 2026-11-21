@@ -983,6 +983,75 @@ def test_controller_delivers_the_certificate_over_the_api(
 
 
 @pytest.mark.django_db
+def test_the_check_code_is_derived_from_the_join_information(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import pki
+
+    controller = management.join(_snippet())
+    expected = pki.check_code(
+        'c2VjcmV0LXNlY3JldA', CONTROLLER_FP, management.node_fingerprint()
+    )
+    assert controller.check_code == expected
+    assert management.check_code() == expected
+
+
+def _renewal(ca_cert: Any, ca_key: Any, number: int) -> tuple[str, str]:
+    from anthias_server.lib import node_identity, pki
+
+    identity = node_identity.ensure_node_identity()
+    node_key = pki.load_key(identity.key_path.read_bytes())
+    cert = pki.issue_client_cert(
+        ca_cert,
+        ca_key,
+        node_key.public_key(),
+        identity.fingerprint,
+        pki.ROLE_SCREEN,
+    )
+    crl = pki.make_crl(ca_cert, ca_key, [], number)
+    return pki.cert_pem(cert), pki.crl_pem(crl)
+
+
+@pytest.mark.django_db
+def test_an_approved_screen_takes_a_renewal_from_its_own_ca(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import pki
+
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
+    cert, crl = _renewal(ca_cert, ca_key, 7)
+    management.install_approval(
+        controller.token_id, cert, pki.cert_pem(ca_cert), crl
+    )
+    assert management.client_cert_path().read_text() == cert
+    assert pki.crl_number(management._load_crl()) == 7
+    # An older CRL delivered with a renewal is not kept.
+    older_cert, older_crl = _renewal(ca_cert, ca_key, 3)
+    management.install_approval(
+        controller.token_id, older_cert, pki.cert_pem(ca_cert), older_crl
+    )
+    assert management.client_cert_path().read_text() == older_cert
+    assert pki.crl_number(management._load_crl()) == 7
+
+    # Another CA cannot slip in through a renewal.
+    other_key = pki.new_key()
+    other = pki.make_ca(other_key, 'Other CA')
+    foreign_cert, foreign_crl = _renewal(other, other_key, 9)
+    with pytest.raises(management.ManagementError, match='different CA'):
+        management.install_approval(
+            controller.token_id,
+            foreign_cert,
+            pki.cert_pem(other),
+            foreign_crl,
+        )
+    assert management.client_cert_path().read_text() == older_cert
+    assert pki.fingerprint(management.controller_ca()) == pki.fingerprint(
+        ca_cert
+    )
+
+
+@pytest.mark.django_db
 def test_install_approval_refuses_what_does_not_check_out(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:

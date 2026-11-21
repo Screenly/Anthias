@@ -125,7 +125,7 @@ back on port 8443, never on its own loopback or internal addresses.
 4. Click **Join controller**.
 
 The screen now shows **Waiting for approval** with a short **check
-code**, such as `7F3A-91C2`. Nothing is trusted yet: the request only
+code**, such as `K7QX-4MRA-9ZTD`. Nothing is trusted yet: the request only
 appears on the controller.
 
 5. On the controller's **Screens** page, the screen is listed under
@@ -229,8 +229,12 @@ Management traffic never uses passwords and never leaves your network:
 * **Every join is approved by a person.** Knowing the join information
   only lets a device ask to join. It is not managed until someone
   approves it on the controller, after comparing the check code. The
-  check code comes from the screen's own certificate, so a different
-  device asking in its name shows a different code.
+  check code is worked out from the join information's secret and both
+  devices' certificates, so it only matches when this screen used this
+  controller's join information and the controller sees this screen's
+  certificate. A different device asking in its name shows a different
+  code, and with 12 characters it can't be made to match by trying
+  many keys.
 * **The controller is a small certificate authority.** When it is
   approved, the screen gets a client certificate signed by the
   controller. The screen creates the signing request with its own key,
@@ -243,14 +247,24 @@ Management traffic never uses passwords and never leaves your network:
   still pin each other's identity certificate as before.
 * **Certificates renew themselves.** Client certificates are valid for
   a year. A screen asks for a new one over its status connection when
-  less than 30 days are left, and the controller renews its own
-  automatically. Nothing needs to be done by hand.
+  less than 30 days are left (once per connection), and the controller
+  renews its own automatically. The old certificate keeps working
+  until the screen has connected with the new one, so a renewal lost
+  on the way never locks a screen out. If a screen has no status
+  connection, or still hasn't renewed with 15 days left, the controller
+  renews it over port 8443 instead. Nothing needs to be done by hand.
+* **The certificate authority fails safe.** It is created only on a
+  controller that has none. If its files exist but can't be read (a
+  failing SD card, a half-restored backup), the controller does not
+  replace them, because a new authority would cut off every screen.
+  The **Screens** page says what is wrong until the files are fixed.
 * **Revocation list.** When you remove a screen, or a certificate is
   replaced, the controller revokes the old certificate. Revoked
   certificates are listed in a signed revocation list (CRL). Connected
   screens get each new list at once; the controller re-signs it at
   least every five days, and screens refuse a controller certificate
-  that is on it.
+  that is on it. A certificate drops off the list once it would have
+  expired anyway.
 * **Authentication comes first.** Joining and controller mode need it,
   and every Anthias device shows a warning on each page while it is
   off, because anyone on the network could then change the screen.
@@ -334,6 +348,17 @@ join again.
 
 **The check codes don't match.** Don't approve the request. Reject it,
 and check which device is using that screen's address.
+
+**"That request has expired."** Nobody approved it within 24 hours.
+Click **Cancel request** on the screen and join again.
+
+**"This controller's certificate authority is unusable."** The
+controller's `ca.key` or `ca.crt` (in `~/.anthias/ssl/controller/`)
+can't be read. The controller leaves them alone so its screens keep
+working once they are back. Restore them from a backup that includes
+the device keys. Only if that isn't possible, remove both files: the
+controller then creates a new authority, and every screen has to join
+again.
 
 **"Could not deliver the approval."** The controller couldn't reach the
 screen on port 8443 when you approved. The request stays listed;

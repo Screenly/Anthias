@@ -450,9 +450,13 @@ def request_join(request: JoinRequest) -> tuple[PendingJoin, bool]:
             'service. Enter the address the controller can reach the screen '
             'on, as an IP address or DNS name.',
         )
-    expire_requests()
+    # Expired requests are dropped by the controller housekeeping task
+    # (tasks.controller_housekeeping), not here: rejecting one calls
+    # the screen back, which an anonymous join must never wait on.
     if (
-        PendingJoin.objects.exclude(fingerprint=request.screen_fp).count()
+        PendingJoin.objects.exclude(fingerprint=request.screen_fp)
+        .filter(expires_at__gte=timezone.now())
+        .count()
         >= MAX_PENDING
     ):
         raise JoinError(
@@ -461,6 +465,9 @@ def request_join(request: JoinRequest) -> tuple[PendingJoin, bool]:
             'controller. Approve or reject some first.',
         )
     info = verify_screen(request)
+    code = pki.check_code(
+        request.secret, controller_fingerprint(), request.screen_fp
+    )
     now = timezone.now()
     with transaction.atomic():
         pending, created = (
@@ -480,6 +487,8 @@ def request_join(request: JoinRequest) -> tuple[PendingJoin, bool]:
         pending.port = request.screen_port
         pending.token_ciphertext = vault.encrypt(request.token)
         pending.csr_pem = request.csr
+        pending.check_code = code
+        pending.approving_until = None
         pending.version = str(info.get('anthias_version') or '')[:100]
         pending.device_model = str(info.get('device_model') or '')[:200]
         pending.created_at = now
@@ -499,6 +508,56 @@ def _client_for_request(pending: PendingJoin) -> NodeClient:
     )
 
 
+# How long an approval may hold its request while it delivers the
+# certificate (the delivery itself times out well before this).
+APPROVAL_CLAIM = timedelta(minutes=2)
+
+
+def _claim(pending: PendingJoin) -> PendingJoin:
+    """Lock the request for this approval; refuse expired or busy ones.
+
+    ``select_for_update`` serializes approvals on databases that lock
+    rows. SQLite ignores it, so the claim is also a conditional update
+    of ``approving_until``: of two approvals racing, only one updates
+    the row.
+    """
+    from django.db.models import Q
+
+    now = timezone.now()
+    with transaction.atomic():
+        row = (
+            PendingJoin.objects.select_for_update()
+            .filter(pk=pending.pk)
+            .first()
+        )
+        if row is None:
+            raise JoinError(
+                404, 'That request is gone; it was approved or rejected.'
+            )
+        if row.expires_at < now:
+            raise JoinError(
+                410,
+                'That request has expired. Ask the screen to join again.',
+            )
+        claimed = (
+            PendingJoin.objects.filter(pk=row.pk)
+            .filter(
+                Q(approving_until__isnull=True) | Q(approving_until__lt=now)
+            )
+            .update(approving_until=now + APPROVAL_CLAIM)
+        )
+        if not claimed:
+            raise JoinError(
+                409, 'That request is already being approved. Wait a moment.'
+            )
+        row.approving_until = now + APPROVAL_CLAIM
+    return row
+
+
+def _release(pending: PendingJoin) -> None:
+    PendingJoin.objects.filter(pk=pending.pk).update(approving_until=None)
+
+
 def approve(pending: PendingJoin) -> Node:
     """Sign the screen's CSR, hand it the certificate, then store it.
 
@@ -506,6 +565,15 @@ def approve(pending: PendingJoin) -> Node:
     if it cannot be reached, the request stays listed and the
     certificate just issued is revoked.
     """
+    pending = _claim(pending)
+    try:
+        return _approve(pending)
+    except BaseException:
+        _release(pending)
+        raise
+
+
+def _approve(pending: PendingJoin) -> Node:
     from anthias_server.controller import ca, service
 
     csr = pki.load_csr(pending.csr_pem)
@@ -513,8 +581,12 @@ def approve(pending: PendingJoin) -> Node:
         issued = ca.sign_screen_csr(
             pending.csr_pem, csr.public_key(), pending.fingerprint
         )
+        ca_certificate = ca.ca_pem()
+        crl = ca.crl_pem()
     except pki.PkiError as exc:
         raise JoinError(400, str(exc)) from exc
+    except ca.CaError as exc:
+        raise JoinError(503, str(exc)) from exc
     serial = pki.serial_hex(issued.serial_number)
     try:
         with _client_for_request(pending) as client:
@@ -523,8 +595,8 @@ def approve(pending: PendingJoin) -> Node:
                 '/pairing/certificate',
                 json={
                     'certificate': pki.cert_pem(issued),
-                    'ca_certificate': ca.ca_pem(),
-                    'crl': ca.crl_pem(),
+                    'ca_certificate': ca_certificate,
+                    'crl': crl,
                     'controller_name': service.controller_name(),
                 },
                 timeout=(CONNECT_TIMEOUT_S, CALLBACK_READ_TIMEOUT_S),
@@ -553,7 +625,10 @@ def approve(pending: PendingJoin) -> Node:
                 'token_ciphertext': pending.token_ciphertext,
             },
         )
-        previous = (node.client_serial, node.client_not_after)
+        previous = [
+            (node.client_serial, node.client_not_after),
+            (node.previous_client_serial, node.previous_client_not_after),
+        ]
         node.name = pending.name
         node.host = pending.host
         node.port = pending.port
@@ -564,15 +639,24 @@ def approve(pending: PendingJoin) -> Node:
         node.client_serial = serial
         node.client_fingerprint = pki.fingerprint(issued)
         node.client_not_after = issued.not_valid_after_utc
+        node.client_cert_pem = pki.cert_pem(issued)
+        node.previous_client_serial = ''
+        node.previous_client_fingerprint = ''
+        node.previous_client_not_after = None
         node.status = NodeStatus.ONLINE
         node.status_detail = ''
         node.last_seen_at = timezone.now()
         node.save()
         pending.delete()
-    if not created and previous[0] and previous[0] != serial:
-        ca.revoke(
-            previous[0], node.name, 'replaced by a new join', previous[1]
-        )
+    if not created:
+        for old_serial, old_not_after in previous:
+            if old_serial and old_serial != serial:
+                ca.revoke(
+                    old_serial,
+                    node.name,
+                    'replaced by a new join',
+                    old_not_after,
+                )
     return node
 
 
@@ -592,8 +676,24 @@ def reject(pending: PendingJoin) -> None:
 
 
 def expire_requests() -> int:
-    """Drop requests nobody approved in time. Returns how many."""
-    expired = list(PendingJoin.objects.filter(expires_at__lt=timezone.now()))
+    """Drop requests nobody approved in time. Returns how many.
+
+    Best effort, from the housekeeping task: each screen is told it
+    was turned down, and a request being approved right now is left
+    alone.
+    """
+    from django.db.models import Q
+
+    now = timezone.now()
+    expired = list(
+        PendingJoin.objects.filter(expires_at__lt=now).filter(
+            Q(approving_until__isnull=True) | Q(approving_until__lt=now)
+        )
+    )
     for pending in expired:
-        reject(pending)
+        try:
+            reject(pending)
+        except Exception:
+            logger.exception('Could not expire the request from %s', pending)
+            pending.delete()
     return len(expired)

@@ -113,8 +113,14 @@ def controller_client_cert() -> tuple[str, str]:
     ``controller.ca``). Issued, or renewed, on demand.
     """
     from anthias_server.controller import ca
+    from anthias_server.controller.client import NodeOfflineError
 
-    return ca.ensure_client_cert()
+    try:
+        return ca.ensure_client_cert()
+    except ca.CaError as exc:
+        # Nothing can be sent to a managed screen without it; the
+        # Screens page shows why (ca.problem()).
+        raise NodeOfflineError(str(exc)) from exc
 
 
 def clean_text(value: str, limit: int) -> str:
@@ -201,6 +207,66 @@ def remove_node(node: Node, actor: str = '') -> str:
     node.delete()
     audit('remove', outcome, node_name=name, detail=detail, actor=actor)
     return detail
+
+
+def renew_certificate(node: Node, actor: str = '') -> str:
+    """Renew a screen's client certificate over REST (mutual TLS).
+
+    The recovery path for a screen that did not renew over its push
+    connection (no connection, or a lost reply): a certificate for the
+    key bound at join (``Node.public_key_pem``), delivered with
+    ``POST /api/v2/pairing/certificate``. Once the screen has confirmed
+    it stored the new certificate, the one it replaces is revoked. If
+    the delivery fails nothing changes here; the new certificate is
+    referenced nowhere and so is accepted nowhere.
+    """
+    from anthias_server.controller import ca
+    from anthias_server.controller.push import (
+        replace_certificate,
+        retire_previous,
+    )
+    from anthias_server.lib import pki
+
+    if not node.public_key_pem:
+        return 'no key on record; the screen has to join again'
+    try:
+        issued = ca.issue_for_screen(node.public_key_pem, node.fingerprint)
+        body = {
+            'certificate': pki.cert_pem(issued),
+            'ca_certificate': ca.ca_pem(),
+            'crl': ca.crl_pem(),
+            'controller_name': controller_name(),
+        }
+    except (pki.PkiError, ca.CaError) as exc:
+        audit('renew', 'failed', node=node, detail=str(exc), actor=actor)
+        return f'not renewed: {exc}'
+    try:
+        with client_for(node) as client:
+            client.request(
+                'POST',
+                '/pairing/certificate',
+                json=body,
+                timeout=(CONNECT_TIMEOUT_S, STATUS_READ_TIMEOUT_S),
+                expected=(200, 204),
+            )
+    except NodeError as exc:
+        audit('renew', 'failed', node=node, detail=str(exc), actor=actor)
+        return f'not renewed: {exc}'
+    node.refresh_from_db()
+    stale = (node.previous_client_serial, node.previous_client_not_after)
+    replace_certificate(node, issued)
+    if stale[0]:
+        ca.revoke(stale[0], node.name, 'superseded', stale[1])
+    # The screen confirmed it stored the new one: the old one can go.
+    retire_previous(node)
+    audit(
+        'renew',
+        'ok',
+        node=node,
+        detail='client certificate renewed over the management port',
+        actor=actor,
+    )
+    return 'renewed'
 
 
 def check_node(node: Node) -> Node:

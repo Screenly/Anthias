@@ -328,65 +328,161 @@ def test_push_lifecycle_online_health_heartbeat_offline(
     assert node.last_checked_at is None
 
 
+def _due(node: Node) -> None:
+    """Make the node's current certificate due for renewal."""
+    Node.objects.filter(pk=node.pk).update(
+        client_not_after=timezone.now() + timedelta(days=10)
+    )
+
+
+async def _renew_once(
+    cert: x509.Certificate, key: Any, fingerprint: str
+) -> list[dict[str, Any]]:
+    """Connect with ``cert``, ask once for a renewal; the replies."""
+    replies: list[dict[str, Any]] = []
+    communicator = _communicator(_headers(cert=cert))
+    assert (await _connect(communicator))['type'] == 'websocket.accept'
+    csr = pki.make_csr(key, fingerprint, pki.ROLE_SCREEN)
+    await _send(communicator, {'type': 'renew', 'csr': csr})
+    if not await communicator.receive_nothing(timeout=1):
+        out = await communicator.receive_output(timeout=5)
+        replies.append(json.loads(out['text']))
+    await _close(communicator)
+    return replies
+
+
 @pytest.mark.django_db
 def test_a_screen_renews_its_certificate_over_the_push_connection(
     controller_on: None,
 ) -> None:
+    """The old certificate stays valid until the new one is used."""
     from anthias_server.controller import ca
-    from anthias_server.controller.models import RevokedCertificate
 
     node = _node()
-    old_serial, key = node.client_serial, _LAST['key']
+    _due(node)
+    old_cert, key = _LAST['cert'], _LAST['key']
+    old_serial = node.client_serial
     replies: list[dict[str, Any]] = []
+    crls: list[str] = []
 
     async def body() -> None:
-        communicator = _communicator(_headers())
-        assert (await _connect(communicator))['type'] == 'websocket.accept'
-        csr = pki.make_csr(key, node.fingerprint, pki.ROLE_SCREEN)
-        await _send(communicator, {'type': 'renew', 'csr': csr})
-        for _ in range(2):
-            out = await communicator.receive_output(timeout=5)
-            replies.append(json.loads(out['text']))
-        await _close(communicator)
+        replies.extend(await _renew_once(old_cert, key, node.fingerprint))
 
     _run(body)
 
-    kinds = sorted(r['type'] for r in replies)
-    # The certificate, and the CRL that now lists the replaced one.
-    assert kinds == ['certificate', 'crl']
-    issued = pki.load_cert(
-        next(r for r in replies if r['type'] == 'certificate')['certificate']
-    )
+    assert [r['type'] for r in replies] == ['certificate']
+    issued = pki.load_cert(replies[0]['certificate'])
     pki.check_client_cert(issued, ca.ca_cert(), pki.ROLE_SCREEN, key)
     node.refresh_from_db()
     assert node.client_serial == pki.serial_hex(issued.serial_number)
     assert node.client_fingerprint == pki.fingerprint(issued)
-    assert RevokedCertificate.objects.filter(serial=old_serial).exists()
-    crl = pki.load_crl(next(r for r in replies if r['type'] == 'crl')['crl'])
-    assert int(old_serial, 16) in set(pki.revoked_serials(crl))
+    assert node.client_cert_pem == replies[0]['certificate']
+    # Not revoked yet: the reply could have been lost on the way.
+    assert node.previous_client_serial == old_serial
+    assert not ca.is_revoked(old_serial)
+
+    async def reconnect() -> None:
+        communicator = _communicator(_headers(cert=issued))
+        await communicator.send_input({'type': 'websocket.connect'})
+        assert (await communicator.receive_output(timeout=5))[
+            'type'
+        ] == 'websocket.accept'
+        out = await communicator.receive_output(timeout=5)
+        crls.append(json.loads(out['text'])['crl'])
+        await _close(communicator)
+
+    _run(reconnect)
+
+    # The screen came back with the new one: the old one is revoked,
+    # and the CRL it is sent on connect already lists it.
+    assert ca.is_revoked(old_serial)
+    assert int(old_serial, 16) in pki.revoked_serials(pki.load_crl(crls[0]))
+    node.refresh_from_db()
+    assert node.previous_client_serial == ''
+    assert node.previous_client_fingerprint == ''
+
+
+@pytest.mark.django_db
+def test_a_lost_renewal_reply_is_sent_again_not_reissued(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller.models import RevokedCertificate
+
+    node = _node()
+    _due(node)
+    old_cert, key = _LAST['cert'], _LAST['key']
+    first: list[dict[str, Any]] = []
+    again: list[dict[str, Any]] = []
+
+    async def body() -> None:
+        first.extend(await _renew_once(old_cert, key, node.fingerprint))
+        # The screen never stored it and still has the old one.
+        again.extend(await _renew_once(old_cert, key, node.fingerprint))
+
+    _run(body)
+
+    assert first[0]['certificate'] == again[0]['certificate']
+    node.refresh_from_db()
+    assert node.client_cert_pem == first[0]['certificate']
+    assert not RevokedCertificate.objects.exists()
+
+
+@pytest.mark.django_db
+def test_renewal_is_once_per_connection_and_only_when_due(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller.models import RevokedCertificate
+
+    node = _node()
+    serial = node.client_serial
+    cert, key = _LAST['cert'], _LAST['key']
+    replies: list[dict[str, Any]] = []
+
+    async def not_due() -> None:
+        replies.extend(await _renew_once(cert, key, node.fingerprint))
+
+    _run(not_due)
+    assert replies == []
+    node.refresh_from_db()
+    assert node.client_serial == serial
+
+    _due(node)
+    outputs: list[dict[str, Any]] = []
+
+    async def twice() -> None:
+        communicator = _communicator(_headers(cert=cert))
+        assert (await _connect(communicator))['type'] == 'websocket.accept'
+        for _ in range(3):
+            csr = pki.make_csr(key, node.fingerprint, pki.ROLE_SCREEN)
+            await _send(communicator, {'type': 'renew', 'csr': csr})
+        outputs.append(await communicator.receive_output(timeout=5))
+        assert await communicator.receive_nothing(timeout=0.5)
+        await _close(communicator)
+
+    _run(twice)
+
+    assert [json.loads(o['text'])['type'] for o in outputs] == ['certificate']
+    assert not RevokedCertificate.objects.exists()
 
 
 @pytest.mark.django_db
 def test_a_renewal_for_another_key_is_refused(controller_on: None) -> None:
     node = _node()
+    _due(node)
     serial = node.client_serial
-    closed: dict[str, Any] = {}
+    replies: list[dict[str, Any]] = []
 
     async def body() -> None:
-        communicator = _communicator(_headers())
-        assert (await _connect(communicator))['type'] == 'websocket.accept'
-        csr = pki.make_csr(pki.new_key(), node.fingerprint, pki.ROLE_SCREEN)
-        await _send(communicator, {'type': 'renew', 'csr': csr})
-        closed.update(await communicator.receive_output(timeout=5))
+        replies.extend(
+            await _renew_once(_LAST['cert'], pki.new_key(), node.fingerprint)
+        )
 
     _run(body)
 
-    assert closed == {
-        'type': 'websocket.close',
-        'code': controller_push.CLOSE_BAD_MESSAGE,
-    }
+    assert replies == []
     node.refresh_from_db()
     assert node.client_serial == serial
+    assert node.previous_client_serial == ''
 
 
 @pytest.mark.django_db

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.db.models import F, Q
 from django.utils import timezone
@@ -28,6 +28,10 @@ PUBLISH_SOFT_TIME_LIMIT_S = 60 * 30
 PUBLISH_TIME_LIMIT_S = PUBLISH_SOFT_TIME_LIMIT_S + 60
 COMMAND_SOFT_TIME_LIMIT_S = 90
 COMMAND_TIME_LIMIT_S = COMMAND_SOFT_TIME_LIMIT_S + 30
+# Expiring requests calls each screen back (best effort, bounded by the
+# client's deadline), so allow for a few slow ones.
+HOUSEKEEPING_SOFT_TIME_LIMIT_S = 600
+HOUSEKEEPING_TIME_LIMIT_S = HOUSEKEEPING_SOFT_TIME_LIMIT_S + 60
 
 # Status polling is serial and slow on purpose: /info takes about a
 # second on a busy Pi, and screens should not spend their CPU on us.
@@ -110,17 +114,70 @@ def refresh_node(node_id: int) -> str:
     return service.check_node(node).status
 
 
-def _housekeeping() -> None:
-    """Expire unanswered join requests; keep the CRL current."""
+def renewal_due(now: datetime) -> Q:
+    """Screens whose certificate the controller should renew over REST.
+
+    A screen with a live push connection renews over it once fewer than
+    ``pki.RENEW_BEFORE`` days are left; the controller steps in when it
+    has no live connection, or when half that margin has passed and it
+    still has not.
+    """
+    from anthias_server.lib import pki
+
+    soon = now + pki.RENEW_BEFORE
+    sooner = now + pki.RENEW_BEFORE / 2
+    return Q(client_not_after__lt=sooner) | (
+        Q(client_not_after__lt=soon) & ~live_filter(now)
+    )
+
+
+@celery.task(
+    soft_time_limit=COMMAND_SOFT_TIME_LIMIT_S,
+    time_limit=COMMAND_TIME_LIMIT_S,
+)
+def renew_node_certificate(node_id: int) -> str:
+    node = Node.objects.filter(pk=node_id).first()
+    if node is None:
+        return 'screen removed'
+    return service.renew_certificate(node)
+
+
+@celery.task(
+    soft_time_limit=HOUSEKEEPING_SOFT_TIME_LIMIT_S,
+    time_limit=HOUSEKEEPING_TIME_LIMIT_S,
+)
+def controller_housekeeping() -> None:
+    """Hourly upkeep, every step best effort.
+
+    * drop join requests nobody approved in time (the join endpoint
+      does not, so an anonymous caller never waits on it);
+    * prune expired revocations and re-sign the CRL when due;
+    * queue a REST renewal for screens whose certificate is due.
+    """
     from anthias_server.controller import ca, join
 
+    if not service.controller_enabled():
+        return
     try:
         expired = join.expire_requests()
         if expired:
             logger.info('Expired %s join request(s)', expired)
+    except Exception:
+        logger.exception('Could not expire join requests')
+    try:
         ca.refresh_crl()
     except Exception:
-        logger.exception('Controller housekeeping failed')
+        logger.exception('Could not refresh the revocation list')
+    now = timezone.now()
+    due = (
+        Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
+        .exclude(public_key_pem='')
+        .filter(client_not_after__isnull=False)
+        .filter(renewal_due(now))
+        .values_list('pk', flat=True)
+    )
+    for node_id in due:
+        renew_node_certificate.delay(node_id)
 
 
 @celery.task(
@@ -142,7 +199,6 @@ def refresh_nodes() -> int:
         STATUS_LOCK_KEY, lock_value, nx=True, ex=STATUS_TIME_LIMIT_S
     ):
         return 0
-    _housekeeping()
     checked = 0
     try:
         now = timezone.now()

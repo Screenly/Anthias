@@ -72,6 +72,19 @@ class Node(models.Model):
         max_length=64, blank=True, default=''
     )
     client_not_after = models.DateTimeField(blank=True, null=True)
+    # The certificate itself, so a screen that missed a renewal reply
+    # can be sent it again instead of being issued yet another one.
+    client_cert_pem = models.TextField(blank=True, default='')
+    # The certificate a renewal replaced. It stays valid (not revoked)
+    # until the screen first connects with the new one, so a renewal
+    # reply lost on the way cannot lock the screen out (see .push).
+    previous_client_serial = models.CharField(
+        max_length=64, blank=True, default=''
+    )
+    previous_client_fingerprint = models.CharField(
+        max_length=64, blank=True, default=''
+    )
+    previous_client_not_after = models.DateTimeField(blank=True, null=True)
 
     publish_state = models.CharField(
         max_length=16,
@@ -217,8 +230,14 @@ class JoinRequest(models.Model):
     csr_pem = models.TextField()
     version = models.CharField(max_length=100, blank=True, default='')
     device_model = models.CharField(max_length=200, blank=True, default='')
+    # Derived from the join secret and both fingerprints when the
+    # request arrived (lib.pki.check_code); the screen shows the same.
+    check_code = models.CharField(max_length=20, blank=True, default='')
     created_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
+    # Set while an approval is delivering the certificate, so a second
+    # click (or a second tab) cannot approve the same request twice.
+    approving_until = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'controller_join_requests'
@@ -226,12 +245,6 @@ class JoinRequest(models.Model):
 
     def __str__(self) -> str:
         return f'{self.name} ({self.host}), waiting for approval'
-
-    @property
-    def check_code(self) -> str:
-        from anthias_server.lib.pki import check_code
-
-        return check_code(self.fingerprint)
 
     @property
     def base_url(self) -> str:
@@ -256,3 +269,16 @@ class RevokedCertificate(models.Model):
 
     def __str__(self) -> str:
         return f'{self.serial} ({self.label})'
+
+
+class CrlCounter(models.Model):
+    """The CRL number: one row, incremented on every re-sign.
+
+    Screens refuse a CRL whose number is lower than the one they hold,
+    so it must only ever grow, whatever the wall clock does.
+    """
+
+    number = models.BigIntegerField(default=0)
+
+    class Meta:
+        db_table = 'controller_crl_counter'

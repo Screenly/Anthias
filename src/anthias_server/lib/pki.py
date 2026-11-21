@@ -25,6 +25,7 @@ sides share it and it is easy to test.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import hashlib
 import secrets
@@ -52,6 +53,12 @@ CRL_REFRESH_BEFORE = dt.timedelta(days=2)
 # clock is slightly behind still accepts them.
 CLOCK_SKEW = dt.timedelta(minutes=5)
 MAX_PEM_BYTES = 16 * 1024
+# A CRL lists one serial per revoked, unexpired certificate (about 40
+# bytes of PEM each), so it gets its own, larger cap. It still fits in
+# one push message (``controller.push.MAX_MESSAGE_BYTES``, 64 KiB).
+MAX_CRL_BYTES = 48 * 1024
+# Characters in a check code (base32, 5 bits each).
+CHECK_CODE_CHARS = 12
 _EC_ONLY = 'Only EC keys are used here.'
 
 
@@ -89,9 +96,11 @@ def key_pem(key: ec.EllipticCurvePrivateKey) -> bytes:
     )
 
 
-def _pem_bytes(pem: str | bytes, what: str) -> bytes:
+def _pem_bytes(
+    pem: str | bytes, what: str, limit: int = MAX_PEM_BYTES
+) -> bytes:
     data = pem.encode('ascii', 'ignore') if isinstance(pem, str) else pem
-    if not data or len(data) > MAX_PEM_BYTES:
+    if not data or len(data) > limit:
         raise PkiError(f'The {what} is missing or too large.')
     return data
 
@@ -117,7 +126,9 @@ def load_csr(pem: str | bytes) -> x509.CertificateSigningRequest:
 
 def load_crl(pem: str | bytes) -> x509.CertificateRevocationList:
     try:
-        return x509.load_pem_x509_crl(_pem_bytes(pem, 'revocation list'))
+        return x509.load_pem_x509_crl(
+            _pem_bytes(pem, 'revocation list', MAX_CRL_BYTES)
+        )
     except ValueError as exc:
         raise PkiError('That is not a PEM revocation list.') from exc
 
@@ -413,10 +424,26 @@ def needs_renewal(
     return cert.not_valid_after_utc - (at or now()) < RENEW_BEFORE
 
 
-def check_code(node_fingerprint: str) -> str:
-    """What the operator compares on screen and controller: ABCD-1234."""
-    head = node_fingerprint[:8].upper()
-    return f'{head[:4]}-{head[4:]}'
+def check_code(secret: str, controller_fp: str, screen_fp: str) -> str:
+    """What the operator compares on screen and controller.
+
+    Derived from the join secret and both node fingerprints, so it is
+    the same on both sides only when the screen joined with this
+    controller's join information *and* the controller saw this
+    screen's certificate. 12 base32 characters (60 bits) in groups of
+    four, e.g. ``ABCD-EFGH-JKLM``: far too many to grind a key pair
+    whose code collides with a real screen's.
+    """
+    digest = hashlib.sha256(
+        b'anthias-check-code-v1\0'
+        + secret.encode()
+        + b'\0'
+        + controller_fp.lower().encode()
+        + b'\0'
+        + screen_fp.lower().encode()
+    ).digest()
+    text = base64.b32encode(digest).decode('ascii')[:CHECK_CODE_CHARS]
+    return '-'.join(text[i : i + 4] for i in range(0, len(text), 4))
 
 
 def random_request_id() -> str:

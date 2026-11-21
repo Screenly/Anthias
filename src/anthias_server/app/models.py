@@ -394,6 +394,9 @@ class ManagementController(models.Model):
     # screen's client certificate (see lib.management.install_approval).
     approved = models.BooleanField(default=False)
     request_id = models.CharField(max_length=64, blank=True, default='')
+    # What the controller shows next to this request (see
+    # lib.pki.check_code), computed here from the join information.
+    check_code = models.CharField(max_length=20, blank=True, default='')
 
     class Meta:
         db_table = 'management_controllers'

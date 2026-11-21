@@ -227,10 +227,10 @@ def is_managed() -> bool:
 
 
 def check_code() -> str:
-    """This screen's check code, as the controller shows it."""
-    from anthias_server.lib import pki
-
-    return pki.check_code(node_fingerprint())
+    """The check code of this screen's join request, as the controller
+    shows it next to the request ('' when there is none)."""
+    controller = pending_controller() or current_controller()
+    return controller.check_code if controller is not None else ''
 
 
 def _set_management_enabled(enabled: bool) -> None:
@@ -450,7 +450,16 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
         apply_caddy()
         raise
 
+    from anthias_server.lib import pki
+
     name = ' '.join(str(confirmed.get('controller_name') or '').split())
+    code = pki.check_code(info.secret, info.fingerprint, own_fp)
+    if confirmed.get('check_code') not in (None, code):
+        # Both sides derive it from the same inputs; a mismatch means
+        # the operator would be comparing different codes.
+        logger.warning(
+            'Join %s: the controller shows a different check code', info.url
+        )
     try:
         controller = ManagementController.objects.create(
             name=(name or info.name)[:MAX_CONTROLLER_NAME_LEN],
@@ -459,6 +468,7 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             token=token,
             approved=False,
             request_id=str(confirmed.get('request_id') or '')[:64],
+            check_code=code,
         )
     finally:
         _join_in_progress.clear()
@@ -552,6 +562,11 @@ def install_approval(
     Only the controller holding the token from our pending request can
     deliver it, over the pinned connection it already uses. Raises
     ManagementError if anything does not check out.
+
+    Once approved, the same call delivers a renewed certificate (the
+    controller's recovery path when the push connection did not
+    renew it). The CA must then be the one already installed, and the
+    CRL is only kept if it is not older than ours.
     """
     from anthias_server.app.models import ManagementController
     from anthias_server.lib import pki
@@ -572,6 +587,19 @@ def install_approval(
         raise ManagementError(f'The approval was not valid: {exc}') from exc
     if cert.serial_number in pki.revoked_serials(revocations):
         raise ManagementError('The certificate delivered is already revoked.')
+    if controller.approved:
+        installed = controller_ca()
+        if installed is None or pki.fingerprint(installed) != (
+            pki.fingerprint(ca)
+        ):
+            raise ManagementError(
+                'The renewed certificate is from a different CA than the '
+                'one this screen was approved with.'
+            )
+        store_crl(crl)
+        _write_public(client_cert_path(), pki.cert_pem(cert))
+        logger.info('Stored a renewed client certificate (REST)')
+        return controller
     _write_public(controller_ca_path(), pki.cert_pem(ca))
     _write_public(client_cert_path(), pki.cert_pem(cert))
     _write_public(crl_path(), pki.crl_pem(revocations))

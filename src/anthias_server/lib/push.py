@@ -124,7 +124,10 @@ def renewal_request(target: Target) -> dict[str, Any] | None:
 
 
 def handle_message(raw: str | bytes) -> str:
-    """Apply a message from the controller. Returns its type."""
+    """Apply a message from the controller. Returns its type.
+
+    A ``certificate`` that was not stored is reported as ``''``.
+    """
     from anthias_server.lib import management
 
     try:
@@ -137,11 +140,11 @@ def handle_message(raw: str | bytes) -> str:
     crl, certificate = message.get('crl'), message.get('certificate')
     if kind == 'crl' and isinstance(crl, str) and management.store_crl(crl):
         logger.info('Stored a new revocation list from the controller')
-    if (
-        kind == 'certificate'
-        and isinstance(certificate, str)
-        and management.store_client_cert(certificate)
-    ):
+    if kind == 'certificate':
+        if not isinstance(certificate, str) or not (
+            management.store_client_cert(certificate)
+        ):
+            return ''
         logger.info('Stored a renewed client certificate')
     return kind
 
@@ -218,7 +221,12 @@ async def run_session(target: Target) -> None:
                 raw = await asyncio.wait_for(
                     ws.recv(), max(0.0, next_beat - monotonic())
                 )
-                await asyncio.to_thread(handle_message, raw)
+                kind = await asyncio.to_thread(handle_message, raw)
+                if kind == 'certificate':
+                    # Reconnect with the renewed certificate: until we
+                    # do, the controller keeps the old one valid.
+                    await ws.close()
+                    return
                 continue
             except TimeoutError:
                 pass
