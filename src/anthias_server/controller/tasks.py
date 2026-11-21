@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import logging
 import secrets
+from datetime import timedelta
 
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from anthias_server import celery_tasks
 from anthias_server.celery_tasks import celery
 from anthias_server.controller import service
 from anthias_server.controller.models import Node, NodeStatus, PublishState
+from anthias_server.controller.push import live_filter
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,12 @@ COMMAND_TIME_LIMIT_S = COMMAND_SOFT_TIME_LIMIT_S + 30
 STATUS_INTERVAL_S = 300
 STATUS_SOFT_TIME_LIMIT_S = 240
 STATUS_TIME_LIMIT_S = 270
+# Polling is the fallback for screens that are not pushing their status
+# (an older Anthias, or a network that blocks the connection; see
+# .push). Those are polled at most this often; a screen whose push
+# connection just closed has last_checked_at cleared and is polled on
+# the next run.
+FALLBACK_POLL_S = 15 * 60
 STATUS_LOCK_KEY = 'controller:status:lock'
 
 # A second publish to the same screen waits for the first rather than
@@ -107,7 +115,13 @@ def refresh_node(node_id: int) -> str:
     time_limit=STATUS_TIME_LIMIT_S,
 )
 def refresh_nodes() -> int:
-    """Poll every screen's /info, one at a time."""
+    """Poll the screens that are due, one at a time.
+
+    Screens with a live push connection report on their own and are
+    skipped. The rest are polled when their last check is older than
+    FALLBACK_POLL_S (or was cleared). "Check now" on the Screens page
+    polls every screen regardless (``refresh_node``).
+    """
     if not service.controller_enabled():
         return 0
     lock_value = secrets.token_hex(8)
@@ -117,9 +131,15 @@ def refresh_nodes() -> int:
         return 0
     checked = 0
     try:
-        nodes = Node.objects.exclude(status=NodeStatus.UNAUTHORIZED).order_by(
-            F('last_checked_at').asc(nulls_first=True), 'pk'
+        now = timezone.now()
+        due = Q(last_checked_at__isnull=True) | Q(
+            last_checked_at__lt=now - timedelta(seconds=FALLBACK_POLL_S)
         )
+        nodes = (
+            Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
+            .exclude(live_filter(now))
+            .filter(due)
+        ).order_by(F('last_checked_at').asc(nulls_first=True), 'pk')
         for node in nodes:
             # Record the attempt before network I/O, so even a check
             # interrupted by the task limit yields to other screens on
