@@ -77,13 +77,14 @@
 <div
   x-show="bulkDeleteOpen"
   x-cloak
+  x-trap="bulkDeleteOpen"
   class="modal-overlay modal-overlay--nested"
   @keydown.escape.window="closeBulkDelete()"
   @click.self="closeBulkDelete()"
 >
-  <div class="modal-card modal-card--sm">
+  <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-modal-title">
     <div class="modal-card__header">
-      <h2>Delete selected assets?</h2>
+      <h2 id="bulk-delete-modal-title">Delete selected assets?</h2>
       <button type="button" class="modal-card__close" @click="closeBulkDelete()" aria-label="Close">
         <i class="ti ti-x"></i>
       </button>
