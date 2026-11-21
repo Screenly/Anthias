@@ -579,6 +579,14 @@ def send_telemetry_task() -> None:
 
 @celery.task
 def cleanup() -> None:
+    from anthias_server.lib import backup_helper
+
+    # API-created backup archives carry the secret key and password
+    # hash; never leave them on disk past their download window.
+    backup_helper.prune_archives(
+        path.join(getenv('HOME') or '', backup_helper.static_dir)
+    )
+
     asset_dir = settings['assetdir']
     if not path.isdir(asset_dir):
         return

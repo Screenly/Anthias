@@ -264,8 +264,13 @@ class ScreenPushConsumer(AsyncWebsocketConsumer):
     async def connect(self) -> None:
         from anthias_server.lib import management
 
+        # The per-install listener secret (see
+        # management.listener_value) proves the connection came through
+        # Caddy's :8443 site, which is also what makes the forwarded
+        # client-certificate header trustworthy.
         listener = _header(self.scope, 'X-Anthias-Listener')
-        if not hmac.compare_digest(listener, management.M2M_LISTENER_VALUE):
+        expected = await database_sync_to_async(management.listener_value)()
+        if not hmac.compare_digest(listener.encode(), expected.encode()):
             await self.close(code=CLOSE_NOT_M2M)
             return
         cert = client_certificate(self.scope)

@@ -207,7 +207,10 @@ def _build_drf_auth_classes() -> dict[str, type]:
         SessionAuthentication,
         get_authorization_header,
     )
-    from rest_framework.exceptions import AuthenticationFailed
+    from rest_framework.exceptions import (
+        AuthenticationFailed,
+        PermissionDenied,
+    )
 
     class _AuthBackendGated:
         """Mixin: ``authenticate()`` returns ``None`` (= "this class
@@ -308,9 +311,30 @@ def _build_drf_auth_classes() -> dict[str, type]:
                 plaintext = parts[1].decode('ascii')
             except UnicodeDecodeError as exc:
                 raise AuthenticationFailed('Invalid token.') from exc
+            if _plaintext_transport(request):
+                # Refused before the lookup: the token has already
+                # crossed the network in clear text, and accepting it
+                # would teach the integration that this is fine. Tokens
+                # are new, so nothing depends on using them over HTTP.
+                raise AuthenticationFailed(
+                    'API tokens are only accepted over HTTPS. Use '
+                    'https:// and revoke this token if it was sent over '
+                    'the network in clear text.'
+                )
             token = authenticate_token(plaintext)
             if token is None:
                 raise AuthenticationFailed('Invalid or revoked token.')
+            from anthias_server.lib.api_tokens import token_refusal
+            from anthias_server.lib.management import request_via_m2m
+
+            refusal = token_refusal(
+                token,
+                request.method or '',
+                request.path,
+                request_via_m2m(request),
+            )
+            if refusal:
+                raise PermissionDenied(refusal)
             return (token.user, token)
 
         def authenticate_header(self, request: DRFRequest) -> str:
@@ -420,6 +444,21 @@ def _login_redirect(request: HttpRequest) -> HttpResponse:
     return redirect(
         f'{login_url}?{urlencode({"next": request.get_full_path()})}'
     )
+
+
+def _plaintext_transport(request: Any) -> bool:
+    """True for a request that reached us over plain HTTP from outside.
+
+    Only meaningful behind Caddy (``FORWARDED_ALLOW_IPS`` set, which is
+    also what makes ``is_secure()`` honour X-Forwarded-Proto): then a
+    non-secure request came in on :80. Development and test setups
+    talk to the server directly and have no HTTPS at all.
+    """
+    from django.conf import settings as django_settings
+
+    if not getattr(django_settings, 'BEHIND_TLS_PROXY', False):
+        return False
+    return not request.is_secure()
 
 
 def authorized[**P, R](

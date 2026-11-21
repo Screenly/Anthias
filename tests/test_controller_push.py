@@ -232,6 +232,39 @@ def test_push_is_refused_without_m2m_listener_or_a_current_certificate(
 
 
 @pytest.mark.django_db
+def test_push_wants_the_per_install_listener_secret(
+    controller_on: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a Caddy run directory, the bare 'm2m' marker is not enough:
+    another container on the Docker network could send it and claim a
+    forwarded client certificate."""
+    _node()
+    monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path)
+    management.reset_listener_cache()
+    try:
+        secret = management.listener_value()
+
+        async def refused() -> None:
+            verdict = await _connect(_communicator(_headers()))
+            assert verdict == {
+                'type': 'websocket.close',
+                'code': controller_push.CLOSE_NOT_M2M,
+            }
+
+        _run(refused)
+
+        async def accepted() -> None:
+            verdict = await _connect(_communicator(_headers(listener=secret)))
+            assert verdict['type'] == 'websocket.accept'
+
+        _run(accepted)
+    finally:
+        management.reset_listener_cache()
+
+
+@pytest.mark.django_db
 def test_push_is_refused_when_controller_mode_is_off(
     _isolated_settings_conf: None,
 ) -> None:
@@ -517,7 +550,8 @@ def test_m2m_site_requests_a_client_certificate_and_forwards_it() -> None:
     # Found on the QA rig: with client auth configured Caddy enforces
     # SNI == Host and answers 421, and peers connect by IP (no SNI).
     assert server['strict_sni_host'] is False
-    proxy = server['routes'][0]['handle'][0]
+    # The first handler on each route is its body cap.
+    proxy = server['routes'][0]['handle'][1]
     assert proxy['headers']['request']['set'][caddy.CLIENT_CERT_HEADER] == [
         '{http.request.tls.client.certificate_der_base64}'
     ]

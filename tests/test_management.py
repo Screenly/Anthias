@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, Self
 from unittest.mock import MagicMock
 
@@ -482,9 +483,18 @@ def test_m2m_server_shape() -> None:
             'client_authentication': {'mode': 'request'},
         }
     ]
-    api_route, fallback = server['routes']
+    join_route, api_route, fallback = server['routes']
+    assert join_route['match'] == [{'path': ['/api/v2/controller/join']}]
+    assert join_route['handle'][0] == {
+        'handler': 'request_body',
+        'max_size': management.JOIN_MAX_BODY_BYTES,
+    }
     assert api_route['match'] == [{'path': ['/api/v2/*']}]
-    (proxy,) = api_route['handle']
+    limit, proxy = api_route['handle']
+    assert limit == {
+        'handler': 'request_body',
+        'max_size': management.M2M_MAX_BODY_BYTES,
+    }
     assert proxy['handler'] == 'reverse_proxy'
     assert proxy['upstreams'] == [{'dial': 'anthias-server:8080'}]
     assert proxy['headers']['request']['set'] == {
@@ -496,6 +506,37 @@ def test_m2m_server_shape() -> None:
     assert fallback == {
         'handle': [{'handler': 'static_response', 'status_code': 404}]
     }
+
+
+def test_listener_value_is_a_secret_in_the_run_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.lib import caddy
+
+    monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path)
+    management.reset_listener_cache()
+    try:
+        value = management.listener_value()
+        assert value.startswith('m2m:') and len(value) > 30
+        secret_file = tmp_path / 'm2m-listener.secret'
+        assert secret_file.stat().st_mode & 0o777 == 0o600
+        # Stable across calls and restarts (re-read from the file).
+        management.reset_listener_cache()
+        assert management.listener_value() == value
+        proxy = management.m2m_server()['routes'][1]['handle'][1]
+        assert proxy['headers']['request']['set'] == {
+            'X-Anthias-Listener': [value],
+            'X-Anthias-Client-Cert': [
+                '{http.request.tls.client.certificate_der_base64}'
+            ],
+        }
+        request = MagicMock()
+        request.headers = {'X-Anthias-Listener': 'm2m'}
+        assert not management.request_via_m2m(request)
+        request.headers = {'X-Anthias-Listener': value}
+        assert management.request_via_m2m(request)
+    finally:
+        management.reset_listener_cache()
 
 
 @pytest.mark.django_db
@@ -546,11 +587,17 @@ def test_request_via_m2m() -> None:
 def test_api_pairing_get_and_controller_delete(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    _join_and_approve()
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
     plaintext = controller_reply['calls'][0]['json']['token']
     client = Client()
     auth = {'Authorization': f'Bearer {plaintext}'}
     url = reverse('api:pairing_v2')
+
+    # The controller's token only works through the :8443 listener,
+    # where a managed screen also wants its controller's certificate.
+    assert client.get(url, headers=auth).status_code == 403
+    auth.update(_der_header(_controller_cert(ca_cert, ca_key)))
 
     response = client.get(url, headers=auth)
     assert response.status_code == 200
@@ -893,12 +940,13 @@ def test_controller_delivers_the_certificate_over_the_api(
     auth = {'Authorization': f'Bearer {plaintext}'}
     client = Client()
 
-    # Only on the management port, and only with the controller token.
+    # Only on the management port, and only with the controller token
+    # (which is itself refused off the management port).
     assert (
         client.post(
             url, body, content_type='application/json', headers=auth
         ).status_code
-        == 404
+        == 403
     )
     session = Client()
     session.force_login(operator)
@@ -1007,8 +1055,8 @@ def test_a_managed_screen_accepts_m2m_calls_only_from_its_controller(
         return int(Client().get(url, headers={**auth, **headers}).status_code)
 
     assert status(_der_header(good)) == 200
-    # The UI port is not affected (no listener tag).
-    assert status({}) == 200
+    # Off the management port the controller's token is refused outright.
+    assert status({}) == 403
     assert status({'X-Anthias-Listener': 'm2m'}) == 403
     assert status({**_der_header(good), 'X-Anthias-Client-Cert': '!!'}) == 403
     assert (

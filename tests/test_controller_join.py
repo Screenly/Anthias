@@ -863,7 +863,7 @@ def test_pending_requests_are_capped(
     )
     response = Client().post(
         JOIN_URL,
-        _body(join.current_secret()),
+        _body(join.current_secret(), screen_host='10.0.0.7'),
         content_type='application/json',
         headers=M2M,
     )
@@ -1249,3 +1249,205 @@ def test_screens_page_keeps_headings_and_fingerprints_reachable(
     assert menus
     assert html.count('@keydown.escape=') == menus
     assert html.count('@click.outside=') == menus
+
+
+# hardening: join callback targets, secret expiry, body size, auditing
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('port', [22, 6379, 8080, 443])
+def test_join_only_calls_back_the_management_port(
+    controller_on: None, screen_ok: list[Any], port: int
+) -> None:
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.7', screen_port=port),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 400
+    assert '8443' in response.json()['detail']
+    assert screen_ok == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'host',
+    [
+        'redis',
+        'anthias-server',
+        'localhost',
+        '127.0.0.1',
+        '::1',
+        '169.254.169.254',
+        '0.0.0.0',
+        '::ffff:127.0.0.1',
+    ],
+)
+def test_join_refuses_internal_callback_targets(
+    controller_on: None, screen_ok: list[Any], host: str
+) -> None:
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host=host),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 400
+    assert screen_ok == []
+    assert not Node.objects.exists()
+
+
+def test_callback_host_check_resolves_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_getaddrinfo(host: str, *_a: Any, **_k: Any) -> list[Any]:
+        addr = '127.0.0.1' if host == 'sneaky.example.com' else '10.0.0.5'
+        return [(2, 1, 6, '', (addr, 8443))]
+
+    monkeypatch.setattr('socket.getaddrinfo', fake_getaddrinfo)
+    assert not join._allowed_callback_host('sneaky.example.com')
+    assert join._allowed_callback_host('screen.example.com')
+    assert join._allowed_callback_host('192.168.1.20')
+
+
+@pytest.mark.django_db
+def test_internal_host_is_checked_only_after_the_secret(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    join.current_secret()
+    with patch.object(join, '_allowed_callback_host') as check:
+        response = Client().post(
+            JOIN_URL,
+            _body('wrong', screen_host='redis'),
+            content_type='application/json',
+            headers=M2M,
+        )
+    assert response.status_code == 403
+    check.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_callback_failure_does_not_leak_the_low_level_reason(
+    controller_on: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    def offline(*_a: Any, **_k: Any) -> Any:
+        raise NodeOfflineError(
+            'Cannot reach 10.0.0.9:8443: Connection refused.'
+        )
+
+    monkeypatch.setattr(client_mod.NodeClient, 'json', offline)
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.9'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 502
+    detail = response.json()['detail']
+    assert 'refused' not in detail.lower()
+    assert '10.0.0.9:8443' in detail
+
+
+@pytest.mark.django_db
+def test_join_secret_expires(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    secret = join.current_secret()
+    JoinSecret.objects.update(
+        created_at=timezone.now()
+        - timedelta(seconds=join.JOIN_SECRET_TTL_S + 1)
+    )
+    response = Client().post(
+        JOIN_URL,
+        _body(secret, screen_host='10.0.0.7'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 403
+    assert 'expired' in response.json()['detail']
+    assert screen_ok == []
+    # The Screens page gets fresh join information.
+    fresh = join.current_secret()
+    assert fresh != secret
+    expiry = join.current_expiry()
+    assert expiry is not None and expiry > timezone.now()
+
+
+@pytest.mark.django_db
+def test_oversized_join_body_is_refused_before_parsing(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    big = _body(join.current_secret(), screen_host='10.0.0.7')
+    big['screen_name'] = 'x' * (management.JOIN_MAX_BODY_BYTES + 1)
+    with patch.object(join, 'parse_join_request') as parse:
+        response = Client().post(
+            JOIN_URL,
+            big,
+            content_type='application/json',
+            headers=M2M,
+        )
+    assert response.status_code == 413
+    parse.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_anonymous_failures_are_not_audited(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    join.current_secret()
+    for body in (_body('wrong'), {'nonsense': True}):
+        Client().post(
+            JOIN_URL, body, content_type='application/json', headers=M2M
+        )
+    assert not AuditEntry.objects.exists()
+
+
+def test_rate_limit_key_groups_ipv6_by_64() -> None:
+    assert join.rate_limit_key('2001:db8::1') == join.rate_limit_key(
+        '2001:db8::ffff:1'
+    )
+    assert join.rate_limit_key('2001:db8::1') != join.rate_limit_key(
+        '2001:db8:0:1::1'
+    )
+    assert join.rate_limit_key('192.168.1.5') == '192.168.1.5'
+    assert join.rate_limit_key('::ffff:192.168.1.5') == '192.168.1.5'
+
+
+@pytest.mark.django_db
+def test_audit_is_pruned_and_sanitised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service, 'AUDIT_MAX_ENTRIES', 5)
+    for i in range(8):
+        service.audit('join', 'failed', node_name=f'n{i}', detail='a\nb\x1bc')
+    assert AuditEntry.objects.count() == 5
+    entry = AuditEntry.objects.first()
+    assert entry is not None
+    assert entry.node_name == 'n7'
+    assert entry.detail == 'a b c'
+
+
+def test_vault_replaces_an_empty_key(tmp_path: Path) -> None:
+    path = tmp_path / 'empty.key'
+    path.write_bytes(b'')
+    key = vault._read_or_create_key(str(path))
+    Fernet(key)
+    assert path.read_bytes().strip() == key
+    assert path.stat().st_mode & 0o777 == 0o600
+    # Stable once written.
+    assert vault._read_or_create_key(str(path)) == key
+
+
+def test_vault_creates_a_key_atomically(tmp_path: Path) -> None:
+    path = tmp_path / 'new.key'
+    key = vault._read_or_create_key(str(path))
+    Fernet(key)
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert [p.name for p in tmp_path.iterdir()] == ['new.key']

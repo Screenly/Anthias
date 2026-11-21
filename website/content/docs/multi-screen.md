@@ -104,9 +104,13 @@ Later, the same section shows **This screen is a controller**, with a
 link to **Screens** and **Turn off controller mode**. Turning
 authentication off also turns controller mode off.
 
-You can use the same join information for every screen. **Regenerate**
-makes the current one stop working, for example if it was shared by
-mistake. Screens that already joined are not affected.
+You can use the same join information for every screen for one hour.
+After that it stops working, so a copy left in a chat or a screenshot
+can't be used to add a device later; reload the **Screens** page for
+new join information. **Regenerate** makes the current one stop working
+at once, for example if it was shared by mistake. Screens that already
+joined are not affected. The controller only calls a joining screen
+back on port 8443, never on its own loopback or internal addresses.
 
 ## Add a screen
 
@@ -257,6 +261,10 @@ Management traffic never uses passwords and never leaves your network:
   hash of the controller's token. The controller stores screen tokens
   encrypted, with a key that is only in a backup if you choose to
   include the device keys (below).
+* **The controller's token is narrow.** The screen accepts it only on
+  port 8443 and only for the calls the controller makes (assets,
+  playlist order, playback, display power, reboot and pairing). It
+  can't create or restore backups.
 
 ### Backups
 
@@ -278,6 +286,10 @@ OPNsense. They can't be added without a password.
 To restore them, enter that password in **Keys password** before
 uploading the backup. Without it, everything else is restored and the
 keys are left out. A wrong password restores nothing.
+
+Restoring a backup revokes every API token in it and ends
+multi-screen management on a screen, so a restored backup can't bring
+back old credentials. Join the screen again afterwards.
 
 Keep a backup with keys as safe as the device itself: whoever has it
 and the password can stand in for the controller. Restore it on one

@@ -21,12 +21,14 @@ authenticated by the secret.
 from __future__ import annotations
 
 import base64
+import datetime
 import hmac
 import ipaddress
 import json
 import logging
 import re
 import secrets
+import socket
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -65,6 +67,13 @@ CALLBACK_READ_TIMEOUT_S = 15
 # bits) pointless even in principle.
 JOIN_RATE_LIMIT = 10
 JOIN_RATE_WINDOW_S = 60
+
+# Join information stops working an hour after it was generated. The
+# secret is reusable within that window so one snippet can join a room
+# of screens, but a snippet that leaks later (chat history, a
+# screenshot) cannot enroll a rogue node. Opening the Screens page
+# after expiry shows fresh join information.
+JOIN_SECRET_TTL_S = 60 * 60
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +118,11 @@ def current_secret() -> str:
     """The join secret, created on first use or after a foreign restore."""
     with transaction.atomic():
         row = JoinSecret.objects.select_for_update().first()
+        if row is not None and _expired(row):
+            # Expired join information is useless to show; start a new
+            # window so the Screens page always has a working snippet.
+            row.delete()
+            row = None
         if row is None:
             row = JoinSecret.objects.create(
                 ciphertext=vault.encrypt(_new_secret())
@@ -122,7 +136,8 @@ def current_secret() -> str:
             logger.warning('Replacing an unreadable controller join secret')
             secret = _new_secret()
             row.ciphertext = vault.encrypt(secret)
-            row.save(update_fields=['ciphertext'])
+            row.created_at = timezone.now()
+            row.save(update_fields=['ciphertext', 'created_at'])
     return secret
 
 
@@ -191,8 +206,13 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
     port = data.get('screen_port', DEFAULT_NODE_PORT)
     if isinstance(port, bool) or not isinstance(port, int):
         raise JoinError(400, '"screen_port" must be a number.')
-    if not 0 < port < 65536:
-        raise JoinError(400, '"screen_port" is out of range.')
+    # Screens always serve management on M2M_PORT. Accepting any port
+    # would let a secret holder point the callback at arbitrary
+    # services next to the controller and read the outcome.
+    if port != M2M_PORT:
+        raise JoinError(
+            400, f'"screen_port" must be {M2M_PORT}, the management port.'
+        )
     host = text('screen_host', 253) or client_ip
     if not host or not _valid_host(host):
         raise JoinError(400, 'The join request has no usable screen address.')
@@ -250,9 +270,83 @@ def _valid_host(host: str) -> bool:
     return True
 
 
+# Names that resolve to this controller's own containers on the Docker
+# network, or to the controller itself. A callback there is never a
+# screen.
+_INTERNAL_HOSTS = frozenset(
+    {
+        'localhost',
+        'redis',
+        'anthias-server',
+        'anthias-caddy',
+        'anthias-celery',
+        'anthias-viewer',
+        'anthias-wifi-connect',
+        'webview',
+    }
+)
+
+
+def _blocked_address(
+    addr: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> bool:
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+    return (
+        addr.is_loopback
+        or addr.is_link_local
+        or addr.is_unspecified
+        or addr.is_multicast
+        or addr.is_reserved
+    )
+
+
+def _allowed_callback_host(host: str) -> bool:
+    """Refuse callback targets that cannot be a screen on the LAN.
+
+    Loopback, link-local (cloud metadata lives there), multicast and
+    the Docker service names of this controller's own stack. A DNS
+    name is resolved and every address it returns is checked, so a
+    name pointing at 127.0.0.1 is refused too. Unresolvable names are
+    left to fail in the callback with a generic error.
+    """
+    lowered = host.lower().rstrip('.')
+    if lowered in _INTERNAL_HOSTS or lowered.endswith('.localhost'):
+        return False
+    try:
+        return not _blocked_address(ipaddress.ip_address(lowered))
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(lowered, M2M_PORT, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return True
+    for info in infos:
+        try:
+            addr = ipaddress.ip_address(str(info[4][0]).split('%', 1)[0])
+        except ValueError:
+            continue
+        if _blocked_address(addr):
+            return False
+    return True
+
+
+def secret_expires_at(row: JoinSecret) -> datetime.datetime:
+    return row.created_at + datetime.timedelta(seconds=JOIN_SECRET_TTL_S)
+
+
+def _expired(row: JoinSecret) -> bool:
+    return timezone.now() >= secret_expires_at(row)
+
+
+def current_expiry() -> datetime.datetime | None:
+    row = JoinSecret.objects.first()
+    return secret_expires_at(row) if row is not None else None
+
+
 def check_secret(candidate: str) -> bool:
     row = JoinSecret.objects.first()
-    if row is None:
+    if row is None or _expired(row):
         return False
     try:
         secret = vault.decrypt(row.ciphertext)
@@ -261,12 +355,26 @@ def check_secret(candidate: str) -> bool:
     return hmac.compare_digest(candidate.encode(), secret.encode())
 
 
+def rate_limit_key(client_ip: str) -> str:
+    """The bucket a client counts against: its IPv4 address, or its
+    IPv6 /64, since one host can rotate through a whole /64 at will."""
+    try:
+        addr = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return client_ip
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.ip_network(f'{addr}/64', strict=False))
+    return str(addr)
+
+
 def rate_limited(client_ip: str) -> bool:
     import redis
 
     from anthias_common.utils import connect_to_redis
 
-    key = f'controller:join:{client_ip}'
+    key = f'controller:join:{rate_limit_key(client_ip)}'
     try:
         r = connect_to_redis()
         count = r.incr(key)
@@ -300,12 +408,21 @@ def verify_screen(request: JoinRequest) -> dict[str, Any]:
                 timeout=(CONNECT_TIMEOUT_S, CALLBACK_READ_TIMEOUT_S),
             )
     except NodeError as exc:
+        # The low-level reason (refused, timed out, TLS error) stays in
+        # the controller's log. Returning it would turn the callback
+        # into a port scanner for anyone holding the join secret.
+        logger.warning(
+            'Join callback to %s:%s failed: %s',
+            request.screen_host,
+            request.screen_port,
+            exc,
+        )
         raise JoinError(
             502,
             f'The controller could not reach this screen back at '
-            f'{request.screen_host}:{request.screen_port} ({exc}). '
-            'Check that the controller can reach the screen on that '
-            'address and port.',
+            f'{request.screen_host}:{request.screen_port}. Check that the '
+            'controller can reach the screen on that address and port; '
+            "the controller's log has the details.",
         ) from exc
     return info if isinstance(info, dict) else {}
 
@@ -320,8 +437,18 @@ def request_join(request: JoinRequest) -> tuple[PendingJoin, bool]:
     if not check_secret(request.secret):
         raise JoinError(
             403,
-            'The join information is wrong or was regenerated on the '
-            "controller. Copy it again from the controller's Screens page.",
+            'The join information is wrong, has expired, or was '
+            'regenerated on the controller. Copy it again from the '
+            "controller's Screens page.",
+        )
+    # Checked only after the secret, so an anonymous caller cannot make
+    # the controller resolve names it picks.
+    if not _allowed_callback_host(request.screen_host):
+        raise JoinError(
+            400,
+            'The screen address points at this controller or at an internal '
+            'service. Enter the address the controller can reach the screen '
+            'on, as an IP address or DNS name.',
         )
     expire_requests()
     if (
