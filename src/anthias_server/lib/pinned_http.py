@@ -21,11 +21,18 @@ Two details that are easy to get wrong:
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import re
+import socket
+import threading
+from collections.abc import Iterator
 from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3.connection import HTTPSConnection
+from urllib3.connectionpool import HTTPSConnectionPool
 
 _FINGERPRINT = re.compile(r'^[0-9a-f]{64}$')
 
@@ -44,6 +51,86 @@ def normalize_fingerprint(value: str) -> str:
     return cleaned
 
 
+class RequestDeadlineError(requests.exceptions.Timeout):
+    """The entire request exhausted its wall-clock budget."""
+
+
+class _RequestDeadline:
+    def __init__(self, seconds: float) -> None:
+        self.expired = False
+        self._lock = threading.Lock()
+        self._sockets: list[socket.socket] = []
+        self.timer = threading.Timer(seconds, self._expire)
+
+    def watch(self, sock: socket.socket | None) -> None:
+        if sock is None:
+            return
+        with self._lock:
+            if self.expired:
+                raise RequestDeadlineError(
+                    'The screen took too long to answer.'
+                )
+            if sock not in self._sockets:
+                self._sockets.append(sock)
+
+    def _expire(self) -> None:
+        with self._lock:
+            self.expired = True
+            for sock in self._sockets:
+                # close() alone does not interrupt a makefile() read.
+                # shutdown wakes header/body reads even when the peer
+                # keeps sending inside the inactivity timeout.
+                with contextlib.suppress(OSError):
+                    sock.shutdown(socket.SHUT_RDWR)
+
+
+_deadline: contextvars.ContextVar[_RequestDeadline | None] = (
+    contextvars.ContextVar('pinned_http_deadline', default=None)
+)
+
+
+@contextlib.contextmanager
+def request_deadline(seconds: float) -> Iterator[None]:
+    """Interrupt pinned HTTP I/O after a total wall-clock budget.
+
+    Join the timer before returning to the caller, so it cannot fire
+    during the next request on this session. No reader is abandoned
+    in a worker thread.
+    """
+    guard = _RequestDeadline(seconds)
+    token = _deadline.set(guard)
+    guard.timer.start()
+    try:
+        yield
+    finally:
+        guard.timer.cancel()
+        guard.timer.join()
+        _deadline.reset(token)
+        if guard.expired:
+            raise RequestDeadlineError('The screen took too long to answer.')
+
+
+class _DeadlineHTTPSConnection(HTTPSConnection):
+    def _watch_socket(self) -> None:
+        guard = _deadline.get()
+        if guard is not None:
+            guard.watch(self.sock)
+
+    def connect(self) -> None:
+        super().connect()
+        self._watch_socket()
+
+    def request(self, *args: Any, **kwargs: Any) -> None:
+        # Reused connections already have a socket; new ones register
+        # theirs in connect(), before sending HTTP bytes.
+        self._watch_socket()
+        super().request(*args, **kwargs)
+
+
+class _DeadlineHTTPSConnectionPool(HTTPSConnectionPool):
+    ConnectionCls = _DeadlineHTTPSConnection
+
+
 class FingerprintAdapter(HTTPAdapter):
     def __init__(self, fingerprint: str, **kwargs: Any) -> None:
         self.fingerprint = normalize_fingerprint(fingerprint)
@@ -54,6 +141,11 @@ class FingerprintAdapter(HTTPAdapter):
         kwargs['cert_reqs'] = 'CERT_NONE'
         kwargs['assert_hostname'] = False
         super().init_poolmanager(*args, **kwargs)
+        # Copy rather than mutate urllib3's process-wide registry.
+        self.poolmanager.pool_classes_by_scheme = {
+            **self.poolmanager.pool_classes_by_scheme,
+            'https': _DeadlineHTTPSConnectionPool,
+        }
 
     def cert_verify(self, conn: Any, url: str, verify: Any, cert: Any) -> None:
         super().cert_verify(conn, url, False, cert)

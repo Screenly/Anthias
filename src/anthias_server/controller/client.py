@@ -82,7 +82,14 @@ _ERRNO_RE = re.compile(r'\[Errno -?\d+\] ([^\'"\)\]]+)')
 def _offline_reason(url: str, exc: Exception) -> str:
     """A one-line reason instead of urllib3's nested repr."""
     where = urlsplit(url).netloc
-    if isinstance(exc, (ResponseTooLargeError, ResponseDeadlineError)):
+    if isinstance(
+        exc,
+        (
+            ResponseTooLargeError,
+            ResponseDeadlineError,
+            pinned_http.RequestDeadlineError,
+        ),
+    ):
         return f'{where}: {exc}'
     if isinstance(exc, requests.exceptions.Timeout):
         return f'{where} did not answer in time.'
@@ -208,16 +215,17 @@ class NodeClient:
         url = f'{self.base_url}{API_PREFIX}{path}'
         started = _monotonic()
         try:
-            response = self.session.request(
-                method,
-                url,
-                headers=headers,
-                timeout=timeout,
-                allow_redirects=False,
-                stream=True,
-                **kwargs,
-            )
-            _read_bounded(response, deadline=started + sum(timeout))
+            with pinned_http.request_deadline(sum(timeout)):
+                response = self.session.request(
+                    method,
+                    url,
+                    headers=headers,
+                    timeout=timeout,
+                    allow_redirects=False,
+                    stream=True,
+                    **kwargs,
+                )
+                _read_bounded(response, deadline=started + sum(timeout))
         except requests.exceptions.SSLError as exc:
             if 'fingerprint' in str(exc).lower():
                 raise NodeCertificateError(

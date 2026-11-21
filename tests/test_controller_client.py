@@ -8,11 +8,13 @@ handshake path the controller uses against a screen.
 from __future__ import annotations
 
 import datetime as dt
+import gzip
 import hashlib
 import json
 import os
 import ssl
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -316,3 +318,80 @@ def test_error_detail_from_a_screen_is_one_short_line(
     message = str(excinfo.value)
     assert '\n' not in message and '\x1b' not in message
     assert len(message) < 300
+
+
+@pytest.mark.parametrize('mode', ['headers', 'body', 'chunked', 'gzip'])
+def test_deadline_interrupts_live_dripping_response(
+    tmp_path: Path, mode: str
+) -> None:
+    """Exercise blocking TLS reads, not a mocked clock after iter_content."""
+    cert, key, fingerprint = _make_cert(tmp_path, 'dripping-screen')
+    stop = threading.Event()
+    peers: list[int] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def do_GET(self) -> None:
+            peers.append(self.client_address[1])
+            if self.path.endswith('/fast'):
+                self.send_response(200)
+                self.send_header('Content-Length', '2')
+                self.end_headers()
+                self.wfile.write(b'{}')
+                return
+            payload = b'x' * 100
+            if mode == 'headers':
+                self.wfile.write(b'HTTP/1.1 200 OK\r\nX-Drip: ')
+            else:
+                self.send_response(200)
+                if mode == 'gzip':
+                    payload = gzip.compress(bytes(range(100)))
+                    self.send_header('Content-Encoding', 'gzip')
+                if mode == 'chunked':
+                    self.send_header('Transfer-Encoding', 'chunked')
+                else:
+                    self.send_header('Content-Length', str(len(payload)))
+                self.end_headers()
+            try:
+                for byte in payload:
+                    chunk = bytes([byte])
+                    if mode == 'chunked':
+                        chunk = b'1\r\n' + chunk + b'\r\n'
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    if stop.wait(0.04):
+                        break
+            except OSError:
+                pass
+            finally:
+                self.close_connection = True
+
+        def log_message(self, *_args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert, key)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        with NodeClient(
+            f'https://127.0.0.1:{server.server_port}', fingerprint
+        ) as client:
+            # Start with a pooled connection: it needs the same protection
+            # as a newly established connection.
+            client.request('GET', '/fast')
+            started = time.monotonic()
+            with pytest.raises(NodeOfflineError, match='too long'):
+                client.request('GET', '/slow', timeout=(0.2, 0.4))
+            assert time.monotonic() - started < 1.2
+            assert peers[0] == peers[1]
+            # The aborted socket cannot poison subsequent requests.
+            assert client.request('GET', '/fast').json() == {}
+    finally:
+        stop.set()
+        server.shutdown()
+        thread.join()
+        server.server_close()
