@@ -1177,8 +1177,28 @@ function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
     if (ev.pointerId !== pointerId) return
     const didMove = moved
     cleanup()
-    if (didMove) postOrder(orderUrl, tbody)
+    if (didMove) {
+      suppressClick = true
+      postOrder(orderUrl, tbody)
+    }
   }
+
+  // A drag ends in a click on the grip, and the grip's click opens the
+  // move menu. Swallow the one click that closes a real drag so it does
+  // not; a press without movement still opens the menu.
+  let suppressClick = false
+  tbody.addEventListener(
+    'click',
+    (ev: MouseEvent) => {
+      if (!suppressClick) return
+      suppressClick = false
+      if ((ev.target as HTMLElement).closest('.drag-handle')) {
+        ev.preventDefault()
+        ev.stopPropagation()
+      }
+    },
+    true,
+  )
 
   tbody.addEventListener('pointerdown', (ev: PointerEvent) => {
     if (ev.button !== 0) return
@@ -1199,10 +1219,11 @@ function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
   })
 }
 
-// The keyboard path to the same reorder: ArrowUp / ArrowDown on a
-// focused .drag-handle moves its row one place. Dragging is pointer
-// only, so without this a keyboard or switch user had no way to change
-// the play order at all (WCAG 2.1.1).
+// The non-drag paths to the same reorder. Dragging needs a pointer AND
+// a path traced across the screen, so two alternatives sit beside it:
+// ArrowUp / ArrowDown on a focused .drag-handle (WCAG 2.1.1), and a
+// click on the handle, which opens a popover of moves (WCAG 2.5.7, one
+// tap and no drag).
 //
 // The POST is debounced so holding an arrow key sends one request, not
 // one per step, and the refresh that follows does not land halfway
@@ -1210,6 +1231,8 @@ function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
 // focus is handed back to the moved row's new handle once it lands.
 let reorderFocusId: string | null = null
 const REORDER_POST_DELAY_MS = 500
+
+type Move = 'top' | 'up' | 'down' | 'bottom'
 
 function announceReorder(row: HTMLTableRowElement, tbody: HTMLElement): void {
   const status = document.getElementById('reorder-status')
@@ -1219,11 +1242,37 @@ function announceReorder(row: HTMLTableRowElement, tbody: HTMLElement): void {
   status.textContent = `${name} moved to position ${position} of ${tbody.children.length}.`
 }
 
+// Where `move` would put `row`, or null when it is already there.
+function moveTarget(row: HTMLTableRowElement, tbody: HTMLElement, move: Move): Node | null | undefined {
+  switch (move) {
+    case 'top':
+      return row === tbody.firstElementChild ? undefined : tbody.firstElementChild
+    case 'up':
+      return row.previousElementSibling ?? undefined
+    case 'down':
+      return row.nextElementSibling ? row.nextElementSibling.nextSibling : undefined
+    case 'bottom':
+      return row === tbody.lastElementChild ? undefined : null
+  }
+}
+
 function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
   if (tbody.dataset.keysBound === '1') return
   tbody.dataset.keysBound = '1'
 
   let timer: number | undefined
+
+  const moveRow = (row: HTMLTableRowElement, move: Move): void => {
+    const before = moveTarget(row, tbody, move)
+    if (before === undefined) return
+    tbody.insertBefore(row, before)
+    row.querySelector<HTMLElement>('.drag-handle')?.focus()
+    announceReorder(row, tbody)
+
+    reorderFocusId = row.dataset.assetId ?? null
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => postOrder(orderUrl, tbody), REORDER_POST_DELAY_MS)
+  }
 
   tbody.addEventListener('keydown', (ev: KeyboardEvent) => {
     if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return
@@ -1232,18 +1281,39 @@ function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
     const row = handle.closest('tr') as HTMLTableRowElement | null
     if (!row || row.parentElement !== tbody) return
     ev.preventDefault()
-
-    const sibling =
-      ev.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling
-    if (!sibling) return
-    tbody.insertBefore(row, ev.key === 'ArrowUp' ? sibling : sibling.nextSibling)
-    ;(handle as HTMLElement).focus()
-    announceReorder(row, tbody)
-
-    reorderFocusId = row.dataset.assetId ?? null
-    window.clearTimeout(timer)
-    timer = window.setTimeout(() => postOrder(orderUrl, tbody), REORDER_POST_DELAY_MS)
+    moveRow(row, ev.key === 'ArrowUp' ? 'up' : 'down')
   })
+
+  tbody.addEventListener('click', (ev: MouseEvent) => {
+    const item = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-move]')
+    if (!item) return
+    const row = item.closest('tr') as HTMLTableRowElement | null
+    if (!row || row.parentElement !== tbody) return
+    item.closest<HTMLElement>('[popover]')?.hidePopover()
+    moveRow(row, item.dataset.move as Move)
+  })
+
+  // Place the menu beside its grip and grey out the moves that would do
+  // nothing. `toggle` does not bubble, hence the capture listener.
+  tbody.addEventListener(
+    'toggle',
+    (ev: Event) => {
+      const menu = ev.target as HTMLElement
+      if (!menu.matches('.reorder-menu') || !menu.matches(':popover-open')) return
+      const row = menu.closest('tr') as HTMLTableRowElement | null
+      const handle = row?.querySelector<HTMLElement>('.drag-handle')
+      if (!row || !handle) return
+      const rect = handle.getBoundingClientRect()
+      const top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)
+      menu.style.top = `${Math.max(8, top)}px`
+      menu.style.left = `${rect.left}px`
+      menu.querySelectorAll<HTMLButtonElement>('[data-move]').forEach((btn) => {
+        btn.disabled = moveTarget(row, tbody, btn.dataset.move as Move) === undefined
+      })
+      menu.querySelector<HTMLButtonElement>('[data-move]:not(:disabled)')?.focus()
+    },
+    true,
+  )
 }
 
 function restoreReorderFocus(): void {

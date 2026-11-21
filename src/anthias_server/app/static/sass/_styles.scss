@@ -537,6 +537,40 @@ label { text-align: left; }
     &:focus-visible { outline: none; box-shadow: var(--focus-ring); }
     &:active { cursor: grabbing; }
   }
+  // The move menu the grip opens on click. A popover renders in the top
+  // layer, so it escapes the table's overflow and the card's stacking;
+  // home.ts places it beside the grip, since the UA default centres it.
+  .reorder-menu {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    min-width: var(--menu-min-width);
+    padding: calc(var(--spacing) * 1);
+    border: 1px solid var(--color-control-edge);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-fg);
+    box-shadow: var(--shadow-lg);
+  }
+  .reorder-menu__item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    width: 100%;
+    min-height: 2.25rem;
+    padding: 0 calc(var(--spacing) * 3);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+    &:hover:not(:disabled) { background: var(--color-scrim-5); }
+    &:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    &:disabled { color: var(--color-fg-faint); cursor: not-allowed; }
+  }
   .asset-cell-name__icon {
     flex: none;
     width: 1.75rem;
