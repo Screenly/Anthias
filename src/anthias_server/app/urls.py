@@ -33,6 +33,16 @@ urlpatterns = [
         views.settings_api_tokens_revoke,
         name='settings_api_tokens_revoke',
     ),
+    path(
+        'settings/management/join/',
+        views.settings_management_join,
+        name='settings_management_join',
+    ),
+    path(
+        'settings/management/leave/',
+        views.settings_management_leave,
+        name='settings_management_leave',
+    ),
     path('settings/backup/', views.settings_backup, name='settings_backup'),
     path('settings/recover/', views.settings_recover, name='settings_recover'),
     path('settings/reboot/', views.settings_reboot, name='settings_reboot'),

@@ -65,6 +65,14 @@ DEFAULTS = {
         'display_power_on_time': '08:00',
         'display_power_off_time': '18:00',
         'display_power_days': '0,1,2,3,4,5,6',
+        # Multi-screen (see lib/management.py). management_enabled is
+        # set while this screen is joined to a controller and
+        # controller_mode while this node is one. Either
+        # one puts the API-only m2m site with the node certificate on
+        # :8443. Both are off by default and have no effect while
+        # auth_backend is empty.
+        'management_enabled': False,
+        'controller_mode': False,
     },
     'viewer': {
         'audio_output': 'hdmi',

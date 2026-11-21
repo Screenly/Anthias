@@ -1,0 +1,23 @@
+{% comment %}
+"Managed by" banner, shown on every page while this screen has joined
+a controller (multi-screen mode). The controller pushes the playlist,
+so local edits get replaced on its next publish; the banner says so
+before the operator spends time on them. Informational, so it uses
+the accent colour rather than a warning or danger colour. Leaving is
+in Settings, not here, so it can't be clicked by accident.
+{% endcomment %}
+{% if managed_by %}
+<section class="device-alert device-alert--info" aria-labelledby="managed-alert-title">
+  <div class="device-alert__icon" aria-hidden="true">
+    <i class="ti ti-topology-star-3"></i>
+  </div>
+  <div class="device-alert__body">
+    <h2 class="device-alert__title" id="managed-alert-title">Managed by {{ managed_by }}</h2>
+    <p class="device-alert__lede">
+      This screen's content is published from {{ managed_by }}. Changes
+      you make here are replaced the next time it publishes. To manage
+      this screen on its own again, use <a href="{% url 'anthias_app:settings' %}#management">Leave management</a> in Settings.
+    </p>
+  </div>
+</section>
+{% endif %}

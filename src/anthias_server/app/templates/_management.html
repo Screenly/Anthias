@@ -1,0 +1,80 @@
+{% load humanize %}
+{% comment %}
+Multi-screen management section of the settings page. Rendered in full
+on GET and swapped in place (hx-swap="outerHTML") after a join or a
+leave. Joining works like a Proxmox cluster join: paste the join
+information from the controller's Screens page. It carries the
+controller's certificate fingerprint, so the first connection is
+already pinned.
+{% endcomment %}
+<section class="settings-section mt-4" id="management">
+  <header>
+    <div>
+      <h2>Multi-screen management</h2>
+      <p class="settings-section__lede">Let another Anthias screen (the controller) publish content to this one. The controller connects to this screen on port {{ management_port }} with this screen's own certificate.</p>
+    </div>
+  </header>
+
+  {% if management_error %}
+  <p class="api-tokens__error" role="alert">{{ management_error }}</p>
+  {% endif %}
+
+  {% if management_controller %}
+  <div class="settings-section__row">
+    <div>
+      <strong>Managed by {{ management_controller.name }}</strong>
+      <p class="settings-section__lede">
+        Joined {{ management_controller.paired_at|naturaltime }}
+        · <code>{{ management_controller.url }}</code>
+        {% if management_controller.token.last_used_at %}· last contact {{ management_controller.token.last_used_at|naturaltime }}{% endif %}
+      </p>
+    </div>
+    <div class="settings-section__actions">
+      <form
+        method="post"
+        action="{% url 'anthias_app:settings_management_leave' %}"
+        hx-post="{% url 'anthias_app:settings_management_leave' %}"
+        hx-target="#management"
+        hx-swap="outerHTML"
+        hx-confirm="Leave management by &quot;{{ management_controller.name }}&quot;? The controller loses access to this screen immediately. Content already on the screen stays."
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <button type="submit" id="btn-leave-management" class="app-btn app-btn-outline-dark">
+          <i class="ti ti-plug-connected-x" aria-hidden="true"></i><span>Leave management</span>
+        </button>
+      </form>
+    </div>
+  </div>
+  {% elif not management_auth_enabled %}
+  <p class="api-tokens__notice" role="status">
+    <i class="ti ti-lock-open" aria-hidden="true"></i>
+    <span>Authentication is disabled, so the API is open to anyone on the network. Turn on authentication above before joining a controller.</span>
+  </p>
+  {% else %}
+  <form
+    method="post"
+    action="{% url 'anthias_app:settings_management_join' %}"
+    hx-post="{% url 'anthias_app:settings_management_join' %}"
+    hx-target="#management"
+    hx-swap="outerHTML"
+    hx-disabled-elt="find button"
+    class="management__join"
+  >
+    {% csrf_token %}
+    <div class="app-floating">
+      <textarea class="app-input management__snippet" id="join-info" name="join_info" placeholder=" " rows="3" required autocomplete="off" spellcheck="false">{{ management_form.join_info|default:'' }}</textarea>
+      <label for="join-info">Join information from the controller's Screens page</label>
+    </div>
+    <div class="app-floating">
+      <input type="text" class="app-input" id="screen-host" name="screen_host" placeholder=" " maxlength="253" autocomplete="off" value="{{ management_form.screen_host|default:'' }}">
+      <label for="screen-host">This screen's address for the controller (optional IP or DNS name)</label>
+    </div>
+    <div>
+      <button type="submit" id="btn-join-controller" class="app-btn app-btn-primary">
+        <i class="ti ti-link" aria-hidden="true"></i><span>Join controller</span>
+      </button>
+    </div>
+  </form>
+  {% endif %}
+</section>

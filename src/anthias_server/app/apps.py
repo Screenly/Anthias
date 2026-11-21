@@ -14,6 +14,11 @@ class AnthiasAppConfig(AppConfig):
         from anthias_server.app.signals import register
 
         register()
+        # Contributes the :8443 m2m site to the Caddy config while this
+        # screen is managed (or is a controller).
+        from anthias_server.lib.management import register_caddy_provider
+
+        register_caddy_provider()
         self._ensure_wal_journal_mode()
 
     def _ensure_wal_journal_mode(self) -> None:

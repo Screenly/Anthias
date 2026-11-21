@@ -50,7 +50,12 @@ from anthias_server.app.models import (
 )
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.django_project.settings import is_valid_time_zone
-from anthias_server.lib import api_tokens, backup_helper, diagnostics
+from anthias_server.lib import (
+    api_tokens,
+    backup_helper,
+    diagnostics,
+    management,
+)
 from anthias_server.lib.auth import (
     AuthSettingsError,
     apply_auth_settings,
@@ -1931,6 +1936,7 @@ def _settings_page(
     context['import_providers'] = list_provider_meta()
     context['web_tls'] = _web_tls_context()
     context.update(_api_tokens_context())
+    context.update(_management_context())
     if extra:
         context.update(extra)
     return template(request, 'settings.html', context)
@@ -2097,6 +2103,58 @@ def settings_api_tokens_revoke(
     return _api_tokens_response(request)
 
 
+def _management_context(
+    error: str | None = None,
+    form: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    return {
+        'management_auth_enabled': management.auth_enabled(),
+        'management_controller': management.current_controller(),
+        'management_error': error,
+        'management_form': form or {},
+        'management_port': management.M2M_PORT,
+    }
+
+
+def _management_response(
+    request: HttpRequest,
+    error: str | None = None,
+    form: dict[str, str] | None = None,
+) -> HttpResponse:
+    extra = _management_context(error, form)
+    if request.headers.get('HX-Request'):
+        response = template(request, '_management.html', extra)
+    else:
+        response = _settings_page(request, extra)
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+@authorized
+@require_http_methods(['POST'])
+def settings_management_join(request: HttpRequest) -> HttpResponse:
+    snippet = request.POST.get('join_info', '')
+    screen_host = request.POST.get('screen_host', '')
+    try:
+        controller = management.join(snippet, screen_host)
+    except management.ManagementError as exc:
+        logger.warning('Join refused: %s', exc)
+        return _management_response(
+            request,
+            error=str(exc),
+            form={'join_info': snippet, 'screen_host': screen_host},
+        )
+    logger.info('Joined controller %r', controller.name)
+    return _management_response(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def settings_management_leave(request: HttpRequest) -> HttpResponse:
+    management.leave_management()
+    return _management_response(request)
+
+
 @authorized
 @require_http_methods(['POST'])
 def settings_save(request: HttpRequest) -> HttpResponse:
@@ -2207,6 +2265,11 @@ def settings_save(request: HttpRequest) -> HttpResponse:
                 from anthias_server.app.consumers import disconnect_all
 
                 disconnect_all()
+            if auth_change.backend_changed:
+                # Management needs auth: turning auth off withdraws the
+                # m2m site and the pairing code, turning it back on
+                # restores them if "Allow management" is still set.
+                management.sync_state()
         ViewerPublisher.get_instance().send_to_viewer('reload')
 
         messages.success(request, 'Settings were successfully saved.')
