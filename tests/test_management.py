@@ -1115,7 +1115,7 @@ def test_a_managed_screen_shows_only_the_managed_page(
         reverse('anthias_app:managed'), headers=UI
     ).content.decode()
     assert 'Managed by Lobby' in html
-    assert 'https://controller.lan:8443' in html
+    assert 'Controller <code>https://controller.lan:8443</code>' in html
     assert 'btn-managed-leave' in html
     # Signing in stays possible.
     assert Client().get('/login/', headers=UI).status_code == 200

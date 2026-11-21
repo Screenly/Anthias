@@ -78,7 +78,7 @@
     @keydown.escape.window="closeDelete()"
     @click.self="closeDelete()"
   >
-    <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="delete-modal-title">
       <div class="modal-card__header">
         <h2 id="delete-modal-title">Delete asset?</h2>
         <button type="button" class="modal-card__close" @click="closeDelete()" aria-label="Close">

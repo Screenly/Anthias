@@ -74,6 +74,29 @@ As a reference, publishing about 96 MB (an image, a 48 MB video and
 some web pages, plus the controller's existing assets) took 7 to 27
 seconds per screen in our tests, the slowest being a Raspberry Pi 2.
 
+## Accurate time on every device
+
+Every device, the controller and each screen, **must** have a correctly
+set clock. Without accurate time, multi-screen management does not
+work: scheduled assets start and stop at the wrong moment, and the
+controller cannot tell reliably which screens are online and up to date.
+
+Keep the clock right in one of two ways:
+
+* **NTP (network time).** Raspberry Pi OS and the other supported
+  operating systems sync the clock over the network by default. Make sure every device can reach an NTP server:
+  if your network blocks outbound traffic, allow UDP port 123 or point
+  the devices at an NTP server on your own network.
+* **A real-time clock (RTC).** Most Raspberry Pi models have no clock
+  that keeps time while powered off, so after a power cut they rely on
+  NTP to get the time back. If a device can't reach an NTP server, give
+  it a battery-backed RTC (the Raspberry Pi 5 has an RTC connector for
+  a backup battery; other models need an RTC add-on board).
+
+To check a device, compare the time on its **System Info** page with the
+correct local time, or run `timedatectl` on it: it should report
+`System clock synchronized: yes`.
+
 ## Network requirements
 
 * The controller and its screens must be on the **same local network**,
@@ -84,6 +107,8 @@ seconds per screen in our tests, the slowest being a Raspberry Pi 2.
   controller or a managed screen, and never while authentication is
   turned off.
 * The web interface stays on ports 80 and 443 as usual.
+* Every device needs [accurate time](#accurate-time-on-every-device),
+  so allow NTP (UDP port 123) or provide an NTP server on your network.
 * There is no automatic discovery. You add a screen by pasting the
   controller's join information on that screen; the screen tells the
   controller its address.
@@ -329,3 +354,8 @@ screen. Join it again or remove it.
 **Publishing to one screen fails.** The other screens are not affected.
 Check that screen's free disk space on the **Screens** page and try
 **Publish** for that screen again.
+
+**Screens show the wrong status, or scheduled assets play at the wrong
+time.** Check the clock on the controller and on the affected screens.
+Every device [must have accurate time](#accurate-time-on-every-device),
+from NTP or a real-time clock.

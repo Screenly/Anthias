@@ -1842,7 +1842,7 @@ def test_navbar_links_navigate(reset_assets: None, page: Page) -> None:
     """The top-nav tabs must reach their pages (Integrations is
     balena-gated and absent in the test container)."""
     page.goto(BASE_URL)
-    page.get_by_role('link', name='Settings').click()
+    page.locator('nav.app-nav').get_by_role('link', name='Settings').click()
     expect(
         page.get_by_role('heading', name='Settings', exact=True)
     ).to_be_visible()

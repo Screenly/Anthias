@@ -478,7 +478,7 @@
       @keydown.escape.window="pending = null"
       @click.self="pending = null"
     >
-      <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" aria-labelledby="power-modal-title">
+      <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="power-modal-title">
         <div class="modal-card__header">
           <h2 id="power-modal-title" x-text="pending === 'reboot' ? 'Reboot device?' : 'Shut down device?'">Reboot device?</h2>
           <button type="button" class="modal-card__close" @click="pending = null" aria-label="Close">

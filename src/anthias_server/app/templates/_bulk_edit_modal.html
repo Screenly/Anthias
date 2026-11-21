@@ -18,7 +18,7 @@
   @keydown.escape.window="closeBulkEdit()"
   @click.self="closeBulkEdit()"
 >
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="bulk-edit-modal-title">
+  <div class="modal-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="bulk-edit-modal-title">
     <div class="modal-card__header">
       <h2 id="bulk-edit-modal-title">Edit
         <span x-text="selectedIds.length"></span>
