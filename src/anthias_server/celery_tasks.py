@@ -88,6 +88,8 @@ celery = Celery(
     backend=CELERY_RESULT_BACKEND,
     broker=CELERY_BROKER_URL,
     result_expires=CELERY_TASK_RESULT_EXPIRES,
+    # Controller-mode fan-out tasks live with the controller app.
+    include=['anthias_server.controller.tasks'],
 )
 
 
@@ -210,6 +212,10 @@ NORMALIZE_VIDEO_TIME_LIMIT_S = 120
 NORMALIZE_VIDEO_SOFT_TIME_LIMIT_S = (
     NORMALIZE_VIDEO_TIME_LIMIT_S - MEDIA_TASK_TIMEOUT_HEADROOM_S
 )
+
+# How often controller mode polls its screens' status (see
+# anthias_server.controller.tasks.refresh_nodes).
+CONTROLLER_STATUS_INTERVAL_S = 60
 
 # How often the scheduled display-power tick runs. One minute is the
 # resolution of the schedule itself (times are HH:MM), so a coarser
@@ -346,6 +352,14 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
         DISPLAY_POWER_SCHEDULE_INTERVAL_S,
         apply_display_power_schedule.s(),
         name='display_power_schedule',
+    )
+    # Screen status for controller mode. The task returns at once when
+    # controller mode is off, so devices that never use it pay one
+    # settings read a minute.
+    sender.add_periodic_task(
+        CONTROLLER_STATUS_INTERVAL_S,
+        sender.signature('anthias_server.controller.tasks.refresh_nodes'),
+        name='controller_refresh_nodes',
     )
 
 

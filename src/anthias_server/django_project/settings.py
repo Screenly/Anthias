@@ -804,6 +804,7 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
         'drf_spectacular',
         'rest_framework',
         'anthias_server.api.apps.ApiConfig',
+        'anthias_server.controller.apps.ControllerConfig',
         'django.contrib.admin',
         'django.contrib.humanize',
         'django.contrib.sessions',

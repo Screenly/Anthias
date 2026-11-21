@@ -47,6 +47,19 @@
         </li>
         {% endif %}
 
+        {% if controller_mode %}
+        <li class="app-tab-item">
+          <a
+            href="{% url 'controller:screens' %}"
+            class="app-tab-link {% if active_nav == 'screens' %}active{% endif %}"
+            @click="open = false"
+          >
+            <i class="ti ti-devices"></i>
+            <span>Screens</span>
+          </a>
+        </li>
+        {% endif %}
+
         <li class="app-tab-item">
           <a
             href="{% url 'anthias_app:settings' %}"

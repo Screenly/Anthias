@@ -75,6 +75,7 @@
 @plugin "@tailwindcss/forms";
 
 @source "../../templates/**/*.html";
+@source "../../../controller/templates/**/*.html";
 @source "./**/*.ts";
 
 /* ========================================================================
