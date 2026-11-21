@@ -15,7 +15,7 @@
 >
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="asset-modal-title">
     <div class="modal-card__header">
-      <h2 id="asset-modal-title" x-text="mode === 'edit' ? 'Edit asset' : 'Add asset'"></h2>
+      <h2 id="asset-modal-title" x-text="mode === 'edit' ? 'Edit asset' : 'Add asset'">Add asset</h2>
       <button type="button" class="modal-card__close" @click="closeModal()" aria-label="Close">
         <i class="ti ti-x"></i>
       </button>
@@ -30,8 +30,8 @@
     <div x-show="mode === 'add'">
       <div class="modal-card__body" style="padding-bottom: calc(var(--spacing) * 3)">
         {% comment %} WAI-ARIA tabs: one tab stop for the whole strip, arrow
-           keys move between tabs and select as they go. The <li>s are
-           presentation so the tablist owns the tabs directly. {% endcomment %}
+           keys move between tabs and select as they go. The list items
+           are presentation so the tablist owns the tabs directly. {% endcomment %}
         <ul class="app-tabs mb-4" id="add-asset-nav-tabs"
           role="tablist" aria-label="Asset source"
           @keydown.right.prevent="tab = {uri: 'file', file: 'apps', apps: 'uri'}[tab]; $nextTick(() => $el.querySelector('[aria-selected=true]').focus())"

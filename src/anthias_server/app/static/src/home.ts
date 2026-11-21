@@ -1268,7 +1268,7 @@ function announceReorder(row: HTMLTableRowElement, tbody: HTMLElement): void {
 }
 
 // Where `move` would put `row`, or null when it is already there.
-function moveTarget(row: HTMLTableRowElement, tbody: HTMLElement, move: Move): Node | null | undefined {
+function moveTarget(row: HTMLTableRowElement, tbody: HTMLElement, move: Move): ChildNode | null | undefined {
   switch (move) {
     case 'top':
       return row === tbody.firstElementChild ? undefined : tbody.firstElementChild
@@ -1312,7 +1312,8 @@ function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
   const moveRow = (row: HTMLTableRowElement, move: Move): void => {
     const before = moveTarget(row, tbody, move)
     if (before === undefined) return
-    tbody.insertBefore(row, before)
+    if (before) before.before(row)
+    else tbody.append(row)
     row.querySelector<HTMLElement>('.drag-handle')?.focus()
     announceReorder(row, tbody)
 
@@ -1329,7 +1330,7 @@ function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
     const handle = (ev.target as HTMLElement).closest('.drag-handle')
     if (!handle) return
     const row = handle.closest('tr') as HTMLTableRowElement | null
-    if (!row || row.parentElement !== tbody) return
+    if (row?.parentElement !== tbody) return
     ev.preventDefault()
     moveRow(row, ev.key === 'ArrowUp' ? 'up' : 'down')
   })
@@ -1338,7 +1339,7 @@ function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
     const item = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-move]')
     if (!item) return
     const row = item.closest('tr') as HTMLTableRowElement | null
-    if (!row || row.parentElement !== tbody) return
+    if (row?.parentElement !== tbody) return
     item.closest<HTMLElement>('[popover]')?.hidePopover()
     moveRow(row, item.dataset.move as Move)
   })
