@@ -372,12 +372,25 @@ def test_leave_management_revokes_and_withdraws_site(
     assert management.leave_management() is False
 
 
+def _pair(operator: User) -> ManagementController:
+    token, _ = api_tokens.create_token(operator, 'Controller: Lobby')
+    return ManagementController.objects.create(
+        name='Lobby',
+        url='https://controller.lan:8443',
+        fingerprint=CONTROLLER_FP,
+        token=token,
+    )
+
+
 @pytest.mark.django_db
-def test_site_follows_auth_and_controller_mode(auth_on: None) -> None:
+def test_site_follows_auth_and_controller_mode(
+    operator: User, auth_on: None
+) -> None:
     from anthias_server.settings import settings
 
     assert management.caddy_extra_servers() == {}
     settings['management_enabled'] = True
+    _pair(operator)
     assert management.M2M_SERVER_NAME in management.caddy_extra_servers()
     settings['auth_backend'] = ''
     assert management.caddy_extra_servers() == {}
@@ -408,8 +421,9 @@ def test_m2m_server_shape() -> None:
 
 
 @pytest.mark.django_db
+@pytest.mark.django_db
 def test_caddy_config_includes_m2m_site_only_while_active(
-    auth_on: None,
+    operator: User, auth_on: None
 ) -> None:
     from anthias_server.lib import caddy
     from anthias_server.settings import settings
@@ -419,6 +433,9 @@ def test_caddy_config_includes_m2m_site_only_while_active(
     assert management.M2M_SERVER_NAME not in servers
 
     settings['management_enabled'] = True
+    servers = caddy.build_config()['apps']['http']['servers']
+    assert management.M2M_SERVER_NAME not in servers
+    _pair(operator)
     servers = caddy.build_config()['apps']['http']['servers']
     assert servers[management.M2M_SERVER_NAME] == management.m2m_server()
     # The node certificate the m2m site selects is always loaded.
@@ -652,3 +669,73 @@ def test_revoking_controller_token_in_settings_leaves_management(
     assert settings['management_enabled'] is False
     assert management.caddy_extra_servers() == {}
     stub_node_and_caddy.assert_called()
+
+
+@pytest.mark.django_db
+def test_stale_flag_without_controller_keeps_site_closed(
+    auth_on: None,
+) -> None:
+    # Found on the QA rig: anthias.conf still said
+    # management_enabled after the pairing was gone, and :8443 came
+    # back on the next server start. The flag alone must not open it.
+    from anthias_server.settings import settings
+
+    settings['management_enabled'] = True
+    assert not management.is_managed()
+    assert not management.m2m_site_active()
+    assert management.caddy_extra_servers() == {}
+
+
+@pytest.mark.django_db
+def test_site_closes_when_token_revoked_by_any_path(
+    operator: User, auth_on: None
+) -> None:
+    from anthias_server.settings import settings
+
+    settings['management_enabled'] = True
+    controller = _pair(operator)
+    assert management.m2m_site_active()
+    # Not through leave_management()/unpair_token(): straight to the
+    # token, so the flag is left behind.
+    api_tokens.revoke_token(controller.token.pk)
+    assert settings['management_enabled'] is True
+    assert not management.m2m_site_active()
+
+
+@pytest.mark.django_db
+def test_join_failure_does_not_leave_join_marker(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.settings import settings
+
+    controller_reply['outcome'] = lambda: _FakeResponse(403, {})
+    with pytest.raises(management.ManagementError):
+        management.join(_snippet())
+    settings['management_enabled'] = True
+    assert not management.m2m_site_active()
+
+
+@pytest.mark.django_db
+def test_leaving_rewrites_flag_changed_by_another_process(
+    operator: User, auth_on: None
+) -> None:
+    # Found on the QA rig: the flag was written by another process,
+    # so this process's in-memory copy still said False, the leave
+    # skipped the write, and anthias.conf kept management_enabled on.
+    import configparser
+
+    from anthias_server.settings import settings
+
+    _pair(operator)
+    parser = configparser.ConfigParser()
+    parser.read(settings.conf_file)
+    parser['main']['management_enabled'] = 'on'
+    with open(settings.conf_file, 'w') as handle:
+        parser.write(handle)
+    assert settings['management_enabled'] is False  # stale copy
+
+    assert management.leave_management() is True
+
+    parser = configparser.ConfigParser()
+    parser.read(settings.conf_file)
+    assert parser['main'].getboolean('management_enabled') is False

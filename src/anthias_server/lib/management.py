@@ -58,6 +58,7 @@ import base64
 import binascii
 import json
 import logging
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -68,6 +69,11 @@ if TYPE_CHECKING:
     from anthias_server.app.models import ManagementController
 
 logger = logging.getLogger(__name__)
+
+# Set while join() waits for the controller to call back on :8443,
+# before a ManagementController row exists. Without it the site would
+# have to trust the management_enabled flag alone.
+_join_in_progress = threading.Event()
 
 M2M_PORT = 8443
 M2M_SERVER_NAME = 'anthias_m2m'
@@ -148,15 +154,24 @@ def management_enabled() -> bool:
 def m2m_site_active() -> bool:
     """Whether Caddy should serve :8443.
 
-    On while this screen is managed (``management_enabled``) or this
-    node is a controller (``controller_mode``), and never
-    while auth is off.
+    On while this node is a controller (``controller_mode``),
+    or while it is managed: ``management_enabled`` and a
+    controller whose token is still active (or a join waiting for the
+    controller's callback). Never while auth is off.
+
+    The flag alone is not enough. It lives in ``anthias.conf`` and can
+    outlive the pairing, e.g. when the token was revoked through a path
+    that doesn't touch the flag; trusting it would reopen :8443 on the
+    next start for a screen that no longer has a controller.
     """
     settings = _settings()
-    wanted = bool(settings['management_enabled']) or bool(
-        settings['controller_mode']
-    )
-    return wanted and auth_enabled()
+    if not auth_enabled():
+        return False
+    if settings['controller_mode']:
+        return True
+    if not settings['management_enabled']:
+        return False
+    return _join_in_progress.is_set() or is_managed()
 
 
 def current_controller() -> ManagementController | None:
@@ -177,6 +192,10 @@ def is_managed() -> bool:
 
 def _set_management_enabled(enabled: bool) -> None:
     settings = _settings()
+    # Re-read first: another process (the CLI, a shell, a second
+    # worker) may have changed the file, and comparing against a stale
+    # in-memory copy would skip a write the file still needs.
+    settings.load()
     if bool(settings['management_enabled']) != enabled:
         settings['management_enabled'] = enabled
         settings.save()
@@ -319,6 +338,7 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
     )
     was_enabled = management_enabled()
     _set_management_enabled(True)
+    _join_in_progress.set()
     apply_caddy()
 
     payload: dict[str, Any] = {
@@ -368,18 +388,22 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             logger.warning('Join %s: unreadable 201 body', info.url)
             confirmed = {}
     except ManagementError:
+        _join_in_progress.clear()
         api_tokens.revoke_token(token.pk)
         _set_management_enabled(was_enabled)
         apply_caddy()
         raise
 
     name = ' '.join(str(confirmed.get('controller_name') or '').split())
-    controller = ManagementController.objects.create(
-        name=(name or info.name)[:MAX_CONTROLLER_NAME_LEN],
-        url=info.url,
-        fingerprint=info.fingerprint,
-        token=token,
-    )
+    try:
+        controller = ManagementController.objects.create(
+            name=(name or info.name)[:MAX_CONTROLLER_NAME_LEN],
+            url=info.url,
+            fingerprint=info.fingerprint,
+            token=token,
+        )
+    finally:
+        _join_in_progress.clear()
     logger.info('Joined controller %r at %s', controller.name, info.url)
     return controller
 
