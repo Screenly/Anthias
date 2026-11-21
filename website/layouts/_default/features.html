@@ -104,8 +104,8 @@
                 <div class="w-10 h-10 rounded-lg bg-brand-yellow/20 flex items-center justify-center mb-4">
                     <svg class="w-5 h-5 text-brand-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/></svg>
                 </div>
-                <h3 class="text-lg font-bold">Drag to reorder, or shuffle</h3>
-                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Arrange your playlist by dragging items into place, or turn on shuffle to mix things up on every loop.</p>
+                <h3 class="text-lg font-bold">Reorder, or shuffle</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Arrange your playlist by dragging items into place, with the arrow keys, or from a quick move menu. Or turn on shuffle to mix things up on every loop.</p>
             </div>
 
             <div class="feature-card">
@@ -130,6 +130,14 @@
                 </div>
                 <h3 class="text-lg font-bold">No app to install</h3>
                 <p class="text-zinc-500 mt-2 text-sm leading-relaxed">Open the dashboard from your laptop, phone, or tablet. There's no cloud account. Anthias runs on the device itself, on your own network.</p>
+            </div>
+
+            <div class="feature-card scroll-mt-24" id="accessibility">
+                <div class="w-10 h-10 rounded-lg bg-brand-purple/10 flex items-center justify-center mb-4">
+                    {{ partial "icon.html" (dict "name" "universal-access" "size" "1.25rem" "class" "text-brand-purple") }}
+                </div>
+                <h3 class="text-lg font-bold">Accessible to everyone</h3>
+                <p class="text-zinc-500 mt-2 text-sm leading-relaxed">The dashboard is built to WCAG 2.2 Level AA. High-contrast text and controls, a clear focus outline, full keyboard control, and screen reader support, so people with low vision or who don't use a mouse can run their screens too.</p>
             </div>
 
             <div class="feature-card">
@@ -269,7 +277,7 @@
                 <p class="text-zinc-500 text-xs mt-1">64-bit</p>
             </div>
         </div>
-        <p class="text-zinc-400 text-xs mt-4">Pi 2 and Pi 3 are in maintenance mode. We recommend Pi 4 or later for new installations.</p>
+        <p class="text-zinc-500 text-xs mt-4">Pi 2 and Pi 3 are in maintenance mode. We recommend Pi 4 or later for new installations.</p>
     </div>
 </section>
 
