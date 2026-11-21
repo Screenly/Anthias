@@ -83,6 +83,7 @@ COLOUR_GROUPS: list[tuple[str, str, list[str]]] = [
             'fg-faint',
             'border',
             'divider',
+            'control-edge',
         ],
     ),
     (
@@ -170,11 +171,13 @@ COLOUR_GROUPS: list[tuple[str, str, list[str]]] = [
     (
         'Focus',
         (
-            'One ring colour for every focusable control, paired with '
-            '--ring-width. Keyboard focus is the one state that must never '
-            'be styled per component.'
+            'Two opaque rings for every focusable control, applied '
+            'together as --focus-ring: the gap hugs the control and the '
+            'ring sits outside it, so one of the two clears 3:1 on any '
+            'plane. Keyboard focus is the one state that must never be '
+            'styled per component.'
         ),
-        ['focus-ring'],
+        ['focus-ring', 'focus-gap'],
     ),
     (
         'Scrims',
@@ -259,6 +262,7 @@ Z_INDEX: list[tuple[str, str, str]] = [
     ('toast', '500', 'Toast stack'),
     ('nudge', '510', 'Review nudge, above the toasts'),
     ('datepicker', '600', 'Flatpickr, clears nested modals and toasts'),
+    ('skip-link', '700', 'Skip link, above everything while focused'),
 ]
 
 BREAKPOINTS: list[tuple[str, str, str]] = [
