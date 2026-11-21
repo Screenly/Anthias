@@ -27,6 +27,7 @@
           <a
             href="{% url 'anthias_app:home' %}"
             class="app-tab-link {% if active_nav == 'home' %}active{% endif %}"
+            {% if active_nav == 'home' %}aria-current="page"{% endif %}
             @click="open = false"
           >
             <i class="ti ti-playlist"></i>
@@ -39,6 +40,7 @@
           <a
             href="{% url 'anthias_app:integrations' %}"
             class="app-tab-link {% if active_nav == 'integrations' %}active{% endif %}"
+            {% if active_nav == 'integrations' %}aria-current="page"{% endif %}
             @click="open = false"
           >
             <i class="ti ti-puzzle"></i>
@@ -64,6 +66,7 @@
           <a
             href="{% url 'anthias_app:settings' %}"
             class="app-tab-link {% if active_nav == 'settings' %}active{% endif %}"
+            {% if active_nav == 'settings' %}aria-current="page"{% endif %}
             @click="open = false"
           >
             <i class="ti ti-settings"></i>
@@ -79,6 +82,7 @@
           <a
             href="{% url 'anthias_app:system_info' %}"
             class="app-tab-link {% if active_nav == 'system-info' %}active{% endif %}"
+            {% if active_nav == 'system-info' %}aria-current="page"{% endif %}
             @click="open = false"
           >
             <i class="ti ti-activity"></i>

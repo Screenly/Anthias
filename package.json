@@ -26,6 +26,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@alpinejs/focus": "^3.17.5",
     "@fontsource/plus-jakarta-sans": "^5.3.0",
     "@tabler/icons-webfont": "^3.52.0",
     "alpinejs": "^3.17.5",

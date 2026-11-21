@@ -37,6 +37,9 @@
      operator is actively using, so a toast arriving mid-edit must not
      land on top of it. */
   --z-datepicker: 600;
+  /* Only ever on screen while it holds keyboard focus, at which point
+     nothing may cover it. */
+  --z-skip-link: 700;
 
   /* ---- Layout constants -----------------------------------------------
    * The navbar height was previously the magic number 4.5rem repeated in
@@ -64,6 +67,13 @@
 
   /* Focus ring width. Paired with --color-focus-ring. */
   --ring-width: 0.1875rem;
+  --ring-gap: 0.125rem;
+  /* The one keyboard-focus treatment. Every :focus-visible rule uses
+     this whole value rather than assembling its own box-shadow, so the
+     two-tone ring (see --color-focus-ring in tailwind.css) cannot be
+     half-applied. */
+  --focus-ring: 0 0 0 var(--ring-gap) var(--color-focus-gap),
+    0 0 0 calc(var(--ring-gap) + var(--ring-width)) var(--color-focus-ring);
 
   /* ---- Motion ---------------------------------------------------------
    * Duration and easing as one value. Every transition in the codebase

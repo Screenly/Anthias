@@ -240,6 +240,76 @@ def test_contrast_ratios_meet_wcag_aa(theme: str) -> None:
     )
 
 
+# WCAG 1.4.11 Non-text Contrast: the boundary of a control, and the
+# indicator that shows which control has keyboard focus, need 3:1
+# against what they sit on. Lighthouse does not measure either, which is
+# how the 8% border on inputs (1.2:1) and the 35% focus ring (1.8:1)
+# shipped for as long as they did.
+NON_TEXT_AA = 3.0
+
+# Control edges on every surface a form can render on.
+CONTROL_PAIRS: list[tuple[str, str]] = [
+    ('--color-control-edge', bg)
+    for bg in (
+        '--color-surface',
+        '--color-surface-soft',
+        '--color-surface-tint',
+        '--color-surface-sunken',
+    )
+]
+
+# Every plane a focusable control can sit on. The ring is two rings, a
+# gap hugging the control and the ring outside it, so the requirement is
+# that at least ONE of them clears 3:1 against the plane, and that they
+# clear it against each other so the pair reads as an edge rather than a
+# smear. See --focus-ring in base.css.
+FOCUS_PLANES: tuple[str, ...] = (
+    '--color-surface',
+    '--color-surface-soft',
+    '--color-surface-tint',
+    '--color-canvas',
+    '--color-canvas-deep',
+    '--color-chrome',
+    '--color-feature-from',
+    '--color-feature-to',
+)
+
+
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_control_edges_meet_wcag_non_text_contrast(theme: str) -> None:
+    tokens = _light_tokens() if theme == 'light' else _dark_tokens()
+    failures = [
+        f'  {fg} on {bg}: {ratio:.2f}:1 (needs {NON_TEXT_AA}:1)'
+        for fg, bg in CONTROL_PAIRS
+        if (ratio := contrast(fg, bg, tokens)) < NON_TEXT_AA
+    ]
+    assert not failures, (
+        f'{theme} theme: form control edges fail WCAG 1.4.11:\n'
+        + '\n'.join(failures)
+    )
+
+
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_focus_ring_is_visible_on_every_plane(theme: str) -> None:
+    tokens = _light_tokens() if theme == 'light' else _dark_tokens()
+    failures = []
+    pair = contrast('--color-focus-ring', '--color-focus-gap', tokens)
+    if pair < NON_TEXT_AA:
+        failures.append(f'  ring against its own gap: {pair:.2f}:1')
+    for plane in FOCUS_PLANES:
+        backdrop = BACKDROP.get(plane, '--color-surface')
+        best = max(
+            contrast('--color-focus-ring', plane, tokens, backdrop),
+            contrast('--color-focus-gap', plane, tokens, backdrop),
+        )
+        if best < NON_TEXT_AA:
+            failures.append(f'  on {plane}: best {best:.2f}:1')
+    assert not failures, (
+        f'{theme} theme: focus indicator fails WCAG 1.4.11 '
+        f'(needs {NON_TEXT_AA}:1):\n' + '\n'.join(failures)
+    )
+
+
 # Bootstrap's default palette and its grid-tier breakpoints. The class
 # names were renamed away long ago (test_template_views.py guards those),
 # but the *values* survived in the stylesheets, which nothing covered:
