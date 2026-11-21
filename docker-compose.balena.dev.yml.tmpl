@@ -72,6 +72,12 @@ services:
     ports:
       - 80:80
       - 443:443
+      # Machine-to-machine API for multi-screen management
+      # (lib/management.py). Nothing listens here unless this screen
+      # is managed or is a controller: the site exists in Caddy's
+      # config only then, so an unmanaged screen refuses the
+      # connection.
+      - 8443:8443
     depends_on:
       - anthias-server
     restart: always

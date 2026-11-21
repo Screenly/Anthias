@@ -328,7 +328,20 @@ def navbar() -> dict[str, Any]:
         'player_name': settings['player_name'],
         'power_warning': _power_warning(),
         'storage_warning': _storage_warning(),
+        'managed_by': _managed_by(),
     }
+
+
+def _managed_by() -> str | None:
+    """Name of the controller managing this screen, for the banner."""
+    from anthias_server.lib import management
+
+    try:
+        controller = management.current_controller()
+    except Exception:
+        logger.exception('Could not read the management state')
+        return None
+    return controller.name if controller else None
 
 
 def _resolved_resolution() -> dict[str, Any]:

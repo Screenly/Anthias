@@ -75,7 +75,12 @@ from anthias_server.app.helpers import (
     remove_default_assets,
 )
 from anthias_server.app.models import Asset
-from anthias_server.lib import diagnostics, system_logs, wifi_connect
+from anthias_server.lib import (
+    diagnostics,
+    management,
+    system_logs,
+    wifi_connect,
+)
 from anthias_server.lib.auth import (
     AuthSettingsError,
     apply_auth_settings,
@@ -874,6 +879,11 @@ class DeviceSettingsViewV2(APIView):
                     from anthias_server.app.consumers import disconnect_all
 
                     disconnect_all()
+                if auth_change.backend_changed:
+                    # Management needs auth: turning auth off withdraws the
+                    # m2m site and the pairing code, turning it back on
+                    # restores them if "Allow management" is still set.
+                    management.sync_state()
             publisher = ViewerPublisher.get_instance()
             publisher.send_to_viewer('reload')
 
