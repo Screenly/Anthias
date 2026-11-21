@@ -29,9 +29,14 @@ COMMAND_TIME_LIMIT_S = COMMAND_SOFT_TIME_LIMIT_S + 30
 
 # Status polling is serial and slow on purpose: /info takes about a
 # second on a busy Pi, and screens should not spend their CPU on us.
-STATUS_INTERVAL_S = 60
-STATUS_SOFT_TIME_LIMIT_S = 50
-STATUS_TIME_LIMIT_S = 58
+# Every five minutes (matches celery_tasks.CONTROLLER_STATUS_INTERVAL_S,
+# which schedules it); "Check now" on the Screens page polls on demand.
+# The time budget stays under the interval so runs never overlap, and
+# is large enough to reach every screen of a small deployment in one
+# run even when a few are slow or unreachable.
+STATUS_INTERVAL_S = 300
+STATUS_SOFT_TIME_LIMIT_S = 240
+STATUS_TIME_LIMIT_S = 270
 STATUS_LOCK_KEY = 'controller:status:lock'
 
 # A second publish to the same screen waits for the first rather than

@@ -214,8 +214,11 @@ NORMALIZE_VIDEO_SOFT_TIME_LIMIT_S = (
 )
 
 # How often controller mode polls its screens' status (see
-# anthias_server.controller.tasks.refresh_nodes).
-CONTROLLER_STATUS_INTERVAL_S = 60
+# anthias_server.controller.tasks.refresh_nodes). Five minutes: status
+# and health change slowly, every poll costs each screen an /info call,
+# and the Screens page's "Check now" refreshes on demand. Must equal
+# controller.tasks.STATUS_INTERVAL_S (pinned by a test).
+CONTROLLER_STATUS_INTERVAL_S = 300
 
 # How often the scheduled display-power tick runs. One minute is the
 # resolution of the schedule itself (times are HH:MM), so a coarser
@@ -355,7 +358,7 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
     )
     # Screen status for controller mode. The task returns at once when
     # controller mode is off, so devices that never use it pay one
-    # settings read a minute.
+    # settings read every five minutes.
     sender.add_periodic_task(
         CONTROLLER_STATUS_INTERVAL_S,
         sender.signature('anthias_server.controller.tasks.refresh_nodes'),

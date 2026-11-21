@@ -253,3 +253,23 @@ def test_screens_page_shows_health_and_warnings(
     assert 'Disk 17.9 GB free · RAM 217 MiB free · up 2 days' in body
     assert 'Low disk space: 300.0 MB free' in body
     assert '1 needs attention' in body
+
+
+def test_status_poll_timing_holds_together() -> None:
+    from anthias_server import celery_tasks
+    from anthias_server.controller import tasks
+
+    # Polled every five minutes, not every minute: status and health
+    # change slowly, and each poll costs every screen an /info call.
+    assert tasks.STATUS_INTERVAL_S == 300
+    # Two constants (the schedule lives in celery_tasks, the task in
+    # controller.tasks); they must not drift apart.
+    assert celery_tasks.CONTROLLER_STATUS_INTERVAL_S == tasks.STATUS_INTERVAL_S
+    # A run finishes before the next one starts.
+    assert (
+        tasks.STATUS_SOFT_TIME_LIMIT_S
+        < tasks.STATUS_TIME_LIMIT_S
+        < tasks.STATUS_INTERVAL_S
+    )
+    # One missed poll doesn't make a reading stale.
+    assert health.HEALTH_MAX_AGE.total_seconds() >= 2 * tasks.STATUS_INTERVAL_S

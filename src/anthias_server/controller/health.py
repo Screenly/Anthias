@@ -1,6 +1,6 @@
 """Health of managed screens, from the ``/api/v2/info`` the controller polls.
 
-The status poll (``service.check_node``, every minute) already fetches
+The status poll (``service.check_node``, every five minutes) fetches
 each screen's ``/api/v2/info``. This module keeps the parts an operator
 acts on: free disk space, storage health, under-voltage, available
 memory, load and uptime. It turns them into short warnings for the
@@ -37,9 +37,10 @@ STORAGE_PROBLEMS = {
     'full': 'Storage full',
     'failing': 'Storage failing',
 }
-# The poll runs every minute, so a reading older than this belongs to a
-# screen that has stopped answering.
-HEALTH_MAX_AGE = timedelta(minutes=10)
+# The poll runs every five minutes (controller.tasks.STATUS_INTERVAL_S),
+# so a reading older than three polls belongs to a screen that has
+# stopped answering.
+HEALTH_MAX_AGE = timedelta(minutes=15)
 
 _SIZE_RE = re.compile(r'^([0-9]+(?:[.,][0-9]+)?)\s*([a-z]+)$')
 _UNITS = {
