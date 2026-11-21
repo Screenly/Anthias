@@ -405,7 +405,11 @@ def test_m2m_server_shape() -> None:
     assert server['listen'] == [':8443']
     assert server['automatic_https'] == {'disable': True}
     assert server['tls_connection_policies'] == [
-        {'certificate_selection': {'any_tag': ['anthias-node']}}
+        {
+            'certificate_selection': {'any_tag': ['anthias-node']},
+            # Pushing screens identify with their node certificate.
+            'client_authentication': {'mode': 'request'},
+        }
     ]
     api_route, fallback = server['routes']
     assert api_route['match'] == [{'path': ['/api/v2/*']}]
@@ -413,14 +417,16 @@ def test_m2m_server_shape() -> None:
     assert proxy['handler'] == 'reverse_proxy'
     assert proxy['upstreams'] == [{'dial': 'anthias-server:8080'}]
     assert proxy['headers']['request']['set'] == {
-        'X-Anthias-Listener': ['m2m']
+        'X-Anthias-Listener': ['m2m'],
+        'X-Anthias-Client-Fingerprint': [
+            '{http.request.tls.client.fingerprint}'
+        ],
     }
     assert fallback == {
         'handle': [{'handler': 'static_response', 'status_code': 404}]
     }
 
 
-@pytest.mark.django_db
 @pytest.mark.django_db
 def test_caddy_config_includes_m2m_site_only_while_active(
     operator: User, auth_on: None
@@ -447,7 +453,8 @@ def test_m2m_listener_header_is_stripped_on_ui_sites() -> None:
     from anthias_server.lib import caddy
 
     assert caddy.proxy_handler()['headers']['request']['delete'] == [
-        caddy.LISTENER_HEADER
+        caddy.LISTENER_HEADER,
+        caddy.CLIENT_FINGERPRINT_HEADER,
     ]
 
 

@@ -2,9 +2,13 @@ from channels.security.websocket import WebsocketDenier
 from django.urls import re_path
 
 from anthias_server.app.consumers import AssetConsumer
+from anthias_server.controller.push import ScreenPushConsumer
 
 websocket_urlpatterns = [
     re_path(r'^ws$', AssetConsumer.as_asgi()),
+    # Managed screens pushing status to this controller (m2m site only;
+    # the consumer checks the listener header and client certificate).
+    re_path(r'^api/v2/controller/ws$', ScreenPushConsumer.as_asgi()),
     # Catch-all, and it has to stay last — the routes are tried in
     # order and this one matches everything.
     #

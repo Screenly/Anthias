@@ -55,6 +55,11 @@ class Node(models.Model):
     # while it is fresh.
     health = models.JSONField(default=dict, blank=True)
     health_at = models.DateTimeField(blank=True, null=True)
+    # Push connection (see .push): the id of the screen's current
+    # WebSocket and when it last spoke. While it is live the status
+    # poll leaves the screen alone.
+    push_connection = models.CharField(max_length=32, blank=True, default='')
+    push_seen_at = models.DateTimeField(blank=True, null=True)
 
     publish_state = models.CharField(
         max_length=16,
@@ -71,6 +76,12 @@ class Node(models.Model):
 
     def __str__(self) -> str:
         return f'{self.name} ({self.host})'
+
+    @property
+    def push_live(self) -> bool:
+        from .push import is_live
+
+        return is_live(self, timezone.now())
 
     @property
     def health_fresh(self) -> bool:

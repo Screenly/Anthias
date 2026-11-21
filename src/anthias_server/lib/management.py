@@ -472,14 +472,30 @@ def m2m_server() -> dict[str, Any]:
         'handler': 'reverse_proxy',
         'upstreams': [{'dial': caddy.UPSTREAM}],
         'headers': {
-            'request': {'set': {caddy.LISTENER_HEADER: [M2M_LISTENER_VALUE]}}
+            'request': {
+                'set': {
+                    caddy.LISTENER_HEADER: [M2M_LISTENER_VALUE],
+                    # Empty when the peer sent no client certificate.
+                    caddy.CLIENT_FINGERPRINT_HEADER: [
+                        '{http.request.tls.client.fingerprint}'
+                    ],
+                }
+            }
         },
     }
     return {
         'listen': [f':{M2M_PORT}'],
         'automatic_https': {'disable': True},
         'tls_connection_policies': [
-            {'certificate_selection': {'any_tag': [caddy.TAG_NODE]}}
+            {
+                'certificate_selection': {'any_tag': [caddy.TAG_NODE]},
+                # Ask for, but neither require nor verify, a client
+                # certificate: a screen pushing to its controller
+                # presents its node certificate, and the controller
+                # matches the fingerprint to the one pinned at join.
+                # REST clients present none and are unaffected.
+                'client_authentication': {'mode': 'request'},
+            }
         ],
         'routes': [
             {
@@ -489,6 +505,13 @@ def m2m_server() -> dict[str, Any]:
             },
             {'handle': [{'handler': 'static_response', 'status_code': 404}]},
         ],
+        # Caddy turns strict SNI/Host matching on whenever client
+        # authentication is configured, and answers 421 when they
+        # differ. Peers reach this site by IP address, which sends no
+        # SNI, so every request (join, REST, push) would be refused.
+        # Off is safe here: one site, and identity comes from the
+        # per-connection client certificate, not the host name.
+        'strict_sni_host': False,
         'read_header_timeout': caddy.READ_HEADER_TIMEOUT,
         'idle_timeout': caddy.IDLE_TIMEOUT,
         'max_header_bytes': caddy.MAX_HEADER_BYTES,
