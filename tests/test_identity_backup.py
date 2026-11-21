@@ -19,7 +19,8 @@ from django.urls import reverse
 from anthias_server.controller import ca, vault
 from anthias_server.lib import backup_helper, identity_backup, node_identity
 
-PASSWORD = 'correct horse battery'  # NOSONAR: test fixture
+# Test fixture, not a real credential.
+PASSWORD = 'correct horse battery'  # NOSONAR
 
 
 @pytest.fixture

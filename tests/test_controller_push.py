@@ -64,13 +64,12 @@ def _vault_key(
 
 
 @pytest.fixture
-def controller_on(_isolated_settings_conf: None) -> Iterator[None]:
+def controller_on(_isolated_settings_conf: None) -> None:
     from anthias_server.settings import settings
 
     settings['auth_backend'] = 'auth_basic'
     settings['controller_mode'] = True
     settings.save()
-    yield
 
 
 _LAST: dict[str, Any] = {}

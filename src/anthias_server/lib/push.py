@@ -194,8 +194,9 @@ def client_context(target: Target) -> ssl.SSLContext:
     runs before any message is sent.
     """
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    # The pin replaces chain and name checks; see check_pin().
+    context.check_hostname = False  # NOSONAR
+    context.verify_mode = ssl.CERT_NONE  # NOSONAR
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(target.cert_path, target.key_path)
     return context
@@ -343,9 +344,10 @@ async def run_forever() -> None:
             delay = RETRY_MIN_S
             fast_until = monotonic() + FAST_RETRY_WINDOW_S
         logger.debug('Reconnecting to the controller in ~%ss', delay)
+        # Jitter for reconnect spacing, not for security.
         await asyncio.sleep(
-            delay * random.uniform(0.8, 1.2)
-        )  # NOSONAR: jitter, not security
+            delay * random.uniform(0.8, 1.2)  # NOSONAR
+        )
         delay = next_delay(delay, fast_until, monotonic())
 
 

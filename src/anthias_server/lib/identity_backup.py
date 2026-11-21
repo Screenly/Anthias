@@ -179,7 +179,8 @@ def _write(target: Path, data: bytes, private: bool) -> None:
         os.fsync(fd)
     finally:
         os.close(fd)
-    os.chmod(tmp, mode)  # NOSONAR: certificates are public; keys are 0600
+    # Certificates are public; keys are 0600.
+    os.chmod(tmp, mode)  # NOSONAR(S2612)
     os.replace(tmp, target)
 
 

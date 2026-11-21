@@ -560,8 +560,9 @@ def _write_public(target: Path, text: str) -> None:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-            # Public material only; the private key never goes here.
-            os.chmod(tmp, 0o644)  # NOSONAR: world-readable is intended
+            # Public material only; the private key never goes here,
+            # so world-readable is intended.
+            os.chmod(tmp, 0o644)  # NOSONAR(S2612)
             os.replace(tmp, target)
         finally:
             tmp.unlink(missing_ok=True)
