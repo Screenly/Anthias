@@ -1224,3 +1224,28 @@ def test_a_pushing_screen_that_answers_is_online(
     service.check_node(node)
     node.refresh_from_db()
     assert node.status == NodeStatus.ONLINE
+
+
+@pytest.mark.django_db
+def test_screens_page_keeps_headings_and_fingerprints_reachable(
+    operator_client: Client, controller_on: None
+) -> None:
+    Node.objects.create(
+        name='Hall',
+        host='10.0.0.8',
+        fingerprint='1' * 64,
+        token_ciphertext=vault.encrypt('anthias_x'),
+    )
+    html = _screens(operator_client)
+    # A heading inside <summary> is flattened into its button role, so
+    # the section heading sits outside it.
+    assert '<h2 class="sr-only" id="join-information-title">' in html
+    assert '<summary class="screens__join-summary"><h2>' not in html
+    assert 'The visible title lives in the summary' not in html
+    # The certificate is visible text, not only a hover title.
+    assert 'Certificate 1111111111111111…' in html
+    # Every per-screen menu closes on Escape and on an outside click.
+    menus = html.count('<details class="screens__menu"')
+    assert menus
+    assert html.count('@keydown.escape=') == menus
+    assert html.count('@click.outside=') == menus

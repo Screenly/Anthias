@@ -92,8 +92,14 @@
   </section>
   {% endif %}
 
-  <details class="settings-section mt-4 screens__join" id="join-information" {% if not node_count %}open{% endif %}>
-    <summary class="screens__join-summary"><h2>Join information</h2></summary>
+  {% comment %}
+    The visible title lives in the summary, which assistive tech exposes as a
+    button and so flattens any heading inside it. The sr-only h2 keeps the
+    section in heading navigation.
+  {% endcomment %}
+  <h2 class="sr-only" id="join-information-title">Join information</h2>
+  <details class="settings-section mt-4 screens__join" id="join-information" {% if not node_count %}open{% endif %} aria-labelledby="join-information-title">
+    <summary class="screens__join-summary"><span class="screens__join-title">Join information</span></summary>
     <p class="settings-section__lede">To add a screen, paste this into the screen's <strong>Settings → Multi-screen management</strong>. You can reuse it for any number of screens; each one still needs your approval here.</p>
     {% if join_error %}
     <p class="api-tokens__error" role="alert">{{ join_error }}</p>

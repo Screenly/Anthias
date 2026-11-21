@@ -3831,7 +3831,8 @@ body.auth-body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    h2 { margin: 0; display: inline; }
+    // Same look as a .settings-section h2 (see the note in screens.html).
+    .screens__join-title { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
     &::-webkit-details-marker { display: none; }
     &::before {
       content: "\25B8";
