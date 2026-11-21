@@ -593,3 +593,24 @@ def test_disabling_auth_withdraws_site(
     assert settings['auth_backend'] == ''
     assert management.caddy_extra_servers() == {}
     stub_node_and_caddy.assert_called()
+
+
+@pytest.mark.parametrize(
+    ('service', 'registered'), [('', True), ('viewer', False)]
+)
+def test_app_registers_caddy_provider_except_in_viewer(
+    monkeypatch: pytest.MonkeyPatch, service: str, registered: bool
+) -> None:
+    from django.apps import apps
+
+    calls: list[object] = []
+    monkeypatch.setattr(
+        'anthias_server.lib.caddy.register_server_provider', calls.append
+    )
+    monkeypatch.setenv('ANTHIAS_SERVICE', service)
+    from anthias_server.app.apps import AnthiasAppConfig
+
+    config = apps.get_app_config('anthias_app')
+    assert isinstance(config, AnthiasAppConfig)
+    config._register_caddy_provider()
+    assert calls == ([management.caddy_extra_servers] if registered else [])
