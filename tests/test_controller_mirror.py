@@ -53,6 +53,17 @@ class FakeScreen:
     def create_asset(self, body: dict[str, Any]) -> dict[str, Any]:
         if body['name'] in self.fail_create_for:
             raise NodeRequestError('POST /assets: HTTP 400: nope', 400)
+        if (
+            body['mimetype'] == 'video'
+            and str(body['uri']).startswith('/')
+            and body['duration'] != 0
+        ):
+            # What the real v2 API answers for an uploaded video.
+            raise NodeRequestError(
+                'POST /assets: HTTP 400: Duration must be zero for video '
+                'assets.',
+                400,
+            )
         asset_id = self._id()
         self.calls.append(('create', body['name']))
         self.assets[asset_id] = {'asset_id': asset_id, **body}
@@ -119,11 +130,14 @@ def _asset(name: str, order: int, **kwargs: Any) -> Asset:
     return Asset.objects.create(**defaults)
 
 
-def _file_asset(name: str, order: int, data: bytes) -> Asset:
+def _file_asset(
+    name: str, order: int, data: bytes, mimetype: str = 'image'
+) -> Asset:
     from anthias_server.settings import settings
 
-    asset = _asset(name, order, mimetype='image', uri='')
-    path = os.path.join(settings['assetdir'], f'{asset.asset_id}.png')
+    asset = _asset(name, order, mimetype=mimetype, uri='')
+    ext = '.mp4' if mimetype == 'video' else '.png'
+    path = os.path.join(settings['assetdir'], f'{asset.asset_id}{ext}')
     Path(path).write_bytes(data)
     asset.uri = path
     asset.save()
@@ -162,6 +176,34 @@ def test_first_publish_creates_uploads_and_orders(node: Node) -> None:
     assert created_img['uri'].endswith('.tmp')
     assert created_img['ext'] == '.png'
     assert NodeAsset.objects.get(source_asset_id=image.asset_id)
+
+
+@pytest.mark.django_db
+def test_uploaded_video_lets_the_screen_measure_its_duration(
+    node: Node,
+) -> None:
+    video = _file_asset('clip', 0, b'mp4-bytes', mimetype='video')
+    video.duration = 55
+    video.save()
+    screen = FakeScreen()
+
+    result = mirror.sync_node(node, screen, mirror.build_manifest())
+
+    assert result.ok, result.errors
+    remote_id = screen.order[0]
+    assert screen.assets[remote_id]['duration'] == 0
+    # The screen probes the file; its own value must not count as drift.
+    screen.assets[remote_id]['duration'] = 55
+    screen.calls.clear()
+    result = mirror.sync_node(node, screen, mirror.build_manifest())
+    assert result.unchanged == 1
+    assert screen.writes() == []
+
+    video.is_enabled = False
+    video.save()
+    mirror.sync_node(node, screen, mirror.build_manifest())
+    assert screen.assets[remote_id]['is_enabled'] is False
+    assert screen.assets[remote_id]['duration'] == 55
 
 
 @pytest.mark.django_db

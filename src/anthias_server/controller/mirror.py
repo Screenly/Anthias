@@ -103,8 +103,20 @@ class ManifestItem:
     def spec_hash(self) -> str:
         return _hash(self.patch_body())
 
+    @property
+    def screen_probes_duration(self) -> bool:
+        """An uploaded video: the screen measures its length itself.
+
+        The v2 API refuses to create one with a non-zero duration, so
+        the controller sends 0 and never patches the duration after.
+        """
+        return self.is_file and self.spec.get('mimetype') == 'video'
+
     def patch_body(self) -> dict[str, Any]:
-        return {k: self.spec[k] for k in PATCHABLE if k in self.spec}
+        body = {k: self.spec[k] for k in PATCHABLE if k in self.spec}
+        if self.screen_probes_duration:
+            body.pop('duration', None)
+        return body
 
 
 class AssetApi(Protocol):
@@ -263,6 +275,8 @@ def _create_remote(
     client: AssetApi, item: ManifestItem, result: SyncResult
 ) -> str:
     body = dict(item.spec)
+    if item.screen_probes_duration:
+        body['duration'] = 0
     if item.is_file:
         assert item.file_path is not None
         upload = client.upload_file(item.file_path, _upload_name(item))
@@ -279,7 +293,7 @@ def _drifted(remote: dict[str, Any], item: ManifestItem) -> bool:
         if key in remote and remote[key] != item.spec.get(key):
             return True
     return (
-        item.spec.get('mimetype') != 'video'
+        not item.screen_probes_duration
         and 'duration' in remote
         and remote['duration'] != item.spec.get('duration')
     )
