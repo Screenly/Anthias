@@ -11,7 +11,20 @@
   </td>
   <td data-label="Name" data-no-label>
     <div class="asset-cell-name">
-      {% if is_active %}<i class="ti ti-grip-vertical drag-handle" title="Drag to reorder"></i>{% endif %}
+      {% if is_active %}
+      {% comment %} Three ways to reorder, so none of them is required:
+         drag the grip, focus it and press the arrow keys, or click it
+         for the move menu below (WCAG 2.5.7, a single-pointer path that
+         needs no dragging). The menu is a native popover, so light
+         dismiss, Escape and the top layer come from the browser. {% endcomment %}
+      <button type="button" class="drag-handle" aria-label="Reorder {{ asset.name|default:'asset' }}" aria-describedby="reorder-help" title="Drag, click or use the arrow keys to reorder" popovertarget="reorder-menu-{{ asset.asset_id }}"><i class="ti ti-grip-vertical" aria-hidden="true"></i></button>
+      <div id="reorder-menu-{{ asset.asset_id }}" class="reorder-menu" popover role="group" aria-label="Move {{ asset.name|default:'asset' }}">
+        <button type="button" class="reorder-menu__item" data-move="top"><i class="ti ti-arrow-bar-to-up" aria-hidden="true"></i>Move to top</button>
+        <button type="button" class="reorder-menu__item" data-move="up"><i class="ti ti-arrow-up" aria-hidden="true"></i>Move up</button>
+        <button type="button" class="reorder-menu__item" data-move="down"><i class="ti ti-arrow-down" aria-hidden="true"></i>Move down</button>
+        <button type="button" class="reorder-menu__item" data-move="bottom"><i class="ti ti-arrow-bar-to-down" aria-hidden="true"></i>Move to bottom</button>
+      </div>
+      {% endif %}
       <span class="asset-cell-name__icon">
         {% if asset.mimetype == 'image' %}<i class="ti ti-photo"></i>
         {% elif asset.mimetype == 'video' %}<i class="ti ti-video"></i>
@@ -73,7 +86,7 @@
           type="checkbox"
           class="app-check-input"
           {% if asset.is_enabled %}checked{% endif %}
-          aria-label="Toggle active"
+          aria-label="Enable {{ asset.name|default:'asset' }}"
           onchange="this.form.requestSubmit()"
         >
       </div>
@@ -86,23 +99,27 @@
         type="button"
         class="app-btn app-btn-icon"
         title="Preview"
+        aria-label="Preview {{ asset.name|default:'asset' }}"
         @click='openPreview({{ asset|to_json }})'
       ><i class="ti ti-eye"></i></button>
       <a
         href="{% url 'anthias_app:assets_download' asset_id=asset.asset_id %}"
         class="app-btn app-btn-icon"
         title="Download"
+        aria-label="Download {{ asset.name|default:'asset' }}"
       ><i class="ti ti-download"></i></a>
       <button
         type="button"
         class="app-btn app-btn-icon"
         title="Edit"
+        aria-label="Edit {{ asset.name|default:'asset' }}"
         @click='openEdit({{ asset|to_json }})'
       ><i class="ti ti-pencil"></i></button>
       <button
         type="button"
         class="app-btn app-btn-icon"
         title="Delete"
+        aria-label="Delete {{ asset.name|default:'asset' }}"
         @click="openDelete('{{ asset.asset_id }}', '{{ asset.name|default:''|escapejs }}')"
       ><i class="ti ti-trash"></i></button>
     </div>
