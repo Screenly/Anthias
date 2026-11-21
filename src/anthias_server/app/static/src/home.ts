@@ -5,6 +5,7 @@
 
 import type Alpine from 'alpinejs'
 import type flatpickrLib from 'flatpickr'
+import type { Options as FlatpickrOptions } from 'flatpickr/dist/types/options'
 
 import {
   appEdit,
@@ -336,6 +337,28 @@ function csrfToken(): string {
   return cookieMatch ? decodeURIComponent(cookieMatch[1]) : ''
 }
 
+function modalPickerOptions(input: HTMLInputElement): Partial<FlatpickrOptions> {
+  const overlay = input.closest<HTMLElement>('.modal-overlay')
+  if (!overlay) return {}
+  return {
+    // Keep the popup inside x-trap, but outside the card's scrolling
+    // container so it isn't clipped at the bottom of a long form.
+    appendTo: overlay,
+    position(instance) {
+      const bounds = input.getBoundingClientRect()
+      const calendar = instance.calendarContainer
+      const above = bounds.bottom + calendar.offsetHeight + 8 > window.innerHeight
+      const top = above ? bounds.top - calendar.offsetHeight - 2 : bounds.bottom + 2
+      calendar.style.position = 'fixed'
+      calendar.style.top = `${Math.max(8, top)}px`
+      const rightEdge = document.documentElement.clientWidth - calendar.offsetWidth - 8
+      calendar.style.left = `${Math.max(8, Math.min(bounds.left, rightEdge))}px`
+      calendar.classList.toggle('arrowTop', !above)
+      calendar.classList.toggle('arrowBottom', above)
+    },
+  }
+}
+
 function homeApp(): HomeAppData {
   return {
     mode: null,
@@ -413,6 +436,7 @@ function homeApp(): HomeAppData {
           if (fp) fp.destroy()
           const seed = seedDateTime(el.value)
           const inst = window.flatpickr(el, {
+            ...modalPickerOptions(el),
             enableTime: true,
             time_24hr: use24,
             dateFormat: `${dateFmt} ${use24 ? 'H:i' : 'h:i K'}`,
@@ -428,6 +452,7 @@ function homeApp(): HomeAppData {
           if (fp) fp.destroy()
           const seed = seedTimeOnly(el.value)
           const inst = window.flatpickr(el, {
+            ...modalPickerOptions(el),
             enableTime: true,
             noCalendar: true,
             time_24hr: use24,
@@ -1102,19 +1127,18 @@ function installProcessingToastWatcher(): void {
 
 type HtmxLike = { trigger: (target: string, event: string) => void }
 
-function postOrder(orderUrl: string, tbody: HTMLElement): void {
+function refreshAssets(): void {
+  (window as unknown as { htmx: HtmxLike }).htmx.trigger('body', 'refresh-assets')
+}
+
+function postOrder(orderUrl: string, tbody: HTMLElement): Promise<void> {
   const ids = Array.from(tbody.children)
     .map((tr) => (tr as HTMLElement).dataset.assetId)
     .filter(Boolean)
     .join(',')
   const fd = new FormData()
   fd.append('ids', ids)
-  const refresh = () =>
-    (window as unknown as { htmx: HtmxLike }).htmx.trigger(
-      'body',
-      'refresh-assets',
-    )
-  fetch(orderUrl, {
+  return fetch(orderUrl, {
     method: 'POST',
     body: fd,
     headers: {
@@ -1126,11 +1150,9 @@ function postOrder(orderUrl: string, tbody: HTMLElement): void {
       if (!r.ok) {
         console.error('reorder POST failed:', r.status, r.statusText)
       }
-      refresh()
     })
     .catch((err) => {
       console.error('reorder POST errored:', err)
-      refresh()
     })
 }
 
@@ -1179,7 +1201,7 @@ function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
     cleanup()
     if (didMove) {
       suppressClick = true
-      postOrder(orderUrl, tbody)
+      void postOrder(orderUrl, tbody).then(refreshAssets)
     }
   }
 
@@ -1230,6 +1252,9 @@ function bindActiveRowsDrag(tbody: HTMLElement, orderUrl: string): void {
 // through a run of presses. The refresh replaces the whole table, so
 // focus is handed back to the moved row's new handle once it lands.
 let reorderFocusId: string | null = null
+let reorderPending = false
+let reorderRevision = 0
+const tableRequestRevisions = new WeakMap<XMLHttpRequest, number>()
 const REORDER_POST_DELAY_MS = 500
 
 type Move = 'top' | 'up' | 'down' | 'bottom'
@@ -1261,6 +1286,28 @@ function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
   tbody.dataset.keysBound = '1'
 
   let timer: number | undefined
+  let posting = false
+  let dirty = false
+
+  const saveOrder = async (): Promise<void> => {
+    timer = undefined
+    if (posting) return
+    posting = true
+    dirty = false
+    await postOrder(orderUrl, tbody)
+    posting = false
+    if (dirty) {
+      // Serialize saves if the operator keeps moving while a POST is
+      // in flight. The last order must be the last one persisted.
+      if (timer === undefined) void saveOrder()
+    } else {
+      // Requests started after the last key press but before this
+      // commit can still carry the old order.
+      reorderRevision += 1
+      reorderPending = false
+      refreshAssets()
+    }
+  }
 
   const moveRow = (row: HTMLTableRowElement, move: Move): void => {
     const before = moveTarget(row, tbody, move)
@@ -1270,8 +1317,11 @@ function bindActiveRowsKeyboard(tbody: HTMLElement, orderUrl: string): void {
     announceReorder(row, tbody)
 
     reorderFocusId = row.dataset.assetId ?? null
+    reorderPending = true
+    reorderRevision += 1
+    dirty = true
     window.clearTimeout(timer)
-    timer = window.setTimeout(() => postOrder(orderUrl, tbody), REORDER_POST_DELAY_MS)
+    timer = window.setTimeout(() => void saveOrder(), REORDER_POST_DELAY_MS)
   }
 
   tbody.addEventListener('keydown', (ev: KeyboardEvent) => {
@@ -1397,6 +1447,25 @@ window.appEdit = appEdit
 function bootHomePage(): void {
   installProcessingToastWatcher()
   setupActiveRowsDrag()
+  document.body.addEventListener('htmx:beforeRequest', (ev) => {
+    const detail = (ev as CustomEvent<{ xhr: XMLHttpRequest }>).detail
+    tableRequestRevisions.set(detail.xhr, reorderRevision)
+  })
+  document.body.addEventListener('htmx:beforeSwap', (ev) => {
+    const detail = (ev as CustomEvent<{
+      target: Element
+      xhr: XMLHttpRequest
+      shouldSwap: boolean
+    }>).detail
+    if (detail.target.id !== 'asset-table') return
+    // Polls and WebSocket refreshes can finish during the debounce or
+    // POST, or arrive late with a snapshot taken before the move. Only
+    // a current response after saving may replace the table and take
+    // over keyboard focus.
+    if (reorderPending || tableRequestRevisions.get(detail.xhr) !== reorderRevision) {
+      detail.shouldSwap = false
+    }
+  })
   document.body.addEventListener('htmx:afterSwap', (ev) => {
     const target = (ev as CustomEvent<{ target?: Element }>).detail?.target
     if (!target) return

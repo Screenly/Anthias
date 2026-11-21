@@ -1440,12 +1440,17 @@ def _set_flatpickr_time(
     picker = page.locator('.flatpickr-calendar.open')
     expect(picker).to_have_count(1)
     expect(picker).to_be_visible()
+    assert picker.evaluate("el => el.closest('[x-trap]') !== null"), (
+        'The picker must stay inside the modal focus trap.'
+    )
     # Real keystrokes, not fill(): Flatpickr's spinners select-all on
     # focus and reformat on key input, so programmatic value-setting
     # gets clobbered by its own normalisation pass.
     picker.locator('input.flatpickr-hour').click()
+    expect(picker.locator('input.flatpickr-hour')).to_be_focused()
     page.keyboard.type(str(hour), delay=50)
     picker.locator('input.flatpickr-minute').click()
+    expect(picker.locator('input.flatpickr-minute')).to_be_focused()
     page.keyboard.type(f'{minute:02d}', delay=50)
     # Flatpickr only writes the spinner state back to the bound input
     # on blur of the spinner — Tab commits it.
