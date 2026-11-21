@@ -66,7 +66,14 @@ class FakeScreen:
             )
         asset_id = self._id()
         self.calls.append(('create', body['name']))
-        self.assets[asset_id] = {'asset_id': asset_id, **body}
+        name = body['name']
+        taken = {a.get('name') for a in self.assets.values()}
+        suffix = 1
+        while name in taken:
+            # The real API's get_unique_name().
+            name = f'{body["name"]}-{suffix}'
+            suffix += 1
+        self.assets[asset_id] = {'asset_id': asset_id, **body, 'name': name}
         return self.assets[asset_id]
 
     def update_asset(
@@ -204,6 +211,45 @@ def test_uploaded_video_lets_the_screen_measure_its_duration(
     mirror.sync_node(node, screen, mirror.build_manifest())
     assert screen.assets[remote_id]['is_enabled'] is False
     assert screen.assets[remote_id]['duration'] == 55
+
+
+@pytest.mark.django_db
+def test_local_assets_with_the_same_name_do_not_rename_the_mirror(
+    node: Node,
+) -> None:
+    _asset('Menu', 0)
+    screen = FakeScreen()
+    screen.assets['local1'] = {'asset_id': 'local1', 'name': 'Menu'}
+
+    mirror.sync_node(node, screen, mirror.build_manifest())
+
+    assert [a['name'] for a in screen.assets.values()] == ['Menu']
+
+
+@pytest.mark.django_db
+def test_replaced_asset_keeps_its_name(node: Node) -> None:
+    web = _asset('Menu', 0)
+    screen = FakeScreen()
+    mirror.sync_node(node, screen, mirror.build_manifest())
+    web.uri = 'https://example.com/v2'
+    web.save()
+
+    mirror.sync_node(node, screen, mirror.build_manifest())
+
+    assert [a['name'] for a in screen.assets.values()] == ['Menu']
+
+
+@pytest.mark.django_db
+def test_name_changed_on_the_screen_is_reverted(node: Node) -> None:
+    _asset('Menu', 0)
+    screen = FakeScreen()
+    mirror.sync_node(node, screen, mirror.build_manifest())
+    screen.assets[screen.order[0]]['name'] = 'Menu-1'
+
+    result = mirror.sync_node(node, screen, mirror.build_manifest())
+
+    assert result.updated == 1
+    assert screen.assets[screen.order[0]]['name'] == 'Menu'
 
 
 @pytest.mark.django_db

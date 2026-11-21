@@ -57,6 +57,7 @@ PATCHABLE = (
 # Compared against what the screen reports, to undo local edits made on
 # the screen even when nothing changed on the controller.
 _DRIFT_FIELDS = (
+    'name',
     'is_enabled',
     'nocache',
     'skip_asset_check',
@@ -273,7 +274,7 @@ def _upload_name(item: ManifestItem) -> str:
 
 def _create_remote(
     client: AssetApi, item: ManifestItem, result: SyncResult
-) -> str:
+) -> tuple[str, str]:
     body = dict(item.spec)
     if item.screen_probes_duration:
         body['duration'] = 0
@@ -285,7 +286,7 @@ def _create_remote(
         if upload.get('ext'):
             body['ext'] = upload['ext']
     created = client.create_asset(body)
-    return str(created['asset_id'])
+    return str(created['asset_id']), str(created.get('name', body['name']))
 
 
 def _drifted(remote: dict[str, Any], item: ManifestItem) -> bool:
@@ -311,6 +312,22 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
     ordered: list[str] = []
     keep: set[str] = set()
 
+    # Remove what is not part of the mirror first. The screen renames a
+    # new asset whose name is already taken ("name-1"), so creating
+    # before deleting would rename the mirrored copies.
+    mapped = {
+        mappings[item.asset_id].remote_asset_id
+        for item in manifest.items
+        if item.asset_id in mappings
+    }
+    for remote_id in [r for r in remote if r not in mapped]:
+        try:
+            client.delete_asset(remote_id)
+            remote.pop(remote_id)
+            result.deleted += 1
+        except NodeRequestError as exc:
+            result.errors.append(f'remove {remote_id}: {exc}')
+
     for item in manifest.items:
         mapping = mappings.get(item.asset_id)
         spec_hash = item.spec_hash
@@ -329,11 +346,15 @@ def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:
                 else:
                     result.unchanged += 1
             else:
-                new_id = _create_remote(client, item, result)
+                new_id, new_name = _create_remote(client, item, result)
                 if existing is not None:
                     client.delete_asset(remote_id)
                     remote.pop(remote_id, None)
                     result.deleted += 1
+                if new_name != item.spec['name']:
+                    # Created while the asset it replaces still held
+                    # the name; take the name back now it is free.
+                    client.update_asset(new_id, {'name': item.spec['name']})
                 remote_id = new_id
                 result.created += 1
         except NodeRequestError as exc:
