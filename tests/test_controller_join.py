@@ -946,8 +946,9 @@ def test_a_signing_request_for_another_key_is_refused() -> None:
     from anthias_server.controller import ca
 
     csr = pki.make_csr(pki.new_key(), SCREEN_FP, pki.ROLE_SCREEN)
+    screen_key = _SCREEN_KEY.public_key()
     with pytest.raises(pki.PkiError):
-        ca.sign_screen_csr(csr, _SCREEN_KEY.public_key(), SCREEN_FP)
+        ca.sign_screen_csr(csr, screen_key, SCREEN_FP)
 
 
 def test_the_subject_and_role_come_from_the_ca_not_the_csr() -> None:
@@ -967,17 +968,12 @@ def test_the_subject_and_role_come_from_the_ca_not_the_csr() -> None:
     assert cn.value == SCREEN_FP[:64]
     with pytest.raises(pki.PkiError):
         pki.check_client_cert(cert, authority, pki.ROLE_CONTROLLER)
+    expired = cert.not_valid_after_utc + timedelta(seconds=1)
     with pytest.raises(pki.PkiError):
-        pki.check_client_cert(
-            cert,
-            authority,
-            pki.ROLE_SCREEN,
-            at=cert.not_valid_after_utc + timedelta(seconds=1),
-        )
+        pki.check_client_cert(cert, authority, pki.ROLE_SCREEN, at=expired)
+    other = pki.make_ca(pki.new_key(), 'Other')
     with pytest.raises(pki.PkiError):
-        pki.check_client_cert(
-            cert, pki.make_ca(pki.new_key(), 'Other'), pki.ROLE_SCREEN
-        )
+        pki.check_client_cert(cert, other, pki.ROLE_SCREEN)
     assert not pki.needs_renewal(cert)
     assert pki.needs_renewal(
         cert, at=cert.not_valid_after_utc - timedelta(days=1)

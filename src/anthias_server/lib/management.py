@@ -512,7 +512,8 @@ def _managed_files() -> tuple[Path, Path, Path]:
 def _write_public(target: Path, text: str) -> None:
     tmp = target.with_name(f'.{target.name}.tmp')
     tmp.write_text(text)
-    os.chmod(tmp, 0o644)
+    # Public material only (certificates, CRL); the key never goes here.
+    os.chmod(tmp, 0o644)  # NOSONAR: world-readable is intended
     os.replace(tmp, target)
 
 
@@ -637,7 +638,6 @@ def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
     here; the join endpoint and the push consumer check their callers.
     """
     import base64
-    import binascii
 
     from cryptography import x509
 
@@ -654,7 +654,7 @@ def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
     try:
         cert = x509.load_der_x509_certificate(base64.b64decode(raw))
         pki.check_client_cert(cert, ca, pki.ROLE_CONTROLLER)
-    except (ValueError, binascii.Error, pki.PkiError):
+    except ValueError:  # binascii.Error and PkiError are ValueErrors
         return False, "Only this screen's controller may call it here."
     revocations = _load_crl()
     if revocations is None:

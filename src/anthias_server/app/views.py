@@ -2179,6 +2179,33 @@ def settings_management_leave(request: HttpRequest) -> HttpResponse:
     return _management_response(request)
 
 
+def _allowed_controller_mode(
+    request: HttpRequest, wanted: bool, auth_backend: str
+) -> bool:
+    """Controller mode as requested, unless it is refused here.
+
+    It holds access to every managed screen, so it needs auth; and a
+    screen that is (or is asking to be) managed cannot also manage.
+    """
+    if not wanted:
+        return False
+    if not auth_backend:
+        messages.warning(
+            request,
+            'Controller mode needs authentication. Turn on '
+            'authentication first.',
+        )
+        return False
+    if management.is_managed() or management.pending_controller():
+        messages.warning(
+            request,
+            'This screen is managed by (or waiting to join) a '
+            'controller, so it cannot be one. Leave management first.',
+        )
+        return False
+    return True
+
+
 @authorized
 @require_http_methods(['POST'])
 def settings_save(request: HttpRequest) -> HttpResponse:
@@ -2255,23 +2282,9 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         controller_mode_changed = controller_mode != bool(
             settings['controller_mode']
         )
-        if controller_mode and not auth_backend:
-            controller_mode = False
-            messages.warning(
-                request,
-                'Controller mode needs authentication. Turn on '
-                'authentication first.',
-            )
-        elif controller_mode and (
-            management.is_managed()
-            or management.pending_controller() is not None
-        ):
-            controller_mode = False
-            messages.warning(
-                request,
-                'This screen is managed by (or waiting to join) a '
-                'controller, so it cannot be one. Leave management first.',
-            )
+        controller_mode = _allowed_controller_mode(
+            request, controller_mode, auth_backend
+        )
         settings['controller_mode'] = controller_mode
 
         # Restrict to the four cardinal angles via the shared

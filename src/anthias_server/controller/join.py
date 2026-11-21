@@ -203,6 +203,21 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
         name = host
     screen_cert = text('screen_cert', pki.MAX_PEM_BYTES)
     csr = text('csr', pki.MAX_PEM_BYTES)
+    _check_screen_credentials(screen_cert, csr, screen_fp)
+    return JoinRequest(
+        secret=secret,
+        token=token,
+        screen_name=name,
+        screen_fp=screen_fp,
+        screen_port=port,
+        screen_host=host,
+        screen_cert=screen_cert,
+        csr=csr,
+    )
+
+
+def _check_screen_credentials(screen_cert: str, csr: str, fp: str) -> None:
+    """The certificate must be the pinned one; the CSR for its key."""
     if not screen_cert or not csr:
         raise JoinError(
             400,
@@ -215,7 +230,7 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
         signing_request = pki.load_csr(csr)
     except pki.PkiError as exc:
         raise JoinError(400, str(exc)) from exc
-    if pki.fingerprint(cert) != screen_fp:
+    if pki.fingerprint(cert) != fp:
         raise JoinError(
             400, 'The certificate does not match the screen fingerprint.'
         )
@@ -225,16 +240,6 @@ def parse_join_request(data: Any, client_ip: str) -> JoinRequest:
         raise JoinError(
             400, "The signing request is not for the screen's own key."
         )
-    return JoinRequest(
-        secret=secret,
-        token=token,
-        screen_name=name,
-        screen_fp=screen_fp,
-        screen_port=port,
-        screen_host=host,
-        screen_cert=screen_cert,
-        csr=csr,
-    )
 
 
 def _valid_host(host: str) -> bool:

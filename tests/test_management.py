@@ -978,21 +978,17 @@ def test_install_approval_refuses_what_does_not_check_out(
         ),
     }
     for name, (cert, authority, crl) in cases.items():
+        pems = (pki.cert_pem(cert), pki.cert_pem(authority), pki.crl_pem(crl))
         with pytest.raises(management.ManagementError):
-            management.install_approval(
-                controller.token_id,
-                pki.cert_pem(cert),
-                pki.cert_pem(authority),
-                pki.crl_pem(crl),
-            )
+            management.install_approval(controller.token_id, *pems)
         assert not management.is_managed(), name
+    good_pems = (
+        pki.cert_pem(good),
+        pki.cert_pem(ca_cert),
+        pki.crl_pem(empty_crl),
+    )
     with pytest.raises(management.ManagementError):
-        management.install_approval(
-            controller.token_id + 1000,
-            pki.cert_pem(good),
-            pki.cert_pem(ca_cert),
-            pki.crl_pem(empty_crl),
-        )
+        management.install_approval(controller.token_id + 1000, *good_pems)
 
 
 @pytest.mark.django_db
@@ -1082,6 +1078,7 @@ def test_a_controller_cannot_join_another_controller(
 
     settings['controller_mode'] = True
     settings.save()
+    snippet = _snippet()
     with pytest.raises(management.ManagementError):
-        management.join(_snippet())
+        management.join(snippet)
     assert controller_reply['calls'] == []

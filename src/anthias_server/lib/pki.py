@@ -52,6 +52,7 @@ CRL_REFRESH_BEFORE = dt.timedelta(days=2)
 # clock is slightly behind still accepts them.
 CLOCK_SKEW = dt.timedelta(minutes=5)
 MAX_PEM_BYTES = 16 * 1024
+_EC_ONLY = 'Only EC keys are used here.'
 
 
 class PkiError(ValueError):
@@ -124,7 +125,7 @@ def load_crl(pem: str | bytes) -> x509.CertificateRevocationList:
 def load_key(pem: bytes) -> ec.EllipticCurvePrivateKey:
     key = serialization.load_pem_private_key(pem, password=None)
     if not isinstance(key, ec.EllipticCurvePrivateKey):
-        raise PkiError('Only EC keys are used here.')
+        raise PkiError(_EC_ONLY)
     return key
 
 
@@ -133,7 +134,7 @@ def public_key_bytes(key: object) -> bytes:
     if isinstance(key, ec.EllipticCurvePrivateKey):
         key = key.public_key()
     if not isinstance(key, ec.EllipticCurvePublicKey):
-        raise PkiError('Only EC keys are used here.')
+        raise PkiError(_EC_ONLY)
     return key.public_bytes(
         serialization.Encoding.DER,
         serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -263,7 +264,7 @@ def issue_client_cert(
     if role not in ROLES:
         raise PkiError(f'Unknown certificate role {role!r}.')
     if not isinstance(public_key, ec.EllipticCurvePublicKey):
-        raise PkiError('Only EC keys are used here.')
+        raise PkiError(_EC_ONLY)
     start = now() - CLOCK_SKEW
     not_after = min(start + validity, ca_cert.not_valid_after_utc)
     return (

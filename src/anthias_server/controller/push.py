@@ -39,7 +39,6 @@ the same shape.
 from __future__ import annotations
 
 import base64
-import binascii
 import hmac
 import json
 import logging
@@ -109,7 +108,7 @@ def client_certificate(scope: dict[str, Any]) -> x509.Certificate | None:
         return None
     try:
         return x509.load_der_x509_certificate(base64.b64decode(raw))
-    except (ValueError, binascii.Error):
+    except ValueError:  # binascii.Error is a ValueError
         return None
 
 
