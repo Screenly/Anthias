@@ -2,13 +2,14 @@
 <div
   x-show="previewAsset"
   x-cloak
+  x-trap="previewAsset"
   class="modal-overlay modal-overlay--nested"
   @keydown.escape.window="closePreview()"
   @click.self="closePreview()"
 >
-  <div class="modal-card modal-card--preview">
+  <div class="modal-card modal-card--preview" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
     <div class="modal-card__header">
-      <h2 x-text="previewAsset && previewAsset.name ? previewAsset.name : 'Preview'"></h2>
+      <h2 id="preview-modal-title" x-text="previewAsset && previewAsset.name ? previewAsset.name : 'Preview'">Preview</h2>
       <button type="button" class="modal-card__close" @click="closePreview()" aria-label="Close">
         <i class="ti ti-x"></i>
       </button>

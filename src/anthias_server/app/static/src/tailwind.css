@@ -170,6 +170,12 @@
   --color-fg-faint: #6f6779;
   --color-border: var(--color-ink-8);
   --color-divider: var(--color-ink-8);
+  /* The edge of a form control: text inputs, selects, checkboxes, the
+   * switch track. Not --color-border, which is a decorative hairline at
+   * 1.2:1. A control's boundary is what tells a reader where to click
+   * and type, so WCAG 1.4.11 holds it to 3:1 against every surface it
+   * can sit on, and test_design_tokens.py measures it there. */
+  --color-control-edge: #7d7488;
 
   --color-feature-from: #503061;
   --color-feature-to: #492955;
@@ -236,7 +242,15 @@
   --color-success-on-wash: var(--color-green-900);
   --color-success-on-wash-strong: var(--color-green-50);
 
-  --color-focus-ring: rgb(124 48 205 / 0.35);
+  /* Keyboard focus is drawn as two rings, see --focus-ring in base.css:
+   * a gap in --color-focus-gap hugging the control, then the ring
+   * itself. A single ring cannot clear 3:1 on both a white card and the
+   * plum canvas, but the pair can: on a light surface the ring carries
+   * the contrast, on the canvas and the feature card the gap does. Both
+   * are opaque; the old ring was purple at 35% alpha, which measured
+   * 1.8:1 on white and all but vanished on plum. */
+  --color-focus-ring: #6633a0;
+  --color-focus-gap: #ffffff;
 
   /* Theme-relative overlay ladder: aliases onto ink in light and paper
    * in dark, so component CSS never has to ask which theme it is in. */
