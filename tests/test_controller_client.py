@@ -171,8 +171,9 @@ def test_offline_screen_raises_offline() -> None:
     ):
         client.info()
     # One readable line, not urllib3's nested repr.
-    assert str(excinfo.value) == (
-        'Cannot reach 127.0.0.1:9: Connection refused.'
+    assert str(excinfo.value).startswith(
+        'Cannot reach 127.0.0.1:9: Connection refused. The device is up but '
+        'not accepting management.'
     )
 
 

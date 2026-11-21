@@ -82,7 +82,16 @@ def _offline_reason(url: str, exc: Exception) -> str:
         return 'Plain HTTP is never used for screens.'
     match = _ERRNO_RE.search(str(exc))
     reason = match.group(1).strip() if match else 'connection failed'
-    return f'Cannot reach {where}: {reason}.'
+    message = f'Cannot reach {where}: {reason}.'
+    if reason.lower() == 'connection refused':
+        # The device answered but nothing listens on the management
+        # port: a screen closes it when it leaves management (or when
+        # authentication is turned off).
+        message += (
+            ' The device is up but not accepting management. It may have '
+            'left management; if so, remove it here or join it again.'
+        )
+    return message
 
 
 def _error_message(response: requests.Response) -> str:

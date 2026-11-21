@@ -178,7 +178,9 @@ From the **Screens** page you can:
 * See which screens are **online**, their version, and an **activity log** of every action.
 * **Remove** a screen. Its token is revoked on the screen, and it keeps playing what it already has.
 
-A screen that goes offline keeps playing its last published schedule and is shown as **Offline** until it is back. A screen that left management (or whose token was revoked) is shown as **Left management** and is skipped by publishes until it joins again.
+A screen that goes offline keeps playing its last published schedule and is shown as **Offline** until it is back. A screen that leaves management closes its management port, so it also shows as **Offline**, with a note that it is up but not accepting management; remove it, or join it again. If a screen's token is revoked while its port stays open, it shows as **Left management** and is skipped by publishes until it joins again.
+
+Video lengths are measured by each screen, so a video's duration on a screen can differ from the value set on the controller.
 
 The controller stores each screen's token encrypted, with a key that is not part of backups. If you restore a controller's backup onto another device, the screens have to join again.
 
