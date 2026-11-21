@@ -10,6 +10,8 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from billiard.exceptions import SoftTimeLimitExceeded
+from cryptography.fernet import Fernet
 from django.contrib.auth.models import User
 from django.test import Client
 from django.urls import reverse
@@ -502,6 +504,59 @@ def test_remove_unreachable_screen_still_forgets_it(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('auth_enabled', 'controller_mode'),
+    [(False, False), (False, True), (True, False)],
+)
+def test_remove_requires_an_enabled_controller(
+    operator_client: Client,
+    controller_on: None,
+    auth_enabled: bool,
+    controller_mode: bool,
+) -> None:
+    from anthias_server.settings import settings
+
+    node = Node.objects.create(
+        name='Lobby',
+        host='screen',
+        fingerprint=SCREEN_FP,
+        token_ciphertext='x',
+    )
+    settings['auth_backend'] = 'auth_basic' if auth_enabled else ''
+    settings['controller_mode'] = controller_mode
+    settings.save()
+    client = operator_client if auth_enabled else Client()
+    with patch.object(service, 'remove_node') as remove:
+        response = client.post(
+            reverse('controller:screens_remove', args=[node.pk])
+        )
+    assert response.status_code == 302
+    remove.assert_not_called()
+    assert Node.objects.filter(pk=node.pk).exists()
+
+
+@pytest.mark.django_db
+def test_screens_recovers_a_join_secret_from_a_foreign_backup(
+    operator_client: Client, controller_on: None
+) -> None:
+    foreign_secret = 'secret-from-another-controller'
+    ciphertext = (
+        Fernet(Fernet.generate_key()).encrypt(foreign_secret.encode()).decode()
+    )
+    JoinSecret.objects.create(ciphertext=ciphertext)
+
+    response = operator_client.get(reverse('controller:screens'))
+
+    assert response.status_code == 200
+    secret = _decode(response.context['join_snippet'])['secret']
+    assert secret != foreign_secret
+    assert join.check_secret(secret)
+    assert not join.check_secret(foreign_secret)
+    assert join.current_secret() == secret
+    assert JoinSecret.objects.count() == 1
+
+
+@pytest.mark.django_db
 def test_regenerate_changes_the_secret(
     operator_client: Client, controller_on: None
 ) -> None:
@@ -547,3 +602,31 @@ def test_status_poll_skips_screens_that_left(
     )
     assert tasks.refresh_nodes() == 1
     assert checked == ['A']
+
+
+@pytest.mark.django_db
+def test_status_poll_resumes_after_a_slow_screen_hits_the_task_limit(
+    controller_on: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    nodes = [
+        Node.objects.create(
+            name=f'Screen {i}',
+            host=f'screen-{i}',
+            fingerprint=str(i) * 64,
+            token_ciphertext='x',
+        )
+        for i in range(6)
+    ]
+    attempted: list[int] = []
+
+    def interrupted_check(node: Node) -> Node:
+        attempted.append(node.pk)
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(service, 'check_node', interrupted_check)
+    for _ in nodes:
+        with pytest.raises(SoftTimeLimitExceeded):
+            tasks.refresh_nodes()
+
+    assert attempted == [node.pk for node in nodes]
+    assert not Node.objects.filter(last_checked_at__isnull=True).exists()

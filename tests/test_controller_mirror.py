@@ -298,6 +298,57 @@ def test_edit_made_on_the_screen_is_reverted(node: Node) -> None:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('field', 'value'),
+    [
+        ('start_date', '2099-01-01T00:00:00Z'),
+        ('end_date', '2099-01-02T00:00:00Z'),
+        ('play_time_from', '09:00:00'),
+        ('play_time_to', '17:00:00'),
+        ('refresh_interval_s', 60),
+        ('custom_headers', {'Authorization': 'screen-local-value'}),
+    ],
+)
+def test_remote_schedule_and_headers_are_reverted(
+    node: Node, field: str, value: Any
+) -> None:
+    _asset('web', 0)
+    screen = FakeScreen()
+    manifest = mirror.build_manifest()
+    mirror.sync_node(node, screen, manifest)
+    remote_id = screen.order[0]
+    screen.assets[remote_id][field] = value
+
+    result = mirror.sync_node(node, screen, manifest)
+
+    assert result.updated == 1
+    assert screen.assets[remote_id][field] == manifest.items[0].spec[field]
+
+
+@pytest.mark.django_db
+def test_equivalent_remote_date_and_time_formats_are_unchanged(
+    node: Node,
+) -> None:
+    from datetime import time
+
+    _asset('web', 0, play_time_from=time(9), play_time_to=time(17))
+    screen = FakeScreen()
+    manifest = mirror.build_manifest()
+    mirror.sync_node(node, screen, manifest)
+    remote = screen.assets[screen.order[0]]
+    for key in ('start_date', 'end_date'):
+        remote[key] = remote[key].replace('+00:00', 'Z')
+    remote['play_time_from'] = '09:00'
+    remote['play_time_to'] = '17:00:00.000000'
+    screen.calls.clear()
+
+    result = mirror.sync_node(node, screen, manifest)
+
+    assert result.unchanged == 1
+    assert screen.writes() == []
+
+
+@pytest.mark.django_db
 def test_changed_file_or_url_replaces_the_remote_asset(node: Node) -> None:
     image = _file_asset('img', 0, b'one')
     web = _asset('web', 1)

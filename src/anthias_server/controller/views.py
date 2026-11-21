@@ -201,6 +201,8 @@ def screens_refresh(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['POST'])
 def screens_remove(request: HttpRequest, node_id: int) -> HttpResponse:
+    if (refusal := _require_enabled(request)) is not None:
+        return refusal
     node = get_object_or_404(Node, pk=node_id)
     name = node.name
     try:

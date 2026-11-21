@@ -24,6 +24,7 @@ import base64
 import hmac
 import ipaddress
 import json
+import logging
 import re
 import secrets
 from dataclasses import dataclass
@@ -62,6 +63,8 @@ CALLBACK_READ_TIMEOUT_S = 15
 JOIN_RATE_LIMIT = 10
 JOIN_RATE_WINDOW_S = 60
 
+logger = logging.getLogger(__name__)
+
 
 class JoinError(Exception):
     def __init__(self, status: int, detail: str) -> None:
@@ -91,14 +94,24 @@ def controller_fingerprint() -> str:
 
 
 def current_secret() -> str:
-    """The join secret, created on first use."""
+    """The join secret, created on first use or after a foreign restore."""
     with transaction.atomic():
         row = JoinSecret.objects.select_for_update().first()
         if row is None:
             row = JoinSecret.objects.create(
                 ciphertext=vault.encrypt(_new_secret())
             )
-    return vault.decrypt(row.ciphertext)
+        try:
+            secret = vault.decrypt(row.ciphertext)
+        except vault.VaultError:
+            # Backups exclude the device's vault key. A restored join
+            # secret cannot be used here; replace it so Screens remains
+            # usable and can show fresh join information.
+            logger.warning('Replacing an unreadable controller join secret')
+            secret = _new_secret()
+            row.ciphertext = vault.encrypt(secret)
+            row.save(update_fields=['ciphertext'])
+    return secret
 
 
 def regenerate_secret() -> str:

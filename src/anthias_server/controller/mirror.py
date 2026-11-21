@@ -27,6 +27,8 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, Protocol
 
+from django.utils.dateparse import parse_datetime, parse_time
+
 from anthias_server.controller.client import NodeRequestError
 from anthias_server.controller.models import Node, NodeAsset
 
@@ -52,17 +54,6 @@ PATCHABLE = (
     'play_time_to',
     'refresh_interval_s',
     'custom_headers',
-)
-
-# Compared against what the screen reports, to undo local edits made on
-# the screen even when nothing changed on the controller.
-_DRIFT_FIELDS = (
-    'name',
-    'is_enabled',
-    'nocache',
-    'skip_asset_check',
-    'skip_ssl_verify',
-    'play_days',
 )
 
 
@@ -290,14 +281,21 @@ def _create_remote(
 
 
 def _drifted(remote: dict[str, Any], item: ManifestItem) -> bool:
-    for key in _DRIFT_FIELDS:
-        if key in remote and remote[key] != item.spec.get(key):
+    for key, expected in item.patch_body().items():
+        actual = remote.get(key)
+        # DRF uses Z for UTC and can omit fractional seconds. Compare
+        # date/time values rather than their wire spelling to keep an
+        # unchanged publish free of unnecessary PATCHes.
+        if isinstance(actual, str) and isinstance(expected, str):
+            if key in ('start_date', 'end_date'):
+                actual = parse_datetime(actual)
+                expected = parse_datetime(expected)
+            elif key in ('play_time_from', 'play_time_to'):
+                actual = parse_time(actual)
+                expected = parse_time(expected)
+        if actual != expected:
             return True
-    return (
-        not item.screen_probes_duration
-        and 'duration' in remote
-        and remote['duration'] != item.spec.get('duration')
-    )
+    return False
 
 
 def sync_node(node: Node, client: AssetApi, manifest: Manifest) -> SyncResult:

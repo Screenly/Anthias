@@ -9,6 +9,9 @@ from __future__ import annotations
 import logging
 import secrets
 
+from django.db.models import F
+from django.utils import timezone
+
 from anthias_server import celery_tasks
 from anthias_server.celery_tasks import celery
 from anthias_server.controller import service
@@ -109,7 +112,15 @@ def refresh_nodes() -> int:
         return 0
     checked = 0
     try:
-        for node in Node.objects.exclude(status=NodeStatus.UNAUTHORIZED):
+        nodes = Node.objects.exclude(status=NodeStatus.UNAUTHORIZED).order_by(
+            F('last_checked_at').asc(nulls_first=True), 'pk'
+        )
+        for node in nodes:
+            # Record the attempt before network I/O, so even a check
+            # interrupted by the task limit yields to other screens on
+            # the next run.
+            node.last_checked_at = timezone.now()
+            node.save(update_fields=['last_checked_at'])
             service.check_node(node)
             checked += 1
     finally:
