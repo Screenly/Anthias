@@ -8,9 +8,10 @@
 // and wires the global DOMContentLoaded listener. The other libs
 // don't auto-expose, so we attach them explicitly so inline scripts
 // in templates can reach them without going through a module bundler.
-import htmx from 'htmx.org'
+import focus from '@alpinejs/focus'
 import Alpine from 'alpinejs'
 import flatpickr from 'flatpickr'
+import htmx from 'htmx.org'
 
 declare global {
   interface Window {
@@ -28,6 +29,13 @@ declare global {
 window.htmx = htmx
 window.Alpine = Alpine
 window.flatpickr = flatpickr
+
+// x-trap: every modal keeps keyboard focus inside itself while open and
+// hands it back to the control that opened it on close. Without it a
+// Tab from the last button in a dialog walked off into the page behind
+// the overlay, which a sighted keyboard user cannot see and a screen
+// reader user has no way to know about.
+Alpine.plugin(focus)
 
 interface ToastItem {
   id: number
