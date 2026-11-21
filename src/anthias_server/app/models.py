@@ -326,3 +326,43 @@ class Asset(models.Model):
             yesterday = weekday - 1 if weekday > 1 else 7
             return yesterday in days
         return False
+
+
+class ApiToken(models.Model):
+    """A revocable bearer credential for the REST API.
+
+    Only a SHA-256 digest of the token is stored, plus a short
+    non-secret ``prefix`` so the operator can tell tokens apart in the
+    settings UI. The plaintext is shown once, at creation time, and
+    cannot be recovered afterwards. A fast digest (rather than a
+    password hasher) is the right tool here: the token carries 256
+    bits of randomness, so there is nothing to brute-force, and a
+    keyed lookup on ``token_hash`` keeps per-request auth O(1) on an
+    SBC.
+
+    See :mod:`anthias_server.lib.api_tokens` for issuing, verifying
+    and revoking tokens.
+    """
+
+    name = models.CharField(max_length=100)
+    prefix = models.CharField(max_length=16)
+    token_hash = models.CharField(max_length=64, unique=True)
+    user = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='api_tokens',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    last_used_at = models.DateTimeField(blank=True, null=True)
+    revoked_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'api_tokens'
+        ordering = ('-created_at', '-id')
+
+    def __str__(self) -> str:
+        return f'{self.name} ({self.prefix}…)'
+
+    @property
+    def is_revoked(self) -> bool:
+        return self.revoked_at is not None

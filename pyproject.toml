@@ -262,5 +262,13 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# drf-spectacular's extension base class declares an untyped
+# ``__init_subclass__``, so merely subclassing it (which is how its
+# extensions register) trips no-untyped-call. Scoped to the one module
+# that holds those subclasses.
+module = ["anthias_server.api.schema"]
+disallow_untyped_calls = false
+
 [tool.django-stubs]
 django_settings_module = "anthias_server.django_project.settings"

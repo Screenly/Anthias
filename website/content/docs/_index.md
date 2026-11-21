@@ -134,6 +134,27 @@ The full endpoint reference is on the [API page](/api/): endpoints, parameters, 
 
 If you'd prefer the live ReDoc-rendered docs straight from your device, open `http://<device-ip>/api/docs/` (or `http://localhost:8000/api/docs/` in development mode).
 
+### Authenticating with API tokens
+
+When **Authentication** is turned on in Settings, scripts and other devices should use an API token instead of your username and password.
+
+1. Go to **Settings → API tokens**, give the token a name (for example, the machine that will use it), and click **Create token**.
+2. Copy the token right away. Anthias stores only a hash of it, so it can't be shown again.
+3. Send it in the `Authorization` header:
+
+```bash
+$ curl -H 'Authorization: Bearer anthias_…' http://<device-ip>/api/v2/info
+```
+
+A token gives full access to the API, the same as the operator account. It can't be used to sign in to the web interface or to create more tokens. To cut off access, click **Revoke** next to the token; anything still using it gets `401 Unauthorized` from then on. Changing your password does not revoke tokens.
+
+Tokens only apply while authentication is on:
+
+* With **Authentication** set to **Disabled**, the API is open to anyone on your network. You can't create tokens in that mode, because they would not protect anything, and a token sent in a request is ignored.
+* Tokens you created earlier stay listed (and can still be revoked) but are inactive until you turn authentication back on.
+
+HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is deprecated in favor of tokens.
+
 ## TLS / SSL
 
 Anthias supports two independent SSL features:
