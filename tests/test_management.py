@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import base64
 import json
-import sys
-import types
 from collections.abc import Iterator
 from typing import Any, Self
 from unittest.mock import MagicMock
@@ -35,7 +33,6 @@ from anthias_server.app.models import ApiToken, ManagementController
 from anthias_server.lib import api_tokens, management
 
 _PWD = 'fixture-management-operator-pwd'  # NOSONAR
-NODE_FP = 'ab' * 32
 CONTROLLER_FP = 'cd' * 32
 
 
@@ -57,29 +54,17 @@ def auth_on(_isolated_settings_conf: None) -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def stub_node_and_caddy(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
-    """Stand-ins for SIRI-2112's node_identity and caddy modules."""
-    node_identity = types.ModuleType('anthias_server.lib.node_identity')
-    node_identity.__dict__.update(
-        ensure_node_identity=lambda: None,
-        fingerprint=lambda: NODE_FP,
-    )
-    caddy = types.ModuleType('anthias_server.lib.caddy')
+    """Real node identity (isolated by conftest), Caddy apply mocked."""
     apply = MagicMock(name='caddy.apply')
-    providers: list[Any] = []
-    caddy.__dict__.update(
-        apply=apply,
-        register_server_provider=providers.append,
-        providers=providers,
-    )
-    monkeypatch.setitem(
-        sys.modules, 'anthias_server.lib.node_identity', node_identity
-    )
-    monkeypatch.setitem(sys.modules, 'anthias_server.lib.caddy', caddy)
-    import anthias_server.lib as lib_pkg
-
-    monkeypatch.setattr(lib_pkg, 'node_identity', node_identity, raising=False)
-    monkeypatch.setattr(lib_pkg, 'caddy', caddy, raising=False)
+    monkeypatch.setattr('anthias_server.lib.caddy.apply', apply)
     return apply
+
+
+@pytest.fixture
+def node_fp() -> str:
+    from anthias_server.lib import node_identity
+
+    return node_identity.ensure_node_identity().fingerprint
 
 
 def _snippet(**overrides: Any) -> str:
@@ -205,6 +190,7 @@ def test_parse_join_info_rejects_bad_input(snippet: str) -> None:
 
 @pytest.mark.django_db
 def test_join_success_pins_records_and_enables_site(
+    node_fp: str,
     operator: User,
     auth_on: None,
     controller_reply: dict[str, Any],
@@ -220,7 +206,7 @@ def test_join_success_pins_records_and_enables_site(
     assert call['allow_redirects'] is False
     body = call['json']
     assert body['secret'] == 'c2VjcmV0LXNlY3JldA'
-    assert body['screen_fp'] == NODE_FP
+    assert body['screen_fp'] == node_fp
     assert body['screen_port'] == 8443
     assert body['screen_host'] == 'screen-1.lan'
     assert body['screen_name']
@@ -421,10 +407,31 @@ def test_m2m_server_shape() -> None:
     }
 
 
-def test_register_caddy_provider(stub_node_and_caddy: MagicMock) -> None:
-    caddy = sys.modules['anthias_server.lib.caddy']
+@pytest.mark.django_db
+def test_caddy_config_includes_m2m_site_only_while_active(
+    auth_on: None,
+) -> None:
+    from anthias_server.lib import caddy
+    from anthias_server.settings import settings
+
     management.register_caddy_provider()
-    assert management.caddy_extra_servers in caddy.__dict__['providers']
+    servers = caddy.build_config()['apps']['http']['servers']
+    assert management.M2M_SERVER_NAME not in servers
+
+    settings['management_enabled'] = True
+    servers = caddy.build_config()['apps']['http']['servers']
+    assert servers[management.M2M_SERVER_NAME] == management.m2m_server()
+    # The node certificate the m2m site selects is always loaded.
+    tls = caddy.build_config()['apps']['tls']['certificates']['load_files']
+    assert any(caddy.TAG_NODE in entry['tags'] for entry in tls)
+
+
+def test_m2m_listener_header_is_stripped_on_ui_sites() -> None:
+    from anthias_server.lib import caddy
+
+    assert caddy.proxy_handler()['headers']['request']['delete'] == [
+        caddy.LISTENER_HEADER
+    ]
 
 
 def test_request_via_m2m() -> None:

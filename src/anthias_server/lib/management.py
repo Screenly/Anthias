@@ -58,7 +58,6 @@ import base64
 import binascii
 import json
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -72,10 +71,7 @@ logger = logging.getLogger(__name__)
 
 M2M_PORT = 8443
 M2M_SERVER_NAME = 'anthias_m2m'
-M2M_LISTENER_HEADER = 'X-Anthias-Listener'
 M2M_LISTENER_VALUE = 'm2m'
-NODE_CERT_TAG = 'anthias-node'
-UPSTREAM = 'anthias-server:8080'
 
 JOIN_PREFIX = 'anthias-join:'
 JOIN_PATH = '/api/v2/controller/join'
@@ -113,12 +109,11 @@ def node_fingerprint() -> str:
     it can't, so callers refuse to join rather than serve a site with
     no certificate.
     """
-    try:
-        from anthias_server.lib import node_identity
+    from anthias_server.lib import node_identity
 
-        node_identity.ensure_node_identity()
-        return str(node_identity.fingerprint())
-    except Exception as exc:
+    try:
+        return node_identity.ensure_node_identity().fingerprint
+    except (OSError, ValueError) as exc:
         logger.exception('Node identity unavailable')
         raise ManagementError(
             "Could not create this screen's identity certificate."
@@ -188,9 +183,9 @@ def apply_caddy() -> bool:
     A Caddy that is down picks the site up when the server re-applies
     its config on the next start.
     """
-    try:
-        from anthias_server.lib import caddy
+    from anthias_server.lib import caddy
 
+    try:
         caddy.apply()
     except Exception:
         logger.exception('Could not apply the Caddy config')
@@ -440,34 +435,34 @@ def m2m_server() -> dict[str, Any]:
 
     Caddy's reverse_proxy sets X-Forwarded-For to the peer address,
     which the controller uses as a joining screen's host when the
-    operator gave none.
+    operator gave none. The connection limits match the UI sites.
     """
+    from anthias_server.lib import caddy
+
+    proxy = {
+        'handler': 'reverse_proxy',
+        'upstreams': [{'dial': caddy.UPSTREAM}],
+        'headers': {
+            'request': {'set': {caddy.LISTENER_HEADER: [M2M_LISTENER_VALUE]}}
+        },
+    }
     return {
         'listen': [f':{M2M_PORT}'],
         'automatic_https': {'disable': True},
         'tls_connection_policies': [
-            {'certificate_selection': {'any_tag': [NODE_CERT_TAG]}}
+            {'certificate_selection': {'any_tag': [caddy.TAG_NODE]}}
         ],
         'routes': [
             {
                 'match': [{'path': ['/api/v2/*']}],
-                'handle': [
-                    {
-                        'handler': 'reverse_proxy',
-                        'upstreams': [{'dial': UPSTREAM}],
-                        'headers': {
-                            'request': {
-                                'set': {
-                                    M2M_LISTENER_HEADER: [M2M_LISTENER_VALUE]
-                                }
-                            }
-                        },
-                    }
-                ],
+                'handle': [proxy],
                 'terminal': True,
             },
             {'handle': [{'handler': 'static_response', 'status_code': 404}]},
         ],
+        'read_header_timeout': caddy.READ_HEADER_TIMEOUT,
+        'idle_timeout': caddy.IDLE_TIMEOUT,
+        'max_header_bytes': caddy.MAX_HEADER_BYTES,
     }
 
 
@@ -479,20 +474,16 @@ def caddy_extra_servers() -> dict[str, dict[str, Any]]:
 
 
 def register_caddy_provider() -> None:
-    try:
-        from anthias_server.lib import caddy
-    except ImportError:
-        return
-    register: Callable[..., Any] | None = getattr(
-        caddy, 'register_server_provider', None
-    )
-    if register is not None:
-        register(caddy_extra_servers)
+    from anthias_server.lib import caddy
+
+    caddy.register_server_provider(caddy_extra_servers)
 
 
 def request_via_m2m(request: Any) -> bool:
     """True when the request came in through the :8443 site."""
     import hmac
 
-    value = request.headers.get(M2M_LISTENER_HEADER, '')
+    from anthias_server.lib import caddy
+
+    value = request.headers.get(caddy.LISTENER_HEADER, '')
     return hmac.compare_digest(value, M2M_LISTENER_VALUE)
