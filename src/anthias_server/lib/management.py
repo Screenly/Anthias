@@ -484,7 +484,8 @@ def _join_credentials(own_fp: str) -> tuple[str, str]:
 # this screen's :8443 site requires a client certificate from that CA
 # (Caddy), and m2m requests must present the controller's certificate,
 # not revoked (M2MClientCertMiddleware). The files sit next to the node
-# certificate and, like it, are not part of backups.
+# certificate and, like it, are only in a backup when the operator adds
+# the encrypted device keys (lib/identity_backup.py).
 
 
 def managed_dir() -> Path:
