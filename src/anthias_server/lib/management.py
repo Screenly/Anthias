@@ -121,12 +121,17 @@ def node_fingerprint() -> str:
 
 
 def device_name() -> str:
+    """How this screen introduces itself to a controller.
+
+    The player name when one is set. Otherwise a stable label from the
+    node fingerprint: inside the container the hostname is the
+    container ID, which changes on every recreate and means nothing to
+    the operator.
+    """
     name = str(_settings()['player_name'] or '').strip()
     if name:
         return name
-    import socket
-
-    return socket.gethostname()
+    return f'Anthias {node_fingerprint()[:8]}'
 
 
 # --- state -----------------------------------------------------------------

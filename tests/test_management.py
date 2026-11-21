@@ -209,7 +209,7 @@ def test_join_success_pins_records_and_enables_site(
     assert body['screen_fp'] == node_fp
     assert body['screen_port'] == 8443
     assert body['screen_host'] == 'screen-1.lan'
-    assert body['screen_name']
+    assert body['screen_name'] == f'Anthias {node_fp[:8]}'
 
     # The token sent to the controller is a working bearer credential,
     # and only its hash is stored here.
@@ -614,3 +614,13 @@ def test_app_registers_caddy_provider_except_in_viewer(
     assert isinstance(config, AnthiasAppConfig)
     config._register_caddy_provider()
     assert calls == ([management.caddy_extra_servers] if registered else [])
+
+
+@pytest.mark.django_db
+def test_device_name_prefers_player_name(auth_on: None, node_fp: str) -> None:
+    from anthias_server.settings import settings
+
+    settings['player_name'] = ''
+    assert management.device_name() == f'Anthias {node_fp[:8]}'
+    settings['player_name'] = '  Lobby left  '
+    assert management.device_name() == 'Lobby left'
