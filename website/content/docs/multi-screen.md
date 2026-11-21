@@ -24,7 +24,8 @@ Settings:
 
 * The **controller** is the device you manage everything from. It
   still plays its own playlist on its own display, and that playlist is
-  what gets published. Turn on **Settings → Controller mode**.
+  what gets published. Choose **Make this a controller** under
+  **Settings → Multi-screen management**.
 * A **screen** is any other Anthias device that has joined the
   controller. It keeps playing on its own, also when the controller or
   the network is down, and the controller updates it whenever you
@@ -91,12 +92,17 @@ seconds per screen in our tests, the slowest being a Raspberry Pi 2.
 ## Set up the controller
 
 1. On the device that will be the controller, open **Settings** and turn
-   on **Authentication**. Controller mode requires it.
-2. Turn on **Controller mode** and click **Save settings**. A **Screens**
-   tab appears.
-3. Open **Screens**. Under **Join information** you'll find a snippet that
-   starts with `anthias-join:`. It contains the controller's address, the
-   fingerprint of its certificate, and a secret. Click **Copy**.
+   on **Authentication**. A controller requires it.
+2. Under **Multi-screen management**, click **Make this a controller**.
+   You land on the new **Screens** page.
+3. Until a screen has joined, **Screens** shows the steps and the
+   **Join information**: a snippet that starts with `anthias-join:`. It
+   contains the controller's address, the fingerprint of its
+   certificate, and a secret. Click **Copy**.
+
+Later, the same section shows **This screen is a controller**, with a
+link to **Screens** and **Turn off controller mode**. Turning
+authentication off also turns controller mode off.
 
 You can use the same join information for every screen. **Regenerate**
 makes the current one stop working, for example if it was shared by
@@ -107,11 +113,11 @@ mistake. Screens that already joined are not affected.
 1. On the screen, open **Settings** and turn on **Authentication**.
    Joining is refused while authentication is off, because the screen's
    API would then be open to anyone on the network.
-2. Go to **Settings → Multi-screen management** and paste the join
-   information.
+2. Go to **Settings → Multi-screen management**, and under **Join a
+   controller** paste the join information.
 3. If the controller can't reach the screen at the address it connects
-   from (for example, the screen is behind NAT), enter the screen's IP
-   address or DNS name in **This screen's address**.
+   from (for example, the screen is behind NAT), open **Advanced** and
+   enter the screen's IP address or DNS name.
 4. Click **Join controller**.
 
 The screen now shows **Waiting for approval** with a short **check
@@ -141,20 +147,25 @@ take the screen back. Its web interface comes back at once.
 
 ## Publish and control
 
-From the controller's **Screens** page:
+The controller's **Screens** page lists, from the top: requests
+**Waiting for approval** (the **Screens** tab shows how many), your
+screens, **Publish** and **Control all screens**, the **Join
+information** (folded away once a screen has joined) and **Activity**.
+From there:
 
-* **Publish to all screens**, or to a single screen. Each screen's
+* **Publish to all screens**, or to a single screen; both ask first,
+  because assets added directly on a screen are removed. Each screen's
   playlist is made to match the controller's: the same assets, schedules
   and order. Files that haven't changed are not uploaded again, so
   publishing an unchanged playlist takes about a second. The result
   shows per screen.
 * **Previous asset**, **Next asset**, **Display on** and **Display off**
-  on every screen or on one. Display on/off needs a display that
+  on every screen, or on one from its **⋯** menu. Display on/off needs a display that
   supports HDMI-CEC.
 * **Reboot** every screen or one. A bulk reboot never reboots the
   controller itself.
 * **Check now** refreshes the status of every screen immediately.
-* **Remove** a screen. Its access token is revoked on the screen, and
+* **Remove** a screen, from its **⋯** menu. Its access token is revoked on the screen, and
   it keeps playing what it already has.
 
 The **Activity** list records every join, publish and command, and who
@@ -318,6 +329,12 @@ check the network and approve again.
 
 **"Could not reach the controller."** Check that the screen can reach
 the controller's address on port 8443, and that controller mode is on.
+
+**A screen shows "Connected, not reachable".** It reports in to the
+controller, but the controller can't call it on port 8443, so it can't
+be published to. Check that nothing (a firewall, port forwarding)
+blocks port 8443 from the controller to the screen; the status clears
+on the next successful check.
 
 **A screen shows "Offline … not accepting management".** The screen is
 up but its management port is closed, usually because it left

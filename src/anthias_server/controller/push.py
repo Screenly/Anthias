@@ -147,7 +147,8 @@ def _attach(cert: x509.Certificate | None, connection: str) -> int | None:
     node.push_connection = connection
     node.push_seen_at = timezone.now()
     node.save(update_fields=['push_connection', 'push_seen_at'])
-    service._set_status(node, NodeStatus.ONLINE)
+    if node.status != NodeStatus.UNREACHABLE:
+        service._set_status(node, NodeStatus.ONLINE)
     return node.pk
 
 
@@ -170,7 +171,9 @@ def _record(node_id: int, connection: str, message: dict[str, Any]) -> bool:
         node.device_model = str(health.get('device_model') or '')[:200]
         fields += ['health', 'health_at', 'version', 'device_model']
     node.save(update_fields=fields)
-    if node.status != NodeStatus.ONLINE:
+    # Unreachable stays until a call to the screen works again: pushing
+    # proves it is up, not that the controller can reach it.
+    if node.status not in (NodeStatus.ONLINE, NodeStatus.UNREACHABLE):
         service._set_status(node, NodeStatus.ONLINE)
     else:
         Node.objects.filter(pk=node.pk).update(last_seen_at=now)

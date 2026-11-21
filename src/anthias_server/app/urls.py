@@ -46,6 +46,11 @@ urlpatterns = [
         name='settings_management_join',
     ),
     path(
+        'settings/management/controller/',
+        views.settings_management_controller,
+        name='settings_management_controller',
+    ),
+    path(
         'settings/management/leave/',
         views.settings_management_leave,
         name='settings_management_leave',

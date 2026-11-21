@@ -615,7 +615,7 @@ def test_settings_page_explains_auth_requirement(
     response = Client().get(reverse('anthias_app:settings'))
     assert response.status_code == 200
     assert b'btn-join-controller' not in response.content
-    assert b'before joining a controller' in response.content
+    assert b'Multi-screen management needs authentication' in response.content
 
 
 @pytest.mark.django_db
@@ -1115,7 +1115,9 @@ def test_a_managed_screen_shows_only_the_managed_page(
         reverse('anthias_app:managed'), headers=UI
     ).content.decode()
     assert 'Managed by Lobby' in html
-    assert 'https://controller.lan:8443' in html
+    # A link to the controller's web interface, not its 8443 port.
+    assert 'href="https://controller.lan/screens/"' in html
+    assert 'controller.lan:8443' not in html
     assert 'btn-managed-leave' in html
     # Signing in stays possible.
     assert Client().get('/login/', headers=UI).status_code == 200
@@ -1221,3 +1223,39 @@ def test_no_warning_once_authentication_is_on(
 ) -> None:
     html = signed_in.get('/').content.decode()
     assert 'id="auth-warning"' not in html
+
+
+@pytest.mark.django_db
+def test_sign_in_on_a_managed_screen_says_who_manages_it(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    html = Client().get('/login/', headers=UI).content.decode()
+    assert 'Managed by Lobby' in html
+    assert 'href="https://controller.lan/screens/"' in html
+    # An unmanaged screen keeps the usual greeting.
+    management.leave_management()
+    assert 'Welcome back' in Client().get('/login/').content.decode()
+
+
+def test_controller_web_url_points_at_its_web_interface() -> None:
+    from types import SimpleNamespace
+
+    def url(value: str) -> str:
+        return management.controller_web_url(SimpleNamespace(url=value))
+
+    assert url('https://10.0.0.5:8443') == 'https://10.0.0.5/screens/'
+    assert url('https://[fd00::5]:8443') == 'https://[fd00::5]/screens/'
+    assert url('https://ctl.lan:8443/') == 'https://ctl.lan/screens/'
+
+
+@pytest.mark.django_db
+def test_leaving_from_the_managed_page_asks_first(
+    signed_in: Client, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    html = signed_in.get(
+        reverse('anthias_app:managed'), headers=UI
+    ).content.decode()
+    form = html.split('id="btn-managed-leave"')[0].rsplit('<form', 1)[1]
+    assert 'confirm(' in form

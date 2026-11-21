@@ -137,7 +137,19 @@ def _set_status(node: Node, status: str, detail: str = '') -> None:
 
 
 def _record_error(node: Node, exc: NodeError) -> None:
-    _set_status(node, exc.status, str(exc))
+    from .push import is_live
+
+    status, detail = exc.status, str(exc)
+    if status == NodeStatus.OFFLINE and is_live(node, timezone.now()):
+        # It reports in over its push connection, so it is up; but this
+        # controller can't call it, so it can't be published to either.
+        status = NodeStatus.UNREACHABLE
+        detail = (
+            'It reports in, but this controller cannot reach it on port '
+            f'{node.port}. Check that nothing blocks that port from the '
+            'controller to the screen.'
+        )
+    _set_status(node, status, detail)
 
 
 def remove_node(node: Node, actor: str = '') -> str:

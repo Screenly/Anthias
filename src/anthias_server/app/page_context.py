@@ -331,7 +331,25 @@ def navbar() -> dict[str, Any]:
         'storage_warning': _storage_warning(),
         'managed_by': _managed_by(),
         'auth_off': not settings['auth_backend'],
+        'pending_joins': _pending_joins(),
     }
+
+
+def _pending_joins() -> int:
+    """Join requests waiting for approval, for the Screens tab badge."""
+    if not settings['controller_mode']:
+        return 0
+    from django.utils import timezone
+
+    from anthias_server.controller.models import JoinRequest
+
+    try:
+        return JoinRequest.objects.filter(
+            expires_at__gte=timezone.now()
+        ).count()
+    except Exception:
+        logger.exception('Could not count join requests')
+        return 0
 
 
 def _managed_by() -> str | None:

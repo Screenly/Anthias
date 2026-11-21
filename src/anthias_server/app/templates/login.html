@@ -28,8 +28,17 @@
         <img src="{% static 'img/dark.svg' %}" alt="Anthias" class="auth-logo"/>
       </div>
 
+      {% if managed_by %}
+      <h1 class="auth-headline">Managed by {{ managed_by }}</h1>
+      <p class="auth-subhead">
+        This screen's content and settings come from its controller.
+        {% if controller_web_url %}<a href="{{ controller_web_url }}" class="auth-link">Open {{ managed_by }} <span aria-hidden="true">→</span></a>{% endif %}
+      </p>
+      <p class="auth-subhead auth-subhead--small">Sign in here only to take this screen back from its controller.</p>
+      {% else %}
       <h1 class="auth-headline">Welcome back</h1>
       <p class="auth-subhead">Sign in to manage what plays on your screen.</p>
+      {% endif %}
 
       {% if messages %}
       <ul class="auth-alert" role="alert">

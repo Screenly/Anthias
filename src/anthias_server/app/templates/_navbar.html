@@ -56,6 +56,7 @@
           >
             <i class="ti ti-devices"></i>
             <span>Screens</span>
+            {% if pending_joins %}<span class="app-tab-badge" title="{{ pending_joins }} waiting for approval">{{ pending_joins }}<span class="sr-only"> waiting for approval</span></span>{% endif %}
           </a>
         </li>
         {% endif %}

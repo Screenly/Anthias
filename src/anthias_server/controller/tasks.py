@@ -151,7 +151,9 @@ def refresh_nodes() -> int:
         )
         nodes = (
             Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
-            .exclude(live_filter(now))
+            # Live screens report on their own, unless the controller
+            # found it cannot call them: those keep being checked.
+            .exclude(live_filter(now) & ~Q(status=NodeStatus.UNREACHABLE))
             .filter(due)
         ).order_by(F('last_checked_at').asc(nulls_first=True), 'pk')
         for node in nodes:

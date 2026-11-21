@@ -32,13 +32,14 @@
         {% if player_name %}{{ player_name }}{% else %}This screen{% endif %}
         gets its content and settings from
         <strong>{{ controller.name }}</strong>, so its own web interface is
-        turned off. Open the controller's <strong>Screens</strong> page to
-        change what plays here.
+        turned off. Change what plays here from the controller.
       </p>
-      <p class="managed-page__meta">
-        Controller <code>{{ controller.url }}</code><br>
-        Joined {{ controller.paired_at|naturaltime }}
-      </p>
+      {% if controller_web_url %}
+      <a class="app-btn app-btn-primary auth-submit" href="{{ controller_web_url }}" id="btn-open-controller">
+        <i class="ti ti-external-link" aria-hidden="true"></i><span>Open {{ controller.name }}</span>
+      </a>
+      {% endif %}
+      <p class="managed-page__meta">Joined {{ controller.paired_at|naturaltime }}</p>
 
       <details class="managed-page__leave">
         <summary>The controller is gone?</summary>
@@ -48,7 +49,8 @@
           certificate, and its web interface comes back. The controller
           can't manage it again until it joins again.
         </p>
-        <form method="post" action="{% url 'anthias_app:managed_leave' %}">
+        <form method="post" action="{% url 'anthias_app:managed_leave' %}"
+          onsubmit="return confirm('Take this screen back from {{ controller.name|escapejs }}? The controller can no longer manage it, and its web interface comes back.');">
           {% csrf_token %}
           <button type="submit" id="btn-managed-leave" class="app-btn app-btn-outline-dark">
             <i class="ti ti-plug-connected-x" aria-hidden="true"></i><span>Leave management</span>

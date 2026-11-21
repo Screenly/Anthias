@@ -1,22 +1,23 @@
 {% load humanize %}
 {% comment %}
-  Screens table and activity log. Polls itself every 5 s so publish
-  progress and online/offline changes show up without a reload.
+  Join requests and the screens list. Polls itself every 5 s so publish
+  progress and online/offline changes show up without a reload, except
+  while a row's actions menu is open (the swap would close it).
 {% endcomment %}
 <div
   id="screens-table"
   hx-get="{% url 'controller:screens_table' %}"
-  hx-trigger="every 5s"
+  hx-trigger="every 5s [!document.querySelector('#screens-table details[open]')]"
   hx-swap="outerHTML"
   class="flex flex-col gap-4"
 >
   {% if join_requests %}
   <section class="surface screens__requests" id="join-requests">
     <header class="surface__header">
-      <h2><i class="ti ti-user-question mr-2"></i>Waiting for approval</h2>
+      <h2><i class="ti ti-user-question mr-2" aria-hidden="true"></i>Waiting for approval</h2>
       <span class="surface__count">{{ join_requests|length }}</span>
     </header>
-    <p class="muted-label px-4">Check that the code matches the one shown on the screen before you approve it. Requests expire after 24 hours.</p>
+    <p class="screens__requests-lede">Check that the code matches the one shown on the screen before you approve it. Requests expire after 24 hours.</p>
     <table class="asset-table screens-table">
       <thead>
         <tr>
@@ -32,21 +33,23 @@
           <td>
             <strong>{{ pending.name }}</strong>
             <div class="muted-label">
-              {{ pending.host }}:{{ pending.port }}{% if pending.device_model %} · {{ pending.device_model }}{% endif %}{% if pending.version %} · {{ pending.version }}{% endif %}
+              {{ pending.host }}{% if pending.device_model %} · {{ pending.device_model }}{% endif %}{% if pending.version %} · {{ pending.version }}{% endif %}
             </div>
           </td>
           <td><span class="screens__check-code">{{ pending.check_code }}</span></td>
           <td class="muted-label">{{ pending.created_at|naturaltime }}</td>
           <td class="text-right">
-            <div class="screens__row-actions">
+            <div class="screens__row-actions screens__decide">
               <form method="post" action="{% url 'controller:screens_approve' pending.pk %}" class="inline m-0">
                 {% csrf_token %}
-                <button type="submit" class="app-btn app-btn-sm app-btn-primary" id="btn-approve-{{ pending.pk }}">Approve</button>
+                <button type="submit" class="app-btn app-btn-primary" id="btn-approve-{{ pending.pk }}">
+                  <i class="ti ti-check" aria-hidden="true"></i><span>Approve</span>
+                </button>
               </form>
               <form method="post" action="{% url 'controller:screens_reject' pending.pk %}" class="inline m-0"
                 onsubmit="return confirm('Reject the request from {{ pending.name|escapejs }}?');">
                 {% csrf_token %}
-                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark" id="btn-reject-{{ pending.pk }}">Reject</button>
+                <button type="submit" class="app-btn app-btn-outline-dark" id="btn-reject-{{ pending.pk }}">Reject</button>
               </form>
             </div>
           </td>
@@ -56,9 +59,23 @@
     </table>
   </section>
   {% endif %}
+
+  {% if not nodes and not join_requests %}
+  <section class="surface screens__empty" id="screens-empty">
+    <div class="empty-state">
+      <div class="empty-state__icon"><i class="ti ti-devices-plus" aria-hidden="true"></i></div>
+      <p class="empty-state__title">Add your first screen</p>
+      <ol class="screens__steps">
+        <li>On the screen, open <strong>Settings</strong> and turn on <strong>Authentication</strong>.</li>
+        <li>Under <strong>Multi-screen management</strong>, paste the <a href="#join-information">join information</a> below and click <strong>Join controller</strong>.</li>
+        <li>It shows up here. Check that its code matches the one on the screen, then approve it.</li>
+      </ol>
+    </div>
+  </section>
+  {% elif nodes %}
   <section class="surface">
     <header class="surface__header">
-      <h2><i class="ti ti-devices mr-2"></i>Screens</h2>
+      <h2><i class="ti ti-devices mr-2" aria-hidden="true"></i>Screens</h2>
       <span class="surface__count">{{ online_count }} of {{ node_count }} online{% if attention_count %} · <span class="screens__attention">{{ attention_count }} need{{ attention_count|pluralize:"s," }} attention</span>{% endif %}</span>
     </header>
     <table class="asset-table screens-table">
@@ -80,26 +97,32 @@
           <td class="muted-label">Source</td>
           <td class="text-right">
             <div class="screens__row-actions">
-              {% for command, label, icon in command_buttons %}
-              <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0"
-                {% if command == 'reboot' %}onsubmit="return confirm('Reboot this screen (the controller)?');"{% endif %}>
-                {% csrf_token %}
-                <input type="hidden" name="target" value="self">
-                <input type="hidden" name="command" value="{{ command }}">
-                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark screens__icon-btn" title="{{ label }}" aria-label="{{ label }} on this screen"><i class="ti {{ icon }}" aria-hidden="true"></i></button>
-              </form>
-              {% endfor %}
+              <details class="screens__menu">
+                <summary class="app-btn app-btn-outline-dark screens__menu-toggle" aria-label="Actions for this screen">
+                  <i class="ti ti-dots" aria-hidden="true"></i><span class="screens__menu-label">More</span>
+                </summary>
+                <div class="screens__menu-list" role="group" aria-label="Actions for this screen">
+                  {% for command, label, icon in command_buttons %}
+                  <form method="post" action="{% url 'controller:screens_command' %}" class="m-0"
+                    {% if command == 'reboot' %}onsubmit="return confirm('Reboot this screen (the controller)?');"{% endif %}>
+                    {% csrf_token %}
+                    <input type="hidden" name="target" value="self">
+                    <input type="hidden" name="command" value="{{ command }}">
+                    <button type="submit" class="screens__menu-item{% if command == 'reboot' %} screens__menu-item--danger{% endif %}"><i class="ti {{ icon }}" aria-hidden="true"></i><span>{{ label }}</span></button>
+                  </form>
+                  {% endfor %}
+                </div>
+              </details>
             </div>
           </td>
         </tr>
         {% for node in nodes %}
         <tr data-screen="{{ node.pk }}" data-status="{{ node.status }}">
           <td>
-            <strong>{{ node.name }}</strong>
+            <strong title="Certificate {{ node.fingerprint }}">{{ node.name }}</strong>
             <div class="muted-label">
-              {{ node.host }}:{{ node.port }}{% if node.device_model %} · {{ node.device_model }}{% endif %}{% if node.version %} · {{ node.version }}{% endif %}
+              {{ node.host }}{% if node.port != management_port %}:{{ node.port }}{% endif %}{% if node.device_model %} · {{ node.device_model }}{% endif %}{% if node.version %} · {{ node.version }}{% endif %}
             </div>
-            <div class="muted-label screens__fp" title="{{ node.fingerprint }}">Certificate {{ node.fingerprint|slice:":16" }}…</div>
           </td>
           <td>
             <span class="screens__status screens__status--{{ node.status }}">{{ node.get_status_display }}</span>
@@ -124,67 +147,43 @@
           <td class="text-right">
             <div class="screens__row-actions">
               {% if node.status != 'unauthorized' %}
-              <form method="post" action="{% url 'controller:screens_publish' %}" class="inline m-0">
+              <form method="post" action="{% url 'controller:screens_publish' %}" class="inline m-0"
+                onsubmit="return confirm('Publish to {{ node.name|escapejs }}? Its playlist is replaced with this screen\'s, and assets added directly on it are removed.');">
                 {% csrf_token %}
                 <input type="hidden" name="target" value="{{ node.pk }}">
-                <button type="submit" class="app-btn app-btn-sm app-btn-primary">Publish</button>
+                <button type="submit" class="app-btn app-btn-primary" id="btn-publish-{{ node.pk }}">Publish</button>
               </form>
-              {% for command, label, icon in command_buttons %}
-              <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0"
-                {% if command == 'reboot' %}onsubmit="return confirm('Reboot {{ node.name|escapejs }}?');"{% endif %}>
-                {% csrf_token %}
-                <input type="hidden" name="target" value="{{ node.pk }}">
-                <input type="hidden" name="command" value="{{ command }}">
-                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark screens__icon-btn" title="{{ label }}" aria-label="{{ label }} on {{ node.name }}"><i class="ti {{ icon }}" aria-hidden="true"></i></button>
-              </form>
-              {% endfor %}
               {% endif %}
-              <form method="post" action="{% url 'controller:screens_remove' node.pk %}" class="inline m-0"
-                onsubmit="return confirm('Remove {{ node.name|escapejs }}? Its access token is revoked and it keeps playing what it has.');">
-                {% csrf_token %}
-                <button type="submit" class="app-btn app-btn-sm app-btn-outline-dark screens__icon-btn" title="Remove" aria-label="Remove {{ node.name }}">
-                  <i class="ti ti-trash" aria-hidden="true"></i>
-                </button>
-              </form>
+              <details class="screens__menu">
+                <summary class="app-btn app-btn-outline-dark screens__menu-toggle" aria-label="More actions for {{ node.name }}">
+                  <i class="ti ti-dots" aria-hidden="true"></i><span class="screens__menu-label">More</span>
+                </summary>
+                <div class="screens__menu-list" role="group" aria-label="More actions for {{ node.name }}">
+                  {% if node.status != 'unauthorized' %}
+                  {% for command, label, icon in command_buttons %}
+                  <form method="post" action="{% url 'controller:screens_command' %}" class="m-0"
+                    {% if command == 'reboot' %}onsubmit="return confirm('Reboot {{ node.name|escapejs }}?');"{% endif %}>
+                    {% csrf_token %}
+                    <input type="hidden" name="target" value="{{ node.pk }}">
+                    <input type="hidden" name="command" value="{{ command }}">
+                    <button type="submit" class="screens__menu-item{% if command == 'reboot' %} screens__menu-item--danger{% endif %}"><i class="ti {{ icon }}" aria-hidden="true"></i><span>{{ label }}</span></button>
+                  </form>
+                  {% endfor %}
+                  <hr class="screens__menu-sep">
+                  {% endif %}
+                  <form method="post" action="{% url 'controller:screens_remove' node.pk %}" class="m-0"
+                    onsubmit="return confirm('Remove {{ node.name|escapejs }}? Its access is revoked and it keeps playing what it has.');">
+                    {% csrf_token %}
+                    <button type="submit" class="screens__menu-item screens__menu-item--danger" id="btn-remove-{{ node.pk }}"><i class="ti ti-trash" aria-hidden="true"></i><span>Remove</span></button>
+                  </form>
+                </div>
+              </details>
             </div>
           </td>
         </tr>
-        {% empty %}
-        <tr>
-          <td colspan="4" class="muted-label">No screens yet. Paste the join information above into a screen's settings to add it.</td>
-        </tr>
         {% endfor %}
       </tbody>
     </table>
   </section>
-
-  <section class="surface">
-    <header class="surface__header">
-      <h2><i class="ti ti-list-details mr-2"></i>Activity</h2>
-    </header>
-    {% if audit_entries %}
-    <table class="asset-table screens-audit">
-      <thead>
-        <tr>
-          <th scope="col">When</th>
-          <th scope="col">Screen</th>
-          <th scope="col">Action</th>
-          <th scope="col">Result</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in audit_entries %}
-        <tr>
-          <td title="{{ entry.created_at|date:'c' }}">{{ entry.created_at|naturaltime }}</td>
-          <td>{{ entry.node_name|default:"-" }}</td>
-          <td>{{ entry.action }}{% if entry.actor %} <span class="muted-label">by {{ entry.actor }}</span>{% endif %}</td>
-          <td><span class="screens__outcome screens__outcome--{{ entry.outcome }}">{{ entry.outcome }}</span> <span class="muted-label">{{ entry.detail|truncatechars:200 }}</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <p class="muted-label p-4">Nothing yet.</p>
-    {% endif %}
-  </section>
+  {% endif %}
 </div>

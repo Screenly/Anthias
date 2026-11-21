@@ -140,8 +140,15 @@ def problems(health: dict[str, Any]) -> list[tuple[str, str]]:
         found.append(('under_voltage', 'Under-voltage since boot'))
     available = health.get('memory_available_mib')
     if isinstance(available, int) and available < LOW_MEMORY_MIB:
-        found.append(('low_memory', f'Low memory: {available} MiB free'))
+        found.append(('low_memory', f'Low memory: {_mib(available)} free'))
     return found
+
+
+def _mib(value: int) -> str:
+    """Memory in the same units as disk space (``filesizeformat``)."""
+    from django.template.defaultfilters import filesizeformat
+
+    return str(filesizeformat(value * 1024 * 1024))
 
 
 def _uptime(hours: Any) -> str:
@@ -160,7 +167,7 @@ def summary_line(health: dict[str, Any]) -> str:
     if health.get('free_space'):
         parts.append(f'Disk {health["free_space"]} free')
     if isinstance(health.get('memory_available_mib'), int):
-        parts.append(f'RAM {health["memory_available_mib"]} MiB free')
+        parts.append(f'RAM {_mib(health["memory_available_mib"])} free')
     uptime = _uptime(health.get('uptime_hours'))
     if uptime:
         parts.append(uptime)

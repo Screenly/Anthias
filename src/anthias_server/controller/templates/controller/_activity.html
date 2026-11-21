@@ -1,0 +1,35 @@
+{% load humanize %}
+{% comment %}
+  The controller's activity log (latest entries first). Polls on its
+  own, slower than the screens list.
+{% endcomment %}
+<section
+  class="surface mt-4 screens__activity"
+  id="screens-activity"
+  hx-get="{% url 'controller:screens_activity' %}"
+  hx-trigger="every 10s"
+  hx-swap="outerHTML"
+>
+  <header class="surface__header">
+    <h2><i class="ti ti-list-details mr-2" aria-hidden="true"></i>Activity</h2>
+    {% if audit_entries %}<span class="surface__count">Latest {{ audit_entries|length }}</span>{% endif %}
+  </header>
+  {% if audit_entries %}
+  <ol class="screens-activity">
+    {% for entry in audit_entries %}
+    <li class="screens-activity__item">
+      <span class="screens__outcome screens__outcome--{{ entry.display_outcome }}">{{ entry.display_outcome }}</span>
+      <div class="screens-activity__body">
+        <p class="screens-activity__what">
+          <strong>{{ entry.action }}</strong>{% if entry.node_name %} · {{ entry.node_name }}{% endif %}
+          <span class="muted-label">· <time datetime="{{ entry.created_at|date:'c' }}" title="{{ entry.created_at|date:'c' }}">{{ entry.created_at|naturaltime }}</time>{% if entry.actor %} · by {{ entry.actor }}{% endif %}</span>
+        </p>
+        {% if entry.detail %}<p class="muted-label screens-activity__detail">{{ entry.detail|truncatechars:200 }}</p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted-label screens-activity__empty">Nothing yet. Joins, approvals, publishes and commands show up here.</p>
+  {% endif %}
+</section>
