@@ -5321,6 +5321,8 @@ class TestWaitForDbSchema:
             mock.patch.object(viewer, 'view_image'),
             mock.patch.object(viewer, 'view_webpage'),
             mock.patch.object(viewer, 'sleep'),
+            mock.patch.object(viewer, '_hold_boot_splash'),
+            mock.patch.object(viewer, '_wifi_setup_watch_loop'),
             mock.patch.object(viewer, 'start_loop'),
             mock.patch.object(
                 viewer,

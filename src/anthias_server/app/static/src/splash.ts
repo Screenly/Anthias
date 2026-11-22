@@ -17,6 +17,8 @@ interface SplashGlobal {
 const g = globalThis as unknown as SplashGlobal
 
 const detecting = document.getElementById('splash-status-detecting')
+const detectingText = document.getElementById('splash-status-detecting-text')
+const noNetworkHint = document.getElementById('splash-no-network-hint')
 const ready = document.getElementById('splash-status-ready')
 const prompt = document.getElementById('splash-prompt')
 const list = document.getElementById('splash-ip-list')
@@ -28,6 +30,13 @@ const startedAt = Date.now()
 const maxPollMs = 120 * 1000
 let attempts = 0
 let lastSig = ''
+
+// How long "Detecting network…" may pulse on its own before the page
+// says what is going on. A wired or already-configured device has an
+// address well inside this; a device still without one is probably on
+// its first boot, waiting for the WiFi setup network to come up.
+const stillLookingAfterMs = 15 * 1000
+let stillLooking = false
 
 function svgFor(url: string): Promise<string> {
   // Browser build of `qrcode` only emits SVG from `toString`. Margin 1
@@ -41,8 +50,14 @@ function svgFor(url: string): Promise<string> {
   })
 }
 
+function showStillLooking(): void {
+  if (detectingText) detectingText.textContent = 'Still looking for a network…'
+  if (noNetworkHint) noNetworkHint.hidden = false
+}
+
 function showEmpty(): void {
   if (detecting) detecting.hidden = false
+  if (stillLooking) showStillLooking()
   if (ready) ready.hidden = true
   if (prompt) prompt.hidden = true
   if (list) list.innerHTML = ''
@@ -52,6 +67,7 @@ function showEmpty(): void {
 
 function showStatusReady(): void {
   if (detecting) detecting.hidden = true
+  if (noNetworkHint) noNetworkHint.hidden = true
   if (ready) ready.hidden = false
   if (prompt) prompt.hidden = false
 }
@@ -112,5 +128,10 @@ function poll(): void {
       globalThis.setTimeout(poll, attempts < 15 ? 2000 : 5000)
     })
 }
+
+globalThis.setTimeout(() => {
+  stillLooking = true
+  if (!lastSig) showStillLooking()
+}, stillLookingAfterMs)
 
 poll()

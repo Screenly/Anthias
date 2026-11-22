@@ -48,6 +48,20 @@ SPLASH_PAGE_IP_POLL_WINDOW_S = 120
 # host_agent refresh -- so this is paced to be unnoticeable on an idle
 # device rather than to be responsive.
 WIFI_SETUP_POLL_INTERVAL_S = 15
+# Except right after the viewer starts. A first boot with no network is
+# the case the portal exists for, and somebody is standing in front of
+# the screen waiting for the passphrase: at the idle cadence the setup
+# screen could trail the portal by a further 15 seconds, on top of
+# everything else a cold boot already spends. So the reporter asks
+# every few seconds for the first few minutes, which covers the portal
+# coming up on both the systemd timer and balena's restart policy, and
+# then settles to the idle pace above.
+WIFI_SETUP_BOOT_POLL_INTERVAL_S = 3
+WIFI_SETUP_BOOT_POLL_WINDOW_S = 300
+# How often the boot splash checks whether the setup portal has come
+# up, so it can hand the display over instead of sitting out the rest
+# of SPLASH_DELAY. A flag read, so it can be frequent.
+BOOT_SPLASH_WIFI_CHECK_S = 1
 
 SERVER_WAIT_TIMEOUT = 60
 

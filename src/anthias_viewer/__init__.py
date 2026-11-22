@@ -37,6 +37,9 @@ from anthias_server.lib import cec, cec_client
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
 from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
+from anthias_viewer.constants import (
+    BOOT_SPLASH_WIFI_CHECK_S as BOOT_SPLASH_WIFI_CHECK_S,
+)
 from anthias_viewer.constants import EMPTY_PL_DELAY as EMPTY_PL_DELAY
 from anthias_viewer.constants import HOTSPOT_PAGE_URL as HOTSPOT_PAGE_URL
 from anthias_viewer.constants import (
@@ -58,6 +61,12 @@ from anthias_viewer.constants import (
 )
 from anthias_viewer.constants import SPLASH_PAGE_URL as SPLASH_PAGE_URL
 from anthias_viewer.constants import STANDBY_SCREEN as STANDBY_SCREEN
+from anthias_viewer.constants import (
+    WIFI_SETUP_BOOT_POLL_INTERVAL_S as WIFI_SETUP_BOOT_POLL_INTERVAL_S,
+)
+from anthias_viewer.constants import (
+    WIFI_SETUP_BOOT_POLL_WINDOW_S as WIFI_SETUP_BOOT_POLL_WINDOW_S,
+)
 from anthias_viewer.constants import (
     WIFI_SETUP_POLL_INTERVAL_S as WIFI_SETUP_POLL_INTERVAL_S,
 )
@@ -3547,6 +3556,46 @@ def _remember_portal_gateway(payload: dict[str, Any]) -> None:
         _wifi_setup_portal_gateway = gateway
 
 
+def _wifi_setup_poll_interval(since_start: float) -> float:
+    """Seconds until the reporter next asks whether the portal is up.
+
+    Quick for the first few minutes after the viewer starts, which is
+    when a first boot with no network raises the portal and somebody is
+    waiting at the screen for the passphrase; the idle pace after that.
+    See ``WIFI_SETUP_BOOT_POLL_INTERVAL_S``.
+    """
+    if since_start < WIFI_SETUP_BOOT_POLL_WINDOW_S:
+        return WIFI_SETUP_BOOT_POLL_INTERVAL_S
+    return WIFI_SETUP_POLL_INTERVAL_S
+
+
+def _hold_boot_splash() -> None:
+    """Show the boot splash for ``SPLASH_DELAY``, unless setup is needed.
+
+    The boot splash used to be a plain ``sleep(SPLASH_DELAY)``, and
+    asset_loop -- the only thing that puts the WiFi setup screen up --
+    does not run until it is over. On a first boot with no network the
+    portal is typically up well inside that minute, so the person who
+    just plugged the screen in watched "Detecting network" with the
+    passphrase they needed already generated and nowhere to be seen.
+    Every viewer restart during first boot paid it again.
+
+    The splash has nothing to offer such a device anyway: with no
+    network it has no address to show. So hand over as soon as the
+    portal is up; the reporter thread sets the flag this reads.
+    """
+    deadline = monotonic() + SPLASH_DELAY
+    while not _wifi_setup_active:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return
+        sleep(min(remaining, BOOT_SPLASH_WIFI_CHECK_S))
+    logger.info(
+        'WiFi setup portal came up during the boot splash; cutting the '
+        'splash short to show the setup screen.'
+    )
+
+
 def _wifi_setup_watch_loop() -> None:
     """Background reporter -- track whether the WiFi setup portal is up.
 
@@ -3565,6 +3614,8 @@ def _wifi_setup_watch_loop() -> None:
     """
     import threading
 
+    started_at = monotonic()
+
     def tick() -> None:
         while True:
             try:
@@ -3574,7 +3625,7 @@ def _wifi_setup_watch_loop() -> None:
                 logger.warning(
                     'Could not read WiFi setup status', exc_info=True
                 )
-            sleep(WIFI_SETUP_POLL_INTERVAL_S)
+            sleep(_wifi_setup_poll_interval(monotonic() - started_at))
 
     t = threading.Thread(target=tick, name='wifi-setup-reporter', daemon=True)
     t.start()
@@ -3636,12 +3687,14 @@ def main() -> None:
 
     if settings['show_splash']:
         view_webpage(SPLASH_PAGE_URL)
-        sleep(SPLASH_DELAY)
+        _hold_boot_splash()
 
     # We don't want to show splash page if there are active assets but all of
-    # them are not available.
-    view_image(STANDBY_SCREEN)
-
-    sleep(0.5)
+    # them are not available. Not when the setup portal is up, though:
+    # asset_loop's first tick paints the setup screen, and a standby
+    # frame in between is only a flash of the wrong thing.
+    if not _wifi_setup_active:
+        view_image(STANDBY_SCREEN)
+        sleep(0.5)
 
     start_loop()
