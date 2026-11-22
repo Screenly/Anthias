@@ -1690,6 +1690,15 @@ label { text-align: left; }
   // this second: power that dipped and recovered, a card carrying old
   // errors that still writes fine. Using the same red for both would
   // flatten a distinction the operator can act on differently.
+  // Accent for state the operator should know about but that is not
+  // a fault: this screen being managed by a controller.
+  &--info {
+    --alert-accent: var(--color-accent);
+    --alert-wash: var(--color-accent-wash);
+    --alert-edge: var(--color-accent-edge);
+    --alert-ink: var(--color-accent-text);
+  }
+
   &--warning {
     --alert-accent: var(--color-warning);
     --alert-wash: var(--color-warning-wash);
@@ -3590,4 +3599,15 @@ body.auth-body {
   color: var(--color-fg-muted);
   height: auto;
   min-height: 6rem;
+}
+
+.management__join {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 3);
+}
+.management__snippet {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  word-break: break-all;
 }

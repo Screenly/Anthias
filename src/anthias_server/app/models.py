@@ -366,3 +366,33 @@ class ApiToken(models.Model):
     @property
     def is_revoked(self) -> bool:
         return self.revoked_at is not None
+
+
+class ManagementController(models.Model):
+    """The controller this screen has joined (multi-screen mode).
+
+    Created when the controller accepts a join. ``url`` and
+    ``fingerprint`` come from the join information the operator pasted
+    (the fingerprint is the controller's pinned node certificate). The
+    controller authenticates with ``token``, an ordinary hashed API
+    token, so revoking that token from the API-tokens list ends
+    management too: the screen counts as managed only while the token
+    is active. See :mod:`anthias_server.lib.management`.
+    """
+
+    name = models.CharField(max_length=80)
+    url = models.CharField(max_length=300)
+    fingerprint = models.CharField(max_length=64)
+    token = models.OneToOneField(
+        ApiToken,
+        on_delete=models.CASCADE,
+        related_name='management_controller',
+    )
+    paired_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'management_controllers'
+        ordering = ('-paired_at', '-id')
+
+    def __str__(self) -> str:
+        return self.name
