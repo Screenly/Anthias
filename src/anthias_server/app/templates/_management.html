@@ -19,7 +19,38 @@ already pinned.
   <p class="api-tokens__error" role="alert">{{ management_error }}</p>
   {% endif %}
 
-  {% if management_controller %}
+  {% if management_pending and not management_controller %}
+  <div class="settings-section__row"
+    hx-get="{% url 'anthias_app:settings_management_section' %}"
+    hx-trigger="every 5s"
+    hx-target="#management"
+    hx-swap="outerHTML">
+    <div>
+      <strong>Waiting for approval on {{ management_pending.name }}</strong>
+      <p class="settings-section__lede">
+        Approve this screen on the controller's <strong>Screens</strong> page. Check that it shows the same code:
+      </p>
+      <p class="management__check-code" id="management-check-code">{{ management_check_code }}</p>
+      <p class="settings-section__lede">Asked {{ management_pending.paired_at|naturaltime }} · <code>{{ management_pending.url }}</code> · the request expires after 24 hours.</p>
+    </div>
+    <div class="settings-section__actions">
+      <form
+        method="post"
+        action="{% url 'anthias_app:settings_management_leave' %}"
+        hx-post="{% url 'anthias_app:settings_management_leave' %}"
+        hx-target="#management"
+        hx-swap="outerHTML"
+        hx-confirm="Withdraw the request to join &quot;{{ management_pending.name }}&quot;?"
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <button type="submit" id="btn-cancel-join" class="app-btn app-btn-outline-dark">
+          <i class="ti ti-x" aria-hidden="true"></i><span>Cancel request</span>
+        </button>
+      </form>
+    </div>
+  </div>
+  {% elif management_controller %}
   <div class="settings-section__row">
     <div>
       <strong>Managed by {{ management_controller.name }}</strong>

@@ -10,6 +10,7 @@ from django.http import HttpRequest, HttpResponse
 from django.http.request import split_domain_port
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from anthias_server.app.helpers import template
@@ -18,6 +19,7 @@ from anthias_server.controller.client import NodeError
 from anthias_server.controller.mirror import build_manifest
 from anthias_server.controller.models import (
     AuditEntry,
+    JoinRequest,
     Node,
     NodeStatus,
     PublishState,
@@ -50,6 +52,9 @@ def _nodes_context() -> dict[str, Any]:
         'nodes': nodes,
         'node_count': len(nodes),
         'online_count': sum(n.status == NodeStatus.ONLINE for n in nodes),
+        'join_requests': list(
+            JoinRequest.objects.filter(expires_at__gte=timezone.now())
+        ),
         'attention_count': sum(bool(n.health_problems) for n in nodes),
         'audit_entries': list(AuditEntry.objects.all()[:AUDIT_ROWS]),
         'commands': service.COMMANDS,
@@ -233,4 +238,53 @@ def screens_regenerate(request: HttpRequest) -> HttpResponse:
         'New join information created. Screens that already joined are '
         'not affected.',
     )
+    return _back(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def screens_approve(request: HttpRequest, request_pk: int) -> HttpResponse:
+    if (refusal := _require_enabled(request)) is not None:
+        return refusal
+    pending = get_object_or_404(JoinRequest, pk=request_pk)
+    name, code = pending.name, pending.check_code
+    try:
+        node = join.approve(pending)
+    except join.JoinError as exc:
+        service.audit(
+            'approve',
+            'failed',
+            node_name=name,
+            detail=exc.detail,
+            actor=_actor(request),
+        )
+        messages.error(request, f'Could not approve {name}: {exc.detail}')
+        return _back(request)
+    service.audit(
+        'approve',
+        'ok',
+        node=node,
+        detail=f'approved (check code {code}); certificate issued',
+        actor=_actor(request),
+    )
+    messages.success(request, f'{name} joined. You can publish to it now.')
+    return _back(request)
+
+
+@authorized
+@require_http_methods(['POST'])
+def screens_reject(request: HttpRequest, request_pk: int) -> HttpResponse:
+    if (refusal := _require_enabled(request)) is not None:
+        return refusal
+    pending = get_object_or_404(JoinRequest, pk=request_pk)
+    name, code = pending.name, pending.check_code
+    join.reject(pending)
+    service.audit(
+        'reject',
+        'ok',
+        node_name=name,
+        detail=f'join request rejected (check code {code})',
+        actor=_actor(request),
+    )
+    messages.success(request, f'Rejected the request from {name}.')
     return _back(request)

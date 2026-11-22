@@ -58,13 +58,17 @@ import base64
 import binascii
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass
+from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
     import requests
+    from django.db.models import QuerySet
 
     from anthias_server.app.models import ManagementController
 
@@ -85,6 +89,9 @@ JOIN_TIMEOUT = (10, 60)
 CONTROLLER_TOKEN_PREFIX = 'Controller: '
 MAX_CONTROLLER_NAME_LEN = 80
 MAX_HOST_LEN = 253
+# How long this screen waits for its join request to be approved (the
+# controller drops requests after 24 hours).
+PENDING_TTL = timedelta(hours=25)
 
 
 class ManagementError(ValueError):
@@ -171,23 +178,53 @@ def m2m_site_active() -> bool:
         return True
     if not settings['management_enabled']:
         return False
-    return _join_in_progress.is_set() or is_managed()
+    return (
+        _join_in_progress.is_set()
+        or is_managed()
+        or pending_controller() is not None
+    )
 
 
-def current_controller() -> ManagementController | None:
-    """The controller this screen is joined to, if its token is active."""
+def _active_controllers() -> QuerySet[ManagementController]:
     from anthias_server.app.models import ManagementController
 
     return (
         ManagementController.objects.select_related('token')
         .filter(token__revoked_at__isnull=True)
         .order_by('-paired_at')
+    )
+
+
+def current_controller() -> ManagementController | None:
+    """The controller this screen is joined to (approved, token active)."""
+    return _active_controllers().filter(approved=True).first()
+
+
+def pending_controller() -> ManagementController | None:
+    """A join request still waiting for the operator's approval.
+
+    Requests expire on the controller after a day; past that (plus a
+    margin) the screen stops waiting too.
+    """
+    from django.utils import timezone
+
+    cutoff = timezone.now() - PENDING_TTL
+    return (
+        _active_controllers()
+        .filter(approved=False, paired_at__gte=cutoff)
         .first()
     )
 
 
 def is_managed() -> bool:
     return current_controller() is not None
+
+
+def check_code() -> str:
+    """This screen's check code, as the controller shows it."""
+    from anthias_server.lib import pki
+
+    return pki.check_code(node_fingerprint())
 
 
 def _set_management_enabled(enabled: bool) -> None:
@@ -320,6 +357,11 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             'anyone on the network, so a controller token would not '
             'protect it.'
         )
+    if _settings()['controller_mode']:
+        raise ManagementError(
+            'This device is a controller. A controller cannot also be '
+            'managed by another one; turn off Controller mode first.'
+        )
     existing = current_controller()
     if existing is not None:
         raise ManagementError(
@@ -332,6 +374,12 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
     operator = _persisted_operator()
     if operator is None:
         raise ManagementError('Create an operator account first.')
+    # A new request replaces one still waiting (for this or another
+    # controller): only one controller at a time.
+    earlier = pending_controller()
+    if earlier is not None:
+        _revoke_and_forget([earlier])
+    screen_cert, csr = _join_credentials(own_fp)
 
     token, plaintext = api_tokens.create_token(
         operator, f'{CONTROLLER_TOKEN_PREFIX}{info.name}'
@@ -347,6 +395,8 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
         'screen_fp': own_fp,
         'screen_port': M2M_PORT,
         'token': plaintext,
+        'screen_cert': screen_cert,
+        'csr': csr,
     }
     if host:
         payload['screen_host'] = host
@@ -372,20 +422,20 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             raise ManagementError(
                 f'Could not reach the controller at {info.url}.'
             ) from exc
-        if response.status_code != 201:
+        if response.status_code != 202:
             logger.warning(
                 'Join %s refused: HTTP %s', info.url, response.status_code
             )
             raise ManagementError(_join_failure_reason(response))
-        # The controller has stored us, so keep the pairing and the
-        # token even if its body is unreadable; the snippet's name
-        # stands in for the one it would have confirmed.
+        # The controller has listed our request, so keep the token even
+        # if its body is unreadable; the snippet's name stands in for
+        # the one it would have confirmed.
         try:
             confirmed = response.json()
         except ValueError:
             confirmed = None
         if not isinstance(confirmed, dict):
-            logger.warning('Join %s: unreadable 201 body', info.url)
+            logger.warning('Join %s: unreadable 202 body', info.url)
             confirmed = {}
     except ManagementError:
         _join_in_progress.clear()
@@ -401,11 +451,234 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             url=info.url,
             fingerprint=info.fingerprint,
             token=token,
+            approved=False,
+            request_id=str(confirmed.get('request_id') or '')[:64],
         )
     finally:
         _join_in_progress.clear()
-    logger.info('Joined controller %r at %s', controller.name, info.url)
+    logger.info(
+        'Asked to join controller %r at %s; waiting for approval',
+        controller.name,
+        info.url,
+    )
     return controller
+
+
+def _join_credentials(own_fp: str) -> tuple[str, str]:
+    """This screen's node certificate and a CSR for the same key."""
+    from anthias_server.lib import node_identity, pki
+
+    identity = node_identity.ensure_node_identity()
+    key = pki.load_key(identity.key_path.read_bytes())
+    return (
+        identity.cert_path.read_text(),
+        pki.make_csr(key, own_fp, pki.ROLE_SCREEN),
+    )
+
+
+# --- approval and certificates ----------------------------------------------
+#
+# Once the operator approves the join request, the controller calls
+# POST /api/v2/pairing/certificate with the client certificate its CA
+# issued for this screen, its CA certificate and its CRL. From then on
+# this screen's :8443 site requires a client certificate from that CA
+# (Caddy), and m2m requests must present the controller's certificate,
+# not revoked (M2MClientCertMiddleware). The files sit next to the node
+# certificate and, like it, are not part of backups.
+
+
+def managed_dir() -> Path:
+    from anthias_server.lib import node_identity
+
+    return node_identity.node_dir()
+
+
+def client_cert_path() -> Path:
+    return managed_dir() / 'managed-client.crt'
+
+
+def controller_ca_path() -> Path:
+    return managed_dir() / 'managed-ca.crt'
+
+
+def crl_path() -> Path:
+    return managed_dir() / 'managed-crl.pem'
+
+
+def _managed_files() -> tuple[Path, Path, Path]:
+    return client_cert_path(), controller_ca_path(), crl_path()
+
+
+def _write_public(target: Path, text: str) -> None:
+    tmp = target.with_name(f'.{target.name}.tmp')
+    tmp.write_text(text)
+    # Public material only (certificates, CRL); the key never goes here.
+    # World-readable is intended: no secrets in these files.
+    os.chmod(tmp, 0o644)  # NOSONAR(S2612)
+    os.replace(tmp, target)
+
+
+def _node_public_key() -> Any:
+    from anthias_server.lib import node_identity, pki
+
+    identity = node_identity.ensure_node_identity()
+    return pki.load_key(identity.key_path.read_bytes()).public_key()
+
+
+def controller_ca() -> Any:
+    from anthias_server.lib import pki
+
+    try:
+        return pki.load_cert(controller_ca_path().read_bytes())
+    except (OSError, pki.PkiError):
+        return None
+
+
+def install_approval(
+    token_id: int,
+    certificate: str,
+    ca_certificate: str,
+    crl: str,
+    controller_name: str = '',
+) -> ManagementController:
+    """Accept the controller's approval: this screen's certificate.
+
+    Only the controller holding the token from our pending request can
+    deliver it, over the pinned connection it already uses. Raises
+    ManagementError if anything does not check out.
+    """
+    from anthias_server.app.models import ManagementController
+    from anthias_server.lib import pki
+
+    controller = _active_controllers().filter(token_id=token_id).first()
+    if not isinstance(controller, ManagementController):
+        raise ManagementError('This token does not belong to a join request.')
+    try:
+        ca = pki.load_cert(ca_certificate)
+        pki.check_ca(ca)
+        cert = pki.load_cert(certificate)
+        pki.check_client_cert(
+            cert, ca, pki.ROLE_SCREEN, public_key=_node_public_key()
+        )
+        revocations = pki.load_crl(crl)
+        pki.check_crl(revocations, ca)
+    except pki.PkiError as exc:
+        raise ManagementError(f'The approval was not valid: {exc}') from exc
+    if cert.serial_number in pki.revoked_serials(revocations):
+        raise ManagementError('The certificate delivered is already revoked.')
+    _write_public(controller_ca_path(), pki.cert_pem(ca))
+    _write_public(client_cert_path(), pki.cert_pem(cert))
+    _write_public(crl_path(), pki.crl_pem(revocations))
+    name = ' '.join(controller_name.split())[:MAX_CONTROLLER_NAME_LEN]
+    controller.approved = True
+    if name:
+        controller.name = name
+    controller.save(update_fields=['approved', 'name'])
+    _set_management_enabled(True)
+    apply_caddy()
+    logger.info('Approved by controller %r', controller.name)
+    return controller
+
+
+def store_crl(text: str) -> bool:
+    """Keep a newer CRL from the controller. True if it was stored."""
+    from anthias_server.lib import pki
+
+    ca = controller_ca()
+    if ca is None:
+        return False
+    try:
+        crl = pki.load_crl(text)
+        pki.check_crl(crl, ca)
+    except pki.PkiError as exc:
+        logger.warning('Ignoring a revocation list: %s', exc)
+        return False
+    current = _load_crl()
+    if current is not None and pki.crl_number(crl) < pki.crl_number(current):
+        return False
+    _write_public(crl_path(), pki.crl_pem(crl))
+    return True
+
+
+def store_client_cert(text: str) -> bool:
+    """Keep a renewed client certificate. True if it was stored."""
+    from anthias_server.lib import pki
+
+    ca = controller_ca()
+    if ca is None:
+        return False
+    try:
+        cert = pki.load_cert(text)
+        pki.check_client_cert(
+            cert, ca, pki.ROLE_SCREEN, public_key=_node_public_key()
+        )
+    except pki.PkiError as exc:
+        logger.warning('Ignoring a renewed certificate: %s', exc)
+        return False
+    _write_public(client_cert_path(), pki.cert_pem(cert))
+    return True
+
+
+def _load_crl() -> Any:
+    from anthias_server.lib import pki
+
+    try:
+        return pki.load_crl(crl_path().read_bytes())
+    except (OSError, pki.PkiError):
+        return None
+
+
+def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
+    """Whether an m2m request may reach this screen's API.
+
+    Only enforced once this screen is managed: the caller must present
+    a controller certificate from its controller's CA (Caddy already
+    checked the chain) that is valid and not on the CRL. Before that
+    (joining, waiting for approval) the bearer token is the gate, as
+    for any API client. A controller's own :8443 site is not checked
+    here; the join endpoint and the push consumer check their callers.
+    """
+    import base64
+
+    from cryptography import x509
+
+    from anthias_server.lib import caddy, pki
+
+    if not request_via_m2m(request) or _settings()['controller_mode']:
+        return True, ''
+    if current_controller() is None:
+        return True, ''
+    ca = controller_ca()
+    if ca is None:
+        return False, 'This screen has no certificate for its controller.'
+    raw = request.headers.get(caddy.CLIENT_CERT_HEADER, '')
+    try:
+        cert = x509.load_der_x509_certificate(base64.b64decode(raw))
+        pki.check_client_cert(cert, ca, pki.ROLE_CONTROLLER)
+    except ValueError:  # binascii.Error and PkiError are ValueErrors
+        return False, "Only this screen's controller may call it here."
+    revocations = _load_crl()
+    if revocations is None:
+        return False, 'This screen has no revocation list from its controller.'
+    if cert.serial_number in pki.revoked_serials(revocations):
+        return False, 'That controller certificate has been revoked.'
+    return True, ''
+
+
+class M2MClientCertMiddleware:
+    """Refuse m2m requests that fail :func:`m2m_caller_allowed`."""
+
+    def __init__(self, get_response: Any) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: Any) -> Any:
+        from django.http import JsonResponse
+
+        allowed, reason = m2m_caller_allowed(request)
+        if not allowed:
+            logger.warning('Refused an m2m request: %s', reason)
+            return JsonResponse({'detail': reason}, status=403)
+        return self.get_response(request)
 
 
 # --- leave -----------------------------------------------------------------
@@ -419,6 +692,8 @@ def _revoke_and_forget(controllers: list[ManagementController]) -> None:
             controller.token.revoked_at = timezone.now()
             controller.token.save(update_fields=['revoked_at'])
         controller.delete()
+    for path in _managed_files():
+        path.unlink(missing_ok=True)
     _set_management_enabled(False)
     apply_caddy()
 
@@ -476,8 +751,8 @@ def m2m_server() -> dict[str, Any]:
                 'set': {
                     caddy.LISTENER_HEADER: [M2M_LISTENER_VALUE],
                     # Empty when the peer sent no client certificate.
-                    caddy.CLIENT_FINGERPRINT_HEADER: [
-                        '{http.request.tls.client.fingerprint}'
+                    caddy.CLIENT_CERT_HEADER: [
+                        '{http.request.tls.client.certificate_der_base64}'
                     ],
                 }
             }
@@ -489,12 +764,7 @@ def m2m_server() -> dict[str, Any]:
         'tls_connection_policies': [
             {
                 'certificate_selection': {'any_tag': [caddy.TAG_NODE]},
-                # Ask for, but neither require nor verify, a client
-                # certificate: a screen pushing to its controller
-                # presents its node certificate, and the controller
-                # matches the fingerprint to the one pinned at join.
-                # REST clients present none and are unaffected.
-                'client_authentication': {'mode': 'request'},
+                'client_authentication': _client_authentication(),
             }
         ],
         'routes': [
@@ -516,6 +786,48 @@ def m2m_server() -> dict[str, Any]:
         'idle_timeout': caddy.IDLE_TIMEOUT,
         'max_header_bytes': caddy.MAX_HEADER_BYTES,
     }
+
+
+def _inline_ca(cert: Any) -> dict[str, Any]:
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+
+    der = cert.public_bytes(serialization.Encoding.DER)
+    return {
+        'provider': 'inline',
+        'trusted_ca_certs': [base64.b64encode(der).decode('ascii')],
+    }
+
+
+def _client_authentication() -> dict[str, Any]:
+    """TLS client-certificate policy for :8443 (mutual TLS).
+
+    * A controller verifies certificates against its own CA when one
+      is given; joining screens have none yet, and the join endpoint
+      and push consumer check their callers themselves.
+    * A managed screen requires a certificate from its controller's CA,
+      so nothing else on the network gets past the TLS handshake.
+    * A screen still joining or waiting for approval only asks for one.
+    """
+    if _settings()['controller_mode']:
+        from anthias_server.controller import ca
+
+        try:
+            return {
+                'mode': 'verify_if_given',
+                'ca': _inline_ca(ca.ca_cert()),
+            }
+        except Exception:
+            logger.exception('Controller CA unavailable')
+            return {'mode': 'request'}
+    controller_cert = controller_ca()
+    if controller_cert is not None and is_managed():
+        return {
+            'mode': 'require_and_verify',
+            'ca': _inline_ca(controller_cert),
+        }
+    return {'mode': 'request'}
 
 
 def caddy_extra_servers() -> dict[str, dict[str, Any]]:

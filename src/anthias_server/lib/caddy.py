@@ -59,10 +59,11 @@ HTTPS_PORT = 443
 # Strip from every request on the UI sites so a client cannot pretend
 # to have arrived through the machine-to-machine listener.
 LISTENER_HEADER = 'X-Anthias-Listener'
-# SHA-256 (lowercase hex, DER) of the TLS client certificate a peer
-# presented on the m2m site. Set only by Caddy there; stripped on every
-# other site so a client can never supply it.
-CLIENT_FINGERPRINT_HEADER = 'X-Anthias-Client-Fingerprint'
+# The TLS client certificate (base64 DER) a peer presented on the m2m
+# site, so the app can check its issuer, role and serial (against the
+# CRL). Set only by Caddy there; stripped on every other site so a
+# client can never supply it.
+CLIENT_CERT_HEADER = 'X-Anthias-Client-Cert'
 
 # Edge limits. Kept in line with start_server.sh's uvicorn guards
 # (--timeout-keep-alive 30): a client gets 10 s to send its headers,
@@ -115,7 +116,12 @@ def proxy_handler() -> dict[str, Any]:
         'handler': 'reverse_proxy',
         'upstreams': [{'dial': UPSTREAM}],
         'headers': {
-            'request': {'delete': [LISTENER_HEADER, CLIENT_FINGERPRINT_HEADER]}
+            'request': {
+                'delete': [
+                    LISTENER_HEADER,
+                    CLIENT_CERT_HEADER,
+                ]
+            }
         },
     }
 

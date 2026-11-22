@@ -60,6 +60,15 @@ class Node(models.Model):
     # poll leaves the screen alone.
     push_connection = models.CharField(max_length=32, blank=True, default='')
     push_seen_at = models.DateTimeField(blank=True, null=True)
+    # The screen's node public key (from its approved CSR) and the
+    # client certificate this controller's CA issued for it (see
+    # .ca). The push connection must present that certificate.
+    public_key_pem = models.TextField(blank=True, default='')
+    client_serial = models.CharField(max_length=64, blank=True, default='')
+    client_fingerprint = models.CharField(
+        max_length=64, blank=True, default=''
+    )
+    client_not_after = models.DateTimeField(blank=True, null=True)
 
     publish_state = models.CharField(
         max_length=16,
@@ -178,3 +187,62 @@ class JoinSecret(models.Model):
 
     class Meta:
         db_table = 'controller_join_secret'
+
+
+class JoinRequest(models.Model):
+    """A screen asking to join, waiting for the operator's approval.
+
+    Created by ``POST /api/v2/controller/join`` once the secret checks
+    out and the controller has reached the screen back on its pinned
+    certificate. Approving signs ``csr_pem`` and turns the request
+    into a :class:`Node`; rejecting or letting it expire drops it.
+    """
+
+    request_id = models.CharField(max_length=64, unique=True)
+    name = models.CharField(max_length=100)
+    host = models.CharField(max_length=253)
+    port = models.PositiveIntegerField(default=DEFAULT_NODE_PORT)
+    fingerprint = models.CharField(max_length=64, unique=True)
+    token_ciphertext = models.TextField()
+    csr_pem = models.TextField()
+    version = models.CharField(max_length=100, blank=True, default='')
+    device_model = models.CharField(max_length=200, blank=True, default='')
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'controller_join_requests'
+        ordering = ('created_at', 'id')
+
+    def __str__(self) -> str:
+        return f'{self.name} ({self.host}), waiting for approval'
+
+    @property
+    def check_code(self) -> str:
+        from anthias_server.lib.pki import check_code
+
+        return check_code(self.fingerprint)
+
+    @property
+    def base_url(self) -> str:
+        host = f'[{self.host}]' if ':' in self.host else self.host
+        return f'https://{host}:{self.port}'
+
+
+class RevokedCertificate(models.Model):
+    """A client certificate this controller's CA revoked (the CRL)."""
+
+    serial = models.CharField(max_length=64, unique=True)
+    revoked_at = models.DateTimeField(default=timezone.now)
+    label = models.CharField(max_length=200, blank=True, default='')
+    reason = models.CharField(max_length=200, blank=True, default='')
+    # Kept until it would have expired anyway; then it no longer needs
+    # to be listed.
+    not_after = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'controller_revoked_certificates'
+        ordering = ('-revoked_at', '-id')
+
+    def __str__(self) -> str:
+        return f'{self.serial} ({self.label})'

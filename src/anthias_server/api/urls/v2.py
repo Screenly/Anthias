@@ -1,6 +1,9 @@
 from django.urls import URLPattern, URLResolver, path
 
-from anthias_server.api.views.pairing import PairingViewV2
+from anthias_server.api.views.pairing import (
+    PairingCertificateViewV2,
+    PairingViewV2,
+)
 from anthias_server.api.views.v2 import (
     AssetContentViewV2,
     AssetListViewV2,
@@ -49,6 +52,11 @@ def get_url_patterns() -> list[URLPattern | URLResolver]:
         ),
         path('v2/backup', BackupViewV2.as_view(), name='backup_v2'),
         path('v2/pairing', PairingViewV2.as_view(), name='pairing_v2'),
+        path(
+            'v2/pairing/certificate',
+            PairingCertificateViewV2.as_view(),
+            name='pairing_certificate_v2',
+        ),
         path('v2/recover', RecoverViewV2.as_view(), name='recover_v2'),
         path('v2/reboot', RebootViewV2.as_view(), name='reboot_v2'),
         path('v2/shutdown', ShutdownViewV2.as_view(), name='shutdown_v2'),

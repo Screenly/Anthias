@@ -9,6 +9,7 @@ certificate and forwards its fingerprint.
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime as dt
 import hashlib
 import json
@@ -31,11 +32,10 @@ from django.utils import timezone
 from anthias_server.controller import push as controller_push
 from anthias_server.controller import service, tasks, vault
 from anthias_server.controller.models import Node, NodeStatus
-from anthias_server.lib import caddy, management
+from anthias_server.lib import caddy, management, pki
 from anthias_server.lib import push as screen_push
 
 SCREEN_FP = 'b' * 64
-OTHER_FP = 'e' * 64
 PATH = '/api/v2/controller/ws'
 INFO: dict[str, Any] = {
     'loadavg': 0.5,
@@ -72,24 +72,63 @@ def controller_on(_isolated_settings_conf: None) -> None:
     settings.save()
 
 
+_LAST: dict[str, Any] = {}
+
+
+def _issue(
+    role: str = pki.ROLE_SCREEN, other_ca: bool = False
+) -> tuple[x509.Certificate, Any]:
+    """A client certificate (and its key) from the controller's CA."""
+    from anthias_server.controller import ca
+
+    if other_ca:
+        issuer_key = pki.new_key()
+        issuer = pki.make_ca(issuer_key, 'Someone else')
+    else:
+        issuer, issuer_key = ca.ensure_ca()
+    key = pki.new_key()
+    cert = pki.issue_client_cert(
+        issuer, issuer_key, key.public_key(), 'screen', role
+    )
+    return cert, key
+
+
 def _node(fingerprint: str = SCREEN_FP, **fields: Any) -> Node:
-    return Node.objects.create(
+    """A managed screen holding a current certificate from our CA."""
+    cert, key = _issue()
+    node = Node.objects.create(
         name=fields.pop('name', 'Lobby'),
         host=fields.pop('host', 'lobby.lan'),
         fingerprint=fingerprint,
         token_ciphertext=vault.encrypt('anthias_x'),
+        public_key_pem=pki.public_key_pem(key),
+        client_serial=pki.serial_hex(cert.serial_number),
+        client_fingerprint=pki.fingerprint(cert),
+        client_not_after=cert.not_valid_after_utc,
         **fields,
     )
+    _LAST.update(cert=cert, key=key)
+    return node
+
+
+def _der(cert: x509.Certificate) -> bytes:
+    return base64.b64encode(cert.public_bytes(serialization.Encoding.DER))
 
 
 def _headers(
-    listener: str | None = 'm2m', fingerprint: str | None = SCREEN_FP
+    listener: str | None = 'm2m',
+    cert: x509.Certificate | None = None,
+    raw: bytes | None = None,
 ) -> list[tuple[bytes, bytes]]:
+    """Headers as Caddy forwards them; the last node's cert by default."""
     headers = []
     if listener is not None:
         headers.append((b'x-anthias-listener', listener.encode()))
-    if fingerprint is not None:
-        headers.append((b'x-anthias-client-fingerprint', fingerprint.encode()))
+    if raw is None:
+        cert = cert or _LAST.get('cert')
+        raw = _der(cert) if cert is not None else b''
+    if raw:
+        headers.append((b'x-anthias-client-cert', raw))
     return headers
 
 
@@ -115,8 +154,14 @@ def _communicator(
 
 
 async def _connect(communicator: ApplicationCommunicator) -> dict[str, Any]:
+    """Handshake; on accept, also take the CRL the consumer sends first."""
     await communicator.send_input({'type': 'websocket.connect'})
-    return await communicator.receive_output(timeout=5)
+    verdict = await communicator.receive_output(timeout=5)
+    if verdict['type'] == 'websocket.accept':
+        first = await communicator.receive_output(timeout=5)
+        assert first['type'] == 'websocket.send'
+        assert json.loads(first['text'])['type'] == 'crl'
+    return verdict
 
 
 async def _send(communicator: ApplicationCommunicator, body: Any) -> None:
@@ -143,22 +188,39 @@ def _run(body: Any) -> None:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    ('headers', 'code'),
+    ('case', 'code'),
     [
-        (_headers(listener=None), controller_push.CLOSE_NOT_M2M),
-        (_headers(listener='ui'), controller_push.CLOSE_NOT_M2M),
-        (_headers(fingerprint=None), controller_push.CLOSE_UNKNOWN_SCREEN),
-        (_headers(fingerprint=''), controller_push.CLOSE_UNKNOWN_SCREEN),
-        (
-            _headers(fingerprint=OTHER_FP),
-            controller_push.CLOSE_UNKNOWN_SCREEN,
-        ),
+        ('no listener', controller_push.CLOSE_NOT_M2M),
+        ('ui listener', controller_push.CLOSE_NOT_M2M),
+        ('no certificate', controller_push.CLOSE_UNKNOWN_SCREEN),
+        ('garbage', controller_push.CLOSE_UNKNOWN_SCREEN),
+        ('another CA', controller_push.CLOSE_UNKNOWN_SCREEN),
+        ('controller role', controller_push.CLOSE_UNKNOWN_SCREEN),
+        ('revoked', controller_push.CLOSE_UNKNOWN_SCREEN),
+        ('superseded', controller_push.CLOSE_UNKNOWN_SCREEN),
     ],
 )
-def test_push_is_refused_without_m2m_listener_or_a_known_screen(
-    controller_on: None, headers: list[tuple[bytes, bytes]], code: int
+def test_push_is_refused_without_m2m_listener_or_a_current_certificate(
+    controller_on: None, case: str, code: int
 ) -> None:
-    _node()
+    from anthias_server.controller import ca
+
+    node = _node()
+    headers = {
+        'no listener': lambda: _headers(listener=None),
+        'ui listener': lambda: _headers(listener='ui'),
+        'no certificate': lambda: _headers(raw=b''),
+        'garbage': lambda: _headers(raw=b'not-base64-der!'),
+        'another CA': lambda: _headers(cert=_issue(other_ca=True)[0]),
+        'controller role': lambda: _headers(
+            cert=_issue(role=pki.ROLE_CONTROLLER)[0]
+        ),
+        # Valid, but no longer this screen's current certificate.
+        'superseded': lambda: _headers(cert=_issue()[0]),
+        'revoked': lambda: _headers(),
+    }[case]()
+    if case == 'revoked':
+        ca.revoke(node.client_serial, node.name, 'test')
 
     async def body() -> None:
         verdict = await _connect(_communicator(headers))
@@ -230,6 +292,94 @@ def test_push_lifecycle_online_health_heartbeat_offline(
     assert not node.push_live
     # First in line for the polling fallback.
     assert node.last_checked_at is None
+
+
+@pytest.mark.django_db
+def test_a_screen_renews_its_certificate_over_the_push_connection(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller import ca
+    from anthias_server.controller.models import RevokedCertificate
+
+    node = _node()
+    old_serial, key = node.client_serial, _LAST['key']
+    replies: list[dict[str, Any]] = []
+
+    async def body() -> None:
+        communicator = _communicator(_headers())
+        assert (await _connect(communicator))['type'] == 'websocket.accept'
+        csr = pki.make_csr(key, node.fingerprint, pki.ROLE_SCREEN)
+        await _send(communicator, {'type': 'renew', 'csr': csr})
+        for _ in range(2):
+            out = await communicator.receive_output(timeout=5)
+            replies.append(json.loads(out['text']))
+        await _close(communicator)
+
+    _run(body)
+
+    kinds = sorted(r['type'] for r in replies)
+    # The certificate, and the CRL that now lists the replaced one.
+    assert kinds == ['certificate', 'crl']
+    issued = pki.load_cert(
+        next(r for r in replies if r['type'] == 'certificate')['certificate']
+    )
+    pki.check_client_cert(issued, ca.ca_cert(), pki.ROLE_SCREEN, key)
+    node.refresh_from_db()
+    assert node.client_serial == pki.serial_hex(issued.serial_number)
+    assert node.client_fingerprint == pki.fingerprint(issued)
+    assert RevokedCertificate.objects.filter(serial=old_serial).exists()
+    crl = pki.load_crl(next(r for r in replies if r['type'] == 'crl')['crl'])
+    assert int(old_serial, 16) in set(pki.revoked_serials(crl))
+
+
+@pytest.mark.django_db
+def test_a_renewal_for_another_key_is_refused(controller_on: None) -> None:
+    node = _node()
+    serial = node.client_serial
+    closed: dict[str, Any] = {}
+
+    async def body() -> None:
+        communicator = _communicator(_headers())
+        assert (await _connect(communicator))['type'] == 'websocket.accept'
+        csr = pki.make_csr(pki.new_key(), node.fingerprint, pki.ROLE_SCREEN)
+        await _send(communicator, {'type': 'renew', 'csr': csr})
+        closed.update(await communicator.receive_output(timeout=5))
+
+    _run(body)
+
+    assert closed == {
+        'type': 'websocket.close',
+        'code': controller_push.CLOSE_BAD_MESSAGE,
+    }
+    node.refresh_from_db()
+    assert node.client_serial == serial
+
+
+@pytest.mark.django_db
+def test_a_revocation_reaches_connected_screens_at_once(
+    controller_on: None,
+) -> None:
+    from asgiref.sync import sync_to_async
+
+    from anthias_server.controller import ca
+
+    _node()
+    other = _node('c' * 64, name='Hall', host='hall.lan')
+    received: list[dict[str, Any]] = []
+
+    async def body() -> None:
+        communicator = _communicator(_headers())
+        assert (await _connect(communicator))['type'] == 'websocket.accept'
+        await sync_to_async(ca.revoke)(other.client_serial, 'Hall', 'test')
+        out = await communicator.receive_output(timeout=5)
+        received.append(json.loads(out['text']))
+        await _close(communicator)
+
+    _run(body)
+
+    assert received[0]['type'] == 'crl'
+    crl = pki.load_crl(received[0]['crl'])
+    assert int(other.client_serial, 16) in set(pki.revoked_serials(crl))
 
 
 async def _refreshed(node: Node) -> Node:
@@ -367,26 +517,26 @@ def test_m2m_site_requests_a_client_certificate_and_forwards_it() -> None:
     # SNI == Host and answers 421, and peers connect by IP (no SNI).
     assert server['strict_sni_host'] is False
     proxy = server['routes'][0]['handle'][0]
-    assert proxy['headers']['request']['set'][
-        caddy.CLIENT_FINGERPRINT_HEADER
-    ] == ['{http.request.tls.client.fingerprint}']
+    assert proxy['headers']['request']['set'][caddy.CLIENT_CERT_HEADER] == [
+        '{http.request.tls.client.certificate_der_base64}'
+    ]
 
 
-def test_ui_sites_strip_a_client_supplied_fingerprint_header() -> None:
+def test_ui_sites_strip_a_client_supplied_certificate_header() -> None:
     config = caddy.build_config()
     for name, server in config['apps']['http']['servers'].items():
         if name == management.M2M_SERVER_NAME:
             continue
         text = json.dumps(server)
         if 'reverse_proxy' in text:
-            assert caddy.CLIENT_FINGERPRINT_HEADER in text, name
+            assert caddy.CLIENT_CERT_HEADER in text, name
 
 
 # ---------------------------------------------------------------------------
 # screen side
 
 
-def _make_cert(tmp: Path, name: str) -> tuple[str, str, str]:
+def _make_cert(tmp: Path, name: str, days: int = 365) -> tuple[str, str, str]:
     key = ec.generate_private_key(ec.SECP256R1())
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
     now = dt.datetime.now(dt.UTC)
@@ -397,7 +547,7 @@ def _make_cert(tmp: Path, name: str) -> tuple[str, str, str]:
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - dt.timedelta(days=1))
-        .not_valid_after(now + dt.timedelta(days=30))
+        .not_valid_after(now + dt.timedelta(days=days))
         .sign(key, hashes.SHA256())
     )
     cert_path, key_path = tmp / f'{name}.crt', tmp / f'{name}.key'
@@ -444,6 +594,8 @@ class _Controller:
         self.context.verify_mode = ssl.CERT_OPTIONAL
         self.messages: list[dict[str, Any]] = []
         self.client_fingerprints: list[str] = []
+        # Set to answer renewal requests with a (fake) certificate.
+        self.renewed: str | None = None
 
     def trust(self, cert: str) -> None:
         self.context.load_verify_locations(cafile=cert)
@@ -455,7 +607,12 @@ class _Controller:
             hashlib.sha256(der).hexdigest() if der else ''
         )
         async for raw in ws:
-            self.messages.append(json.loads(raw))
+            message = json.loads(raw)
+            self.messages.append(message)
+            if message.get('type') == 'renew' and self.renewed is not None:
+                await ws.send(
+                    json.dumps({'type': 'certificate', 'certificate': 'NEW'})
+                )
 
 
 def test_screen_pushes_hello_then_heartbeat_with_its_client_certificate(
@@ -539,6 +696,75 @@ def test_screen_pushes_health_when_a_warning_appears(
 
     assert [m['type'] for m in controller.messages] == ['hello', 'health']
     assert controller.messages[1]['health']['free_space'] == '100.0\xa0MB'
+
+
+def test_screen_asks_to_renew_a_certificate_close_to_expiry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from websockets.asyncio.server import serve
+
+    from anthias_server.lib import management
+
+    ctl_cert, ctl_key, ctl_fp = _make_cert(tmp_path, 'controller')
+    scr_cert, scr_key, _ = _make_cert(tmp_path, 'screen', days=10)
+    controller = _Controller(ctl_cert, ctl_key)
+    controller.trust(scr_cert)
+    controller.renewed = 'NEW'
+    stored: list[str] = []
+    monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
+
+    def store(pem: str) -> bool:
+        stored.append(pem)
+        return True
+
+    monkeypatch.setattr(management, 'store_client_cert', store)
+
+    async def body() -> None:
+        async with serve(
+            controller.handler, '127.0.0.1', 0, ssl=controller.context
+        ) as server:
+            port = server.sockets[0].getsockname()[1]
+            target = screen_push.Target(
+                1,
+                f'wss://127.0.0.1:{port}{screen_push.PATH}',
+                ctl_fp,
+                scr_cert,
+                scr_key,
+            )
+            answers = iter([target, target, None])
+            monkeypatch.setattr(
+                screen_push, 'current_target', lambda: next(answers)
+            )
+            await asyncio.wait_for(screen_push.run_session(target), 5)
+            await asyncio.sleep(0.1)
+
+    asyncio.run(body())
+
+    kinds = [m['type'] for m in controller.messages]
+    # One request per session, however many heartbeats follow.
+    assert kinds.count('renew') == 1
+    csr = pki.load_csr(controller.messages[kinds.index('renew')]['csr'])
+    assert csr.subject.rfc4514_string().count(pki.ROLE_SCREEN) == 1
+    assert stored == ['NEW']
+
+
+def test_screen_stores_a_pushed_revocation_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_server.lib import management
+
+    stored: list[str] = []
+
+    def store(pem: str) -> bool:
+        stored.append(pem)
+        return True
+
+    monkeypatch.setattr(management, 'store_crl', store)
+    assert screen_push.handle_message('{"type": "crl", "crl": "X"}') == 'crl'
+    assert screen_push.handle_message('not json') == ''
+    assert screen_push.handle_message('[1]') == ''
+    assert stored == ['X']
 
 
 def test_screen_refuses_a_controller_with_another_certificate(

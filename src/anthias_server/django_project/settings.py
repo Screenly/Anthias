@@ -822,6 +822,10 @@ if getenv('ANTHIAS_SERVICE') != 'viewer':
 # closing bracket where S4502 actually raises its issue.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Multi-screen: on a managed screen's :8443 site, only its
+    # controller's (unrevoked) client certificate gets through. A no-op
+    # for every other request. See anthias_server/lib/management.py.
+    'anthias_server.lib.management.M2MClientCertMiddleware',
     # Fault-tolerant subclass of whitenoise's middleware: its startup
     # scan of STATIC_ROOT survives unreadable entries (a corrupted SD
     # card raising EUCLEAN bricked a device into a uvicorn crash-loop

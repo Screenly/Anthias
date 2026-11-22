@@ -34,6 +34,11 @@ urlpatterns = [
         name='settings_api_tokens_revoke',
     ),
     path(
+        'settings/management/',
+        views.settings_management_section,
+        name='settings_management_section',
+    ),
+    path(
         'settings/management/join/',
         views.settings_management_join,
         name='settings_management_join',

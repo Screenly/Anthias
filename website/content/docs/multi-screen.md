@@ -139,9 +139,20 @@ mistake. Screens that already joined are not affected.
    address or DNS name in **This screen's address**.
 4. Click **Join controller**.
 
-Joining takes a second or two. The screen then shows a **Managed by …**
-banner on every page, and it appears on the controller's **Screens**
-page as **Online**.
+The screen now shows **Waiting for approval** with a short **check
+code**, such as `7F3A-91C2`. Nothing is trusted yet: the request only
+appears on the controller.
+
+5. On the controller's **Screens** page, the screen is listed under
+   **Waiting for approval** with its name, address, model and check
+   code. Make sure the check code matches the one on the screen, then
+   click **Approve**. If you don't recognize the request, click
+   **Reject**.
+
+Once approved, the screen shows a **Managed by …** banner on every
+page, and it appears on the controller's **Screens** page as
+**Online**. A request that nobody approves expires after 24 hours; the
+screen can withdraw it with **Cancel request**.
 
 **Content on a managed screen is replaced when the controller
 publishes.** Assets you add or change directly on the screen are removed
@@ -219,13 +230,34 @@ Management traffic never uses passwords and never leaves your network:
   controller its own fingerprint and an access token, and the controller
   checks that fingerprint on every connection. Nobody else on the
   network can pretend to be either side.
+* **Every join is approved by a person.** Knowing the join information
+  only lets a device ask to join. It is not managed until someone
+  approves it on the controller, after comparing the check code. The
+  check code comes from the screen's own certificate, so a different
+  device asking in its name shows a different code.
+* **The controller is a small certificate authority.** When it is
+  approved, the screen gets a client certificate signed by the
+  controller. The screen creates the signing request with its own key,
+  which never leaves the device. The controller has a client
+  certificate of its own too.
+* **Mutual TLS in both directions.** Once a screen is managed, its
+  port 8443 only accepts connections that present the controller's
+  certificate. The controller in turn knows screens by the certificate
+  it issued them, for example on the status connection. Both sides
+  still pin each other's identity certificate as before.
+* **Certificates renew themselves.** Client certificates are valid for
+  a year. A screen asks for a new one over its status connection when
+  less than 30 days are left, and the controller renews its own
+  automatically. Nothing needs to be done by hand.
+* **Revocation list.** When you remove a screen, or a certificate is
+  replaced, the controller revokes the old certificate. Revoked
+  certificates are listed in a signed revocation list (CRL). Connected
+  screens get each new list at once; the controller re-signs it at
+  least every five days, and screens refuse a controller certificate
+  that is on it.
 * **A separate port for management.** Port 8443 always presents the
   device's own certificate and only serves the management API.
   Uploading a certificate for the web interface doesn't affect it.
-* **Screens identify themselves with their certificate.** For the status
-  connection, a screen presents its own certificate as a TLS client
-  certificate, and the controller accepts only the one it recorded when
-  the screen joined.
 * **Tokens are revocable and stored safely.** The screen keeps only a
   hash of the controller's token. The controller stores screen tokens
   encrypted, with a key that is not part of backups.
@@ -234,17 +266,19 @@ Management traffic never uses passwords and never leaves your network:
 
 A device's identity certificate is not included in backups. Restoring
 one screen's backup onto another device does not clone its identity.
-The same goes for the controller's token key: if you restore a
+The same goes for the controller's certificate authority and token
+key, and for a screen's client certificate: if you restore a
 controller's backup onto a different device, the screens have to join
-again.
+again. Keeping the authority's private key out of backups means a
+copied backup file can never be used to vouch for a device.
 
 ## Leaving and removing
 
 * On a screen, **Settings → Leave management** revokes the controller's
   token immediately and closes port 8443. Revoking the `Controller: …`
   token under **Settings → API tokens** does the same.
-* On the controller, **Remove** revokes the token on the screen and
-  forgets it.
+* On the controller, **Remove** revokes the token on the screen,
+  revokes the screen's client certificate, and forgets it.
 
 A screen that left shows as **Offline** on the controller, with a note
 that it may have left management. Remove it there, or join it again.
@@ -268,6 +302,18 @@ different device. Copy the join information from the controller's
 
 **"The controller rejected the join information."** It was regenerated
 after you copied it. Copy it again.
+
+**The screen keeps showing "Waiting for approval".** Approve it on the
+controller's **Screens** page. If it isn't listed there, the request
+expired or was rejected: click **Cancel request** on the screen and
+join again.
+
+**The check codes don't match.** Don't approve the request. Reject it,
+and check which device is using that screen's address.
+
+**"Could not deliver the approval."** The controller couldn't reach the
+screen on port 8443 when you approved. The request stays listed;
+check the network and approve again.
 
 **"Could not reach the controller."** Check that the screen can reach
 the controller's address on port 8443, and that controller mode is on.

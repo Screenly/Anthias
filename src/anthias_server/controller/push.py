@@ -3,11 +3,11 @@
 A managed screen keeps one connection open to
 ``wss://<controller>:8443/api/v2/controller/ws`` (see
 ``anthias_server.lib.push`` for the screen side). The screen proves
-who it is with its node certificate as a TLS client certificate:
-Caddy's m2m site asks for one and forwards its fingerprint
-(``X-Anthias-Client-Fingerprint``), and that fingerprint must be the
-one this controller pinned for the screen at join. No token or other
-secret is involved.
+who it is with the client certificate this controller's CA issued it
+(``controller.ca``): Caddy's m2m site verifies it when given and
+forwards it (``X-Anthias-Client-Cert``), and it must be a current,
+unrevoked screen certificate, the one last issued to that screen. No
+token or other secret is involved.
 
 While a screen's connection is live, the status poll skips it
 (``tasks.refresh_nodes``). A closed connection marks the screen offline
@@ -22,7 +22,14 @@ Messages are JSON objects with a ``type``:
 * ``health``: ``{"type": "health", "health": {...}}`` when a warning
   changes, and at least every :data:`HEALTH_PUSH_MAX_S`;
 * ``heartbeat``: ``{"type": "heartbeat"}`` every
-  :data:`HEARTBEAT_S`.
+  :data:`HEARTBEAT_S`;
+* ``renew``: ``{"type": "renew", "csr": "<PEM>"}`` when the screen's
+  certificate is close to expiry, answered with
+  ``{"type": "certificate", "certificate": "<PEM>"}`` (the old one is
+  revoked).
+
+The controller sends ``{"type": "crl", "crl": "<PEM>"}`` on connect
+and whenever the revocation list changes.
 
 ``health`` carries the screen's ``/api/v2/info`` health fields
 (``InfoViewV2.health_payload``), so pushed and polled readings are
@@ -31,6 +38,7 @@ the same shape.
 
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import logging
@@ -38,10 +46,15 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Any
 
+from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.layers import get_channel_layer
+from cryptography import x509
 from django.db.models import Q
 from django.utils import timezone
+
+from anthias_server.lib import pki
 
 from .models import Node, NodeStatus
 
@@ -59,6 +72,10 @@ MAX_MESSAGE_BYTES = 64 * 1024
 CLOSE_NOT_M2M = 4404
 CLOSE_UNKNOWN_SCREEN = 4403
 CLOSE_BAD_MESSAGE = 4400
+
+# Every connected screen's consumer joins this Channels group, so a new
+# CRL reaches all of them at once (broadcast_crl).
+GROUP = 'controller-screens'
 
 
 def is_live(node: Node, now: datetime) -> bool:
@@ -82,17 +99,49 @@ def _header(scope: dict[str, Any], name: str) -> str:
     return ''
 
 
-def _attach(fingerprint: str, connection: str) -> int | None:
-    """Mark the screen with ``fingerprint`` as connected; its pk."""
+def client_certificate(scope: dict[str, Any]) -> x509.Certificate | None:
+    """The TLS client certificate Caddy forwarded, or None."""
+    from anthias_server.lib import caddy
+
+    raw = _header(scope, caddy.CLIENT_CERT_HEADER)
+    if not raw:
+        return None
+    try:
+        return x509.load_der_x509_certificate(base64.b64decode(raw))
+    except ValueError:  # binascii.Error is a ValueError
+        return None
+
+
+def _screen_for(cert: x509.Certificate | None) -> Node | None:
+    """The managed screen this client certificate currently belongs to.
+
+    It must be a screen certificate from this controller's CA, valid
+    now, not revoked, and the one most recently issued to that screen.
+    """
+    from . import ca
+
+    if cert is None:
+        return None
+    try:
+        pki.check_client_cert(cert, ca.ca_cert(), pki.ROLE_SCREEN)
+    except pki.PkiError:
+        return None
+    if ca.is_revoked(pki.serial_hex(cert.serial_number)):
+        return None
+    return (
+        Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
+        .filter(client_fingerprint=pki.fingerprint(cert))
+        .first()
+    )
+
+
+def _attach(cert: x509.Certificate | None, connection: str) -> int | None:
+    """Mark the screen presenting ``cert`` as connected; its pk."""
     from . import service
 
     if not service.controller_enabled():
         return None
-    node = (
-        Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
-        .filter(fingerprint=fingerprint)
-        .first()
-    )
+    node = _screen_for(cert)
     if node is None:
         return None
     node.push_connection = connection
@@ -153,6 +202,47 @@ def _detach(node_id: int, connection: str) -> None:
     Node.objects.filter(pk=node_id).update(last_checked_at=None)
 
 
+def _renew(node_id: int, connection: str, csr_pem: str) -> dict[str, Any]:
+    """Sign a renewal CSR; revoke the certificate it replaces."""
+    from . import ca
+
+    node = Node.objects.filter(pk=node_id, push_connection=connection).first()
+    if node is None or not node.public_key_pem:
+        raise pki.PkiError('This screen cannot renew its certificate.')
+    issued = ca.sign_screen_csr(
+        csr_pem, pki.load_public_key(node.public_key_pem), node.fingerprint
+    )
+    previous = (node.client_serial, node.client_not_after)
+    node.client_serial = pki.serial_hex(issued.serial_number)
+    node.client_fingerprint = pki.fingerprint(issued)
+    node.client_not_after = issued.not_valid_after_utc
+    node.save(
+        update_fields=[
+            'client_serial',
+            'client_fingerprint',
+            'client_not_after',
+        ]
+    )
+    if previous[0]:
+        ca.revoke(previous[0], node.name, 'renewed', previous[1])
+    logger.info('Renewed the client certificate of screen %s', node_id)
+    return {'type': 'certificate', 'certificate': pki.cert_pem(issued)}
+
+
+def _crl_message() -> dict[str, Any]:
+    from . import ca
+
+    return {'type': 'crl', 'crl': ca.crl_pem()}
+
+
+def broadcast_crl() -> None:
+    """Send the current CRL to every connected screen."""
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    async_to_sync(layer.group_send)(GROUP, {'type': 'crl.update'})
+
+
 def _parse(text_data: str | None) -> dict[str, Any] | None:
     """A pushed message as a dict, or None when it isn't one."""
     if text_data is None or len(text_data) > MAX_MESSAGE_BYTES:
@@ -175,22 +265,30 @@ class ScreenPushConsumer(AsyncWebsocketConsumer):
         if not hmac.compare_digest(listener, management.M2M_LISTENER_VALUE):
             await self.close(code=CLOSE_NOT_M2M)
             return
-        fingerprint = _header(
-            self.scope, 'X-Anthias-Client-Fingerprint'
-        ).lower()
-        if len(fingerprint) != 64:
+        cert = client_certificate(self.scope)
+        if cert is None:
             await self.close(code=CLOSE_UNKNOWN_SCREEN)
             return
         self.connection = secrets.token_hex(8)
         self.node_id = await database_sync_to_async(_attach)(
-            fingerprint, self.connection
+            cert, self.connection
         )
         if self.node_id is None:
             logger.info('Push connection refused: unknown screen')
             await self.close(code=CLOSE_UNKNOWN_SCREEN)
             return
         await self.accept()
+        if self.channel_layer is not None:
+            await self.channel_layer.group_add(GROUP, self.channel_name)
+        await self._send_json(await database_sync_to_async(_crl_message)())
         logger.info('Screen %s connected for push', self.node_id)
+
+    async def _send_json(self, message: dict[str, Any]) -> None:
+        await self.send(text_data=json.dumps(message))
+
+    async def crl_update(self, _event: dict[str, Any]) -> None:
+        """Channels group message: the CRL changed."""
+        await self._send_json(await database_sync_to_async(_crl_message)())
 
     async def receive(
         self, text_data: str | None = None, bytes_data: bytes | None = None
@@ -202,6 +300,19 @@ class ScreenPushConsumer(AsyncWebsocketConsumer):
             logger.info('Bad push message from screen %s', self.node_id)
             await self.close(code=CLOSE_BAD_MESSAGE)
             return
+        if message.get('type') == 'renew':
+            try:
+                reply = await database_sync_to_async(_renew)(
+                    self.node_id, self.connection, str(message.get('csr', ''))
+                )
+            except pki.PkiError as exc:
+                logger.warning(
+                    'Renewal refused for screen %s: %s', self.node_id, exc
+                )
+                await self.close(code=CLOSE_BAD_MESSAGE)
+                return
+            await self._send_json(reply)
+            return
         current = await database_sync_to_async(_record)(
             self.node_id, self.connection, message
         )
@@ -211,6 +322,8 @@ class ScreenPushConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, code: int) -> None:
         if self.node_id is None:
             return
+        if self.channel_layer is not None:
+            await self.channel_layer.group_discard(GROUP, self.channel_name)
         await database_sync_to_async(_detach)(self.node_id, self.connection)
         logger.info(
             'Screen %s push connection closed (%s)', self.node_id, code

@@ -100,12 +100,28 @@ def audit(
     return entry
 
 
+def controller_client_cert() -> tuple[str, str]:
+    """The client certificate this controller presents to its screens.
+
+    Managed screens only accept calls that present it (mutual TLS; see
+    ``controller.ca``). Issued, or renewed, on demand.
+    """
+    from anthias_server.controller import ca
+
+    return ca.ensure_client_cert()
+
+
 def client_for(node: Node) -> NodeClient:
     try:
         token = vault.decrypt(node.token_ciphertext)
     except vault.VaultError as exc:
         raise NodeUnauthorizedError(str(exc)) from exc
-    return NodeClient(node.base_url, node.fingerprint, token)
+    return NodeClient(
+        node.base_url,
+        node.fingerprint,
+        token,
+        client_cert=controller_client_cert(),
+    )
 
 
 def _set_status(node: Node, status: str, detail: str = '') -> None:
@@ -140,6 +156,11 @@ def remove_node(node: Node, actor: str = '') -> str:
         )
         outcome = 'partial'
     name = node.name
+    if node.client_serial:
+        from anthias_server.controller import ca
+
+        ca.revoke(node.client_serial, name, 'removed', node.client_not_after)
+        detail += '; certificate revoked'
     node.delete()
     audit('remove', outcome, node_name=name, detail=detail, actor=actor)
     return detail

@@ -44,16 +44,27 @@ class ControllerJoinView(APIView):
                     'screen_fp': {'type': 'string'},
                     'screen_port': {'type': 'integer'},
                     'screen_host': {'type': 'string'},
+                    'screen_cert': {'type': 'string'},
+                    'csr': {'type': 'string'},
                 },
-                'required': ['secret', 'token', 'screen_fp'],
+                'required': [
+                    'secret',
+                    'token',
+                    'screen_fp',
+                    'screen_cert',
+                    'csr',
+                ],
             }
         },
         responses={
-            201: {
+            202: {
                 'type': 'object',
                 'properties': {
+                    'status': {'type': 'string', 'enum': ['pending']},
+                    'request_id': {'type': 'string'},
+                    'check_code': {'type': 'string'},
                     'controller_name': {'type': 'string'},
-                    'screen_id': {'type': 'integer'},
+                    'expires_at': {'type': 'string', 'format': 'date-time'},
                 },
             }
         },
@@ -78,7 +89,7 @@ class ControllerJoinView(APIView):
             )
         try:
             join_request = join.parse_join_request(request.data, client_ip)
-            node, created = join.join(join_request)
+            pending, created = join.request_join(join_request)
         except join.JoinError as exc:
             service.audit(
                 'join',
@@ -88,18 +99,22 @@ class ControllerJoinView(APIView):
             )
             return Response({'detail': exc.detail}, status=exc.status)
         service.audit(
-            'join',
+            'join request',
             'ok',
-            node=node,
+            node_name=pending.name,
             detail=(
-                f'{"joined" if created else "joined again"} from '
-                f'{node.host}:{node.port}, fp {node.fingerprint[:16]}…'
+                f'{"asked" if created else "asked again"} to join from '
+                f'{pending.host}:{pending.port}, check code '
+                f'{pending.check_code}; waiting for approval'
             ),
         )
         return Response(
             {
+                'status': 'pending',
+                'request_id': pending.request_id,
+                'check_code': pending.check_code,
                 'controller_name': service.controller_name(),
-                'screen_id': node.pk,
+                'expires_at': pending.expires_at.isoformat(),
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_202_ACCEPTED,
         )

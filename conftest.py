@@ -464,3 +464,8 @@ def _isolate_tls_files(
     monkeypatch.setattr(
         'anthias_server.lib.caddy.RUN_DIR', root / 'run-anthias-caddy'
     )
+    # A controller's CA (multi-screen), created on first use.
+    monkeypatch.setattr(
+        'anthias_server.controller.ca.ca_dir',
+        lambda: root / 'ssl' / 'controller',
+    )
